@@ -184,6 +184,7 @@ def _run_generate_inner(
             framework_id,
             project_root,
             allow_unenforced=bool(getattr(args, "allow_unenforced_confinement", False)),
+            team_dir=output_dir,
         )
     except PrivilegeConfinementError as exc:
         # P1-2: confined/exclusive requested on a host with no OS sandbox to enforce it,

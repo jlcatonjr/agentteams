@@ -229,8 +229,9 @@ explicit **non-goal**, for concrete safety reasons:
   layout. Transplanting them into another repo would emit a boundary that is wrong for that
   host — either over-broad or silently inert — which is worse than emitting none.
 - **A capability grant is a single-operator bearer capability.** The grant ledger
-  (`references/capability-grants.log.csv`) and approver roster
-  (`references/security-approvers.txt`) are trust state for one operator holding both
+  (`references/capability-grants.log.csv`), the holder team dir's approver roster
+  (`references/security-approvers.txt`) and its Ed25519 verify-key store
+  (`references/authorized-verify-keys/`) are trust state for one operator holding both
   repos. A bridge that copied them into a foreign repo would move an authorization decision
   outside the trust boundary that authorized it.
 - **The inbound advisory is operator OS hardening**, not config a bridge can meaningfully

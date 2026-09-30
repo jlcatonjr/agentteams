@@ -6,6 +6,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (only an operator Ed25519 grant widens allowWrite — closes the HMAC grant route, PR-E)
+
+- **An in-sandbox agent could mint a grant that widened its own sandbox at the next `--update`
+  (red-team row 34, HIGH).** Capability grants were HMAC-signed with the shared
+  `AGENTTEAMS_GRANT_SIGNING_KEY`, which a Claude-sandboxed process inherits from the shell that
+  launched it. The approver roster was read from the **project root**
+  (`references/security-approvers.txt`), which the agent can create. So the agent could plant a
+  roster, HMAC-sign a `write` grant, and the operator's next `--update` merged the grant's target
+  into the emitted `allowWrite`. **This closes that route** for grants that widen `allowWrite`.
+- **E1 — Ed25519 for widening grants.** New operator-only `--sign-grant SPEC.json`, mirroring
+  `--sign-decision`: the private key is read from the file named by
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE` (same keyfile warnings), and the row is verified against
+  the holder **team dir**'s `references/authorized-verify-keys/<key_id>.pub.pem` before it is
+  appended. The signed payload starts with the purpose tag `agentteams-grant-v1`, so an operator
+  signature over a decision cannot be replayed as a grant; the decision verifier and
+  `--sign-decision` refuse a payload in the grant domain, so the reverse fails too. `sig_scheme`
+  and `key_id` are signed, labelled fields (new optional ledger columns; a pre-PR-E ledger gains
+  them on its next append, and existing payloads and the hash chain are unchanged).
+- **HMAC write grants are refused, with no transitional flag.** A grant whose `permitted_ops`
+  include `write` and that is not Ed25519-signed is refused by `--issue-grant`, reported by
+  `--verify-grants`, and skipped on the widening path with a NOTE naming `--sign-grant`. HMAC
+  remains for non-widening grants (for example `read`).
+- **E3 — team-dir roster only.** Grants read the approver roster from the holder team dir (the
+  `--output` the update targets, under the sandbox's `.claude` write deny), like decisions and
+  waivers. There is **no project-root fallback**; when only a project-root roster exists,
+  agentteams warns and names the file to move it to. The grant CLI (`--sign-grant`,
+  `--issue-grant`, `--verify-grants`) derives the team dir the same way `--update` does, from
+  `--framework` and `--output`/`--project`. In a multi-framework project the team whose
+  `--output` the update targets verifies (today only a Claude sandbox consumes grants).
+- **Migration (availability break for cross-workspace write grants).** Existing HMAC `write`
+  grants stop widening at the next `--update`. To restore one: (1) run
+  `agentteams --verify-grants --framework claude --project <holder>` to list the refused grants;
+  (2) provision an operator Ed25519 key pair if you have none, keeping the private key in
+  `~/.config/agentteams/keys/`; (3) install the public key as
+  `<holder team dir>/references/authorized-verify-keys/<key_id>.pub.pem`; (4) move the approver
+  list into `<holder team dir>/references/security-approvers.txt` if it lived at the project root;
+  (5) re-issue each grant with `agentteams --sign-grant SPEC.json --framework claude --project
+  <holder>` (the old spec plus `key_id`); (6) re-run the holder's `--update`.
+- **Code:** `agentteams/cli/grants.py` (`sign_ed25519_grant`, scheme-aware
+  `verify_grant_signature`, `validate_grant(team_dir=…)`, `warn_if_only_root_roster`), new
+  `agentteams/cli/grant_commands.py` (the grant CLI runners, carved from `cli/commands.py`),
+  `cli/artifacts.py` + `cli/generate.py` pass the run's `output_dir` as the team dir,
+  `cli/decision_log.py` refuses grant-domain payloads. `grants.py` and `decision_log.py` are
+  re-pinned in `references/enforcement-integrity.json`.
+- **Residuals:** a widening grant is as strong as the operator's Ed25519 private key and the
+  write protection of the team dir's verify-key store and roster. The project-root roster and
+  ledger remain Bash-writable in-sandbox; that no longer grants anything. Never export
+  `AGENTTEAMS_GRANT_SIGNING_KEY` or `AGENTTEAMS_DECISION_ED25519_KEYFILE` into the shell that
+  launches `claude`.
+
 ### security (the control plane cannot be renamed away — F-4)
 
 - **An agent could rename an ancestor of a write-denied control-plane path and plant a

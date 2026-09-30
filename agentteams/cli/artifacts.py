@@ -475,7 +475,7 @@ def resolve_host_features_and_advise(
 
 def finalize_privilege_wiring(
     manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
-    *, allow_unenforced: bool = True,
+    *, allow_unenforced: bool = True, team_dir: Path | None = None,
 ) -> None:
     """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
 
@@ -492,11 +492,12 @@ def finalize_privilege_wiring(
         project_root: The holder workspace root (holds the capability-grants ledger).
         allow_unenforced: Forwarded to :func:`resolve_host_features_and_advise`; when
             ``False``, an unenforceable confinement request raises rather than warning.
+        team_dir: The run's ``output_dir`` (holder TEAM dir): grant roster + verify keys.
     """
     resolve_host_features_and_advise(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
     )
-    apply_held_grants_to_write_roots(manifest, project_root)
+    apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
     apply_coordination_roots_to_write_roots(manifest)
     _advise_exclusive_inbound_hardening(manifest, framework_id)
 
@@ -534,7 +535,9 @@ def _advise_exclusive_inbound_hardening(manifest: dict, framework_id: str) -> No
     )
 
 
-def apply_held_grants_to_write_roots(manifest: dict, project_root: Path) -> list[str]:
+def apply_held_grants_to_write_roots(
+    manifest: dict, project_root: Path, *, team_dir: Path | None = None,
+) -> list[str]:
     """Widen a confined team's sandbox write roots by the cross-workspace grants it holds (P2).
 
     When the Claude sandbox is active for this team, read the workspace's grant ledger
@@ -544,23 +547,34 @@ def apply_held_grants_to_write_roots(manifest: dict, project_root: Path) -> list
     a grant is inert until the holder is (re)generated, and an agent cannot widen its own
     OS boundary at runtime. No-op unless the sandbox is on.
 
+    PR-E: only Ed25519-signed grants widen, verified against ``team_dir`` (this run's
+    ``output_dir`` — in a multi-framework project, the team whose ``--output`` the update
+    targets): its ``references/authorized-verify-keys/`` store and its approver roster. No
+    project-root roster fallback. With no ``team_dir`` nothing is applied (fail-closed).
+
     Args:
         manifest: The team manifest (mutated: ``workspace_write_roots`` extended).
         project_root: The holder workspace root (holds ``references/capability-grants.log.csv``).
+        team_dir: The holder TEAM dir (roster + verify-key store).
 
     Returns:
         The list of granted paths that were added (empty when none / sandbox off).
     """
     from agentteams.frameworks.claude import _sandbox_feature_enabled
-    from agentteams.cli.grants import GrantError, granted_write_roots
+    from agentteams.cli.grants import GRANT_LOG_REL, GrantError, granted_write_roots
 
     if not _sandbox_feature_enabled(manifest):
         return []
     holder = (manifest.get("team_id") or "").strip()
     if not holder:
         return []
+    if team_dir is None:
+        if (project_root / GRANT_LOG_REL).exists():
+            print("  NOTE: no holder team dir given; capability grants are not applied "
+                  "(fail-closed).", file=sys.stderr)
+        return []
     try:
-        extra = granted_write_roots(project_root, holder_team=holder)
+        extra = granted_write_roots(project_root, holder_team=holder, team_dir=team_dir)
     except GrantError as exc:
         print(f"  WARNING: capability-grant ledger unreadable, no grants applied: {exc}", file=sys.stderr)
         return []

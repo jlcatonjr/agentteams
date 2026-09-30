@@ -309,29 +309,56 @@ other team issues. Absent a valid grant, there is no reach.
 ### The model
 
 A grant authorizes team A (the holder) to write a specific path in team B's workspace.
-It is an HMAC-signed row in the **holder's** `references/capability-grants.log.csv` — the
+It is a signed row in the **holder's** `references/capability-grants.log.csv` — the
 holder holds the grants issued to it (a bearer-capability model), so the holder's own
 generation can read them. Rows are **hash-chained**: each carries a signed `prev_digest`
 linking it to its predecessor, so deleting or reordering a signed row is detected at every
 read (per-row signatures stop forgery; the chain stops silent deletion). A broken chain
 fails closed — `--verify-grants` reports it, and generation-time widening applies no grants. `issuer_team` records who authorized it. When team A is next
-generated or updated with the sandbox on, the granted path (if it permits `write`) is
-merged into A's sandbox `allowWrite` — so A's kernel-enforced boundary now includes
+generated or updated with the sandbox on, the granted path (if it permits `write` **and the
+row is operator Ed25519-signed**, see below) is merged into A's sandbox `allowWrite` — so
+A's kernel-enforced boundary now includes
 exactly that foreign path (verified against Seatbelt: a granted foreign dir is writable,
 an ungranted one is still denied).
 
 ```bash
-# Issue a grant into the HOLDER's workspace (--output points at the holder A);
-# needs AGENTTEAMS_GRANT_SIGNING_KEY + an approver on A's roster:
-agentteams --issue-grant grant-spec.json --output /path/to/A
+# Operator-only: Ed25519-sign a write grant into the HOLDER's workspace. Use the same
+# --framework/--output (or --project) as the holder's --update. Needs the operator key file
+# (AGENTTEAMS_DECISION_ED25519_KEYFILE, kept in ~/.config/agentteams/keys/), the matching
+# public key at <team dir>/references/authorized-verify-keys/<key_id>.pub.pem, and an
+# approver on <team dir>/references/security-approvers.txt:
+agentteams --sign-grant grant-spec.json --framework claude --project /path/to/A
 
 # audit a workspace's grant ledger (read-only, never consumes):
-agentteams --verify-grants --output /path/to/A
+agentteams --verify-grants --framework claude --project /path/to/A
 ```
 
 A grant spec is JSON: `issuer_team`, `holder_team`, `target_path`, `permitted_ops`,
-`expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`, and the optional
-`issuer_root`. Each team's identity is its `team_id` (the `privilege_profile` sibling
+`expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`, the optional
+`issuer_root`, and (for `--sign-grant`) `key_id`.
+
+> **Only an operator Ed25519 signature widens `allowWrite` (PR-E).** A grant whose
+> `permitted_ops` include `write` is honoured only when it is Ed25519-signed (`--sign-grant`)
+> and verifies against the holder **team dir**'s write-protected store
+> `references/authorized-verify-keys/<key_id>.pub.pem`. An HMAC-signed `write` grant is
+> **refused** at issue (`--issue-grant`), in `--verify-grants`, and on the widening path, with
+> a migration message. There is no transitional flag. The reason: a Claude-sandboxed agent
+> inherits `AGENTTEAMS_GRANT_SIGNING_KEY` from the environment that launched it, so it could
+> HMAC-sign its own grant, which the operator's next `--update` would turn into real OS write
+> reach. The Ed25519 private key sits in the read-denied `~/.config/agentteams/keys/`. The
+> signed payload starts with the purpose tag `agentteams-grant-v1`, so an operator signature
+> over a security decision can never be replayed as a grant, and the reverse is refused too.
+> HMAC (`--issue-grant`) remains for grants that do not widen anything (for example `read`).
+>
+> **Which team verifies.** Grants are verified against the team dir that the `--update`
+> writes: in a multi-framework project, the team whose `--output` the update targets (today
+> only a Claude sandbox consumes grants, so normally `.claude/agents`). The ledger itself is
+> read from that run's workspace root.
+>
+> **Migrating an existing HMAC write grant.** Run `agentteams --verify-grants` (each affected
+> grant is reported as refused), provision an operator key pair if you have none, install the
+> public key in the holder team dir's `references/authorized-verify-keys/`, then re-issue each
+> grant with `--sign-grant` (same spec plus `key_id`) and re-run the holder's `--update`. Each team's identity is its `team_id` (the `privilege_profile` sibling
 field; defaults to the slugified project name — **keep it unique across your workspaces**).
 
 > **Anchor an absolute grant to the issuer's tree (`issuer_root`, optional but recommended).**
@@ -341,8 +368,12 @@ field; defaults to the slugified project name — **keep it unique across your w
 > or widened `issuer_root` invalidates the grant. Omit it and the grant still works, bounded by
 > the `target_path` shape checks below (backward compatible).
 
-> **An approver roster is mandatory.** A grant is only honoured when its `approver` is on
-> the holder workspace's `references/security-approvers.txt`. If that roster is **absent
+> **An approver roster is mandatory, and it is the team dir's.** A grant is only honoured
+> when its `approver` is on the holder **team dir**'s `references/security-approvers.txt`
+> (the same roster decisions and waivers use, protected by the sandbox's `.claude` write
+> deny). A project-root `references/security-approvers.txt` is **ignored** for grants, because
+> an in-sandbox agent can create it; when only a project-root roster exists, agentteams warns
+> and names the file to move it to. There is no fallback. If the team-dir roster is **absent
 > or empty**, issuing, verifying, and generation-time widening all **fail closed** — the
 > grant is refused rather than cleared by a built-in `security`/`@security` default.
 > (Without this, a grant naming `@security` as its own approver could self-clear.) Create
@@ -352,15 +383,12 @@ field; defaults to the slugified project name — **keep it unique across your w
 > or a `..`-escaping relative path is refused before it can enter the ledger and widen a
 > boundary. A malformed `expires_at` is likewise rejected at issue, not left to fail later.
 >
-> **Honest ceiling — grant signing is symmetric (HMAC-SHA256).** The signature defends against a
-> **keyless, injected, or buggy** agent (it cannot mint a valid grant without the shared
-> `AGENTTEAMS_GRANT_SIGNING_KEY`), but it does **not** defend against an adversarial **peer team
-> that holds the same key** — with a symmetric key, whoever can *verify* a grant can also *forge*
-> one. This is a deliberate ceiling for the single-operator / both-repos model these grants are
-> built for (there is no second trust principal). If you ever exchange grants **across
-> organizations or mutually-distrusting operators**, this model is insufficient — an asymmetric
-> (public-key) backend behind the `signed_ledger` seam would be required (a gated future option;
-> decision `references/plans/decision-c1-grant-signing.report.md`).
+> **Honest ceiling.** A widening grant is only as strong as the operator's Ed25519 private key
+> and the write protection of the team dir's verify-key store and roster. Whoever holds the
+> private key can mint any grant. The HMAC scheme that non-widening grants still use defends
+> only against a **keyless** actor: whoever holds `AGENTTEAMS_GRANT_SIGNING_KEY` can forge
+> an HMAC grant, which is why HMAC can no longer widen anything (history:
+> `references/plans/decision-c1-grant-signing.report.md`).
 
 ### Enforcement is generation-time, by design
 
@@ -384,18 +412,18 @@ Two consequences of the generation-time model to plan around:
 
 ### Trust model (read this before relying on it)
 
-Signing is **symmetric HMAC-SHA256** (one shared `AGENTTEAMS_GRANT_SIGNING_KEY`). It
-defends against a **keyless** actor — a prompt-injected or buggy agent that cannot read
-the key cannot fabricate a grant. It does **not** defend against an actor that holds the
-key (an adversarial peer team). That is the same single-trusted-operator model the
-security waivers use, and it is the honest ceiling of a stdlib-only implementation:
-cross-team *unforgeability* (a holder who cannot forge the issuer's grants) needs
-asymmetric signatures, which the Python standard library does not provide.
-`agentteams.cli.signed_ledger` is the seam where an asymmetric backend would slot in.
+A grant that widens `allowWrite` must be signed with the operator's **Ed25519** key
+(`--sign-grant`; the `signing` extra provides the `cryptography` backend, and without it
+the widening path fails closed). Agents hold only the public verify keys, in a store the
+sandbox write-denies, so an agent cannot mint a widening grant even though it inherits
+`AGENTTEAMS_GRANT_SIGNING_KEY`. Non-widening grants may still be **HMAC-SHA256**-signed with
+that shared key, which defends only against a keyless actor.
 
 **Preconditions and non-goals:**
-- The signing key must be issued out-of-band and **never enter an agent session** (same
-  as the waiver key).
+- The Ed25519 private key lives in `~/.config/agentteams/keys/` (read-denied by every emitted
+  sandbox) and **never enters an agent session**. Never export `AGENTTEAMS_GRANT_SIGNING_KEY`
+  or `AGENTTEAMS_DECISION_ED25519_KEYFILE` into the shell that launches `claude`: a
+  Claude-sandboxed command inherits the environment (only `sandbox/confine-run.sh` scrubs it).
 - A grant **never overrides a `@security` HALT** — it widens a write boundary, it does
   not lift a stop (C-2 parity).
 - Filesystem-local only; no cross-machine grant delivery.

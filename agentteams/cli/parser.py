@@ -915,10 +915,13 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="verify_grants",
         default=False,
         help=(
-            "Read-only: report the validity (signature, expiry, use-limit, approver "
+            "Read-only: report the validity (scheme, signature, expiry, use-limit, approver "
             "roster) of every cross-workspace capability grant (P2) in "
-            "references/capability-grants.log.csv under --output/--project (else CWD). "
-            "Never consumes a grant. Exits non-zero if any grant is invalid. Requires "
+            "references/capability-grants.log.csv under --output/--project (else CWD). The "
+            "roster and Ed25519 verify keys are read from the TEAM dir that --update with the "
+            "same --framework/--output writes (never a project-root roster). An HMAC-signed "
+            "write grant is reported as refused (re-sign it with --sign-grant). Never consumes "
+            "a grant. Exits non-zero if any grant is invalid. HMAC rows need "
             "AGENTTEAMS_GRANT_SIGNING_KEY."
         ),
     )
@@ -928,14 +931,32 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="SPEC.json",
         help=(
-            "Mint and sign a cross-workspace capability grant (P2) from a JSON spec "
-            "(issuer_team, holder_team, target_path, permitted_ops, expires_at, "
+            "Mint an HMAC-signed, NON-widening cross-workspace capability grant (P2) from a "
+            "JSON spec (issuer_team, holder_team, target_path, permitted_ops, expires_at, "
             "max_uses, approver, ticket_id, reason_code) and append it to the HOLDER "
-            "workspace's ledger under --output/--project (else CWD) — point it at the "
-            "holder, whose generation reads the ledger. Requires "
-            "AGENTTEAMS_GRANT_SIGNING_KEY and an approver on the holder's roster. The "
-            "holder's sandbox allowWrite widens to the granted (write) path when the "
-            "holder team is next generated/updated."
+            "workspace's ledger under --output/--project (else CWD). Requires "
+            "AGENTTEAMS_GRANT_SIGNING_KEY and an approver on the holder TEAM dir's roster. A "
+            "spec whose permitted_ops include write is REFUSED: a grant that widens the "
+            "sandbox allowWrite must be Ed25519-signed with --sign-grant."
+        ),
+    )
+    parser.add_argument(
+        "--sign-grant",
+        dest="sign_grant",
+        default=None,
+        metavar="SPEC.json",
+        help=(
+            "Operator-only: mint an Ed25519-signed cross-workspace capability grant from a JSON "
+            "spec (the --issue-grant fields plus key_id) and append it to the HOLDER "
+            "workspace's ledger under --output/--project (else CWD). The only minter of a grant "
+            "that widens the holder's sandbox allowWrite (at its next --update). Reads the "
+            "operator private key from the file named by AGENTTEAMS_DECISION_ED25519_KEYFILE "
+            "(keep it in ~/.config/agentteams/keys). The payload carries the purpose tag "
+            "agentteams-grant-v1, so it can never double as a decision signature. The row is "
+            "verified BEFORE it is appended against the holder TEAM dir (the one --update with "
+            "the same --framework/--output writes): its "
+            "references/authorized-verify-keys/<key_id>.pub.pem and its "
+            "references/security-approvers.txt roster."
         ),
     )
     parser.add_argument(

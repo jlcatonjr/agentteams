@@ -28,8 +28,37 @@ from agentteams.cli.signed_ledger import (
 )
 from agentteams.frameworks.claude import ClaudeAdapter
 
+pytest.importorskip("cryptography", reason="the 'signing' extra is not installed")
+
+from cryptography.hazmat.primitives import serialization  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
+
 _KEY = "test-grant-key"
 _FAR_FUTURE = "2099-01-01T00:00:00Z"
+_KEY_ID = "op-grant"
+
+
+def _keypair() -> tuple[str, str]:
+    priv = Ed25519PrivateKey.generate()
+    private_pem = priv.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode("utf-8")
+    public_pem = priv.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("utf-8")
+    return private_pem, public_pem
+
+
+_PRIV, _PUB = _keypair()
+
+
+def _install_pub(team_dir: Path, key_id: str = _KEY_ID, public_pem: str = _PUB) -> None:
+    store = team_dir / "references" / "authorized-verify-keys"
+    store.mkdir(parents=True, exist_ok=True)
+    (store / f"{key_id}.pub.pem").write_text(public_pem, encoding="utf-8")
 
 
 def _write_roster(root: Path, *approvers: str) -> None:
@@ -52,7 +81,15 @@ def _issue(root: Path, **over):
     existing = roster.read_text(encoding="utf-8").split() if roster.exists() else []
     if approver not in existing:
         _write_roster(root, *(existing + [approver]))
-    return grants.issue_grant(root, **base)
+    # PR-E: a `write` grant must be operator Ed25519-signed (--sign-grant); HMAC only for others.
+    # The tests use one dir as both the ledger root and the holder TEAM dir.
+    if "write" in base["permitted_ops"].split(";"):
+        base.pop("key")
+        _install_pub(root)
+        return grants.sign_ed25519_grant(
+            root, team_dir=root, private_pem=_PRIV, key_id=_KEY_ID, **base
+        )
+    return grants.issue_grant(root, team_dir=root, **base)
 
 
 # --------------------------------------------------------------------------
@@ -85,40 +122,40 @@ def test_path_within_containment_and_escape(tmp_path):
 # --------------------------------------------------------------------------
 
 def test_issue_and_verify_signature(tmp_path):
-    rec = _issue(tmp_path)
+    rec = _issue(tmp_path, permitted_ops="read")  # HMAC: non-widening grants only
     assert len(rec["signature"]) == 64
-    assert grants.verify_grant_signature(rec, key=_KEY)
+    assert grants.verify_grant_signature(rec, key=_KEY, team_dir=tmp_path)
 
 
 def test_validate_passes_for_fresh_grant(tmp_path):
-    grants.validate_grant(_issue(tmp_path), key=_KEY)  # must not raise
+    grants.validate_grant(_issue(tmp_path), team_dir=tmp_path, key=_KEY)  # must not raise
 
 
 def test_validate_rejects_tampered_target(tmp_path):
     rec = _issue(tmp_path)
     rec["target_path"] = "/abs/b/EVERYTHING"  # not re-signed
-    assert not grants.verify_grant_signature(rec, key=_KEY)
+    assert not grants.verify_grant_signature(rec, key=_KEY, team_dir=tmp_path)
     with pytest.raises(grants.GrantError):
-        grants.validate_grant(rec, key=_KEY)
+        grants.validate_grant(rec, team_dir=tmp_path, key=_KEY)
 
 
 def test_validate_rejects_expired(tmp_path):
     rec = _issue(tmp_path, expires_at="2000-01-01T00:00:00Z")
     with pytest.raises(grants.GrantError, match="expired"):
-        grants.validate_grant(rec, key=_KEY)
+        grants.validate_grant(rec, team_dir=tmp_path, key=_KEY)
 
 
 def test_validate_rejects_exhausted_uses(tmp_path):
-    rec = _issue(tmp_path, max_uses=1)
+    rec = _issue(tmp_path, max_uses=1, permitted_ops="read")
     rec["uses"] = "1"
     rec["signature"] = grants.sign_grant(rec, key=_KEY)
     with pytest.raises(grants.GrantError, match="exhausted"):
-        grants.validate_grant(rec, key=_KEY)
+        grants.validate_grant(rec, team_dir=tmp_path, key=_KEY)
 
 
 def test_missing_key_fails_closed(tmp_path, monkeypatch):
     monkeypatch.delenv(grants.GRANT_KEY_ENV, raising=False)
-    rec = _issue(tmp_path)  # issued with explicit key
+    rec = _issue(tmp_path, permitted_ops="read")  # HMAC, issued with explicit key
     with pytest.raises(grants.GrantError):
         grants.verify_grant_signature(rec)  # no key arg, env unset → fail closed
 
@@ -142,14 +179,14 @@ def test_grant_covers_holder_op_and_path(tmp_path):
 def test_held_grants_filters_by_holder(tmp_path):
     _issue(tmp_path, grant_id="g-1", holder_team="team-a")
     _issue(tmp_path, grant_id="g-2", holder_team="team-c")
-    held = grants.held_grants(tmp_path, holder_team="team-a", key=_KEY)
+    held = grants.held_grants(tmp_path, holder_team="team-a", team_dir=tmp_path, key=_KEY)
     assert [g["grant_id"] for g in held] == ["g-1"]
 
 
 def test_held_grants_skips_invalid(tmp_path, capsys):
     _issue(tmp_path, grant_id="ok", holder_team="team-a")
     _issue(tmp_path, grant_id="stale", holder_team="team-a", expires_at="2000-01-01T00:00:00Z")
-    held = grants.held_grants(tmp_path, holder_team="team-a", key=_KEY)
+    held = grants.held_grants(tmp_path, holder_team="team-a", team_dir=tmp_path, key=_KEY)
     assert [g["grant_id"] for g in held] == ["ok"]
     assert "skipping invalid capability grant" in capsys.readouterr().err
 
@@ -157,7 +194,7 @@ def test_held_grants_skips_invalid(tmp_path, capsys):
 def test_verify_grants_reports_problems(tmp_path):
     _issue(tmp_path, grant_id="ok", holder_team="team-a")
     _issue(tmp_path, grant_id="stale", holder_team="team-a", expires_at="2000-01-01T00:00:00Z")
-    problems = grants.verify_grants(tmp_path, key=_KEY)
+    problems = grants.verify_grants(tmp_path, team_dir=tmp_path, key=_KEY)
     assert len(problems) == 1 and "stale" in problems[0]
 
 
@@ -166,7 +203,7 @@ def test_verify_grants_clean_ledger_returns_no_problems(tmp_path):
     # audit's output does NOT change for valid input.
     _issue(tmp_path, grant_id="ok-1", holder_team="team-a")
     _issue(tmp_path, grant_id="ok-2", holder_team="team-a", target_path="/abs/b/other")
-    assert grants.verify_grants(tmp_path, key=_KEY) == []
+    assert grants.verify_grants(tmp_path, team_dir=tmp_path, key=_KEY) == []
 
 
 def test_assert_approver_on_roster_accepts_listed_approver(tmp_path):
@@ -182,8 +219,8 @@ def test_issue_rejects_offroster_approver(tmp_path):
     _write_roster(tmp_path, "bob")  # alice is NOT on the roster
     with pytest.raises(grants.GrantError, match="roster"):
         grants.issue_grant(
-            tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
-            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="alice",
+            tmp_path, team_dir=tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
+            permitted_ops="read", expires_at=_FAR_FUTURE, max_uses=1, approver="alice",
             ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
             key=_KEY,
         )
@@ -194,8 +231,8 @@ def test_issue_rejects_absent_roster(tmp_path):
     # self-clear via the built-in default. Refuse to issue instead (fail-closed).
     with pytest.raises(grants.GrantError, match="explicit approver roster"):
         grants.issue_grant(
-            tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
-            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="@security",
+            tmp_path, team_dir=tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
+            permitted_ops="read", expires_at=_FAR_FUTURE, max_uses=1, approver="@security",
             ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
             key=_KEY,
         )
@@ -209,8 +246,8 @@ def test_issue_rejects_empty_roster(tmp_path):
     )
     with pytest.raises(grants.GrantError, match="explicit approver roster"):
         grants.issue_grant(
-            tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
-            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="@security",
+            tmp_path, team_dir=tmp_path, issuer_team="team-b", holder_team="team-a", target_path="/abs/b/x",
+            permitted_ops="read", expires_at=_FAR_FUTURE, max_uses=1, approver="@security",
             ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
             key=_KEY,
         )
@@ -223,7 +260,7 @@ def test_validate_rejects_absent_roster(tmp_path):
     rec = _issue(tmp_path)
     (tmp_path / "references" / "security-approvers.txt").unlink()
     with pytest.raises(grants.GrantError, match="explicit approver roster"):
-        grants.validate_grant(rec, output_dir=tmp_path, key=_KEY)
+        grants.validate_grant(rec, team_dir=tmp_path, key=_KEY)
 
 
 @pytest.mark.parametrize("bad", ["", "   ", "/", "~", "~/secrets", "../escape", "../../x"])
@@ -232,8 +269,8 @@ def test_issue_rejects_unsafe_target_path(tmp_path, bad):
     _write_roster(tmp_path, "alice")
     with pytest.raises(grants.GrantError):
         grants.issue_grant(
-            tmp_path, issuer_team="team-b", holder_team="team-a", target_path=bad,
-            permitted_ops="write", expires_at=_FAR_FUTURE, max_uses=1, approver="alice",
+            tmp_path, team_dir=tmp_path, issuer_team="team-b", holder_team="team-a", target_path=bad,
+            permitted_ops="read", expires_at=_FAR_FUTURE, max_uses=1, approver="alice",
             ticket_id="T", reason_code="c", grant_id="g", timestamp="2026-08-21T00:00:00Z",
             key=_KEY,
         )
@@ -246,19 +283,19 @@ def test_granted_write_roots_rejects_unsafe_target_on_widening_path(tmp_path, mo
     # so an unsafe value can never become real OS write reach by a path that skipped the guard.
     monkeypatch.setattr(
         grants, "held_grants",
-        lambda *a, **k: [{"target_path": bad, "permitted_ops": "write"}],
+        lambda *a, **k: [{"target_path": bad, "permitted_ops": "write", "sig_scheme": "ed25519"}],
     )
     with pytest.raises(grants.GrantError):
-        grants.granted_write_roots(tmp_path, holder_team="team-a")
+        grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path)
 
 
 def test_granted_write_roots_allows_safe_target_on_widening_path(tmp_path, monkeypatch):
     # The guard must not reject a legitimate scoped absolute grant target.
     monkeypatch.setattr(
         grants, "held_grants",
-        lambda *a, **k: [{"target_path": "/abs/b/shared", "permitted_ops": "write"}],
+        lambda *a, **k: [{"target_path": "/abs/b/shared", "permitted_ops": "write", "sig_scheme": "ed25519"}],
     )
-    assert grants.granted_write_roots(tmp_path, holder_team="team-a") == ["/abs/b/shared"]
+    assert grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path) == ["/abs/b/shared"]
 
 
 def test_issue_rejects_malformed_expires_at(tmp_path):
@@ -272,18 +309,18 @@ def test_validate_rejects_malformed_expires_at(tmp_path):
     # P2-8: a malformed expires_at that is nonetheless validly signed (a hand-crafted
     # ledger row) surfaces as a GrantError, not a bare ValueError that crashes the caller.
     _write_roster(tmp_path, "alice")
-    rec = _issue(tmp_path)
+    rec = _issue(tmp_path, permitted_ops="read")
     rec = dict(rec, expires_at="garbage")
     rec["signature"] = grants.sign_grant(rec, key=_KEY)  # re-sign so signature passes
     with pytest.raises(grants.GrantError, match="malformed expires_at"):
-        grants.validate_grant(rec, key=_KEY)
+        grants.validate_grant(rec, team_dir=tmp_path, key=_KEY)
 
 
 def test_granted_write_roots_dedupes(tmp_path):
     _issue(tmp_path, grant_id="g-1", target_path="/abs/b/shared")
     _issue(tmp_path, grant_id="g-2", target_path="/abs/b/shared")  # dup path
     _issue(tmp_path, grant_id="g-3", target_path="/abs/b/other")
-    roots = grants.granted_write_roots(tmp_path, holder_team="team-a", key=_KEY)
+    roots = grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path, key=_KEY)
     assert roots == ["/abs/b/shared", "/abs/b/other"]
 
 
@@ -310,7 +347,7 @@ def test_held_grant_widens_sandbox_allowwrite(tmp_path, monkeypatch):
     )
     resolve_host_features_and_advise(m, [], "claude")  # turns on claude:sandbox
     _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
-    added = apply_held_grants_to_write_roots(m, tmp_path)
+    added = apply_held_grants_to_write_roots(m, tmp_path, team_dir=tmp_path)
     assert added == ["/abs/b/shared"]
     aw = json.loads(dict(ClaudeAdapter().extra_output_files(m))["../settings.hooks.example.json"])[
         "sandbox"
@@ -328,7 +365,7 @@ def test_no_widening_when_sandbox_off(tmp_path, monkeypatch):
         framework="claude",
     )
     _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
-    assert apply_held_grants_to_write_roots(m, tmp_path) == []
+    assert apply_held_grants_to_write_roots(m, tmp_path, team_dir=tmp_path) == []
 
 
 def test_default_confined_widens_only_by_valid_grant(tmp_path, monkeypatch):
@@ -339,7 +376,7 @@ def test_default_confined_widens_only_by_valid_grant(tmp_path, monkeypatch):
     m = analyze.build_manifest({"project_goal": "x", "project_name": "Team A"}, framework="claude")
     assert m["privilege_profile"] == "confined" and m["privilege_profile_explicit"] is False
     _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared")
-    widened = apply_held_grants_to_write_roots(m, tmp_path)
+    widened = apply_held_grants_to_write_roots(m, tmp_path, team_dir=tmp_path)
     assert widened == ["/abs/b/shared"]
     assert "/" not in widened  # never an unrestricted root
 
@@ -349,14 +386,14 @@ def test_default_confined_excludes_expired_grant(tmp_path, monkeypatch):
     m = analyze.build_manifest({"project_goal": "x", "project_name": "Team A"}, framework="claude")
     _issue(tmp_path, holder_team=m["team_id"], target_path="/abs/b/shared",
            expires_at="2000-01-01T00:00:00Z")  # expired
-    assert apply_held_grants_to_write_roots(m, tmp_path) == []
+    assert apply_held_grants_to_write_roots(m, tmp_path, team_dir=tmp_path) == []
 
 
 def test_readonly_grant_does_not_widen(tmp_path):
     # D1: a grant permitting only `read` must NOT hand the holder OS write.
     _issue(tmp_path, grant_id="ro", holder_team="team-a", permitted_ops="read",
            target_path="/abs/b/readonly")
-    assert grants.granted_write_roots(tmp_path, holder_team="team-a", key=_KEY) == []
+    assert grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path, key=_KEY) == []
 
 
 def test_widening_enforces_roster(tmp_path, monkeypatch):
@@ -365,7 +402,7 @@ def test_widening_enforces_roster(tmp_path, monkeypatch):
     _issue(tmp_path, holder_team="team-a", target_path="/abs/b/shared", approver="alice")
     # roster now no longer contains alice → the grant must not apply at widening
     _write_roster(tmp_path, "bob")
-    assert grants.granted_write_roots(tmp_path, holder_team="team-a", key=_KEY) == []
+    assert grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path, key=_KEY) == []
 
 
 # --------------------------------------------------------------------------
@@ -431,7 +468,7 @@ def test_chain_break_stops_widening_fail_closed(tmp_path, monkeypatch):
     header, rows = _read_raw_ledger(tmp_path)
     _write_raw_ledger(tmp_path, header, [rows[0], rows[2]])  # delete middle
     with pytest.raises(grants.GrantError, match="chain broken"):
-        grants.granted_write_roots(tmp_path, holder_team="team-a", key=_KEY)
+        grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path, key=_KEY)
 
 
 def test_verify_grants_reports_chain_break(tmp_path):
@@ -439,7 +476,7 @@ def test_verify_grants_reports_chain_break(tmp_path):
         _issue(tmp_path, grant_id=f"g-{i}", target_path=f"/abs/b/{i}")
     header, rows = _read_raw_ledger(tmp_path)
     _write_raw_ledger(tmp_path, header, [rows[1]])  # drop genesis → chain break at row 1
-    problems = grants.verify_grants(tmp_path, key=_KEY)
+    problems = grants.verify_grants(tmp_path, team_dir=tmp_path, key=_KEY)
     assert problems and any("chain broken" in p for p in problems)
 
 
@@ -451,9 +488,9 @@ def test_backward_compat_grant_without_issuer_root_still_verifies(tmp_path):
     """A grant issued WITHOUT issuer_root (the pre-G-6 / omitted-spec case) signs over the old
     payload (issuer_root omitted) and still verifies — no migration break."""
     _write_roster(tmp_path, "alice")
-    rec = _issue(tmp_path)  # no issuer_root
+    rec = _issue(tmp_path, permitted_ops="read")  # no issuer_root (HMAC: pre-PR-E payload)
     assert rec["issuer_root"] == ""
-    assert grants.verify_grant_signature(rec, key=_KEY)
+    assert grants.verify_grant_signature(rec, key=_KEY, team_dir=tmp_path)
 
 
 def test_issue_with_issuer_root_inside_signs_and_verifies(tmp_path):
@@ -462,7 +499,7 @@ def test_issue_with_issuer_root_inside_signs_and_verifies(tmp_path):
     (issuer / "shared").mkdir(parents=True)
     rec = _issue(tmp_path, target_path=str(issuer / "shared"), issuer_root=str(issuer))
     assert rec["issuer_root"] == str(issuer)
-    assert grants.verify_grant_signature(rec, key=_KEY)
+    assert grants.verify_grant_signature(rec, key=_KEY, team_dir=tmp_path)
 
 
 def test_issue_rejects_absolute_target_outside_issuer_root(tmp_path):
@@ -485,9 +522,9 @@ def test_tampering_issuer_root_breaks_signature(tmp_path):
     issuer = (tmp_path / "issuer").resolve()
     (issuer / "shared").mkdir(parents=True)
     rec = _issue(tmp_path, target_path=str(issuer / "shared"), issuer_root=str(issuer))
-    assert grants.verify_grant_signature(rec, key=_KEY)
+    assert grants.verify_grant_signature(rec, key=_KEY, team_dir=tmp_path)
     rec["issuer_root"] = "/"  # widen the anchor to defeat containment
-    assert not grants.verify_grant_signature(rec, key=_KEY), (
+    assert not grants.verify_grant_signature(rec, key=_KEY, team_dir=tmp_path), (
         "issuer_root must be signed — a forged wider anchor must invalidate the signature"
     )
 
@@ -499,10 +536,10 @@ def test_granted_write_roots_enforces_issuer_root_containment(tmp_path, monkeypa
     outside = str((tmp_path / "outside" / "x").resolve())
     monkeypatch.setattr(
         grants, "held_grants",
-        lambda *a, **k: [{"target_path": outside, "permitted_ops": "write", "issuer_root": issuer}],
+        lambda *a, **k: [{"target_path": outside, "permitted_ops": "write", "sig_scheme": "ed25519", "issuer_root": issuer}],
     )
     with pytest.raises(grants.GrantError, match="outside its signed issuer_root"):
-        grants.granted_write_roots(tmp_path, holder_team="team-a")
+        grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path)
 
 
 def test_granted_write_roots_allows_target_inside_issuer_root(tmp_path, monkeypatch):
@@ -510,6 +547,6 @@ def test_granted_write_roots_allows_target_inside_issuer_root(tmp_path, monkeypa
     inside = str(issuer / "shared")
     monkeypatch.setattr(
         grants, "held_grants",
-        lambda *a, **k: [{"target_path": inside, "permitted_ops": "write", "issuer_root": str(issuer)}],
+        lambda *a, **k: [{"target_path": inside, "permitted_ops": "write", "sig_scheme": "ed25519", "issuer_root": str(issuer)}],
     )
-    assert grants.granted_write_roots(tmp_path, holder_team="team-a") == [inside]
+    assert grants.granted_write_roots(tmp_path, holder_team="team-a", team_dir=tmp_path) == [inside]

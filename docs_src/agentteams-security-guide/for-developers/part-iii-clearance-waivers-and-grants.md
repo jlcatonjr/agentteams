@@ -9,14 +9,14 @@ separate ledgers.
 |---|---|---|---|---|
 | **Clearance** | may this destructive action run *here, now*? | a destructive action **locally, before it runs** (C-5) | `references/security-decisions.log.csv` | decision-signing (when active) |
 | **Waiver** | may this proceed past a *stop*? | **lifts a gate block** (destructive or stale-intel gate) | `references/security-waivers.log.csv` | `AGENTTEAMS_WAIVER_SIGNING_KEY` |
-| **Grant** | may this reach into *another workspace*? | **widens a cross-workspace write boundary** | `references/capability-grants.log.csv` (holder's workspace) | `AGENTTEAMS_GRANT_SIGNING_KEY` |
+| **Grant** | may this reach into *another workspace*? | **widens a cross-workspace write boundary** | `references/capability-grants.log.csv` (holder's workspace) | operator Ed25519 key (`--sign-grant`) for a `write` grant; `AGENTTEAMS_GRANT_SIGNING_KEY` (HMAC) only for non-widening grants |
 
 A waiver "lifts a stop"; a grant "permits a reach" — the grant is the
 cross-workspace analogue of a waiver
-(`agentteams/cli/grants.py:1-36`).
+(`agentteams/cli/grants.py:1-49`).
 
 **None of the three overrides a HALT (C-2).** HALT is checked *first* and no
-instrument is consulted for it (`agentteams/cli/grants.py:34-35`).
+instrument is consulted for it (`agentteams/cli/grants.py:47-48`).
 
 **One shared trust model — symmetric HMAC, fail-closed**
 (`agentteams/cli/signed_ledger.py:9-14`): keyed HMAC-SHA256 over an ordered field
@@ -26,11 +26,13 @@ instrument uses its own key (`AGENTTEAMS_WAIVER_SIGNING_KEY`,
 `agentteams/cli/security_gate.py:39-69`). **Key unset ⇒ fails closed** — it
 refuses rather than proceeding unsigned.
 
-**Honest ceiling — what it costs.** Signing is *symmetric* (one shared key per
-instrument). It stops a **keyless forger** but not an actor who **holds the key**.
-Issue keys out-of-band and never let one enter an agent session. Asymmetric
-signatures aren't in the stdlib; `agentteams/cli/signed_ledger.py`
-(`hmac_sign`/`hmac_verify`) is the single documented **asymmetric swap point**.
+**Honest ceiling — what it costs.** HMAC signing is *symmetric* (one shared key per
+instrument). It stops a **keyless forger** but not an actor who **holds the key**, and a
+Claude-sandboxed agent inherits any key exported into the shell that launched it. So the
+two paths that relax a boundary require the operator's **Ed25519** signature instead
+(`agentteams/cli/signed_ledger.py` `ed25519_sign`/`ed25519_verify`, the `signing` extra): a
+constraint-relaxing decision (`--sign-decision`) and a grant that widens `allowWrite`
+(`--sign-grant`, PR-E). Issue keys out-of-band and never let one enter an agent session.
 
 ## Security decisions log and the CONDITIONAL PASS lifecycle  ✅ {#S8}
 
@@ -123,7 +125,7 @@ for a `holder_team` to perform an op (e.g. `write`) on a `target_path` in the
 issuer's workspace — the cross-workspace analogue of a waiver. Its ledger lives
 in the **holder's** workspace (`references/capability-grants.log.csv`,
 bearer-capability model), **created on the first grant, not shipped**
-(`agentteams/cli/grants.py:1-36`).
+(`agentteams/cli/grants.py:1-49`).
 
 **Enforcement is generation-time only.** On (re)generation with the sandbox on,
 valid `write` grants' targets are merged into the sandbox `allowWrite` set. A
@@ -134,37 +136,45 @@ use, so today `expires_at` is the active temporal bound and `max_uses` is
 validated-but-not-decremented (reserved for a future per-write consume path).
 
 **`validate_grant()` is fail-closed and ordered**
-(`agentteams/cli/grants.py:126-235,306-473`):
+(`agentteams/cli/grants.py:223-354,541-635`):
 
-1. Required fields present → 2. **Signature** verifies → 3. Not expired →
-4. Use-counter not exhausted → 5. Approver on the roster.
+1. Required fields present → 2. **Scheme sufficient**: a `write` grant must be
+`sig_scheme=ed25519`; an HMAC `write` grant is refused with a `--sign-grant` migration
+message → 3. **Signature** verifies (Ed25519 against the holder team dir's
+`references/authorized-verify-keys/<key_id>.pub.pem`; the payload starts with the purpose
+tag `agentteams-grant-v1`) → 4. Not expired → 5. Use-counter not exhausted → 6. Approver on
+the **team-dir** roster.
 
-Cross-workspace grants require an **explicit** approver roster — the
-`{security,@security}` self-clear fallback is refused. Path-safety guards reject
+Cross-workspace grants require an **explicit** approver roster in the holder **team dir**
+(the `--output` the update targets) — the `{security,@security}` self-clear fallback is
+refused, and a project-root `references/security-approvers.txt` is ignored with a warning
+(an in-sandbox agent can plant it; there is no fallback). Path-safety guards reject
 `~`, `..`-escapes, and targets outside a signed `issuer_root`; a **SHA-256
 `prev_digest` chain** is verified on every read (fail-closed on tamper)
-(`agentteams/cli/grants.py:56-84,476-639`).
+(`agentteams/cli/grants.py:74-120,637-902`).
 
 **The commands:**
 
 ```
-agentteams --issue-grant …     # deposits a signed grant into the holder workspace
+agentteams --sign-grant …      # operator Ed25519: the only minter of a widening (write) grant
+agentteams --issue-grant …     # HMAC: non-widening grants only (a write spec is refused)
 agentteams --verify-grants     # read-only per-row audit (mirrors --verify-waivers)
 ```
 
 **C-2 parity:** a grant widens a write boundary, never overrides a HALT.
 
-**Honest ceiling — what it costs.** Same symmetric-HMAC bound (S7): signature and
-digest chain defend a keyless forger and detect accidental/undetected tampering,
-**not** an adversarial peer team holding `AGENTTEAMS_GRANT_SIGNING_KEY`. The
-prev_digest chain makes ledger tampering *evident*, not *impossible*. And because
+**Honest ceiling — what it costs.** A widening grant is as strong as the operator's
+Ed25519 private key (kept in the read-denied `~/.config/agentteams/keys/`) and the write
+protection of the team dir's verify-key store and roster. HMAC grants keep the S7 bound
+and so can no longer widen anything. The prev_digest chain makes ledger tampering
+*evident*, not *impossible*. And because
 enforcement is generation-time, a grant is configuration — its effect on the OS
 boundary engages only when you regenerate with the sandbox on.
 
 ---
 
 **Sources for Part III.**
-`agentteams/cli/grants.py:1-36,56-84,126-235,306-473,476-639`;
+`agentteams/cli/grants.py:1-49,74-120,223-354,425-452,541-635,712-902`;
 `agentteams/cli/security_gate.py:39-69,96-259,430-477,511-616,619-659`;
 `agentteams/cli/decision_log.py:22-63,187-234`;
 `agentteams/cli/signed_ledger.py:9-14,40-92`;

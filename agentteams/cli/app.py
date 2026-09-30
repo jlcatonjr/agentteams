@@ -33,6 +33,7 @@ from agentteams.cli.commands import (
     _run_verify_waivers,
     _run_verify_grants,
     _run_issue_grant,
+    _run_sign_grant,
     _run_verify_directives,
     _run_issue_directive,
     _run_audit_exceptions,
@@ -190,6 +191,8 @@ def _main_dispatch(
         return _run_verify_grants(args)
     if getattr(args, "issue_grant", None):
         return _run_issue_grant(args)
+    if getattr(args, "sign_grant", None):
+        return _run_sign_grant(args)
 
     # --verify-directives / --issue-directive: standalone management-directive ops
     # (authenticated management-repository endowment).

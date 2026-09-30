@@ -121,18 +121,24 @@ deliberately **no runtime path by which an agent widens its own OS boundary.** A
 grant is configuration, not a live capability. This is a deliberate trust
 boundary: self-granting at runtime is the escalation it forecloses.
 
-**`validate_grant()` is fail-closed and ordered:** required fields → signature →
-not expired → use-counter not exhausted → approver on roster. Cross-workspace
-grants require an **explicit** approver roster — the self-clear fallback is
-refused for a cross-workspace reach — and path-safety guards reject `~`,
+**`validate_grant()` is fail-closed and ordered:** required fields → scheme
+sufficient (a `write` grant must be operator Ed25519-signed; an HMAC one is
+refused) → signature → not expired → use-counter not exhausted → approver on the
+holder **team dir**'s roster. Cross-workspace grants require an **explicit**
+approver roster — the self-clear fallback is refused for a cross-workspace reach,
+and a project-root roster, which an in-sandbox agent could plant, is ignored — and
+path-safety guards reject `~`,
 `..`-escapes, and targets outside a signed `issuer_root`. A SHA-256 `prev_digest`
 chain is verified on every read (fail-closed on tamper), so ledger tampering is
 *evident*.
 
-**Honest ceiling.** Same symmetric-HMAC bound as the rest of the triad (S7): the
-signature and digest chain defend against a keyless forger and against
-undetected tampering, **not** against an adversarial peer team that holds the
-grant signing key. The prev_digest chain makes ledger tampering *evident*, not
+**Honest ceiling.** A grant that widens a write boundary is signed with the
+operator's Ed25519 key (`--sign-grant`), because a sandboxed agent inherits the
+shared HMAC grant key from its environment: HMAC defends only against a keyless
+forger, so HMAC grants can no longer widen anything. The Ed25519 payload carries
+the purpose tag `agentteams-grant-v1`, so a signature over a security decision
+cannot be replayed as a grant. A widening grant is as strong as that private key
+and the write protection of the team dir's verify-key store. The prev_digest chain makes ledger tampering *evident*, not
 *impossible*. And because enforcement is generation-time, a grant affects the OS
 boundary only when the operator regenerates with the sandbox on. Full validation
 order and line numbers: Edition R, S10.

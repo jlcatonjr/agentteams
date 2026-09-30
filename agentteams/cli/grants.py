@@ -24,12 +24,25 @@ path, ``expires_at`` is the active temporal bound; ``max_uses`` is validated (an
 grant is rejected) and reserved for a future per-write runtime-consume path, but it is not
 decremented today. Do not rely on ``max_uses`` to bound generation-time widening.
 
-Trust model (symmetric, per the 2026-08-21 decision): one shared
-``AGENTTEAMS_GRANT_SIGNING_KEY``. Signing defends a *keyless* agent from fabricating a
-grant; it does not defend against an actor that holds the key (an adversarial peer
-team). The key must be issued out-of-band and never enter an agent session — the same
-precondition as the waiver key. Asymmetric, cross-team-unforgeable signing would need a
-non-stdlib dependency; :mod:`agentteams.cli.signed_ledger` is the swap point.
+Trust model (PR-E, 2026-09-30 — supersedes the 2026-08-21 symmetric-only decision).
+**A grant that widens ``allowWrite`` (``permitted_ops`` contains ``write``) must be
+Ed25519-signed** by the operator (``--sign-grant``; private key read from the file named by
+``AGENTTEAMS_DECISION_ED25519_KEYFILE``, kept in the read-denied ``~/.config/agentteams/keys``),
+verify against the HOLDER TEAM dir's write-protected store
+``<team dir>/references/authorized-verify-keys/<key_id>.pub.pem``, and name an approver on the
+TEAM-dir roster ``<team dir>/references/security-approvers.txt``. The shared
+``AGENTTEAMS_GRANT_SIGNING_KEY`` is inherited by a Claude-sandboxed process, so an HMAC-signed
+``write`` grant is REFUSED everywhere (issue, ``--verify-grants``, widening) with a migration
+message; there is no transitional flag. HMAC remains only for non-widening grants (e.g.
+``read``). The Ed25519 payload starts with :data:`GRANT_PURPOSE_TAG` (domain separation), so a
+decision signature can never be replayed as a grant, and ``decision_log`` refuses a payload
+carrying the tag, so a grant signature is never accepted as a decision.
+
+**Which team verifies (multi-framework projects):** the team whose ``--output`` the update
+targets — that run's ``output_dir`` is the ``team_dir`` passed to :func:`held_grants`; the
+ledger is read from that run's workspace root (``project_root``). There is **no project-root
+roster fallback** (E3): a project-root ``references/security-approvers.txt`` is exactly what an
+in-sandbox agent can plant, so it is ignored for grants, with a warning naming the remedy.
 
 **C-2 parity:** a grant widens a write boundary; it never overrides a ``@security``
 HALT. A holder still cannot proceed past a HALT on the granted write.
@@ -46,11 +59,15 @@ from pathlib import Path
 
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
 from agentteams.cli.signed_ledger import (
+    SIG_SCHEME_ED25519,
+    SIG_SCHEME_HMAC,
     canonical_payload,
+    ed25519_sign,
     hmac_sign,
     hmac_verify,
     is_expired,
     path_within,
+    verify_by_scheme,
 )
 
 #: Env var holding the shared grant signing secret. Separate from the waiver key so the
@@ -66,6 +83,25 @@ GRANT_COLUMNS: tuple[str, ...] = (
     "permitted_ops", "expires_at", "max_uses", "uses", "approver", "ticket_id",
     "reason_code", "issuer_root", "prev_digest", "signature",
 )
+
+#: Optional trailing ledger columns (PR-E). A pre-PR-E ledger header lacks them: the reader
+#: requires only :data:`GRANT_COLUMNS`, and the append path rewrites the header with these added.
+GRANT_SCHEME_COLUMNS: tuple[str, ...] = ("sig_scheme", "key_id")
+
+#: The column set written on every append.
+GRANT_LEDGER_COLUMNS: tuple[str, ...] = (*GRANT_COLUMNS, *GRANT_SCHEME_COLUMNS)
+
+#: Domain-separation tag: the FIRST value of every Ed25519 grant payload. A decision row's
+#: payload starts with its ``date`` value, and ``decision_log`` refuses (to sign or to accept) any
+#: payload that begins with this tag, so an operator signature over one kind never verifies as
+#: the other.
+GRANT_PURPOSE_TAG = "agentteams-grant-v1"
+
+#: The approver roster, relative to the holder TEAM dir — never the project root (E3).
+GRANT_ROSTER_REL = "references/security-approvers.txt"
+
+#: The operation that widens the holder's sandbox ``allowWrite``.
+_WIDENING_OP = "write"
 
 #: Business fields that MUST be present (non-empty) on every row, in fixed order (excludes
 #: ``timestamp``, ``prev_digest`` and ``signature``). ``uses`` is signed so a tampered
@@ -115,12 +151,59 @@ def _signed_values(record: dict[str, str]) -> list[str]:
     so a grant issued without it (an older grant, or a spec that omits it) keeps a valid
     signature, while a grant that carries an ``issuer_root`` binds it into the signature so an
     attacker cannot forge or widen it (e.g. set it to ``/``) to defeat the containment check.
+
+    ``sig_scheme`` / ``key_id`` (PR-E) follow as LABELLED tokens (``sig_scheme=ed25519``), each
+    only when non-empty, so a pre-PR-E row's payload is byte-identical while a relabelled scheme
+    or key breaks both the signature and the hash chain.
     """
     values = [record.get(f, "") for f in _GRANT_SIGNED_FIELDS]
     issuer_root = (record.get("issuer_root") or "").strip()
     if issuer_root:
         values.append(issuer_root)
+    for axis in GRANT_SCHEME_COLUMNS:
+        value = (record.get(axis) or "").strip()
+        if value:
+            values.append(f"{axis}={value}")
     return values
+
+
+def _ed25519_signed_values(record: dict[str, str]) -> list[str]:
+    """The Ed25519 payload: :data:`GRANT_PURPOSE_TAG`, then :func:`_signed_values`."""
+    return [GRANT_PURPOSE_TAG, *_signed_values(record)]
+
+
+def payload_claims_grant_purpose(values: list[str]) -> bool:
+    """True iff the canonical payload of ``values`` begins with the grant purpose tag.
+
+    The decision minter and verifier call this to refuse a decision payload that could double as
+    a grant payload. ``canonical_payload`` does not escape ``|``, so the test is on the joined
+    bytes, not on the first value alone.
+
+    Args:
+        values: Ordered signed field values of some other ledger row.
+
+    Returns:
+        Whether that payload lies in the grant signing domain.
+    """
+    payload = canonical_payload(values)
+    return payload == GRANT_PURPOSE_TAG or payload.startswith(GRANT_PURPOSE_TAG + "|")
+
+
+def _grant_scheme(record: dict[str, str]) -> str:
+    """Return the row's declared (signed) scheme; ``hmac`` when empty."""
+    return (record.get("sig_scheme") or "").strip().lower() or SIG_SCHEME_HMAC
+
+
+def _hmac_write_refusal(record: dict[str, str]) -> GrantError:
+    """The migration refusal for a non-Ed25519 grant that would widen ``allowWrite``."""
+    return GrantError(
+        f"grant {record.get('grant_id')!r} permits 'write' but is {_grant_scheme(record)}-signed: "
+        "a grant that widens the sandbox allowWrite must be Ed25519-signed by the operator (the "
+        "shared AGENTTEAMS_GRANT_SIGNING_KEY is inherited by sandboxed agents). REFUSED. Migrate: "
+        "re-issue it with `agentteams --sign-grant SPEC.json --framework <fw> --output <holder "
+        "team dir>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE; public key at <team "
+        "dir>/references/authorized-verify-keys/<key_id>.pub.pem)."
+    )
 
 
 def sign_grant(record: dict[str, str], *, key: str | None = None) -> str:
@@ -137,16 +220,47 @@ def sign_grant(record: dict[str, str], *, key: str | None = None) -> str:
     return hmac_sign(signing_key, _signed_values(record))
 
 
-def verify_grant_signature(record: dict[str, str], *, key: str | None = None) -> bool:
-    """Return True iff the record's ``signature`` matches its signed fields.
+def verify_grant_signature(
+    record: dict[str, str], *, key: str | None = None, team_dir: Path | None = None,
+) -> bool:
+    """Return True iff the record's ``signature`` is valid under its DECLARED scheme.
+
+    Validity only. Whether the scheme is *sufficient* (a ``write`` grant needs Ed25519) is
+    decided by :func:`validate_grant`.
 
     Args:
         record: The grant row.
-        key: Override the signing key (defaults to the env key).
+        key: Override the HMAC signing key (defaults to the env key; hmac rows only).
+        team_dir: Holder TEAM dir whose ``authorized-verify-keys`` store verifies an ed25519 row.
 
     Returns:
         Whether the signature is valid.
+
+    Raises:
+        GrantError: An ed25519 row with no ``team_dir``, a missing/invalid verify key, an absent
+            Ed25519 backend, an unknown scheme, or (hmac) an unset key. All fail closed.
     """
+    scheme = _grant_scheme(record)
+    if scheme == SIG_SCHEME_ED25519:
+        if team_dir is None:
+            raise GrantError(
+                f"grant {record.get('grant_id')!r} is ed25519-signed but no holder team dir was "
+                "given to verify it against (fail-closed)"
+            )
+        from agentteams.cli.decision_log import _load_verify_key
+
+        try:
+            public_pem = _load_verify_key(team_dir, (record.get("key_id") or "").strip())
+            return verify_by_scheme(
+                SIG_SCHEME_ED25519, _ed25519_signed_values(record),
+                (record.get("signature") or "").strip(), public_pem=public_pem,
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise GrantError(
+                f"grant {record.get('grant_id')!r} cannot be Ed25519-verified: {exc}"
+            ) from exc
+    if scheme != SIG_SCHEME_HMAC:
+        raise GrantError(f"grant {record.get('grant_id')!r} declares unknown sig_scheme {scheme!r}")
     signing_key = key or _signing_key()
     return hmac_verify(
         signing_key,
@@ -187,27 +301,32 @@ def grant_covers(
 
 
 def validate_grant(
-    record: dict[str, str], *, output_dir: Path | None = None, now: datetime | None = None,
+    record: dict[str, str], *, team_dir: Path | None = None, now: datetime | None = None,
     key: str | None = None,
 ) -> None:
     """Validate a grant row's signature and lifecycle; raise on any failure (fail-closed).
 
-    Checks, in order: required fields present, signature valid, not expired, use-counter
-    not exhausted, and (when ``output_dir`` is given) the approver is on the roster.
+    Checks, in order: required fields present; scheme sufficient (a ``write`` grant must be
+    ed25519, and an HMAC one is refused with a migration message); signature valid; not
+    expired; use-counter not exhausted; and (when ``team_dir`` is given) the approver is on the
+    TEAM-dir roster.
 
     Args:
         record: The grant row.
-        output_dir: Workspace root for roster lookup; skip roster check when None.
+        team_dir: Holder TEAM dir (roster + verify-key store). The roster check is skipped when
+            None, and an ed25519 row cannot verify without it.
         now: Reference time for expiry (defaults to now, UTC).
-        key: Override the signing key.
+        key: Override the HMAC signing key.
 
     Raises:
-        GrantError: Any field/signature/expiry/use-counter/roster check fails.
+        GrantError: Any field/scheme/signature/expiry/use-counter/roster check fails.
     """
     for field in _GRANT_SIGNATURE_FIELDS:
         if not (record.get(field) or "").strip():
             raise GrantError(f"grant is missing required field {field!r}")
-    if not verify_grant_signature(record, key=key):
+    if _WIDENING_OP in _permitted_ops(record) and _grant_scheme(record) != SIG_SCHEME_ED25519:
+        raise _hmac_write_refusal(record)
+    if not verify_grant_signature(record, key=key, team_dir=team_dir):
         raise GrantError(f"grant {record.get('grant_id')!r} has an invalid signature")
     try:
         expired = is_expired(record["expires_at"], now=now)
@@ -230,8 +349,8 @@ def validate_grant(
         raise GrantError(
             f"grant {record.get('grant_id')!r} is exhausted (uses={uses}, max_uses={max_uses})"
         )
-    if output_dir is not None:
-        _assert_approver_on_roster(record.get("approver", ""), output_dir)
+    if team_dir is not None:
+        _assert_approver_on_roster(record.get("approver", ""), team_dir)
 
 
 def _roster_names_an_approver(output_dir: Path) -> bool:
@@ -243,12 +362,12 @@ def _roster_names_an_approver(output_dir: Path) -> bool:
     ``_approved_decision_authors`` would fall back to the built-in default.
 
     Args:
-        output_dir: Workspace root (roster read from ``references/security-approvers.txt``).
+        output_dir: The holder TEAM dir (roster read from ``references/security-approvers.txt``).
 
     Returns:
         Whether a named approver is present.
     """
-    roster_path = output_dir / "references" / "security-approvers.txt"
+    roster_path = output_dir / GRANT_ROSTER_REL
     if not roster_path.exists():
         return False
     try:
@@ -279,7 +398,7 @@ def _assert_approver_on_roster(approver: str, output_dir: Path) -> None:
 
     Args:
         approver: The approver named on the grant (``@`` and case are normalized).
-        output_dir: Workspace root.
+        output_dir: The holder TEAM dir (E3: never the project root; no fallback).
 
     Raises:
         GrantError: The roster is absent/empty, or the approver is not on the roster.
@@ -301,6 +420,36 @@ def _assert_approver_on_roster(approver: str, output_dir: Path) -> None:
             f"grant approver {approver!r} is not on the security-approver roster "
             f"(references/security-approvers.txt)"
         )
+
+
+def warn_if_only_root_roster(repo_root: Path, team_dir: Path) -> str | None:
+    """E3: warn when grants would need a roster that exists only at the project root.
+
+    Grants read the approver roster from the TEAM dir only. A project-root
+    ``references/security-approvers.txt`` is ignored (an in-sandbox agent can plant it); when the
+    team-dir roster names no approver but a project-root one does, print the remedy to stderr.
+
+    Args:
+        repo_root: The holder workspace root (where the ledger lives).
+        team_dir: The holder TEAM dir whose roster grants use.
+
+    Returns:
+        The warning text when one was printed, else None.
+    """
+    try:
+        same = repo_root.resolve() == team_dir.resolve()
+    except OSError:
+        same = False
+    if same or _roster_names_an_approver(team_dir) or not _roster_names_an_approver(repo_root):
+        return None
+    message = (
+        f"WARNING: {repo_root / GRANT_ROSTER_REL} is IGNORED for capability grants (a project-root "
+        f"roster is plantable from inside the sandbox; there is no fallback). Grants read "
+        f"{team_dir / GRANT_ROSTER_REL}, which names no approver, so every grant is refused. "
+        f"Remedy: move the approver list into {team_dir / GRANT_ROSTER_REL}."
+    )
+    print(f"  {message}", file=sys.stderr)
+    return message
 
 
 def _grant_chain_digest(record: dict[str, str]) -> str:
@@ -390,34 +539,39 @@ def _read_grant_rows(repo_root: Path) -> list[dict[str, str]]:
 
 
 def held_grants(
-    repo_root: Path, *, holder_team: str, now: datetime | None = None, key: str | None = None,
+    repo_root: Path, *, holder_team: str, team_dir: Path, now: datetime | None = None,
+    key: str | None = None,
 ) -> list[dict[str, str]]:
     """Return the valid, in-force grants ``holder_team`` holds in ``repo_root``.
 
-    A grant is included only if it passes :func:`validate_grant` (signature, expiry,
-    use-counter) — malformed or invalid rows are skipped, never trusted. Used by
+    A grant is included only if it passes :func:`validate_grant` (scheme sufficiency,
+    signature, expiry, use-counter, TEAM-dir roster). Malformed or invalid rows, including
+    every HMAC-signed ``write`` grant, are skipped with a NOTE, never trusted. Used by
     generation-time sandbox widening to collect the extra write roots a holder has
     earned. Does NOT consume uses (widening is not a per-write event).
 
     Args:
         repo_root: Workspace whose ledger is read.
         holder_team: The team whose grants to collect.
+        team_dir: The holder TEAM dir (the run's ``--output``): roster + verify-key store.
         now: Reference time for expiry.
-        key: Override the signing key.
+        key: Override the HMAC signing key.
 
     Returns:
         The valid grant rows held by ``holder_team``.
     """
     held: list[dict[str, str]] = []
-    for row in _read_grant_rows(repo_root):
+    rows = _read_grant_rows(repo_root)
+    if any((r.get("holder_team") or "").strip() == holder_team.strip() for r in rows):
+        warn_if_only_root_roster(repo_root, team_dir)
+    for row in rows:
         if (row.get("holder_team") or "").strip() != holder_team.strip():
             continue
         try:
-            # Enforce the approver roster here too (output_dir=repo_root), not only in
-            # the manual --verify-grants lint: a grant naming an off-roster approver must
-            # not silently widen the sandbox (adversarial defect 2). The roster lives in
-            # the holder workspace being generated.
-            validate_grant(row, output_dir=repo_root, now=now, key=key)
+            # Enforce the approver roster here too, not only in the manual --verify-grants
+            # lint: a grant naming an off-roster approver must not silently widen the sandbox
+            # (adversarial defect 2). E3: the roster is the TEAM dir's, never the project root's.
+            validate_grant(row, team_dir=team_dir, now=now, key=key)
         except GrantError as exc:
             # An invalid/expired/exhausted grant is not trusted — but skipping it
             # silently would hide a real problem (a tampered or lapsed authorization),
@@ -432,30 +586,37 @@ def held_grants(
 
 
 def granted_write_roots(
-    repo_root: Path, *, holder_team: str, now: datetime | None = None, key: str | None = None,
+    repo_root: Path, *, holder_team: str, team_dir: Path, now: datetime | None = None,
+    key: str | None = None,
 ) -> list[str]:
     """Return the target paths of the valid grants ``holder_team`` holds in ``repo_root``.
 
     The list of extra write roots to merge into a holder's sandbox ``allowWrite`` at
-    generation time. Order-preserving and de-duplicated. Only valid (signed, unexpired,
-    non-exhausted) grants contribute; invalid rows are silently skipped by
+    generation time. Order-preserving and de-duplicated. Only valid grants contribute:
+    Ed25519-signed by a key in ``team_dir``'s verify-key store, approver on ``team_dir``'s
+    roster, unexpired, non-exhausted. Invalid rows are skipped with a NOTE by
     :func:`held_grants`.
 
     Args:
         repo_root: The holder workspace whose ledger is read.
         holder_team: The holder team id.
+        team_dir: The holder TEAM dir (the run's ``--output``).
         now: Reference time for expiry.
-        key: Override the signing key.
+        key: Override the HMAC signing key.
 
     Returns:
         The de-duplicated target paths (may be empty).
     """
     roots: list[str] = []
-    for row in held_grants(repo_root, holder_team=holder_team, now=now, key=key):
+    for row in held_grants(repo_root, holder_team=holder_team, team_dir=team_dir, now=now, key=key):
         # Only grants that permit `write` widen a write boundary — a read-only grant must
         # NOT hand the holder OS write access (adversarial defect 1).
-        if "write" not in _permitted_ops(row):
+        if _WIDENING_OP not in _permitted_ops(row):
             continue
+        # PR-E: re-assert scheme sufficiency on the real enforcement path (defense in depth —
+        # held_grants already refused it via validate_grant).
+        if _grant_scheme(row) != SIG_SCHEME_ED25519:
+            raise _hmac_write_refusal(row)
         target = (row.get("target_path") or "").strip()
         # P2-4: re-assert the guards on the REAL enforcement path, not only at issue time.
         # `target_path` (and `issuer_root`) are signature-covered, so a row reaching here already
@@ -548,42 +709,17 @@ def _assert_target_within_issuer_root(target_path: str, issuer_root: str) -> Non
         )
 
 
-def issue_grant(
-    repo_root: Path, *, issuer_team: str, holder_team: str, target_path: str,
+def _prepare_grant_record(
+    repo_root: Path, *, team_dir: Path, issuer_team: str, holder_team: str, target_path: str,
     permitted_ops: str, expires_at: str, max_uses: int, approver: str, ticket_id: str,
     reason_code: str, grant_id: str, timestamp: str, issuer_root: str = "",
-    key: str | None = None,
 ) -> dict[str, str]:
-    """Mint, sign, and append a capability grant to the HOLDER's ledger.
-
-    The ledger is the holder's ``references/capability-grants.log.csv`` (a bearer
-    capability the holder holds), so the holder's own generation reads it. The approver
-    is checked against ``repo_root``'s security-approver roster at issue time
-    (fail-closed) so an off-roster grant cannot enter the ledger and later widen a
-    boundary unchecked.
-
-    Args:
-        repo_root: The HOLDER workspace root (ledger written under it; roster checked here).
-        issuer_team: The granting team's id (recorded as the authorizer).
-        holder_team: The receiving team's id.
-        target_path: The path in the issuer's workspace the holder may write.
-        permitted_ops: ``;``-separated operations (e.g. ``"write"``).
-        expires_at: ISO-8601 expiry.
-        max_uses: Positive use ceiling (validated; not consumed by generation-time widening).
-        approver: A principal on ``repo_root``'s security-approver roster.
-        ticket_id: Audit ticket reference.
-        reason_code: Short reason code.
-        grant_id: Caller-supplied unique id (no clock/rng available here).
-        timestamp: Caller-supplied ISO-8601 issue time.
-        key: Override the signing key.
-
-    Returns:
-        The signed grant record as written.
+    """Validate a grant spec and return its unsigned, chained record (shared by both minters).
 
     Raises:
         GrantError: ``max_uses`` is not positive, ``target_path`` is unsafe (empty, ``/``,
-            home-rooted, or ``..``-escaping), ``expires_at`` is not valid ISO-8601, the
-            approver is off-roster (or no roster is present), or the signing key is unset.
+            home-rooted, ``..``-escaping, or outside a signed ``issuer_root``), ``expires_at`` is
+            not ISO-8601, the approver is not on the TEAM-dir roster, or the ledger is tampered.
     """
     if max_uses <= 0:
         raise GrantError("max_uses must be a positive integer")
@@ -595,7 +731,8 @@ def issue_grant(
         raise GrantError(
             f"expires_at is not a valid ISO-8601 timestamp ({expires_at!r}): {exc}"
         ) from exc
-    _assert_approver_on_roster(approver, repo_root)
+    warn_if_only_root_roster(repo_root, team_dir)
+    _assert_approver_on_roster(approver, team_dir)
     if max_uses != 1:
         # max_uses is validated at every generation but NOT decremented per write — the
         # generation-time widening path re-reads the ledger and does not consume a use
@@ -613,41 +750,170 @@ def issue_grant(
     # (also verifies the existing chain is intact — fail closed on a tampered ledger).
     existing = _read_grant_rows(repo_root)
     prev_digest = _grant_chain_digest(existing[-1]) if existing else ""
-    record: dict[str, str] = {
+    return {
         "timestamp": timestamp, "grant_id": grant_id, "issuer_team": issuer_team,
         "holder_team": holder_team, "target_path": target_path,
         "permitted_ops": permitted_ops, "expires_at": expires_at,
         "max_uses": str(max_uses), "uses": "0", "approver": approver,
         "ticket_id": ticket_id, "reason_code": reason_code,
         "issuer_root": (issuer_root or "").strip(),
-        "prev_digest": prev_digest, "signature": "",
+        "prev_digest": prev_digest, "signature": "", "sig_scheme": "", "key_id": "",
     }
+
+
+def issue_grant(
+    repo_root: Path, *, team_dir: Path, issuer_team: str, holder_team: str, target_path: str,
+    permitted_ops: str, expires_at: str, max_uses: int, approver: str, ticket_id: str,
+    reason_code: str, grant_id: str, timestamp: str, issuer_root: str = "",
+    key: str | None = None,
+) -> dict[str, str]:
+    """Mint, HMAC-sign, and append a NON-WIDENING capability grant to the HOLDER's ledger.
+
+    The ledger is the holder's ``references/capability-grants.log.csv`` (a bearer
+    capability the holder holds), so the holder's own generation reads it. The approver
+    is checked against ``team_dir``'s roster at issue time (fail-closed). A grant whose
+    ``permitted_ops`` include ``write`` is REFUSED here (PR-E): it must be Ed25519-signed with
+    :func:`sign_ed25519_grant` (``--sign-grant``).
+
+    Args:
+        repo_root: The HOLDER workspace root (ledger written under it).
+        team_dir: The HOLDER team dir (approver roster).
+        issuer_team: The granting team's id (recorded as the authorizer).
+        holder_team: The receiving team's id.
+        target_path: The path in the issuer's workspace the grant covers.
+        permitted_ops: ``;``-separated operations (never ``write`` here).
+        expires_at: ISO-8601 expiry.
+        max_uses: Positive use ceiling (validated; not consumed by generation-time widening).
+        approver: A principal on ``team_dir``'s security-approver roster.
+        ticket_id: Audit ticket reference.
+        reason_code: Short reason code.
+        grant_id: Caller-supplied unique id (no clock/rng available here).
+        timestamp: Caller-supplied ISO-8601 issue time.
+        issuer_root: Optional signed containment anchor (G-6).
+        key: Override the HMAC signing key.
+
+    Returns:
+        The signed grant record as written.
+
+    Raises:
+        GrantError: The grant permits ``write`` (migration message), any spec check in
+            :func:`_prepare_grant_record` fails, or the signing key is unset.
+    """
+    if _WIDENING_OP in _permitted_ops({"permitted_ops": permitted_ops}):
+        raise _hmac_write_refusal({"grant_id": grant_id, "sig_scheme": SIG_SCHEME_HMAC})
+    record = _prepare_grant_record(
+        repo_root, team_dir=team_dir, issuer_team=issuer_team, holder_team=holder_team,
+        target_path=target_path, permitted_ops=permitted_ops, expires_at=expires_at,
+        max_uses=max_uses, approver=approver, ticket_id=ticket_id, reason_code=reason_code,
+        grant_id=grant_id, timestamp=timestamp, issuer_root=issuer_root,
+    )
     record["signature"] = sign_grant(record, key=key)
     _append_grant_row(repo_root, record)
     return record
 
 
+def sign_ed25519_grant(
+    repo_root: Path, *, team_dir: Path, private_pem: str, key_id: str, issuer_team: str,
+    holder_team: str, target_path: str, permitted_ops: str, expires_at: str, max_uses: int,
+    approver: str, ticket_id: str, reason_code: str, grant_id: str, timestamp: str,
+    issuer_root: str = "", password: bytes | None = None,
+) -> dict[str, str]:
+    """Mint an operator Ed25519-signed grant and append it to the HOLDER's ledger (``--sign-grant``).
+
+    The only minter of a grant that can widen ``allowWrite``. The payload is
+    ``[GRANT_PURPOSE_TAG, …signed fields…, sig_scheme=ed25519, key_id=<id>]``. The row is
+    **verified before it is appended** against ``team_dir``: the team's verify-key store must
+    already hold ``<key_id>.pub.pem`` matching ``private_pem``, and the approver must be on the
+    team-dir roster. A row whose signature or approver could not later verify never enters the
+    ledger.
+
+    Args:
+        repo_root: The HOLDER workspace root (ledger written under it).
+        team_dir: The HOLDER team dir (the ``--output`` the update targets): roster + key store.
+        private_pem: The operator's Ed25519 private key PEM.
+        key_id: Names ``<team_dir>/references/authorized-verify-keys/<key_id>.pub.pem``.
+        issuer_team: The granting team's id.
+        holder_team: The receiving team's id.
+        target_path: The path the holder may reach.
+        permitted_ops: ``;``-separated operations (e.g. ``"write"``).
+        expires_at: ISO-8601 expiry.
+        max_uses: Positive use ceiling.
+        approver: A principal on ``team_dir``'s roster.
+        ticket_id: Audit ticket reference.
+        reason_code: Short reason code.
+        grant_id: Caller-supplied unique id.
+        timestamp: Caller-supplied ISO-8601 issue time.
+        issuer_root: Optional signed containment anchor (G-6).
+        password: Optional passphrase for an encrypted PEM.
+
+    Returns:
+        The signed grant record as written.
+
+    Raises:
+        GrantError: A spec check fails, the key cannot sign (backend absent / not Ed25519), or
+            verify-before-append fails (no matching public key in the store, off-roster approver).
+    """
+    record = _prepare_grant_record(
+        repo_root, team_dir=team_dir, issuer_team=issuer_team, holder_team=holder_team,
+        target_path=target_path, permitted_ops=permitted_ops, expires_at=expires_at,
+        max_uses=max_uses, approver=approver, ticket_id=ticket_id, reason_code=reason_code,
+        grant_id=grant_id, timestamp=timestamp, issuer_root=issuer_root,
+    )
+    record["sig_scheme"] = SIG_SCHEME_ED25519
+    record["key_id"] = (key_id or "").strip()
+    try:
+        record["signature"] = ed25519_sign(
+            private_pem, _ed25519_signed_values(record), password=password
+        )
+    except RuntimeError as exc:
+        raise GrantError(f"cannot Ed25519-sign grant {grant_id!r}: {exc}") from exc
+    # Verify-before-append (the roster was already asserted in _prepare_grant_record).
+    try:
+        verified = verify_grant_signature(record, team_dir=team_dir)
+    except GrantError as exc:
+        verified, reason = False, str(exc)
+    else:
+        reason = "the signature does not match the public key stored under that key_id"
+    if not verified:
+        raise GrantError(
+            f"refusing to append grant {grant_id!r}: it does not verify against the holder team "
+            f"dir {team_dir} ({reason}). Install the matching public key as "
+            f"references/authorized-verify-keys/<key_id>.pub.pem there first."
+        )
+    _append_grant_row(repo_root, record)
+    return record
+
+
 def _append_grant_row(repo_root: Path, record: dict[str, str]) -> None:
-    """Append a grant row to the ledger, creating it with a header if absent."""
+    """Append a grant row to the ledger, creating it with a header if absent.
+
+    Always writes :data:`GRANT_LEDGER_COLUMNS`, so a pre-PR-E ledger gains the empty
+    ``sig_scheme``/``key_id`` columns on its next append (their empty values are omitted from
+    every payload, so existing signatures and the hash chain are unchanged).
+    """
     log_path = repo_root / GRANT_LOG_REL
     existing = _read_grant_rows(repo_root) if log_path.exists() else []
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    rows = existing + [record]
+    columns = list(GRANT_LEDGER_COLUMNS)
+    rows = [{c: (r.get(c) or "") for c in columns} for r in (*existing, record)]
     if not log_path.exists():
-        header = ",".join(GRANT_COLUMNS) + "\n"
-        _atomic_write_text(log_path, header)
-    atomic_rewrite_csv_rows(log_path, rows, list(GRANT_COLUMNS))
+        _atomic_write_text(log_path, ",".join(columns) + "\n")
+    atomic_rewrite_csv_rows(log_path, rows, columns)
 
 
-def verify_grants(output_dir: Path, *, now: datetime | None = None, key: str | None = None) -> list[str]:
+def verify_grants(
+    output_dir: Path, *, team_dir: Path, now: datetime | None = None, key: str | None = None,
+) -> list[str]:
     """Validate every grant row read-only; return a list of human-readable problems.
 
-    Mirrors ``--verify-waivers``: consumes nothing, reports every invalid row.
+    Mirrors ``--verify-waivers``: consumes nothing, reports every invalid row, including each
+    HMAC-signed ``write`` grant (with the ``--sign-grant`` migration message).
 
     Args:
-        output_dir: Workspace root.
+        output_dir: Workspace root holding the ledger.
+        team_dir: The holder TEAM dir (roster + verify-key store).
         now: Reference time for expiry.
-        key: Override the signing key.
+        key: Override the HMAC signing key.
 
     Returns:
         A list of problem strings (empty when all rows are valid).
@@ -659,9 +925,11 @@ def verify_grants(output_dir: Path, *, now: datetime | None = None, key: str | N
         # A broken hash chain (or malformed header) is a whole-ledger problem — report it
         # rather than crash the read-only audit.
         return [str(exc)]
+    if rows:
+        warn_if_only_root_roster(output_dir, team_dir)
     for row in rows:
         try:
-            validate_grant(row, output_dir=output_dir, now=now, key=key)
+            validate_grant(row, team_dir=team_dir, now=now, key=key)
         except GrantError as exc:
             problems.append(str(exc))
     return problems
@@ -670,14 +938,20 @@ def verify_grants(output_dir: Path, *, now: datetime | None = None, key: str | N
 __all__ = [
     "GRANT_COLUMNS",
     "GRANT_KEY_ENV",
+    "GRANT_LEDGER_COLUMNS",
     "GRANT_LOG_REL",
+    "GRANT_PURPOSE_TAG",
+    "GRANT_ROSTER_REL",
     "GrantError",
     "grant_covers",
     "granted_write_roots",
     "held_grants",
     "issue_grant",
+    "payload_claims_grant_purpose",
+    "sign_ed25519_grant",
     "sign_grant",
     "validate_grant",
     "verify_grant_signature",
     "verify_grants",
+    "warn_if_only_root_roster",
 ]
