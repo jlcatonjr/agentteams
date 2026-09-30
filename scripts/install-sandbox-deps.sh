@@ -67,28 +67,29 @@ if [ -r "$knob" ]; then
   echo "kernel.apparmor_restrict_unprivileged_userns = $val"
   if [ "$val" = "1" ]; then
     cat <<'EOF'
-  RESTRICTED. Claude Code's sandboxed commands will fail closed on this host (its seccomp step
-  cannot run in a nested user namespace). This script does not change it. Two operator options:
+  RESTRICTED. Claude Code's sandboxed commands will fail closed on this host. This script does not
+  change it. What actually blocks it (measured, Claude Code 2.1.251): Ubuntu's own
+  /etc/apparmor.d/bwrap-userns-restrict moves every process bwrap launches into `unpriv_bwrap`,
+  which denies all capabilities. Claude Code runs its seccomp helper from an anonymous in-memory
+  file INSIDE bwrap, and that helper needs a capability in its nested user namespace, so it is
+  refused. A profile on the `claude` binary does NOT help (the helper runs under bwrap's profile,
+  and a memfd has no path to attach a profile to). `sandbox.enableWeakerNestedSandbox` does not
+  help either.
 
-  (a) An AppArmor profile for the claude binary that grants `userns,` (narrow: only claude, and
-      the processes it starts, regain unprivileged user namespaces). Example, as root:
-        /etc/apparmor.d/claude-code:
-          abi <abi/4.0>,
-          include <tunables/global>
-          profile claude-code /path/to/claude flags=(unconfined) {
-            userns,
-          }
-        apparmor_parser -r /etc/apparmor.d/claude-code
-      The path must match the real binary (resolve ~/.local/bin/claude with `readlink -f`), and
-      an update that moves the binary silently undoes it.
+  Claude Code documents a fix (code.claude.com/docs/en/sandboxing, "Set up Linux and WSL2"): an
+  unconfined `profile bwrap /usr/bin/bwrap flags=(unconfined) { userns, }`. On Ubuntu it collides
+  BY NAME with the `profile bwrap` in bwrap-userns-restrict, so it only sticks if Ubuntu's file is
+  disabled. Either way, bwrap and everything it launches then run without that AppArmor
+  confinement: a host-wide widening for every bwrap user (e.g. flatpak).
 
-  (b) sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0 (persist in /etc/sysctl.d/).
-      Simple and survives claude updates, but it removes the restriction for EVERY unprivileged
-      process on the host, re-exposing the kernel user-namespace attack surface the default
-      exists to reduce.
+  Test the candidates safely first. Each one is applied TEMPORARILY, probed with a real sandboxed
+  Claude Code command, then reverted. Nothing persists unless you pass --persist:
+    sudo bash scripts/test-sandbox-apparmor-userns.sh
+    sudo bash scripts/test-sandbox-apparmor-userns.sh --persist documented   # keep the documented fix
 
-  Trade-off: (a) keeps the host hardening and scopes the exception to one binary but must track
-  that binary's path; (b) is one line but weakens the whole host.
+  The alternative, `sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0`, removes the
+  restriction for EVERY unprivileged process, and may still not help, because bwrap's profile
+  still confines its children. The test script measures it too.
 EOF
   else
     echo "  Not restricted: Claude Code's nested-userns seccomp step can run."

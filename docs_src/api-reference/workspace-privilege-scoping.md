@@ -106,10 +106,15 @@ Other measured Linux behaviours (2026-09-30, Ubuntu):
   `~/.azure`, …) do not need to exist.
 - **With `kernel.apparmor_restrict_unprivileged_userns=1`** (the Ubuntu default), Claude
   Code's seccomp step fails ("apply-seccomp … nested userns is capability-restricted"), so
-  every sandboxed command fails closed. Running the sandbox there needs an operator decision:
-  an AppArmor profile for `claude` that permits user namespaces, or setting the sysctl to 0
-  (which relaxes the restriction for every unprivileged process on the host). The install
-  script explains both and changes neither.
+  every sandboxed command fails closed. The block is Ubuntu's `bwrap-userns-restrict`: every
+  process bwrap launches runs under `unpriv_bwrap`, which denies capabilities, and Claude Code's
+  seccomp helper runs there from an in-memory file. A profile on `claude` therefore does **not**
+  help, and neither does `enableWeakerNestedSandbox`. Claude Code's documented fix is an
+  unconfined `profile bwrap /usr/bin/bwrap`. On Ubuntu it collides by name with the one in
+  `bwrap-userns-restrict`, and it lifts AppArmor confinement from everything bwrap launches on
+  the host. `scripts/test-sandbox-apparmor-userns.sh` tries each candidate (the documented profile,
+  a `local/unpriv_bwrap` capability override, the sysctl) temporarily, probes a real sandboxed
+  command, and reverts. It persists one only with `--persist`.
 
 Until a full product-arm run passes on Linux (`tests/test_os_sandbox_product_enforcement.py`,
 which now fails loudly unless the sandbox is demonstrably operational), treat Claude Code's

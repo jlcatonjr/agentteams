@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (Linux sandbox setup advice on Ubuntu)
+
+- `scripts/install-sandbox-deps.sh` recommended an AppArmor profile on the `claude` binary for
+  hosts with `kernel.apparmor_restrict_unprivileged_userns=1`. That does not work. Ubuntu's
+  `bwrap-userns-restrict` confines every process bwrap launches as `unpriv_bwrap`, which denies
+  capabilities, and Claude Code's seccomp helper runs there from an anonymous memfd, so no
+  path-attached profile can reach it (measured on Claude Code 2.1.251). The script now explains
+  the real mechanism and Claude Code's documented fix (an unconfined `bwrap` profile), including
+  its name collision with Ubuntu's profile and its host-wide scope.
+- New `scripts/test-sandbox-apparmor-userns.sh` (root) tries each candidate temporarily, probes
+  a real sandboxed Claude Code command (the in-root write must succeed; the escape and the
+  signing-switch write must fail), and reverts. It persists one only with `--persist`.
+
 ### security (remaining sandbox trust roots — PR-D)
 
 - **The HMAC grant route is closed by the Ed25519-grants change below (#79),** not by this entry.
