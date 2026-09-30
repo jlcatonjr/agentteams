@@ -82,8 +82,10 @@ if [ -r "$knob" ]; then
   disabled. Either way, bwrap and everything it launches then run without that AppArmor
   confinement: a host-wide widening for every bwrap user (e.g. flatpak).
 
-  Test the candidates safely first. Each one is applied TEMPORARILY, probed with a real sandboxed
-  Claude Code command, then reverted. Nothing persists unless you pass --persist:
+  (A local `allow capability` override for unpriv_bwrap cannot work: an AppArmor deny beats an
+  allow.) Test the candidates safely first. Each one is applied TEMPORARILY, probed with a real
+  sandboxed Claude Code command, then reverted. One persists only with --persist, and only if it
+  PASSED:
     sudo bash scripts/test-sandbox-apparmor-userns.sh
     sudo bash scripts/test-sandbox-apparmor-userns.sh --persist documented   # keep the documented fix
 

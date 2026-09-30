@@ -17,7 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its name collision with Ubuntu's profile and its host-wide scope.
 - New `scripts/test-sandbox-apparmor-userns.sh` (root) tries each candidate temporarily, probes
   a real sandboxed Claude Code command (the in-root write must succeed; the escape and the
-  signing-switch write must fail), and reverts. It persists one only with `--persist`.
+  signing-switch write must fail), and reverts. It persists one only with `--persist`, and only if
+  its probe passed. `--persist documented` disables Ubuntu's `bwrap-userns-restrict` HOST-WIDE.
 
 ### security (remaining sandbox trust roots — PR-D)
 

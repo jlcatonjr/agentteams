@@ -112,9 +112,10 @@ Other measured Linux behaviours (2026-09-30, Ubuntu):
   help, and neither does `enableWeakerNestedSandbox`. Claude Code's documented fix is an
   unconfined `profile bwrap /usr/bin/bwrap`. On Ubuntu it collides by name with the one in
   `bwrap-userns-restrict`, and it lifts AppArmor confinement from everything bwrap launches on
-  the host. `scripts/test-sandbox-apparmor-userns.sh` tries each candidate (the documented profile,
-  a `local/unpriv_bwrap` capability override, the sysctl) temporarily, probes a real sandboxed
-  command, and reverts. It persists one only with `--persist`.
+  the host. `scripts/test-sandbox-apparmor-userns.sh` tries each candidate (the documented profile and
+  the sysctl; a `local/unpriv_bwrap` allow cannot beat its deny) temporarily, probes a real
+  sandboxed command, and reverts. It persists one only with `--persist`, and only if that
+  candidate's probe passed.
 
 Until a full product-arm run passes on Linux (`tests/test_os_sandbox_product_enforcement.py`,
 which now fails loudly unless the sandbox is demonstrably operational), treat Claude Code's
