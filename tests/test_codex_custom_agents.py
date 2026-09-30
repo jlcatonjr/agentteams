@@ -670,3 +670,24 @@ def test_contained_path_rejects_symlink_escape(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         contained_path(base, "/etc/passwd")
     assert contained_path(base, "refs/a.md") == base / "refs" / "a.md"
+
+
+def test_preplanted_skill_symlinks_cannot_redirect_writes(tmp_path: Path) -> None:
+    """baseAgent @security (2026-09-29): SKILL.md and its directory are containment-checked."""
+    import pytest
+
+    agents = _claude_team_with_skill(tmp_path / "proj")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    skills_root = tmp_path / "proj" / ".agents" / "skills"
+    (skills_root / "recall").mkdir(parents=True)
+    (skills_root / "recall" / "SKILL.md").symlink_to(outside / "victim.md")
+    with pytest.raises(ValueError, match="unsafe skill file path"):
+        run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", skills_only=True, overwrite=True)
+    assert not (outside / "victim.md").exists()
+    (skills_root / "recall" / "SKILL.md").unlink()
+    (skills_root / "recall").rmdir()
+    (skills_root / "recall").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="unsafe skill file path"):
+        run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", skills_only=True, overwrite=True)
+    assert list(outside.iterdir()) == []

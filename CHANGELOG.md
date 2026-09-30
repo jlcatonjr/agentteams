@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (skill destination containment)
+
+- Interop skill import now checks that the skill directory and its `SKILL.md` stay inside the target skills
+  root (`.claude/skills` / `.agents/skills`). A pre-planted symlink at `<name>/` or
+  `<name>/SKILL.md` can no longer redirect the write outside the project. Co-located files were
+  already checked (#71). Reported by baseAgent's @security, 2026-09-29.
+
 ### added (`--interop-skills-only`: skills without re-rendering agents)
 
 - `agentteams --interop-from <team> --framework <claude|codex> --interop-skills-only` imports **only**

@@ -454,8 +454,12 @@ def import_skills(
         for skill in cai_skills:
             slug = str(skill["slug"]).strip()
             require_safe_slug(slug)
-            skill_dir = adapter.skills_dir(target_dir) / slug
-            dest = skill_dir / "SKILL.md"
+            skills_root = adapter.skills_dir(target_dir)
+            # Anchor on the skills root: a pre-planted symlink at <slug>/ or <slug>/SKILL.md
+            # must not redirect the write (baseAgent @security, 2026-09-29). Co-located files
+            # below are then checked against this already-contained directory.
+            skill_dir = contained_path(skills_root, slug)
+            dest = contained_path(skills_root, f"{slug}/SKILL.md")
             if dest.exists() and not overwrite:
                 result.skipped.append(str(dest))
                 continue
