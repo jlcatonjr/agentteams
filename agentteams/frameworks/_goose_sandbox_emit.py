@@ -256,8 +256,10 @@ def _build_seatbelt_profile(
             at or inside the operator signing-key directory.
     """
     from agentteams.frameworks._sandbox_emit import (
+        GRANT_ROSTER_PROJECT_REL,
         assert_roots_clear_of_signing_keys,
         control_plane_ancestors,
+        governed_roster_paths,
         protected_write_paths,
         signing_key_deny_read,
     )
@@ -323,8 +325,13 @@ def _build_seatbelt_profile(
     # and all descendants, so no key can be planted in it), or its OWN Seatbelt profile. Emitted
     # AFTER the workspace allow so
     # last-match-wins denies these even though they sit inside the writable workspace.
-    control_plane = [*protected_write_paths("goose"), ".goose/sandbox.sb"]
-    cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in control_plane) if e]
+    # PR-D: plus the operator-only rosters/config (a deny on a missing path also stops the agent
+    # CREATING it) and the project-root grant roster. The Claude gate hook stays in
+    # protected_write_paths("goose") on purpose (3c: a goose-confined agent must not replace the
+    # hook the next Claude session runs). The grant roster gets no ancestor rule: a create-deny
+    # on the `references` literal would stop a goose agent creating a project `references/` dir.
+    control_plane = [*protected_write_paths("goose"), ".goose/sandbox.sb", *governed_roster_paths("goose")]
+    cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (*control_plane, GRANT_ROSTER_PROJECT_REL)) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",
         "(deny file-write*",

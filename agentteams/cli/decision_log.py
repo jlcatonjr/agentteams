@@ -534,6 +534,9 @@ def _assert_relaxing_row_is_traceable(
 #: (which emits a README sentinel so the path exists) so an agent cannot plant its own public key.
 #: That closes key PLANTING only; the Claude directory-denyWrite arm is unverified on a real host,
 #: and self-signing stays possible while the private key is readable in the sandbox (F-1).
+#: F-2 (PR-D): relative to the TEAM dir (``output_dir``, e.g. ``.claude/agents``), never the project
+#: root. The operator helper writes here with ``--team-dir``; ``--sign-decision`` refuses a non-team
+#: ``--output`` and verifies each new signature against this store before appending.
 _VERIFY_KEY_STORE_REL = "references/authorized-verify-keys"
 
 #: A key-id must be a safe bare filename stem (no path separators / traversal).

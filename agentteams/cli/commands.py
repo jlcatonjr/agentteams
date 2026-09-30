@@ -226,8 +226,8 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
 
     enforcement_rc = 0
     manifest_path = output_dir / integrity.MANIFEST_REL_PATH
-    if manifest_path.exists():
-        enf_findings = integrity.verify(output_dir)
+    enf_findings = integrity.verify(output_dir)  # a MISSING shipped manifest is a finding (PR-D)
+    if manifest_path.exists() or enf_findings:
         if enf_findings:
             enforcement_rc = 1
             print(f"Enforcement manifest ({integrity.MANIFEST_REL_PATH}): MISMATCH", file=sys.stderr)
@@ -1075,6 +1075,22 @@ def _run_list_exceptions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _sign_decision_team_refusal(output_dir: Path) -> str | None:
+    """F-2: return why ``output_dir`` is not a team root ``--sign-decision`` may append to, or None.
+
+    The gate reads the decisions log and the verify-key store relative to the TEAM dir, so a row
+    minted anywhere else (``--project .``, a bare CWD) was a silent no-op the gate never read. A
+    team is detected by ``references/agent-privilege.json`` OR ``references/build-log.json``.
+    """
+    refs = output_dir / "references"
+    if (refs / "agent-privilege.json").is_file() or (refs / "build-log.json").is_file():
+        return None
+    return (f"{output_dir} is not an agentteams team dir (no references/agent-privilege.json or "
+            "references/build-log.json). The gate reads the decisions log and the verify-key store "
+            "relative to the team dir; pass --output <project>/.claude/agents (or the team's agents "
+            "dir). Refusing to sign (fail-closed).")
+
+
 def _run_sign_decision(args: argparse.Namespace) -> int:
     """``--sign-decision``: operator-only Ed25519 minter for a constraint-relaxing decision row.
 
@@ -1100,6 +1116,10 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
     from agentteams.cli import signed_ledger as sl
 
     output_dir = _resolve_output_dir(args)
+    refusal = _sign_decision_team_refusal(output_dir)
+    if refusal:
+        print(f"Error: {refusal}", file=sys.stderr)
+        return 1
     try:
         spec = json.loads(Path(args.sign_decision).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -1169,7 +1189,16 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
               "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
         return 1
     try:
-        row["signature"] = sl.ed25519_sign(private_pem, dl._decision_signature_values(row))
+        values = dl._decision_signature_values(row)
+        row["signature"] = sl.ed25519_sign(private_pem, values)
+        # F-2 verify-before-append: the key the GATE will load (this team's store, by key_id)
+        # must verify the new signature, or the row is refused now rather than at gate time.
+        public_pem = dl._load_verify_key(output_dir, row.get("key_id", ""))
+        if not sl.ed25519_verify(public_pem, values, row["signature"]):
+            raise RuntimeError(
+                f"the signature does not verify against {dl._VERIFY_KEY_STORE_REL}/"
+                f"{row.get('key_id', '')}.pub.pem in {output_dir} (a private/public key mismatch, "
+                "or the public key was provisioned into another team dir). Nothing appended.")
         dl.append_signed_decision_row(output_dir, row)
     except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)

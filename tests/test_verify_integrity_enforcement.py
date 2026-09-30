@@ -202,8 +202,8 @@ def _tamper(root: pathlib.Path, rel: str, old: str, new: str) -> None:
     ("rel", "old", "new"),
     [
         # drop the profile's self-protection from the goose control-plane deny
-        (_GOOSE_EMITTER, '[*protected_write_paths("goose"), ".goose/sandbox.sb"]',
-         '[*protected_write_paths("goose")]'),
+        (_GOOSE_EMITTER, '[*protected_write_paths("goose"), ".goose/sandbox.sb", *governed_roster_paths("goose")]',
+         '[*protected_write_paths("goose"), *governed_roster_paths("goose")]'),
         # unwire the gate hook from PreToolUse
         (_SETTINGS_EXAMPLE, '"PreToolUse"', '"PreToolUseDisabled"'),
         # drop the verify-key store from the deny list

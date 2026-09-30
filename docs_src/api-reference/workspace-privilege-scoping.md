@@ -229,8 +229,9 @@ Two properties matter for the privilege model:
   `allowRead`). The goose Seatbelt profile and `sandbox/confine-run.sh` deny the same directory.
   Keys provisioned before this change sit directly in `~/.config/agentteams/`; the ones present
   on the generating host are denied by **exact path** for now (the sandbox takes no globs), and
-  `provision-operator-signing-key.sh --migrate` moves them into `keys/` without overwriting or
-  deleting anything. A workspace write root at or inside `keys/` is refused at generation, since
+  `provision-operator-signing-key.sh --migrate` (an operator helper in the agentteams source
+  repository's `references/authorized-verify-keys/`, not emitted into generated projects) moves
+  them into `keys/` without overwriting or deleting anything. A workspace write root at or inside `keys/` is refused at generation, since
   a narrower `allowRead` would re-open it. Only the key **file** is covered: the environment
   variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` are inherited by
   Claude-sandboxed commands (the launcher scrubs its environment; Claude Code does not). No
@@ -242,7 +243,16 @@ Two properties matter for the privilege model:
   `.claude/`). So the same branch that emits the sandbox block adds `permissions.deny`:
   `Read(~/.config/agentteams/keys/**)` and `Read(~/.config/agentteams/*.pem)` (the legacy glob,
   in gitignore syntax — used here only), and project-anchored `Edit(/…)` rules for the switch,
-  the gate hook and the verify-key store (`Edit(/.claude/agents/references/authorized-verify-keys/**)`).
+  the verify-key store (`Edit(/.claude/agents/references/authorized-verify-keys/**)`), and
+  (PR-D) the team's `security-approvers.txt`, `authorized-managers.txt` and
+  `management-authority.json`, the project-root `references/security-approvers.txt`,
+  `.claude/settings.json`, `.claude/settings.local.json` and `.claude/hooks/**` (which subsumes
+  the single gate-hook rule). The roster, settings and hooks rules are **emitted,
+  product-unverified**: they are stricter than Claude Code's own `.claude` ask, which was
+  measured under `acceptEdits` only. They block an agent's tool edits of those files; you merge
+  settings outside the session. **The HMAC grant route is not closed here:** an in-sandbox Bash
+  process can still create the project-root roster (it is protect-if-present in the launcher);
+  that route is addressed separately by the Ed25519-grants change.
   `Edit(...)` covers Edit, Write and MultiEdit; Claude Code reports that a `NotebookEdit(path)`
   rule "is not matched by file permission checks", so none is emitted. A `Read(...)` rule covers
   Grep and Glob on a best-effort basis; there is no `Grep(...)`/`Glob(...)` form. Residuals:
@@ -250,6 +260,31 @@ Two properties matter for the privilege model:
   servers run unsandboxed; goose has no Claude-style permission system (its Seatbelt profile
   binds every process goose runs). A denyRead path that does not exist was tolerated by bwrap on
   Claude Code 2.1.251 (Linux); the Claude arm stays **unverified end-to-end** on Linux.
+- **Operator-only rosters (PR-D, 2026-09-30).** `security-approvers.txt` (decision and waiver
+  approvers), `authorized-managers.txt` and `management-authority.json` in the team's
+  `references/` name who may approve or manage. An agent that wrote one could name itself.
+  Coverage per arm: Claude Bash — already inside the `.claude` `denyWrite` (the Claude
+  `denyWrite` list is unchanged); built-in tools — the `Edit(...)` rules above; goose Seatbelt —
+  added to the control-plane deny (**unverified**, no macOS host; a deny on a missing path also
+  stops the agent creating it; the project-root roster gets no ancestor rule, so a goose agent
+  can still create a project `references/` dir); Linux launcher — added to its control plane.
+  So that every entry exists, a sandboxed claude or goose team gets **comment-only stubs** of the
+  three files, written only when absent (`O_CREAT|O_EXCL|O_NOFOLLOW`: an existing roster or a
+  planted symlink is never touched, and the stubs never go through the overwrite path). A stub
+  reads exactly like an absent file in every reader (default approvers; no manager; no
+  management authority). A team with no sandbox, and no management settings, gets no new file.
+- **In-sandbox `--update` refuses before writing (3b).** A sandboxed session sees the team dir
+  read-only, so an `--update` there used to fail file by file and leave a partial tree. It now
+  probes the team dir first (a create+unlink of a temp file, plus a non-truncating,
+  non-blocking, no-follow write-only open of each existing control-plane file, so a planted FIFO
+  cannot hang it) and exits 2 with one message, writing nothing. `--dry-run` reports that a real
+  run would be refused. A path that does not exist yet is "can't tell", not "writable".
+- **A missing integrity manifest is a finding where one is expected.** `integrity.verify` used
+  to return nothing when `references/enforcement-integrity.json` was absent. It now reports a
+  `manifest-missing` finding when the repository tracks the manifest in git or the imported
+  scanner sits inside the project below its top level (an in-project `.venv`);
+  `--verify-integrity` exits 1 on it, and a confined (fail-closed) gate hook answers `ask`, not
+  `deny`. A consumer project whose scanner is installed elsewhere is unchanged.
 - **`allowUnsandboxedCommands: false`** closes the `dangerouslyDisableSandbox`
   escape hatch.
 
@@ -649,12 +684,20 @@ installs the `socat` that Claude Code's own sandbox needs) and refuses to launch
 
 **Control plane (F-4, Linux branch).** Inside every writable root (`--scratch`, `--writable`,
 `--coord-root`) the launcher `--ro-bind`s each agentteams control-plane path that exists there
-(the `enforce_decision_signing` switch, the gate hook and the verify-key store for claude and
-goose, and `.goose/sandbox.sb`), and gives each ancestor directory below the root a read-write
-self-bind so it becomes a mount point: `mv .claude .claude.old` fails `EBUSY`, while writes
-inside `.claude/` still work. The order is rw roots, ancestor self-binds, read-only binds, then
-the credential masks. Each path is `realpath`'d and a symlink anywhere on it is refused; an
-absent path is skipped, never created. `--protect PATH` (repeatable) read-only binds an extra
+(the `enforce_decision_signing` switch, the gate hook, the verify-key store and — PR-D — the
+`security-approvers.txt` / `authorized-managers.txt` / `management-authority.json` rosters for
+claude and goose, `.goose/sandbox.sb`, the project-root `references/security-approvers.txt`, and
+each team's `references/build-log.json`), and gives each ancestor directory below the root a
+read-write self-bind so it becomes a mount point: `mv .claude .claude.old` fails `EBUSY`, while
+writes inside `.claude/` still work. The order is rw roots, ancestor self-binds, read-only binds,
+then the credential masks. Each path is `realpath`'d and a symlink anywhere on it is refused;
+nothing is ever created. A framework's entries are **required** only when that framework holds
+an agentteams team, marked by `<agents dir>/references/build-log.json` (a hand-written
+`.claude/agents` without one is skipped); the marker itself is read-only bound so it cannot be
+deleted to disable the check, and the rosters are required only when the team's switch is
+present. A required entry that is missing is an exit-2 refusal ("run agentteams --update");
+a team generated before PR-D lacks the roster stubs and is refused until its next `--update`.
+The project-root roster is protect-if-present only. `--protect PATH` (repeatable) read-only binds an extra
 path — `--protect "$PWD/.claude"` makes the whole config dir read-only, the Claude-block
 equivalent — and a missing `--protect` path is an exit-2 refusal, never a `mkdir`. `--check`
 prints the result on a `control-plane (ro)` line. Mechanism-verified (the launcher run end to

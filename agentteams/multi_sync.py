@@ -249,6 +249,12 @@ def _emit_privilege_artifacts(
         if not dry_run:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
+    # PR-D: the comment-only roster stubs the launcher/Seatbelt entries need, write-if-absent
+    # (never through the overwrite loop above, which would clobber an operator roster).
+    from agentteams.control_plane_io import write_control_plane_stubs
+
+    stubs = write_control_plane_stubs(agents_dir, framework, manifest, dry_run=dry_run)
+    written += [str(p.resolve()) for p in stubs]
     return written
 
 

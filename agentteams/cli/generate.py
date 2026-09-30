@@ -55,7 +55,8 @@ from agentteams.frameworks.registry import FRAMEWORKS
 from agentteams.cli.generate_helpers import (  # noqa: F401
     _sweep_capability_key,
     _emit_agent_privilege_config,
-    _emit_management_authority_config,
+    _emit_privilege_artifacts,
+    _preflight_sandboxed_write,
     _verify_enforcement_integrity,
     _bridge_entry_files,
     _bridge_gate_refusal,
@@ -273,6 +274,8 @@ def _run_generate_inner(
     )
     if _standalone_rc is not None:
         return _standalone_rc
+    if (_preflight_rc := _preflight_sandboxed_write(args, output_dir)) is not None:
+        return _preflight_rc  # 3b: an in-sandbox run refuses before writing anything
 
     # -----------------------------------------------------------------------
     # Step 4d: Build live security intelligence placeholders
@@ -560,8 +563,7 @@ def _run_generate_inner(
                             f"  !  Model-routing write failed: {exc}",
                             file=sys.stderr,
                         )
-                _emit_agent_privilege_config(manifest, output_dir)
-                _emit_management_authority_config(manifest, output_dir)
+                _emit_privilege_artifacts(manifest, output_dir)
                 _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
@@ -725,8 +727,7 @@ def _run_generate_inner(
                         f"  !  Model-routing write failed: {exc}",
                         file=sys.stderr,
                     )
-            _emit_agent_privilege_config(manifest, output_dir)
-            _emit_management_authority_config(manifest, output_dir)
+            _emit_privilege_artifacts(manifest, output_dir)
             _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
             from agentteams import git_hooks as _git_hooks
             _git_hooks.maybe_install_git_hooks(args, project_root)
@@ -957,8 +958,7 @@ def _run_generate_inner(
                     f"  !  Model-routing write failed: {exc}",
                     file=sys.stderr,
                 )
-        _emit_agent_privilege_config(manifest, output_dir)
-        _emit_management_authority_config(manifest, output_dir)
+        _emit_privilege_artifacts(manifest, output_dir)
         _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
         from agentteams import git_hooks as _git_hooks
         _git_hooks.maybe_install_git_hooks(args, project_root)

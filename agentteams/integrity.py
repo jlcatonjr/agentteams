@@ -26,7 +26,10 @@ harness (where agents cannot write it) and keep signing keys outside the agent's
 from __future__ import annotations
 
 import hashlib
+import os
+import importlib.util
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -145,10 +148,47 @@ class IntegrityFinding:
     rel_path: str
     expected: str
     actual: str
-    reason: str  # "modified" | "missing" | "unmanifested"
+    reason: str  # "modified" | "missing" | "unmanifested" | "manifest-missing"
 
     def describe(self) -> str:
+        if self.reason == "manifest-missing":
+            return (f"{self.rel_path}: the integrity manifest is missing although this repository "
+                    "ships one or the scanner runs from inside it (nothing can be verified)")
         return f"{self.rel_path}: {self.reason} (expected {self.expected[:12]}, got {self.actual[:12]})"
+
+
+def _manifest_expected(repo_root: Path) -> bool:
+    """True when a MISSING manifest at ``repo_root`` must be a finding, not "never set up".
+
+    Two cases (PR-D, row 31): the imported scanner (``agentteams/scan.py``) resolves inside
+    ``repo_root`` below its top level (an in-project ``.venv``), so an in-project agent can edit
+    both the scanner and the manifest; or ``repo_root`` is a git work tree that TRACKS the
+    manifest (this repository), so its absence is a deletion. A consumer project whose scanner
+    sits outside it (site-packages) and that tracks no manifest keeps the historical ``[]``.
+    Rule-12: a scanner at ``<repo_root>/agentteams/scan.py`` that git does not track the
+    manifest for (an untracked source copy) is NOT flagged; that is the pip-installed layout
+    ``generate_helpers._verify_enforcement_integrity`` checks (site-packages as ``repo_root``).
+    """
+    root = repo_root.resolve()
+    spec = importlib.util.find_spec("agentteams.scan")
+    if spec is not None and spec.origin:
+        scanner = Path(spec.origin).resolve()
+        if scanner.is_relative_to(root) and scanner != root / "agentteams" / "scan.py":
+            return True
+    try:
+        # This runs from the gate hook, OUTSIDE the sandbox, in a repository the agent can write.
+        # Command-line -c overrides the repo's own config, so a planted `core.fsmonitor` (which git
+        # executes during ls-files) or hooks path cannot run code here (@security, PR-D C1).
+        tracked = subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+             "-c", "core.untrackedCache=false", "-C", str(root),
+             "ls-files", "--error-unmatch", "--", MANIFEST_REL_PATH],
+            capture_output=True, text=True, timeout=10, check=False,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return tracked.returncode == 0
 
 
 def _digest(path: Path) -> str:
@@ -204,12 +244,18 @@ def verify(repo_root: Path) -> list[IntegrityFinding]:
 
     Returns:
         A finding per mismatch; empty when everything matches. **A missing manifest returns
-        empty** — an unmanifested repository is not a tampered one, and treating "never set up"
-        as "compromised" would make the check fire on every fresh clone until it got muted.
-        Callers that require a manifest must check for the file themselves.
+        empty** in an ordinary consumer project — an unmanifested repository is not a tampered
+        one, and treating "never set up" as "compromised" would make the check fire on every
+        fresh clone until it got muted. It is ONE ``manifest-missing`` finding when the
+        repository ships the manifest or the scanner runs from inside it
+        (:func:`_manifest_expected`, PR-D): there the absence is a deletion, and ``[]`` would
+        let the scanner-tamper check pass silently.
     """
     manifest_path = repo_root / MANIFEST_REL_PATH
     if not manifest_path.exists():
+        if _manifest_expected(repo_root):
+            return [IntegrityFinding(rel_path=MANIFEST_REL_PATH, expected="", actual="",
+                                     reason="manifest-missing")]
         return []
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))

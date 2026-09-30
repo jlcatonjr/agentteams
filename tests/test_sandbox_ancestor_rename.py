@@ -71,15 +71,22 @@ def test_claude_block_write_denies_the_framework_config_dir():
 
 
 def test_config_dir_deny_does_not_touch_permissions_deny():
-    # PR-C's built-in-tool rules are unchanged: no Edit(/.claude/**) (that would block agents'
-    # own Write-tool edits under .claude) and nothing removed.
+    # Still no Edit(/.claude/**) (that would block agents' own Write-tool edits under .claude).
+    # PR-D adds the rosters, the settings files and hooks/** (which subsumes the single hook rule).
     assert permission_deny_rules("claude") == [
         "Read(~/.config/agentteams/keys/**)",
         "Read(~/.config/agentteams/*.pem)",
         "Edit(/.claude/agents/references/agent-privilege.json)",
-        "Edit(/.claude/hooks/constitutional-gate.py)",
         "Edit(/.claude/agents/references/authorized-verify-keys/**)",
+        "Edit(/.claude/agents/references/security-approvers.txt)",
+        "Edit(/.claude/agents/references/authorized-managers.txt)",
+        "Edit(/.claude/agents/references/management-authority.json)",
+        "Edit(/references/security-approvers.txt)",
+        "Edit(/.claude/settings.json)",
+        "Edit(/.claude/settings.local.json)",
+        "Edit(/.claude/hooks/**)",
     ]
+    assert "Edit(/.claude/**)" not in permission_deny_rules("claude")
 
 
 def test_control_plane_ancestors_are_top_down_and_deduplicated():
@@ -108,10 +115,21 @@ def test_seatbelt_ancestor_rules_fail_closed_on_an_unrepresentable_ancestor():
 
 
 def test_launcher_control_plane_list_is_locked_to_the_python_source():
+    from agentteams.frameworks._sandbox_emit import (
+        GRANT_ROSTER_PROJECT_REL,
+        TEAM_MARKER_REL,
+        governed_roster_paths,
+    )
+
     text = LAUNCHER.read_text(encoding="utf-8")
     body = re.search(r"CONTROL_PLANE_REL=\(([^)]*)\)", text).group(1)
-    expected = {*protected_write_paths("claude"), *protected_write_paths("goose"), ".goose/sandbox.sb"}
+    expected = {*protected_write_paths("claude"), *protected_write_paths("goose"), ".goose/sandbox.sb",
+                *governed_roster_paths("claude"), *governed_roster_paths("goose"),
+                GRANT_ROSTER_PROJECT_REL}
     assert set(body.split()) == expected
+    assert re.search(r"^TEAM_MARKER_REL=(\S+)$", text, re.M).group(1) == TEAM_MARKER_REL
+    teams = re.search(r"TEAM_DIRS_REL=\(([^)]*)\)", text).group(1).split()
+    assert teams == [".claude/agents", ".goose/recipes"]
 
 
 # --- mechanism: raw bubblewrap ----------------------------------------------------------------
@@ -137,9 +155,12 @@ attempt("root", lambda: open("rootfile", "w").write("x"))
 """
 
 
-def _project(tmp_path: Path) -> Path:
+def _project(tmp_path: Path, *, team: bool = True) -> Path:
+    """A sandboxed Claude team: the control plane, the roster stubs and (``team``) the build-log."""
+    from agentteams.frameworks._sandbox_emit import TEAM_MARKER_REL, governed_roster_paths
+
     p = (tmp_path / "proj").resolve()
-    for rel in protected_write_paths("claude"):
+    for rel in (*protected_write_paths("claude"), *governed_roster_paths("claude")):
         q = p / rel
         if q.name == "authorized-verify-keys":
             q.mkdir(parents=True)
@@ -147,6 +168,8 @@ def _project(tmp_path: Path) -> Path:
         else:
             q.parent.mkdir(parents=True, exist_ok=True)
             q.write_text("{}\n", encoding="utf-8")
+    if team:
+        (p / ".claude/agents" / TEAM_MARKER_REL).write_text("{}\n", encoding="utf-8")
     return p
 
 
@@ -278,6 +301,7 @@ def test_launcher_argv_order_rw_roots_then_ancestors_then_ro_then_masks(tmp_path
     root = pos[("--bind", str(p))]
     anc = [pos[("--bind", str(p / a))] for a in control_plane_ancestors(protected_write_paths("claude"))]
     ro = [pos[("--ro-bind", str(p / c))] for c in protected_write_paths("claude")]
+    assert ("--ro-bind", str(p / ".claude/agents/references/build-log.json")) in pos
     mask = pos[("--ro-bind", str(secret))]
     assert root < min(anc) and max(anc) < min(ro) and max(ro) < mask
     assert anc == sorted(anc)  # top-down
@@ -333,6 +357,9 @@ def test_launcher_covers_writable_and_coord_roots_too(tmp_path):
     ".claude/agents/references/agent-privilege.json",
     ".claude/agents/references/authorized-verify-keys",
     ".claude/hooks/constitutional-gate.py",
+    ".claude/agents/references/security-approvers.txt",
+    ".claude/agents/references/authorized-managers.txt",
+    ".claude/agents/references/management-authority.json",
 ])
 def test_launcher_refuses_a_missing_control_plane_entry_when_the_team_exists(tmp_path, missing):
     """@security (PR-B review): with the team present, an absent entry sits under a rename-locked but

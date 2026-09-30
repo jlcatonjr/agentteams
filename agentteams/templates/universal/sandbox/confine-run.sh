@@ -46,14 +46,20 @@
 #
 # CONTROL PLANE (F-4, 2026-09-30; Linux/bwrap branch only): inside every writable root (--scratch,
 #   --writable, --coord-root) each EXISTING agentteams control-plane path (CONTROL_PLANE_REL below:
-#   the enforce_decision_signing switch, the gate hook, the verify-key store, the goose profile) is
+#   the enforce_decision_signing switch, the gate hook, the verify-key store, the approver/manager
+#   rosters and management config (PR-D), the goose profile, and each team's build-log marker) is
 #   --ro-bind'ed, and each of its ancestor dirs below the root gets a read-write SELF-bind so it
 #   becomes a mount point: renaming it away (`mv .claude .claude.old`, then plant a tree) fails
 #   EBUSY, while writes inside it still work. Order: rw roots, ancestor self-binds, ro-binds, masks.
-#   Every protected path is realpath'd and a SYMLINK anywhere on it is refused (die). A path absent
-#   from a root is skipped when that framework's team (.claude/agents, .goose/recipes) is not there,
-#   and a DIE when it is (a writable parent would let the process create it). --protect PATH (repeatable)
-#   ro-binds an extra path, e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
+#   Every protected path is realpath'd and a SYMLINK anywhere on it is refused (die). A framework's
+#   entries are REQUIRED only when that framework holds an agentteams team, marked by
+#   <agents dir>/references/build-log.json (TEAM_MARKER_REL); a hand-written .claude/agents without
+#   it is skipped. Each present marker is itself ro-bound, so it cannot be deleted from inside to
+#   disable the check. The approver/manager rosters are required only when that team's switch is
+#   present. A required entry that is absent is a DIE (a writable parent would let the process create
+#   it); anything else absent is skipped. The project-root references/security-approvers.txt (the
+#   grant roster) is protect-if-present only. --protect PATH (repeatable) ro-binds an extra path,
+#   e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
 #   Status: mechanism-verified (raw bwrap probes), product-unverified. The macOS branch is unchanged.
 #
 # macOS AUGMENTATION (2026-W36) - added ONLY to the macOS (Darwin) branch. TWO DISTINCT mechanisms;
@@ -96,12 +102,20 @@ set -uo pipefail
 
 SCRATCH=""; EGRESS="deny"; PROXY_ADDR="127.0.0.1"; PROXY_PORT="8443"; NETNS="agentteams-egress"
 CHECK=0; EXCLUDES=(); WRITABLES=(); SETENVS=(); ENV_ALLOW=(); CMD=(); COORD_ROOTS=(); PROTECTS=()
-# Project-relative control-plane paths (locked to agentteams' _sandbox_emit.protected_write_paths
-# plus the goose profile by a test). Protected wherever they exist under a writable root.
+# Project-relative control-plane paths (locked by a test to agentteams' _sandbox_emit
+# protected_write_paths + governed_roster_paths + GRANT_ROSTER_PROJECT_REL, plus the goose profile).
+# Protected wherever they exist under a writable root; see cp_required for when absence is a die.
 CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks/constitutional-gate.py
                     .claude/agents/references/authorized-verify-keys
+                    .claude/agents/references/security-approvers.txt .claude/agents/references/authorized-managers.txt
+                    .claude/agents/references/management-authority.json
                     .goose/recipes/references/agent-privilege.json .goose/recipes/references/authorized-verify-keys
-                    .goose/sandbox.sb )
+                    .goose/recipes/references/security-approvers.txt .goose/recipes/references/authorized-managers.txt
+                    .goose/recipes/references/management-authority.json
+                    .goose/sandbox.sb references/security-approvers.txt )
+# The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
+TEAM_MARKER_REL=references/build-log.json
+TEAM_DIRS_REL=( .claude/agents .goose/recipes )
 CP_ANC=(); CP_RO=()
 # DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
 # launcher's environment by default: only these benign vars (when set) plus any --env-allow name and
@@ -197,22 +211,41 @@ cp_real(){   # realpath of an existing path; die (in the $(...) subshell - calle
   case "$r" in *$'\n'*) die "control-plane path contains a newline: $1" ;; esac
   printf '%s\n' "$r"
 }
+cp_present(){ [ -e "$1" ] || [ -L "$1" ]; }
+cp_required(){   # root rel -> prints the owning agentteams team dir when rel MUST exist, else nothing
+  local r="$1" rel="$2" team
+  case "$rel" in
+    .goose/sandbox.sb) return 0 ;;   # macOS-only artifact
+    .claude/*) team="$r/.claude/agents" ;;
+    .goose/*) team="$r/.goose/recipes" ;;
+    *) return 0 ;;                   # project-root grant roster: protect-if-present
+  esac
+  cp_present "$team/$TEAM_MARKER_REL" || return 0   # not an agentteams team (e.g. hand-written)
+  case "$rel" in
+    */security-approvers.txt|*/authorized-managers.txt|*/management-authority.json)
+      cp_present "$team/references/agent-privilege.json" || return 0 ;;   # rosters follow the switch
+  esac
+  printf '%s\n' "$team"
+}
 control_plane_binds() {
-  local roots=() prot=() anc=() r rel p a under
+  local roots=() prot=() anc=() r rel p a under t team
   for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"} ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do
     [ -n "$r" ] && roots+=( "$(realpath -e -- "$r")" )
   done
   for r in "${roots[@]}"; do
+    for t in "${TEAM_DIRS_REL[@]}"; do   # the marker itself: deleting it must not disable the check
+      cp_present "$r/$t/$TEAM_MARKER_REL" || continue
+      p="$(cp_real "$r/$t/$TEAM_MARKER_REL")" || exit 2
+      prot+=( "$p" )
+    done
     for rel in "${CONTROL_PLANE_REL[@]}"; do
-      if [ ! -e "$r/$rel" ] && [ ! -L "$r/$rel" ]; then
-        # Absent. Fine when that framework's native team is not here, but when its agents dir IS
-        # present a missing entry is a hole: its parent is rename-locked yet WRITABLE, so a confined
-        # process could create a `false` switch, a verify-key store with a planted .pub.pem, or a
-        # gate hook. Refuse (never create). .goose/sandbox.sb is macOS-only.
-        case "$rel" in .claude/*) team="$r/.claude/agents" ;; .goose/*) team="$r/.goose/recipes" ;; *) team="" ;; esac
-        [ "$rel" = ".goose/sandbox.sb" ] && continue
-        [ -n "$team" ] && [ -d "$team" ] || continue   # that framework's team is absent here
-        die "control-plane path '$r/$rel' is missing although '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with its sandbox enabled (agentteams --update) so it is emitted, then retry."
+      if ! cp_present "$r/$rel"; then
+        # Absent. A hole when the entry is REQUIRED (cp_required): its parent is rename-locked yet
+        # WRITABLE, so a confined process could create a `false` switch, a verify-key store with a
+        # planted .pub.pem, a gate hook or a roster naming itself. Refuse (never create).
+        team="$(cp_required "$r" "$rel")"
+        [ -n "$team" ] || continue
+        die "control-plane path '$r/$rel' is missing although the agentteams team '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with its sandbox enabled (agentteams --update) so it is emitted, then retry."
       fi
       p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )
