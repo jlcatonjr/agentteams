@@ -215,7 +215,7 @@ def _build_seatbelt_profile(
         ValueError: a non-empty ``write_roots`` or ``deny_read`` entry cannot be expressed
             as a safe Seatbelt rule (fail closed, never silently drop it).
     """
-    from agentteams.frameworks._sandbox_emit import _PROTECTED_WRITE_PATHS
+    from agentteams.frameworks._sandbox_emit import protected_write_paths
     roots = list(write_roots) if write_roots else ["."]
     # Fail CLOSED on any unrepresentable root rather than silently dropping it: a dropped
     # write root would leave the agent unable to write where the operator intended (and a
@@ -275,7 +275,7 @@ def _build_seatbelt_profile(
     # audit 2026-W39 hygiene RANK3): a confined agent must not edit its own enforcement
     # switch, gate hook, or its OWN Seatbelt profile. Emitted AFTER the workspace allow so
     # last-match-wins denies these even though they sit inside the writable workspace.
-    control_plane = [*_PROTECTED_WRITE_PATHS, ".goose/sandbox.sb"]
+    control_plane = [*protected_write_paths("goose"), ".goose/sandbox.sb"]
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in control_plane) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",

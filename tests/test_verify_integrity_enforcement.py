@@ -166,10 +166,9 @@ def test_tampering_with_the_sandbox_emitter_trips_verify(tmp_path) -> None:
     root = _scratch_root_with_manifest(tmp_path)
     victim = root / "agentteams/frameworks/_sandbox_emit.py"
     assert victim.exists(), "_sandbox_emit.py not copied into the scratch root — is it tracked?"
-    victim.write_text(
-        victim.read_text(encoding="utf-8").replace(
-            '"references/agent-privilege.json",', ""  # simulate dropping the switch protection
-        ),
-        encoding="utf-8",
-    )
+    original = victim.read_text(encoding="utf-8")
+    # simulate dropping the claude switch protection
+    tampered = original.replace('"claude": ".claude/agents/references/agent-privilege.json",', "")
+    assert tampered != original, "tamper target not found — the test would pass vacuously"
+    victim.write_text(tampered, encoding="utf-8")
     assert _run_verify_integrity(_args(root)) == 1

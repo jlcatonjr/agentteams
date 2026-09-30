@@ -81,6 +81,40 @@ def _sweep_capability_key(
         print(f"     ... and {len(migrated) - 10} more")
 
 
+def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
+    """Warn when an emitted sandbox write-denies a switch path this team does not use.
+
+    The sandbox ``denyWrite`` / Seatbelt control plane names the switch at the framework's
+    DEFAULT agents dir (``_sandbox_emit.protected_write_paths``), because the adapter emitting it
+    never sees ``--output``. A team written anywhere else keeps its switch elsewhere: it is then
+    unprotected, and on Linux the dangling deny path stops bwrap initializing the sandbox
+    (@security condition, 2026-09-30). Only reported, never adjusted: the operator either uses
+    the default dir or edits the deny path when merging the example into their settings.
+
+    Args:
+        manifest: The team manifest (``framework``, ``host_features``).
+        output_dir: The team's agents dir.
+    """
+    from agentteams.frameworks._goose_sandbox_emit import _goose_sandbox_feature_enabled
+    from agentteams.frameworks._sandbox_emit import _AGENT_PRIVILEGE_SWITCH, _sandbox_feature_enabled
+
+    framework = manifest.get("framework") or ""
+    enabled = {"claude": _sandbox_feature_enabled, "goose": _goose_sandbox_feature_enabled}.get(framework)
+    if enabled is None or not enabled(manifest):
+        return
+    sub = tuple(Path(_AGENT_PRIVILEGE_SWITCH[framework]).parts[:2])  # e.g. (".claude", "agents")
+    if tuple(output_dir.parts[-2:]) == sub:
+        return
+    print(
+        f"  !  {framework}:sandbox write-denies the enforce_decision_signing switch at "
+        f"{'/'.join(sub)}/references/agent-privilege.json (relative to the project root), but "
+        f"this team writes it to {output_dir / 'references' / 'agent-privilege.json'}. The switch "
+        f"is not protected there, and on Linux the missing deny path stops the sandbox starting. "
+        f"Use the default agents dir, or fix the denyWrite path when merging the sandbox block.",
+        file=sys.stderr,
+    )
+
+
 def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     """Write ``references/agent-privilege.json`` and print the enforce-signing notice.
 
@@ -101,6 +135,7 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
         return
     if path is None:
         return
+    _warn_sandbox_deny_path_mismatch(manifest, output_dir)
     if manifest.get("enforce_decision_signing"):
         print(
             "  ⚖  Strict agent-privilege enforcement (enforce_decision_signing) is ON for "

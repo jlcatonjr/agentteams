@@ -163,14 +163,41 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #: agent must not edit — else it could disable its own boundary. Emitted as ``denyWrite``, which
 #: takes precedence over ``allowWrite`` (deny-over-allow; the Seatbelt mechanism is empirically
 #: verified in ``tests/test_os_sandbox_enforcement.py``). Exact paths only — globs are unsupported.
-#: - ``references/agent-privilege.json`` is the ``enforce_decision_signing`` switch; it is NOT
-#:   under ``.claude/`` so Claude Code's ``.claude/`` auto-protection does not cover it (the gap
-#:   this closes). - the gate hook is added belt-and-suspenders: the ``.claude/`` auto-protection
-#:   claim is itself unverified (open item B-7 / P1-5), so we do not rely on it alone.
-_PROTECTED_WRITE_PATHS: tuple[str, ...] = (
-    "references/agent-privilege.json",         # enforce_decision_signing switch (D-3)
-    ".claude/hooks/constitutional-gate.py",    # the PreToolUse gate hook (defense-in-depth, D-1)
-)
+#: - the ``enforce_decision_signing`` switch is emitted into the TEAM's ``references/``
+#:   (``artifacts.AGENT_PRIVILEGE_REL_PATH``, relative to the agents dir). These deny paths are
+#:   relative to the PROJECT root (the merged ``settings.json`` / the Seatbelt ``WORKSPACE_ROOT``),
+#:   so the switch is ``<agents dir>/references/agent-privilege.json``. It was emitted as a bare
+#:   ``references/agent-privilege.json`` — a project-root path nothing writes — until 2026-09-30
+#:   (found auditing researchteam's rc7 refresh): the real switch was unprotected, and on Linux a
+#:   deny path that does not exist stops bwrap initializing the sandbox at all. The existing test
+#:   compared the privilege path in the agents-dir frame and the hook in the project-root frame.
+#:   Claude Code's ``.claude/`` auto-protection claim is itself unverified (open item B-7 / P1-5),
+#:   so the claude switch is listed explicitly even though it sits under ``.claude/``.
+#: - the gate hook is added belt-and-suspenders for the same reason.
+_AGENT_PRIVILEGE_SWITCH: dict[str, str] = {
+    "claude": ".claude/agents/references/agent-privilege.json",
+    "goose": ".goose/recipes/references/agent-privilege.json",
+}
+_GATE_HOOK_PATH = ".claude/hooks/constitutional-gate.py"
+
+
+def protected_write_paths(framework: str) -> tuple[str, ...]:
+    """Project-root-relative control-plane paths an in-sandbox agent of ``framework`` must not write.
+
+    Args:
+        framework: ``"claude"`` or ``"goose"`` (the frameworks with an emitted sandbox).
+
+    Returns:
+        The switch path for that framework's default agents dir, then the gate hook.
+
+    Raises:
+        KeyError: ``framework`` emits no sandbox.
+    """
+    return (_AGENT_PRIVILEGE_SWITCH[framework], _GATE_HOOK_PATH)
+
+
+#: The Claude set (kept under its original name for existing importers).
+_PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
 
 
 def _build_sandbox_block(
