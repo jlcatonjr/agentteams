@@ -30,14 +30,34 @@ Run the helper in your **interactive shell** — never inside an agent/sandbox s
 references/authorized-verify-keys/provision-operator-signing-key.sh op-2026
 ```
 
-It generates the private key **outside** the repo (`~/.config/agentteams/`, mode 600), writes
-the public key here as `<key-id>.pub.pem`, and prints the `AGENTTEAMS_DECISION_ED25519_KEYFILE`
-export line. Commit **only** the `.pub.pem`; never the private key. Then, to sign a relaxing
-decision:
+It generates the private key **outside** the repo in `~/.config/agentteams/keys/` (directory
+mode 700, file mode 600), writes the public key here as `<key-id>.pub.pem`, and prints the
+`AGENTTEAMS_DECISION_ED25519_KEYFILE` export line. Commit **only** the `.pub.pem`; never the
+private key. Then, to sign a relaxing decision:
 
 ```
-export AGENTTEAMS_DECISION_ED25519_KEYFILE="$HOME/.config/agentteams/decision-signing-op-2026.pem"
+export AGENTTEAMS_DECISION_ED25519_KEYFILE="$HOME/.config/agentteams/keys/decision-signing-op-2026.pem"
 agentteams --sign-decision path/to/decision-spec.json
+```
+
+**Why `keys/`.** Every sandbox agentteams emits — the Claude `sandbox` block (plus its
+`permissions.deny` `Read(...)` rules for the built-in tools), the goose Seatbelt profile and
+`sandbox/confine-run.sh` — read-denies `~/.config/agentteams/keys`, in every privilege profile.
+No other directory is denied, so the script **refuses** a custom `KEY_DIR` unless you pass
+`--allow-unprotected-keydir` (and then warns loudly). It also refuses a symlinked or
+group/world-accessible `keys/`. Only the key **file** is protected: environment variables
+(`AGENTTEAMS_DECISION_ED25519_KEYFILE`, `AGENTTEAMS_*_SIGNING_KEY`) are inherited by Claude-sandboxed
+commands, so do not export them into the shell that launches an agent. Claude-arm enforcement is
+unverified end-to-end on Linux.
+
+**Migrating from the old location.** Keys provisioned before this change sit directly in
+`~/.config/agentteams/`. The script warns about them; `--migrate` moves each one into `keys/`
+with `mv -n` (never overwrites, never deletes — a skipped file is reported and the run exits 1),
+then reminds you to update any `AGENTTEAMS_DECISION_ED25519_KEYFILE` exported in shell rc files or
+CI. Until then the sandboxes also deny the legacy files transitionally.
+
+```
+references/authorized-verify-keys/provision-operator-signing-key.sh --migrate
 ```
 
 ## Rotation / revocation

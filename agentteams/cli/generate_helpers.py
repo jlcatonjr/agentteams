@@ -158,6 +158,41 @@ def _warn_live_sandbox_fails_open(manifest: dict, output_dir: Path) -> bool:
     return True
 
 
+def _warn_legacy_signing_keys(manifest: dict) -> bool:
+    """Advise when a sandbox is emitted and legacy private keys sit on THIS host (F-1).
+
+    Host-local and informational only: the build host may not be the host that runs the team.
+    The emitted sandboxes deny the legacy files by exact path transitionally, but only the ones
+    present at generation; the durable fix is moving them into the read-denied key directory.
+
+    Args:
+        manifest: The team manifest (sandbox request gates the notice).
+
+    Returns:
+        True iff the notice was printed.
+    """
+    from agentteams.frameworks._goose_sandbox_emit import _goose_sandbox_feature_enabled
+    from agentteams.frameworks._sandbox_emit import (
+        SIGNING_KEY_DIR,
+        _sandbox_feature_enabled,
+        legacy_signing_key_files,
+    )
+
+    if not (_sandbox_feature_enabled(manifest) or _goose_sandbox_feature_enabled(manifest)):
+        return False
+    legacy = legacy_signing_key_files()
+    if not legacy:
+        return False
+    print(
+        f"  !  {len(legacy)} private key file(s) in the pre-F-1 location on this host "
+        f"({', '.join(legacy)}). The emitted sandbox denies them by exact path for now; move them "
+        f"into the read-denied {SIGNING_KEY_DIR} with "
+        "references/authorized-verify-keys/provision-operator-signing-key.sh --migrate.",
+        file=sys.stderr,
+    )
+    return True
+
+
 def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     """Write ``references/agent-privilege.json`` and print the enforce-signing notice.
 
@@ -177,6 +212,7 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
         print(f"  !  agent-privilege config write failed: {exc}", file=sys.stderr)
         return
     _warn_live_sandbox_fails_open(manifest, output_dir)
+    _warn_legacy_signing_keys(manifest)
     if path is None:
         return
     _warn_sandbox_deny_path_mismatch(manifest, output_dir)

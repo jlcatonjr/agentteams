@@ -1047,8 +1047,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "CWD). Reads the operator private key from the file named by "
             "AGENTTEAMS_DECISION_ED25519_KEYFILE (never from an agent env). Prints the row's "
             "derived material effect for a deliberate second look before writing. This is the ONLY "
-            "minter of Ed25519 relaxing rows; an agent context lacks both the env var and the key "
-            "file, so running it in-sandbox fails closed."
+            "minter of Ed25519 relaxing rows. Keep the key in ~/.config/agentteams/keys: every "
+            "emitted sandbox read-denies that directory, so there the key FILE is unreadable "
+            "in-sandbox (unverified end-to-end for the Claude arm on Linux); a key elsewhere, "
+            "symlinked, or wider than mode 600 draws a warning. Environment variables "
+            "(AGENTTEAMS_DECISION_ED25519_KEYFILE, AGENTTEAMS_*_SIGNING_KEY) ARE inherited by "
+            "Claude-sandboxed commands, so never export them into an agent's shell."
         ),
     )
     parser.add_argument(

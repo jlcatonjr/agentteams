@@ -323,6 +323,8 @@ def test_build_sandbox_block_shape_and_defaults():
                 ".claude/hooks/constitutional-gate.py",
                 ".claude/agents/references/authorized-verify-keys",
             ],
+            # F-1: the operator signing-key dir is read-denied in EVERY block, with no allowRead.
+            "denyRead": ["~/.config/agentteams/keys"],
         },
         "allowUnsandboxedCommands": False,
         # Fail closed (2026-09-30): without this, Claude Code silently runs every command
@@ -435,17 +437,19 @@ def test_emitted_settings_example_is_valid_json():
 # P3 — read-exclusion (exclusive profile) + P2×P3 + P3b advisory
 # --------------------------------------------------------------------------
 
-def test_build_sandbox_block_confined_has_no_denyread():
-    # confined stays byte-identical (no denyRead/allowRead) — the exact-equality contract.
+def test_build_sandbox_block_confined_denies_only_the_signing_keys():
+    # F-1 changed the old "confined has no denyRead" contract deliberately: confined now carries
+    # the signing-key denyRead, and still NO allowRead (no over-confinement, no re-open).
     block = _build_sandbox_block(["."], None)
-    assert "denyRead" not in block["filesystem"]
+    assert block["filesystem"]["denyRead"] == ["~/.config/agentteams/keys"]
     assert "allowRead" not in block["filesystem"]
 
 
 def test_build_sandbox_block_exclusive_adds_denyread_and_allowread():
     block = _build_sandbox_block(["."], ["~/.ssh", "~/sibling"])
     fs = block["filesystem"]
-    assert fs["denyRead"] == ["~/.ssh", "~/sibling"]
+    # profile read-exclusion first, the signing-key dir appended after it
+    assert fs["denyRead"] == ["~/.ssh", "~/sibling", "~/.config/agentteams/keys"]
     # P2×P3: write roots re-opened for read so a granted write target stays readable.
     assert fs["allowRead"] == fs["allowWrite"] == ["."]
 
@@ -477,7 +481,8 @@ def test_exclusive_emits_denyread_confined_does_not():
         {"host_features": ["claude:sandbox"], "privilege_profile": "confined"}
     ))
     fs_conf = json.loads(conf["../settings.hooks.example.json"])["sandbox"]["filesystem"]
-    assert "denyRead" not in fs_conf
+    assert fs_conf["denyRead"] == ["~/.config/agentteams/keys"]  # F-1 only
+    assert "allowRead" not in fs_conf
 
 
 def test_p2xp3_granted_path_stays_readable():

@@ -49,9 +49,184 @@ _SANDBOX_COMMENT_LINES: list[str] = [
     "denyWrite also names the decision-signing verify-key store DIRECTORY",
     "(<agents dir>/references/authorized-verify-keys), so an agent cannot plant its own",
     "public key. Whether Claude Code honours a DIRECTORY denyWrite entry is UNVERIFIED",
-    "until a real-host test passes; test it before relying on it. This closes key",
-    "PLANTING only: it does not stop an agent that can read your private signing key.",
+    "until a real-host test passes; test it before relying on it.",
 ]
+
+
+#: Comment lines appended with every sandbox block: the operator signing-key isolation (F-1) and
+#: the ``permissions.deny`` list that covers the built-in tools the sandbox does not.
+_SIGNING_KEY_COMMENT_LINES: list[str] = [
+    "",
+    "Signing-key isolation (F-1) — in EVERY sandboxed profile `denyRead` names the operator",
+    "private-key directory ~/.config/agentteams/keys (create it with",
+    "references/authorized-verify-keys/provision-operator-signing-key.sh, which also migrates",
+    "keys from the old ~/.config/agentteams/ location with --migrate). Any legacy",
+    "~/.config/agentteams/*.pem found on the GENERATING host is listed by exact path too (the",
+    "sandbox takes no globs); regenerate on the host that runs the team. Only the Read of the",
+    "key FILE is closed: the environment variables AGENTTEAMS_DECISION_ED25519_KEYFILE and",
+    "AGENTTEAMS_*_SIGNING_KEY are INHERITED by sandboxed commands — do not export them into",
+    "the shell that launches `claude`. Claude Code's `sandbox.filesystem` binds only Bash",
+    "(and its child processes); the built-in Read/Edit/Write tools obey `permissions` instead,",
+    "so the `permissions.deny` list below carries: Read(...) rules for the key directory and",
+    "the legacy location (Read rules cover Grep/Glob best-effort), and Edit(...) rules —",
+    "which cover Edit, Write and MultiEdit (Claude Code matches no NotebookEdit(path) rule) —",
+    "for the enforce_decision_signing switch, the gate hook and the verify-key store. Without",
+    "those an agent could Write-tool its own public key into the store (measured: the Write",
+    "tool ignores sandbox denyWrite outside .claude/). RESIDUALS: `permissions.deny` is INERT",
+    "until merged like the rest of this example; it is unverified under bypassPermissions;",
+    "hooks and MCP servers run UNSANDBOXED; the Claude sandbox arm is UNVERIFIED end-to-end on",
+    "Linux. A denyRead path that does not exist was tolerated by bwrap on Claude Code 2.1.251",
+    "(Linux); older builds are untested.",
+]
+
+
+#: The operator private-key directory (F-1). Every emitted sandbox (Claude block, goose Seatbelt
+#: profile, ``confine-run.sh``) read-denies it whatever the privilege profile. Deliberately NOT
+#: ``$XDG_CONFIG_HOME``-relative: a deny path must be static and identical across the emitters.
+#: The shell literals in ``confine-run.sh`` and ``provision-operator-signing-key.sh`` are locked to
+#: this value by a test. Not the whole ``~/.config/agentteams``: ``goose_config`` reads
+#: ``goose-sources.json`` there and silently falls back to built-ins when it cannot.
+SIGNING_KEY_DIR = "~/.config/agentteams/keys"
+
+#: The pre-F-1 private-key location. Key files there are denied TRANSITIONALLY (@security ruling
+#: (b), 2026-09-30); remove once a release has shipped the migration advisory. The glob form is
+#: used ONLY in ``permissions.deny`` (gitignore syntax); the sandbox side lists exact paths.
+LEGACY_SIGNING_KEY_DIR = "~/.config/agentteams"
+LEGACY_SIGNING_KEY_GLOB = f"{LEGACY_SIGNING_KEY_DIR}/*.pem"
+
+
+def _home_rel_to_abs(path: str) -> str:
+    """Return ``path`` with a leading ``~`` expanded and made absolute."""
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def legacy_signing_key_files() -> list[str]:
+    """Return the ``~/``-relative paths of ``*.pem`` files in the legacy key location, sorted.
+
+    Host-local by nature: it lists what exists on the GENERATING host (the sandbox side takes
+    exact paths only). Unreadable or absent directory → ``[]``.
+
+    Returns:
+        E.g. ``["~/.config/agentteams/decision-signing-op-2026.pem"]``.
+    """
+    legacy = _home_rel_to_abs(LEGACY_SIGNING_KEY_DIR)
+    try:
+        names = sorted(os.listdir(legacy))
+    except OSError:
+        return []
+    return [
+        f"{LEGACY_SIGNING_KEY_DIR}/{n}"
+        for n in names
+        if n.endswith(".pem") and os.path.isfile(os.path.join(legacy, n))
+    ]
+
+
+def signing_key_deny_read(*, resolve_abspath: bool = False) -> list[str]:
+    """Return the sandbox read-deny entries isolating the operator private key.
+
+    Args:
+        resolve_abspath: Expand ``~`` to the generating host's absolute home (the P3-3 opt-in).
+
+    Returns:
+        :data:`SIGNING_KEY_DIR`, then every legacy key file on this host (exact paths).
+    """
+    paths = [SIGNING_KEY_DIR, *legacy_signing_key_files()]
+    return [_home_rel_to_abs(p) for p in paths] if resolve_abspath else paths
+
+
+def assert_roots_clear_of_signing_keys(roots: list[str] | None) -> None:
+    """Raise if a write root sits at or inside :data:`SIGNING_KEY_DIR`.
+
+    Claude Code resolves overlapping read rules narrower-wins, so a write root (re-opened by
+    ``allowRead``, and writable) at or inside the key directory would undo its deny. Only
+    ``~``-relative and absolute roots are checked: a relative root is relative to the project,
+    which is never inside the key directory.
+
+    Args:
+        roots: The workspace write roots (``None`` = the default ``["."]``).
+
+    Raises:
+        ValueError: A root resolves at or inside the key directory.
+    """
+    keys = _home_rel_to_abs(SIGNING_KEY_DIR)
+    for root in roots or []:
+        if not root or not (root.startswith("~") or os.path.isabs(root)):
+            continue
+        resolved = _home_rel_to_abs(root)
+        if resolved == keys or resolved.startswith(keys + os.sep):
+            raise ValueError(
+                f"workspace write root {root!r} is at or inside the operator signing-key "
+                f"directory {SIGNING_KEY_DIR}; that would re-open the private key to the "
+                "sandboxed agent. Remove it from workspace_write_roots (or the grant)."
+            )
+
+
+def signing_keyfile_warnings(keyfile: str) -> list[str]:
+    """Return operator warnings about where a private signing key file sits (never refuses).
+
+    The sandboxes read-deny only :data:`SIGNING_KEY_DIR` (plus legacy key files transitionally),
+    so a key elsewhere, behind a symlink, or with a mode wider than 600 is a visibility signal
+    for the operator (Rule 12), not a hard stop: ``--sign-decision`` still signs.
+
+    Args:
+        keyfile: The path named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE``.
+
+    Returns:
+        Zero or more warning sentences. A missing file yields a pointer to the migrated copy
+        when one exists under :data:`SIGNING_KEY_DIR`, else nothing (the read error reports it).
+    """
+    keys = os.path.realpath(_home_rel_to_abs(SIGNING_KEY_DIR))
+    legacy = os.path.realpath(_home_rel_to_abs(LEGACY_SIGNING_KEY_DIR))
+    path = os.path.abspath(os.path.expanduser(keyfile))
+    real = os.path.realpath(path)
+    if not os.path.exists(path):
+        moved = os.path.join(keys, os.path.basename(path))
+        if os.path.dirname(real) == legacy and os.path.isfile(moved):
+            return [
+                f"{keyfile} does not exist, but {moved} does: the key was migrated into "
+                f"{SIGNING_KEY_DIR}. Export AGENTTEAMS_DECISION_ED25519_KEYFILE=\"{moved}\"."
+            ]
+        return []
+    out: list[str] = []
+    if os.path.islink(path):
+        out.append(f"{keyfile} is a symlink (to {real}); sandbox read-denies match the resolved "
+                   "path, so keep the key itself in the key directory.")
+    if os.path.dirname(real) == legacy:
+        out.append(f"{keyfile} is in the pre-F-1 location {LEGACY_SIGNING_KEY_DIR}/. Move it into "
+                   f"{SIGNING_KEY_DIR} with provision-operator-signing-key.sh --migrate.")
+    elif not real.startswith(keys + os.sep):
+        out.append(f"{keyfile} is outside {SIGNING_KEY_DIR}: no emitted sandbox read-denies it, "
+                   "so a sandboxed agent may be able to read it.")
+    try:
+        mode = os.stat(real).st_mode & 0o777
+    except OSError:
+        mode = 0
+    if mode & 0o077:
+        out.append(f"{keyfile} has mode {mode:o}; a private key should be 600 (chmod 600).")
+    return out
+
+
+def permission_deny_rules(framework: str = "claude") -> list[str]:
+    """Return the Claude Code ``permissions.deny`` rules emitted beside the sandbox block.
+
+    ``sandbox.filesystem`` binds Bash and its children only; the built-in tools obey
+    ``permissions``. ``Read(...)`` covers Read/Grep/Glob (best-effort per the docs; there is no
+    ``Grep(...)``/``Glob(...)`` form). ``Edit(...)`` covers Edit/Write/MultiEdit; Claude Code 2.1.251
+    warns that a ``NotebookEdit(path)`` rule "is not matched by file permission checks", so none is
+    emitted. Home paths are ``~/``-anchored; project paths are ``/``-anchored (relative to the
+    settings source, i.e. the project root for ``.claude/settings.json``).
+
+    Args:
+        framework: The framework whose control-plane paths to protect.
+
+    Returns:
+        The rule strings, read rules first.
+    """
+    rules = [f"Read({SIGNING_KEY_DIR}/**)", f"Read({LEGACY_SIGNING_KEY_GLOB})"]
+    store = _verify_key_store_path(framework)
+    for path in protected_write_paths(framework):
+        rules.append(f"Edit(/{path}/**)" if path == store else f"Edit(/{path})")
+    return rules
 
 
 #: Comment lines appended when the exclusive profile's read-exclusion (denyRead) is
@@ -114,7 +289,7 @@ def _exclusive_read_deny_paths(manifest: dict[str, Any]) -> list[str] | None:
 
     Returns:
         The deny-read paths for an exclusive team, or ``None`` for any other profile —
-        which keeps the emitted sandbox block byte-identical to the ``confined`` shape.
+        in which case the block carries only the signing-key ``denyRead`` (the ``confined`` shape).
     """
     if manifest.get("privilege_profile") != "exclusive":
         return None
@@ -195,8 +370,9 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #:   per-framework agents-dir mapping, no second copy). A missing deny path stops bwrap
 #:   initializing, so the store must exist whenever this deny is emitted: the adapters emit
 #:   :data:`VERIFY_KEY_STORE_SENTINEL_REL` from the SAME branch that emits the deny.
-#:   HONEST LIMITS: this closes the key-PLANTING route only. Self-signing stays possible while
-#:   the operator's private key is readable in the sandbox (remediation F-1, open). Claude Code's
+#:   HONEST LIMITS: this closes the key-PLANTING route via Bash only; the built-in Write/Edit
+#:   tools ignore ``denyWrite`` and are bound by :func:`permission_deny_rules` instead. The
+#:   private key FILE is read-denied separately (:data:`SIGNING_KEY_DIR`, F-1). Claude Code's
 #:   handling of a DIRECTORY ``denyWrite`` entry is UNVERIFIED pending a real-host test (only
 #:   directory ``denyRead`` is verified). The goose Seatbelt arm relies on the existing
 #:   ``(subpath …)`` semantics (the directory and all its descendants).
@@ -289,35 +465,49 @@ def _build_sandbox_block(
     deny_read: list[str] | None = None,
     *,
     platform: str | None = None,
+    resolve_abspath: bool = False,
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
+
+    Three read properties are independent: the signing-key ``denyRead`` is emitted in EVERY
+    block (F-1); the profile read-exclusion ``deny_read`` is appended only when given
+    (``exclusive``); ``allowRead`` (re-opening the write roots) only accompanies ``deny_read``.
+    So a ``confined`` block carries the key deny and no ``allowRead``.
 
     Args:
         write_roots: Directories (relative to the merged ``settings.json`` at the
             project root) the agent may write to. Defaults to ``["."]`` — the whole
             generated project tree is the workspace.
-        deny_read: Paths the agent (and its subprocesses) may not READ (P3a read
-            exclusion, ``exclusive`` profile). ``None``/empty emits no read restriction,
-            leaving the block byte-identical to the ``confined`` shape.
+        deny_read: Profile read-exclusion paths (P3a, ``exclusive``). ``None``/empty emits no
+            profile read-exclusion and no ``allowRead``.
         platform: Override for ``sys.platform`` (tests); see :func:`_sandbox_fails_closed_on`.
+        resolve_abspath: Emit the signing-key entries as absolute paths (P3-3 opt-in).
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
-        ``write_roots``, the unsandboxed-command escape hatch closed, and — when
-        ``deny_read`` is given — reads of those paths denied while ``write_roots`` are
-        re-opened for read via ``allowRead`` (so a P2-granted write target inside a
-        denied region stays readable; read-modify-write keeps working). On macOS/Linux
-        it also sets ``failIfUnavailable: true``, so Claude Code refuses to start when its
-        sandbox cannot initialize (e.g. bwrap or socat missing) instead of silently running
-        every command unsandboxed. A native-Windows block omits it (advisory only there).
+        ``write_roots``, the unsandboxed-command escape hatch closed, the operator signing key
+        read-denied, and — when ``deny_read`` is given — reads of those paths denied while
+        ``write_roots`` are re-opened for read via ``allowRead`` (so a P2-granted write target
+        inside a denied region stays readable). On macOS/Linux it also sets
+        ``failIfUnavailable: true``, so Claude Code refuses to start when its sandbox cannot
+        initialize instead of silently running every command unsandboxed. A native-Windows
+        block omits it (advisory only there).
+
+    Raises:
+        ValueError: A write root is at or inside the signing-key directory.
     """
     roots = list(write_roots) if write_roots else ["."]
+    assert_roots_clear_of_signing_keys(roots)
     filesystem: dict[str, Any] = {"allowWrite": roots}
     # D-3: deny the in-sandbox agent write access to the control-plane files it would otherwise
     # be able to edit (the switch is inside the write root). denyWrite wins over allowWrite.
     filesystem["denyWrite"] = list(_PROTECTED_WRITE_PATHS)
+    denied = list(deny_read or [])
+    for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
+        if path not in denied:
+            denied.append(path)
+    filesystem["denyRead"] = denied
     if deny_read:
-        filesystem["denyRead"] = list(deny_read)
         filesystem["allowRead"] = roots
     block: dict[str, Any] = {
         "enabled": True,
@@ -338,7 +528,8 @@ def _inject_sandbox_block(
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
-    Parses the shipped hooks example, adds the ``sandbox`` block and explanatory
+    Parses the shipped hooks example, adds the ``sandbox`` block, the ``permissions.deny``
+    rules that bind the built-in tools (:func:`permission_deny_rules`) and explanatory
     ``_comment`` lines, and re-serializes.
 
     Fails LOUD, not open: this is called only when confinement was *requested*, and the
@@ -351,15 +542,19 @@ def _inject_sandbox_block(
     Args:
         example_text: The verbatim ``settings.hooks.example.json`` template text.
         write_roots: Optional override of the confined write roots.
-        deny_read: Optional read-exclusion paths (P3a, ``exclusive`` profile); adds a
-            ``denyRead`` restriction and an explanatory comment when present.
+        deny_read: Optional read-exclusion paths (P3a, ``exclusive`` profile); adds them to
+            ``denyRead`` with ``allowRead`` and the exclusive comment when present. The
+            signing-key ``denyRead``, the ``permissions.deny`` rules and their comment are
+            emitted whether or not it is given.
+        deny_read_resolved_abspath: The P3-3 opt-in; also resolves the signing-key entries.
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
 
     Raises:
         ValueError: If ``example_text`` is not parseable as a JSON object — a corrupted
-            shipped asset that must not be masked when a sandbox was requested.
+            shipped asset that must not be masked when a sandbox was requested — or if a
+            write root is at or inside the signing-key directory.
     """
     try:
         data = json.loads(example_text)
@@ -373,10 +568,19 @@ def _inject_sandbox_block(
             "settings.hooks.example.json did not parse to a JSON object; cannot inject "
             "the requested sandbox confinement block."
         )
-    data["sandbox"] = _build_sandbox_block(write_roots, deny_read)
+    data["sandbox"] = _build_sandbox_block(
+        write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath
+    )
+    # Same branch as the sandbox block, never one without the other (R11): the built-in tools
+    # are bound by permissions, not by the sandbox.
+    permissions = data.setdefault("permissions", {})
+    deny = permissions.setdefault("deny", [])
+    for rule in permission_deny_rules("claude"):
+        if rule not in deny:
+            deny.append(rule)
     comment = data.get("_comment")
     if isinstance(comment, list):
-        extra = list(_SANDBOX_COMMENT_LINES)
+        extra = list(_SANDBOX_COMMENT_LINES) + _SIGNING_KEY_COMMENT_LINES
         if deny_read:
             extra += (
                 _READ_EXCLUSION_ABSPATH_COMMENT_LINES
