@@ -42,20 +42,25 @@ _SANDBOX_COMMENT_LINES: list[str] = [
     "will run WITHOUT sandboxing\"); with it Claude Code refuses to start instead. Linux",
     "needs bubblewrap (bwrap) AND socat on PATH (scripts/install-sandbox-deps.sh in the",
     "agentteams repo); Ubuntu's kernel.apparmor_restrict_unprivileged_userns=1 makes every",
-    "sandboxed command fail closed until the operator relaxes it. Confinement on Linux is",
-    "UNVERIFIED end-to-end. A block generated on native Windows omits failIfUnavailable:",
+    "sandboxed command fail closed until the operator relaxes it. Confinement on Linux was",
+    "VERIFIED end-to-end on 2026-09-30 (Ubuntu with that restriction on, bubblewrap 0.11.1,",
+    "socat 1.8.1.1, Claude Code 2.1.251: write confinement, denyWrite of the switch, denyRead",
+    "incl. ~/, the signing-key dir, the .claude read-only bind, failIfUnavailable) ONLY after",
+    "installing Claude Code's documented unconfined /etc/apparmor.d/bwrap profile, which",
+    "disables Ubuntu's bwrap-userns-restrict host-wide; other distros and Claude Code",
+    "versions are untested. A block generated on native Windows omits failIfUnavailable:",
     "Claude Code has no OS enforcement there and the block is advisory only (it would",
     "otherwise refuse to start). To remove it: delete the `sandbox` key.",
     "denyWrite also names the decision-signing verify-key store DIRECTORY",
     "(<agents dir>/references/authorized-verify-keys), so an agent cannot plant its own",
-    "public key. Whether Claude Code honours a DIRECTORY denyWrite entry is UNVERIFIED",
-    "until a real-host test passes; test it before relying on it.",
+    "public key. Claude Code 2.1.251 on Linux binds every denyWrite entry, this DIRECTORY",
+    "included, read-only (its captured bwrap argv, 2026-09-30); other versions are untested.",
     "denyWrite also names the whole `.claude` directory (F-4): without it an agent could",
     "RENAME `.claude` away and plant a replacement tree (settings, hooks, switch) that the",
     "NEXT session reads. Claude Code binds the entry read-only over the project, so `.claude`",
     "cannot be renamed, replaced or written from Bash (you, outside a session, are",
-    "unaffected). Status: mechanism-verified (raw bubblewrap), product-unverified (Claude",
-    "Code's sandbox fails on this host's AppArmor userns restriction). In a project that",
+    "unaffected). Status: VERIFIED on Linux with Claude Code 2.1.251 (read-only bind in its",
+    "bwrap argv; a sandboxed `mv .claude` fails), under the AppArmor precondition above. In a project that",
     "ALSO has a goose team, `.goose` is NOT denied here (a missing deny path stops bwrap):",
     "add \".goose\" to denyWrite yourself if both teams share the project.",
 ]
@@ -90,8 +95,9 @@ _SIGNING_KEY_COMMENT_LINES: list[str] = [
     "grant route through the project-root roster is NOT closed by these rules; it is",
     "addressed separately (Ed25519 grants). RESIDUALS: `permissions.deny` is INERT",
     "until merged like the rest of this example; it is unverified under bypassPermissions;",
-    "hooks and MCP servers run UNSANDBOXED; the Claude sandbox arm is UNVERIFIED end-to-end on",
-    "Linux. A denyRead path that does not exist was tolerated by bwrap on Claude Code 2.1.251",
+    "hooks and MCP servers run UNSANDBOXED; the Claude sandbox arm is verified on Linux only",
+    "for Claude Code 2.1.251 on Ubuntu with the documented bwrap AppArmor profile installed",
+    "(macOS is UNVERIFIED). A denyRead path that does not exist was tolerated by bwrap on Claude Code 2.1.251",
     "(Linux); older builds are untested.",
 ]
 
@@ -396,8 +402,9 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #:   HONEST LIMITS: this closes the key-PLANTING route via Bash only; the built-in Write/Edit
 #:   tools ignore ``denyWrite`` and are bound by :func:`permission_deny_rules` instead. The
 #:   private key FILE is read-denied separately (:data:`SIGNING_KEY_DIR`, F-1). Claude Code's
-#:   handling of a DIRECTORY ``denyWrite`` entry is UNVERIFIED pending a real-host test (only
-#:   directory ``denyRead`` is verified). The goose Seatbelt arm relies on the existing
+#:   handling of a DIRECTORY ``denyWrite`` entry was verified on Linux 2026-09-30 for Claude
+#:   Code 2.1.251 only (every denyWrite entry is read-only bound in its captured bwrap argv, and a
+#:   sandboxed ``mv .claude`` fails — ``tests/test_os_sandbox_product_enforcement.py``, F-4). The goose Seatbelt arm relies on the existing
 #:   ``(subpath …)`` semantics (the directory and all its descendants).
 #: - DELIBERATELY NOT denied: the ledgers (``security-decisions.log.csv`` etc.; the in-sandbox gate
 #:   rewrites them to consume use counts, and their integrity is signatures + hash chains) and

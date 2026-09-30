@@ -26,7 +26,7 @@ flowchart TD
     Q[requested?] -->|yes| P{platform?}
     P -->|linux| FW{claude?}
     FW -->|no| ML["manual-wire (NON-FATAL): must WRAP"]
-    FW -->|yes| CN["native + launcher; native arm UNVERIFIED on Linux"]
+    FW -->|yes| CN["native + launcher; native arm VERIFIED on Linux<br/>(Ubuntu: needs documented bwrap AppArmor profile)"]
     P -->|darwin| DF{fw?}
     DF -->|claude| CNd["native; no advisory"]
     DF -->|goose| SBn["native Seatbelt; no advisory"]

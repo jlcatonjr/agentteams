@@ -6,7 +6,8 @@
 
 - **Ceiling #3 — verified only on Linux (so far).** The launcher's **Linux `bwrap`** branch is live-kernel deny-tested (write-outside-
   scratch, credential read, raw egress all denied). The newer **macOS `build_macos`** branch ships `mac-escape-tests.sh` but is **enforcement-UNVERIFIED** until that passes unnested on a real mac (memory UNCAPPED, no syscall filtering there). The native **macOS Seatbelt is UNVERIFIED** off a mac; claude's
-  native Linux arm is unverified on stock Ubuntu. (The sibling security guide's earlier "macOS only
+  native Linux arm is verified (Claude Code 2.1.251, 2026-09-30) only once Claude Code's documented bwrap
+  AppArmor profile is installed on Ubuntu — without it, sandboxed commands fail closed. (The sibling security guide's earlier "macOS only
   verified" wording has since been CORRECTED to match — the two guides now agree; see
   [Reference Part VII](../reference/part-vii-ceilings-and-red-team.md).)
 - **Ceiling #4 — closes nothing absolutely.** A same-host operator/key-holder (T6) and host-as-TCB stay

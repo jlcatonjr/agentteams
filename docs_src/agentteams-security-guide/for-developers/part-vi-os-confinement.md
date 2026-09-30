@@ -71,7 +71,8 @@ control-plane paths** — `<agents dir>/references/agent-privilege.json`,
 `<agents dir>/references/authorized-verify-keys/` — deny-over-allow, so an in-sandbox agent
 cannot rewrite the enforcement plane governing it. `denyWrite` binds Bash only; the
 built-in Write/Edit tools are bound by the `permissions.deny` `Edit(...)` rules emitted beside
-it, and the Claude directory-`denyWrite` arm is unverified pending a real-host test. Every
+it, and Claude Code 2.1.251 on Linux binds each directory `denyWrite` entry read-only (captured
+bwrap argv, 2026-09-30; other versions untested). Every
 profile also **`denyRead`s the operator private-key directory** `~/.config/agentteams/keys`
 (F-1; plus `Read(...)` permission rules for the built-in tools), so a sandboxed agent cannot
 read the key and self-sign; the environment variables naming or holding signing keys are still
@@ -88,7 +89,7 @@ reading yours.
 - **Claude Code's *native* Linux bubblewrap arm has the open D-3 fragility** (distinct from the verified launcher) — on bubblewrap a `denyWrite` of a
   *non-existent* path fails `bwrap` init, blocking **all** Bash (a fail-*shut*
   availability defect, still **open** in `references/agentteams-remediation-log.csv`,
-  item D-3); Linux `denyRead` is **unverified**.
+  item D-3); Linux `denyRead` (incl. `~/`) is verified under the AppArmor precondition below.
 - **Claude Code's native sandbox fails OPEN without `failIfUnavailable` (fixed
   2026-09-30).** Measured on Linux with `socat` missing: the old block (`enabled: true`,
   `allowUnsandboxedCommands: false`) let Claude Code print "Sandbox disabled … Commands
@@ -97,7 +98,7 @@ reading yours.
   block is advisory), so Claude Code refuses to start instead. Linux needs `bwrap` **and**
   `socat` (`scripts/install-sandbox-deps.sh`); Ubuntu's
   `kernel.apparmor_restrict_unprivileged_userns=1` makes every sandboxed command fail closed
-  at the seccomp step. That native arm is **unverified on Linux end-to-end**. Operators who
+  at the seccomp step. That native arm is now verified end-to-end on Linux (2026-09-30: Ubuntu, Claude Code 2.1.251, bubblewrap 0.11.1, socat 1.8.1.1) **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed commands fail closed. Operators who
   merged an earlier block: re-run `--update` and re-merge the `sandbox` block.
 - **Native Windows has no emitted enforcement** (design-only).
 - On a host that **cannot** enforce confinement the interactive path **fails

@@ -6,8 +6,8 @@ Three emitters, three trust models — a reviewer should not treat them as equiv
 
 - **A — claude settings block** (any OS). Emits `allowWrite`/`denyWrite`/`denyRead`/
   `allowUnsandboxedCommands:false`. **It emits no egress directive** — claude network confinement is
-  Claude Code's *product default*, which agentteams neither emits nor verifies. Its Linux product arm is
-  unverified.
+  Claude Code's *product default*, which agentteams neither emits nor verifies. Its Linux product arm
+  (filesystem confinement) is verified end-to-end on Linux (2026-09-30: Ubuntu, Claude Code 2.1.251, bubblewrap 0.11.1, socat 1.8.1.1) **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed commands fail closed.
 - **B — goose Seatbelt** (macOS). `deny file-write*` + `deny network*` by default; read-exclusion under
   exclusive. **Enforcement- and profile-syntax-unverified off a mac.**
 - **C — the dual-OS launcher** (any framework). **Linux `bwrap`** branch: `--ro-bind / /`, scratch-only writes, `--unshare-net`,

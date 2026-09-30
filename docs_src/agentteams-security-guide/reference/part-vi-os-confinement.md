@@ -113,8 +113,8 @@ The consequence, stated as fact 4's binding ceilings:
   `denyWrite` of a *non-existent* path fails `bwrap` initialization, which blocks **all**
   Bash — a fail-*shut* fragility, not a security hole, but an availability defect that
   remains **open** in `references/agentteams-remediation-log.csv` (item D-3). That native
-  arm's `denyRead` behaviour and its *product arm* on stock Ubuntu (nested-userns) are
-  likewise **unverified**.
+  arm's `denyRead` behaviour (incl. `~/`) and its *product arm* are verified on Linux only under
+  the AppArmor precondition in the next item.
 - **Claude Code's native sandbox fails OPEN without `failIfUnavailable` (fixed
   2026-09-30).** Measured on Linux with `socat` missing: the old block (`enabled: true`,
   `allowUnsandboxedCommands: false`) let Claude Code print "Sandbox disabled … Commands
@@ -123,7 +123,7 @@ The consequence, stated as fact 4's binding ceilings:
   block is advisory), so Claude Code refuses to start instead. Linux needs `bwrap` **and**
   `socat` (`scripts/install-sandbox-deps.sh`); Ubuntu's
   `kernel.apparmor_restrict_unprivileged_userns=1` makes every sandboxed command fail closed
-  at the seccomp step. That native arm is **unverified on Linux end-to-end**. Operators who
+  at the seccomp step. That native arm is now verified end-to-end on Linux (2026-09-30: Ubuntu, Claude Code 2.1.251, bubblewrap 0.11.1, socat 1.8.1.1) **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed commands fail closed. Operators who
   merged an earlier block: re-run `--update` and re-merge the `sandbox` block.
 - **Native Windows has no emitted enforcement** — it is design-only.
 - On a host where confinement **cannot** be enforced, the interactive path **fails

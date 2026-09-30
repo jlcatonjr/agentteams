@@ -56,7 +56,7 @@
 | Fact | Source |
 |---|---|
 | Launcher Linux (`bwrap`) branch enforcement-VERIFIED (live-kernel deny test) | `agentteams/templates/universal/sandbox/confine-run.sh` (status header); `docs_src/api-reference/workspace-privilege-scoping.md` |
-| Launcher macOS (`build_macos`) branch UNVERIFIED until `mac-escape-tests.sh` passes; native macOS Seatbelt + claude Linux product-arm also unverified | `agentteams/templates/universal/sandbox/confine-run.sh` (status header); `agentteams/templates/universal/sandbox/mac-escape-tests.sh`; `docs_src/api-reference/workspace-privilege-scoping.md` (macOS augmentation) |
+| Launcher macOS (`build_macos`) branch UNVERIFIED until `mac-escape-tests.sh` passes; native macOS Seatbelt also unverified; claude Linux product arm verified 2026-09-30 only with the documented bwrap AppArmor profile | `agentteams/templates/universal/sandbox/confine-run.sh` (status header); `tests/test_os_sandbox_product_enforcement.py`; `agentteams/templates/universal/sandbox/mac-escape-tests.sh`; `docs_src/api-reference/workspace-privilege-scoping.md` (macOS augmentation) |
 | T6/host-as-TCB bounded; seccomp/Landlock not yet added | `agentteams/templates/universal/sandbox/confine-run.sh` (policy header) |
 | Hook uncovered surfaces are the operator's responsibility | `agentteams/templates/universal/security.template.md` (delete-gate limits) |
 

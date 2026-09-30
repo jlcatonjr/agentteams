@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### verified (Claude Code sandbox arm on Linux)
+
+- Claude Code's native sandbox arm now has an end-to-end Linux pass. The operator ran it on
+  2026-09-30 on Ubuntu with `kernel.apparmor_restrict_unprivileged_userns=1`, bubblewrap 0.11.1,
+  socat 1.8.1.1 and Claude Code 2.1.251. `RUN_CLAUDE_SANDBOX_ITEST=1 pytest
+  tests/test_os_sandbox_product_enforcement.py` gave 8 passed, 1 skipped. It covered write
+  confinement (P1), the switch `denyWrite` (D-3), `denyRead` including `~/` (P3, P3-3), the
+  signing-key directory read-deny (PF1), and the `.claude` read-only bind plus rename refusal
+  (F-4). The skipped fail-closed test needs a host without the deps. The refusal itself was seen
+  live on the same host without socat: "sandbox required but unavailable … refusing to start",
+  exit 1.
+- **Precondition:** this works only after installing Claude Code's documented unconfined
+  `/etc/apparmor.d/bwrap` profile (`scripts/test-sandbox-apparmor-userns.sh --persist
+  documented`). That profile disables Ubuntu's `bwrap-userns-restrict` host-wide. Without it,
+  sandboxed commands fail closed.
+- Labels in `SECURITY.md`, the workspace-privilege-scoping reference, the security and
+  sandboxing guides, the emitted sandbox `_comment` and the `--sign-decision` help now
+  say this. Still unverified: goose and macOS Seatbelt, the `permissions.deny` `Edit` rules for
+  `.claude/settings*.json` and `.claude/hooks/**`, `bypassPermissions`, and other distros and
+  Claude Code versions. The `sandbox/confine-run.sh` launcher status is unchanged.
+
 ### fixed (Linux sandbox setup advice on Ubuntu)
 
 - `scripts/install-sandbox-deps.sh` recommended an AppArmor profile on the `claude` binary for

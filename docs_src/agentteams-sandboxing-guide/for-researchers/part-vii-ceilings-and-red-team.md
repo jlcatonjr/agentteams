@@ -8,8 +8,9 @@ The honest verdicts a reviewer should record:
   write-outside-scratch, credential/sibling read, and raw egress are all denied for a real process
   (incl. a real `goose`). **Unverified:** the launcher's newer **macOS `build_macos`** branch (ships
   `mac-escape-tests.sh` but not yet passed on a mac; mem UNCAPPED, no syscall filtering), the native
-  macOS Seatbelt paths (off a mac), and claude's native Linux product arm (stock Ubuntu nested-userns).
-  Distinct mechanisms, distinct verdicts.
+  macOS Seatbelt paths (off a mac). **Verified under a precondition:** claude's native Linux product arm
+  (2026-09-30, Claude Code 2.1.251) — on Ubuntu only after installing Claude Code's documented bwrap
+  AppArmor profile, which disables `bwrap-userns-restrict` host-wide. Distinct mechanisms, distinct verdicts.
   *(The sibling security guide's earlier "verified on macOS only" wording has since been CORRECTED to
   match — the two guides now agree.)*
 - **Not closed (ceiling #4):** **T6 / host-as-TCB** — a same-host operator shell or key-holding peer is

@@ -17,9 +17,15 @@ Distinct mechanisms carry distinct verdicts — **never conflate them**:
    yet runnable against the emitted launcher**, and macOS cannot become "verified" until that
    test/wrapper mismatch is fixed (logged for the launcher/test owner). Honest residuals: memory UNCAPPED,
    no syscall filtering, setuid denylist ≠ NoNewPrivs, loopback-only proxy (SB12).
-3. **Native macOS Seatbelt (goose/claude) + Claude's native Linux product arm: also unverified** — the
-   goose/claude Seatbelt profiles are enforcement/profile-syntax-unverified off a mac; Claude Code's
-   Linux bubblewrap *product arm* is unverified on stock Ubuntu (nested-userns; the mechanism is verified).
+3. **Native macOS Seatbelt (goose/claude): also unverified** — the goose/claude Seatbelt profiles are
+   enforcement/profile-syntax-unverified off a mac. **Claude Code's native Linux product arm: VERIFIED
+   (2026-09-30), under a precondition** — on Ubuntu with `kernel.apparmor_restrict_unprivileged_userns=1`,
+   bubblewrap 0.11.1, socat 1.8.1.1 and Claude Code 2.1.251, `tests/test_os_sandbox_product_enforcement.py`
+   passed write confinement, the switch `denyWrite`, `denyRead` (incl. `~/`), the signing-key directory
+   read-deny, the `.claude` read-only bind + rename refusal, and the fail-closed refusal was observed live —
+   **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables
+   Ubuntu's `bwrap-userns-restrict` host-wide (without it sandboxed commands fail closed). Other distros,
+   Claude Code versions, and `bypassPermissions` remain unverified.
 
 > **Cross-guide reconciliation (done, 2026-09-01).** The sibling
 > [Security Guide's](../../agentteams-security-guide/README.md) earlier *"verified on macOS only"*

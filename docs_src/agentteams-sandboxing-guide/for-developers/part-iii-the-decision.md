@@ -29,7 +29,7 @@ branch, so codex/copilot/agents-md on a mac are no longer fatal.)*
 flowchart TD
     Q["confinement requested?"] -->|yes| P{platform?}
     P -->|linux| FW{claude?}
-    FW -->|yes| CN["native + launcher; no advisory<br/>(native arm UNVERIFIED on Linux)"]
+    FW -->|yes| CN["native + launcher; no advisory<br/>(native arm VERIFIED on Linux; Ubuntu needs the<br/>documented bwrap AppArmor profile)"]
     FW -->|no| ML["manual-wire (NON-FATAL) + launcher"]
     P -->|darwin| DF{framework?}
     DF -->|claude| CN2["native; no advisory"]

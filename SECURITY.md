@@ -146,8 +146,16 @@ refuses to start instead. It is omitted on native Windows, where the block is ad
 **Action:** re-run `agentteams --update` and re-merge the `sandbox` block into
 `.claude/settings.json`, or add `"failIfUnavailable": true` to your merged `sandbox` object;
 `--update` prints a notice while it is missing. On Linux, install `bubblewrap` and `socat`
-(`scripts/install-sandbox-deps.sh`). Claude Code's native sandbox remains **unverified on Linux
-end-to-end**; see [`docs_src/api-reference/workspace-privilege-scoping.md`](docs_src/api-reference/workspace-privilege-scoping.md).
+(`scripts/install-sandbox-deps.sh`). **Update (2026-09-30):** Claude Code's native sandbox is now
+**verified end-to-end on Linux** for one host configuration — Ubuntu with
+`kernel.apparmor_restrict_unprivileged_userns=1`, bubblewrap 0.11.1, socat 1.8.1.1, Claude Code
+2.1.251 — covering write confinement, the switch `denyWrite`, `denyRead` (including `~/`), the
+signing-key directory, the `.claude` read-only bind and rename refusal, and the fail-closed
+refusal. **Precondition:** on such a host it works only after installing Claude Code's documented
+unconfined `/etc/apparmor.d/bwrap` profile (`scripts/test-sandbox-apparmor-userns.sh --persist
+documented`), which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed
+commands fail closed. Other distros and Claude Code versions, macOS, and `bypassPermissions` remain
+unverified; see [`docs_src/api-reference/workspace-privilege-scoping.md`](docs_src/api-reference/workspace-privilege-scoping.md).
 
 ### 2026-09-30 — An HMAC-signed capability grant could widen the sandbox from inside it
 

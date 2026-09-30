@@ -96,8 +96,8 @@ Apple Seatbelt profile; Goose has **no native Linux/Windows OS sandbox.**
 - **Claude Code's *native* Linux bubblewrap arm has the open D-3 fragility** (distinct
   from the verified launcher above): a `denyWrite` of a *non-existent* path fails `bwrap`
   init and blocks **all** Bash — a fail-*shut* availability defect (not a hole) that
-  remains **open** in the remediation log; that native arm's `denyRead` and its product
-  arm on stock Ubuntu are likewise **unverified**.
+  remains **open** in the remediation log. Its `denyRead` (incl. `~/`) and product arm are
+  verified on Linux only under the AppArmor precondition in the next item.
 - **Claude Code's native sandbox fails OPEN without `failIfUnavailable` (fixed
   2026-09-30).** Measured on Linux with `socat` missing: the old block (`enabled: true`,
   `allowUnsandboxedCommands: false`) let Claude Code print "Sandbox disabled … Commands
@@ -106,7 +106,7 @@ Apple Seatbelt profile; Goose has **no native Linux/Windows OS sandbox.**
   block is advisory), so Claude Code refuses to start instead. Linux needs `bwrap` **and**
   `socat` (`scripts/install-sandbox-deps.sh`); Ubuntu's
   `kernel.apparmor_restrict_unprivileged_userns=1` makes every sandboxed command fail closed
-  at the seccomp step. That native arm is **unverified on Linux end-to-end**. Operators who
+  at the seccomp step. That native arm is now verified end-to-end on Linux (2026-09-30: Ubuntu, Claude Code 2.1.251, bubblewrap 0.11.1, socat 1.8.1.1) **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed commands fail closed. Operators who
   merged an earlier block: re-run `--update` and re-merge the `sandbox` block.
 - **Native Windows has no emitted enforcement** — design-only.
 - On a host where confinement cannot be enforced, the interactive path **fails
