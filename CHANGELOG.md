@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the control plane cannot be renamed away — F-4)
+
+- **An agent could rename an ancestor of a write-denied control-plane path and plant a
+  replacement tree (F-4).** Every deny follows a path, so with `allowWrite: ["."]` an in-sandbox
+  agent could `mv .claude .claude.old`, recreate `.claude/` with its own settings, hooks and
+  `enforce_decision_signing` switch, and the **next** session would read it. **Fix (Claude
+  block):** `denyWrite` now also names the whole `.claude` directory. Claude Code 2.1.251 (argv
+  captured through a logging `bwrap` shim) turns it into a `--ro-bind` placed after the
+  read-write root bind, so `.claude` is a read-only mount point: rename gives `EBUSY`, a hard
+  link out gives `EXDEV`, and a planted `.claude/settings.local.json` is refused. A deny only
+  removes capability, and `permissions.deny` is unchanged. For a non-default `--output` the dir
+  is derived from the same switch path, and the existing mismatch warning names it.
+- **`sandbox/confine-run.sh` had no control-plane binds.** Its Linux branch now `--ro-bind`s each
+  control-plane path it finds under a writable root and self-binds each ancestor so its rename
+  fails `EBUSY` (order: rw roots, ancestor binds, read-only binds, masks). A symlink on any of
+  these paths is refused; nothing is ever created. New `--protect PATH` read-only binds an
+  extra path (e.g. a whole `.claude`); a missing one is an exit-2 refusal. The launcher's
+  sha256 changed: consuming projects that pin it (baseAgent) must re-pin.
+- **Goose Seatbelt:** the profile denies `file-write-unlink` and `file-write-create` on each
+  control-plane ancestor literal. **Unverified** (no macOS host).
+- **Status:** mechanism-verified (raw bubblewrap probes, `tests/test_sandbox_ancestor_rename.py`),
+  product-unverified (Claude Code's sandbox cannot start under Ubuntu's AppArmor user-namespace
+  restriction; the opt-in `RUN_CLAUDE_SANDBOX_ITEST=1` argv fixture checks bind order only).
+- **Residuals / follow-up:** in a project with both a Claude and a goose team, the Claude block
+  does not deny `.goose` (a missing deny path stops bwrap) — add it by hand. Pinning the control
+  plane *outside* the write root is tracked as a follow-up (defence in depth; needed where the
+  chain is not mount-protected, i.e. Seatbelt).
+- **Action:** re-run `--update` and re-merge the `sandbox` block into `.claude/settings.json`.
+
 ### security (the operator signing key is unreadable in every sandbox; built-in tools bound — F-1, R11)
 
 - **A sandboxed agent could read the operator's Ed25519 private signing key and self-sign a

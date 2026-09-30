@@ -153,6 +153,40 @@ def _seatbelt_path_expr(path: str) -> str | None:
     return f'(subpath (string-append (param "WORKSPACE_ROOT") "/{rest}"))'
 
 
+def _seatbelt_ancestor_rename_rules(ancestors: tuple[str, ...]) -> list[str]:
+    """Return the Seatbelt rules refusing a rename of each control-plane ancestor dir (F-4).
+
+    Renaming ``.goose`` (or ``.goose/recipes`` …) away and planting a replacement tree would
+    sidestep the ``(subpath …)`` control-plane deny, which follows the path, not the inode. A
+    rename needs ``file-write-unlink`` on the source and ``file-write-create`` on the
+    destination, so both are denied on each ancestor LITERAL (the directory entry only —
+    writes inside it are unaffected). UNVERIFIED: no macOS host has run these rules.
+
+    Args:
+        ancestors: Workspace-relative ancestor dirs (:func:`_sandbox_emit.control_plane_ancestors`).
+
+    Returns:
+        The profile lines (empty when there are no ancestors).
+
+    Raises:
+        ValueError: An ancestor cannot be expressed as a safe Seatbelt literal (fail closed).
+    """
+    exprs = [_seatbelt_path_expr(a) for a in ancestors]
+    if any(e is None for e in exprs):
+        raise ValueError(f"control-plane ancestor not expressible as a Seatbelt literal: {ancestors!r}")
+    literals = ["(literal " + e[len("(subpath "):] for e in exprs if e]
+    if not literals:
+        return []
+    return [
+        ";; F-4: refuse RENAMING an ancestor of the control plane away (rename = unlink of the",
+        ";; source + create at the destination). Literal = the directory entry only; writes inside",
+        ";; it are unaffected. UNVERIFIED on a real macOS host.",
+        "(deny file-write-unlink file-write-create",
+        *[f"    {e}" for e in literals],
+        ")",
+    ]
+
+
 def _seatbelt_egress_rule(endpoint: str | None) -> str | None:
     """Validate a sanctioned-egress endpoint for a Seatbelt ``remote ip`` rule.
 
@@ -223,6 +257,7 @@ def _build_seatbelt_profile(
     """
     from agentteams.frameworks._sandbox_emit import (
         assert_roots_clear_of_signing_keys,
+        control_plane_ancestors,
         protected_write_paths,
         signing_key_deny_read,
     )
@@ -295,6 +330,7 @@ def _build_seatbelt_profile(
         "(deny file-write*",
         *[f"    {e}" for e in cp_exprs],
         ")",
+        *_seatbelt_ancestor_rename_rules(control_plane_ancestors(control_plane)),
         "",
         ";; --- Network egress ---",
     ]

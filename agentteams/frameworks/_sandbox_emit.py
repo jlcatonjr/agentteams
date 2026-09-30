@@ -50,6 +50,14 @@ _SANDBOX_COMMENT_LINES: list[str] = [
     "(<agents dir>/references/authorized-verify-keys), so an agent cannot plant its own",
     "public key. Whether Claude Code honours a DIRECTORY denyWrite entry is UNVERIFIED",
     "until a real-host test passes; test it before relying on it.",
+    "denyWrite also names the whole `.claude` directory (F-4): without it an agent could",
+    "RENAME `.claude` away and plant a replacement tree (settings, hooks, switch) that the",
+    "NEXT session reads. Claude Code binds the entry read-only over the project, so `.claude`",
+    "cannot be renamed, replaced or written from Bash (you, outside a session, are",
+    "unaffected). Status: mechanism-verified (raw bubblewrap), product-unverified (Claude",
+    "Code's sandbox fails on this host's AppArmor userns restriction). In a project that",
+    "ALSO has a goose team, `.goose` is NOT denied here (a missing deny path stops bwrap):",
+    "add \".goose\" to denyWrite yourself if both teams share the project.",
 ]
 
 
@@ -437,6 +445,48 @@ def protected_write_paths(framework: str) -> tuple[str, ...]:
 _PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
 
 
+def framework_config_dir(framework: str) -> str:
+    """Return ``framework``'s project-root-relative top-level config dir (``.claude``, ``.goose``).
+
+    Derived from the SAME source as :func:`protected_write_paths` (the switch path's first
+    segment), so a team written under a non-default ``--output`` gets the same frame, and the
+    existing mismatch warning (``cli.generate_helpers._warn_sandbox_deny_path_mismatch``) names it.
+
+    Args:
+        framework: ``"claude"`` or ``"goose"``.
+
+    Returns:
+        The config dir, e.g. ``".claude"``.
+
+    Raises:
+        KeyError: ``framework`` emits no sandbox.
+    """
+    return _AGENT_PRIVILEGE_SWITCH[framework].split("/", 1)[0]
+
+
+def control_plane_ancestors(paths: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """Return every proper ancestor dir of ``paths`` below the project root, top-down, de-duplicated.
+
+    F-4: an in-sandbox agent that may write the project root can RENAME an ancestor of a
+    write-denied control-plane path (``mv .claude .claude.old``) and plant a replacement tree read
+    by the next session. These are the directories whose rename must be refused.
+
+    Args:
+        paths: Project-root-relative control-plane paths (no leading ``/`` or ``./``).
+
+    Returns:
+        E.g. ``(".claude", ".claude/agents", ".claude/agents/references", ".claude/hooks")``.
+    """
+    out: list[str] = []
+    for path in paths:
+        parts = path.split("/")[:-1]
+        for i in range(1, len(parts) + 1):
+            anc = "/".join(parts[:i])
+            if anc not in out:
+                out.append(anc)
+    return tuple(sorted(out))
+
+
 def _sandbox_fails_closed_on(platform: str | None = None) -> bool:
     """Return True iff the emitted block should carry ``failIfUnavailable: true`` here.
 
@@ -501,7 +551,12 @@ def _build_sandbox_block(
     filesystem: dict[str, Any] = {"allowWrite": roots}
     # D-3: deny the in-sandbox agent write access to the control-plane files it would otherwise
     # be able to edit (the switch is inside the write root). denyWrite wins over allowWrite.
-    filesystem["denyWrite"] = list(_PROTECTED_WRITE_PATHS)
+    # F-4 (2026-09-30): the whole framework config dir too. Claude Code turns a denyWrite entry
+    # into a --ro-bind AFTER the rw root bind (captured argv, 2.1.251), so `.claude` becomes a
+    # read-only mount point: renaming it (the ancestor-rename route to a planted tree) gives
+    # EBUSY and a planted `.claude/settings.local.json` is refused. A deny only removes
+    # capability, whatever the write roots; permissions.deny is unaffected (built-in tools).
+    filesystem["denyWrite"] = [*_PROTECTED_WRITE_PATHS, framework_config_dir("claude")]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:

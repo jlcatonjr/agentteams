@@ -111,6 +111,7 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
         f"{'/'.join(sub)}/references/agent-privilege.json (relative to the project root), but "
         f"this team writes it to {output_dir / 'references' / 'agent-privilege.json'}. The switch "
         f"is not protected there, and on Linux the missing deny path stops the sandbox starting. "
+        f"The ancestor-rename (F-4) deny of the whole {sub[0]}/ dir assumes the same layout. "
         f"Use the default agents dir, or fix the denyWrite path when merging the sandbox block.",
         file=sys.stderr,
     )

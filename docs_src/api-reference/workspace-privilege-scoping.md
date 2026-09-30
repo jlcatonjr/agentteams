@@ -49,7 +49,8 @@ it already ships (`.claude/settings.hooks.example.json`):
       "denyWrite": [
         ".claude/agents/references/agent-privilege.json",
         ".claude/hooks/constitutional-gate.py",
-        ".claude/agents/references/authorized-verify-keys"
+        ".claude/agents/references/authorized-verify-keys",
+        ".claude"
       ]
     },
     "allowUnsandboxedCommands": false,
@@ -199,6 +200,29 @@ Two properties matter for the privilege model:
   Code honours a **directory** `denyWrite` entry is **unverified** until a real-host test
   passes. The goose Seatbelt profile denies the same directory with `(subpath …)`, which
   covers everything under it.
+- **The control plane cannot be renamed away (F-4, 2026-09-30).** A deny follows a *path*, so
+  an agent that may write the project root could `mv .claude .claude.old`, recreate `.claude/`
+  with its own settings, hooks and switch, and have the **next** session read the planted tree.
+  Captured Claude Code 2.1.251 argv shows each `denyWrite` entry becomes a `--ro-bind` placed
+  *after* the read-write root bind, so `denyWrite` now also names the whole **`.claude`**
+  directory: it becomes a read-only mount point, its rename fails `EBUSY`, and a planted
+  `.claude/settings.local.json` is refused. A deny only removes capability, whatever the write
+  roots, and `permissions.deny` is unchanged (no `Edit(/.claude/**)`, which would block agents'
+  own Write-tool edits there). For a team generated under a non-default `--output`, the config
+  dir is derived from the same switch path as the other entries, and the existing
+  deny-path-mismatch warning names it. **Two frameworks in one project:** `.goose` is not
+  added (a missing deny path stops bwrap); add `".goose"` to `denyWrite` by hand if a goose team
+  shares the project. The goose Seatbelt profile denies `file-write-unlink` and
+  `file-write-create` on each control-plane ancestor literal (`.goose`, `.goose/recipes`,
+  `.goose/recipes/references`, `.claude`, `.claude/hooks`) — **unverified**, no macOS host has
+  run it. `sandbox/confine-run.sh` (Linux) read-only binds every control-plane path it finds
+  under a writable root and self-binds each ancestor so its rename fails `EBUSY`; see the
+  launcher section. Status: **mechanism-verified** (raw bubblewrap probes in
+  `tests/test_sandbox_ancestor_rename.py`), **product-unverified** (Claude Code's sandbox cannot
+  start on a host with the AppArmor user-namespace restriction; the opt-in
+  `test_f4_captured_argv_…` fixture checks the argv only). Tracked follow-up: pinning the
+  control plane *outside* the write root (defence in depth; needed where the chain is not
+  mount-protected, i.e. Seatbelt).
 - **The operator's private signing key is read-denied in every profile (F-1).** Every emitted
   sandbox — `confined` as well as `exclusive`, and a `cooperative` team with `claude:sandbox` —
   puts `~/.config/agentteams/keys` in `denyRead` (a `confined` block gets that entry and **no**
@@ -594,6 +618,19 @@ Key flags: `--scratch DIR` (required; the only writable path), `--egress deny|pr
 ~/.kube ~/.config/gcloud ~/.azure`), `--writable PATH`, `--setenv VAR=VAL`. It requires
 `bwrap` (`sudo apt-get install -y bubblewrap`, or `scripts/install-sandbox-deps.sh`, which also
 installs the `socat` that Claude Code's own sandbox needs) and refuses to launch without it.
+
+**Control plane (F-4, Linux branch).** Inside every writable root (`--scratch`, `--writable`,
+`--coord-root`) the launcher `--ro-bind`s each agentteams control-plane path that exists there
+(the `enforce_decision_signing` switch, the gate hook and the verify-key store for claude and
+goose, and `.goose/sandbox.sb`), and gives each ancestor directory below the root a read-write
+self-bind so it becomes a mount point: `mv .claude .claude.old` fails `EBUSY`, while writes
+inside `.claude/` still work. The order is rw roots, ancestor self-binds, read-only binds, then
+the credential masks. Each path is `realpath`'d and a symlink anywhere on it is refused; an
+absent path is skipped, never created. `--protect PATH` (repeatable) read-only binds an extra
+path — `--protect "$PWD/.claude"` makes the whole config dir read-only, the Claude-block
+equivalent — and a missing `--protect` path is an exit-2 refusal, never a `mkdir`. `--check`
+prints the result on a `control-plane (ro)` line. Mechanism-verified (the launcher run end to
+end under bwrap), product-unverified; the macOS branch is unchanged.
 
 **4. Dry-run / inspect before trusting it** — `--check` prints the effective sandbox and runs
 nothing:

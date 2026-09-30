@@ -9,7 +9,8 @@ own mechanism (a claude team on Linux emits both the settings block and the laun
 
 For the `claude` framework, `_sandbox_emit._build_sandbox_block` emits a `sandbox` block into
 `.claude/settings.hooks.example.json`: `allowWrite` (the write roots), `denyWrite` (the control-plane
-files even inside a write root), `denyRead`/`allowRead` (for `exclusive`), and the
+files even inside a write root, plus the whole `.claude` dir so it cannot be renamed away and
+replaced — F-4, mechanism-verified, product-unverified), `denyRead`/`allowRead` (for `exclusive`), and the
 `allowUnsandboxedCommands: false` escape-hatch closure. Claude Code applies it natively once the operator
 merges the example into their live `settings.json`. **The block emits no network/egress directive** —
 claude network confinement is Claude Code's own product default, which agentteams neither emits nor

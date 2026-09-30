@@ -307,3 +307,81 @@ def test_fail_if_unavailable_refuses_to_start_without_deps(tmp_path: Path) -> No
         )
     finally:
         shutil.rmtree(escape, ignore_errors=True)
+
+
+# --- F-4 (PR-B): the ancestor-rename route ----------------------------------------------------
+
+_BIND_FLAGS = {"--bind", "--bind-try", "--ro-bind", "--ro-bind-try", "--dev-bind", "--dev-bind-try"}
+
+
+def _bind_sequence(argv: list[str]) -> list[tuple[bool, str]]:
+    """Return ``(read_only, destination)`` for each bind in a bwrap argv, in order."""
+    out: list[tuple[bool, str]] = []
+    i = 0
+    while i < len(argv) and argv[i] != "--":
+        if argv[i] in _BIND_FLAGS and i + 2 < len(argv):
+            out.append((argv[i].startswith("--ro-"), os.path.normpath(argv[i + 2])))
+            i += 3
+        elif argv[i] == "--setenv":
+            i += 3
+        else:
+            i += 1
+    return out
+
+
+def test_f4_captured_argv_binds_the_config_dir_read_only_after_every_rw_ancestor(
+    tmp_path: Path,
+) -> None:
+    """Capture Claude Code's REAL bwrap argv (a logging ``bwrap`` shim first on PATH) for the
+    emitted block, and fail if any protected read-only bind is followed by a read-write bind of
+    itself or an ancestor (which would re-open it), or if ``.claude`` is not bound read-only.
+    Independent of the operational precondition: it inspects the argv, not the outcome."""
+    if not sys.platform.startswith("linux"):
+        pytest.skip("Linux-only: the argv is Claude Code's bubblewrap invocation")
+    real, socat = shutil.which("bwrap"), shutil.which("socat")
+    if not (real and socat):
+        pytest.skip("bwrap and socat must be on PATH for Claude Code to build its sandbox")
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    log_dir = tmp_path / "argv"
+    log_dir.mkdir()
+    (shim / "bwrap").write_text(
+        f"#!/bin/bash\nprintf '%s\\n' \"$@\" > '{log_dir}/argv.'$$\nexec '{real}' \"$@\"\n",
+        encoding="utf-8",
+    )
+    (shim / "bwrap").chmod(0o755)
+    project = _make_project(tmp_path / "proj")
+    block = _build_sandbox_block(None)
+    _write_settings(project, block)
+    env = {**os.environ, "PATH": os.pathsep.join(
+        [str(shim), os.path.dirname(socat), os.environ.get("PATH", "")])}
+    subprocess.run(
+        [_CLAUDE, "-p", "Run this exact bash command: echo hi > probe.txt", "--model", _MODEL,
+         "--permission-mode", "acceptEdits", "--allowedTools", "Bash"],
+        cwd=str(project), capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        timeout=180, env=env,
+    )
+    logs = sorted(log_dir.glob("argv.*"))
+    assert logs, "Claude Code never invoked bwrap through the shim (no argv captured)"
+    protected = [os.path.normpath(project / p) for p in block["filesystem"]["denyWrite"]]
+    for log in logs:
+        seq = _bind_sequence(log.read_text(encoding="utf-8").splitlines())
+        assert (True, str(project / ".claude")) in seq, f"{log.name}: .claude not read-only bound"
+        for path in protected:
+            ro_at = [i for i, (ro, dst) in enumerate(seq) if ro and dst == path]
+            assert ro_at, f"{log.name}: denyWrite {path} has no read-only bind"
+            for ro, dst in seq[ro_at[-1] + 1:]:
+                assert ro or not (path == dst or path.startswith(dst + os.sep)), (
+                    f"{log.name}: rw --bind {dst} follows the read-only bind of {path}"
+                )
+
+
+@pytest.mark.usefixtures("sandbox_operational")
+def test_f4_config_dir_cannot_be_renamed_from_sandboxed_bash(tmp_path: Path) -> None:
+    """F-4 product arm: ``mv .claude .claude.old`` (then plant a tree) must fail in the sandbox."""
+    project = _make_project(tmp_path / "proj")
+    _write_settings(project, _build_sandbox_block(None))
+    _run_claude(project, "mv .claude .claude.old")
+    assert (project / ".claude").is_dir() and not (project / ".claude.old").exists(), (
+        "F-4 FAILED: sandboxed Bash renamed the .claude control-plane directory"
+    )
