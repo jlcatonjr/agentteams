@@ -194,11 +194,38 @@ Two properties matter for the privilege model:
   verify keys (`<key-id>.pub.pem`). It is denied so an in-sandbox agent cannot plant its
   own key. The store must exist for bwrap to start, so generation emits a frozen
   `README.md` sentinel into it, in the same step that emits the deny. agentteams never
-  writes, rewrites or deletes a `*.pub.pem`. Limits: this closes the key-*planting* route
-  only, and an agent that can read the operator's private signing key can still self-sign
-  (open item F-1). Whether Claude Code honours a **directory** `denyWrite` entry is
-  **unverified** until a real-host test passes. The goose Seatbelt profile denies the same
-  directory with `(subpath …)`, which covers everything under it.
+  writes, rewrites or deletes a `*.pub.pem`. `denyWrite` binds Bash only (below), so the
+  Write/Edit-tool route is closed by the `permissions.deny` `Edit(...)` rules. Whether Claude
+  Code honours a **directory** `denyWrite` entry is **unverified** until a real-host test
+  passes. The goose Seatbelt profile denies the same directory with `(subpath …)`, which
+  covers everything under it.
+- **The operator's private signing key is read-denied in every profile (F-1).** Every emitted
+  sandbox — `confined` as well as `exclusive`, and a `cooperative` team with `claude:sandbox` —
+  puts `~/.config/agentteams/keys` in `denyRead` (a `confined` block gets that entry and **no**
+  `allowRead`). The goose Seatbelt profile and `sandbox/confine-run.sh` deny the same directory.
+  Keys provisioned before this change sit directly in `~/.config/agentteams/`; the ones present
+  on the generating host are denied by **exact path** for now (the sandbox takes no globs), and
+  `provision-operator-signing-key.sh --migrate` moves them into `keys/` without overwriting or
+  deleting anything. A workspace write root at or inside `keys/` is refused at generation, since
+  a narrower `allowRead` would re-open it. Only the key **file** is covered: the environment
+  variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` are inherited by
+  Claude-sandboxed commands (the launcher scrubs its environment; Claude Code does not). No
+  relaxing or elevated authorization accepts an HMAC-only signature, which is what keeps an
+  inherited HMAC key a residual rather than a bypass.
+- **`permissions.deny` binds the built-in tools.** Claude Code's `sandbox.filesystem` applies
+  only to Bash and its child processes; the built-in Read, Edit and Write tools obey
+  `permissions` instead (measured: the Write tool overwrote a `denyWrite` path outside
+  `.claude/`). So the same branch that emits the sandbox block adds `permissions.deny`:
+  `Read(~/.config/agentteams/keys/**)` and `Read(~/.config/agentteams/*.pem)` (the legacy glob,
+  in gitignore syntax — used here only), and project-anchored `Edit(/…)` rules for the switch,
+  the gate hook and the verify-key store (`Edit(/.claude/agents/references/authorized-verify-keys/**)`).
+  `Edit(...)` covers Edit, Write and MultiEdit; Claude Code reports that a `NotebookEdit(path)`
+  rule "is not matched by file permission checks", so none is emitted. A `Read(...)` rule covers
+  Grep and Glob on a best-effort basis; there is no `Grep(...)`/`Glob(...)` form. Residuals:
+  the rules are inert until merged; they are unverified under `bypassPermissions`; hooks and MCP
+  servers run unsandboxed; goose has no Claude-style permission system (its Seatbelt profile
+  binds every process goose runs). A denyRead path that does not exist was tolerated by bwrap on
+  Claude Code 2.1.251 (Linux); the Claude arm stays **unverified end-to-end** on Linux.
 - **`allowUnsandboxedCommands: false`** closes the `dangerouslyDisableSandbox`
   escape hatch.
 

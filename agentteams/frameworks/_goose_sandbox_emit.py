@@ -95,7 +95,8 @@ def _goose_read_deny_paths(manifest: dict[str, Any]) -> list[str] | None:
     Mirrors ``_sandbox_emit._exclusive_read_deny_paths``: the curated credential-path
     defaults plus any operator-supplied ``protected_read_paths`` (sibling agent scratch
     roots / sibling workspaces), de-duplicated. Only ``exclusive`` carries read-exclusion;
-    ``confined`` returns None so the emitted profile stays write-confinement only.
+    ``confined`` returns None, so its profile carries no profile read-exclusion (only the F-1
+    signing-key read-deny every profile gets).
     """
     if manifest.get("privilege_profile") != "exclusive":
         return None
@@ -217,10 +218,16 @@ def _build_seatbelt_profile(
 
     Raises:
         ValueError: a non-empty ``write_roots`` or ``deny_read`` entry cannot be expressed
-            as a safe Seatbelt rule (fail closed, never silently drop it).
+            as a safe Seatbelt rule (fail closed, never silently drop it), or a write root is
+            at or inside the operator signing-key directory.
     """
-    from agentteams.frameworks._sandbox_emit import protected_write_paths
+    from agentteams.frameworks._sandbox_emit import (
+        assert_roots_clear_of_signing_keys,
+        protected_write_paths,
+        signing_key_deny_read,
+    )
     roots = list(write_roots) if write_roots else ["."]
+    assert_roots_clear_of_signing_keys(roots)
     # Fail CLOSED on any unrepresentable root rather than silently dropping it: a dropped
     # write root would leave the agent unable to write where the operator intended (and a
     # root like "/" or "../x" that _seatbelt_path_expr now rejects must surface as an error,
@@ -325,6 +332,23 @@ def _build_seatbelt_profile(
             ";; network isolation, use privilege_profile: exclusive (adds deny network* + a",
             ";; loopback egress-proxy allow) and read-exclusion.",
         ]
+
+    # F-1: the operator signing-key directory (plus any legacy key file on the generating host,
+    # exact paths only) is read-denied in EVERY profile, confined included. `(subpath …)` of a
+    # file path matches that file. Seatbelt resolves real paths, so a SYMLINKED key directory
+    # escapes this rule: the provisioning script refuses one.
+    key_exprs = [e for e in (_seatbelt_path_expr(p) for p in signing_key_deny_read()) if e]
+    lines += [
+        "",
+        ";; --- Operator signing-key isolation (F-1, every profile) ---",
+        ";; The private decision-signing key lives outside the workspace; no agent may read it.",
+        ";; This denies the key FILE only: AGENTTEAMS_DECISION_ED25519_KEYFILE / *_SIGNING_KEY",
+        ";; environment variables are inherited unless the launcher scrubs them (sandbox-exec",
+        ";; does not). UNVERIFIED on a real macOS host.",
+        "(deny file-read*",
+        *[f"    {e}" for e in key_exprs],
+        ")",
+    ]
 
     if deny_read:
         # Fail CLOSED: an unrepresentable read-exclusion path must NOT be silently dropped
@@ -526,8 +550,9 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     # The profile's control-plane deny names the verify-key store directory, so its frozen
     # sentinel ships with the profile and only with it (Seatbelt tolerates a missing path, but the
     # store must exist for parity with the bwrap arms and for the same emit-together invariant).
-    # This closes key PLANTING only; self-signing stays possible while F-1 (private key readable
-    # in the sandbox) is open.
+    # This closes key PLANTING; the profile also read-denies the operator private key (F-1).
+    # Goose has no Claude-style `permissions` system: the Seatbelt profile binds every process
+    # goose runs, so there is no separate built-in-tool gap to close here.
     return [
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),

@@ -81,8 +81,11 @@ def test_confined_profile_denies_writes_leaves_network_open_no_reads():
     # confined does NOT deny network (no active deny/allow network rule).
     assert not any(r.startswith("(deny network*") for r in _active_rules(prof))
     assert not any(r.startswith("(allow network*") for r in _active_rules(prof))
-    # confined carries NO read-exclusion.
-    assert "(deny file-read*" not in prof
+    # confined carries NO profile read-exclusion — only the F-1 signing-key read-deny.
+    assert prof.count("(deny file-read*") == 1
+    assert '(param "HOME_DIR") "/.config/agentteams/keys")' in prof
+    assert "Read-exclusion (privilege_profile: exclusive)" not in prof
+    assert "/.ssh" not in prof
     # ...but it DOES protect the control-plane files (parity with Claude denyWrite).
     assert any(r.startswith("(deny file-write*") for r in _active_rules(prof))
     assert 'agent-privilege.json' in prof

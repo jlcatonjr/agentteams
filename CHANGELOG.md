@@ -6,6 +6,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the operator signing key is unreadable in every sandbox; built-in tools bound — F-1, R11)
+
+- **A sandboxed agent could read the operator's Ed25519 private signing key and self-sign a
+  relaxing authorization (F-1, HIGH).** The key lived in `~/.config/agentteams/`, which no emitted
+  sandbox denied, and a `confined` Claude block had no `denyRead` at all. `agentteams.1` and
+  `docs_src/cli-reference.md` claimed an agent context "lacks both the env var and the key file";
+  the key file was readable. **Fix:** the key now lives in `~/.config/agentteams/keys/` (mode 700),
+  and every emitted sandbox read-denies that directory in every profile — the Claude block
+  (`confined` gets the `denyRead` entry and no `allowRead`), the goose Seatbelt profile and
+  `sandbox/confine-run.sh` (which also now masks an `--exclude` *file* with a `/dev/null` bind
+  instead of aborting bwrap). A write root at or inside `keys/` is refused at generation.
+- **The built-in Read/Edit/Write tools ignored the sandbox (R11, blocker).** Claude Code's
+  `sandbox.filesystem` binds Bash only; measured on Claude Code 2.1.251, the Write tool
+  overwrote a `denyWrite` path outside `.claude/`. So the verify-key store and switch
+  deny-writes (#74/#75) did not stop an agent Write-tooling its own `.pub.pem` into the store.
+  **Fix:** the same branch that emits the sandbox block now emits `permissions.deny`:
+  `Read(~/.config/agentteams/keys/**)`, `Read(~/.config/agentteams/*.pem)`, and project-anchored
+  `Edit(/…)` rules for the switch, the gate hook and the verify-key store. Verified live: with the
+  rules merged, `claude -p` in `acceptEdits` mode could not Write either protected path.
+  `Edit(...)` covers Edit/Write/MultiEdit; no `NotebookEdit(path)` rule is emitted (Claude Code
+  says it is never matched).
+- **Provisioning:** `provision-operator-signing-key.sh` writes to `keys/`, refuses a symlinked or
+  group/world-accessible `keys/`, and refuses any other `KEY_DIR` unless
+  `--allow-unprotected-keydir` (loud warning). It warns about keys in the old location; `--migrate`
+  moves them with `mv -n` (never overwrites, never deletes; a skip is detected and exits 1) and
+  names rc files that still export the old `AGENTTEAMS_DECISION_ED25519_KEYFILE`.
+  `--sign-decision` warns (still signs) when the keyfile is outside `keys/`, in the old location,
+  a symlink, or wider than 600, and names the migrated path when the old one is missing.
+- **Transitional:** legacy `~/.config/agentteams/*.pem` files are denied too — by exact path in
+  the sandboxes (only files present on the generating host), by glob only in the `Read(...)`
+  permission rule. This over-denies any other `.pem` kept there; it will be removed in a release
+  after the migration advisory has shipped. Generate/update prints a host-local advisory when
+  legacy keys exist.
+- **Action:** run `provision-operator-signing-key.sh --migrate`, update any exported keyfile path,
+  then re-run `--update` and re-merge the `sandbox` **and** `permissions` blocks into
+  `.claude/settings.json`. `sandbox/confine-run.sh` changed: consuming projects that pin its sha256
+  (baseAgent) must re-pin.
+- **Residuals (documented, not closed):** environment variables (`AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+  `AGENTTEAMS_*_SIGNING_KEY`) are inherited by Claude-sandboxed commands — do not export them into
+  an agent's shell; no relaxing or elevated path accepts an HMAC-only signature (now tested), so
+  an inherited HMAC key cannot mint a relaxing authorization. `permissions.deny` is inert until
+  merged and unverified under `bypassPermissions`; `Read(...)` covers Grep/Glob best-effort; hooks
+  and MCP servers run unsandboxed; goose has no Claude-style permission system. The Claude sandbox
+  arm is **unverified end-to-end on Linux**, and the Seatbelt arms are unverified without a Mac.
+
 ### security (the Claude sandbox block fails closed: `failIfUnavailable`)
 
 - **The emitted Claude `sandbox` block failed OPEN.** It set `enabled: true` and

@@ -1168,7 +1168,9 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
     private key from the file named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE``, refuses a
     categorically non-eligible row, prints the row's derived material effect for a deliberate
     second look, signs the canonical payload with Ed25519, and appends the signed row. It is the
-    only minter of Ed25519 relaxing rows; an agent context lacks both the env var and the key file.
+    only minter of Ed25519 relaxing rows. Every emitted sandbox read-denies the key FILE when it
+    sits in ``~/.config/agentteams/keys`` (a key elsewhere, symlinked, or wider than 600 draws a
+    warning but still signs); an inherited environment variable is not denied.
 
     Args:
         args: Parsed CLI namespace (``sign_decision`` is the spec path).
@@ -1201,6 +1203,10 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    from agentteams.frameworks._sandbox_emit import signing_keyfile_warnings
+
+    for warning in signing_keyfile_warnings(keyfile):
+        print(f"Warning: {warning}", file=sys.stderr)
     try:
         private_pem = Path(keyfile).read_text(encoding="utf-8")
     except OSError as exc:

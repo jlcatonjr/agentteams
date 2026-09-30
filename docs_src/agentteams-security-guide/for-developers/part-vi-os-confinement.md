@@ -69,10 +69,13 @@ Independent of profile, the emitted sandbox applies **`denyWrite` of exact
 control-plane paths** — `<agents dir>/references/agent-privilege.json`,
 `.claude/hooks/constitutional-gate.py` and the verify-key store directory
 `<agents dir>/references/authorized-verify-keys/` — deny-over-allow, so an in-sandbox agent
-cannot rewrite the enforcement plane governing it. The store deny closes key *planting*
-only: self-signing stays possible while the private signing key is readable in the
-sandbox (F-1), and the Claude directory-`denyWrite` arm is unverified pending a real-host
-test. `exclusive` adds **`denyRead`
+cannot rewrite the enforcement plane governing it. `denyWrite` binds Bash only; the
+built-in Write/Edit tools are bound by the `permissions.deny` `Edit(...)` rules emitted beside
+it, and the Claude directory-`denyWrite` arm is unverified pending a real-host test. Every
+profile also **`denyRead`s the operator private-key directory** `~/.config/agentteams/keys`
+(F-1; plus `Read(...)` permission rules for the built-in tools), so a sandboxed agent cannot
+read the key and self-sign; the environment variables naming or holding signing keys are still
+inherited. `exclusive` adds **`denyRead`
 of credential directories** (SSH/AWS/etc.): outbound hardening of *files, not env
 vars* — it stops the confined agent reading *your* credential tree, not others
 reading yours.

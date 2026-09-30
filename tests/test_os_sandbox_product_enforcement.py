@@ -254,6 +254,31 @@ def test_p3_3_tilde_denyread_expands_and_enforces(tmp_path: Path) -> None:
         shutil.rmtree(other_dir, ignore_errors=True)
 
 
+@pytest.mark.usefixtures("sandbox_operational")
+def test_pf1_signing_key_dir_is_unreadable_from_sandboxed_bash(tmp_path: Path) -> None:
+    """P-F1: a canary in the operator key dir (``~/.config/agentteams/keys``, the default
+    emitted ``~/`` form) cannot be read from sandboxed Bash. The precondition fixture already ran
+    a block carrying that denyRead entry, so a host WITHOUT the key dir also shows a missing
+    denyRead path does not stop bwrap. Removes only what it created."""
+    keys = Path.home() / ".config" / "agentteams" / "keys"
+    created_dir = not keys.exists()
+    keys.mkdir(parents=True, exist_ok=True, mode=0o700)
+    canary = keys / f"agentteams-itest-canary-{os.getpid()}.pem"
+    canary.write_text("PF1-CANARY-marker-q7r8\n", encoding="utf-8")
+    project = _make_project(tmp_path / "proj")
+    _write_settings(project, _build_sandbox_block([str(project)]))
+    try:
+        _run_claude(project, f"cat {canary} > readback.txt 2>/dev/null; true")
+        rb = project / "readback.txt"
+        assert "PF1-CANARY-marker-q7r8" not in (
+            rb.read_text(encoding="utf-8") if rb.exists() else ""
+        ), "P-F1 FAILED: sandboxed Bash read the operator signing-key directory"
+    finally:
+        canary.unlink(missing_ok=True)
+        if created_dir:
+            shutil.rmtree(keys, ignore_errors=True)
+
+
 def test_fail_if_unavailable_refuses_to_start_without_deps(tmp_path: Path) -> None:
     """PR-A: with a Linux sandbox dependency (bwrap or socat) absent from PATH, Claude Code given
     the emitted block (``failIfUnavailable: true``) must exit non-zero with "refusing to start" and

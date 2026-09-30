@@ -23,7 +23,9 @@
 # through a UTF-8 re-encode.
 #
 # Policy (POLA / fail-closed): read-only root; ONLY --scratch writable; /tmp scratch; credential dirs
-# (~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config/gcloud ~/.azure) + --exclude paths read-excluded; egress
+# (~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config/gcloud ~/.azure), the operator decision-signing private-key
+# dir ~/.config/agentteams/keys, any legacy ~/.config/agentteams/*.pem key file, and --exclude paths
+# (directories or files) read-excluded; egress
 # deny(default)/proxy(root+netns, OOB)/host(fs-confined only). --writable adds a rw path; --setenv
 # passes VAR=VAL into the guest. The guest environment is DEFAULT-DENY: it inherits none of the
 # launcher's env; only a benign built-in allowlist (plus --env-allow NAMEs and explicit --setenv
@@ -144,7 +146,11 @@ for c in ${COORD_ROOTS[@]+"${COORD_ROOTS[@]}"}; do
 done
 
 # credential + caller read-excludes: only EXISTING paths (masking a missing path fails fail-shut: D-3).
+# F-1: the operator signing-key dir is masked in every run; legacy key files (pre-keys/ layout) are
+# masked one by one, as exact paths, until the operator migrates them (provision script --migrate).
 MASK=( "$HOME/.ssh" "$HOME/.aws" "$HOME/.gnupg" "$HOME/.kube" "$HOME/.config/gcloud" "$HOME/.azure" )
+MASK+=( "$HOME/.config/agentteams/keys" )
+for p in "$HOME"/.config/agentteams/*.pem; do [ -f "$p" ] && MASK+=( "$p" ); done
 MASK+=( ${EXCLUDES[@]+"${EXCLUDES[@]}"} )
 MASKED=()
 for p in "${MASK[@]}"; do [ -n "$p" ] && [ -e "$p" ] && MASKED+=( "$p" ); done
@@ -183,7 +189,11 @@ build_linux() {   # -> RUN[] using bwrap
   # allowlist passthrough first (default-deny env), then explicit --setenv so an explicit value wins.
   local n; for n in "${ENV_ALLOW_ALL[@]}"; do [ -n "${!n+x}" ] && BW+=( --setenv "$n" "${!n}" ); done
   local kv; for kv in ${SETENVS[@]+"${SETENVS[@]}"}; do [ -n "$kv" ] && { case "$kv" in *=*) BW+=( --setenv "${kv%%=*}" "${kv#*=}" ) ;; *) die "--setenv expects VAR=VAL (got '$kv')" ;; esac; }; done
-  local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do BW+=( --tmpfs "$m" ); done
+  # a directory is hidden under an empty tmpfs; a FILE cannot take a tmpfs mount (bwrap aborts), so
+  # it is shadowed by a read-only bind of /dev/null instead.
+  local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do
+    if [ -d "$m" ]; then BW+=( --tmpfs "$m" ); else BW+=( --ro-bind /dev/null "$m" ); fi
+  done
   case "$EGRESS" in
     deny) BW+=( --unshare-net ); RUN=( "${BW[@]}" -- "${CMD[@]}" ) ;;
     host) echo "confine-run: WARNING --egress host - network SHARED with host; egress NOT confined (fs/read/NNP still apply)." >&2
