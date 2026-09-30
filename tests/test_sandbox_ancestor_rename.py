@@ -326,3 +326,47 @@ def test_launcher_covers_writable_and_coord_roots_too(tmp_path):
     binds = _binds(_effective(r.stdout))
     assert ("--bind", str(sib / ".claude")) in binds
     assert ("--ro-bind", str(sib / ".claude/agents/references/agent-privilege.json")) in binds
+
+
+@_linux_bwrap
+@pytest.mark.parametrize("missing", [
+    ".claude/agents/references/agent-privilege.json",
+    ".claude/agents/references/authorized-verify-keys",
+    ".claude/hooks/constitutional-gate.py",
+])
+def test_launcher_refuses_a_missing_control_plane_entry_when_the_team_exists(tmp_path, missing):
+    """@security (PR-B review): with the team present, an absent entry sits under a rename-locked but
+    WRITABLE parent, so a confined process could create a `false` switch, a store with a planted
+    .pub.pem, or a gate hook. The launcher must refuse, and never create the path."""
+    import shutil as _sh
+    p = _project(tmp_path)
+    target = p / missing
+    (_sh.rmtree if target.is_dir() else os.unlink)(target)
+    r = _check("--scratch", str(p))
+    assert r.returncode == 2, r.stdout
+    assert "missing although" in r.stderr
+    assert not target.exists()
+
+
+@_linux_bwrap
+def test_launcher_allows_a_bare_config_dir_without_a_team(tmp_path):
+    """A plain `.claude/` (e.g. only settings.local.json) is not a native team: nothing is required."""
+    p = (tmp_path / "bare").resolve()
+    (p / ".claude").mkdir(parents=True)
+    (p / ".claude" / "settings.local.json").write_text("{}", encoding="utf-8")
+    r = _check("--scratch", str(p))
+    assert r.returncode == 0, r.stderr
+
+
+def test_two_framework_project_warns_that_goose_is_not_denied(tmp_path, capsys):
+    """@security PR-B condition B: a documented manual step also needs a generate-time warning."""
+    from agentteams.cli.generate_helpers import _warn_goose_under_claude_sandbox
+
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+    m = {"framework": "claude", "host_features": ["claude:sandbox"]}
+    assert _warn_goose_under_claude_sandbox(m, agents) is False
+    (tmp_path / ".goose" / "recipes").mkdir(parents=True)
+    assert _warn_goose_under_claude_sandbox(m, agents) is True
+    assert '".goose"' in capsys.readouterr().err
+    assert _warn_goose_under_claude_sandbox({"framework": "claude"}, agents) is False

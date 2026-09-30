@@ -23,14 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails `EBUSY` (order: rw roots, ancestor binds, read-only binds, masks). A symlink on any of
   these paths is refused; nothing is ever created. New `--protect PATH` read-only binds an
   extra path (e.g. a whole `.claude`); a missing one is an exit-2 refusal. The launcher's
-  sha256 changed: consuming projects that pin it (baseAgent) must re-pin.
+  sha256 changed: consuming projects that pin it (baseAgent) must re-pin. When a framework's
+  team is present (`.claude/agents`, `.goose/recipes`) but one of its control-plane entries is
+  missing, the launcher now refuses (exit 2) instead of skipping it. The missing path's parent is
+  rename-locked but writable, so a confined process could have created a `false` switch, a
+  verify-key store with a planted `.pub.pem`, or a gate hook.
 - **Goose Seatbelt:** the profile denies `file-write-unlink` and `file-write-create` on each
   control-plane ancestor literal. **Unverified** (no macOS host).
 - **Status:** mechanism-verified (raw bubblewrap probes, `tests/test_sandbox_ancestor_rename.py`),
   product-unverified (Claude Code's sandbox cannot start under Ubuntu's AppArmor user-namespace
   restriction; the opt-in `RUN_CLAUDE_SANDBOX_ITEST=1` argv fixture checks bind order only).
 - **Residuals / follow-up:** in a project with both a Claude and a goose team, the Claude block
-  does not deny `.goose` (a missing deny path stops bwrap) — add it by hand. Pinning the control
+  does not deny `.goose` (a missing deny path stops bwrap) — add it by hand. Generate/update
+  now prints a warning in that case. Pinning the control
   plane *outside* the write root is tracked as a follow-up (defence in depth; needed where the
   chain is not mount-protected, i.e. Seatbelt).
 - **Action:** re-run `--update` and re-merge the `sandbox` block into `.claude/settings.json`.

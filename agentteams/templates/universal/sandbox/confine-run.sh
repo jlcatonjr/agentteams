@@ -51,7 +51,8 @@
 #   becomes a mount point: renaming it away (`mv .claude .claude.old`, then plant a tree) fails
 #   EBUSY, while writes inside it still work. Order: rw roots, ancestor self-binds, ro-binds, masks.
 #   Every protected path is realpath'd and a SYMLINK anywhere on it is refused (die). A path absent
-#   from a root is skipped (that framework is not there), never created. --protect PATH (repeatable)
+#   from a root is skipped when that framework's team (.claude/agents, .goose/recipes) is not there,
+#   and a DIE when it is (a writable parent would let the process create it). --protect PATH (repeatable)
 #   ro-binds an extra path, e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
 #   Status: mechanism-verified (raw bwrap probes), product-unverified. The macOS branch is unchanged.
 #
@@ -203,7 +204,16 @@ control_plane_binds() {
   done
   for r in "${roots[@]}"; do
     for rel in "${CONTROL_PLANE_REL[@]}"; do
-      [ -e "$r/$rel" ] || [ -L "$r/$rel" ] || continue   # that framework's path is absent here
+      if [ ! -e "$r/$rel" ] && [ ! -L "$r/$rel" ]; then
+        # Absent. Fine when that framework's native team is not here, but when its agents dir IS
+        # present a missing entry is a hole: its parent is rename-locked yet WRITABLE, so a confined
+        # process could create a `false` switch, a verify-key store with a planted .pub.pem, or a
+        # gate hook. Refuse (never create). .goose/sandbox.sb is macOS-only.
+        case "$rel" in .claude/*) team="$r/.claude/agents" ;; .goose/*) team="$r/.goose/recipes" ;; *) team="" ;; esac
+        [ "$rel" = ".goose/sandbox.sb" ] && continue
+        [ -n "$team" ] && [ -d "$team" ] || continue   # that framework's team is absent here
+        die "control-plane path '$r/$rel' is missing although '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with its sandbox enabled (agentteams --update) so it is emitted, then retry."
+      fi
       p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )
     done
