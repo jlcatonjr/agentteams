@@ -711,7 +711,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "and for target-framework entry files only re-render content "
             "inside <!-- AGENTTEAMS-BRIDGE:BEGIN ... --> fences. Files "
             "lacking any bridge fence are skipped with notices in "
-            "bridge-merge.report.md. First-time consumers should use "
+            "bridge-merge.report.md. Never replaces a native .claude/agents "
+            "body with a subagent stub. First-time consumers should use "
             "--bridge-refresh."
         ),
     )
@@ -771,7 +772,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Behaviour when a fenced-region merge would lose concrete refs. "
             "'preserve' (default) keeps the existing enriched body for that "
             "fence and still updates non-shrinking fences (respectful, "
-            "non-destructive); 'additive' additionally splices the template's "
+            "non-destructive; template-/brief-authoritative fences are replaced "
+            "anyway, with a .lost sidecar); 'additive' additionally splices the template's "
             "NEW markdown-heading (##/###) sub-sections into the enriched body at "
             "the render position (strict superset, nothing dropped), so an additive "
             "template change reaches an enriched fence; content added UNDER an "

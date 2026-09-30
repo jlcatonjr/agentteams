@@ -6,6 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (native teams inside bridge targets)
+
+Reported by researchteam, 2026-09-30. Its `.claude/` and `.goose/` are bridges to the canonical
+`.github/agents`, and both also hold full native teams from earlier runs. Those native teams
+drifted with nothing reporting it.
+
+- **Retrieval contracts now follow a declared brief.** When the brief *declares*
+  `retrieval_integration`, `retrieval-integration.reference.md` and
+  `retrieval-trigger-contract.reference.md` are brief-derived (`fences._BRIEF_DERIVED_FILES`).
+  Previously, declaring the real entrypoints removed wrongly *inferred* ones, and
+  `--shrink-policy=preserve` read that as lost content and kept the stale contract. A contract that
+  ingest only *inferred* still yields to an enriched body under `preserve`.
+- **Truthful shrink notices for authoritative fences.** Under the default `preserve` policy, a
+  template- or brief-authoritative fence that shrank was replaced, but the run reported "retained
+  existing enriched body" and wrote no `.lost.<sid>.md` sidecar. It now says `replaced` and writes
+  the sidecar, or says the prior body was not saved when run with `--no-backup`. The `--dry-run`
+  preview says the same.
+- **`--bridge-merge` no longer overwrites native agent bodies.** With the
+  `bridge:copilot-vscode-to-claude:subagents` host feature, stub emission replaced full native
+  `.claude/agents/<slug>.md` files. Under `--bridge-merge` it now keeps any file that is not a bridge
+  stub and says so. `--bridge-refresh` is unchanged.
+- **A native update no longer drops a nested bridge fence.** The whole-body `content` migration
+  (a legacy file whose template has since gained named sections) assumed everything inside the old
+  fence was template-owned. researchteam's `.goosehints` had the goose bridge's `goose-bridge-hints`
+  block inside that fence, and a native `--update --merge` removed it. Once no bridge fence is left,
+  `--bridge-merge` skips the file for good. The migration now carries `AGENTTEAMS-BRIDGE` blocks over
+  unchanged and says so. The migration notice now reads `replaced (structural migration)` rather
+  than "retained", and the old body is saved to a `.lost.content.md` sidecar.
+- **The native team is reported.** `--bridge-check`, `--bridge-merge` and `--bridge-refresh` print a
+  notice (also recorded in `bridge-merge.report.md`) when the target holds a native build-log. The
+  notice names the refresh route (`--update --merge --materialize-native`) and the retire route. The
+  `--bridge-check` verdict is unchanged. Notices now print in check mode too.
+- **D3 `--update` gate.** On a mixed target, the refusal now points at `--materialize-native` (a
+  drift-aware merge against the existing native build-log) instead of `--bridge-merge`. The gate
+  also fires when `--output` names the agents directory itself (`<project>/.claude/agents`). It was
+  previously skipped there, because it looked for `references/bridges/` one level too deep. At that
+  derived root only the per-target bridge manifest counts. The entry-file fence does not count
+  there, because a copilot-cli bridge's `.github/copilot-instructions.md` would otherwise refuse a
+  canonical copilot-vscode update.
+
 ### security (skill destination containment)
 
 - Interop skill import now checks that the skill directory and its `SKILL.md` stay inside the target skills

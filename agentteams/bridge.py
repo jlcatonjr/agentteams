@@ -84,6 +84,71 @@ class BridgeResult:
         return len(self.errors) == 0 and (self.check_ok or not self.check_only)
 
 
+#: Where a NATIVE team of each target framework keeps its build-log. A bridge never writes one,
+#: so its presence under a bridge target means the directory also holds a full native team.
+_NATIVE_BUILD_LOGS: dict[str, tuple[str, ...]] = {
+    "claude": (".claude", "agents", "references", "build-log.json"),
+    "goose": (".goose", "recipes", "references", "build-log.json"),
+    "copilot-vscode": (".github", "agents", "references", "build-log.json"),
+    "copilot-cli": (".github", "agents", "references", "build-log.json"),
+}
+
+
+def native_team_notice(*, output_root: Path, target_framework: str, source_dir: Path) -> str | None:
+    """Describe a native agentteams team living inside a bridge target, if there is one.
+
+    No bridge mode refreshes such a team. ``--bridge-merge`` rewrites only bridge-owned
+    artifacts and ``AGENTTEAMS-BRIDGE`` fences, so the native agent bodies and references drift
+    from the canonical render with nothing reporting it. Confirmed 2026-09-30 on researchteam,
+    whose ``.claude/`` and ``.goose/`` teams still carried a retrieval contract the canonical brief
+    had since corrected. The notice is informational: it never changes a ``--bridge-check`` verdict,
+    which answers a different question (bridge freshness against its source).
+
+    Args:
+        output_root: Project root the bridge writes into.
+        target_framework: Framework receiving the bridge.
+        source_dir: Canonical source agents directory; a build-log inside it is the source's
+            own and is ignored.
+
+    Returns:
+        The notice text, or ``None`` when the target holds no native build-log.
+    """
+    parts = _NATIVE_BUILD_LOGS.get(target_framework)
+    if not parts:
+        return None
+    log_path = output_root.joinpath(*parts)
+    if not log_path.is_file():
+        return None
+    try:
+        if log_path.resolve().is_relative_to(source_dir.resolve()):
+            return None
+    except OSError:
+        return None
+    try:
+        log = json.loads(log_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        log = {}
+    if not isinstance(log, dict):
+        log = {}
+    # A build-log names the framework that wrote it. copilot-vscode and copilot-cli share
+    # .github/agents, so without this a copilot-vscode team would be reported (with a wrong
+    # --framework in the suggested command) as a copilot-cli one. Logs without the field are
+    # attributed to the target, as the directory implies.
+    if log.get("framework", target_framework) != target_framework:
+        return None
+    version = log.get("agentteams_version")
+    built = f"agentteams {version}" if version else "an agentteams build that predates version stamping"
+    agents_dir = rel_to_root(log_path.parent.parent, output_root)
+    return (
+        f"{agents_dir}/ holds a NATIVE {target_framework} team ({built}; "
+        f"{rel_to_root(log_path, output_root)}) inside this bridge target. No bridge mode "
+        "refreshes it, so it drifts from the canonical team. To refresh it in place (fence-aware, "
+        f"content outside fences preserved): agentteams --description <brief> --framework "
+        f"{target_framework} --output {agents_dir} --update --merge --materialize-native. "
+        "To retire it instead, remove it via @cleanup with @security clearance, leaving the bridge."
+    )
+
+
 def rel_to_root(path: Path | str, output_root: Path) -> str:
     """Render ``path`` relative to ``output_root`` when it lies inside it.
 
@@ -204,6 +269,12 @@ def run_bridge(
 
     pair_dir = output_root / "references" / "bridges" / f"{src_fw}-to-{target_framework}"
     manifest_path = pair_dir / "bridge-manifest.json"
+
+    native_notice = native_team_notice(
+        output_root=output_root, target_framework=target_framework, source_dir=source_dir
+    )
+    if native_notice:
+        result.notices.append(native_notice)
 
     if check_only:
         ok, report = _run_bridge_check(manifest_path=manifest_path, source_hash_rows=source_hashes)
@@ -421,7 +492,7 @@ def run_bridge(
             )
 
     # Target-framework entry files: dispatched by mode.
-    merge_report_lines: list[str] = []
+    merge_report_lines: list[str] = [f"- native team present: {native_notice}"] if native_notice else []
     for path, content in target_files:
         if not path.exists():
             # First-time creation: write the rendered content regardless of mode.
@@ -509,10 +580,19 @@ def run_bridge(
             output_root=output_root,
             dry_run=dry_run,
             overwrite=overwrite or merge_only,  # bridge-refresh / -merge both regenerate stubs
+            # ...but --bridge-merge is content-preserving: never replace a native agent body.
+            preserve_non_stubs=merge_only,
         )
         result.written.extend(stub_result.written)
         result.skipped.extend(stub_result.skipped)
         result.errors.extend(stub_result.errors)
+        if stub_result.preserved_native:
+            result.notices.append(
+                f"Kept {len(stub_result.preserved_native)} existing non-stub file(s) in "
+                ".claude/agents/ (native agent bodies; --bridge-merge never replaces them "
+                "with stubs): "
+                + ", ".join(rel_to_root(p, output_root) for p in stub_result.preserved_native)
+            )
         if stub_result.experts_collapsed:
             result.notices.append(
                 f"Collapsed {len(stub_result.experts_collapsed)} workstream-expert "

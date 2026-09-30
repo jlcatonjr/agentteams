@@ -989,8 +989,8 @@ def _run_bridge(
             + (f", skipped {len(result.skipped)}" if result.skipped else "")
             + "."
         )
-        for notice in result.notices:
-            print(f"  Notice: {notice}", file=sys.stderr)
+    for notice in result.notices:
+        print(f"  Notice: {notice}", file=sys.stderr)
 
     return 0 if result.success else 1
 

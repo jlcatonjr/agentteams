@@ -36,7 +36,10 @@ def load(source: str | Path, *, scan_project: bool = True) -> dict[str, Any]:
 
     Returns:
         Normalized project description dict conforming to
-        schemas/project-description.schema.json.
+        schemas/project-description.schema.json, except for one private provenance key:
+        when ``scan_project`` INFERRED ``retrieval_integration`` (the source declared none),
+        ``_retrieval_integration_inferred: True`` is also set. Pop it before validating the
+        dict against the schema (``cli/generate.py`` does).
 
     Raises:
         FileNotFoundError: If source does not exist.
@@ -349,6 +352,10 @@ def _supplement_from_directory(desc: dict[str, Any], project_path: Path) -> dict
         inferred = _infer_retrieval_integration(project_path)
         if inferred.get("mode") != "none":
             desc["retrieval_integration"] = inferred
+            # Provenance for the merge: an INFERRED contract is not the brief's say-so, so it must
+            # not override an enriched retrieval reference (see fences._BRIEF_DERIVED_FILES).
+            # Popped by cli/generate.py before validation.
+            desc["_retrieval_integration_inferred"] = True
 
     return desc
 

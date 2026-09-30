@@ -99,6 +99,7 @@ Result for a single fenced-content merge operation.
 - `merged_content` (`str`) — Final merged file content. Empty string when parse fails.
 - `shrink_notices` (`list[str]`) — Per-section human-readable notices (Plan 3) when a regenerated fence body is materially shorter or less specific than the existing on-disk version. Used for alerting on potential loss of detail during merge.
 - `lost_fence_bodies` (`dict[str, str]`) — W22 data-loss recovery: full pre-merge body of every fence that fired a shrink notice, keyed by `section_id`. Persisted as a `<rel_path>.lost.<sid>.md` sidecar inside the backup dir by `emit_all` when `backup_path` is provided. Empty when no shrink fired.
+- `migrated` (`bool`) — `True` when the merge was a whole-body structural migration (a legacy single-`content`-fence file whose template has since gained named sections). Its notice is labelled `replaced (structural migration)` and the old body is recorded in `lost_fence_bodies`.
 - `front_matter_drift` (`list[str]`) — Front-matter keys whose template value moved on while the on-disk file kept its own. Merge preserves everything outside a fence by design — that never changes what is written — so this exists purely to surface an otherwise-silent drift (e.g. a new tool added to a template's `tools:` list that an already-generated team never receives).
 - `duplicate_section_notices` (`list[str]`) — Sections a newly-added fence duplicates: the deployed file already carries the same heading unfenced, from before the template fenced it. Reported, never auto-resolved.
 - `deleted_constraint_notices` (`list[str]`) — Template rules absent from the deployed file. Fires regardless of modification state.
@@ -142,7 +143,7 @@ Outcome of `prune_backups()`.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False)`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset())`
 
 > *Source: `agentteams/emit.py`*
 
@@ -166,6 +167,7 @@ Write rendered files to `output_dir`.
 
 - `backup_path` (`Path | None`, keyword-only) — When provided and a shrink notice fires under `warn`, the full pre-merge body of every shrunken fence is written to `<backup_path>/<rel_path>.lost.<sid>.md` and the corresponding `EmitResult.notices` entry is annotated with `— recovery: <sidecar-path>`. This makes `warn` recoverable even when the operator didn't catch the notice — the sidecar is the durable evidence of what was dropped. Default: `None` (no sidecar written; notices are not annotated).
 - `auto_fence_legacy` (`bool`, keyword-only) — When `True`, a `--merge` run retrofits `AGENTTEAMS` fence markers into a legacy unfenced file instead of skipping it, so subsequent merges can update it. Off by default because retrofitting rewrites a file the operator has not opted in to having managed. Default: `False`.
+- `brief_derived_files` (`frozenset[str]`, keyword-only) — Basenames whose fences the brief owns for this run, so they are never preserved on shrink (see `fences._BRIEF_DERIVED_FILES`). The CLI passes the two retrieval references only when the brief *declares* `retrieval_integration`; an inferred contract leaves this empty. Default: `frozenset()`.
 
 **Returns:** `EmitResult` — Results of all write operations.
 
