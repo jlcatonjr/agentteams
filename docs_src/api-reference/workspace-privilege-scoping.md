@@ -31,8 +31,9 @@ mechanism** — the still-untested link is **argument construction**: whether Cl
 correctly derives the `bwrap` arguments from agentteams' `denyRead` JSON (a kernel that
 denies when handed correct hand-built args says nothing about whether Claude Code's
 *derived* args are correct). So Linux is **not** "verified" end-to-end; treat it as
-mechanism-observed, translation-unverified (tracked in the remediation log). Native
-Windows has no OS sandbox agentteams can configure and stays advisory-only.
+mechanism-observed, translation-unverified (tracked in the remediation log): Claude Code's
+native sandbox is **unverified on Linux end-to-end**. Native Windows has no OS sandbox
+agentteams can configure and stays advisory-only.
 
 ## What it does
 
@@ -51,7 +52,8 @@ it already ships (`.claude/settings.hooks.example.json`):
         ".claude/agents/references/authorized-verify-keys"
       ]
     },
-    "allowUnsandboxedCommands": false
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true
   }
 }
 ```
@@ -61,6 +63,52 @@ native sandbox (macOS Seatbelt / Linux + WSL2 bubblewrap) confines **every Bash
 command and child process** file write to the `allowWrite` roots. Writes outside are
 denied by the kernel — not by an agent's judgement, and without agentteams having to
 parse shell command lines.
+
+### Fail closed: `failIfUnavailable` and the Linux dependencies
+
+**Security fix (2026-09-30).** Blocks emitted before this fix set `enabled: true` and
+`allowUnsandboxedCommands: false` but not `failIfUnavailable`, and that combination
+**fails open**. Measured on Linux (Claude Code 2.1.251, bubblewrap 0.11.1, `socat` absent):
+Claude Code printed "Sandbox disabled … Commands will run WITHOUT sandboxing", and a write to
+`$HOME` succeeded. `allowUnsandboxedCommands: false` only closes the per-command
+`dangerouslyDisableSandbox` escape; it does not stop Claude Code dropping the whole sandbox
+when the sandbox cannot start.
+
+The emitted block now sets **`failIfUnavailable: true`** on macOS and Linux targets. Claude
+Code documents this key (code.claude.com/docs/en/sandboxing) as "intended for managed
+deployments that require sandboxing as a security gate". Measured on the same host, it made
+Claude Code exit 1 with "sandbox required but unavailable … refusing to start", and nothing
+was written. The trade-off is intended: a host that lacks the sandbox dependencies can no
+longer start Claude Code in a project whose `settings.json` merged the block. A block
+generated on **native Windows** omits the key, because Claude Code has no OS sandbox there
+and the key would stop it starting at all; there the block stays advisory.
+
+**If you merged an earlier block**, re-run `agentteams --update` and re-merge the `sandbox`
+block into `.claude/settings.json`, or add the one line `"failIfUnavailable": true` to your
+merged `sandbox` object. `--update` prints a notice while the merged block lacks it.
+
+**Linux dependencies.** Claude Code's Linux/WSL2 sandbox needs **bubblewrap (`bwrap`) and
+`socat`** on `PATH`. `scripts/install-sandbox-deps.sh` (in the agentteams repository) installs
+both via apt or dnf, smoke-tests `bwrap`, and diagnoses (never changes) the AppArmor
+user-namespace restriction below.
+
+Other measured Linux behaviours (2026-09-30, Ubuntu):
+
+- **A missing `denyWrite` path breaks bwrap for every command** ("Can't mkdir …: Not a
+  directory"). That is fail-closed per command, not a refusal to start, so
+  `failIfUnavailable` does not change it. Generation emits every `denyWrite` path.
+- **A missing `denyRead` path is tolerated**, so the `exclusive` defaults (`~/.kube`,
+  `~/.azure`, …) do not need to exist.
+- **With `kernel.apparmor_restrict_unprivileged_userns=1`** (the Ubuntu default), Claude
+  Code's seccomp step fails ("apply-seccomp … nested userns is capability-restricted"), so
+  every sandboxed command fails closed. Running the sandbox there needs an operator decision:
+  an AppArmor profile for `claude` that permits user namespaces, or setting the sysctl to 0
+  (which relaxes the restriction for every unprivileged process on the host). The install
+  script explains both and changes neither.
+
+Until a full product-arm run passes on Linux (`tests/test_os_sandbox_product_enforcement.py`,
+which now fails loudly unless the sandbox is demonstrably operational), treat Claude Code's
+Linux confinement as **unverified end-to-end**.
 
 Verified at two levels:
 
@@ -93,10 +141,12 @@ Covered by `tests/test_os_sandbox_product_enforcement.py::test_p3_3_tilde_denyre
   Code's Linux sandbox needs **nested unprivileged user namespaces**, which stock Ubuntu 26.04 restricts
   (`apply-seccomp: setgroups nested userns`), so the sandbox cannot initialize there. This is a Claude
   Code + host-kernel matter, not an agentteams config defect.
-- **Fail-closed confirmed.** When the sandbox cannot initialize, Claude Code **refuses to run the Bash
-  command regardless of `allowUnsandboxedCommands`** — a confined/exclusive team fails closed on Linux
-  (no unconfined execution), consistent with the fail-closed default. A positive Linux *product* run
-  requires a host that permits Claude Code's nested-userns sandbox.
+- **Fail-closed at the seccomp stage only.** When bwrap starts but the seccomp step cannot initialize,
+  Claude Code **refuses to run the Bash command regardless of `allowUnsandboxedCommands`**. That is
+  NOT true of every failure: with a sandbox dependency missing (e.g. `socat`), Claude Code disabled
+  the sandbox and ran commands unsandboxed (measured 2026-09-30) unless `failIfUnavailable: true` is
+  set — see "Fail closed" above. A positive Linux *product* run requires a host that permits Claude
+  Code's nested-userns sandbox.
 
 Do not read the above as "Linux product arm verified" — it is not; the mechanism is verified and the
 failure mode is fail-closed. Full evidence:
@@ -449,7 +499,9 @@ author name. It applies to both authorization paths (PASS and HALT-RETRACTED).
   that silently does nothing. Pass `--allow-unenforced-confinement` to proceed anyway; the
   request then degrades to a visible advisory and a `privilege-profile-unenforced-host`
   manifest advisory — advisory only there, and never silently "on". (Whether Claude Code
-  enforces on native Windows is itself unverified; treat Windows as advisory.) For targets
+  enforces on native Windows is itself unverified; treat Windows as advisory. A block
+  generated there omits `failIfUnavailable`, which would otherwise stop Claude Code
+  starting.) For targets
   with no emittable boundary (**native Windows**, or any non-Linux non-macOS host), confine
   from **outside** the process: a container plus **seccomp-bpf + Landlock** and **egress
   filtering**. macOS Seatbelt paths remain enforcement-UNVERIFIED off a mac host, and the
@@ -509,7 +561,8 @@ sandbox/confine-run.sh --scratch ./work -- claude
 Key flags: `--scratch DIR` (required; the only writable path), `--egress deny|proxy|host`,
 `--exclude PATH` (extra read-denies on top of the credential defaults `~/.ssh ~/.aws ~/.gnupg
 ~/.kube ~/.config/gcloud ~/.azure`), `--writable PATH`, `--setenv VAR=VAL`. It requires
-`bwrap` (`sudo apt-get install -y bubblewrap`).
+`bwrap` (`sudo apt-get install -y bubblewrap`, or `scripts/install-sandbox-deps.sh`, which also
+installs the `socat` that Claude Code's own sandbox needs) and refuses to launch without it.
 
 **4. Dry-run / inspect before trusting it** — `--check` prints the effective sandbox and runs
 nothing:

@@ -115,6 +115,16 @@ The consequence, stated as fact 4's binding ceilings:
   remains **open** in `references/agentteams-remediation-log.csv` (item D-3). That native
   arm's `denyRead` behaviour and its *product arm* on stock Ubuntu (nested-userns) are
   likewise **unverified**.
+- **Claude Code's native sandbox fails OPEN without `failIfUnavailable` (fixed
+  2026-09-30).** Measured on Linux with `socat` missing: the old block (`enabled: true`,
+  `allowUnsandboxedCommands: false`) let Claude Code print "Sandbox disabled … Commands
+  will run WITHOUT sandboxing" and run unconfined. The block now emits
+  `failIfUnavailable: true` on macOS/Linux targets (omitted on native Windows, where the
+  block is advisory), so Claude Code refuses to start instead. Linux needs `bwrap` **and**
+  `socat` (`scripts/install-sandbox-deps.sh`); Ubuntu's
+  `kernel.apparmor_restrict_unprivileged_userns=1` makes every sandboxed command fail closed
+  at the seccomp step. That native arm is **unverified on Linux end-to-end**. Operators who
+  merged an earlier block: re-run `--update` and re-merge the `sandbox` block.
 - **Native Windows has no emitted enforcement** — it is design-only.
 - On a host where confinement **cannot** be enforced, the interactive path **fails
   closed** with `PrivilegeConfinementError` unless the operator explicitly passes

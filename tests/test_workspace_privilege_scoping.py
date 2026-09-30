@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -312,7 +313,7 @@ def test_sandbox_feature_enabled_gate():
 
 
 def test_build_sandbox_block_shape_and_defaults():
-    assert _build_sandbox_block(None) == {
+    assert _build_sandbox_block(None, platform="linux") == {
         "enabled": True,
         "filesystem": {
             "allowWrite": ["."],
@@ -324,8 +325,33 @@ def test_build_sandbox_block_shape_and_defaults():
             ],
         },
         "allowUnsandboxedCommands": False,
+        # Fail closed (2026-09-30): without this, Claude Code silently runs every command
+        # unsandboxed when its sandbox cannot start (measured on Linux with socat missing).
+        "failIfUnavailable": True,
     }
     assert _build_sandbox_block(["./a"])["filesystem"]["allowWrite"] == ["./a"]
+
+
+@pytest.mark.parametrize("plat", ["linux", "darwin"])
+def test_build_sandbox_block_fails_closed_where_claude_enforces(plat):
+    assert _build_sandbox_block(None, platform=plat)["failIfUnavailable"] is True
+    assert _build_sandbox_block(["."], ["~/.ssh"], platform=plat)["failIfUnavailable"] is True
+
+
+@pytest.mark.parametrize("plat", ["win32", "cygwin"])
+def test_build_sandbox_block_is_advisory_on_native_windows(plat):
+    # Claude Code has no OS sandbox on native Windows: failIfUnavailable there would stop it
+    # starting at all, so the block stays advisory (the host_features Windows advisory says so).
+    block = _build_sandbox_block(None, platform=plat)
+    assert "failIfUnavailable" not in block
+    assert block["enabled"] is True and block["allowUnsandboxedCommands"] is False
+
+
+def test_emitted_settings_example_documents_fail_closed():
+    ex = _read_template_asset("hooks/settings.hooks.example.json")
+    comment = " ".join(json.loads(_inject_sandbox_block(ex, None))["_comment"])
+    assert "failIfUnavailable" in comment and "socat" in comment
+    assert "UNVERIFIED end-to-end" in comment
 
 
 def test_build_sandbox_block_denywrite_protects_the_switch():
@@ -345,6 +371,8 @@ def test_extra_output_files_emits_sandbox_when_enabled():
     d = json.loads(files["../settings.hooks.example.json"])
     assert d["sandbox"]["enabled"] is True
     assert d["sandbox"]["allowUnsandboxedCommands"] is False
+    if sys.platform.startswith("linux") or sys.platform == "darwin":
+        assert d["sandbox"]["failIfUnavailable"] is True
     assert d["sandbox"]["filesystem"]["allowWrite"] == ["."]
     # hooks block is preserved alongside the sandbox block
     assert "hooks" in d
@@ -1130,3 +1158,44 @@ def test_sandbox_deny_path_mismatch_warns_for_a_nondefault_output(tmp_path, caps
     assert "not protected" in capsys.readouterr().err
     _warn_sandbox_deny_path_mismatch({"framework": "claude"}, tmp_path / "custom-agents")
     assert capsys.readouterr().err == ""  # no sandbox, nothing to warn about
+
+
+def test_live_sandbox_without_fail_if_unavailable_gets_an_update_notice(tmp_path, capsys, monkeypatch):
+    """PR-A (2026-09-30): a merged sandbox block lacking failIfUnavailable fails OPEN, so
+    generate/update names the one-line fix. Never edits settings.json."""
+    from agentteams.cli import generate_helpers
+    from agentteams.cli.generate_helpers import _warn_live_sandbox_fails_open
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+    live = tmp_path / ".claude" / "settings.json"
+    m = {"framework": "claude"}
+
+    assert _warn_live_sandbox_fails_open(m, agents) is False  # no settings.json
+    live.write_text(json.dumps({"sandbox": {"enabled": True, "allowUnsandboxedCommands": False}}))
+    before = live.read_text()
+    assert _warn_live_sandbox_fails_open(m, agents) is True
+    err = capsys.readouterr().err
+    assert '"failIfUnavailable": true' in err and "FAILS OPEN" in err
+    assert live.read_text() == before  # read-only
+    assert _warn_live_sandbox_fails_open({"framework": "goose"}, agents) is False
+
+    live.write_text(json.dumps({"sandbox": {"enabled": True, "failIfUnavailable": True}}))
+    assert _warn_live_sandbox_fails_open(m, agents) is False
+    live.write_text(json.dumps({"sandbox": {"enabled": False}}))
+    assert _warn_live_sandbox_fails_open(m, agents) is False
+    live.write_text("{ not json")
+    assert _warn_live_sandbox_fails_open(m, agents) is False
+
+    live.write_text(json.dumps({"sandbox": {"enabled": True}}))
+    monkeypatch.setattr(sys, "platform", "win32")  # advisory-only block there: no notice
+    assert _warn_live_sandbox_fails_open(m, agents) is False
+
+    # Wired into the generate/update path via _emit_agent_privilege_config.
+    monkeypatch.setattr(sys, "platform", "linux")
+    capsys.readouterr()
+    generate_helpers._emit_agent_privilege_config(
+        {"framework": "claude", "enforce_decision_signing": False}, agents
+    )
+    assert "FAILS OPEN" in capsys.readouterr().err

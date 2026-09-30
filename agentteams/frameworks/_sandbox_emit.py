@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from typing import Any
 
 
@@ -35,8 +36,16 @@ _SANDBOX_COMMENT_LINES: list[str] = [
     "editing outside an agent session — are unaffected. `allowUnsandboxedCommands: false`",
     "closes the escape hatch. allowWrite defaults to [\".\"] — the whole project tree is",
     "the workspace, so this confines writes to WITHIN the project (it does not restrict",
-    "writes between project subdirectories). Native Windows has no OS enforcement; there",
-    "this block is advisory only. To remove it: delete the `sandbox` key.",
+    "writes between project subdirectories). `failIfUnavailable: true` makes it FAIL",
+    "CLOSED: without it Claude Code silently runs every command UNSANDBOXED when its",
+    "sandbox cannot start (measured on Linux without socat: \"Sandbox disabled ... Commands",
+    "will run WITHOUT sandboxing\"); with it Claude Code refuses to start instead. Linux",
+    "needs bubblewrap (bwrap) AND socat on PATH (scripts/install-sandbox-deps.sh in the",
+    "agentteams repo); Ubuntu's kernel.apparmor_restrict_unprivileged_userns=1 makes every",
+    "sandboxed command fail closed until the operator relaxes it. Confinement on Linux is",
+    "UNVERIFIED end-to-end. A block generated on native Windows omits failIfUnavailable:",
+    "Claude Code has no OS enforcement there and the block is advisory only (it would",
+    "otherwise refuse to start). To remove it: delete the `sandbox` key.",
     "denyWrite also names the decision-signing verify-key store DIRECTORY",
     "(<agents dir>/references/authorized-verify-keys), so an agent cannot plant its own",
     "public key. Whether Claude Code honours a DIRECTORY denyWrite entry is UNVERIFIED",
@@ -252,8 +261,34 @@ def protected_write_paths(framework: str) -> tuple[str, ...]:
 _PROTECTED_WRITE_PATHS: tuple[str, ...] = protected_write_paths("claude")
 
 
+def _sandbox_fails_closed_on(platform: str | None = None) -> bool:
+    """Return True iff the emitted block should carry ``failIfUnavailable: true`` here.
+
+    Claude Code OS-enforces its sandbox on macOS (Seatbelt) and Linux/WSL2 (bubblewrap +
+    socat). There, an operator who asked for confinement must get a refusal to start rather
+    than a silent unsandboxed session, so the block fails closed. On native Windows (and any
+    other platform) Claude Code has no OS sandbox, the block is advisory only, and
+    ``failIfUnavailable`` would stop Claude Code starting at all. The predicate mirrors the
+    ``privilege-profile-claude-native-windows-advisory`` branch in ``host_features``; it is
+    re-stated here because this module depends only on the stdlib.
+
+    Args:
+        platform: Override for ``sys.platform`` (tests). ``None`` reads the live value: the
+            generating host stands in for the target, as it does for every other platform
+            decision in the emitters.
+
+    Returns:
+        Whether the sandbox block should fail closed.
+    """
+    plat = sys.platform if platform is None else platform
+    return plat.startswith("linux") or plat == "darwin"
+
+
 def _build_sandbox_block(
-    write_roots: list[str] | None, deny_read: list[str] | None = None
+    write_roots: list[str] | None,
+    deny_read: list[str] | None = None,
+    *,
+    platform: str | None = None,
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -264,13 +299,17 @@ def _build_sandbox_block(
         deny_read: Paths the agent (and its subprocesses) may not READ (P3a read
             exclusion, ``exclusive`` profile). ``None``/empty emits no read restriction,
             leaving the block byte-identical to the ``confined`` shape.
+        platform: Override for ``sys.platform`` (tests); see :func:`_sandbox_fails_closed_on`.
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
         ``write_roots``, the unsandboxed-command escape hatch closed, and — when
         ``deny_read`` is given — reads of those paths denied while ``write_roots`` are
         re-opened for read via ``allowRead`` (so a P2-granted write target inside a
-        denied region stays readable; read-modify-write keeps working).
+        denied region stays readable; read-modify-write keeps working). On macOS/Linux
+        it also sets ``failIfUnavailable: true``, so Claude Code refuses to start when its
+        sandbox cannot initialize (e.g. bwrap or socat missing) instead of silently running
+        every command unsandboxed. A native-Windows block omits it (advisory only there).
     """
     roots = list(write_roots) if write_roots else ["."]
     filesystem: dict[str, Any] = {"allowWrite": roots}
@@ -280,11 +319,14 @@ def _build_sandbox_block(
     if deny_read:
         filesystem["denyRead"] = list(deny_read)
         filesystem["allowRead"] = roots
-    return {
+    block: dict[str, Any] = {
         "enabled": True,
         "filesystem": filesystem,
         "allowUnsandboxedCommands": False,
     }
+    if _sandbox_fails_closed_on(platform):
+        block["failIfUnavailable"] = True
+    return block
 
 
 def _inject_sandbox_block(

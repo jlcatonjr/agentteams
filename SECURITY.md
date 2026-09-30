@@ -125,3 +125,26 @@ specifically:
 - `--revert-migration` is intentionally ungated (it is the recovery path).
 - `--migrate` no longer hard-errors on a stale snapshot tag; with `--yes`
   it moves the tag to current HEAD.
+
+## Advisories
+
+### 2026-09-30 — Claude sandbox block failed open when the sandbox could not start
+
+**Affected:** `1.0.0-rc.7` and `main` before this fix: every release that emitted the Claude
+`sandbox` settings block (`claude:sandbox`, or `privilege_profile: confined`/`exclusive`; `confined`
+has been the default since 2026-W39). **Severity:** critical for operators who relied on the block
+for confinement.
+
+The emitted block set `enabled: true` and `allowUnsandboxedCommands: false` but not
+`failIfUnavailable`. When Claude Code cannot start its sandbox, that combination runs every command
+**unsandboxed**, after a single warning. Measured on Linux (Claude Code 2.1.251) with `socat`
+missing: "Sandbox disabled … Commands will run WITHOUT sandboxing", and a write to `$HOME`
+succeeded.
+
+**Fix:** the block now sets `failIfUnavailable: true` on macOS and Linux targets, so Claude Code
+refuses to start instead. It is omitted on native Windows, where the block is advisory.
+**Action:** re-run `agentteams --update` and re-merge the `sandbox` block into
+`.claude/settings.json`, or add `"failIfUnavailable": true` to your merged `sandbox` object;
+`--update` prints a notice while it is missing. On Linux, install `bubblewrap` and `socat`
+(`scripts/install-sandbox-deps.sh`). Claude Code's native sandbox remains **unverified on Linux
+end-to-end**; see [`docs_src/api-reference/workspace-privilege-scoping.md`](docs_src/api-reference/workspace-privilege-scoping.md).
