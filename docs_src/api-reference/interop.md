@@ -57,15 +57,15 @@ Returns CAI object with keys including:
 7. `references` — present only when the source team has a non-empty `references/` directory
 8. `framework_extensions` — present only when the source framework contributes project-level config (e.g., goose recipe parameters/response/retry)
 
-### `import_from_cai(cai, target_framework, target_dir, *, dry_run=False, overwrite=False, preserve_existing=False)`
+### `import_from_cai(cai, target_framework, target_dir, *, dry_run=False, overwrite=False, preserve_existing=False, skills_only=False)`
 
-Imports CAI payload into target framework files. With `preserve_existing=True` (used by pinned sync), an agent whose complete exported record already equals the canonical entry is left byte-for-byte untouched. This applies only to Markdown front-matter frameworks; codex and goose are always re-rendered. An existing instruction file is fence-merged rather than replaced. Agent and skill slugs must be safe single path components (`ValueError` otherwise).
+Imports CAI payload into target framework files. With `preserve_existing=True` (used by pinned sync), an agent whose complete exported record already equals the canonical entry is left byte-for-byte untouched. This applies only to Markdown front-matter frameworks; codex and goose are always re-rendered. An existing instruction file is fence-merged rather than replaced. Agent and skill slugs must be safe single path components (`ValueError` otherwise). With `skills_only=True` (CLI `--interop-skills-only`), only the CAI `skills[]` are imported into the adapter's `skills_dir`. No agent, instructions, MCP or sidecar file is written, and a target without a skill concept (including `canonical`) raises `ValueError`.
 
 Returns:
 
 - `InteropResult`
 
-### `run_interop(source_dir, target_framework, target_dir, *, source_framework=None, mode='direct', dry_run=False, overwrite=False)`
+### `run_interop(source_dir, target_framework, target_dir, *, source_framework=None, mode='direct', dry_run=False, overwrite=False, skills_only=False)`
 
 End-to-end interop operation.
 
