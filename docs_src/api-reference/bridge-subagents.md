@@ -19,6 +19,7 @@ class StubEmissionResult:
     skipped: list[str]            # paths skipped because overwrite=False and the file existed
     errors: list[str]             # error messages for any failed emission
     experts_collapsed: list[str]  # slugs of *-expert agents folded into the parametric stub
+    preserved_native: list[str]   # existing non-stub files kept because preserve_non_stubs=True
     # property: success -> len(errors) == 0
 ```
 
@@ -34,9 +35,10 @@ emit_subagent_stubs(
     output_root: Path,
     dry_run: bool = False,
     overwrite: bool = True,
+    preserve_non_stubs: bool = False,
 ) -> StubEmissionResult
 ```
-Emit Claude subagent stubs delegating to copilot-vscode source agents. Stubs land in `<output_root>/.claude/agents/`. `dry_run=True` computes the action set without writing. `overwrite=True` (default) matches `--bridge-refresh` semantics; pass `False` for idempotent re-runs that preserve existing stubs.
+Emit Claude subagent stubs delegating to copilot-vscode source agents. Stubs land in `<output_root>/.claude/agents/`. `dry_run=True` computes the action set without writing. `overwrite=True` (default) matches `--bridge-refresh` semantics; pass `False` for idempotent re-runs that preserve existing stubs. `preserve_non_stubs=True` (set by `--bridge-merge`) never overwrites an existing file lacking the `bridge: copilot-vscode-to-claude` front-matter marker — a native agent body — whatever `overwrite` says; such files are listed in `preserved_native`.
 
 ```python
 detect_stub_drift(

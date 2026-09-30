@@ -37,6 +37,7 @@ Load and return a normalized project description dict.
 **Behavior Notes:**
 
 - When `scan_project=True` and `existing_project_path` is present, `load()` supplements missing fields from repository context (tools, output hints, dependency manifests, retrieval integration).
+- When it infers `retrieval_integration` (the source declared none), it also sets the private provenance key `_retrieval_integration_inferred: True`. That key is not in the schema, so pop it before validating the dict with a JSON-schema validator. `cli/generate.py` pops it and uses it to decide whether the retrieval references are brief-authoritative.
 - Retrieval inference is additive and conservative: inferred retrieval data is only written when `retrieval_integration` is not already explicitly provided.
 
 **Raises:**

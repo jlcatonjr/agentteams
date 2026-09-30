@@ -88,10 +88,29 @@ class StubEmissionResult:
     skipped: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     experts_collapsed: list[str] = field(default_factory=list)
+    #: Existing non-stub files left in place because ``preserve_non_stubs`` was set.
+    preserved_native: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
         return len(self.errors) == 0
+
+
+_STUB_BRIDGE_MARKER = "copilot-vscode-to-claude"
+
+
+def _is_bridge_stub(path: Path) -> bool:
+    """True when ``path`` is a stub this module emitted (front matter ``bridge:`` marker).
+
+    A file without the marker is a native agent body — a full team generated into
+    ``.claude/agents/`` before the directory became a bridge target, or a hand-authored
+    subagent — and holds content a stub would destroy.
+    """
+    try:
+        meta, _ = _parse_front_matter(path.read_text(encoding="utf-8", errors="ignore"))
+    except OSError:
+        return False
+    return meta.get("bridge") == _STUB_BRIDGE_MARKER
 
 
 def _file_sha256(path: Path) -> str:
@@ -323,6 +342,7 @@ def emit_subagent_stubs(
     output_root: Path,
     dry_run: bool = False,
     overwrite: bool = True,
+    preserve_non_stubs: bool = False,
 ) -> StubEmissionResult:
     """Emit Claude subagent stubs delegating to copilot-vscode source agents.
 
@@ -342,6 +362,12 @@ def emit_subagent_stubs(
         When False, existing stub files are skipped (idempotent re-runs).
         When True, stubs are unconditionally regenerated (default; matches
         ``--bridge-refresh`` semantics).
+    preserve_non_stubs : bool
+        When True, an existing file that is not a bridge stub (see
+        :func:`_is_bridge_stub`) is never overwritten, whatever ``overwrite``
+        says; it is recorded in ``preserved_native``. Set by ``--bridge-merge``,
+        whose contract is content-preserving: on a target that already holds a
+        native team, regenerating stubs would replace full agent bodies.
     """
     result = StubEmissionResult()
     source_dir = source_dir.resolve()
@@ -378,6 +404,10 @@ def emit_subagent_stubs(
             tools_raw=meta.get("tools"),
         )
         out_path = target_dir / f"{slug}.md"
+        if out_path.exists() and preserve_non_stubs and not _is_bridge_stub(out_path):
+            result.skipped.append(str(out_path))
+            result.preserved_native.append(str(out_path))
+            continue
         if out_path.exists() and not overwrite:
             result.skipped.append(str(out_path))
             continue
@@ -401,7 +431,10 @@ def emit_subagent_stubs(
             tools_union=tools_union,
         )
         out_path = target_dir / "workstream-expert.md"
-        if out_path.exists() and not overwrite:
+        if out_path.exists() and preserve_non_stubs and not _is_bridge_stub(out_path):
+            result.skipped.append(str(out_path))
+            result.preserved_native.append(str(out_path))
+        elif out_path.exists() and not overwrite:
             result.skipped.append(str(out_path))
         else:
             if not dry_run:

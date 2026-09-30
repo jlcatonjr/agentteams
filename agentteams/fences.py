@@ -84,6 +84,8 @@ class MergeResult:
     # a shrink notice, keyed by section_id. Persisted as a .lost.<sid>.md
     # sidecar inside the backup dir by emit_all when backup_path is provided.
     lost_fence_bodies: dict[str, str] = field(default_factory=dict)
+    #: True when the merge was a whole-body structural migration (see _is_whole_body_migration).
+    migrated: bool = False
     # Front-matter keys whose template value moved on while the on-disk file kept its own.
     # Merge preserves everything outside a fence BY DESIGN — that is what protects user edits —
     # so this never changes what is written. It exists because the preservation was also silent:
@@ -116,6 +118,57 @@ class MergeResult:
 # W2: detect AGENTTEAMS-BRIDGE fences (written by --bridge-refresh) so the
 # --merge path can emit a targeted notice instead of the generic "legacy file" warning.
 _BRIDGE_FENCE_BEGIN_RE = re.compile(r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+")
+
+# A complete AGENTTEAMS-BRIDGE block (BEGIN ... matching END), for carrying bridge-owned content
+# through a whole-body migration (see _bridge_blocks_in).
+_BRIDGE_BLOCK_RE = re.compile(
+    r"^[ \t]*<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s+(?P<region>[A-Za-z0-9_-]+)\s+v=\d+\s*-->.*?"
+    r"<!--\s*AGENTTEAMS-BRIDGE:END\s+(?P=region)\s*-->[ \t]*\n?",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+#: Basenames of the files a bridge writes its fences into (`bridge.py` entry files). Only these
+#: may carry a bridge block through a whole-body migration: the bridge never writes into an agent
+#: body, so a bridge-shaped block inside, say, a legacy `security.agent.md` is not the bridge's and
+#: must be overwritten like any other in-fence text (@security, 2026-09-30).
+_BRIDGE_ENTRY_BASENAMES: frozenset[str] = frozenset([
+    "AGENTS.md", ".goosehints", "CLAUDE.md", "README.md", "agent-team.md",
+    "quickstart-snippet.md", "copilot-instructions.md", "bridge-entry.md",
+])
+
+_NATIVE_FENCE_MARKER_RE = re.compile(r"AGENTTEAMS:(?:BEGIN|END)\b")
+
+
+def _bridge_blocks_in(text: str, rel_path: str) -> list[str]:
+    """Return the complete ``AGENTTEAMS-BRIDGE`` blocks in *text* to carry over, in order.
+
+    A bridge target that also holds a native team can carry a bridge block INSIDE the native
+    whole-body ``content`` fence (researchteam's ``.goosehints``, 2026-09-30). The bridge wrote
+    it, and the native template never renders it, so it is not template-owned.
+
+    What carrying it over newly permits (Rule 12) is keeping bridge-shaped text a template update
+    would otherwise overwrite. Bounded two ways: only in a bridge entry file
+    (:data:`_BRIDGE_ENTRY_BASENAMES`, never an ``*.agent.md``), and never a block containing a
+    native ``AGENTTEAMS:BEGIN/END`` marker, which would forge a template-owned fence.
+
+    Args:
+        text: The old whole-body fence's contents.
+        rel_path: Path of the file being merged; its basename decides eligibility.
+
+    Returns:
+        The eligible blocks, each ending in a newline; empty for an ineligible file.
+    """
+    name = Path(rel_path).name if rel_path else ""
+    if name not in _BRIDGE_ENTRY_BASENAMES or name.endswith(".agent.md"):
+        return []
+    blocks: list[str] = []
+    for m in _BRIDGE_BLOCK_RE.finditer(text):
+        block = m.group(0)
+        if _NATIVE_FENCE_MARKER_RE.search(block):
+            continue
+        blocks.append(block if block.endswith("\n") else block + "\n")
+    return blocks
 
 _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS: frozenset[str] = frozenset([
     "references/security-vulnerability-watch.json",
@@ -227,11 +280,10 @@ _TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
 #:
 #: Membership applies the criterion already stated for `_TEMPLATE_AUTHORITATIVE_FENCES`: a file
 #: belongs here only when the project has **no legitimate reason to extend its body**. Exactly
-#: one of the 24 reference files in a generated team meets that today. The other 17 that share
-#: the `content` fence — the code-hygiene rules, the retrospective procedure, the retrieval
-#: contracts — are files a project may reasonably add to, so blanket-listing the `content`
-#: section id would trade one defect for a worse one. Add entries deliberately, one at a time,
-#: and say why here.
+#: one of the 24 reference files in a generated team meets that today. The others that share
+#: the `content` fence — the code-hygiene rules, the retrospective procedure — are files a
+#: project may reasonably add to, so blanket-listing the `content` section id would trade one
+#: defect for a worse one. Add entries deliberately, one at a time, and say why here.
 _CONSTITUTIONAL_FILES: frozenset[str] = frozenset([
     # The instruction-authority ordering. Its own header states the whole file is module-owned
     # and restored on every `--update --merge`; before this entry that claim was false under
@@ -240,10 +292,37 @@ _CONSTITUTIONAL_FILES: frozenset[str] = frozenset([
 ])
 
 
-def _is_template_authoritative(sid: str, rel_path: str) -> bool:
+#: Files whose single `content` fence is rendered wholly from the brief, identified by basename.
+#:
+#: Applies ONLY when the brief itself declares `retrieval_integration`: the caller passes this set
+#: as `brief_derived_files` then, and an empty set otherwise. A contract that ingest INFERRED from a
+#: scan is not the brief's say-so, and must not override an enriched body under `preserve` (which
+#: downstream pipelines pin precisely so enriched fences never shrink into an unattended auto-PR).
+#:
+#: The file-keyed counterpart of :data:`_BRIEF_DERIVED_FENCES`. The two retrieval contracts are
+#: nothing but `retrieval_integration` fields dropped into fixed headings, so the brief is their
+#: source of record and the place to extend them. Under `--shrink-policy=preserve`, correcting a
+#: wrongly INFERRED contract (declaring the real entrypoints in the brief) read as "lost concrete
+#: refs" and kept the stale body forever. Confirmed 2026-09-30 on researchteam's native `.claude/`
+#: team: the inferred autosync-gate/test paths survived a real `--update --merge` after the brief
+#: declared the literature-library entrypoints.
+#:
+#: What this newly permits (Rule 12): an in-fence hand edit to either file is replaced by the brief
+#: render. It stays visible — the shrink notice and the `.lost.content.md` sidecar still fire, as
+#: for every template-authoritative fence — and the durable home for that content is the brief.
+_BRIEF_DERIVED_FILES: frozenset[str] = frozenset([
+    "retrieval-integration.reference.md",
+    "retrieval-trigger-contract.reference.md",
+])
+
+
+def _is_template_authoritative(
+    sid: str, rel_path: str, brief_derived_files: frozenset[str] = frozenset()
+) -> bool:
     """True when the template owns this fence body outright and must never yield to disk.
 
-    Also true for :data:`_BRIEF_DERIVED_FENCES`: those fences meet the exact
+    Also true for :data:`_BRIEF_DERIVED_FENCES` (and, by file, :data:`_BRIEF_DERIVED_FILES`):
+    those fences meet the exact
     criterion this function already names ("no legitimate reason to extend
     its body") for a different reason (brief-derived, not security-critical)
     — kept as a separate, distinctly-commented set for that documentation
@@ -259,13 +338,19 @@ def _is_template_authoritative(sid: str, rel_path: str) -> bool:
             does not know it, in which case only the section-id rule applies — the
             conservative direction, since it can only *fail to protect*, never wrongly
             overwrite a file the project owns.
+        brief_derived_files: Basenames whose fences are brief-authoritative for THIS run
+            (a subset of :data:`_BRIEF_DERIVED_FILES`, non-empty only when the brief declares
+            the contract). Empty by default: preserve-on-shrink applies.
 
     Returns:
         Whether shrink-preserve must be refused for this fence.
     """
     if sid in _TEMPLATE_AUTHORITATIVE_FENCES or sid in _BRIEF_DERIVED_FENCES:
         return True
-    return bool(rel_path) and Path(rel_path).name in _CONSTITUTIONAL_FILES
+    if not rel_path:
+        return False
+    name = Path(rel_path).name
+    return name in _CONSTITUTIONAL_FILES or name in brief_derived_files
 
 
 def _rename_suspect_sid(orphan_sid: str, new_sids: set[str]) -> str | None:
@@ -842,6 +927,7 @@ def _merge_fenced_content(
     additive_on_shrink: bool = False,
     file_is_unmodified: bool = False,
     rel_path: str = "",
+    brief_derived_files: frozenset[str] = frozenset(),
 ) -> MergeResult:
     """Merge fenced sections from *new_rendered* into *existing_on_disk*.
 
@@ -859,6 +945,8 @@ def _merge_fenced_content(
             still receive their template updates. This is the respectful,
             non-destructive update path: no content is lost and no whole-file
             write is blocked.
+        brief_derived_files: Basenames treated as brief-authoritative for this merge
+            (see :data:`_BRIEF_DERIVED_FILES`); empty unless the brief declares them.
 
     Returns:
         MergeResult describing what changed.  ``merged_content`` is empty on
@@ -878,16 +966,39 @@ def _merge_fenced_content(
         # Structural migration, not an ordinary merge — see _is_whole_body_migration.
         # Merge Semantics rule 5 still applies: whatever sits outside the whole-body fence on
         # disk is the project's, not the template's, so it survives the replacement.
-        prefix_new, _tail_new = _split_at_last_fence_end(new_rendered)
+        prefix_new, tail_new = _split_at_last_fence_end(new_rendered)
         _prefix_disk, tail_disk = _split_at_last_fence_end(existing_on_disk)
         preserved_tail = bool(tail_disk.strip())
-        result.merged_content = (prefix_new + tail_disk) if preserved_tail else new_rendered
+        # "Everything inside it was template-owned" is false for a bridge block nested in the
+        # whole-body fence: the bridge wrote it. Dropping it also strands the bridge, since
+        # --bridge-merge skips a file with no bridge fence. Carry each block over, after the
+        # render's fenced prefix (unfenced, as the bridge writes it).
+        bridge_blocks = [
+            b for b in _bridge_blocks_in(_existing_probe.get(_WHOLE_BODY_FENCE, ""), rel_path)
+            if b not in prefix_new
+        ]
+        carried = ("\n" + "".join(bridge_blocks)) if bridge_blocks else ""
+        if preserved_tail or bridge_blocks:
+            result.merged_content = prefix_new + carried + (tail_disk if preserved_tail else tail_new)
+        else:
+            result.merged_content = new_rendered
         result.sections_added = list(_new_probe)
         result.sections_orphaned = [_WHOLE_BODY_FENCE]
+        # The old body WAS replaced: record it so the run writes a .lost sidecar and labels the
+        # notice "replaced" rather than "retained" under the default preserve policy.
+        result.lost_fence_bodies[_WHOLE_BODY_FENCE] = _fence_body(
+            _existing_probe.get(_WHOLE_BODY_FENCE, "")
+        )
+        result.migrated = True
         result.shrink_notices.append(
             f"fence '{_WHOLE_BODY_FENCE}': this file predates its template being split into "
             f"named sections; the whole-body fence was replaced by "
             f"{', '.join(sorted(_new_probe))}. Everything inside it was template-owned"
+            + (
+                f" except {len(bridge_blocks)} AGENTTEAMS-BRIDGE block(s), carried over unchanged"
+                if bridge_blocks
+                else ""
+            )
             + (
                 "; content outside it was carried over unchanged."
                 if preserved_tail
@@ -987,7 +1098,7 @@ def _merge_fenced_content(
                     if (
                         notice
                         and additive_on_shrink
-                        and not _is_template_authoritative(sid, rel_path)
+                        and not _is_template_authoritative(sid, rel_path, brief_derived_files)
                     ):
                         # Additive update: splice the template's NEW heading-delimited
                         # sub-sections into the enriched body (strict superset — nothing
@@ -1015,7 +1126,7 @@ def _merge_fenced_content(
                     elif (
                         notice
                         and preserve_on_shrink
-                        and not _is_template_authoritative(sid, rel_path)
+                        and not _is_template_authoritative(sid, rel_path, brief_derived_files)
                     ):
                         # Respectful update: the new render would drop enriched
                         # content. Keep the existing body verbatim; surface a
@@ -1128,3 +1239,54 @@ def _write_lost_fence_sidecars(
         except ValueError:
             written[sid] = str(sidecar)
     return written
+
+
+def _shrink_notice_lines(
+    rel_path: str,
+    merge_result: MergeResult,
+    shrink_policy: str,
+    backup_path: Path | None,
+) -> list[str]:
+    """Render a merge's shrink notices for the run output, writing ``.lost`` sidecars as needed.
+
+    W22 data-loss recovery: each lost fence body is persisted to a sidecar in the backup dir so
+    the operator can recover from a shrink even under ``warn``. Under ``preserve``
+    only template-/brief-authoritative fences lose a body (every other shrinking fence is kept in
+    place); they are replaced anyway, so they get the sidecar too and are reported as replaced.
+    Before 2026-09-30 they were reported as "retained" with no sidecar.
+
+    Args:
+        rel_path: Output-relative path of the merged file.
+        merge_result: The file's :class:`MergeResult`.
+        shrink_policy: The run's ``--shrink-policy``.
+        backup_path: The run's backup dir, or ``None`` (``--no-backup``).
+
+    Returns:
+        One notice line per shrink notice; empty under ``allow``.
+    """
+    if not merge_result.shrink_notices or shrink_policy == "allow":
+        return []
+    sidecar_paths: dict[str, str] = {}
+    if backup_path is not None and merge_result.lost_fence_bodies:
+        sidecar_paths = _write_lost_fence_sidecars(backup_path, rel_path, merge_result.lost_fence_bodies)
+    lines: list[str] = []
+    for notice in merge_result.shrink_notices:
+        sid = _shrink_notice_sid(notice)
+        if shrink_policy == "preserve" and sid not in merge_result.lost_fence_bodies:
+            lines.append(
+                f"{rel_path}: {notice} — retained existing enriched body "
+                f"(template update suppressed; use --shrink-policy=allow to force)"
+            )
+            continue
+        line = f"{rel_path}: {notice}"
+        if shrink_policy == "preserve" and merge_result.migrated:
+            line += " — replaced (structural migration)"
+        elif shrink_policy == "preserve":
+            line += " — replaced: this fence is template-/brief-authoritative and never preserved on shrink"
+        sidecar = sidecar_paths.get(sid) if sid else None
+        if sidecar:
+            line += f" — recovery: {sidecar}"
+        elif backup_path is None and sid in merge_result.lost_fence_bodies:
+            line += " — no backup dir (--no-backup): the prior body was not saved"
+        lines.append(line)
+    return lines

@@ -219,7 +219,41 @@ def _bridge_entry_files(project_root: Path, framework_id: str) -> list[Path]:
     return []
 
 
-def _update_target_is_bridge(project_root: Path, framework_id: str) -> bool:
+#: The native agents directory of each framework, relative to its project root.
+_NATIVE_AGENTS_SUBPATHS: dict[str, tuple[str, str]] = {
+    "claude": (".claude", "agents"),
+    "goose": (".goose", "recipes"),
+    "copilot-vscode": (".github", "agents"),
+    "copilot-cli": (".github", "agents"),
+}
+
+
+def _bridge_gate_roots(project_root: Path, output_dir: Path, framework_id: str) -> list[Path]:
+    """Project roots the D3 bridge gate must inspect for this run.
+
+    ``project_root`` is whatever ``--output`` named. Passing the agents directory itself
+    (``--output <project>/.claude/agents``) made it that directory, so the gate looked for
+    ``.claude/agents/references/bridges/`` and never fired: the same bridge target was gated or
+    not depending only on how ``--output`` was spelled. Found 2026-09-30 while reproducing the
+    researchteam mixed-target report. When the write target is the framework's native agents
+    directory, its grandparent is the real project root and is checked too — for the per-target
+    bridge MANIFEST only (see :func:`_bridge_gate_refusal`). The entry-file fence signal is not
+    framework-exclusive there: a copilot-cli bridge fences `.github/copilot-instructions.md`, which
+    is also a copilot-vscode entry file, so applying it at the real root would refuse a canonical
+    copilot-vscode update (fleet's `--output <ws>/.github/agents`).
+    """
+    roots = [project_root]
+    sub = _NATIVE_AGENTS_SUBPATHS.get(framework_id)
+    if sub and tuple(output_dir.parts[-2:]) == sub:
+        real_root = output_dir.parent.parent
+        if real_root != project_root:
+            roots.append(real_root)
+    return roots
+
+
+def _update_target_is_bridge(
+    project_root: Path, framework_id: str, *, manifest_only: bool = False
+) -> bool:
     """True when the ``--update`` target is a BRIDGE to a canonical framework (D3).
 
     Detected ONLY by positive, structured, per-target signals:
@@ -233,6 +267,9 @@ def _update_target_is_bridge(project_root: Path, framework_id: str) -> bool:
 
     NEVER a substring scan of agent bodies, and NEVER absent-build-log (a first-generation
     native team also has no build-log, and must not be misclassified as a bridge).
+
+    ``manifest_only`` restricts detection to the per-target bridge manifest (the one signal that
+    names its target framework unambiguously).
     """
     bridges = project_root / "references" / "bridges"
     if bridges.is_dir():
@@ -243,6 +280,8 @@ def _update_target_is_bridge(project_root: Path, framework_id: str) -> bool:
                 and (pair / "bridge-manifest.json").exists()
             ):
                 return True
+    if manifest_only:
+        return False
     for entry in _bridge_entry_files(project_root, framework_id):
         try:
             if entry.is_file() and _BRIDGE_FENCE_BEGIN_RE.search(
@@ -252,6 +291,52 @@ def _update_target_is_bridge(project_root: Path, framework_id: str) -> bool:
         except OSError:
             continue
     return False
+
+
+def _bridge_gate_refusal(project_root: Path, output_dir: Path, framework_id: str) -> str | None:
+    """The D3 ``--update`` bridge-gate refusal text, or ``None`` when the target is not a bridge.
+
+    An ``--update`` against a BRIDGE target would silently materialize a full native team (the
+    missing build-log makes the structural diff treat every file as an addition), so the caller
+    fails closed on a positively detected bridge unless the operator passes
+    ``--materialize-native``.
+
+    A MIXED target, where a native team with its own build-log already lives inside the bridge,
+    gets different advice. ``--bridge-merge`` never touches those native files, so pointing at it
+    sent operators down a route that cannot refresh what they asked to refresh (researchteam,
+    2026-09-30). For them ``--materialize-native`` with ``--merge`` is a drift-aware merge against
+    the existing build-log.
+
+    Args:
+        project_root: The root ``--output`` named (see :func:`_bridge_gate_roots`).
+        output_dir: The resolved agents directory this run writes.
+        framework_id: The target framework.
+
+    Returns:
+        The refusal message, or ``None`` when no bridge signal is present.
+    """
+    if not any(
+        _update_target_is_bridge(root, framework_id, manifest_only=root != project_root)
+        for root in _bridge_gate_roots(project_root, output_dir, framework_id)
+    ):
+        return None
+    native_log = output_dir / "references" / "build-log.json"
+    if native_log.is_file():
+        return (
+            f"Error: the --update target is a BRIDGE to a canonical framework that ALSO holds a "
+            f"native {framework_id!r} team ({native_log} present). --bridge-merge refreshes only "
+            f"the bridge and never touches these native files. Re-run with --materialize-native to "
+            f"update the native team in place: with --merge this is a drift-aware merge against its "
+            f"existing build-log, not a from-scratch materialization."
+        )
+    return (
+        f"Error: the --update target is a BRIDGE to a canonical framework "
+        f"(structured AGENTTEAMS-BRIDGE marker / references/bridges/*-to-{framework_id}/"
+        f"bridge-manifest.json present). Proceeding would materialize a full NATIVE "
+        f"{framework_id!r} team over the bridge (every file read as an addition). "
+        f"Re-run with --bridge-merge to refresh the BRIDGE (safe, content-preserving), "
+        f"or with --materialize-native to intentionally generate a native team here."
+    )
 
 
 def _handle_check(

@@ -48,6 +48,7 @@ from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-export
     _fence_body,
     _is_machine_managed_merge_overwrite_path,
     _merge_fenced_content,
+    _shrink_notice_lines,
     _shrink_notice_sid,
     _write_lost_fence_sidecars,
 )
@@ -302,6 +303,7 @@ def emit_all(
     shrink_policy: str = "preserve",
     backup_path: Path | None = None,
     auto_fence_legacy: bool = False,
+    brief_derived_files: frozenset[str] = frozenset(),
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -332,6 +334,9 @@ def emit_all(
                         notice — capturing the full pre-merge fence body so the
                         operator can recover dropped hand-edits even under the
                         default ``warn`` policy. (W22 data-loss recovery.)
+        brief_derived_files: Basenames whose fences the brief owns for this run
+                        (never preserved on shrink); empty unless the brief
+                        declares them. See ``fences._BRIEF_DERIVED_FILES``.
 
     Returns:
         EmitResult with results of all write operations.
@@ -459,13 +464,17 @@ def emit_all(
                     preserve_on_shrink=(shrink_policy == "preserve"),
                     additive_on_shrink=(shrink_policy == "additive"),
                     rel_path=rel_path,
+                    brief_derived_files=brief_derived_files,
                 )
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
                 # Annotate so operators understand what the real run will do
                 # with each shrink — preserve in place, or sidecar+write.
                 for notice in mr.shrink_notices:
-                    if shrink_policy == "preserve":
+                    if shrink_policy == "preserve" and _shrink_notice_sid(notice) in mr.lost_fence_bodies:
+                        why = "structural migration" if mr.migrated else "template-/brief-authoritative fence"
+                        suffix = f" ({why}: the real run will replace it and keep the prior body in a .lost.<sid>.md sidecar in the backup dir)"
+                    elif shrink_policy == "preserve":
                         suffix = " (existing enriched body will be retained; template update suppressed for this fence — use --shrink-policy=allow to force)"
                     elif shrink_policy == "additive":
                         # Additive notices are self-describing (either "spliced in N
@@ -637,6 +646,7 @@ def emit_all(
                 additive_on_shrink=(shrink_policy == "additive"),
                 file_is_unmodified=(rel_path in _unmodified),
                 rel_path=rel_path,
+                brief_derived_files=brief_derived_files,
             )
             # Front-matter drift: the template's front matter moved on while this file kept its
             # own. Merge cannot fix it — front matter lies outside every fence and is preserved
@@ -689,32 +699,9 @@ def emit_all(
             # Plan 3: surface shrink Notices from this merge (real-run path).
             # T2.D5: shrink_policy controls whether to surface and whether
             # to write the smaller content.
-            if merge_result.shrink_notices and shrink_policy == "preserve":
-                # Respectful update: the enriched body was kept in place; no
-                # content was lost, so no sidecar is needed. Surface a notice so
-                # the suppressed template update is visible to the operator.
-                for notice in merge_result.shrink_notices:
-                    result.notices.append(
-                        f"{rel_path}: {notice} — retained existing enriched "
-                        f"body (template update suppressed; use "
-                        f"--shrink-policy=allow to force)"
-                    )
-            elif merge_result.shrink_notices and shrink_policy != "allow":
-                # W22 data-loss recovery: persist each lost fence body to a
-                # sidecar in the backup dir so the operator can recover from
-                # silent shrinks even under default "warn".
-                sidecar_paths: dict[str, str] = {}
-                if backup_path is not None and merge_result.lost_fence_bodies:
-                    sidecar_paths = _write_lost_fence_sidecars(
-                        backup_path, rel_path, merge_result.lost_fence_bodies,
-                    )
-                for notice in merge_result.shrink_notices:
-                    sid = _shrink_notice_sid(notice)
-                    sidecar = sidecar_paths.get(sid) if sid else None
-                    line = f"{rel_path}: {notice}"
-                    if sidecar:
-                        line += f" — recovery: {sidecar}"
-                    result.notices.append(line)
+            result.notices.extend(
+                _shrink_notice_lines(rel_path, merge_result, shrink_policy, backup_path)
+            )
             if merge_result.shrink_notices and shrink_policy == "halt":
                 # Skip the write entirely; record the path for operator review.
                 result.shrink_blocked.append(str(target))

@@ -294,6 +294,10 @@ Register pre-existing agent files that the generated taxonomy does not produce (
 
 Used with `--update` against a **bridge** target (a `.claude/`, `.github/`, etc. that bridges to a canonical framework maintained elsewhere): opt in to generating a full **native** team over the bridge. Without this flag, `--update` on a detected bridge **fails closed** with guidance (use `--bridge-merge` to refresh the bridge, or this flag to materialize a native team) rather than silently writing a full native team (D3). Bridge detection is positive and structured — a `references/bridges/<source>-to-<framework>/bridge-manifest.json` for the target framework, or an `AGENTTEAMS-BRIDGE` HTML-comment fence in a framework **entry file** — never a substring match on agent bodies and never absent-build-log (a first-generation native team legitimately has no build-log).
 
+The gate also fires when `--output` names the framework's agents directory itself (e.g. `<project>/.claude/agents`): the real project root two levels up is checked too, for the per-target bridge manifest only (an entry-file fence there is not framework-exclusive — a copilot-cli bridge fences `.github/copilot-instructions.md`).
+
+**Mixed target.** When the bridge target already holds a native team with its own `references/build-log.json` (a team generated there before it became a bridge), the refusal says so and points here instead of at `--bridge-merge`, which never touches native files. With `--merge`, `--materialize-native` is then a drift-aware, fence-only merge against that existing build-log, not a from-scratch materialization. Every bridge mode (`--bridge-check` included) prints a notice naming this route when it finds such a team.
+
 ### `--check`
 
 Check for template drift and structural changes without writing any files. Exits with code `1` if drift or structural changes are detected, `0` otherwise. Suitable for CI gates.
@@ -502,7 +506,7 @@ By default, `--overwrite`, `--merge`, and `--update` all take an automatic backu
 
 Skip the automatic backup. The write proceeds without creating a backup.
 
-### `--shrink-policy {preserve,warn,halt,allow}`
+### `--shrink-policy {preserve,warn,halt,allow,additive}`
 
 *(T2.D5)* Controls behaviour when a fenced-region merge would lose
 concrete references (paths, identifiers, CVE IDs, list items) from
@@ -512,6 +516,11 @@ the on-disk fence body relative to the freshly rendered content.
   fence (the shrink is suppressed and a Notice is emitted) while
   still updating every non-shrinking fence in the file. Respectful
   and non-destructive — nothing is lost and no sidecar is produced.
+  **Exception:** template-/brief-authoritative fences (security and constitutional
+  fences, `authority_hierarchy`/`source_repositories`, and the two retrieval
+  references when the brief declares `retrieval_integration`) are never preserved:
+  they are replaced, the notice says `replaced`, and the prior body is saved to a
+  `.lost.<sid>.md` sidecar in the backup dir (not saved under `--no-backup`).
 - `warn` (back-compatible): log the shrink notice into the
   emit notices stream and proceed with the smaller content. The
   notice is also appended to

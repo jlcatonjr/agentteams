@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-from agentteams import analyze, emit, ingest, liaison_logs, render, template_pins
+from agentteams import analyze, emit, fences, ingest, liaison_logs, render, template_pins
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
@@ -58,6 +58,7 @@ from agentteams.cli.generate_helpers import (  # noqa: F401
     _emit_management_authority_config,
     _verify_enforcement_integrity,
     _bridge_entry_files,
+    _bridge_gate_refusal,
     _update_target_is_bridge,
     _BRIDGE_FENCE_BEGIN_RE,
     _handle_check,
@@ -119,6 +120,14 @@ def _run_generate_inner(
             description = ingest._supplement_from_directory(
                 description, Path(description["existing_project_path"])
             )
+
+    # Retrieval references are brief-authoritative only for a DECLARED contract (not an inferred one).
+    retrieval_inferred = bool(description.pop("_retrieval_integration_inferred", False))
+    brief_derived_files = (
+        fences._BRIEF_DERIVED_FILES
+        if "retrieval_integration" in description and not retrieval_inferred
+        else frozenset()
+    )
 
     # -----------------------------------------------------------------------
     # Step 2: Validate
@@ -339,22 +348,10 @@ def _run_generate_inner(
     # Step 5b: Handle --update (structural + content drift, manual preservation)
     # -----------------------------------------------------------------------
     if args.update:
-        # D3 bridge gate: an --update against a BRIDGE target would silently materialize a
-        # full native team (the missing build-log makes the structural diff treat every file
-        # as an addition). Fail closed on a positively-detected bridge unless the operator
-        # opts in with --materialize-native.
-        if _update_target_is_bridge(project_root, framework_id) and not getattr(
-            args, "materialize_native", False
-        ):
-            print(
-                f"Error: the --update target is a BRIDGE to a canonical framework "
-                f"(structured AGENTTEAMS-BRIDGE marker / references/bridges/*-to-{framework_id}/"
-                f"bridge-manifest.json present). Proceeding would materialize a full NATIVE "
-                f"{framework_id!r} team over the bridge (every file read as an addition). "
-                f"Re-run with --bridge-merge to refresh the BRIDGE (safe, content-preserving), "
-                f"or with --materialize-native to intentionally generate a native team here.",
-                file=sys.stderr,
-            )
+        # D3 bridge gate (fail closed on a detected bridge; policy in generate_helpers).
+        refusal = _bridge_gate_refusal(project_root, output_dir, framework_id)
+        if refusal and not getattr(args, "materialize_native", False):
+            print(refusal, file=sys.stderr)
             return 1
 
         from agentteams import drift
@@ -652,6 +649,7 @@ def _run_generate_inner(
             shrink_policy=getattr(args, "shrink_policy", "preserve"),
             backup_path=backup_path,
             auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
+            brief_derived_files=brief_derived_files,
         )
         emit.print_summary(result, manifest)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
@@ -882,6 +880,7 @@ def _run_generate_inner(
         shrink_policy=getattr(args, "shrink_policy", "preserve"),
         backup_path=backup_path,
         auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
+        brief_derived_files=brief_derived_files,
     )
     emit.print_summary(result, manifest)
     build_team._persist_shrink_events(args, result, manifest, output_dir)
