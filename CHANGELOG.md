@@ -55,6 +55,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ledger remain Bash-writable in-sandbox; that no longer grants anything. Never export
   `AGENTTEAMS_GRANT_SIGNING_KEY` or `AGENTTEAMS_DECISION_ED25519_KEYFILE` into the shell that
   launches `claude`.
+- **Known limit:** the verify-key store is write-denied only at the default agents dir. With a
+  non-default `--output`, a sandboxed agent could plant a public key and sign a grant that verifies.
+  Use the default dir, or deny the store by hand (see SECURITY.md).
 
 ### security (the control plane cannot be renamed away — F-4)
 

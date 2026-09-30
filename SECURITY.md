@@ -166,3 +166,9 @@ HMAC `write` grants are refused (no transitional flag), and a project-root roste
 a warning. **Action:** run `agentteams --verify-grants` to list refused grants, then follow the
 migration steps in the `CHANGELOG.md` entry "only an operator Ed25519 grant widens allowWrite".
 Never export `AGENTTEAMS_GRANT_SIGNING_KEY` into the shell that launches `claude`.
+
+**Known limit.** The verify-key store is write-denied only at the framework's default agents dir
+(`.claude/agents/references/authorized-verify-keys/`). A team generated with a non-default
+`--output` keeps its store elsewhere, so a sandboxed agent could plant its own public key there and
+then sign a grant that verifies. Use the default agents dir, or add the store to `denyWrite` and
+`permissions.deny` by hand. `--update` warns when `--output` is not the default.
