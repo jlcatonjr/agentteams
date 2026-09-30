@@ -190,10 +190,12 @@ Core; `agentteams/templates/universal/security.template.md`;
    **grant** **widens a cross-workspace write boundary**. They are kept in **separate ledgers**.
 2. **None of the three overrides a HALT** (C-2): HALT is checked first and no instrument is consulted for it.
 3. All three share one **symmetric-HMAC trust model** (separate keys: `AGENTTEAMS_WAIVER_SIGNING_KEY`,
-   `AGENTTEAMS_GRANT_SIGNING_KEY`; decision-signing when active), **fail-closed when the key is unset**,
-   with `agentteams/cli/signed_ledger.py` as the single asymmetric swap point. Honest ceiling: symmetric
-   signing stops a keyless forger, not a key-holder.
-**Source.** `agentteams/cli/grants.py:1-36`; `agentteams/cli/security_gate.py:39-69`;
+   `AGENTTEAMS_GRANT_SIGNING_KEY`; decision-signing when active), **fail-closed when the key is unset**; the two
+   relaxing paths (a constraint-relaxing decision, a grant that widens `allowWrite`) require the operator's
+   Ed25519 signature instead (PR-E for grants; `agentteams/cli/signed_ledger.py` `ed25519_sign`/
+   `ed25519_verify`). Honest ceiling: symmetric signing stops a keyless forger, not a key-holder, and a
+   Claude-sandboxed agent inherits any exported key — hence Ed25519 for the relaxing paths.
+**Source.** `agentteams/cli/grants.py:1-49`; `agentteams/cli/security_gate.py:39-69`;
 `agentteams/cli/signed_ledger.py:9-14`.
 **Dial.** R Full · D Full · S Core · E Light.
 
@@ -243,14 +245,18 @@ Core; `agentteams/templates/universal/security.template.md`;
 2. **Enforcement is generation-time only:** on (re)generation with the sandbox on, valid `write`
    grants' targets are merged into the sandbox `allowWrite`. A freshly issued grant is **inert until the
    operator re-runs an update** — there is **no runtime path for an agent to widen its own OS boundary**.
-3. `validate_grant()` is fail-closed and ordered: required fields → **signature** → not expired → use-
-   counter not exhausted → approver on roster. Cross-workspace grants require an **explicit** approver
-   roster (the `{security,@security}` self-clear fallback is refused). Path-safety guards reject `~`,
-   `..`-escapes, and targets outside a signed `issuer_root`; a **SHA-256 prev_digest chain** is verified
-   on every read (fail-closed on tamper).
-4. `--issue-grant`/`--verify-grants` mirror the waiver commands. **C-2 parity:** a grant widens a write
-   boundary, never overrides a HALT.
-**Source.** `agentteams/cli/grants.py:56-84,126-235,306-473,476-639`.
+3. `validate_grant()` is fail-closed and ordered: required fields → **scheme sufficient** (a `write`
+   grant must be Ed25519; an HMAC one is refused with a `--sign-grant` migration message) → **signature**
+   (Ed25519 against the holder team dir's `authorized-verify-keys/<key_id>.pub.pem`, payload prefixed with
+   the purpose tag `agentteams-grant-v1`) → not expired → use-counter not exhausted → approver on the
+   **team-dir** roster. Cross-workspace grants require an **explicit** approver roster (the
+   `{security,@security}` self-clear fallback is refused; a project-root roster is ignored with a warning,
+   no fallback). Path-safety guards reject `~`, `..`-escapes, and targets outside a signed `issuer_root`;
+   a **SHA-256 prev_digest chain** is verified on every read (fail-closed on tamper).
+4. `--sign-grant` (operator Ed25519, the only widening minter) / `--issue-grant` (HMAC, non-widening only) /
+   `--verify-grants` mirror the waiver commands. **C-2 parity:** a grant widens a write boundary, never
+   overrides a HALT.
+**Source.** `agentteams/cli/grants.py:74-120,223-354,541-635,712-902`.
 **Dial.** R Full · D Full · S Core · E Light.
 
 ---

@@ -2,11 +2,11 @@
   "modules": {
     ".claude/hooks/constitutional-gate.py": "1c619ef79454be0aa28ea4ac32d05e25ed908d559132d1bcb154bf13d47ffb64",
     ".github/hooks/constitutional-gate.py": "1c619ef79454be0aa28ea4ac32d05e25ed908d559132d1bcb154bf13d47ffb64",
-    "agentteams/cli/decision_log.py": "7b42b1b8e167750208bc294a1fdceb78afa289746ab02a924bb2d5423747921a",
+    "agentteams/cli/decision_log.py": "dfd88790d6ac32e97bc0808a51c15540155067634cedfb6bfb667fb1b734091e",
     "agentteams/cli/effect_classifier.py": "180fc2aab56b75f323e883b3d3534c29c6ea32d2e0058a17b3414aaa759bdd0a",
     "agentteams/cli/exception_registry.py": "63bda6a5c22482a6dd95e952fb1129d2bc7ad0452b5057244cf8259ed6c25d04",
     "agentteams/cli/governance_targets.py": "8071d65931e7fd6bcecc5ccc1c1009481dd9f06e04e4440053be84f250185645",
-    "agentteams/cli/grants.py": "98736df0c9cd4c19dfbfa397eb09084c66e55f2adc66a3d7fc4ce78551808869",
+    "agentteams/cli/grants.py": "b62c5e23cc3b845a5d45e7532a2ee4b4f9b4c4c8cf4136dda2e18d621aacb4a7",
     "agentteams/cli/management_directives.py": "1caf147f1826d969007a88cdb5636cdc94596ee92f41be5a5e1d6af711534a3e",
     "agentteams/cli/security_gate.py": "5adcec4ecec679ddb4761fc30173b72c0628fa72a0caa23c352c021ea4c864f5",
     "agentteams/cli/signed_ledger.py": "1175d82ee98734a040bab8c16fac58cac087f21c2238b215ee7d6e87d763ab7c",

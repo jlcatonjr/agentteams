@@ -148,3 +148,27 @@ refuses to start instead. It is omitted on native Windows, where the block is ad
 `--update` prints a notice while it is missing. On Linux, install `bubblewrap` and `socat`
 (`scripts/install-sandbox-deps.sh`). Claude Code's native sandbox remains **unverified on Linux
 end-to-end**; see [`docs_src/api-reference/workspace-privilege-scoping.md`](docs_src/api-reference/workspace-privilege-scoping.md).
+
+### 2026-09-30 — An HMAC-signed capability grant could widen the sandbox from inside it
+
+**Affected:** `main` before this fix: every release with cross-workspace capability grants whose
+holder team emits the Claude `sandbox` block. **Severity:** high.
+
+Grants were HMAC-signed with the shared `AGENTTEAMS_GRANT_SIGNING_KEY`, and their approver roster
+was read from the project root. A Claude-sandboxed agent inherits that key from the shell that
+launched it and can create `references/security-approvers.txt` at the project root, so it could
+mint a `write` grant that the operator's next `--update` merged into the emitted `allowWrite`.
+
+**Fix:** a grant that widens `allowWrite` must be Ed25519-signed by the operator
+(`agentteams --sign-grant`) and verify against the holder team dir's
+`references/authorized-verify-keys/<key_id>.pub.pem`, with its approver on the team dir's roster.
+HMAC `write` grants are refused (no transitional flag), and a project-root roster is ignored with
+a warning. **Action:** run `agentteams --verify-grants` to list refused grants, then follow the
+migration steps in the `CHANGELOG.md` entry "only an operator Ed25519 grant widens allowWrite".
+Never export `AGENTTEAMS_GRANT_SIGNING_KEY` into the shell that launches `claude`.
+
+**Known limit.** The verify-key store is write-denied only at the framework's default agents dir
+(`.claude/agents/references/authorized-verify-keys/`). A team generated with a non-default
+`--output` keeps its store elsewhere, so a sandboxed agent could plant its own public key there and
+then sign a grant that verifies. Use the default agents dir, or add the store to `denyWrite` and
+`permissions.deny` by hand. `--update` warns when `--output` is not the default.

@@ -23,7 +23,7 @@ distinction directly — a waiver "lifts a stop," a grant "permits a reach").
 and no instrument is consulted for it. A clearance authorizes a step that was never
 HALTed; a waiver lifts a *gate* block, not a HALT; a grant widens a write boundary
 but "a holder still cannot proceed past a HALT on the granted write"
-(`agentteams/cli/grants.py:34-35`). This is the C-2 finality property carried through
+(`agentteams/cli/grants.py:47-48`). This is the C-2 finality property carried through
 the whole triad.
 
 **One shared trust model — symmetric HMAC, fail-closed.** All three rest on the same
@@ -153,30 +153,39 @@ for a future per-write consume path).
 (`agentteams/cli/grants.py:126-235,306-473`):
 
 1. Required fields present
-2. **Signature** verifies
-3. Not expired
-4. Use-counter not exhausted
-5. Approver on the roster
+2. **Scheme sufficient** — a `write` grant must be `sig_scheme=ed25519`; an HMAC `write`
+   grant is refused with a migration message (re-sign it with `--sign-grant`)
+3. **Signature** verifies — for Ed25519, against the holder team dir's
+   `references/authorized-verify-keys/<key_id>.pub.pem`, over a payload that starts with
+   the purpose tag `agentteams-grant-v1` (so a decision signature is never a grant)
+4. Not expired
+5. Use-counter not exhausted
+6. Approver on the **team-dir** roster
 
-Cross-workspace grants require an **explicit** approver roster — the
-`{security,@security}` self-clear fallback is refused for a cross-workspace reach.
+Cross-workspace grants require an **explicit** approver roster, read from the holder
+**team dir** (the `--output` the update targets) — the `{security,@security}` self-clear
+fallback is refused for a cross-workspace reach, and a project-root
+`references/security-approvers.txt` is ignored with a warning (an in-sandbox agent can
+plant it; there is no fallback).
 Path-safety guards reject `~`, `..`-escapes, and targets outside a signed
 `issuer_root`, and a **SHA-256 `prev_digest` chain** is verified on every read
-(fail-closed on tamper) (`agentteams/cli/grants.py:56-84,476-639`).
+(fail-closed on tamper) (`agentteams/cli/grants.py:74-120,637-902`).
 
-`--issue-grant` and `--verify-grants` mirror the waiver commands (issue deposits into
-the holder workspace; verify is a read-only per-row audit). **C-2 parity:** a grant
+`--sign-grant` (operator Ed25519, the only minter of a widening grant), `--issue-grant`
+(HMAC, non-widening grants only) and `--verify-grants` mirror the waiver commands (the
+minters deposit into the holder workspace; verify is a read-only per-row audit). **C-2 parity:** a grant
 widens a write boundary, it never overrides a HALT.
 
-**Honest ceiling.** Same symmetric-HMAC bound as the rest of the triad (S7): the
-signature and digest chain defend against a keyless forger and against accidental or
-undetected tampering, not against an adversarial peer team that holds
-`AGENTTEAMS_GRANT_SIGNING_KEY`. The prev_digest chain makes ledger tampering
+**Honest ceiling.** A widening grant is as strong as the operator's Ed25519 private key
+(kept in the read-denied `~/.config/agentteams/keys/`) and the write protection of the team
+dir's verify-key store and roster. HMAC grants keep the symmetric bound of S7 (anyone
+holding `AGENTTEAMS_GRANT_SIGNING_KEY`, including a sandboxed agent that inherited it, can
+forge one), which is why an HMAC grant can no longer widen anything. The prev_digest chain makes ledger tampering
 *evident*; it does not make it *impossible*. And because enforcement is
 generation-time, a grant's effect on the OS boundary engages only when the operator
 regenerates with the sandbox on — the grant is configuration, not a live capability.
 
-**Sources for Part III.** `agentteams/cli/grants.py:1-36,56-84,126-235,306-473,476-639`;
+**Sources for Part III.** `agentteams/cli/grants.py:1-49,74-120,223-354,425-452,541-635,712-902`;
 `agentteams/cli/security_gate.py:39-69,96-259,430-477,511-616,619-659`;
 `agentteams/cli/decision_log.py:22-63,187-234`;
 `agentteams/cli/signed_ledger.py:9-14,40-92`;

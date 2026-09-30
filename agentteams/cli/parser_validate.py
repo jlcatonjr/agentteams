@@ -404,7 +404,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("backup_mirror", "--backup-mirror"), ("fleet", "--fleet"),
         ("capture_baseline", "--capture-baseline"), ("check_baseline", "--check-baseline"),
         ("verify_waivers", "--verify-waivers"), ("verify_grants", "--verify-grants"),
-        ("issue_grant", "--issue-grant"),
+        ("issue_grant", "--issue-grant"), ("sign_grant", "--sign-grant"),
         ("verify_directives", "--verify-directives"), ("issue_directive", "--issue-directive"),
         ("audit_exceptions", "--audit-exceptions"), ("list_exceptions", "--list-exceptions"),
         ("sign_decision", "--sign-decision"),

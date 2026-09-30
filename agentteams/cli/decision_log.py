@@ -597,6 +597,16 @@ def _assert_ed25519_sufficient(row: dict[str, str], *, output_dir: Path, action:
             f"signature is valid-but-INSUFFICIENT for a relaxing row (no downgrade). Only the "
             f"operator's Ed25519 signature can authorize this."
         )
+    from agentteams.cli.grants import payload_claims_grant_purpose
+
+    if payload_claims_grant_purpose(_decision_signature_values(row)):
+        # PR-E domain separation: the same operator key signs grants, whose payloads begin with
+        # the grant purpose tag. A decision whose payload lies in that domain could be a replayed
+        # grant signature — refuse it (--sign-decision refuses to mint one, too).
+        raise RuntimeError(
+            f"decision authorizing relaxing action '{action}' has a payload in the capability-"
+            f"grant signing domain (it begins with the grant purpose tag); refused (fail-closed)."
+        )
     public_pem = _load_verify_key(output_dir, (row.get("key_id") or "").strip())
     signature = (row.get("signature") or "").strip()
     try:
