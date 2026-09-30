@@ -431,6 +431,7 @@ def _main_dispatch(
             mode=args.interop_mode,
             dry_run=args.dry_run,
             overwrite=args.overwrite,
+            skills_only=getattr(args, "interop_skills_only", False),
         )
 
     # -----------------------------------------------------------------------

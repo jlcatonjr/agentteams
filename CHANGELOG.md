@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (`--interop-skills-only`: skills without re-rendering agents)
+
+- `agentteams --interop-from <team> --framework <claude|codex> --interop-skills-only` imports **only**
+  the source team's skills. No agent, instructions, MCP or runtime-handoffs file is written. For
+  example, it carries `.claude/skills/<name>/SKILL.md` into Codex `.agents/skills/<name>/SKILL.md`
+  while `.codex/agents` stays derived from the canonical `.github/agents`. Requested by baseAgent,
+  2026-09-29. A target without a skill concept, and `--interop-mode bundle`, are refused.
+- **Security:** a skill's co-located files must stay inside its skill directory. An absolute
+  path, `..` or a symlink escape now raises (`interop_helpers.contained_path`). Skill
+  `description` front matter is emitted with `json.dumps`, so a crafted description (backslash,
+  quote or newline) can no longer inject YAML keys such as `allowed-tools:`.
+- Interop now keeps each skill's **authored** `description`. It was previously replaced by the
+  generic tool-doc description, which broke skill triggering.
+
 ### fixed (Codex handoffs to agents outside the team)
 
 - Codex custom agents no longer list "Hand off to" targets that are not on the team's roster.

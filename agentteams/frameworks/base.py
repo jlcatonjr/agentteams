@@ -80,7 +80,10 @@ class FrameworkAdapter(ABC):
     def _render_markdown_skill(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
         """Shared ``SKILL.md`` rendering for Markdown-skill frameworks (Claude Code, Codex)."""
         body = self._strip_handoffs_section(self._strip_yaml_front_matter(content))
-        return inject_skill_front_matter(body, slug, skill_description(slug, manifest)).strip() + "\n"
+        # An imported skill keeps its own authored description (interop); a rendered tool doc
+        # gets the generated one.
+        description = (manifest.get("skill_descriptions") or {}).get(slug) or skill_description(slug, manifest)
+        return inject_skill_front_matter(body, slug, description).strip() + "\n"
 
     def has_skill_concept(self) -> bool:
         """Whether this framework has a first-class skill concept.
@@ -477,11 +480,14 @@ def inject_skill_front_matter(content: str, slug: str, description: str) -> str:
     Returns:
         The body with front matter prepended.
     """
+    import json
+
     lines = ["---", f"name: {slug}"]
     if description:
-        # Escape embedded double quotes so the YAML scalar stays well-formed.
-        safe = description.replace('"', '\\"')
-        lines.append(f'description: "{safe}"')
+        # json.dumps yields a valid YAML double-quoted scalar with backslashes, quotes and
+        # control characters (newlines) all escaped: a crafted description cannot close the
+        # string and inject keys such as `allowed-tools:` (@security, 2026-09-29).
+        lines.append(f"description: {json.dumps(description, ensure_ascii=False)}")
     lines.append("---")
     lines.append("")
     return "\n".join(lines) + content

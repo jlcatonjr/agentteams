@@ -567,6 +567,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Interop mode: direct conversion only, or bundle (conversion + interop artifacts).",
     )
     parser.add_argument(
+        "--interop-skills-only",
+        dest="interop_skills_only",
+        action="store_true",
+        default=False,
+        help=(
+            "With --interop-from: import ONLY the source team's skills (e.g. .claude/skills -> "
+            "Codex .agents/skills/<name>/SKILL.md). No agent, instructions, MCP or sidecar "
+            "files are written. The target must have a skill concept (claude, codex)."
+        ),
+    )
+    parser.add_argument(
         "--bridge-from",
         metavar="DIR",
         dest="bridge_from",

@@ -619,6 +619,7 @@ def _run_interop(
     mode: str,
     dry_run: bool,
     overwrite: bool,
+    skills_only: bool = False,
 ) -> int:
     """Execute the --interop-from path via CAI normalization pipeline."""
     from agentteams.interop import detect_framework, run_interop
@@ -675,6 +676,7 @@ def _run_interop(
             mode=mode,
             dry_run=dry_run,
             overwrite=overwrite,
+            skills_only=skills_only,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
