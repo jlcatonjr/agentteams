@@ -355,7 +355,9 @@ def test_emitted_settings_example_documents_fail_closed():
     ex = _read_template_asset("hooks/settings.hooks.example.json")
     comment = " ".join(json.loads(_inject_sandbox_block(ex, None))["_comment"])
     assert "failIfUnavailable" in comment and "socat" in comment
-    assert "UNVERIFIED end-to-end" in comment
+    assert "VERIFIED end-to-end on 2026-09-30" in comment
+    # The Linux verdict is bounded by its precondition: never drop the AppArmor caveat.
+    assert "bwrap-userns-restrict" in comment and "/etc/apparmor.d/bwrap" in comment
 
 
 def test_build_sandbox_block_denywrite_protects_the_switch():

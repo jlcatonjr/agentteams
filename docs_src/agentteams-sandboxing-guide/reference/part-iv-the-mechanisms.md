@@ -20,8 +20,8 @@ The block is **inert until merged** — agentteams ships an *example*, never wri
 `settings.json`. `verify_sandbox_wiring` (P1-3) is the read-only, output-only check that the block was
 actually merged; it reports booleans and never echoes live-settings secrets.
 
-**Honest ceiling.** Claude Code's *mechanism* is verified; its **Linux product arm** on stock Ubuntu is
-**not** (nested-userns restrictions) — a distinct mechanism from the bwrap launcher of SB12.
+**Honest ceiling.** Claude Code's *mechanism* is verified, and its **Linux product arm** is verified end-to-end on Linux (2026-09-30: Ubuntu, Claude Code 2.1.251, bubblewrap 0.11.1, socat 1.8.1.1) **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed commands fail closed
+(other distros / Claude Code versions untested) — a distinct mechanism from the bwrap launcher of SB12.
 
 *Source:* `agentteams/frameworks/_sandbox_emit.py:176` `_build_sandbox_block`;
 `agentteams/frameworks/claude.py:249` (gate), `:320` `verify_sandbox_wiring`.

@@ -46,7 +46,8 @@ these:**
   hook stays fail-open by default (the flip needs an *explicit* `confined`/`exclusive`).
   Governance layers are always active; OS-level locks enforce only once wired.
 - **(c) OS-confinement is empirically verified on Linux** — the `sandbox/confine-run.sh` bwrap launcher passes a live-kernel deny test; **macOS Seatbelt is UNVERIFIED**. Claude Code's *native* Linux bubblewrap arm is
-  partial (open D-3 fragility, unverified `denyRead`); native Windows has no
+  verified on Linux only with Claude Code's documented bwrap AppArmor profile on Ubuntu, and partial
+  (open D-3 fragility); native Windows has no
   emitted enforcement (S18).
 
 **Layer → what it buys → its ceiling.**

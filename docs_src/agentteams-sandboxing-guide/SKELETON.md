@@ -203,7 +203,7 @@ flowchart TD
     Q["confinement requested?<br/>(profile confined/exclusive OR *:sandbox)"] -->|no| COOP["cooperative:<br/>no boundary (SB3)"]
     Q -->|yes| P{"platform?"}
     P -->|linux| FW{"framework == claude?"}
-    FW -->|yes| CNL["claude: native settings-block sandbox (SB10),<br/>No advisory. ALSO emits the launcher (SB12/SB13),<br/>but native is claude's intended boundary — and on<br/>Linux that native arm is UNVERIFIED (SB20)"]
+    FW -->|yes| CNL["claude: native settings-block sandbox (SB10),<br/>No advisory. ALSO emits the launcher (SB12/SB13),<br/>but native is claude's intended boundary — on Linux<br/>that native arm is VERIFIED only with the documented<br/>bwrap AppArmor profile on Ubuntu (SB20)"]
     FW -->|no| ML["manual-wire advisory (NON-FATAL)<br/>+ emit bwrap launcher (SB12)"]
     P -->|darwin| DF{"framework?"}
     DF -->|claude| CN["claude: native settings-block<br/>sandbox (SB10). No advisory."]
@@ -235,8 +235,9 @@ flowchart TD
      gate (SB20). claude AND goose are excluded — each has its own auto-applied native macOS boundary
      (Claude Code Seatbelt; goose `GOOSE_SANDBOX` via `_goose_sandbox_emit`, SB11).
    - **`None`** — a boundary wired through the framework's own config surfaces no extra advisory:
-     claude native everywhere; goose Seatbelt on macOS. **Claude/Linux caveat unchanged:** claude's
-     native arm is its intended boundary but is UNVERIFIED on Linux (SB20) while the verified launcher
+     claude native everywhere; goose Seatbelt on macOS. **Claude/Linux caveat:** claude's
+     native arm is its intended boundary and is now VERIFIED on Linux only under a precondition (Ubuntu
+     needs Claude Code's documented bwrap AppArmor profile, SB20) while the verified launcher
      rides along un-advised — "no advisory for claude" ≠ "fully covered."
 2. `resolve_host_features_and_advise` fail-closes on the fatal code **only** (`fatal = code ==
    "privilege-profile-unenforced-host"`). Both manual-wire codes warn + persist, never raise — fail-
@@ -278,8 +279,8 @@ flowchart TD
 2. The block is **inert until merged** — agentteams ships an example, never writes the operator's
    `settings.json`. `verify_sandbox_wiring` (P1-3) is the read-only, output-only check that the block
    was actually merged (it reports booleans, never echoes live-settings secrets).
-3. **Honest ceiling.** Claude Code's *mechanism* is verified; its Linux *product arm* on stock Ubuntu is
-   **not** (nested-userns restrictions) — a separate mechanism from the bwrap launcher of SB12.
+3. **Honest ceiling.** Claude Code's *mechanism* is verified, and its Linux *product arm* is verified end-to-end on Linux (2026-09-30: Ubuntu, Claude Code 2.1.251, bubblewrap 0.11.1, socat 1.8.1.1) **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables Ubuntu's `bwrap-userns-restrict` host-wide; without it sandboxed commands fail closed
+   (other distros / Claude Code versions untested) — a separate mechanism from the bwrap launcher of SB12.
 **Source.** `agentteams/frameworks/_sandbox_emit.py:176` `_build_sandbox_block`;
 `agentteams/frameworks/claude.py:249` (gate), `:320` `verify_sandbox_wiring`.
 **Dial.** R Full · D Full · S Core · E Light.
@@ -503,9 +504,15 @@ flowchart LR
    test/wrapper mismatch is resolved (logged for the launcher/test owner). Its honest residuals ride
    along in the advisory (SB8): memory UNCAPPED, no syscall filtering, setuid denylist ≠ NoNewPrivs,
    loopback-only proxy.
-3. **Native macOS Seatbelt (goose/claude) and Claude's native Linux product arm: also unverified** — the
-   goose/claude Seatbelt profiles are enforcement/profile-syntax-unverified off a mac, and Claude Code's
-   Linux bubblewrap product arm is unverified on stock Ubuntu (nested-userns; the *mechanism* is verified).
+3. **Native macOS Seatbelt (goose/claude): also unverified** — the goose/claude Seatbelt profiles are
+   enforcement/profile-syntax-unverified off a mac. **Claude Code's native Linux product arm: VERIFIED
+   (2026-09-30), under a precondition** — on Ubuntu with `kernel.apparmor_restrict_unprivileged_userns=1`,
+   bubblewrap 0.11.1, socat 1.8.1.1 and Claude Code 2.1.251, `tests/test_os_sandbox_product_enforcement.py`
+   passed write confinement, the switch `denyWrite`, `denyRead` (incl. `~/`), the signing-key directory
+   read-deny, the `.claude` read-only bind + rename refusal, and the fail-closed refusal was observed live —
+   **only after** installing Claude Code's documented `/etc/apparmor.d/bwrap` profile, which disables
+   Ubuntu's `bwrap-userns-restrict` host-wide (without it sandboxed commands fail closed). Other distros,
+   Claude Code versions, and `bypassPermissions` remain unverified.
    Each of these is a **distinct mechanism with a distinct verdict** — never conflated.
 4. **Cross-guide reconciliation (done, 2026-09-01).** The sibling
    [Security Guide's](../agentteams-security-guide/README.md) earlier *"verified on macOS only"* framing

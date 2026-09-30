@@ -27,7 +27,7 @@ flowchart TD
     Q["confinement requested?<br/>(profile confined/exclusive OR *:sandbox)"] -->|no| COOP["cooperative:<br/>no boundary (SB3)"]
     Q -->|yes| P{"platform?"}
     P -->|linux| FW{"framework == claude?"}
-    FW -->|yes| CNL["claude: native settings-block sandbox (SB10),<br/>No advisory. ALSO emits the launcher (SB12/SB13),<br/>but native is claude's intended boundary — and on<br/>Linux that native arm is UNVERIFIED (SB20)"]
+    FW -->|yes| CNL["claude: native settings-block sandbox (SB10),<br/>No advisory. ALSO emits the launcher (SB12/SB13),<br/>but native is claude's intended boundary — on Linux<br/>that native arm is VERIFIED only with the documented<br/>bwrap AppArmor profile on Ubuntu (SB20)"]
     FW -->|no| ML["manual-wire advisory (NON-FATAL)<br/>+ emit bwrap launcher (SB12)"]
     P -->|darwin| DF{"framework?"}
     DF -->|claude| CN["claude: native settings-block<br/>sandbox (SB10). No advisory."]
@@ -60,7 +60,8 @@ flowchart TD
   **enforcement-UNVERIFIED** gate (SB20).
 - **`None`** — a boundary wired through the framework's own config surfaces no extra advisory: claude
   native everywhere; goose Seatbelt on macOS. **Claude/Linux caveat:** claude's native arm is its
-  intended boundary but is UNVERIFIED on Linux (SB20) while the verified launcher rides along un-advised
+  intended boundary and is VERIFIED on Linux only under a precondition (Ubuntu needs Claude Code's
+  documented bwrap AppArmor profile, SB20) while the verified launcher rides along un-advised
   — "no advisory for claude" ≠ "fully covered."
 
 `resolve_host_features_and_advise` fail-closes on the fatal code **only** (`fatal = code ==

@@ -60,7 +60,8 @@ designed.
   `confined`/`exclusive`). The governance layers are always active; the OS-level
   locks enforce only once wired.
 - **(c) OS-confinement is empirically verified on Linux** — the `sandbox/confine-run.sh` bwrap launcher passes a live-kernel deny test; **macOS Seatbelt is UNVERIFIED**. Claude Code's *native* Linux bubblewrap arm is
-  partial (open D-3 absent-path fragility, unverified `denyRead`) and native
+  verified on Linux only with Claude Code's documented bwrap AppArmor profile on Ubuntu, and partial
+  (open D-3 absent-path fragility); native
   Windows has no emitted enforcement (S18). Posture is "engages as tested," never
   "verified-unbypassable."
 

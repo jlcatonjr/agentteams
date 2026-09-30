@@ -16,7 +16,9 @@ Three layers, each labelled honestly:
   symlinked path, and die-not-mkdir on a missing ``--protect``.
 
 The product arm (Claude Code's own bwrap argv) is the opt-in shim test in
-``test_os_sandbox_product_enforcement.py``. Status: mechanism-verified, product-unverified.
+``test_os_sandbox_product_enforcement.py``; it passed on Linux 2026-09-30 (Claude Code 2.1.251,
+Ubuntu, with Claude Code's documented bwrap AppArmor profile installed). Status: mechanism-verified;
+product arm verified on that host only.
 """
 from __future__ import annotations
 

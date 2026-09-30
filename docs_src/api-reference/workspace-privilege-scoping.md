@@ -30,9 +30,12 @@ the sandbox and the protected read returned denied. That confirms only the **ker
 mechanism** — the still-untested link is **argument construction**: whether Claude Code
 correctly derives the `bwrap` arguments from agentteams' `denyRead` JSON (a kernel that
 denies when handed correct hand-built args says nothing about whether Claude Code's
-*derived* args are correct). So Linux is **not** "verified" end-to-end; treat it as
-mechanism-observed, translation-unverified (tracked in the remediation log): Claude Code's
-native sandbox is **unverified on Linux end-to-end**. Native Windows has no OS sandbox
+*derived* args are correct). **That link has since been tested (2026-09-30):** Claude Code's
+native sandbox is **verified end-to-end on Linux** for one host configuration — Ubuntu with
+`kernel.apparmor_restrict_unprivileged_userns=1`, bubblewrap 0.11.1, socat 1.8.1.1, Claude Code
+2.1.251 — and only after installing Claude Code's documented unconfined `/etc/apparmor.d/bwrap`
+profile (see "Fail closed: `failIfUnavailable` and the Linux dependencies" below). Other distros and Claude Code versions are untested.
+Native Windows has no OS sandbox
 agentteams can configure and stays advisory-only.
 
 ## What it does
@@ -117,9 +120,20 @@ Other measured Linux behaviours (2026-09-30, Ubuntu):
   sandboxed command, and reverts. It persists one only with `--persist`, and only if that
   candidate's probe passed.
 
-Until a full product-arm run passes on Linux (`tests/test_os_sandbox_product_enforcement.py`,
-which now fails loudly unless the sandbox is demonstrably operational), treat Claude Code's
-Linux confinement as **unverified end-to-end**.
+**Product-arm verdict (2026-09-30): VERIFIED on Linux, on one host configuration.** On Ubuntu with
+`kernel.apparmor_restrict_unprivileged_userns=1`, bubblewrap 0.11.1, socat 1.8.1.1 and Claude Code
+2.1.251, **after** `scripts/test-sandbox-apparmor-userns.sh --persist documented` installed Claude
+Code's documented unconfined `/etc/apparmor.d/bwrap` profile, `RUN_CLAUDE_SANDBOX_ITEST=1 pytest
+tests/test_os_sandbox_product_enforcement.py` (which fails loudly unless the sandbox is
+demonstrably operational) gave 8 passed, 1 skipped: write confinement (P1), the switch `denyWrite`
+(D-3), `denyRead` including `~/` expansion (P3, P3-3), the signing-key directory read-deny (PF1),
+the `.claude` read-only bind and rename refusal (F-4). The skipped
+`test_fail_if_unavailable_refuses_to_start_without_deps` needs a host without the deps; the
+refusal was observed live on the same host without socat ("sandbox required but unavailable …
+refusing to start", exit 1). **Precondition:** that profile disables Ubuntu's
+`bwrap-userns-restrict` for `bwrap` host-wide; without it every sandboxed command fails closed.
+Still unverified: other distros and Claude Code versions, and behaviour under
+`bypassPermissions`.
 
 Verified at two levels:
 
@@ -165,12 +179,13 @@ failure mode is fail-closed. Full evidence:
 
 > **Two distinct Linux mechanisms — do not conflate their verdicts.** This section is about the
 > **`claude` framework's own** Linux sandbox (Claude Code's native bubblewrap backend, wired through
-> the emitted settings block): its *mechanism* is verified but its *product arm* on stock Ubuntu is
-> **not** (nested-userns restrictions). That is a SEPARATE path from the framework-neutral
+> the emitted settings block): its *mechanism* is verified, and its *product arm* is verified on
+> Ubuntu with Claude Code 2.1.251 **only after** installing Claude Code's documented bwrap AppArmor
+> profile (on stock Ubuntu without it, sandboxed commands fail closed). That is a SEPARATE path from the framework-neutral
 > **`sandbox/confine-run.sh`** bwrap launcher documented under "End-to-end" below — a standalone
 > launcher agentteams emits for confined/exclusive teams of any framework, whose enforcement **is**
-> VERIFIED by a live-kernel deny test. "Claude native Linux product arm unverified" and "emitted
-> launcher VERIFIED" are both true because they describe different mechanisms.
+> VERIFIED by a live-kernel deny test. The two verdicts describe different mechanisms and
+> different preconditions; neither implies the other.
 
 Two properties matter for the privilege model:
 
@@ -224,9 +239,10 @@ Two properties matter for the privilege model:
   run it. `sandbox/confine-run.sh` (Linux) read-only binds every control-plane path it finds
   under a writable root and self-binds each ancestor so its rename fails `EBUSY`; see the
   launcher section. Status: **mechanism-verified** (raw bubblewrap probes in
-  `tests/test_sandbox_ancestor_rename.py`), **product-unverified** (Claude Code's sandbox cannot
-  start on a host with the AppArmor user-namespace restriction; the opt-in
-  `test_f4_captured_argv_…` fixture checks the argv only). Tracked follow-up: pinning the
+  `tests/test_sandbox_ancestor_rename.py`); for the Claude arm, **product-verified on Linux**
+  (2026-09-30, Claude Code 2.1.251: `test_f4_captured_argv_…` found `.claude` and every
+  `denyWrite` entry read-only bound in the real bwrap argv, and `test_f4_config_dir_cannot_be_renamed_…`
+  saw a sandboxed `mv .claude` fail), under the AppArmor precondition above. Tracked follow-up: pinning the
   control plane *outside* the write root (defence in depth; needed where the chain is not
   mount-protected, i.e. Seatbelt).
 - **The operator's private signing key is read-denied in every profile (F-1).** Every emitted
@@ -265,7 +281,10 @@ Two properties matter for the privilege model:
   the rules are inert until merged; they are unverified under `bypassPermissions`; hooks and MCP
   servers run unsandboxed; goose has no Claude-style permission system (its Seatbelt profile
   binds every process goose runs). A denyRead path that does not exist was tolerated by bwrap on
-  Claude Code 2.1.251 (Linux); the Claude arm stays **unverified end-to-end** on Linux.
+  Claude Code 2.1.251 (Linux). The Claude *sandbox* arm is verified on Linux (see the product-arm
+  verdict above); these `permissions.deny` rules are a separate layer — the `Edit` rules for the
+  switch and verify-key store and the key-dir `Read` rule were exercised live (PR #77), but the
+  `.claude/settings*.json` and `.claude/hooks/**` rules have not been.
 - **Operator-only rosters (PR-D, 2026-09-30).** `security-approvers.txt` (decision and waiver
   approvers), `authorized-managers.txt` and `management-authority.json` in the team's
   `references/` name who may approve or manage. An agent that wrote one could name itself.

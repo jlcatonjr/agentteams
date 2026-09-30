@@ -405,7 +405,9 @@ Core; `agentteams/templates/universal/security.template.md`;
    the [Sandboxing Guide](../agentteams-sandboxing-guide/README.md)) passes a live-kernel deny test
    (write-outside-scratch, credential read, raw egress all denied). **macOS Seatbelt is enforcement-
    UNVERIFIED** (no on-mac deny test has been run). Claude Code's *native* Linux bubblewrap arm is
-   mechanism-verified but **product-arm-unverified** on stock Ubuntu (nested-userns) and carries an
+   mechanism-verified and **product-arm-verified** (2026-09-30, Claude Code 2.1.251) on Ubuntu **only
+   after** installing Claude Code's documented bwrap AppArmor profile (without it, sandboxed commands
+   fail closed), and carries an
    **open D-3 fragility** (a `denyWrite` of a non-existent path fails bwrap init → all Bash blocked);
    native **Windows has no emitted enforcement**. On an unenforceable host the interactive path
    **fails closed** (`PrivilegeConfinementError`) unless `--allow-unenforced-confinement`.
