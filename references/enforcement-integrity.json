@@ -16,7 +16,7 @@
     "agentteams/frameworks/_sandbox_emit.py": "bc2e402b0c03f7bd092965e36e51f936c2ba7279cdddc350a3dc6048aff4254c",
     "agentteams/front_matter_merge.py": "3b440ad7557385729b4568ba0a9033587fb5a1b6aada22191e26e8da54233cfc",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
-    "agentteams/integrity.py": "37a4ff3a668ab6468b0d5d876e02a820e7ec233c71f92ad4ccbe35e677650cf2",
+    "agentteams/integrity.py": "ffb45160eae8c12c3a43485c8bb04f3275c93a4803988ff4239315b35820c9f6",
     "agentteams/rank_conformance.py": "b5c1d0ce4c8b36677c38f5f873c2386537adeabcfea211880cc756291b6ba0d0",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
