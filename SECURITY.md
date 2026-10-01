@@ -270,7 +270,8 @@ honour.
 
 **Residuals:**
 - **Fake marker.** A planted `build-log.json` in an empty `.github/agents` or `.codex/agents`
-  makes the launcher refuse to start. This is denial of service only: nothing is granted.
+  makes the launcher refuse to start. This is denial of service only: nothing is granted. Since #11 the launcher
+  and generation name the marker as possibly planted and say how to remove it.
 - **Copilot is not fully covered.** Its prompt-level roots (`.github/agents/*.agent.md`,
   `.github/copilot-instructions.md`) stay writable through the Edit tool, and the gate hook is
   the only check on them.

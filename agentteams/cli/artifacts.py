@@ -742,6 +742,9 @@ def _emit_codex_mcp_if_enabled(manifest: dict, project_root: Path) -> None:
             f"replaced: {', '.join(res.dropped_unmanaged)} (hand-author these outside "
             "the agentteams-managed block, or add them to mcp_servers[] to keep them)"
         )
+    if res.preserved_security_keys:  # #11: a planted config.toml would be carried forward
+        print(f"  ⚠  Kept existing Codex keys ({', '.join(res.preserved_security_keys)}) in "
+              ".codex/config.toml: confirm you wrote them.", file=sys.stderr)
     for err in res.errors:
         print(f"  !  MCP server skipped (non-conformant): {err}", file=sys.stderr)
 MEMORY_INDEX_REL_PATH = "references/memory-index.json"

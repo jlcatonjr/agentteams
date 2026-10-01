@@ -110,6 +110,8 @@ class CodexMCPEmissionResult:
     wired: list[str] = field(default_factory=list)
     not_wired: dict[str, str] = field(default_factory=dict)
     dropped_unmanaged: list[str] = field(default_factory=list)
+    #: security-relevant keys already in a pre-existing config.toml that this splice carries forward (#11)
+    preserved_security_keys: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -279,6 +281,10 @@ def emit_codex_mcp_config(
         except tomllib.TOMLDecodeError as exc:
             result.errors.append(f"existing {out_path} is not valid TOML, refusing to splice: {exc}")
             return result
+        from agentteams.team_dir_advisories import codex_config_security_keys
+
+        result.preserved_security_keys = [
+            k for k in codex_config_security_keys(Path(output_root)) if k not in ("[mcp_servers]", "<symlink>")]
 
     # Surface (never silently drop) any pre-existing [mcp_servers.<id>] table —
     # hand-authored or from a version of this module predating the managed-

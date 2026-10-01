@@ -245,6 +245,49 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
   esac
   printf '%s\n' "$team"
 }
+# DIAGNOSIS ONLY (message choice; the launcher refuses either way): an attacker who also plants one
+# dummy agent file steers this to the generic "regenerate" hint. Nothing is granted.
+team_looks_planted(){   # team dir -> true when it holds no agent file of its framework and no switch
+  local t="$1" glob f
+  case "$t" in
+    */.claude/agents) glob="*.md" ;;
+    */.goose/recipes) glob="*.yaml" ;;
+    */.github/agents) glob="*.agent.md" ;;
+    */.codex/agents) glob="*.toml" ;;
+    *) return 1 ;;
+  esac
+  cp_present "$t/references/agent-privilege.json" && return 1
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "${f##*/}" in SETUP-REQUIRED.md) continue ;; esac
+    return 1
+  done < <(compgen -G "$t/$glob" || true)
+  return 0
+}
+# #11 (2026-09-30): `.codex/config.toml` is protect-if-present, so a file a confined process created
+# is locked in from the next launch, and Codex run OUTSIDE this launcher would honour it. Warn on the
+# security-relevant keys every run (key-based, never a digest an agent could re-record). Never a die.
+# BEST-EFFORT: plain `key =` lines and `[table]` headers only; quoted keys, dotted keys
+# (`mcp_servers.x.command =`), inline tables and `model_providers` base_url are not detected.
+codex_config_warn(){
+  local r f line keys=()
+  for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"}; do
+    f="$r/.codex/config.toml"
+    if [ -L "$f" ]; then   # Codex outside the launcher follows the link: say so, never read it
+      echo "confine-run: WARNING $(printf %q "$f") is a symlink; Codex run OUTSIDE this launcher reads its target. Review the target, and confirm you (not a confined process) created it." >&2
+      continue
+    fi
+    [ -f "$f" ] || continue
+    keys=()
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [[ "$line" =~ ^[[:space:]]*(approval_policy|sandbox_mode|notify)[[:space:]]*= ]]; then keys+=( "${BASH_REMATCH[1]}" )
+      elif [[ "$line" =~ ^[[:space:]]*\[(sandbox_workspace_write|mcp_servers)[].] ]]; then keys+=( "[${BASH_REMATCH[1]}]" )
+      fi
+    done < "$f"
+    [ "${#keys[@]}" -gt 0 ] || continue
+    echo "confine-run: WARNING $(printf %q "$f") sets security-relevant Codex keys (${keys[*]}). It is read-only in this sandbox, but Codex run OUTSIDE this launcher honours it: review it, and confirm you (not a confined process) wrote it." >&2
+  done
+}
 control_plane_binds() {
   local roots=() prot=() anc=() r rel p a under t team
   for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"} ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do
@@ -268,7 +311,10 @@ control_plane_binds() {
         # planted .pub.pem, a gate hook or a roster naming itself. Refuse (never create).
         team="$(cp_required "$r" "$rel")"
         [ -n "$team" ] || continue
-        die "control-plane path '$r/$rel' is missing although the agentteams team '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with current agentteams (agentteams --update) so it is emitted (agentteams before 2026-09-30 did not emit it for every framework and platform), then retry."
+        if team_looks_planted "$team"; then
+          die "control-plane path $(printf %q "$r/$rel") is missing although the agentteams team $(printf %q "$team") exists, but it holds only an agentteams marker ($TEAM_MARKER_REL) and no agent files: it may have been PLANTED by a confined process. If you did not generate an agentteams team there, inspect and remove $(printf %q "$team/$TEAM_MARKER_REL") from OUTSIDE the sandbox, then retry. Otherwise regenerate the team (agentteams --update). Nothing was changed (fail-closed)."
+        fi
+        die "control-plane path $(printf %q "$r/$rel") is missing although the agentteams team $(printf %q "$team") exists: a confined process could create it (fail-closed; never created). Regenerate the team with current agentteams (agentteams --update) so it is emitted (agentteams before 2026-09-30 did not emit it for every framework and platform), then retry."
       fi
       p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )
@@ -458,6 +504,7 @@ case "$OS" in
   *) die "unsupported OS '$OS' - confinement is Linux (bwrap) or macOS (sandbox-exec) only. FAIL CLOSED." ;;
 esac
 
+codex_config_warn
 if [ "$CHECK" -eq 1 ]; then
   echo "== confine-run --check (inert; nothing runs) =="
   echo "  os                : $OS"

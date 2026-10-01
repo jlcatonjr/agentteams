@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (launcher residuals: planted markers and planted Codex config made visible)
+
+- **Planted marker.** A confined process can create an empty team dir holding only
+  `references/build-log.json`. The launcher then refuses to start, and until now it wrongly told the operator to
+  run `agentteams --update`. It now says the marker may have been planted and should be removed from outside the
+  sandbox. Generation and `--check` print the same warning for every marker-only team dir. Nothing is deleted
+  automatically, and the dir stays denied in the Claude block.
+- **Planted `.codex/config.toml`.** The file is protect-if-present, so one created by a confined process stays
+  locked in, and Codex run outside the launcher honours it. The launcher warns on every run (never dies) when
+  the file sets `approval_policy`, `sandbox_mode`, `notify`, `[sandbox_workspace_write]` or `[mcp_servers.*]`.
+  Generation and `--check` warn too. The `codex:mcp` splice reports the security keys it carries forward from an
+  existing file. Detection is key-based, never a digest recorded at generation, which would bless whatever was
+  planted before it.
+- The `_sandbox_emit.py` comment claiming agentteams never writes `config.toml` is corrected. The integrity
+  manifest is re-hashed for `_sandbox_emit.py` and `confine-run.sh`.
+
 ### verification (sandbox protections re-measured, and re-checked after Claude Code upgrades)
 
 - **The built-in Write tool is now measured against `permissions.deny`** under both `acceptEdits` and `bypassPermissions`

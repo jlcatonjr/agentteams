@@ -465,7 +465,9 @@ TEAM_KEY_BY_FRAMEWORK: dict[str, str] = {
 }
 
 #: Codex's project config (approval and sandbox policy; an upstream claim, unverified here).
-#: Protect-if-present everywhere: agentteams never emits it and emits no stub for it.
+#: Protect-if-present everywhere, with no stub. agentteams does write it when ``codex:mcp`` is on
+#: (``codex_mcp_emit`` splices MCP tables into an EXISTING file and keeps its other keys), so a
+#: planted file can be carried forward: the launcher and ``--check`` warn on its security keys.
 CODEX_CONFIG_REL = ".codex/config.toml"
 _GATE_HOOK_PATH = ".claude/hooks/constitutional-gate.py"
 
