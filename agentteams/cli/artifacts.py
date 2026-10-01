@@ -476,6 +476,7 @@ def resolve_host_features_and_advise(
 def finalize_privilege_wiring(
     manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
     *, allow_unenforced: bool = True, team_dir: Path | None = None,
+    accepted_write_roots: list[str] | None = None,
 ) -> None:
     """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
 
@@ -493,12 +494,25 @@ def finalize_privilege_wiring(
         allow_unenforced: Forwarded to :func:`resolve_host_features_and_advise`; when
             ``False``, an unenforceable confinement request raises rather than warning.
         team_dir: The run's ``output_dir`` (holder TEAM dir): grant roster + verify keys.
+        accepted_write_roots: ``--accept-write-root`` values (operator argv only).
+
+    Raises:
+        PrivilegeConfinementError: Unenforceable confinement (P1-2).
+        WriteRootPolicyError: A refused or unaccepted write root (follow-up #2).
     """
+    from agentteams.cli import write_root_policy
+
+    brief_roots = write_root_policy.begin(manifest, project_root)
     resolve_host_features_and_advise(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
     )
-    apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
-    apply_coordination_roots_to_write_roots(manifest)
+    grant_roots = apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
+    coordination_roots = apply_coordination_roots_to_write_roots(manifest)
+    write_root_policy.enforce(
+        manifest, framework_id=framework_id, brief_roots=brief_roots, grant_roots=grant_roots,
+        coordination_roots=coordination_roots, accepted=accepted_write_roots,
+        confined=_confinement_active(manifest),
+    )
     _advise_exclusive_inbound_hardening(manifest, framework_id)
 
 

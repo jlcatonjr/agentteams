@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import csv
 import json
+import shlex
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +44,7 @@ from agentteams.frameworks._sandbox_emit import (
     VERIFY_KEY_STORE_SENTINEL_REL,
     VERIFY_KEY_STORE_SENTINEL_TEXT,
 )
+from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.sync_baseline import load_baseline, write_baseline
@@ -252,6 +255,8 @@ def _emit_privilege_artifacts(
         "privilege_profile": profile,
         "privilege_profile_explicit": bool(privilege.get("privilege_profile_explicit")),
         "host_features": expand_privilege_profile(profile, framework),
+        # Transient, never persisted: the project root for the write-root hard bans (#2).
+        PROJECT_ROOT_KEY: Path(root).resolve(),
     }
     for key in ("workspace_write_roots", "protected_read_paths", "goose_egress_proxy",
                 "resolve_deny_read_abspath"):
@@ -447,6 +452,48 @@ def _reconcile(
 # projection + baselines
 # ---------------------------------------------------------------------------
 
+def _check_projected_write_roots(
+    root: Path, privilege: dict[str, Any], frameworks: list[str], accepted: list[str] | None,
+) -> None:
+    """Apply the generation-time write-root policy to a projection (follow-up #2).
+
+    The projected roots come from the agent-writable brief. Hard bans are enforced by the pinned
+    emitters; here a NEW external root needs ``--accept-write-root``. The baseline is the live
+    ``.claude/settings.json`` for claude only (a protected file); every other framework has an
+    empty baseline, because a previously emitted file the agent can write is not a baseline.
+
+    Raises:
+        ValueError: A hard-banned or unaccepted external root (raised before any write).
+    """
+    if privilege.get("privilege_profile") not in {"confined", "exclusive"}:
+        return
+    from agentteams.cli.write_root_policy import live_claude_allow_write
+    from agentteams.frameworks._write_roots import (
+        is_external_root,
+        unaccepted_external_roots,
+        validate_write_roots,
+    )
+
+    roots = list(privilege.get("workspace_write_roots") or ["."])
+    project_root = str(Path(root).resolve())
+    validate_write_roots(roots, project_root=project_root)
+    for fw in frameworks:
+        baseline = live_claude_allow_write(Path(root)) if fw == "claude" else []
+        need = unaccepted_external_roots(roots, project_root=project_root, baseline=baseline,
+                                         accepted=accepted or [])
+        for r in roots:
+            if r != "." and is_external_root(r, project_root):
+                print(f"  !  SANDBOX WIDENING [{fw}]: projected allowWrite includes external root "
+                      f"{r!r} (source: brief workspace_write_roots).", file=sys.stderr)
+        if need:
+            raise ValueError(
+                f"[{fw}] new external sandbox write root(s) from the brief need operator "
+                f"acceptance: {need!r}. If you intend this, re-run with "
+                + " ".join(f"--accept-write-root {shlex.quote(r)}" for r in need)
+                + " (operator argv only)."
+            )
+
+
 def _project_and_rebaseline(
     root: Path,
     canonical_dir: Path,
@@ -455,6 +502,7 @@ def _project_and_rebaseline(
     *,
     dry_run: bool,
     notices: list[str] | None = None,
+    accepted_write_roots: list[str] | None = None,
 ) -> list[str]:
     """Project canonical to every framework and rewrite each baseline.
 
@@ -472,6 +520,7 @@ def _project_and_rebaseline(
     # Up-front validation: dry-emit the privilege artifacts for every framework so an
     # unrepresentable write-root / missing asset fails BEFORE the write loop mutates disk.
     if privilege:
+        _check_projected_write_roots(root, privilege, frameworks, accepted_write_roots)
         for fw in frameworks:
             _emit_privilege_artifacts(root, fw, privilege, dry_run=True)
     projected: list[str] = []
@@ -551,6 +600,7 @@ def sync_init(
     frameworks: list[str] | None = None,
     canonical_rel: str = DEFAULT_CANONICAL_REL,
     dry_run: bool = False,
+    accepted_write_roots: list[str] | None = None,
 ) -> SyncResult:
     """Bootstrap the pinned sync: seed canonical from the pin, project to all.
 
@@ -560,6 +610,7 @@ def sync_init(
         frameworks: The sync set (defaults to every registered framework).
         canonical_rel: Canonical hub path relative to ``root``.
         dry_run: When set, computes without writing.
+        accepted_write_roots: ``--accept-write-root`` values (operator argv only).
 
     Returns:
         A :class:`SyncResult`.
@@ -584,12 +635,14 @@ def sync_init(
     # persists in team.cai.json and projection re-emits each framework's OS boundary.
     priv = _read_brief_privilege(root)
     if priv:
+        _check_projected_write_roots(root, priv, fws, accepted_write_roots)  # before any write
         seed["privilege"] = priv
     materialize_canonical(seed, canonical_dir, dry_run=dry_run)
 
     notices: list[str] = []
     projected = _project_and_rebaseline(
         root, canonical_dir, seed, fws, dry_run=dry_run, notices=notices,
+        accepted_write_roots=accepted_write_roots,
     )
     if not dry_run:
         save_pin(
@@ -613,6 +666,7 @@ def run_sync(
     *,
     since: str | None = None,
     dry_run: bool = False,
+    accepted_write_roots: list[str] | None = None,
 ) -> SyncResult:
     """Run one sync pass: detect changes, reconcile to the pin, project all.
 
@@ -620,6 +674,7 @@ def run_sync(
         root: The project root directory.
         since: Git ref to diff from (defaults to the pin's ``last_synced_commit``).
         dry_run: When set, computes without writing.
+        accepted_write_roots: ``--accept-write-root`` values (operator argv only).
 
     Returns:
         A :class:`SyncResult`. When no framework changed, returns early with
@@ -672,11 +727,13 @@ def run_sync(
     # privilege_profile propagates, and re-persist it so team.cai.json stays authoritative.
     priv = _read_brief_privilege(root)
     if priv:
+        _check_projected_write_roots(root, priv, fws, accepted_write_roots)  # before persisting
         final_canonical["privilege"] = priv
         materialize_canonical(final_canonical, canonical_dir, dry_run=dry_run)
     notices: list[str] = []
     projected = _project_and_rebaseline(
         root, canonical_dir, final_canonical, fws, dry_run=dry_run, notices=notices,
+        accepted_write_roots=accepted_write_roots,
     )
     if not dry_run:
         _append_conflict_log(root, all_conflicts)

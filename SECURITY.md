@@ -128,6 +128,66 @@ specifically:
 
 ## Advisories
 
+### 2026-09-30 — Brief write roots could widen the next sandbox or run shell in the operator's shell
+
+**Affected:** `main` before this fix. This covers every confined or exclusive team. **Severity:**
+high.
+
+The brief's `workspace_write_roots` and `coordination_write_roots` went straight into the
+sandbox's writable set. Brief files (`.agentteams/brief.json`, `_build-description.json`, or any
+`--description` path) are agent-writable. A sandboxed agent could therefore add `~` or `/` to them,
+and the operator's next `--update` would emit that root silently. `--check-wiring` then told the
+operator to "re-merge".
+
+The goose Linux runner (`.goose/confined-run.example.sh`) was worse: it pasted each root raw into
+an operator-run bash script. A root such as `x$(cmd)` ran in the operator's **unsandboxed** shell.
+
+**Fix:**
+- **One pinned chokepoint** (`frameworks/_write_roots.py`) refuses these roots in every emitter:
+  - `/`, `~`, `$HOME` and their ancestors;
+  - the signing-key directory, and anything at, inside or above it;
+  - home credential and persistence paths;
+  - `~user`;
+  - the project's control plane (`.git`, `.claude`, `.goose`, `.codex`, `.github/agents`,
+    `.github/hooks`, `sandbox`, `.agentteams`) and any ancestor of the project;
+  - shell, SBPL and glob metacharacters.
+- **The goose runner** validates every root and also shell-quotes it.
+- **Generation names each added root and its source.** A new root outside the project needs the
+  operator's `--accept-write-root PATH` (argv only). The accepted baseline is the live
+  `.claude/settings.json` for Claude; no other framework has one.
+- **The launcher** ro-binds the whole `.claude` directory and protects the goose runner.
+- **`permissions.deny`** covers `.claude/settings.hooks.example.json` and the goose runner.
+  Status: product-unverified.
+
+**Action:**
+1. Run `agentteams --update` outside any sandbox for each confined team.
+2. If generation now refuses a root, name a narrower directory. For an external root you intend,
+   pass `--accept-write-root`.
+3. Check every `SANDBOX WIDENING` line before re-merging.
+
+**Residuals:**
+- **The brief files are not write-denied.** Team Builder and agent-updater edit them by design.
+  Instead, the widening notice and acceptance are the control.
+- **A planted flag.** An agent can plant `--accept-write-root` in a script the operator later
+  runs. The notice still names the root and its source.
+  Goose and `--sync` have no accepted baseline, so they ask for the flag on every run, and that
+  trains operators to bake it into a script. Prefer Claude's live-settings baseline, or a signed grant.
+- **The home denylist is not exhaustive.** Acceptance of each external root is the control, and
+  any hidden home dir is flagged in the notice.
+- **Lexical checks only, with a best-effort `realpath`.** A symlink created after generation is
+  resolved by the OS at session time.
+- **A sibling-repo coordination root exposes that repo's control plane.**
+- **Projects with no `.claude` dir.** There, a confined agent can create `.claude/settings.json`.
+- **Launcher side effects.** All of `.claude` is read-only under `confine-run.sh`. A Claude Code
+  session run inside the launcher cannot save `.claude/settings.local.json`, and a symlinked `.claude`
+  makes the launcher refuse to start (fail-closed). Confined goose and codex agents can no longer
+  write `.claude/agents`; run `--sync` into a claude team outside the launcher.
+- **A symlink swapped in after generation.** Any in-project root other than `.` can later be
+  replaced by a symlink, which bypasses acceptance, because the OS resolves it at session time.
+  Tracked as a follow-up.
+- **`.git/hooks` stays inside the default root `.`.** Hooks run unsandboxed. Tracked as a
+  MEDIUM follow-up.
+
 ### 2026-09-30 — Claude sandbox block failed open when the sandbox could not start
 
 **Affected:** `1.0.0-rc.7` and `main` before this fix: every release that emitted the Claude

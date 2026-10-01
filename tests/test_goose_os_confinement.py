@@ -380,7 +380,7 @@ def test_linux_runner_exclusive_carries_protected_read_paths(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     mani = {"privilege_profile": "exclusive", "protected_read_paths": ["/home/x/sibling-scratch"]}
     c = goose_linux_sandbox_output_files(mani)[0][1]
-    assert '--exclude "/home/x/sibling-scratch"' in c
+    assert "--exclude /home/x/sibling-scratch" in c  # shlex.quote-d (follow-up #2)
 
 
 def test_linux_runner_confined_has_no_manifest_excludes(monkeypatch):
@@ -442,7 +442,7 @@ def test_linux_runner_rejects_unsafe_protected_read_path(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     mani = {"privilege_profile": "exclusive", "protected_read_paths": ["/ok", '/e"v`$(x)']}
     c = goose_linux_sandbox_output_files(mani)[0][1]
-    assert '--exclude "/ok"' in c            # safe path carried
+    assert '--exclude /ok' in c            # safe path carried
     assert 'e"v' not in c and "`$(x)" not in c  # unsafe path never injected
     assert "SKIPPED from --exclude" in c     # visible skip signal (not silent scope drop)
     fd, fn = tempfile.mkstemp(suffix=".sh"); os.write(fd, c.encode()); os.close(fd)

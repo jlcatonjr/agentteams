@@ -262,6 +262,9 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     # files and hooks the next session trusts. Emitted, product-UNVERIFIED.
     rules += [f"Edit(/{p})" for p in (*governed_roster_paths(framework), GRANT_ROSTER_PROJECT_REL)]
     rules += [f"Edit(/{p})" for p in _CLAUDE_SETTINGS_PATHS]
+    # Follow-up #2 (2026-09-30): the operator-merged/-run EXAMPLES. An edited settings example or
+    # goose runner is what the operator next merges or executes unsandboxed. Product-UNVERIFIED.
+    rules += [f"Edit(/{p})" for p in OPERATOR_EXAMPLE_PATHS]
     rules.append(f"Edit(/{_GATE_HOOK_PATH.rsplit('/', 1)[0]}/**)")
     if framework == "claude":
         rules += _sibling_permission_deny_rules()
@@ -551,6 +554,11 @@ TEAM_MARKER_REL = "references/build-log.json"
 #: Claude Code settings files the NEXT session trusts (hook wiring, permissions).
 _CLAUDE_SETTINGS_PATHS: tuple[str, ...] = (".claude/settings.json", ".claude/settings.local.json")
 
+#: Operator-merged / operator-run examples an agent must not edit (follow-up #2, 2026-09-30).
+OPERATOR_EXAMPLE_PATHS: tuple[str, ...] = (
+    ".claude/settings.hooks.example.json", ".goose/confined-run.example.sh",
+)
+
 #: FROZEN comment-only stub texts, written write-if-absent (never overwritten) for a sandboxed team
 #: so every launcher/Seatbelt entry exists. A stub reads exactly like an absent file in every reader
 #: (default approvers; no manager; no management authority): ``tests/test_prd_trust_roots.py``.
@@ -729,6 +737,7 @@ def _build_sandbox_block(
     platform: str | None = None,
     resolve_abspath: bool = False,
     sibling_deny_dirs: tuple[str, ...] | list[str] = (),
+    project_root: str | None = None,
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -748,6 +757,8 @@ def _build_sandbox_block(
         sibling_deny_dirs: Sibling team dirs PRESENT at generation
             (:func:`present_sibling_deny_dirs`), appended to ``denyWrite``. Never an absent one:
             a missing deny path stops bwrap.
+        project_root: The absolute project root (``_write_roots.PROJECT_ROOT_KEY``), for the
+            project-ancestor ban; ``None`` skips only that check.
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
@@ -760,10 +771,14 @@ def _build_sandbox_block(
         block omits it (advisory only there).
 
     Raises:
-        ValueError: A write root is at or inside the signing-key directory.
+        ValueError: A write root matches a hard ban (``_write_roots.validate_write_roots``:
+            the signing-key directory, home, the project control plane, metacharacters, …).
     """
+    from agentteams.frameworks._write_roots import validate_write_roots
+
     roots = list(write_roots) if write_roots else ["."]
     assert_roots_clear_of_signing_keys(roots)
+    validate_write_roots(roots, project_root=project_root)
     filesystem: dict[str, Any] = {"allowWrite": roots}
     # D-3: deny the in-sandbox agent write access to the control-plane files it would otherwise
     # be able to edit (the switch is inside the write root). denyWrite wins over allowWrite.
@@ -798,6 +813,7 @@ def _inject_sandbox_block(
     *,
     deny_read_resolved_abspath: bool = False,
     sibling_deny_dirs: tuple[str, ...] = (),
+    project_root: str | None = None,
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
@@ -822,6 +838,7 @@ def _inject_sandbox_block(
         deny_read_resolved_abspath: The P3-3 opt-in; also resolves the signing-key entries.
         sibling_deny_dirs: Present sibling team dirs for ``denyWrite`` (see
             :func:`_build_sandbox_block`).
+        project_root: Forwarded to :func:`_build_sandbox_block` (write-root validation).
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
@@ -829,7 +846,7 @@ def _inject_sandbox_block(
     Raises:
         ValueError: If ``example_text`` is not parseable as a JSON object — a corrupted
             shipped asset that must not be masked when a sandbox was requested — or if a
-            write root is at or inside the signing-key directory.
+            write root matches a hard ban.
     """
     try:
         data = json.loads(example_text)
@@ -845,7 +862,7 @@ def _inject_sandbox_block(
         )
     data["sandbox"] = _build_sandbox_block(
         write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath,
-        sibling_deny_dirs=sibling_deny_dirs,
+        sibling_deny_dirs=sibling_deny_dirs, project_root=project_root,
     )
     # Same branch as the sandbox block, never one without the other (R11): the built-in tools
     # are bound by permissions, not by the sandbox.

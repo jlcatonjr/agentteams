@@ -457,6 +457,28 @@ P1-3 verification that an emitted workspace-confinement `sandbox` block was actu
 
 Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
 
+### `--accept-write-root PATH`
+
+Accepts one **new** sandbox write root outside the project: an absolute path, `~/…`, or `../…`.
+The root can come from the brief's `workspace_write_roots`, its `coordination_write_roots`, or a
+capability grant. The flag is repeatable, and each value must match the root exactly after
+normalization.
+
+Generation fails closed for a confined or exclusive team when a new external root has not been
+accepted. A root that is already in the live `.claude/settings.json` `allowWrite` needs no
+acceptance (Claude only). Every other framework, and every `--sync`, has no accepted baseline.
+
+The brief is agent-writable, so generation prints a `SANDBOX WIDENING` line naming the source of
+every root it adds. Hard-banned roots are refused whether or not they are accepted:
+- `/`, `~`, `$HOME`, or an ancestor of any of these;
+- the signing-key directory;
+- home credential and persistence paths;
+- the project's control plane;
+- shell or glob metacharacters.
+
+The flag is accepted from the operator's argv only. It is never read from a brief, an
+environment variable or an `@file`.
+
 ### `--allow-fallback-fail-open`
 
 CC-2 opt-out. For a `confined`/`exclusive` `privilege_profile`, agentteams emits the constitutional-gate hook **fail-closed**: an unexpected crash in the gate emits a `deny` decision rather than letting the harness fail open (a crash → silent allow), because a workspace that opted into a boundary must not have it silently dropped by a gate error. This flag restores the historical **fail-open** behavior for those profiles — use it only when a buggy gate bricking the session is a worse risk than a missed block. Cooperative teams are unaffected (they are always fail-open) and remain byte-identical.

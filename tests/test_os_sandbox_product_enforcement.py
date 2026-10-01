@@ -535,3 +535,37 @@ def test_sibling_negative_control_without_the_deny_github_is_renameable(tmp_path
     assert out.get("workflow") == "OK", out
     assert out.get("mv-github") == "OK", f"`mv .github` failed without any sibling deny: {out}"
     assert (project / ".github.moved").is_dir()
+
+
+# --- follow-up #2 (2026-09-30): brief write roots ------------------------------------------------
+# T-I1 is the positive control proving the threat is real (a home-relative allowWrite root IS
+# honoured, so an agent-added root would widen the next session); T-I4 shows the settings example
+# the operator re-merges is Bash-unwritable (under the `.claude` denyWrite). The Edit-tool rule for
+# it is emitted but product-UNVERIFIED.
+
+@pytest.mark.usefixtures("sandbox_operational")
+def test_t_i1_home_relative_allow_write_root_is_honoured(tmp_path: Path) -> None:
+    project = _make_project(tmp_path / "proj")
+    granted = _escape_dir("wr-granted")
+    other = _escape_dir("wr-other")
+    granted.mkdir(exist_ok=True)
+    other.mkdir(exist_ok=True)
+    rel = "~/" + granted.name
+    _write_settings(project, _build_sandbox_block([".", rel], project_root=str(project)))
+    try:
+        _run_claude(project, f"echo hi > '{granted}/f'; echo hi > '{other}/f'")
+        assert (granted / "f").exists(), "T-I1: the home-relative allowWrite root was NOT honoured"
+        assert not (other / "f").exists(), "T-I1: a sibling home path was writable (sandbox off?)"
+    finally:
+        shutil.rmtree(granted, ignore_errors=True)
+        shutil.rmtree(other, ignore_errors=True)
+
+
+@pytest.mark.usefixtures("sandbox_operational")
+def test_t_i4_settings_example_is_bash_unwritable(tmp_path: Path) -> None:
+    project = _make_project(tmp_path / "proj")
+    _write_settings(project, _build_sandbox_block(None, project_root=str(project)))
+    example = project / ".claude" / "settings.hooks.example.json"
+    example.write_text("{}\n", encoding="utf-8")
+    _run_claude(project, "echo '{\"sandbox\": {}}' > .claude/settings.hooks.example.json")
+    assert example.read_text(encoding="utf-8") == "{}\n", "T-I4: sandboxed Bash rewrote the example"

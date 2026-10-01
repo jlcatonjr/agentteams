@@ -852,6 +852,19 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--accept-write-root",
+        action="append",
+        dest="accept_write_root",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Accept one NEW sandbox write root outside the project (absolute, ~/..., or ../...) "
+            "named by the brief, coordination roots or a grant. Repeatable; matched exactly "
+            "after normalization. Roots already in the live .claude/settings.json allowWrite need "
+            "no acceptance. Operator argv only: never read from a brief, env var or file."
+        ),
+    )
+    parser.add_argument(
         "--allow-fallback-fail-open",
         action="store_true",
         dest="allow_fallback_fail_open",

@@ -56,6 +56,7 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _sandbox_feature_enabled,
     sibling_deny_dirs,
 )
+from ._write_roots import project_root_of
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 
@@ -256,6 +257,7 @@ class ClaudeAdapter(FrameworkAdapter):
                     ),
                     # Present sibling teams, computed by the CLI (transient; never from input).
                     sibling_deny_dirs=sibling_deny_dirs(manifest),
+                    project_root=project_root_of(manifest),  # transient, CLI-set (never input)
                 )
                 # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
                 # missing deny path). Its frozen sentinel is emitted for every team by
@@ -404,10 +406,21 @@ def verify_sandbox_wiring(project_root: Path) -> tuple[bool, list[str]]:
     lv_roots = lv_fs.get("allowWrite")
     if ex_roots != lv_roots:
         ok = False
-        msgs.append(
-            "WARNING: the live sandbox write roots differ from the emitted expectation "
-            f"(expected allowWrite={ex_roots!r}) — re-merge so the boundary matches."
-        )
+        # Follow-up #2: a WIDENING (the emitted example adds roots) must not be waved through as
+        # "re-merge": the brief is agent-writable. Only emitted values are echoed, never live ones.
+        live_set = set(lv_roots) if isinstance(lv_roots, list) else set()
+        added = [r for r in (ex_roots or []) if r not in live_set]
+        if added:
+            msgs.append(
+                f"WARNING: the emitted sandbox block WIDENS allowWrite by {added!r} "
+                f"(expected allowWrite={ex_roots!r}). Review where each root came from before "
+                "re-merging: an agent-writable brief can add roots (generation prints the source)."
+            )
+        else:
+            msgs.append(
+                "WARNING: the live sandbox write roots differ from the emitted expectation "
+                f"(expected allowWrite={ex_roots!r}) — re-merge so the boundary matches."
+            )
     # denyWrite (control-plane protection) + denyRead (exclusive read-exclusion) must not be
     # dropped/shortened on merge (audit 2026-W39, security F4). A merge that keeps the block
     # but strips denyWrite re-enables the in-sandbox agent to edit its own gate/switch; a

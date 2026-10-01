@@ -119,7 +119,13 @@ def test_write_root_inside_the_key_dir_is_refused(home, root):
 
 
 def test_write_root_beside_the_key_dir_is_allowed(home):
-    se._build_sandbox_block([".", "~/.config/agentteams", "~/.config/agentteams/keysX"])
+    se._build_sandbox_block([".", "~/.config/agentteams/keysX"])
+
+
+def test_write_root_above_the_key_dir_is_refused(home):
+    # follow-up #2 (2026-09-30): an ANCESTOR of the key dir would re-open it; refused like the dir
+    with pytest.raises(ValueError, match="protected home path"):
+        se._build_sandbox_block([".", "~/.config/agentteams"])
 
 
 # --- goose Seatbelt --------------------------------------------------------------------------

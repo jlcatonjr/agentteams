@@ -124,7 +124,8 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         raw_fws = getattr(args, "sync_frameworks", None)
         fws = [f.strip() for f in raw_fws.split(",") if f.strip()] if raw_fws else None
         try:
-            result = sync_init(root, pin=pin, frameworks=fws, dry_run=dry)
+            result = sync_init(root, pin=pin, frameworks=fws, dry_run=dry,
+                               accepted_write_roots=getattr(args, "accept_write_root", None))
         except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 2
@@ -136,7 +137,8 @@ def run_sync_cli(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        result = run_sync(root, since=getattr(args, "sync_since", None), dry_run=dry)
+        result = run_sync(root, since=getattr(args, "sync_since", None), dry_run=dry,
+                          accepted_write_roots=getattr(args, "accept_write_root", None))
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2

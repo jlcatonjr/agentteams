@@ -121,7 +121,12 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .codex/agents/references/agent-privilege.json .codex/agents/references/authorized-verify-keys
                     .codex/agents/references/security-approvers.txt .codex/agents/references/authorized-managers.txt
                     .codex/agents/references/management-authority.json .codex/config.toml
-                    .goose/sandbox.sb references/security-approvers.txt )
+                    .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh )
+# Whole directories read-only wherever they exist under a writable root (follow-up #2, 2026-09-30):
+# .claude holds the live settings.json whose allowWrite is the operator-accepted write baseline and
+# the settings/hooks the next Claude session trusts. Mirrors Claude's own `.claude` denyWrite, so a
+# confined goose/copilot/codex agent cannot rewrite them either. A mount point cannot be renamed.
+CONTROL_PLANE_DIRS_REL=( .claude )
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
 TEAM_MARKER_REL=references/build-log.json
 TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents )
@@ -226,6 +231,7 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
   case "$rel" in
     .goose/sandbox.sb) return 0 ;;   # macOS-only artifact
     .codex/config.toml) return 0 ;;  # Codex's own config: protect-if-present (never stubbed)
+    .goose/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
     .github/agents/*) team="$r/.github/agents" ;;   # never .github/* (workflows stay unprotected)
@@ -248,6 +254,11 @@ control_plane_binds() {
     for t in "${TEAM_DIRS_REL[@]}"; do   # the marker itself: deleting it must not disable the check
       cp_present "$r/$t/$TEAM_MARKER_REL" || continue
       p="$(cp_real "$r/$t/$TEAM_MARKER_REL")" || exit 2
+      prot+=( "$p" )
+    done
+    for rel in "${CONTROL_PLANE_DIRS_REL[@]}"; do   # protect-if-present, whole dir
+      cp_present "$r/$rel" || continue
+      p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )
     done
     for rel in "${CONTROL_PLANE_REL[@]}"; do
