@@ -753,6 +753,28 @@ Read-only: report the validity (signature scheme, signature, expiry, use-limit, 
 
 Mint an **HMAC-signed, non-widening** cross-workspace capability grant (P2) from a JSON spec (`issuer_team`, `holder_team`, `target_path`, `permitted_ops`, `expires_at`, `max_uses`, `approver`, `ticket_id`, `reason_code`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD). Requires `AGENTTEAMS_GRANT_SIGNING_KEY` and an approver on the holder team dir's roster. A spec whose `permitted_ops` include `write` is **refused**: the shared HMAC key is inherited by Claude-sandboxed agents, so a grant that widens the sandbox `allowWrite` must be Ed25519-signed with `--sign-grant`.
 
+### `--confirm-review-sha256 HEX`
+
+Used with `--sign-decision` and `--sign-grant` when there is no terminal to confirm on.
+
+Both minters print the payload and its review digest before reading the key. The digest covers the
+kind, the spec, the team dir, the `key_id` and the ledger root. On a terminal they then ask
+`Sign this payload? [y/N]`. Without a terminal they refuse unless this flag equals the digest
+printed for the payload you reviewed. `--yes` never applies to signing.
+
+A script can compute the digest, so this binds the reviewed content, not the reviewer. Never run an
+agent-written wrapper that passes it.
+
+### `--allow-checkout-signing`
+
+By default the minters refuse when the running agentteams package, `sys.prefix` or `sys.executable`
+lies inside the current directory, a git work tree, or a sandbox `allowWrite` root of the project.
+That is code an agent may be able to edit.
+
+This flag signs anyway. It warns on every use, and for decisions it records
+`signed-from-checkout (--allow-checkout-signing)` in the signed `conditions_verified`. Prefer signing
+from a trusted install (see `SECURITY.md`, "Signing from a trusted install").
+
 ### `--sign-grant SPEC.json`
 
 **Operator-only.** Mint an **Ed25519-signed** cross-workspace capability grant from a JSON spec (the `--issue-grant` fields plus `key_id`, and optionally `issuer_root`) and append it to the **holder** workspace's ledger under `--output`/`--project` (else CWD). It is the only minter of a grant that can widen the holder's sandbox `allowWrite`, which happens the next time the holder team is generated/updated (a grant is inert until then). The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` (the same key file and warnings as `--sign-decision`; keep it in `~/.config/agentteams/keys/`). The signed payload begins with the purpose tag `agentteams-grant-v1`, so a grant signature can never be replayed as a decision signature, or the reverse. Before appending, the row is verified against the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes (for `--framework claude --project P`, `P/.claude/agents`): its `references/authorized-verify-keys/<key_id>.pub.pem` must hold the matching public key, and its `references/security-approvers.txt` must name the approver. In a multi-framework project, the team whose `--output` the update targets is the one that verifies. There is no project-root roster fallback.

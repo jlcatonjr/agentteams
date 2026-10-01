@@ -12,6 +12,8 @@ import pytest
 import build_team
 from agentteams import emit
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 REPO_ROOT = Path(__file__).parent.parent
 SCHEMA_PATH = REPO_ROOT / "agentteams" / "schemas" / "backup-manifest.schema.json"
 EXAMPLES_DIR = REPO_ROOT / "examples"

@@ -128,7 +128,10 @@ def _run_sign_grant(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 on any error (fail-closed).
     """
-    return operator_signing.sign_grant(args.sign_grant, lambda: _grant_dirs(args))
+    return operator_signing.sign_grant(
+        args.sign_grant, lambda: _grant_dirs(args),
+        confirm_sha256=getattr(args, "confirm_review_sha256", None),
+        allow_checkout=bool(getattr(args, "allow_checkout_signing", False)))
 
 
 __all__ = ["_grant_dirs", "_run_issue_grant", "_run_sign_grant", "_run_verify_grants"]

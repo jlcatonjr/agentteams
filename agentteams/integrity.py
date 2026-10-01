@@ -124,6 +124,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/operator_signing.py",
     # Runs during the signed append (writes the ledger) inside operator_signing's closure.
     "agentteams/atomicio.py",
+    # #10 (2026-09-30): the install-location check the minters run before the key is read; in the
+    # signing closure, so drift in it refuses signing.
+    "agentteams/cli/signer_location.py",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use

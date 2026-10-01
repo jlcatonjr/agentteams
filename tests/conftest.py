@@ -185,3 +185,14 @@ def pytest_sessionfinish(session, exitstatus):  # noqa: D103
         flush=True,
     )
     session.exitstatus = 1
+
+
+@pytest.fixture
+def signing_preapproved(monkeypatch):
+    """Pre-approve the #9 confirm gate and the #10 install-location refusal for tests that exercise
+    the signing pipeline itself. Opt-in per module; ``tests/test_sign_confirm.py`` tests the real
+    gate and location check without this fixture."""
+    from agentteams.cli import operator_signing, signer_location
+
+    monkeypatch.setattr(operator_signing, "_confirm", lambda digest, confirm: True)
+    monkeypatch.setattr(signer_location, "verify_install_location", lambda *a, **k: [])

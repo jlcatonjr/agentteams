@@ -100,24 +100,40 @@ protects, so deleting it is itself recorded by the manifest: a speed bump with a
 boundary. An agent that edits the closure AND regenerates the manifest passes it, which is what
 the `HEAD`/tag warnings are for.
 
-### `sign_decision(output_dir, spec_path)`
+### `sign_decision(output_dir, spec_path, *, confirm_sha256=None, allow_checkout=False)`
 
 > *Source: `agentteams/cli/operator_signing.py`*
 
-Mint and append one Ed25519-signed constraint-relaxing decision row under the team dir
-`output_dir`. Order: team-dir refusal, spec load and shape check, key read, eligibility and
-effect classification, the derived-effect display, the PR-E grant-purpose refusal, sign,
-verify-before-append against the team's verify-key store, append. Returns 0, or 1 on any error
-(fail-closed).
+Mints and appends one Ed25519-signed constraint-relaxing decision row under the team dir
+`output_dir`. Returns 0, or 1 on any error (fail-closed). The steps run in this order (#9/#10):
 
-### `sign_grant(spec_path, resolve_dirs)`
+1. team-dir refusal;
+2. spec load and shape check, then the display-spoofing refusal;
+3. eligibility and effect classification, then the PR-E grant-purpose refusal;
+4. preflight: env, integrity, install location, key-file existence. With `allow_checkout`, an overridden
+   location refusal is recorded in the signed `conditions_verified`;
+5. the display, with the review digest;
+6. the confirm gate: a y/N prompt on a terminal, or an exact `confirm_sha256` match;
+7. the key read, then the signature over the same in-memory row;
+8. verify-before-append, then the append.
+
+### `sign_grant(spec_path, resolve_dirs, *, confirm_sha256=None, allow_checkout=False)`
 
 > *Source: `agentteams/cli/operator_signing.py`*
 
-Mint and append one Ed25519-signed capability grant. `resolve_dirs` is a zero-argument callable
-returning `(ledger_root, team_dir)`. It is injected rather than resolved by the caller so that its
-`ValueError` (a non-rendering `--framework`) still fires after the key read, keeping the error
-precedence spec → `key_id` → env → key read → directories. Returns 0, or 1 on any error.
+Mints and appends one Ed25519-signed capability grant. Returns 0, or 1 on any error. `resolve_dirs` is a
+zero-argument callable returning `(ledger_root, team_dir)`; it runs unpinned adapter code, so it is always
+called before the key read. The error precedence is (amended by #9):
+
+1. spec;
+2. `key_id`;
+3. display-spoofing refusal;
+4. preflight;
+5. directories and `max_uses`;
+6. an install-location re-check against the holder project;
+7. the display (every field, grant id and timestamp minted once, review digest);
+8. confirm;
+9. the key read, then the signature.
 
 ### `sign_decision_team_refusal(output_dir)`
 

@@ -1089,4 +1089,7 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 on any error (fail-closed).
     """
-    return operator_signing.sign_decision(_resolve_output_dir(args), args.sign_decision)
+    return operator_signing.sign_decision(
+        _resolve_output_dir(args), args.sign_decision,
+        confirm_sha256=getattr(args, "confirm_review_sha256", None),
+        allow_checkout=bool(getattr(args, "allow_checkout_signing", False)))

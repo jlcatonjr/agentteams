@@ -126,6 +126,39 @@ specifically:
 - `--migrate` no longer hard-errors on a stale snapshot tag; with `--yes`
   it moves the tag to current HEAD.
 
+## Signing from a trusted install
+
+The operator's Ed25519 private key is read in the process that runs `--sign-decision` and `--sign-grant`.
+Code an agent can edit must therefore never run that process. The minters check this and refuse by
+default (#10); every in-process check is a speed bump only, because tampered code can skip it.
+
+1. Clone a release tag into a directory outside every agent write root.
+2. Verify the tag with repository config neutralised:
+   ```
+   git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
+       -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
+       -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+       tag -v <tag>
+   ```
+   Keep `allowed_signers` outside every write root. Release tags are signed from rc8 onward; until then,
+   pin a tag you have reviewed.
+3. Install from that clone with `pipx install "./<clone>[signing]"`, with `PIPX_HOME` outside the project.
+   Do not use a `git+https@tag` URL: it fetches the code again.
+4. Run the absolute console-script path. Never run `python -m agentteams` from a project root, because it
+   imports the project's checkout.
+
+Run the signer from a directory outside the install. With the current directory at `$HOME`, a pipx
+install under `~/.local` counts as "inside the current directory" and is refused. `--allow-checkout-signing`
+is recorded in signed **decisions** only. Grant rows have no free-text signed field, so a grant signed with it
+carries no marker; a signed marker is planned for the next grant schema version.
+
+`agentteams --sign-*` also prints install-location warnings:
+- the package dir is owned by someone other than you or root, or is group- or world-writable;
+- the dist-info `RECORD` hashes differ (`RECORD` lives beside the files it hashes, so this is a speed bump
+  too);
+- a `.pth` file runs `import` lines;
+- the current directory is on `sys.path`.
+
 ## Advisories
 
 ### 2026-09-30 — Brief write roots could widen the next sandbox or run shell in the operator's shell

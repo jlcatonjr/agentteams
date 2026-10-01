@@ -23,6 +23,8 @@ from agentteams.frameworks import _sandbox_emit as se
 from agentteams.frameworks._goose_sandbox_emit import _build_seatbelt_profile
 from agentteams.frameworks.claude import ClaudeAdapter, _read_template_asset
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 REPO = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO / "agentteams" / "templates" / "universal" / "sandbox" / "confine-run.sh"
 PROVISION = REPO / "references" / "authorized-verify-keys" / "provision-operator-signing-key.sh"

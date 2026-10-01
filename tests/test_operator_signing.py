@@ -34,6 +34,8 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey 
 from agentteams.cli import grants  # noqa: E402
 from agentteams.cli.app import main  # noqa: E402
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 _KEY_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"
 _KEY_ID = "op-1"
 _FAR = "2099-01-01T00:00:00Z"
@@ -230,6 +232,8 @@ _HOME_RE = re.escape(os.path.expanduser("~"))
 def _norm(text: str, tmp: Path) -> str:
     text = text.replace(str(tmp.resolve()), "<TMP>").replace(str(tmp), "<TMP>")
     text = re.sub(r"grant-[0-9a-f]{16}", "grant-<ID>", text)
+    text = re.sub(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?\+00:00", "<TS>", text)
+    text = re.sub(r"\b[0-9a-f]{64}\b", "<DIGEST>", text)
     return re.sub(_HOME_RE, "<HOME>", text)
 
 
@@ -285,97 +289,56 @@ _PRESIGN = (
     "Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git "
     "work tree or under the current directory: code an agent may be able to edit.\n"
     "Warning: the integrity check catches in-place edits to the signing code, not unpinned code "
-    "running in this same process (the CLI dispatch chain, .pth files), and the pre-sign display "
-    "is a record, not a gate. To rule that out, sign from a pinned install outside every agent "
+    "running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds "
+    "the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent "
     "write root (a release-tag pin of the git source, e.g. pipx install \"agentteams[signing] @ "
     "git+https://github.com/jlcatonjr/agentteams.git@v<tag>\") and run --verify-integrity "
     "first.\n"
 )
 
-EXPECTED: dict[str, tuple[int, str, str]] = {
-    "decision-success": (
-        0,
-        _DISPLAY + "\nSigned decision appended to <TMP>/team/references/security-decisions.log.csv\n",
-        _PRESIGN + _KEY_WARN,
-    ),
-    "decision-env-unset": (1, "", _NOT_SET),
-    "decision-unreadable-key": (
-        1, "",
-        _PRESIGN + "Error: cannot read operator private key file: [Errno 2] No such file or "
-        "directory: "
-        "'<TMP>/absent.key'\n",
-    ),
-    "decision-not-a-team-dir": (
-        1, "",
-        "Error: <TMP>/proj is not an agentteams team dir (no references/agent-privilege.json or "
-        "references/build-log.json). The gate reads the decisions log and the verify-key store "
-        "relative to the team dir; pass --output <project>/.claude/agents (or the team's agents "
-        "dir). Refusing to sign (fail-closed).\n",
-    ),
-    "decision-malformed-spec": (
-        1, "",
-        "Error: cannot read --sign-decision spec: Expecting property name enclosed in double "
-        "quotes: line 1 column 2 (char 1)\n",
-    ),
-    "decision-no-action-reviewed": (
-        1, "", "Error: spec must be a JSON object with a non-empty action_reviewed\n",
-    ),
-    "decision-non-eligible": (
-        1, "",
-        _PRESIGN + _KEY_WARN + "Error: this decision is categorically NON-ELIGIBLE: it authorizes a write to governance/trust root "
-        "'references/authorized-verify-keys/x.pub.pem'.\n",
-    ),
-    "decision-classifier-error": (
-        1, "", _PRESIGN + _KEY_WARN + "Error: inconsistent effect declaration: row declares "
-        "effect_class='non-relaxing' but its derived effect is 'relaxing': the relaxing class is "
-        "derived from effect, never self-declared, and a disagreement is refused (fail-closed). "
-        "Correct the declaration or the effect fields.\n",
-    ),
-    "decision-grant-purpose": (
-        1, _DISPLAY,
-        _PRESIGN + _KEY_WARN + "Error: refusing to sign — this decision's payload begins with the capability-"
-        "grant purpose tag (use --sign-grant for grants).\n",
-    ),
-    "decision-verify-mismatch": (
-        1, _DISPLAY,
-        _PRESIGN + _KEY_WARN + "Error: the signature does not verify against "
-        "references/authorized-verify-keys/op-1.pub.pem in <TMP>/team (a private/public key "
-        "mismatch, or the public key was provisioned into another team dir). Nothing appended.\n",
-    ),
-    "grant-success": (0, _ISSUED.format(scheme="ed25519", ops="write"), _PRESIGN + _KEY_WARN),
-    "grant-env-unset": (1, "", _NOT_SET),
-    "grant-missing-key-id": (
-        1, "", "Error: --sign-grant spec must name a key_id (the verify key's file stem)\n",
-    ),
-    "grant-unreadable-key": (
-        1, "",
-        _PRESIGN + "Error: cannot read operator private key file: [Errno 2] No such file or "
-        "directory: "
-        "'<TMP>/absent.key'\n",
-    ),
-    "grant-bad-framework": (
-        1, "", _PRESIGN + _KEY_WARN + "Error: --framework 'canonical' has no team directory for grants\n",
-    ),
-    "grant-missing-roster": (1, "", _PRESIGN + _KEY_WARN + "Error: cross-workspace grant authorization requires an explicit approver "
-        "roster; references/security-approvers.txt is absent or names no approver (refusing the "
-        "built-in security/@security self-clear fallback — add at least one approver to the "
-        "roster before issuing or honouring a grant)\n"),
-    "grant-malformed-spec": (
-        1, "",
-        "Error: grant spec missing required field(s): holder_team, target_path, permitted_ops, "
-        "expires_at, max_uses, approver, ticket_id, reason_code\n",
-    ),
-    "grant-bad-framework-env-unset": (1, "", _NOT_SET),
-    "grant-bad-framework-bad-max-uses": (
-        1, "", _PRESIGN + _KEY_WARN + "Error: --framework 'canonical' has no team directory for grants\n",
-    ),
-    "issue-success": (0, _ISSUED.format(scheme="hmac", ops="read"), ""),
-    "issue-write-refusal": (1, "", "Error: grant 'grant-<ID>' permits 'write' but is hmac-signed: a grant that "
-        "widens the sandbox allowWrite must be Ed25519-signed by the operator (the shared "
-        "AGENTTEAMS_GRANT_SIGNING_KEY is inherited by sandboxed agents). REFUSED. Migrate: "
-        "re-issue it with `agentteams --sign-grant SPEC.json --framework <fw> --output <holder "
-        "team dir>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE; public key at <team "
-        "dir>/references/authorized-verify-keys/<key_id>.pub.pem).\n"),
+EXPECTED: dict[str, tuple[int, str, str]] = {  # regenerated for #9/#10 (2026-09-30)
+    'decision-classifier-error': (1, '',
+        "Error: inconsistent effect declaration: row declares effect_class='non-relaxing' but its derived effect is 'relaxing': the relaxing class is derived from effect, never self-declared, and a disagreement is refused (fail-closed). Correct the declaration or the effect fields.\n"),
+    'decision-env-unset': (1, '',
+        'Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
+    'decision-grant-purpose': (1, '',
+        "Error: refusing to sign — this decision's payload begins with the capability-grant purpose tag (use --sign-grant for grants).\n"),
+    'decision-malformed-spec': (1, '',
+        'Error: cannot read --sign-decision spec: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)\n'),
+    'decision-no-action-reviewed': (1, '',
+        'Error: spec must be a JSON object with a non-empty action_reviewed\n'),
+    'decision-non-eligible': (1, '',
+        "Error: this decision is categorically NON-ELIGIBLE: it authorizes a write to governance/trust root 'references/authorized-verify-keys/x.pub.pem'.\n"),
+    'decision-not-a-team-dir': (1, '',
+        "Error: <TMP>/proj is not an agentteams team dir (no references/agent-privilege.json or references/build-log.json). The gate reads the decisions log and the verify-key store relative to the team dir; pass --output <project>/.claude/agents (or the team's agents dir). Refusing to sign (fail-closed).\n"),
+    'decision-success': (0, 'About to sign a constraint-relaxing security decision:\n  action_reviewed : grant-cross-repo-write\n  verdict         : PASS\n  derived class   : relaxing\n  needs operator  : True\n  grants          : [\'write:cross-repo\']\n  write targets   : []\n  relaxes         : []\n  destructive/xrepo/bulk: False/False/False\n  derives_from    : approved-cleanup\n  key_id          : op-1\n  team dir        : <TMP>/team\n  signature values: ["2026-09-30", "grant-cross-repo-write", "PASS", "", "security", "", "derives_from=approved-cleanup", "sig_scheme=ed25519", "key_id=op-1"]\n\nSigned decision appended to <TMP>/team/references/security-decisions.log.csv\n',
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\n'),
+    'decision-unreadable-key': (1, '',
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nError: cannot read operator private key file: \'<TMP>/absent.key\' does not exist or is not a file. Refusing to sign (fail-closed).\n'),
+    'decision-verify-mismatch': (1, 'About to sign a constraint-relaxing security decision:\n  action_reviewed : grant-cross-repo-write\n  verdict         : PASS\n  derived class   : relaxing\n  needs operator  : True\n  grants          : [\'write:cross-repo\']\n  write targets   : []\n  relaxes         : []\n  destructive/xrepo/bulk: False/False/False\n  derives_from    : approved-cleanup\n  key_id          : op-1\n  team dir        : <TMP>/team\n  signature values: ["2026-09-30", "grant-cross-repo-write", "PASS", "", "security", "", "derives_from=approved-cleanup", "sig_scheme=ed25519", "key_id=op-1"]\n',
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\nError: the signature does not verify against references/authorized-verify-keys/op-1.pub.pem in <TMP>/team (a private/public key mismatch, or the public key was provisioned into another team dir). Nothing appended.\n'),
+    'grant-bad-framework': (1, '',
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\nError: --framework \'canonical\' has no team directory for grants\n'),
+    'grant-bad-framework-bad-max-uses': (1, '',
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\nError: --framework \'canonical\' has no team directory for grants\n'),
+    'grant-bad-framework-env-unset': (1, '',
+        'Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
+    'grant-env-unset': (1, '',
+        'Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator private key file (never an agent env). Refusing to sign (fail-closed).\n'),
+    'grant-malformed-spec': (1, '',
+        'Error: grant spec missing required field(s): holder_team, target_path, permitted_ops, expires_at, max_uses, approver, ticket_id, reason_code\n'),
+    'grant-missing-key-id': (1, '',
+        "Error: --sign-grant spec must name a key_id (the verify key's file stem)\n"),
+    'grant-missing-roster': (1, "About to sign a capability grant (widens the holder's sandbox allowWrite):\n  issuer_team     : 'team-b'\n  holder_team     : 'team-a'\n  target_path     : '/abs/b/shared'\n  permitted_ops   : 'write'\n  expires_at      : '2099-01-01T00:00:00Z'\n  max_uses        : 1\n  approver        : 'alice'\n  ticket_id       : 'T-1'\n  reason_code     : 'collab'\n  issuer_root     : ''\n  grant_id        : 'grant-<ID>'\n  timestamp       : '<TS>'\n  key_id          : 'op-1'\n  ledger root     : <TMP>/team\n  team dir        : <TMP>/team\n",
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\nError: cross-workspace grant authorization requires an explicit approver roster; references/security-approvers.txt is absent or names no approver (refusing the built-in security/@security self-clear fallback — add at least one approver to the roster before issuing or honouring a grant)\n'),
+    'grant-success': (0, "About to sign a capability grant (widens the holder's sandbox allowWrite):\n  issuer_team     : 'team-b'\n  holder_team     : 'team-a'\n  target_path     : '/abs/b/shared'\n  permitted_ops   : 'write'\n  expires_at      : '2099-01-01T00:00:00Z'\n  max_uses        : 1\n  approver        : 'alice'\n  ticket_id       : 'T-1'\n  reason_code     : 'collab'\n  issuer_root     : ''\n  grant_id        : 'grant-<ID>'\n  timestamp       : '<TS>'\n  key_id          : 'op-1'\n  ledger root     : <TMP>/team\n  team dir        : <TMP>/team\nIssued capability grant grant-<ID> (ed25519): team-b → team-a may write /abs/b/shared (expires 2099-01-01T00:00:00Z, max_uses 1)\n  appended to <TMP>/team/references/capability-grants.log.csv\n  verified against team dir <TMP>/team\n",
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nWarning: <TMP>/op.key is outside ~/.config/agentteams/keys: no emitted sandbox read-denies it, so a sandboxed agent may be able to read it.\n'),
+    'grant-unreadable-key': (1, '',
+        'Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git work tree or under the current directory: code an agent may be able to edit.\nWarning: the integrity check catches in-place edits to the signing code, not unpinned code running in this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, not the code showing it. To rule that out, sign from a pinned install outside every agent write root (a release-tag pin of the git source, e.g. pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first.\nError: cannot read operator private key file: \'<TMP>/absent.key\' does not exist or is not a file. Refusing to sign (fail-closed).\n'),
+    'issue-success': (0, 'Issued capability grant grant-<ID> (hmac): team-b → team-a may read /abs/b/shared (expires 2099-01-01T00:00:00Z, max_uses 1)\n  appended to <TMP>/team/references/capability-grants.log.csv\n  verified against team dir <TMP>/team\n',
+        ''),
+    'issue-write-refusal': (1, '',
+        "Error: grant 'grant-<ID>' permits 'write' but is hmac-signed: a grant that widens the sandbox allowWrite must be Ed25519-signed by the operator (the shared AGENTTEAMS_GRANT_SIGNING_KEY is inherited by sandboxed agents). REFUSED. Migrate: re-issue it with `agentteams --sign-grant SPEC.json --framework <fw> --output <holder team dir>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE; public key at <team dir>/references/authorized-verify-keys/<key_id>.pub.pem).\n"),
 }
 
 
@@ -577,8 +540,9 @@ def test_sign_grant_resolves_dirs_before_the_key_is_read(tmp_path, monkeypatch):
     from agentteams.cli import operator_signing
 
     order: list[str] = []
+    monkeypatch.setattr(operator_signing, "_signing_preflight", lambda *a: ("keyfile", False))
     monkeypatch.setattr(operator_signing, "_read_operator_private_key",
-                        lambda: order.append("key") or None)
+                        lambda keyfile: order.append("key") or None)
     spec = tmp_path / "spec.json"
     spec.write_text(json.dumps({**_grant(), "key_id": "op"}), encoding="utf-8")
 
@@ -599,3 +563,4 @@ def test_signing_closure_covers_every_module_run_with_the_key(tmp_path):
                 "agentteams/atomicio.py"):
         assert rel in operator_signing.SIGNING_CLOSURE
         assert rel in integrity.ENFORCEMENT_MODULES
+
