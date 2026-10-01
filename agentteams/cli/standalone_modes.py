@@ -160,6 +160,10 @@ def run_standalone_modes(
             from agentteams.frameworks.claude import verify_sandbox_wiring
 
             ok, messages = verify_sandbox_wiring(output_dir)
+            # #6: advisory version tripwire (never changes ok / the exit status).
+            from agentteams.cli.itest_tripwire import tripwire_notes
+
+            messages = list(messages) + tripwire_notes()
         else:
             # codex/copilot have no OS sandbox agentteams configures — report honestly
             # (exit-neutral) rather than running the Claude checker against a foreign tree.

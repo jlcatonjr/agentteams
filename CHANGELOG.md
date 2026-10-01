@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### verification (sandbox protections re-measured, and re-checked after Claude Code upgrades)
+
+- **The built-in Write tool is now measured against `permissions.deny`** under both `acceptEdits` and `bypassPermissions`
+  (product itest, Claude Code 2.1.251, Linux). Each path gets a paired run: a baseline with no deny rule, and a
+  run with the emitted rules.
+  - **Outside `.claude`:** the rules for `references/security-approvers.txt` and
+    `.goose/confined-run.example.sh` hold in both modes. Product-verified.
+  - **Under `.claude`:** writes to `settings.hooks.example.json`, `hooks/**` and `settings.local.json` are blocked
+    by Claude Code's own protection under `acceptEdits`, even with no rule. The test skips those cases rather than
+    credit the rule. Under `bypassPermissions` the baseline write succeeds and the emitted rule blocks it, so the
+    rule is product-verified there.
+- **Version tripwire.** When the whole product itest module passes, it records this host's Claude Code
+  version in `$XDG_CACHE_HOME/agentteams/claude-sandbox-itest.json` (mode 0600; unauthenticated).
+  `--check-wiring` (claude) adds a NOTE when the installed `claude --version` has no recorded pass,
+  because the rename protection relies on measured, undocumented behaviour. The NOTE is advisory only:
+  the exit status ignores the record. Set `AGENTTEAMS_NO_ITEST_TRIPWIRE=1` to silence it.
+- **`scripts/schedule-sandbox-itest.sh`** is an operator script that installs a weekly systemd **user** timer to
+  re-run the itest. It is dry-run by default and also has `--remove`. It refuses root and sudo, puts no secrets in
+  the units, and is bounded by a timeout, `Persistent=false` and `--max-turns`.
+- **macOS:** `mac-escape-tests.sh` targeted a launcher that is never emitted (`confine-run.macos-ref.sh`), so the
+  gate could not run. It now targets `confine-run.sh`, and the integrity manifest is re-hashed for that file
+  only. New `tests/test_goose_seatbelt_mechanism.py` runs the emitted goose Seatbelt profile under the real
+  `sandbox-exec`. It is opt-in, and its workspace sits under `$HOME`, so the negative control can fail. The new
+  advisory CI job `macos-seatbelt` on `macos-latest` runs it together with the launcher gate. CI token
+  permissions are now `contents: read`.
+- **Fixed (found by the first macOS run).** The goose Seatbelt profile write-denied only the Claude gate hook inside
+  `.claude`. On macOS a goose agent could therefore flip the claude team's `enforce_decision_signing` switch, plant
+  a verify key, or rewrite the live `settings.json` `allowWrite` baseline. The profile now denies all of `.claude`,
+  which matches the Linux launcher since #86. `_goose_sandbox_emit.py` is re-hashed.
+
 ### security (brief write roots can no longer widen the sandbox silently)
 
 - **Breaking.** For confined and exclusive teams, generation refuses these sandbox write roots:

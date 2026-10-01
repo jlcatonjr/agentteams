@@ -3,7 +3,7 @@
 # mac-escape-tests.sh - macOS (Seatbelt/sandbox-exec) acceptance gates for the augmented launcher.
 #
 # Mirrors serve/deploy/layerc-escape-tests.sh, but invokes the macOS confinement WRAPPER
-# (confine-run.macos-ref.sh) DIRECTLY - the wrapper IS the boundary; there is nothing to run it
+# (confine-run.sh, its darwin branch) DIRECTLY - the wrapper IS the boundary; there is nothing to run it
 # "through". Each gate must fail closed before the macOS tier is trusted to confine.
 #
 # POSITIVE CONTROLS (adversarial H1): a deny gate on an offline / feature-less box would score a
@@ -21,7 +21,7 @@
 # ============================================================================================
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
-WRAP="$HERE/confine-run.macos-ref.sh"
+WRAP="$HERE/confine-run.sh"   # the emitted launcher (was the never-emitted confine-run.macos-ref.sh)
 pass=0; fail=0; na=0; untrusted=0; indet=0
 ok(){   echo "  PASS          $1"; pass=$((pass+1)); }
 no(){   echo "  FAIL          $1"; fail=$((fail+1)); }

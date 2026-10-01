@@ -267,6 +267,7 @@ def _build_seatbelt_profile(
         GRANT_ROSTER_PROJECT_REL,
         assert_roots_clear_of_signing_keys,
         control_plane_ancestors,
+        framework_config_dir,
         governed_roster_paths,
         protected_write_paths,
         signing_key_deny_read,
@@ -347,8 +348,13 @@ def _build_seatbelt_profile(
            for k in ("copilot", "codex")}
     sib["codex"].append(CODEX_CONFIG_REL)
     anc_paths = [*control_plane, *sib["codex"], *(sib["copilot"] if copilot_present else [])]
+    # 2026-09-30 (#87, found by the first macOS sandbox-exec run): the WHOLE `.claude` dir, as the
+    # Linux launcher has ro-bound it since #86. Before this only the Claude gate hook was denied, so
+    # a goose agent on macOS could flip the claude team's switch, plant a verify key or rewrite the
+    # live settings.json allowWrite baseline. A subpath deny covers the dir entry itself (rename).
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
-        *control_plane, *sib["copilot"], *sib["codex"], GRANT_ROSTER_PROJECT_REL)) if e]
+        *control_plane, framework_config_dir("claude"), *sib["copilot"], *sib["codex"],
+        GRANT_ROSTER_PROJECT_REL)) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",
         "(deny file-write*",
