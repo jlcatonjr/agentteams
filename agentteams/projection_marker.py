@@ -16,8 +16,10 @@ section B and its binding "Codex marker" conditions):
 * **Write order (security cond 12).** The launcher requires a team's switch, verify-key store and
   rosters once the marker exists, so they are written FIRST, each write-if-absent
   (``O_CREAT|O_EXCL|O_NOFOLLOW``): the switch (mirroring the source team's
-  ``enforce_decision_signing``; absent/unreadable source = ``false``, which reads exactly like an
-  absent switch), the store sentinel, then the roster stubs (``control_plane_io``). Every required
+  ``enforce_decision_signing``; an ABSENT source switch = ``false``, which reads exactly like an
+  absent switch; a present-but-unusable one refuses the marker; a ``signing-governed.marker`` in
+  the source or target team forces ``true``), the store sentinel, then the roster stubs
+  (``control_plane_io``). Every required
   entry is then re-checked to be a real file / directory, never a symlink. Any failure: NO marker.
 * **Real directories only.** The agents dir, its parent, ``references/`` and the store must not be
   symlinks; the marker is written by temp file + ``os.replace`` inside a checked ``references/``.
@@ -33,8 +35,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import sys
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -122,9 +124,66 @@ def _unsafe_dir(path: Path) -> str:
     return ""
 
 
-def _source_switch_value(source_dir: Path) -> bool:
-    data = _read_json(source_dir / _SWITCH_REL)
-    return bool(data.get("enforce_decision_signing")) if isinstance(data, dict) else False
+_GOVERNED_MARKER = "signing-governed.marker"
+
+#: Repo-relative source dirs a refresh hint may name (security C4); anything else is ``<source>``.
+_KNOWN_SOURCE_DIRS: frozenset[str] = frozenset({".github/agents", ".claude/agents", ".goose/recipes"})
+
+
+def safe_source_hint(value: Any) -> str:
+    """Return a marker's ``source_dir`` fit to paste into an ``--overwrite`` command.
+
+    The marker is agent-writable, so its ``source_dir`` is shown only when it is exactly one of
+    the known repo-relative team dirs (shell-quoted); anything else becomes ``<source>``.
+
+    Args:
+        value: The marker's ``source_dir`` value (any JSON value).
+
+    Returns:
+        The quoted known dir, or ``"<source>"``.
+    """
+    import shlex
+
+    return shlex.quote(value) if isinstance(value, str) and value in _KNOWN_SOURCE_DIRS else "<source>"
+
+
+def _read_switch(path: Path) -> bool | None:
+    """Return a switch's ``enforce_decision_signing``; ``None`` when absent.
+
+    Raises:
+        ValueError: The switch is present but a symlink, not a regular file, unreadable,
+            malformed, or its value is not a JSON boolean (security C2: never default to false).
+    """
+    if not os.path.lexists(path):
+        return None
+    if path.is_symlink() or not stat.S_ISREG(os.lstat(path).st_mode):
+        raise ValueError(f"switch {path} is a symlink or not a regular file")
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, encoding="utf-8") as fh:
+            data = json.loads(fh.read())
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"switch {path} is unreadable or malformed: {exc}") from exc
+    value = data.get("enforce_decision_signing") if isinstance(data, dict) else None
+    if not isinstance(value, bool):
+        raise ValueError(f"switch {path} has no boolean enforce_decision_signing")
+    return value
+
+
+def _switch_value(source_dir: Path, agents_dir: Path) -> bool:
+    """Decide the projected switch value (security C1/C2).
+
+    Raises:
+        ValueError: The source switch is unusable (C2), or a governed team's existing target
+            switch is not ``true`` (C1).
+    """
+    source = _read_switch(source_dir / _SWITCH_REL)
+    governed = any(os.path.lexists(d / _GOVERNED_MARKER) for d in (source_dir, agents_dir))
+    if not governed:
+        return bool(source)
+    if _read_switch(agents_dir / _SWITCH_REL) is False:  # never leave a governed team OFF
+        raise ValueError(f"{agents_dir / _SWITCH_REL} is false in a signing-governed team")
+    return True  # C1: a governed source or target always projects ON, never false
 
 
 def _write_control_plane(agents_dir: Path, framework: str, enforce: bool) -> list[Path]:
@@ -154,7 +213,8 @@ def _write_control_plane(agents_dir: Path, framework: str, enforce: bool) -> lis
     payload = json.dumps({
         "enforce_decision_signing": enforce,
         "note": "Projected by agentteams interop from the source team's switch (absent there = "
-                "false, the same as no switch). Read by the security gate.",
+                "false, the same as no switch; a signing-governed team is always true). Read by "
+                "the security gate.",
     }, indent=2) + "\n"
     if not os.path.lexists(switch) and control_plane_io._create_exclusive(switch, payload):
         created.append(switch)
@@ -184,20 +244,54 @@ def _control_plane_hole(agents_dir: Path) -> str:
     return ""
 
 
-def _write_marker_file(refs: Path, text: str) -> Path:
-    """Atomically write ``refs/build-log.json`` (temp file + ``os.replace``, never via a link)."""
-    target = refs / "build-log.json"
-    if target.is_symlink():
-        raise OSError(f"{target} is a symlink")
-    fd, tmp = tempfile.mkstemp(prefix=".build-log.", suffix=".tmp", dir=refs)
+def _origin_at(dir_fd: int) -> str | None:
+    """:func:`existing_marker_origin` for ``build-log.json`` relative to an opened ``references/``."""
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(text)
-        os.replace(tmp, target)
-    except OSError:
-        os.unlink(tmp)
-        raise
-    return target
+        st = os.stat("build-log.json", dir_fd=dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(st.st_mode):
+        return "native"
+    fd = os.open("build-log.json", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
+    with os.fdopen(fd, encoding="utf-8") as fh:
+        try:
+            data = json.loads(fh.read())
+        except ValueError:
+            return "native"
+    return INTEROP_ORIGIN if isinstance(data, dict) and data.get("origin") == INTEROP_ORIGIN else "native"
+
+
+def _write_marker_file(refs: Path, text: str) -> Path:
+    """Atomically write ``refs/build-log.json``, never through a link.
+
+    ``references/`` is lstat-checked and opened ``O_DIRECTORY|O_NOFOLLOW`` (security C3); the temp
+    file and the ``os.replace`` are relative to that descriptor, so a dir swapped for a link
+    afterwards is not followed. The existing marker's origin is re-checked immediately before the
+    replace (C5): a native build-log that appeared meanwhile is never overwritten.
+
+    Raises:
+        OSError: ``references/`` or the marker is a symlink / not a real file or directory, or a
+            native build-log appeared before the replace.
+    """
+    if not stat.S_ISDIR(os.lstat(refs).st_mode):
+        raise OSError(f"{refs} is not a real directory (symlink?)")
+    dir_fd = os.open(refs, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    tmp = f".build-log.{os.getpid()}.{os.urandom(4).hex()}.tmp"
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644, dir_fd=dir_fd)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            if _origin_at(dir_fd) == "native":
+                raise OSError(f"{refs / 'build-log.json'} became a native build-log (or a link); "
+                              "left untouched")
+            os.replace(tmp, "build-log.json", src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        except OSError:
+            os.unlink(tmp, dir_fd=dir_fd)
+            raise
+    finally:
+        os.close(dir_fd)
+    return refs / "build-log.json"
 
 
 def _marker_payload(
@@ -280,8 +374,12 @@ def write_projection_marker(
             result.error = f"refusing the projection marker: {reason or f'{directory} does not exist'}"
             return result
     try:
-        result.control_plane = _write_control_plane(
-            agents_dir, framework, _source_switch_value(source_dir))
+        enforce = _switch_value(source_dir, agents_dir)
+    except ValueError as exc:
+        result.error = f"refusing the projection marker: {exc}"
+        return result
+    try:
+        result.control_plane = _write_control_plane(agents_dir, framework, enforce)
     except OSError as exc:
         result.error = f"refusing the projection marker: control-plane write failed: {exc}"
         return result
@@ -371,5 +469,6 @@ __all__ = [
     "existing_marker_origin",
     "mark_interop_projection",
     "print_marker_outcome",
+    "safe_source_hint",
     "write_projection_marker",
 ]

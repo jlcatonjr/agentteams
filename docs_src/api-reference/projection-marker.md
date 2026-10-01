@@ -36,16 +36,20 @@ format, so `--verify-integrity` reads them), `template_hashes: {}`, `origin`, `s
 - **The control plane is written first (security condition 12).** Once the marker exists, the
   launcher requires the team's switch, verify-key store and rosters. They are created
   write-if-absent (`O_CREAT|O_EXCL|O_NOFOLLOW`), in this order:
-  1. the switch, which mirrors the source team's `enforce_decision_signing`. A missing or
-     unreadable source switch gives `false`, which reads like no switch;
+  1. the switch, which mirrors the source team's `enforce_decision_signing`. A missing source
+     switch gives `false`, which reads like no switch. A source switch that is a symlink, not a
+     regular file, unreadable, malformed or non-boolean refuses the marker, and no switch is
+     written. When the source or target team has `signing-governed.marker`, the switch is always
+     `true`, and an existing `false` target switch refuses the marker;
   2. the verify-key store sentinel;
   3. the roster stubs (`control_plane_io.write_control_plane_stubs`).
 
   Each required entry is then checked again: it must be a real file or directory, never a symlink.
 - **No marker is written on any failure.** If a write fails, a path is unsafe, the agents dir, its
   parent, `references/` or the store is a symlink, or the marker path is a symlink, `error` is set.
-- **The write is atomic.** The marker is a temp file moved into place with `os.replace` inside the
-  checked `references/`.
+- **The write is atomic.** `references/` is lstat-checked and opened `O_DIRECTORY|O_NOFOLLOW`.
+  The temp file and the `os.replace` are relative to that descriptor. The existing marker's origin
+  is checked again just before the replace, so a native build-log that appears meanwhile is kept.
 
 Callers:
 
@@ -67,6 +71,13 @@ Returns a `ProjectionMarkerResult` with these fields:
 
 Returns `None` when there is no build-log, `"interop"` for a projection marker, and `"native"`
 for anything else, including an unparseable file or a symlink.
+
+### `safe_source_hint(value) -> str`
+
+Returns a marker's `source_dir` in a form safe to paste into an `--overwrite` command. The value
+is used only when it is exactly `.github/agents`, `.claude/agents` or `.goose/recipes`, and is then
+shell-quoted. Anything else becomes `<source>`, because the marker is agent-writable. The fleet and
+bridge refresh hints use it.
 
 ### `codex_session_advisory(project_root) -> str`
 

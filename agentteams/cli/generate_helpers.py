@@ -857,6 +857,9 @@ def _handle_check(
             or sdreport.team_membership_changed
         )
     # An interop marker is "unverifiable", never clean (cond 13): --check fails on it.
+    if dreport.unverifiable is not None:
+        print(f"\n--check: unverifiable (interop) for {output_dir}: an interop-projected team has "
+              "no template baseline, so --check exits non-zero.")
     has_any = dreport.has_drift or structural_fail or dreport.unverifiable is not None
     # R5 (D5): fail --check when an enforcement module drifts from — or is absent from —
     # the integrity manifest. This is the CI/pre-commit fail-closed boundary for the

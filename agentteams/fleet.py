@@ -353,11 +353,13 @@ def _codex_kind(ws: Path) -> str:
 
 def _codex_interop_hint(ws: Path) -> str:
     """The refresh command for an interop-projected Codex team (its marker names the source)."""
-    source = "<source agents dir>"
+    from agentteams.projection_marker import safe_source_hint
+
+    source = "<source>"
     with contextlib.suppress(OSError, ValueError):
         data = json.loads((ws / _CODEX_MARKER).read_text(encoding="utf-8"))
-        if isinstance(data, dict) and isinstance(data.get("source_dir"), str) and data["source_dir"]:
-            source = data["source_dir"]
+        if isinstance(data, dict):  # agent-writable: only a known team dir, quoted (C4)
+            source = safe_source_hint(data.get("source_dir"))
     return (f"interop projection (origin: interop) — refresh by re-running it outside any agent "
             f"sandbox: agentteams --interop-from {source} --framework codex --output . --overwrite "
             "(fleet never runs --overwrite)")

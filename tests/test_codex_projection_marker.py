@@ -227,7 +227,8 @@ def test_check_fails_on_an_interop_marker(tmp_path, capsys):
     rc = _handle_check(argparse.Namespace(strict_prompt_roots=False), agents, {},
                        FRAMEWORKS["codex"](), "Demo")
     assert rc == 1
-    assert drift.INTEROP_UNVERIFIABLE in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert drift.INTEROP_UNVERIFIABLE in out and "unverifiable (interop)" in out
 
 
 def test_marker_never_vouches_for_an_overwrite(tmp_path):
@@ -311,3 +312,105 @@ def test_launcher_accepts_an_interop_codex_team_and_requires_its_store(tmp_path)
     r = _launcher_check(root)
     assert r.returncode == 2 and "missing although" in r.stderr, r.stderr
     assert "--interop-from <source> --framework codex --output . --overwrite" in r.stderr
+
+
+# --- @security conditions on d1830d0 (C1-C5) ----------------------------------------------------
+
+def _switch(agents: Path) -> object:
+    return json.loads((agents / "references/agent-privilege.json").read_text())["enforce_decision_signing"]
+
+
+@pytest.mark.parametrize("where", ["source", "target"])
+def test_c1_signing_governed_team_always_projects_true(tmp_path, where):
+    root, src, agents = _project(tmp_path, switch=False)
+    gov = src if where == "source" else agents
+    gov.mkdir(parents=True, exist_ok=True)
+    (gov / "signing-governed.marker").write_text("governed\n", encoding="utf-8")
+    assert run_interop(src, "codex", agents).success
+    assert _switch(agents) is True
+
+
+def test_c1_governed_target_with_a_false_switch_is_refused(tmp_path):
+    root, src, agents = _project(tmp_path)
+    (agents / "references").mkdir(parents=True)
+    (agents / "signing-governed.marker").write_text("governed\n", encoding="utf-8")
+    (agents / "references/agent-privilege.json").write_text(
+        json.dumps({"enforce_decision_signing": False}), encoding="utf-8")
+    result = run_interop(src, "codex", agents)
+    assert not result.success and any("signing-governed" in e for e in result.errors)
+    assert not (agents / "references/build-log.json").exists()
+
+
+@pytest.mark.parametrize("kind", ["malformed", "non-bool", "symlink", "directory"])
+def test_c2_unusable_source_switch_refuses_switch_and_marker(tmp_path, kind):
+    root, src, agents = _project(tmp_path)
+    sw = src / "references" / "agent-privilege.json"
+    sw.parent.mkdir(parents=True)
+    if kind == "malformed":
+        sw.write_text("{not json", encoding="utf-8")
+    elif kind == "non-bool":
+        sw.write_text(json.dumps({"enforce_decision_signing": "yes"}), encoding="utf-8")
+    elif kind == "symlink":
+        real = tmp_path / "real.json"
+        real.write_text(json.dumps({"enforce_decision_signing": True}), encoding="utf-8")
+        sw.symlink_to(real)
+    else:
+        sw.mkdir()
+    result = run_interop(src, "codex", agents)
+    assert not result.success and any("switch" in e for e in result.errors)
+    assert not (agents / "references/agent-privilege.json").exists()
+    assert not (agents / "references/build-log.json").exists()
+
+
+def test_c3_references_swapped_for_a_link_before_the_marker_is_refused(tmp_path, monkeypatch):
+    root, src, agents = _project(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    original = projection_marker._control_plane_hole
+
+    def swap(agents_dir):
+        hole = original(agents_dir)
+        refs = agents_dir / "references"
+        shutil.move(str(refs), str(tmp_path / "moved"))
+        refs.symlink_to(elsewhere, target_is_directory=True)
+        return hole
+
+    monkeypatch.setattr(projection_marker, "_control_plane_hole", swap)
+    result = run_interop(src, "codex", agents)
+    assert not result.success and any("not a real directory" in e for e in result.errors)
+    assert list(elsewhere.iterdir()) == []
+
+
+def test_c4_source_hint_only_names_a_known_dir_and_quotes_it(tmp_path):
+    from agentteams import bridge
+
+    assert projection_marker.safe_source_hint(".github/agents") == ".github/agents"
+    for evil in ("x; rm -rf ~", "/abs/.github/agents", "../.github/agents", 3, None,
+                 ".agentteams/canonical"):
+        assert projection_marker.safe_source_hint(evil) == "<source>"
+    root, src, agents = _project(tmp_path)
+    assert run_interop(src, "codex", agents).success
+    log = _marker(agents)
+    log["source_dir"] = "$(touch /tmp/pwned)"
+    (agents / "references/build-log.json").write_text(json.dumps(log), encoding="utf-8")
+    hint = fleet._codex_interop_hint(root)
+    notice = bridge.native_team_notice(output_root=root, target_framework="codex",
+                                       source_dir=root / ".agentteams" / "canonical")
+    for text in (hint, notice):
+        assert "pwned" not in text and "--interop-from <source>" in text
+
+
+def test_c5_a_native_build_log_appearing_before_the_replace_is_kept(tmp_path, monkeypatch):
+    root, src, agents = _project(tmp_path)
+    native = json.dumps({"framework": "codex", "template_hashes": {"t": "x"}})
+    original = projection_marker._origin_at
+
+    def race(dir_fd):
+        (agents / "references" / "build-log.json").write_text(native, encoding="utf-8")
+        return original(dir_fd)
+
+    monkeypatch.setattr(projection_marker, "_origin_at", race)
+    result = run_interop(src, "codex", agents)
+    assert not result.success and any("native build-log" in e for e in result.errors)
+    assert (agents / "references" / "build-log.json").read_text() == native
+    assert not [p for p in (agents / "references").iterdir() if p.name.endswith(".tmp")]

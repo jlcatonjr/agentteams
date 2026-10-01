@@ -144,7 +144,9 @@ def native_team_notice(*, output_root: Path, target_framework: str, source_dir: 
     built = f"agentteams {version}" if version else "an agentteams build that predates version stamping"
     agents_dir = rel_to_root(log_path.parent.parent, output_root)
     if log.get("origin") == "interop":  # projection_marker: refreshed by interop, not --update
-        source = log.get("source_dir") if isinstance(log.get("source_dir"), str) else "<source>"
+        from agentteams.projection_marker import safe_source_hint
+
+        source = safe_source_hint(log.get("source_dir"))  # agent-writable: known dirs only (C4)
         return (
             f"{agents_dir}/ holds an INTEROP-PROJECTED {target_framework} team ({built}; "
             f"{rel_to_root(log_path, output_root)}, origin: interop) inside this bridge target. No "
