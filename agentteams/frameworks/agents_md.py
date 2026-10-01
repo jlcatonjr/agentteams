@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from ._agents_md_rules import apply_constitutional_rules_baseline
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 # Matches a single-line YAML scalar: key: value (with optional surrounding quotes).
@@ -140,6 +141,8 @@ class AgentsMdAdapter(FrameworkAdapter):
         references/agentteams-remediation-log.csv for that follow-up.
         """
         body = self._strip_yaml_front_matter(content)
+        # #16: fenced Constitutional Rules baseline (template-sourced) + extensions heading.
+        body = apply_constitutional_rules_baseline(body, manifest)
         body = _neutralize_instructions(body)
         rendered = f"{_AGENTS_MD_NOTICE}\n\n{body}".strip() + "\n"
         style_rules = manifest.get("style_rules")

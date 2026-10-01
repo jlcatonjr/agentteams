@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (goose recipes and AGENTS.md rendering: follow-ups #15, #16)
+
+- **#15: goose legacy tool agents are swept.** The legacy tool-agent sweep now takes the
+  adapter's own agent extension (keyword-only `agent_ext`), so goose `.goose/recipes/tool-<slug>.yaml`
+  is caught (no current goose path emits one: tools are reference docs). `--overwrite` deletes only
+  regular files (never a symlink) whose resolved path stays in the agents dir, for an exact current
+  `tool_agents` slug, and only after the backup copy is verified byte-for-byte.
+- **#15: the orchestrator's `sub_recipes` is agentteams-managed.** New
+  `frameworks/goose_recipe_merge.py` reconciles the top-level `sub_recipes:` span from the fresh render on
+  `--update --merge` (after the fence merge), reports added/removed names, leaves an unrecognised shape
+  untouched with a notice, and rolls back an edit that would fail recipe validation. A column-0
+  `# agentteams-managed: sub_recipes …` comment marks the key. Fresh lists exclude `tool_agents` slugs,
+  reserved bridge slugs (`orchestrator`, `team-builder`, `bridge-orchestrator`) and roster members with no
+  recipe emitted or on disk (each warned as bespoke).
+- **#15: orphan advisory relabels instead of silencing.** Moved to `agentteams/orphan_advisory.py`
+  (shim kept in `build_team.py`). Bespoke roster members are labelled "bespoke roster member (no template):
+  keep", reserved bridge slugs "bridge-managed: keep"; a front-matter-only `bridge:`/`source_sha256:` claim
+  stays orphaned, labelled "claims bridge-managed (unverified)". Only the orphaned bucket is persisted.
+- **#16: AGENTS.md carries a fenced Constitutional Rules baseline** (goose, codex, agents-md;
+  `copilot-instructions.md` unchanged). The unfenced list becomes a `constitutional_rules_baseline` fence
+  ("## Constitutional Rules (baseline)", the template rules verbatim, sourced from the template only, and
+  governing on conflict) plus an empty unfenced "## Project Constitutional Rules (extensions)" heading.
+  Existing files gain the fence on `--update --merge`; while the old unfenced list remains, a
+  duplicate-list notice prints on every run.
+- **#16: `constitutional_rules_baseline` and `constitutional_core` are template-authoritative**
+  (`fences._TEMPLATE_AUTHORITATIVE_FENCES`), so `--shrink-policy=preserve` cannot pin an edited body.
+  `fences.py` is integrity-pinned: `references/enforcement-integrity.json` is re-pinned (that hash only).
+- **Notes.**
+  - `--dry-run` now previews the `sub_recipes` reconcile and the duplicate-rules notice.
+  - A column-0 comment inside the `sub_recipes` list makes the key "unrecognised", and it is left alone.
+  - The rollback net is a structural re-parse plus the shallow recipe checks. It is not a full YAML parse.
+  - The reconcile now **removes** a `team-builder` entry from `sub_recipes` on every `--update --merge`.
+    That slug is reserved for the bridge. No agentteams generator emitted it into goose `sub_recipes`, so
+    any such entry was added by hand. It is kept in the merge backup.
+  - **Residual:** the baseline fence is not rendered when the manifest has no
+    `auto_resolved_placeholders` (`--sync`/interop/convert stubs). There, an existing baseline fence is
+    kept verbatim until the next native `--update --merge`, and teams created by `convert` get it only
+    on that update.
+
 ### security (operator signing: confirm gate and trusted-install check)
 
 - **#9: the pre-sign display is now a gate.** `--sign-decision` and `--sign-grant` now run in this order:

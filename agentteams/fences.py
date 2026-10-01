@@ -266,6 +266,11 @@ _TEMPLATE_AUTHORITATIVE_FENCES: frozenset[str] = frozenset([
     "security_authority",
     "security_rules_invariant",
     "security_verdict_contract",
+    # Follow-up #16 (@security APPROVED 2026-09-30): the C-1..C-5 principles and the AGENTS.md
+    # Constitutional Rules baseline. Projects extend the rules outside these fences (the
+    # unfenced rules/extensions sections), so a shrink-preserve must not pin a tampered copy.
+    "constitutional_core",
+    "constitutional_rules_baseline",
 ])
 
 

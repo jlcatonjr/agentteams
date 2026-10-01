@@ -31,10 +31,12 @@ intentionally avoids a YAML dependency and parses front matter with regex).
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 from .base import FrameworkAdapter
+from ._agents_md_rules import apply_constitutional_rules_baseline
 from agentteams import capability_map as _capability_map
 
 # 2026-08-12 A.1: Strip a pre-existing "## Delegation & references (Goose)" block
@@ -260,19 +262,23 @@ class GooseAdapter(FrameworkAdapter):
         recipe_retry = manifest.get("recipe_retry") or None
 
         if agent_slug == "orchestrator":
+            # #15: never delegate to a tool (a doc, not an agent), a reserved bridge slug, or
+            # a roster member with no recipe emitted or on disk (a dangling path).
+            excluded = _sub_recipe_exclusions(manifest, team)
+            delegates = [h for h in targets if h["agent"] not in excluded]
             sub_recipes = [
                 {
                     "name": _tool_name(h["agent"]),
                     "path": f"./{h['agent']}.yaml",
                     "description": h.get("label") or h.get("prompt") or "",
                 }
-                for h in targets
+                for h in delegates
             ]
             # W4: supplement sub_recipes with team agents absent from handoffs:.
             # Agents in the team roster but missing from the handoffs: block are still
             # valid delegation targets; include them at the end with empty descriptions.
-            target_slugs = frozenset(h["agent"] for h in targets)
-            for slug in sorted(team - target_slugs - frozenset([agent_slug])):
+            target_slugs = frozenset(h["agent"] for h in delegates)
+            for slug in sorted(team - target_slugs - excluded - frozenset([agent_slug])):
                 sub_recipes.append({
                     "name": _tool_name(slug),
                     "path": f"./{slug}.yaml",
@@ -334,6 +340,8 @@ class GooseAdapter(FrameworkAdapter):
         propagate its project-specific authority_hierarchy into the AGENTS.md body.
         """
         body = self._strip_yaml_front_matter(content)
+        # #16: fenced Constitutional Rules baseline (template-sourced) + extensions heading.
+        body = apply_constitutional_rules_baseline(body, manifest)
         source_instructions = manifest.get("_source_instructions_content", "")
         if source_instructions:
             hierarchy = _extract_authority_hierarchy(source_instructions)
@@ -620,6 +628,59 @@ def _team_slugs(manifest: dict[str, Any]) -> frozenset[str]:
         if name.endswith(".agent.md"):
             slugs.add(name[: -len(".agent.md")])
     return frozenset(slugs)
+
+
+_TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
+
+
+def _recipe_backed_slugs(manifest: dict[str, Any]) -> frozenset[str] | None:
+    """Slugs with a recipe emitted this run or already on disk; None when unknowable.
+
+    An ``output_files`` entry naming a ``template`` counts only when that template (or its
+    ``fallback_template``) exists — ``render_all`` silently skips a missing one, which is how
+    a bespoke roster member ends up delegated to with no recipe behind the path. Entries with
+    no ``template`` key (hand-built manifests) are taken at their word. Returns None when the
+    manifest carries no ``output_files`` at all, so no filtering is attempted.
+    """
+    files = manifest.get("output_files") or []
+    if not files:
+        return None
+    slugs: set[str] = {"orchestrator"}
+    slugs.update(manifest.get("existing_agent_slugs", []))
+    slugs.update(manifest.get("adopted_agents", []))
+    for f in files:
+        name = Path(f.get("path", "")).name
+        if not name.endswith(".agent.md"):
+            continue
+        tpl, fb = f.get("template"), f.get("fallback_template")
+        if not tpl or (_TEMPLATES_DIR / tpl).is_file() or (fb and (_TEMPLATES_DIR / fb).is_file()):
+            slugs.add(name[: -len(".agent.md")])
+    return frozenset(slugs)
+
+
+def _sub_recipe_exclusions(manifest: dict[str, Any], team: frozenset[str]) -> frozenset[str]:
+    """Team slugs the orchestrator must NOT list in ``sub_recipes`` (follow-up #15).
+
+    Excludes ``tool_agents`` slugs (tools are docs, never agents), the reserved bridge slugs
+    (``bridge_subagents_goose._RESERVED_SLUGS``), and roster members with no recipe emitted or
+    on disk. Each skipped roster member is warned about on stderr, by name.
+    """
+    # Lazy: bridge_subagents_goose imports this module (its _emit_recipe re-export).
+    from agentteams.bridge_subagents_goose import _RESERVED_SLUGS
+
+    excluded = {str(t.get("slug", "")) for t in manifest.get("tool_agents", []) if t.get("slug")}
+    excluded.update(_RESERVED_SLUGS)
+    backed = _recipe_backed_slugs(manifest)
+    if backed is not None:
+        for slug in sorted(team - excluded - backed):
+            print(
+                f"  ⚠  goose: roster member '{slug}' skipped from orchestrator sub_recipes — "
+                "bespoke (no template; no recipe emitted). Add .goose/recipes/"
+                f"{slug}.yaml by hand to delegate to it.",
+                file=sys.stderr,
+            )
+            excluded.add(slug)
+    return frozenset(excluded)
 
 
 # ---------------------------------------------------------------------------

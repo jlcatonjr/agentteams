@@ -265,76 +265,26 @@ def _report_orphan_agent_files(
     *,
     agent_ext: str,
 ) -> list[str]:
-    """Detect + print agent files on disk that the current team no longer emits.
+    """Shim for :func:`agentteams.orphan_advisory.report_orphan_agent_files` (CH-07 carve).
 
-    ``--prune`` handles removals the build log recorded since the last build; these are older
-    orphans the log no longer records, so without this advisory they accumulate invisibly.
-
-    Carved out of ``agentteams/cli/generate.py`` on 2026-07-31 because that module had two lines
-    of runway under the CH-07 ceiling and an ordinary edit pushed it over — the exact failure
-    mode recorded for it in the remediation log. It belongs here regardless: it is the mirror of
-    :func:`_report_orphan_reference_docs`, and the two were describing the same blind spot from
-    two different files.
-
-    **The suffix is the framework's, not a constant.** This filtered on ``.agent.md`` in both
-    directions until 2026-08-03. Only copilot-vscode uses that extension; claude, copilot-cli,
-    agents_md and goose emit ``*.md``, so ``glob("*.agent.md")`` matched nothing and the
-    advisory reported zero orphans on those frameworks regardless of what was on disk —
-    measured on this repo's own ``.claude/agents``, which carried four. ``cli/generate.py``'s
-    ``--adopt-orphans`` path already read the extension from the adapter; only this advisory
-    hardcoded it.
-
-    ``agent_ext`` is keyword-only and required rather than defaulted, because a default is
-    what let the suffix go unexamined in the first place.
+    Supplies :func:`_persist_orphan_events` (which resolves its log under this file's
+    directory) so only the orphaned bucket is persisted. ``agent_ext`` stays keyword-only and
+    required: a default is what let the suffix go unexamined on every non-copilot framework.
 
     Args:
         final_rendered: ``(rel_path, content)`` pairs the current run will write.
         output_dir:     Root agents directory.
-        manifest:       Team manifest, read for ``adopted_agents`` and ``tool_agents``.
-        agent_ext:      The framework's agent-file extension, from
-                        ``adapter.get_file_extension("agent")``.
+        manifest:       Team manifest.
+        agent_ext:      The framework's agent-file extension (``adapter.get_file_extension("agent")``).
 
     Returns:
-        The sorted list of orphaned filenames (empty if none).
+        The sorted list of orphaned filenames (keep buckets excluded; empty if none).
     """
-    emitted_names = {Path(p).name for p, _ in final_rendered if p.endswith(agent_ext)}
-    # Adopted orphans (--adopt-orphans) are deliberately not emitted but are now roster
-    # members — don't re-report them as orphaned.
-    adopted_names = {f"{s}{agent_ext}" for s in manifest.get("adopted_agents", [])}
-    # Tool docs are never agents — exclude any tool-<slug> doc whose tool is in the
-    # current team from the orphan scan (handled by migration in the caller).
-    tool_doc_names = {f"{ta['slug']}{agent_ext}" for ta in manifest.get("tool_agents", [])}
+    from agentteams.orphan_advisory import report_orphan_agent_files
 
-    orphans = sorted(
-        f.name for f in output_dir.glob(f"*{agent_ext}")
-        # A build artifact, not an agent, and never emitted as one. The `.agent.md` suffix
-        # excluded it for free; a bare `.md` does not. Same carve-out, same reason, as
-        # `bridge_sources.py` applies when it walks a source directory.
-        if f.name != "SETUP-REQUIRED.md"
-        and f.name not in emitted_names
-        and f.name not in adopted_names
-        and f.name not in tool_doc_names
+    return report_orphan_agent_files(
+        final_rendered, output_dir, manifest, agent_ext=agent_ext, persist=_persist_orphan_events
     )
-    if orphans:
-        print(
-            f"\n  ⚠  {len(orphans)} agent file(s) on disk are not part "
-            "of the current team (orphaned by past team-config changes):",
-            file=sys.stderr,
-        )
-        for name in orphans:
-            print(f"       {name}", file=sys.stderr)
-        # The --prune caveat matters: --prune deletes only what the build-log diff records as
-        # removed (sdreport.removed_files). These orphans are found by globbing the output
-        # directory, which --prune never consults, so "Review and delete" without the caveat
-        # reads as though --prune would have handled them. Wording kept identical to
-        # _report_orphan_reference_docs below.
-        print(
-            "     These are not updated by --update, and --prune cannot remove "
-            "them (detection-only today). Review and delete manually if obsolete.",
-            file=sys.stderr,
-        )
-        _persist_orphan_events(orphans, manifest, output_dir)
-    return orphans
 
 
 def _report_orphan_reference_docs(

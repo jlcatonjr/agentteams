@@ -283,23 +283,58 @@ def _stale_tool_agent_paths(
     manifest: dict[str, Any],
     output_dir: Path,
     framework_id: str,
+    *,
+    agent_ext: str,
 ) -> list[Path]:
     """Return existing legacy tool-AGENT files for tools now emitted as docs.
 
-    Targets only the exact `tool-<slug>` agent file for each tool the current
-    team carries (copilot: `tool-<slug>.agent.md`; claude: `tool-<slug>.md` in
-    the agents dir) — never touches unrelated agents.
+    Targets only the exact ``tool-<slug><agent_ext>`` agent file for each tool the
+    current team carries (copilot: ``tool-<slug>.agent.md``; claude: ``tool-<slug>.md``;
+    goose: ``tool-<slug>.yaml``) — never touches unrelated agents. Only regular files
+    count (a symlink is never a candidate), and only when the resolved path
+    stays inside the resolved *output_dir*.
+
+    ``agent_ext`` is keyword-only and required: the suffix is the adapter's own
+    (``adapter.get_file_extension("agent")``). A hardcoded map without a goose entry
+    is how ``tool-<slug>.yaml`` evaded this sweep (follow-up #15).
+
+    Args:
+        manifest: Team manifest, read for ``tool_agents``.
+        output_dir: The framework's agents directory.
+        framework_id: The target framework id (kept for the caller's signature).
+        agent_ext: The framework's agent-file extension.
+
+    Returns:
+        Candidate paths, in ``tool_agents`` order.
     """
-    suffix = {"claude": ".md", "agents-md": ".md", "codex": ".toml"}.get(framework_id, ".agent.md")
+    del framework_id  # the suffix now comes from the adapter, not a per-framework map
+    root = output_dir.resolve()
     paths: list[Path] = []
     for ta in manifest.get("tool_agents", []):
         slug = ta.get("slug", "")
-        if not slug:
+        if not slug or "/" in slug or "\\" in slug or slug in {".", ".."}:
             continue
-        candidate = output_dir / f"{slug}{suffix}"
-        if candidate.is_file():
-            paths.append(candidate)
+        candidate = output_dir / f"{slug}{agent_ext}"
+        # lstat semantics: a symlink is never a candidate, whatever it points at.
+        if candidate.is_symlink() or not candidate.is_file():
+            continue
+        if not candidate.resolve().is_relative_to(root):
+            continue
+        paths.append(candidate)
     return paths
+
+
+def _backup_verified(backup_path: Path | None, output_dir: Path, p: Path) -> bool:
+    """True when *p*'s bytes are present, identical, in the backup taken for its removal."""
+    if backup_path is None:
+        return False
+    try:
+        rel = p.resolve().relative_to(output_dir.resolve())
+        return (backup_path / rel).read_bytes() == p.read_bytes()
+    except (OSError, ValueError):
+        return False
+
+
 def _remove_stale_tool_agents(
     manifest: dict[str, Any],
     output_dir: Path,
@@ -307,13 +342,26 @@ def _remove_stale_tool_agents(
     *,
     overwrite: bool,
     dry_run: bool,
+    agent_ext: str,
 ) -> tuple[list[str], list[str]]:
-    """Migrate legacy tool-*.agent.md files (tools are now docs/skills).
+    """Migrate legacy tool-agent files (tools are now docs/skills).
 
-    Overwrite mode backs the files up then deletes them; otherwise a notice is
-    returned and the file is left in place. Returns (removed_paths, notices).
+    Overwrite mode backs the files up, verifies each backup copy byte-for-byte, then
+    deletes only the verified ones; otherwise a notice is returned and the file is left
+    in place. A file whose backup cannot be verified is never deleted.
+
+    Args:
+        manifest: Team manifest, read for ``tool_agents``.
+        output_dir: The framework's agents directory.
+        framework_id: The target framework id (recorded on the backup).
+        overwrite: Delete (after a verified backup) rather than only report.
+        dry_run: Print the planned removals and change nothing.
+        agent_ext: The framework's agent-file extension (``adapter.get_file_extension("agent")``).
+
+    Returns:
+        ``(removed_paths, notices)``.
     """
-    stale = _stale_tool_agent_paths(manifest, output_dir, framework_id)
+    stale = _stale_tool_agent_paths(manifest, output_dir, framework_id, agent_ext=agent_ext)
     if not stale:
         return [], []
     if dry_run:
@@ -322,35 +370,39 @@ def _remove_stale_tool_agents(
         return [str(p) for p in stale], []
     if not overwrite:
         return [], [
-            f"legacy tool agent {p.name} remains on disk — {p.stem} is now a tool "
-            f"document; re-run with --overwrite to remove it."
+            f"legacy tool agent {p.name} remains on disk — {p.name[: -len(agent_ext)]} is now "
+            f"a tool document; re-run with --overwrite to remove it."
             for p in stale
         ]
     # Overwrite: back up before deleting so any hand edits are recoverable.
-    rels: list[str] = []
-    for p in stale:
-        try:
-            rels.append(str(p.relative_to(output_dir)))
-        except ValueError:
-            rels.append(p.name)
+    rels = [str(p.resolve().relative_to(output_dir.resolve())) for p in stale]
+    backup_path: Path | None = None
     try:
-        emit.backup_output_dir(
+        backup_path = emit.backup_output_dir(
             output_dir,
             files_to_backup=rels,
             reason="stale-tool-agent-removal",
             framework=framework_id,
-        )
-    except OSError as exc:  # CH-24: backup I/O is best-effort; never block the migration
+        ).backup_path
+    except OSError as exc:
         print(f"  !  stale tool-agent backup failed: {exc}", file=sys.stderr)
     removed: list[str] = []
     notices: list[str] = []
     for p in stale:
+        if not _backup_verified(backup_path, output_dir, p):
+            notices.append(
+                f"legacy tool agent {p} NOT removed: its backup could not be verified "
+                "(remove it by hand once a backup exists)."
+            )
+            continue
         try:
             p.unlink()
             removed.append(str(p))
         except OSError as exc:
             notices.append(f"could not remove legacy tool agent {p}: {exc}")
     return removed, notices
+
+
 def _guess_file_type(rel_path: str) -> str:
     lower = rel_path.lower()
     if "copilot-instructions" in lower or rel_path.endswith("/CLAUDE.md") or rel_path == "../CLAUDE.md":

@@ -152,3 +152,92 @@ def test_the_real_deployed_tree_has_the_orphans_that_prompted_this(tmp_path: Pat
         rendered, agents, _manifest(), agent_ext=".md"
     )
     assert set(orphans) == {"cohesion-repairer.md", "retrieval-integrator.md"}, orphans
+
+
+# --------------------------------------------------------------------------------------
+# Follow-up #15: goose `.yaml` legacy tool agents, and relabelled (not silenced) keep buckets
+# --------------------------------------------------------------------------------------
+
+
+def _goose_tool_manifest() -> dict:
+    return {"project_name": "Demo", "adopted_agents": [], "tool_agents": [{"slug": "tool-x"}]}
+
+
+def test_goose_legacy_tool_yaml_is_caught_by_the_sweep_dry_run(tmp_path: Path, capsys) -> None:
+    """The sweep used a hardcoded suffix map with no goose entry; `tool-x.yaml` evaded it."""
+    out = _plant(tmp_path, ["tool-x.yaml", "navigator.yaml"])
+    removed, notices = build_team._remove_stale_tool_agents(
+        _goose_tool_manifest(), out, "goose", overwrite=True, dry_run=True, agent_ext=".yaml"
+    )
+    assert removed == [str(out / "tool-x.yaml")] and notices == []
+    assert "[DRY RUN] REMOVE" in capsys.readouterr().out
+    assert (out / "tool-x.yaml").exists()
+
+
+def test_goose_legacy_tool_yaml_overwrite_backs_up_then_deletes(tmp_path: Path) -> None:
+    out = _plant(tmp_path, ["tool-x.yaml", "navigator.yaml"])
+    removed, notices = build_team._remove_stale_tool_agents(
+        _goose_tool_manifest(), out, "goose", overwrite=True, dry_run=False, agent_ext=".yaml"
+    )
+    assert removed == [str(out / "tool-x.yaml")] and notices == []
+    assert not (out / "tool-x.yaml").exists() and (out / "navigator.yaml").exists()
+    backups = list((out / ".agentteams-backups").rglob("tool-x.yaml"))
+    assert backups and backups[0].read_text(encoding="utf-8") == "# stub\n"
+
+
+def test_overwrite_never_deletes_through_a_symlink(tmp_path: Path) -> None:
+    """Regular files only: a planted `tool-x.yaml -> elsewhere` is not a candidate."""
+    out = _plant(tmp_path, ["navigator.yaml"])
+    target = tmp_path / "precious.txt"
+    target.write_text("keep", encoding="utf-8")
+    (out / "tool-x.yaml").symlink_to(target)
+    removed, _ = build_team._remove_stale_tool_agents(
+        _goose_tool_manifest(), out, "goose", overwrite=True, dry_run=False, agent_ext=".yaml"
+    )
+    assert removed == [] and target.read_text(encoding="utf-8") == "keep"
+    assert (out / "tool-x.yaml").is_symlink()
+
+
+def test_overwrite_refuses_when_the_backup_cannot_be_verified(tmp_path: Path, monkeypatch) -> None:
+    from agentteams import emit
+    from agentteams.backup import BackupResult
+
+    out = _plant(tmp_path, ["tool-x.yaml"])
+    monkeypatch.setattr(emit, "backup_output_dir", lambda *a, **k: BackupResult())
+    removed, notices = build_team._remove_stale_tool_agents(
+        _goose_tool_manifest(), out, "goose", overwrite=True, dry_run=False, agent_ext=".yaml"
+    )
+    assert removed == [] and (out / "tool-x.yaml").exists()
+    assert notices and "NOT removed" in notices[0]
+
+
+def test_sweep_agent_ext_is_required(tmp_path: Path) -> None:
+    out = _plant(tmp_path, ["tool-x.yaml"])
+    with pytest.raises(TypeError):
+        build_team._stale_tool_agent_paths(_goose_tool_manifest(), out, "goose")  # type: ignore[call-arg]
+
+
+def test_goose_buckets_bespoke_and_bridge_are_kept_not_orphaned(tmp_path: Path, capsys, monkeypatch) -> None:
+    persisted: list[list[str]] = []
+    monkeypatch.setattr(build_team, "_persist_orphan_events", lambda o, m, d: persisted.append(o))
+    out = _plant(
+        tmp_path,
+        ["navigator.yaml", "interpretation-advisor.yaml", "bridge-orchestrator.yaml", "stale.yaml"],
+    )
+    (out / "forged.yaml").write_text('bridge: true\nversion: "1.0.0"\n', encoding="utf-8")
+    manifest = {
+        "adopted_agents": [], "tool_agents": [],
+        "agent_slug_list": ["orchestrator", "navigator", "interpretation-advisor"],
+    }
+
+    orphans = build_team._report_orphan_agent_files(
+        [("navigator.yaml", "x")], out, manifest, agent_ext=".yaml"
+    )
+    err = capsys.readouterr().err
+
+    assert orphans == ["forged.yaml", "stale.yaml"]
+    assert persisted == [["forged.yaml", "stale.yaml"]], "only the orphaned bucket is persisted"
+    assert "interpretation-advisor.yaml  — bespoke roster member (no template): keep" in err
+    assert "bridge-orchestrator.yaml  — bridge-managed: keep" in err
+    # A front-matter claim is self-asserted: labelled, but never moved to a keep bucket.
+    assert "forged.yaml  — claims bridge-managed (unverified)" in err
