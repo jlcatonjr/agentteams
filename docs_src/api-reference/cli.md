@@ -79,14 +79,14 @@ env read and the appended row lives in `operator_signing.py`, which is listed in
 **What the pin does not cover.** It closes in-place edits and unnoticed drift. It does not defend
 against unpinned code in the same process: the dispatch chain (`app.py`, `parser.py`,
 `agentteams/__init__.py`, `.pth` files) can patch `Path.read_text` or this module's primitives,
-or call `signed_ledger` directly. The decision display is printed immediately before signing,
-with no confirmation, so it is a record, not a gate. Sign from a pinned install outside every
-agent write root, and run `--verify-integrity` first.
+or call `signed_ledger` directly. Since #9 the display is a gate: a y/N confirm on a terminal, or
+an exact `--confirm-review-sha256` match without one, before the key is read. Sign from a trusted
+install (`SECURITY.md`, "Signing from a trusted install"), and run `--verify-integrity` first.
 
 **The pre-sign self-check** (`presign_integrity_check`, run before the key is read). Both minters
 verify the signing closure (`SIGNING_CLOSURE`: this module, `signed_ledger.py`, `decision_log.py`,
 `grants.py`, `effect_classifier.py`, `governance_targets.py`, `management_directives.py`,
-`atomicio.py`, `_sandbox_emit.py`, `integrity.py`) against the integrity
+`atomicio.py`, `signer_location.py`, `_sandbox_emit.py`, `integrity.py`) against the integrity
 manifest. They **refuse** on drift in that closure, on a missing manifest the repository should
 carry, or on an unreadable manifest, and the key is never read. They **warn** (and still sign) on
 drift in other pinned modules, and on a closure that differs from git `HEAD` or from the nearest
@@ -94,8 +94,9 @@ local tag. A local tag is **unverified**: anyone who can write the repository ca
 an agent that can commit and tag silences both comparisons. Git runs with repo config neutralised
 and never through a content filter (`ls-tree` object ids against Python-computed blob ids, and
 `cat-file blob`, because `git diff`/`show` would run a planted `.gitattributes` clean filter as the
-operator), and when the package sits inside a git work tree or
-the current directory. There is no environment override. The check lives in the module it
+operator). Since #10 a package, prefix or interpreter inside the current directory, a git work
+tree or a sandbox `allowWrite` root is **refused** (`signer_location.py`) unless
+`--allow-checkout-signing`. There is no environment override. The check lives in the module it
 protects, so deleting it is itself recorded by the manifest: a speed bump with a trail, not a
 boundary. An agent that edits the closure AND regenerates the manifest passes it, which is what
 the `HEAD`/tag warnings are for.

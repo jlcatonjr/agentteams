@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (rc8 consistency)
+
+- Superseded statements in the rc.8 notes, `docs_src/api-reference/cli.md` (signing gate, `signer_location.py`
+  in the closure, checkout refusal) and `SECURITY.md` (affected versions, Seatbelt status verified on
+  `macos-latest`, Codex config key warning) are aligned with what shipped. The signing install hint now
+  points at the verified-clone recipe instead of a `git+https@tag` URL (`operator_signing.py` re-pinned).
+
 ## [1.0.0-rc.8] - 2026-10-01
 
 ### release notes (rc8)
@@ -251,16 +258,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pre-sign self-check.** Before the key is read, the signing closure is verified against the
   integrity manifest. Drift there, a missing manifest or an unreadable one REFUSES. Drift
   elsewhere, a closure that differs from git `HEAD` or the latest release tag, and signing from a
-  checkout inside a git work tree all WARN. There is no environment override. The tag comparison
+  checkout inside a git work tree all WARN (superseded in this release by #10 below: signing from a checkout, a git work tree or an `allowWrite` root now REFUSES unless `--allow-checkout-signing`). There is no environment override. The tag comparison
   uses the nearest LOCAL tag, which is unverified (an agent that can commit can also tag). Git is
   never run through a content filter: `git diff` would execute a planted `.gitattributes` clean filter
   as the operator, outside the sandbox. Directory resolution happens before the key is read, and
   `atomicio.py` is now pinned as part of the signing closure.
 - **What this does and does not cover.** It closes in-place edits to the signing code and
   unnoticed drift. It does NOT defend against unpinned code in the same process (the CLI dispatch
-  chain, `.pth` files), and the pre-sign display is a record, not a gate. Sign from a pinned
-  install outside every agent write root. An interactive confirm before signing is logged as a
-  follow-up.
+  chain, `.pth` files). Sign from a pinned install outside every agent write root. (The
+  interactive confirm logged here as a follow-up shipped in this release as #9: the display is now a gate.)
 - `max_uses: null` in a grant spec now produces a clean error instead of a `TypeError` traceback.
 
 ### security (the `.github/agents` and `.codex/agents` team-dir control planes)

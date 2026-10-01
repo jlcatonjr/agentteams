@@ -20,9 +20,9 @@ payload and its review digest, then require a y/N answer on a terminal, or, with
 ``--confirm-review-sha256 <digest>`` on the operator's argv, before the key is read. Since #10 the
 running install is checked (``signer_location``) and signing from a checkout or an agent-writable
 root is refused unless ``--allow-checkout-signing``. Both are speed bumps for an honest operator
-against the in-process limit above: a script can compute the digest. The durable mitigation is to sign from a pinned install
-outside every agent write root (a release-tag pin of the git source, for example
-``pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>"``;
+against the in-process limit above: a script can compute the digest. The durable mitigation is to sign from a verified install
+outside every agent write root: a signed release tag cloned and verified with neutralised git config,
+then ``pipx install``-ed from that clone (``SECURITY.md``, "Signing from a trusted install";
 agentteams is not on PyPI).
 
 Provenance: @security PR-E review ("pin them, or move the signing code into a pinned module");
@@ -62,10 +62,9 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
 _REFUSE_REASONS = frozenset({"manifest-missing", "unreadable"})
 
 _TRUSTED_INSTALL_HINT = (
-    "sign from a pinned install outside every agent write root (a release-tag pin of the git "
-    "source, e.g. "
-    'pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>"'
-    ") and run --verify-integrity first"
+    "sign from a verified install outside every agent write root (clone a signed release tag, verify "
+    "it, pipx install from the clone: SECURITY.md \"Signing from a trusted install\") and run "
+    "--verify-integrity first"
 )
 _TRUSTED_INSTALL_WARNING = (
     "the integrity check catches in-place edits to the signing code, not unpinned code running in "
