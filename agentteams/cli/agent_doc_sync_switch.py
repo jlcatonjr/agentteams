@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 def add_agent_doc_sync_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register ``--sync-agent-docs``, ``--apply`` and ``--include-claude``.
+    """Register ``--sync-agent-docs``, ``--apply``, ``--include-claude`` and ``--restore-removed``.
 
     Args:
         parser: The main CLI argument parser to extend in place.
@@ -46,8 +46,17 @@ def add_agent_doc_sync_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         dest="sync_include_claude",
         default=False,
-        help="With --sync-agent-docs --apply: also write .claude/agents targets, printing each "
-             "diff first (operator review; the unattended unit never passes this).",
+        help="With --sync-agent-docs --apply: also write .claude/agents targets after showing "
+             "each diff and asking y/N. Refused unless stdin/stdout are a terminal and CLAUDECODE "
+             "is unset (operator review; the unattended unit never passes this).",
+    )
+    group.add_argument(
+        "--restore-removed",
+        action="store_true",
+        dest="sync_restore_removed",
+        default=False,
+        help="With --sync-agent-docs --apply: re-insert the agreed learned block into copies an "
+             "agent removed it from (they are otherwise excluded, with a warning every run).",
     )
 
 
@@ -66,6 +75,8 @@ def validate_agent_doc_sync_args(parser: argparse.ArgumentParser, args: argparse
         parser.error("--apply requires --sync-agent-docs")
     if getattr(args, "sync_include_claude", False) and not (on and args.sync_apply):
         parser.error("--include-claude requires --sync-agent-docs --apply")
+    if getattr(args, "sync_restore_removed", False) and not (on and args.sync_apply):
+        parser.error("--restore-removed requires --sync-agent-docs --apply")
     if not on:
         return
     if not getattr(args, "project", None):
@@ -93,4 +104,5 @@ def run_agent_doc_sync_cli(args: argparse.Namespace) -> int:
     from agentteams.agent_doc_sync import run_sync_agent_docs
 
     return run_sync_agent_docs(Path(args.project), apply=bool(args.sync_apply),
-                               include_claude=bool(args.sync_include_claude))
+                               include_claude=bool(args.sync_include_claude),
+                               restore_removed=bool(args.sync_restore_removed))

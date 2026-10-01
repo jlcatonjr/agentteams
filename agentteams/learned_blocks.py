@@ -37,8 +37,12 @@ Stdlib only; no YAML dependency (the codebase hand-parses recipes, see
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import stat
+import unicodedata
 from dataclasses import dataclass
+from pathlib import Path
 
 from agentteams.fences import _extract_fenced_regions
 from agentteams.frameworks.goose_recipe_validate import _validate_recipe_yaml
@@ -65,6 +69,7 @@ _FORBIDDEN_CHARS = frozenset("\r\x00\x0b\x0c\x1c\x1d\x1e\x85  ")
 
 _INSTRUCTIONS_LINE_RE = re.compile(r"^instructions:[ \t]*\|[ \t]*$")
 _TOP_LEVEL_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*)\s*:")
+_RECIPE_SHAPE_RE = re.compile(r'^version:\s*"', re.MULTILINE)
 
 
 class LearnedBlockError(ValueError):
@@ -323,6 +328,60 @@ def content_problems(content: str) -> list[str]:
     return problems
 
 
+#: Learned-block policy denylist (on top of :func:`agentteams.scan.scan_content`). A learned
+#: block is agent-written text that an unsandboxed process copies into other agents' files, so
+#: anything that reads as an instruction override, a constitutional-tier claim, a governance
+#: bypass or a capability/permission change is quarantined rather than propagated. Matched
+#: case-insensitively on NFKC-normalised text with format characters removed; ``_GAP`` tolerates
+#: whitespace and punctuation between words.
+_GAP = r"[\W_]*"
+_NEAR = r"[\W\w]{0,60}?"
+_POLICY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (label, re.compile(rx, re.IGNORECASE)) for label, rx in (
+        ("instruction override", rf"\bignore\b{_NEAR}\b(?:previous|prior|all|above|earlier)\b"
+                                 rf"{_NEAR}\binstructions?\b"),
+        ("instruction override", r"\bdisregard"),
+        ("instruction override", rf"\byou{_GAP}are{_GAP}now\b"),
+        ("constitutional-tier claim", rf"\btier{_GAP}(?:1|one|i)\b"),
+        ("constitutional-tier claim", r"\bC\s*-\s*[1-5]\b"),
+        ("constitutional-tier claim", rf"\bconstitutional{_GAP}core\b"),
+        ("constitutional-tier claim", r"\boverrid(?:e|es|ing|den)\b"),
+        ("governance bypass", rf"\b(?:skip|skipping|bypass|bypassing|disable|disabling|ignore|"
+                              rf"ignoring)\b{_NEAR}@?\b(?:security|adversarial|"
+                              rf"conflict{_GAP}auditor)\b"),
+        ("governance bypass", rf"\bwithout{_GAP}(?:any{_GAP})?(?:clearance|@?security)\b"),
+        ("governance bypass", rf"\bno{_GAP}need{_GAP}(?:for|of){_GAP}(?:a{_GAP})?clearance\b"),
+        ("permission/tool widening", rf"\bpermission{_GAP}mode"),
+        ("permission/tool widening", rf"\bbypass{_GAP}permissions"),
+        ("permission/tool widening", r"\bdangerously"),
+        ("permission/tool widening", rf"\ballowed{_GAP}tools"),
+        ("permission/tool widening", r"\btools\s*:"),
+        ("permission/tool widening", r"\bhooks\s*:"),
+        ("permission/tool widening", rf"\bmcp{_GAP}servers"),
+    )
+)
+
+
+def policy_problems(content: str) -> list[str]:
+    """Return the learned-block policy denylist matches in *content* (empty when clean).
+
+    Args:
+        content: Canonical block content.
+
+    Returns:
+        One ``"policy: <category> (<matched text>)"`` entry per matching pattern.
+    """
+    text = "".join(c for c in unicodedata.normalize("NFKC", content)
+                   if unicodedata.category(c) != "Cf")
+    out: list[str] = []
+    for label, rx in _POLICY_PATTERNS:
+        m = rx.search(text)
+        if m:
+            snippet = " ".join(m.group(0).split())[:60]
+            out.append(f"policy: {label} ({snippet!r})")
+    return out
+
+
 def render_block(content: str, indent: str) -> str:
     """Render the marker lines and *content* at *indent*.
 
@@ -436,3 +495,96 @@ def verify_composed(old: str, new: str, kind: str, content: str) -> list[str]:
         if so != sn:
             problems.append("a top-level recipe key other than instructions changed")
     return problems
+
+
+# ---------------------------------------------------------------------------
+# Carry across regeneration (--update / --merge / --overwrite / machine-managed full replace)
+# ---------------------------------------------------------------------------
+
+def host_kind(rel_path: str, text: str) -> str | None:
+    """Return the host format a generated file would carry a learned block in, or None.
+
+    Args:
+        rel_path: The output path (relative or absolute).
+        text: The file content (a ``.yaml`` must look like a recipe).
+
+    Returns:
+        :data:`MARKDOWN` for ``.md``, :data:`RECIPE` for a goose recipe, else None.
+    """
+    if rel_path.endswith(".md"):
+        return MARKDOWN
+    if rel_path.endswith(".yaml") and _RECIPE_SHAPE_RE.search(text) and re.search(
+            r"^instructions:[ \t]*\|", text, re.MULTILINE):
+        return RECIPE
+    return None
+
+
+def carry_block_text(rel_path: str, source: str, dest: str) -> tuple[str, list[str]]:
+    """Carry *source*'s learned block into *dest* when *dest* has none.
+
+    Used so that no regeneration path — a fence merge, ``--overwrite``, or the machine-managed
+    full replace that unfenced goose recipes take — deletes the block an agent wrote. The same
+    gates as a sync write apply: :func:`content_problems` and :func:`verify_composed` (nothing
+    outside the block may differ from *dest*).
+
+    Args:
+        rel_path: The output path (selects the host format).
+        source: The text holding the block (the file on disk, or a render that already carries it).
+        dest: The text about to be written.
+
+    Returns:
+        ``(text to write, notices)``. *dest* unchanged (no notice) when *source* has no block or
+        *dest* already carries the same one; *dest* unchanged with a notice when the block cannot
+        be carried safely.
+    """
+    kind = host_kind(rel_path, dest) or host_kind(rel_path, source)
+    if kind is None:
+        return dest, []
+    try:
+        src = parse(source, kind)
+    except LearnedBlockError:
+        return dest, []
+    if src.block is None:
+        return dest, []
+    content = src.block.content
+    try:
+        parsed = parse(dest, kind)
+    except LearnedBlockError as exc:
+        return dest, [f"AGENTTEAMS-LEARNED block NOT carried into the regenerated file ({exc}); "
+                      "it survives only in the backup — re-add it, then run --sync-agent-docs"]
+    if parsed.block is not None:
+        if parsed.block.content == content:
+            return dest, []
+        return dest, ["the regenerated file already carries a different AGENTTEAMS-LEARNED block; "
+                      "the on-disk block was kept only in the backup"]
+    problems = content_problems(content)
+    new = compose(dest, parsed, content) if not problems else dest
+    problems = problems or verify_composed(dest, new, kind, content)
+    if problems:
+        return dest, [f"AGENTTEAMS-LEARNED block NOT carried into the regenerated file "
+                      f"({'; '.join(problems)}); it survives only in the backup"]
+    return new, []
+
+
+def carry_learned_block(rel_path: str, fresh: str, target: Path) -> tuple[str, list[str]]:
+    """Carry the learned block of the file at *target* into its fresh render.
+
+    Args:
+        rel_path: The output path relative to the agents dir.
+        fresh: The fresh render about to be merged or written.
+        target: The on-disk file (read only when it is a regular file, never via a symlink).
+
+    Returns:
+        ``(fresh, possibly carrying the block, notices)`` — see :func:`carry_block_text`.
+    """
+    if not (rel_path.endswith(".md") or rel_path.endswith(".yaml")):
+        return fresh, []
+    try:
+        if not stat.S_ISREG(os.lstat(target).st_mode):
+            return fresh, []
+        existing = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return fresh, []
+    if BEGIN_MARKER not in existing:
+        return fresh, []
+    return carry_block_text(rel_path, existing, fresh)

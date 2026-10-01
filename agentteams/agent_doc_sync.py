@@ -29,7 +29,21 @@ That makes this module an unsandboxed writer of agent files, and every rule belo
   regular, single-link, opened ``O_NOFOLLOW`` relative to a directory fd and stay under the
   project's realpath. Only existing files are written (never created). Writes are temp-file +
   ``rename`` with a digest re-check of the target immediately before the rename, so a concurrent
-  agent edit wins; an exclusive lock in the state dir serialises runs.
+  agent edit wins — **best effort**: an edit landing in the small window between that re-check and
+  the rename is lost (there is no lock an agent shares). An exclusive lock in the state dir
+  serialises sync runs.
+* **Claude targets need a human.** ``--include-claude`` refuses unless stdin and stdout are a
+  terminal and ``CLAUDECODE`` is unset (Claude Code sets it in agent shells), and asks y/N per
+  file after printing its diff.
+* **Removed blocks.** A block that vanished from a copy is never propagated as a deletion. When
+  the copy is byte-for-byte what the generator last wrote (its ``references/build-log.json``
+  ``file_hashes`` entry matches), regeneration removed it and the next ``--apply`` re-inserts it;
+  otherwise an agent removed it and every run warns until the operator passes
+  ``--restore-removed``. (Regeneration now carries the block itself —
+  :func:`agentteams.learned_blocks.carry_learned_block` — so this is the fallback.)
+* **Policy denylist.** On top of ``scan_content``, :func:`agentteams.learned_blocks.policy_problems`
+  quarantines instruction overrides, constitutional-tier claims, governance bypasses and
+  permission/tool widening.
 * **No configuration input.** The sync reads no brief, pin or project config — nothing an agent
   could edit changes what it does beyond the learned text itself.
 * **Idempotent.** A run with nothing to do writes nothing, the baseline included.
@@ -43,6 +57,7 @@ import json
 import os
 import secrets
 import stat
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO
@@ -85,6 +100,7 @@ class _Copy:
     st: os.stat_result
     text: str
     parsed: lb.ParsedDoc
+    generated: bool = False
 
     @property
     def value(self) -> str | None:
@@ -105,11 +121,14 @@ class SyncReport:
     quarantined: list[str] = field(default_factory=list)
     refused: list[str] = field(default_factory=list)
     skipped_concurrent: list[str] = field(default_factory=list)
+    removed: list[str] = field(default_factory=list)
+    declined: list[str] = field(default_factory=list)
 
     @property
     def exit_code(self) -> int:
         """Return :data:`EXIT_ATTENTION` when anything needs a human, else :data:`EXIT_OK`."""
-        if self.conflicts or self.quarantined or self.refused or self.skipped_concurrent:
+        if (self.conflicts or self.quarantined or self.refused or self.skipped_concurrent
+                or self.removed):
             return EXIT_ATTENTION
         return EXIT_OK
 
@@ -345,6 +364,33 @@ def _atomic_replace(copy: _Copy, new_text: str) -> bool:
     return True
 
 
+def _recorded_hashes(dir_fd: int) -> dict[str, str]:
+    """Return ``file_hashes`` of the agents dir's ``references/build-log.json`` (``{}`` if absent).
+
+    Read through the dir fd, ``O_NOFOLLOW`` on every component. Only used to tell "regeneration
+    removed the block" from "an agent removed it"; a forged entry can at most re-insert the
+    agreed (gated) block.
+    """
+    try:
+        ref_fd = os.open("references", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                         dir_fd=dir_fd)
+    except OSError:
+        return {}
+    try:
+        raw, _st = _read_regular(ref_fd, "build-log.json")
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return {}
+    finally:
+        os.close(ref_fd)
+    hashes = data.get("file_hashes") if isinstance(data, dict) else None
+    if not isinstance(hashes, dict):
+        return {}
+    return {k: v.lower() for k, v in hashes.items()
+            if isinstance(k, str) and isinstance(v, str) and len(v) >= 16
+            and all(c in "0123456789abcdefABCDEF" for c in v)}
+
+
 def _collect(project_real: str, report: SyncReport) -> tuple[dict[str, dict[str, _Copy]], list[int]]:
     """Read every framework copy; return ``{slug: {fw: copy}}`` and the dir fds to close."""
     by_slug: dict[str, dict[str, _Copy]] = {}
@@ -359,6 +405,7 @@ def _collect(project_real: str, report: SyncReport) -> tuple[dict[str, dict[str,
         if dir_fd is None:
             continue
         fds.append(dir_fd)
+        recorded = _recorded_hashes(dir_fd)
         for name in sorted(os.listdir(dir_fd)):
             if not name.endswith(suffix) or name.startswith(".") or len(name) <= len(suffix):
                 continue
@@ -377,7 +424,10 @@ def _collect(project_real: str, report: SyncReport) -> tuple[dict[str, dict[str,
                 report.note(f"  REFUSED {label}: {exc}")
                 continue
             slug = name[: -len(suffix)]
-            by_slug.setdefault(slug, {})[fw] = _Copy(fw, kind, dir_fd, name, raw, st, text, parsed)
+            want = recorded.get(name)
+            generated = bool(want) and hashlib.sha256(raw).hexdigest().startswith(want)
+            by_slug.setdefault(slug, {})[fw] = _Copy(fw, kind, dir_fd, name, raw, st, text, parsed,
+                                                     generated)
     return by_slug, fds
 
 
@@ -400,7 +450,7 @@ def _diff(old: str, new: str, label: str) -> str:
 
 def _gate(slug: str, content: str) -> list[str]:
     """Return the content-gate findings for a block about to be propagated."""
-    problems = lb.content_problems(content)
+    problems = lb.content_problems(content) + lb.policy_problems(content)
     for finding in scan_content(content, filename=f"<learned-block:{slug}>"):
         problems.append(f"scan {finding.severity} {finding.category} (line {finding.line}): "
                         f"{finding.message}")
@@ -418,6 +468,7 @@ class _Run:
     baseline: dict[str, Any]
     conflicts: dict[str, Any]
     pending: dict[str, Any]
+    restore_removed: bool = False
 
 
 def _sync_slug(run: _Run, slug: str, copies: dict[str, _Copy]) -> None:
@@ -426,9 +477,20 @@ def _sync_slug(run: _Run, slug: str, copies: dict[str, _Copy]) -> None:
     base = run.baseline.get(slug) if isinstance(run.baseline.get(slug), dict) else {}
     base_copies = base.get("copies") if isinstance(base.get("copies"), dict) else {}
     agreed = base.get("agreed") if isinstance(base.get("agreed"), str) else None
-    removed = sorted(fw for fw, c in copies.items() if c.value is None and base_copies.get(fw))
-    for fw in removed:
-        rep.note(f"  note {_label(copies[fw])}: learned block removed; removal is never propagated")
+    gone = sorted(fw for fw, c in copies.items() if c.value is None and base_copies.get(fw))
+    # Regeneration removed it (the file is exactly what the generator last wrote) or the operator
+    # asked for a restore: re-sync it. Otherwise an agent removed it: excluded, loudly.
+    removed = [fw for fw in gone if not (copies[fw].generated or run.restore_removed)]
+    for fw in gone:
+        label = _label(copies[fw])
+        if fw in removed:
+            rep.removed.append(label)
+            rep.note(f"  WARNING {label}: learned block was removed (not by regeneration); this "
+                     "copy is EXCLUDED from sync until the operator runs --sync-agent-docs --apply "
+                     "--restore-removed")
+        else:
+            why = "operator --restore-removed" if run.restore_removed else "removed by regeneration"
+            rep.note(f"  note {label}: learned block missing ({why}); re-syncing it")
     changed = {fw: c.value for fw, c in copies.items()
                if c.value is not None and c.value != base_copies.get(fw)}
     run.conflicts.pop(slug, None)
@@ -479,6 +541,32 @@ def _sync_slug(run: _Run, slug: str, copies: dict[str, _Copy]) -> None:
     run.baseline[slug] = {"agreed": new_agreed, "copies": dict(sorted(entry_copies.items()))}
 
 
+def _stdio_is_tty() -> bool:
+    """Return True when both stdin and stdout are terminals."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _claude_write_refusal() -> str | None:
+    """Return why ``--include-claude`` may not run here, or None when a human is at a terminal."""
+    if os.environ.get("CLAUDECODE"):
+        return ("CLAUDECODE is set: this looks like a Claude Code agent shell. Run "
+                "--include-claude in your own terminal")
+    if not _stdio_is_tty():
+        return ("stdin/stdout is not a terminal; --include-claude needs an interactive y/N "
+                "confirmation. Run it in your own terminal")
+    return None
+
+
+def _confirm(label: str, diff: str) -> bool:
+    """Print *diff* and ask y/N on the terminal; True only for an explicit yes."""
+    print(diff.rstrip("\n"), flush=True)
+    try:
+        answer = input(f"Write {label}? [y/N] ")
+    except EOFError:
+        return False
+    return answer.strip().lower() in ("y", "yes")
+
+
 def _propagate(run: _Run, slug: str, source: _Copy, tgt: _Copy, content: str) -> bool:
     """Compose, verify and (when allowed) write one target; True only when it was written."""
     rep = run.report
@@ -502,8 +590,14 @@ def _propagate(run: _Run, slug: str, source: _Copy, tgt: _Copy, content: str) ->
         rep.would_write.append(label)
         rep.note(f"  would write {label} <- {_label(source)}")
         return False
-    if tgt.fw == CLAUDE:
-        rep.note(_diff(old, content, label).rstrip("\n"))
+    if tgt.fw == CLAUDE and not _confirm(label, _diff(old, content, label)):
+        run.pending[slug] = {"source": _label(source), "target": label,
+                             "digest": lb.content_digest(content),
+                             "diff": _diff(old, content, label)}
+        rep.declined.append(label)
+        rep.staged.append(label)
+        rep.note(f"  declined {label}; left staged")
+        return False
     if not content and tgt.parsed.block is not None and old:
         _write_state_text(run.state / "backups" / f"{slug}.{tgt.fw}.{lb.content_digest(old)[:16]}.txt",
                           old)
@@ -516,24 +610,31 @@ def _propagate(run: _Run, slug: str, source: _Copy, tgt: _Copy, content: str) ->
     return True
 
 
-def sync_agent_docs(project: Path, *, apply: bool = False,
-                    include_claude: bool = False) -> SyncReport:
+def sync_agent_docs(project: Path, *, apply: bool = False, include_claude: bool = False,
+                    restore_removed: bool = False) -> SyncReport:
     """Run one learned-block sync over a project's agent copies.
 
     Args:
         project: The project root (holds ``.github/agents``, ``.claude/agents``, ``.goose/recipes``).
         apply: Write targets (default: report only, write nothing — not even state).
-        include_claude: With *apply*, also write ``.claude/agents`` targets (otherwise staged).
+        include_claude: With *apply*, also write ``.claude/agents`` targets after an interactive
+            y/N per file (otherwise staged).
+        restore_removed: With *apply*, re-insert blocks an agent removed from a copy.
 
     Returns:
         The run report.
 
     Raises:
-        SyncError: The project is not a directory, the state dir is unsafe, ``include_claude`` was
-            given without ``apply``, or another run holds the lock.
+        SyncError: The project is not a directory, the state dir is unsafe, ``include_claude`` or
+            ``restore_removed`` was given without ``apply``, ``include_claude`` without a human at
+            a terminal (or with ``CLAUDECODE`` set), or another run holds the lock.
     """
-    if include_claude and not apply:
-        raise SyncError("--include-claude requires --apply")
+    if (include_claude or restore_removed) and not apply:
+        raise SyncError("--include-claude / --restore-removed require --apply")
+    if include_claude:
+        refusal = _claude_write_refusal()
+        if refusal:
+            raise SyncError(f"refusing --include-claude: {refusal}")
     project_real = os.path.realpath(project)
     if not os.path.isdir(project_real):
         raise SyncError(f"project {project} is not a directory")
@@ -547,7 +648,8 @@ def sync_agent_docs(project: Path, *, apply: bool = False,
         slugs = doc.get("slugs") if isinstance(doc.get("slugs"), dict) else {}
         conflicts = _load_json(state / CONFLICTS_NAME) if have_state else {}
         pending = _load_json(state / PENDING_NAME) if have_state else {}
-        run = _Run(report, apply, include_claude, state, dict(slugs), dict(conflicts), dict(pending))
+        run = _Run(report, apply, include_claude, state, dict(slugs), dict(conflicts), dict(pending),
+                   restore_removed)
         by_slug, fds = _collect(project_real, report)
         for slug in sorted(by_slug):
             if len(by_slug[slug]) > 1:
@@ -579,27 +681,28 @@ def _persist_optional(path: Path, data: dict[str, Any]) -> None:
 
 
 def run_sync_agent_docs(project: Path, *, apply: bool = False, include_claude: bool = False,
-                        out: TextIO | None = None) -> int:
+                        restore_removed: bool = False, out: TextIO | None = None) -> int:
     """CLI wrapper: run :func:`sync_agent_docs`, print the report, return the exit code.
 
     Args:
         project: The project root.
         apply: Write targets (``--apply``).
         include_claude: Also write ``.claude/agents`` targets (``--include-claude``).
+        restore_removed: Re-insert agent-removed blocks (``--restore-removed``).
         out: Stream for the report (default ``sys.stdout``).
 
     Returns:
         :data:`EXIT_OK`, :data:`EXIT_ATTENTION` (conflict, quarantine, refusal or concurrent-edit
-        skip), or :data:`EXIT_FATAL` (a :class:`SyncError`).
+        skip, or a copy excluded because its block was removed), or :data:`EXIT_FATAL` (a
+        :class:`SyncError`).
     """
-    import sys
-
     stream = out if out is not None else sys.stdout
     mode = "apply" if apply else "check"
     if apply and include_claude:
         mode = "apply, include-claude"
     try:
-        report = sync_agent_docs(project, apply=apply, include_claude=include_claude)
+        report = sync_agent_docs(project, apply=apply, include_claude=include_claude,
+                                 restore_removed=restore_removed)
     except SyncError as exc:
         print(f"Agent-doc sync ({mode}): FATAL: {exc}", file=stream)
         return EXIT_FATAL
@@ -611,5 +714,6 @@ def run_sync_agent_docs(project: Path, *, apply: bool = False, include_claude: b
     print(f"  summary: {len(report.written)} written, {len(report.would_write)} would write, "
           f"{len(report.staged)} staged for Claude, {len(report.conflicts)} conflict(s), "
           f"{len(report.quarantined)} quarantined, {len(report.refused)} refused, "
-          f"{len(report.skipped_concurrent)} skipped (concurrent edit)", file=stream)
+          f"{len(report.skipped_concurrent)} skipped (concurrent edit), "
+          f"{len(report.removed)} excluded (block removed)", file=stream)
     return report.exit_code

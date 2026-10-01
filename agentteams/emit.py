@@ -55,6 +55,7 @@ from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-export
 # Backup subsystem extracted to agentteams/backup.py (CH-07); re-exported so
 # cli/, build_team, drift, and tests resolve emit.<symbol> unchanged.
 from agentteams.frameworks.structural_merge import post_merge_structural
+from agentteams.learned_blocks import carry_learned_block
 from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     BACKUP_MANIFEST_NAME,
     BACKUP_MANIFEST_SCHEMA_VERSION,
@@ -398,6 +399,8 @@ def emit_all(
         target = _resolve_path(output_dir, rel_path)
         normalized_content = _normalize_generated_content(rel_path, content)
         normalized_content = _ensure_project_notes_section(rel_path, normalized_content)
+        normalized_content, _lb_n = carry_learned_block(rel_path, normalized_content, target)  # every path
+        result.notices.extend(f"{rel_path}: {n}" for n in _lb_n)
 
         # Auto-fence-on-update: retrofit a `content` fence onto an eligible
         # legacy (unfenced) file so its template region becomes mergeable this

@@ -5,6 +5,9 @@ the front-matter merge, for every merged file. Each step is a no-op for files it
 
 * Goose recipes (``*.yaml``): the top-level ``sub_recipes`` key is reconciled from the fresh
   render (:func:`agentteams.frameworks.goose_recipe_merge.reconcile_sub_recipes`).
+* Every markdown agent file and goose recipe: an ``AGENTTEAMS-LEARNED`` block the fence merge
+  dropped is carried back from the fresh render (which :func:`agentteams.emit.emit_all` already
+  seeded from the on-disk file) — :func:`agentteams.learned_blocks.carry_block_text`.
 * Repo-root ``AGENTS.md``: a remaining unfenced Constitutional Rules list beside the fenced
   baseline is reported on every run
   (:func:`agentteams.frameworks._agents_md_rules.duplicate_rules_notice`).
@@ -18,6 +21,7 @@ from pathlib import Path
 
 from agentteams.frameworks._agents_md_rules import duplicate_rules_notice
 from agentteams.frameworks.goose_recipe_merge import reconcile_sub_recipes
+from agentteams.learned_blocks import carry_block_text
 
 
 def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, list[str]]:
@@ -31,12 +35,14 @@ def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, 
     Returns:
         ``(content, notices)`` — *merged* (possibly reconciled) and any operator notices.
     """
+    merged, notices = carry_block_text(rel_path, fresh, merged)
     if rel_path.endswith(".yaml"):
-        return reconcile_sub_recipes(fresh, merged)
+        merged, more = reconcile_sub_recipes(fresh, merged)
+        return merged, notices + list(more)
     if Path(rel_path).name == "AGENTS.md":
         notice = duplicate_rules_notice(fresh, merged)
-        return merged, [notice] if notice else []
-    return merged, []
+        return merged, notices + ([notice] if notice else [])
+    return merged, notices
 
 
 __all__ = ["post_merge_structural"]

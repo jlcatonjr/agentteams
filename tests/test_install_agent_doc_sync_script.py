@@ -110,3 +110,28 @@ def test_refuses_symlinked_agent_dir(tmp_path):
 def test_requires_project(tmp_path):
     r = _run(tmp_path)
     assert r.returncode == 2 and "--project" in r.stderr
+
+
+@pytest.mark.parametrize("which", ["state", "units", "log"])
+def test_refuses_state_unit_or_log_dir_inside_an_allow_write_root(tmp_path, which):
+    proj = _project(tmp_path)
+    home = tmp_path / "home"
+    root = {"state": home / ".local" / "state", "units": tmp_path / "cfg" / "systemd",
+            "log": home / ".cache"}[which]
+    root.mkdir(parents=True)
+    (proj / ".claude").mkdir()
+    (proj / ".claude" / "settings.json").write_text(json.dumps(
+        {"sandbox": {"enabled": True, "filesystem": {"allowWrite": [str(root)]}}}))
+    r = _run(tmp_path, "--project", str(proj), "--python", sys.executable)
+    assert r.returncode == 2 and "allowWrite root" in r.stderr, r.stderr
+
+
+def test_refuses_unit_dir_inside_the_project(tmp_path):
+    proj = _project(tmp_path)
+    r = _run(tmp_path, "--project", str(proj), "--python", sys.executable,
+             XDG_CONFIG_HOME=str(proj / "cfg"))
+    assert r.returncode == 2 and "unit dir" in r.stderr, r.stderr
+
+
+def test_checks_base_prefix():
+    assert "sys.base_prefix" in SCRIPT.read_text()

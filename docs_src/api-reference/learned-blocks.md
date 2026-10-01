@@ -63,6 +63,17 @@ Why content may not be propagated: a fence-family token (`AGENTTEAMS:`, `AGENTTE
 a line break or control character other than `\n` (CR, VT, FF, NEL, LS, PS, …), or a missing
 final newline.
 
+### `policy_problems(content)`
+
+The learned-block policy denylist, applied on top of `scan.scan_content` before a block is
+propagated. Case-insensitive on NFKC-normalised text with format characters removed, and tolerant
+of whitespace and punctuation between words. It matches instruction overrides ("ignore … previous
+instructions", "disregard", "you are now"), constitutional-tier claims ("Tier-1", "C-1".."C-5",
+"Constitutional Core", "override(s)"), governance bypasses ("skip/bypass/disable/ignore … @security
+/adversarial/conflict-auditor", "without clearance", "no need for clearance") and permission/tool
+widening (`permissionMode`, `bypassPermissions`, "dangerously", `allowedTools`, `tools:`, `hooks:`,
+`mcpServers`).
+
 ### `render_block(content, indent)`
 
 The marker lines plus content at `indent` (empty lines stay empty).
@@ -74,6 +85,23 @@ The marker lines plus content at `indent` (empty lines stay empty).
 ### `top_level_sections(text)`
 
 Each top-level recipe key mapped to its raw text (duplicates get a `#n` suffix).
+
+### `host_kind(rel_path, text)`
+
+`MARKDOWN` for `.md`, `RECIPE` for a goose-recipe-shaped `.yaml`, else `None`.
+
+### `carry_block_text(rel_path, source, dest)`
+
+Carry `source`'s block into `dest` when `dest` has none, behind the same gates as a sync write
+(`content_problems`, `verify_composed`). Returns `(text, notices)`; a block that cannot be carried
+safely produces a notice (it survives in the backup).
+
+### `carry_learned_block(rel_path, fresh, target)`
+
+Carry the on-disk file's block into its fresh render. `emit.emit_all` calls it for every rendered
+file before any merge, overwrite or machine-managed full replace (unfenced goose recipes take the
+latter, which used to delete the block), and `structural_merge.post_merge_structural` re-applies it
+after a fence merge. A symlinked target is never read.
 
 ### `verify_composed(old, new, kind, content)`
 

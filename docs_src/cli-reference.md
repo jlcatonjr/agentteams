@@ -1208,8 +1208,18 @@ state dir), so an unattended run never writes Claude agent files.
 
 ### `--include-claude`
 
-With `--sync-agent-docs --apply`: also write `.claude/agents` targets, printing each diff first.
-This is the operator review step; the installed unit never passes it.
+With `--sync-agent-docs --apply`: also write `.claude/agents` targets. Each diff is printed and
+needs a y/N answer; "no" leaves the target staged. The flag is refused (exit 2) unless stdin and
+stdout are a terminal and `CLAUDECODE` is unset, so it cannot run from an agent shell or a unit.
+Run it in your own terminal. This is the operator review step; the installed unit never passes it.
+
+### `--restore-removed`
+
+With `--sync-agent-docs --apply`: re-insert the agreed learned block into copies an agent removed
+it from. Those copies are otherwise excluded from sync, and every run (including the default check)
+prints a WARNING and exits 1. A block that a regeneration removed (the file matches its build-log
+hash) is re-synced without this flag. Regeneration (`--update`, `--merge`, `--overwrite`) now
+carries the block itself.
 
 ---
 

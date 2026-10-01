@@ -14,9 +14,11 @@
 #     `-I` (isolated mode) ignores PYTHON* variables, the user site dir and the current directory,
 #     so nothing in the project can shadow the agentteams package. .claude/agents targets are never
 #     written by the unit (they are staged; the operator runs --apply --include-claude by hand).
-#   * refuses when the python interpreter, its prefix, or the agentteams package lies inside the
-#     project or inside any sandbox.filesystem.allowWrite root of <project>/.claude/settings.json
-#     (an agent could then edit the code the unit runs)
+#   * refuses when the python interpreter, its prefix or base prefix, the agentteams package, the
+#     sync state dir (~/.local/state/agentteams), the systemd user unit dir or the log dir lies
+#     inside the project or inside any sandbox.filesystem.allowWrite root of
+#     <project>/.claude/settings.json or settings.local.json (an agent could then edit what the
+#     unit runs or trusts)
 #   * bounded: 5 s debounce, 300 s hard timeout, start/trigger rate limits (an idempotent run
 #     writes nothing, so it cannot re-trigger itself), UMask=0077
 #   * logs to ~/.cache/agentteams/doc-sync-<project hash>.log (mode 0600)
@@ -50,9 +52,10 @@ done
 # Containment + naming facts, computed by the SAME interpreter, in isolated mode, that the unit will
 # run. Prints: <hash> TAB <escaped unit instance> TAB <agentteams package dir> TAB <has flag 0|1>,
 # or exits 3 with the reason on stderr.
-read -r HASH ESCAPED PKG HASFLAG < <("$PY" -I - "$PROJECT" "$PY" <<'PYEOF'
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+read -r HASH ESCAPED PKG HASFLAG < <("$PY" -I - "$PROJECT" "$PY" "$UNIT_DIR" "$HOME" <<'PYEOF'
 import hashlib, json, os, sys
-project, py = sys.argv[1], sys.argv[2]
+project, py, unit_dir, home = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 real = os.path.realpath(project)
 
 def inside(path, root):
@@ -85,11 +88,16 @@ try:
 except ImportError:
     sys.exit(f"refusing: {py} -I cannot import agentteams")
 pkg = os.path.dirname(os.path.realpath(agentteams.__file__))
+# The unit runs with HOME=%h and no XDG_* variables, so its state dir and log dir are fixed.
 for what, target in (("python interpreter", py), ("python prefix", sys.prefix),
-                     ("agentteams package", pkg)):
+                     ("python base prefix", sys.base_prefix), ("agentteams package", pkg),
+                     ("sync state dir", os.path.join(home, ".local", "state", "agentteams")),
+                     ("systemd user unit dir", unit_dir),
+                     ("log dir", os.path.join(home, ".cache", "agentteams"))):
     for label, root in roots:
         if inside(target, root):
-            sys.exit(f"refusing: the {what} ({target}) lies inside {label} ({root}); an agent could edit the code the unit runs")
+            sys.exit(f"refusing: the {what} ({target}) lies inside {label} ({root}); an agent could "
+                     "edit what the unit runs or trusts")
 for c in pkg:
     if c.isspace() or c in "'\"$`\\%;&|<>":
         sys.exit(f"refusing: unsafe agentteams package path: {pkg}")
@@ -126,7 +134,6 @@ for d in .github/agents .goose/recipes .claude/agents; do
 done
 [ "${#DIRS[@]}" -gt 0 ] || { echo "refusing: no agent dirs (.github/agents, .goose/recipes, .claude/agents) in $PROJECT" >&2; exit 2; }
 
-UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 NAME="agentteams-doc-sync@$ESCAPED"
 LOG="%h/.cache/agentteams/doc-sync-$HASH.log"
 WATCH=""

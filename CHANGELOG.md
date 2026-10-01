@@ -38,6 +38,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The agent-updater template tells agents to write their learnings into this block, and explains how
   the block propagates. The example snapshots are regenerated.
 
+### fix (learned blocks survive regeneration; review findings on `--sync-agent-docs`)
+
+- **Blocker:** generated goose recipes carry no AGENTTEAMS fence, so `--update --merge` full-replaces
+  them, and that deleted the goose learned block. The sync then excluded that copy for good. Now
+  `emit_all` carries the on-disk block into every fresh render (merge, overwrite, machine-managed
+  replace, dry-run), and `post_merge_structural` re-applies it after a fence merge, behind the same
+  `verify_composed` gates. A new end-to-end test regenerates real claude, goose and copilot teams.
+- **Removed blocks:** a block removed by regeneration (the file matches its build-log hash) is
+  re-synced. One an agent removed produces a WARNING on every run, `--check` included, and exits 1
+  until the operator runs `--apply --restore-removed`.
+- **`--include-claude`:** refused unless stdin and stdout are a terminal and `CLAUDECODE` is unset;
+  each diff needs a y/N answer.
+- **Policy denylist:** a learned-block denylist, on top of `scan_content`, quarantines instruction
+  overrides, constitutional-tier claims, governance bypasses and permission/tool widening.
+- **Installer:** also refuses when `sys.base_prefix`, the state dir, the unit dir or the log dir
+  lies inside the project or an `allowWrite` root.
+- **Docs:** "concurrent edit wins" is now documented as best effort.
+
 ### security (capability keys; `sandbox.excludedCommands`)
 
 - `front_matter_merge.CAPABILITY_FRONT_MATTER_KEYS` (pinned) now includes `hooks`, `mcpServers`,

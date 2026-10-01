@@ -126,8 +126,11 @@ specifically:
 - `--migrate` no longer hard-errors on a stale snapshot tag; with `--yes`
   it moves the tag to current HEAD.
 - `--sync-agent-docs` writes agent files from outside every sandbox. It moves only the
-  `AGENTTEAMS-LEARNED` block, scan-gates it, never creates files, and writes `.claude/agents` only
-  with `--apply --include-claude`. Both of its modules are integrity-pinned.
+  `AGENTTEAMS-LEARNED` block, scan- and policy-gates it, and never creates files. It writes
+  `.claude/agents` only with `--apply --include-claude`, which needs an interactive y/N at a
+  terminal and is refused when `CLAUDECODE` is set. Both of its modules are integrity-pinned.
+  "Concurrent edit wins" is best effort: there is a small window between the re-check and the
+  rename.
 
 ## Signing from a trusted install
 
