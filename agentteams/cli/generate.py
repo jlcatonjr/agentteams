@@ -518,8 +518,8 @@ def _run_generate_inner(
         # when there is no content drift. Overwrite deletes (after backup);
         # merge leaves a notice.
         _removed_tool_agents, _stale_notices = _remove_stale_tool_agents(
-            manifest, output_dir, framework_id,
-            overwrite=args.overwrite, dry_run=args.dry_run,
+            manifest, output_dir, framework_id, overwrite=args.overwrite,
+            dry_run=args.dry_run, agent_ext=adapter.get_file_extension("agent"),
         )
         for _n in _stale_notices:
             print(f"  ⚠  {_n}", file=sys.stderr)

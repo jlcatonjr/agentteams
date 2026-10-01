@@ -28,7 +28,8 @@ def test_stale_removal_overwrite_deletes_and_backs_up(tmp_path):
     legacy.write_text("---\nname: legacy\n---\n# legacy\n", encoding="utf-8")
 
     removed, notices = build_team._remove_stale_tool_agents(
-        _manifest_with_tool(), out, "copilot-vscode", overwrite=True, dry_run=False
+        _manifest_with_tool(), out, "copilot-vscode", overwrite=True, dry_run=False,
+        agent_ext=".agent.md",
     )
 
     assert not legacy.exists(), "overwrite must delete the legacy tool agent"
@@ -46,7 +47,8 @@ def test_stale_removal_merge_is_notice_only(tmp_path):
     legacy.write_text("# legacy\n", encoding="utf-8")
 
     removed, notices = build_team._remove_stale_tool_agents(
-        _manifest_with_tool(), out, "copilot-vscode", overwrite=False, dry_run=False
+        _manifest_with_tool(), out, "copilot-vscode", overwrite=False, dry_run=False,
+        agent_ext=".agent.md",
     )
 
     assert legacy.exists(), "merge mode must NOT delete (notice-only)"
@@ -61,7 +63,8 @@ def test_stale_removal_dry_run_reports_without_deleting(tmp_path):
     legacy.write_text("# legacy\n", encoding="utf-8")
 
     removed, notices = build_team._remove_stale_tool_agents(
-        _manifest_with_tool(), out, "copilot-vscode", overwrite=True, dry_run=True
+        _manifest_with_tool(), out, "copilot-vscode", overwrite=True, dry_run=True,
+        agent_ext=".agent.md",
     )
 
     assert legacy.exists(), "dry-run must not delete"
@@ -75,7 +78,8 @@ def test_stale_removal_claude_uses_md_suffix(tmp_path):
     legacy.write_text("# legacy\n", encoding="utf-8")
 
     removed, _ = build_team._remove_stale_tool_agents(
-        _manifest_with_tool(), out, "claude", overwrite=True, dry_run=False
+        _manifest_with_tool(), out, "claude", overwrite=True, dry_run=False,
+        agent_ext=".md",
     )
     assert not legacy.exists()
     assert removed == [str(legacy)]
@@ -91,7 +95,8 @@ def test_stale_removal_ignores_unrelated_agents(tmp_path):
     other.write_text("# other\n", encoding="utf-8")
 
     removed, notices = build_team._remove_stale_tool_agents(
-        _manifest_with_tool(), out, "copilot-vscode", overwrite=True, dry_run=False
+        _manifest_with_tool(), out, "copilot-vscode", overwrite=True, dry_run=False,
+        agent_ext=".agent.md",
     )
     assert keep.exists() and other.exists()
     assert removed == [] and notices == []

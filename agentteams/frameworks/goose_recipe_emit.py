@@ -18,6 +18,7 @@ from typing import Any
 
 from .base import FrameworkAdapter
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
+from agentteams.frameworks.goose_recipe_merge import SUB_RECIPES_MANAGED_COMMENT
 
 #: Goose recipe schema version (hand-built emitter).
 _RECIPE_VERSION = "1.0.0"
@@ -218,6 +219,9 @@ def _emit_recipe(
             lines += [f"      - {_yaml_dq(k)}" for k in mx["env_keys"]]
         lines.append(f"    timeout: {int(mx.get('timeout', _MCP_EXT_TIMEOUT))}")
     if sub_recipes:
+        # Column-0 managed-key comment (follow-up #15): the key is owned structurally on
+        # --update --merge by goose_recipe_merge.reconcile_sub_recipes. Goose ignores it.
+        lines.append(SUB_RECIPES_MANAGED_COMMENT)
         lines.append("sub_recipes:")
         for sr in sub_recipes:
             lines.append(f"  - name: {_yaml_dq(sr['name'])}")

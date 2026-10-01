@@ -49,6 +49,7 @@ from agentteams import capability_map as _capability_map
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 from .agents_md import AgentsMdAdapter, _extract_name_description, _neutralize_instructions
+from ._agents_md_rules import apply_constitutional_rules_baseline
 
 __all__ = [
     "CodexAdapter",
@@ -536,6 +537,8 @@ class CodexAdapter(AgentsMdAdapter):
         later run may refresh this file but never an AGENTS.md someone else owns.
         """
         body = self._strip_yaml_front_matter(content)
+        # #16: fenced Constitutional Rules baseline (template-sourced) + extensions heading.
+        body = apply_constitutional_rules_baseline(body, manifest)
         agents_dir = None if manifest.get("interop_source_framework") else ".codex/agents"
         body = _neutralize_instructions(body, agents_dir)
         body = strip_codex_notice(body)  # codex -> codex re-render: never stack a second notice

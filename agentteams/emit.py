@@ -54,6 +54,7 @@ from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-export
 )
 # Backup subsystem extracted to agentteams/backup.py (CH-07); re-exported so
 # cli/, build_team, drift, and tests resolve emit.<symbol> unchanged.
+from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     BACKUP_MANIFEST_NAME,
     BACKUP_MANIFEST_SCHEMA_VERSION,
@@ -538,6 +539,8 @@ def emit_all(
                         if _pv_applied
                         else mr.merged_content
                     )
+                    _pv_content, _pv_sn = post_merge_structural(rel_path, normalized_content, _pv_content)
+                    result.notices.extend(f"{rel_path}: {n}" for n in _pv_sn)  # pure: dry-run fidelity
                     # ...and SURFACE what that merge decided. Classifying the file as MERGE
                     # instead of UNCHANGED (below) tells an operator that *something* changed;
                     # it does not tell them a capability grant widened. The real run emits
@@ -687,6 +690,10 @@ def emit_all(
             )
             for notice in _fm_guard_notices:
                 result.notices.append(f"{rel_path}: {notice}")
+            # #15/#16: structurally-owned unfenced regions (goose sub_recipes; AGENTS.md rules).
+            merge_result.merged_content, _sn = post_merge_structural(
+                rel_path, normalized_content, merge_result.merged_content)
+            result.notices.extend(f"{rel_path}: {n}" for n in _sn)
             # Partial fence adoption: a template fenced a section this team predates, so the
             # fenced block landed beside the deployed file's unfenced copy. Reported, never
             # auto-resolved — see fences._detect_duplicate_sections.

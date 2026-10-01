@@ -133,6 +133,39 @@ The following content categories must **never** be placed inside fence markers:
 - The file's primary `#` heading
 - Content that is entirely user-authored from first generation (e.g., `## Constitutional Rules` in `copilot-instructions.md`)
 
+### Exception: the AGENTS.md Constitutional Rules baseline
+
+For the three repo-root `AGENTS.md` targets (goose, codex, agents-md) the rules list is split in
+two by `agentteams/frameworks/_agents_md_rules.py` (follow-up #16): a fenced
+`constitutional_rules_baseline` section ("## Constitutional Rules (baseline)" — the template's
+rules verbatim, sourced from the template alone (not from any on-disk file), and stating that it
+governs on conflict) plus an empty, unfenced `## Project Constitutional Rules (extensions)`
+heading where projects extend it. Both `constitutional_rules_baseline` and `constitutional_core`
+are template-authoritative (`fences._TEMPLATE_AUTHORITATIVE_FENCES`): `--shrink-policy=preserve`
+cannot pin an edited body. An existing `AGENTS.md` gains the fence on `--update --merge`; while
+its old unfenced `## Constitutional Rules` list remains, a duplicate-list notice prints on every
+run. `copilot-instructions.md` is unchanged.
+
+### Structural ownership without a fence: goose `sub_recipes`
+
+A Goose recipe's top-level `sub_recipes:` key cannot be fenced: a new fence would be spliced
+inside the indented `instructions: |` block scalar, and a column-0 marker there ends the scalar
+and corrupts the YAML. It is owned **structurally** instead
+(`agentteams/frameworks/goose_recipe_merge.py`, follow-up #15). On `--update --merge` the span
+from the column-0 `sub_recipes:` line to the next column-0 key is replaced with the fresh render's
+(appended when absent, removed when the fresh render has none), the added/removed names are
+reported, and the previous list stays in the merge backup. The key is marked by a column-0
+comment, which Goose ignores:
+
+```yaml
+# agentteams-managed: sub_recipes (regenerated on --update; change delegation via the brief/roster)
+sub_recipes:
+```
+
+An unrecognised on-disk shape (`sub_recipes: []`, an inline comment, a duplicated key) is
+reported and left untouched, and an edit that would introduce a recipe-validation violation is
+rolled back. Change delegation through the brief or roster, not by hand-editing the list.
+
 ---
 
 ## Authoring Consequences

@@ -542,3 +542,52 @@ class TestOrphanDetectionExtension:
         from agentteams.bridge import _render_quickstart
         snippet = _render_quickstart("copilot-vscode", "goose")
         assert "--convert-from" in snippet
+
+
+# ---------------------------------------------------------------------------
+# #15 — sub_recipes excludes tools, reserved bridge slugs and recipe-less roster members
+# ---------------------------------------------------------------------------
+
+class TestSubRecipesRosterFiltering:
+    """Fresh orchestrator sub_recipes list only slugs that have (or will have) a recipe."""
+
+    def _paths(self, recipe: str) -> list[str]:
+        import re
+        return re.findall(r'path:\s*"\./([^"]+)\.yaml"', recipe)
+
+    def test_tool_bridge_and_template_less_slugs_are_excluded(self, capsys):
+        manifest = _make_manifest(
+            output_files=[
+                {"path": "alpha.agent.md"},
+                {"path": "beta.agent.md"},
+                {"path": "gamma.agent.md"},
+                # A roster member whose template does not exist: render_all skips it.
+                {"path": "interpretation-advisor.agent.md",
+                 "template": "domain/interpretation-advisor.template.md"},
+                {"path": "team-builder.agent.md"},
+            ],
+            agent_slug_list=["orchestrator", "alpha", "interpretation-advisor"],
+            existing_agent_slugs=["tool-pandoc", "bridge-orchestrator", "beta"],
+            tool_agents=[{"slug": "tool-pandoc"}],
+        )
+        recipe = GooseAdapter().render_agent_file(
+            _ORCHESTRATOR_WITH_HANDOFFS, "orchestrator", manifest
+        )
+        paths = self._paths(recipe)
+        assert {"alpha", "beta", "gamma"} <= set(paths)
+        for excluded in ("tool-pandoc", "bridge-orchestrator", "team-builder",
+                         "interpretation-advisor", "orchestrator"):
+            assert excluded not in paths, f"{excluded} must not be a sub_recipe"
+        err = capsys.readouterr().err
+        assert "'interpretation-advisor' skipped from orchestrator sub_recipes" in err
+        assert "bespoke (no template; no recipe emitted)" in err
+
+    def test_on_disk_bespoke_recipe_is_kept(self):
+        manifest = _make_manifest(
+            agent_slug_list=["orchestrator", "interpretation-advisor"],
+            existing_agent_slugs=["interpretation-advisor"],
+        )
+        recipe = GooseAdapter().render_agent_file(
+            _ORCHESTRATOR_WITH_HANDOFFS, "orchestrator", manifest
+        )
+        assert "interpretation-advisor" in self._paths(recipe)
