@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (interop projection marker is deterministic)
+
+- The `origin: interop` marker records `source_dir` as the team-relative path (`.github/agents`). It no longer
+  records an absolute path when the source lies outside the projection root, so a temp-dir re-projection matches
+  and no home path reaches a committed file.
+- An unchanged re-projection keeps the committed marker byte-identical. It is rewritten only when a field other
+  than `generated_at` changes. Render-consistency diffs therefore need to ignore only `generated_at`, and only
+  when comparing a fresh temp projection.
+
 ### fix (interop-projected Codex teams were invisible: no team marker)
 
 - No interop path wrote `references/build-log.json`, the agentteams team marker. So a `.codex/agents` team
