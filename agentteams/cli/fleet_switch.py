@@ -32,7 +32,8 @@ def add_fleet_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "Which infrastructures to update per workspace (default: both). "
             "`both` = copilot-vscode + claude (backward-compatible). "
-            "`all` = copilot-vscode + claude + goose. "
+            "`all` = copilot-vscode + claude + goose + codex (a .codex/agents team with a "
+            "marker; an interop projection gets its refresh command, never an --update). "
             "`goose` = Goose workspaces only."
         ),
     )

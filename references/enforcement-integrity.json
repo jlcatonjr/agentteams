@@ -30,7 +30,7 @@
     "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/templates/universal/hooks/constitutional-gate.py": "54e3b5f46286e5d27350f5499a9f4456dffb64917bdf1e35c29051207fcd1c42",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
-    "agentteams/templates/universal/sandbox/confine-run.sh": "653197f6b7c59518926f89f0c0391c079ae1ea59d61a4d46f2fd274f855b44b5",
+    "agentteams/templates/universal/sandbox/confine-run.sh": "064d47060768ecfe629c000ce8d1cbf2bec533fa0b8fb1f665ab4df8f439dea5",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "c485df0b39dd0847bcb08fc583c4f0fad9c377f4ae3702a62e2c57576c84f69c",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"
   },

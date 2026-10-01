@@ -102,6 +102,8 @@ class FrameworkFreshness:
         unverifiable:       True when the build-log predates template-hash tracking
                             (no ``template_hashes``), so drift cannot be computed — the
                             render is neither confirmed current nor confirmed stale.
+        interop:            True when the build-log is an ``origin: "interop"`` projection
+                            marker (always ``unverifiable``; reported as such, cond 13).
     """
 
     framework: str
@@ -111,6 +113,7 @@ class FrameworkFreshness:
     changed_templates: list[str]
     missing_templates: list[str]
     unverifiable: bool = False
+    interop: bool = False
 
     @property
     def is_stale(self) -> bool:
@@ -154,7 +157,9 @@ class FrameworkFreshnessReport:
         at a render that is itself behind. Falls back to None when no current render
         carries a ``generated_at`` stamp.
         """
-        stamped = [r for r in self.renders if r.generated_at and not r.is_stale]
+        # Unverifiable renders (legacy or interop) are never "current", so never the freshest.
+        stamped = [r for r in self.renders
+                   if r.generated_at and not r.is_stale and not r.unverifiable]
         if not stamped:
             return None
         return max(stamped, key=lambda r: r.generated_at or "")
@@ -210,7 +215,8 @@ def scan(project_root: Path, templates_dir: Path) -> FrameworkFreshnessReport:
         # A build-log without template_hashes predates hash tracking; detect_drift's
         # legacy branch would return ALL templates as "changed", which is not real drift.
         # Classify it as unverifiable rather than crying wolf.
-        unverifiable = not build_log.get("template_hashes")
+        interop = drift.is_interop_marker(build_log)
+        unverifiable = interop or not build_log.get("template_hashes")
         try:
             dreport = drift.detect_drift(agents_dir, templates_dir, build_log=build_log)
         except FileNotFoundError as exc:
@@ -229,6 +235,7 @@ def scan(project_root: Path, templates_dir: Path) -> FrameworkFreshnessReport:
                 ),
                 missing_templates=[] if unverifiable else list(dreport.missing_templates),
                 unverifiable=unverifiable,
+                interop=interop,
             )
         )
     return report
@@ -259,7 +266,9 @@ def print_report(report: FrameworkFreshnessReport, *, project_root: Path) -> Non
             rel = r.agents_dir.relative_to(project_root)
         except ValueError:
             rel = r.agents_dir
-        if r.unverifiable:
+        if r.interop:
+            status = drift.INTEROP_UNVERIFIABLE
+        elif r.unverifiable:
             status = "unverifiable (legacy build-log, no template hashes)"
         elif r.is_stale:
             detail = []
@@ -284,5 +293,8 @@ def print_report(report: FrameworkFreshnessReport, *, project_root: Path) -> Non
 
     if report.has_stale:
         print(f"\n{len(report.stale)} render(s) behind the current templates.")
+    elif report.unverifiable:
+        print(f"\nNo render is provably stale; {len(report.unverifiable)} render(s) are "
+              "unverifiable (not confirmed current).")
     else:
         print("\nAll renders are current with the templates.")

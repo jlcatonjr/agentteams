@@ -963,7 +963,7 @@ Update every agent-infrastructure workspace under `DIR` and its subfolders. Requ
 Which infrastructures to update per workspace. Default: `both`.
 
 - `both` (default) — copilot-vscode (`.github/agents/`) + claude (`.claude/`), backward-compatible.
-- `all` — adds goose to `both` (copilot-vscode + claude + goose).
+- `all` — adds goose and codex to `both` (copilot-vscode + claude + goose + codex). A `.codex/agents` team is discovered by its `references/build-log.json` marker; an interop projection (`origin: "interop"`) is reported as a SKIP row carrying its refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), never `--update`d.
 - `goose` — Goose workspaces only.
 - `github` / `claude` — restrict to that single infrastructure.
 

@@ -216,6 +216,7 @@ nav:
       - parallel-plan: api-reference/parallel-plan.md
       - liaison-logs: api-reference/liaison-logs.md
       - control-plane-io: api-reference/control-plane-io.md
+      - projection-marker: api-reference/projection-marker.md
       - team-dir-advisories: api-reference/team-dir-advisories.md
       - prompt-roots: api-reference/prompt-roots.md
       - host-features: api-reference/host-features.md

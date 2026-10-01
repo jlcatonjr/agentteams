@@ -61,6 +61,18 @@ def _is_git_tracked_dir(path: Path) -> bool:
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
+def _is_interop_marker(log_path: Path) -> bool:
+    """Whether ``log_path`` is an ``origin: "interop"`` projection marker (unreadable = no)."""
+    import json
+
+    from agentteams.drift import is_interop_marker
+
+    try:
+        return is_interop_marker(json.loads(log_path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return False
+
+
 def _looks_agentteams_generated(path: Path) -> bool:
     """Whether ``path`` shows any sign of being an agentteams output tree.
 
@@ -74,6 +86,8 @@ def _looks_agentteams_generated(path: Path) -> bool:
     """
     for marker in _GENERATED_MARKERS:
         if (path / marker).exists():
+            if marker == "references/build-log.json" and _is_interop_marker(path / marker):
+                continue  # cond 13: a projection marker never vouches for a native overwrite
             return True
     try:
         for candidate in list(path.glob("*.md"))[:40]:

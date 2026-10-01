@@ -279,6 +279,12 @@ team_looks_planted(){   # team dir -> true when it holds no agent file of its fr
   done < <(compgen -G "$t/$glob" || true)
   return 0
 }
+regen_hint(){   # team dir -> how to regenerate it (MESSAGE ONLY; nothing is read or granted)
+  case "$1" in
+    */.codex/agents) printf '%s' "agentteams --update for a native Codex team; a Codex team written by an interop projection (origin: interop in $TEAM_MARKER_REL) is refreshed by re-running that projection OUTSIDE any agent sandbox: agentteams --interop-from <source> --framework codex --output . --overwrite" ;;
+    *) printf '%s' "agentteams --update" ;;
+  esac
+}
 # #11 (2026-09-30): `.codex/config.toml` is protect-if-present, so a file a confined process created
 # is locked in from the next launch, and Codex run OUTSIDE this launcher would honour it. Warn on the
 # security-relevant keys every run (key-based, never a digest an agent could re-record). Never a die.
@@ -334,9 +340,9 @@ control_plane_binds() {
         team="$(cp_required "$r" "$rel")"
         [ -n "$team" ] || continue
         if team_looks_planted "$team"; then
-          die "control-plane path $(printf %q "$r/$rel") is missing although the agentteams team $(printf %q "$team") exists, but it holds only an agentteams marker ($TEAM_MARKER_REL) and no agent files: it may have been PLANTED by a confined process. If you did not generate an agentteams team there, inspect and remove $(printf %q "$team/$TEAM_MARKER_REL") from OUTSIDE the sandbox, then retry. Otherwise regenerate the team (agentteams --update). Nothing was changed (fail-closed)."
+          die "control-plane path $(printf %q "$r/$rel") is missing although the agentteams team $(printf %q "$team") exists, but it holds only an agentteams marker ($TEAM_MARKER_REL) and no agent files: it may have been PLANTED by a confined process. If you did not generate an agentteams team there, inspect and remove $(printf %q "$team/$TEAM_MARKER_REL") from OUTSIDE the sandbox, then retry. Otherwise regenerate the team ($(regen_hint "$team")). Nothing was changed (fail-closed)."
         fi
-        die "control-plane path $(printf %q "$r/$rel") is missing although the agentteams team $(printf %q "$team") exists: a confined process could create it (fail-closed; never created). Regenerate the team with current agentteams (agentteams --update) so it is emitted (agentteams before 2026-09-30 did not emit it for every framework and platform), then retry."
+        die "control-plane path $(printf %q "$r/$rel") is missing although the agentteams team $(printf %q "$team") exists: a confined process could create it (fail-closed; never created). Regenerate the team with current agentteams ($(regen_hint "$team")) so it is emitted (agentteams before 2026-09-30 did not emit it for every framework and platform), then retry."
       fi
       p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )

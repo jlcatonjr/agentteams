@@ -18,7 +18,9 @@ Fields:
 2. `skipped`: skipped target files.
 3. `errors`: pipeline errors.
 4. `bundle_files`: emitted bundle artifact files.
-5. `dry_run`: whether run was simulated.
+5. `notices`: operator notices, such as an instruction file left untouched or the `.codex` session advisory.
+6. `dry_run`: whether run was simulated.
+7. `marker_files`: the team marker (`references/build-log.json`, `origin: "interop"`), always last, after the control-plane files written before it. See [`projection_marker`](projection-marker.md).
 
 Property:
 
@@ -75,6 +77,15 @@ Modes:
 2. `bundle`: target files plus compatibility artifacts
 
 Bundle artifacts are emitted under `references/interop/<source>-to-<target>/`.
+
+Team marker (2026-10-01): a run that is real (not `dry_run`), not `skills_only`, and error-free
+then calls `projection_marker.mark_interop_projection`. That applies when the target is one of
+`projection_marker.MARKER_FRAMEWORKS` (codex, copilot-vscode, copilot-cli, goose). It writes the
+team's switch, verify-key store sentinel and roster stubs (each write-if-absent), and only then an
+`origin: "interop"` `references/build-log.json` with empty `template_hashes`. It never writes over
+a native build-log. A failed or unsafe control-plane write, such as a symlinked `references/`,
+adds an error and writes no marker. `write_projection_marker` is re-exported here; see
+[`projection_marker`](projection-marker.md).
 
 ---
 

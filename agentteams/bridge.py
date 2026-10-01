@@ -86,11 +86,15 @@ class BridgeResult:
 
 #: Where a NATIVE team of each target framework keeps its build-log. A bridge never writes one,
 #: so its presence under a bridge target means the directory also holds a full native team.
+#: codex (2026-10-01): run_bridge does not accept codex as a target today, so that entry is
+#: reached only by direct callers of :func:`native_team_notice`; an ``origin: "interop"``
+#: marker (``projection_marker``) gets the interop refresh command instead of ``--update``.
 _NATIVE_BUILD_LOGS: dict[str, tuple[str, ...]] = {
     "claude": (".claude", "agents", "references", "build-log.json"),
     "goose": (".goose", "recipes", "references", "build-log.json"),
     "copilot-vscode": (".github", "agents", "references", "build-log.json"),
     "copilot-cli": (".github", "agents", "references", "build-log.json"),
+    "codex": (".codex", "agents", "references", "build-log.json"),
 }
 
 
@@ -139,6 +143,17 @@ def native_team_notice(*, output_root: Path, target_framework: str, source_dir: 
     version = log.get("agentteams_version")
     built = f"agentteams {version}" if version else "an agentteams build that predates version stamping"
     agents_dir = rel_to_root(log_path.parent.parent, output_root)
+    if log.get("origin") == "interop":  # projection_marker: refreshed by interop, not --update
+        from agentteams.projection_marker import safe_source_hint
+
+        source = safe_source_hint(log.get("source_dir"))  # agent-writable: known dirs only (C4)
+        return (
+            f"{agents_dir}/ holds an INTEROP-PROJECTED {target_framework} team ({built}; "
+            f"{rel_to_root(log_path, output_root)}, origin: interop) inside this bridge target. No "
+            "bridge mode refreshes it. Refresh it by re-running the projection outside any agent "
+            f"sandbox: agentteams --interop-from {source} --framework {target_framework} --output . "
+            "--overwrite."
+        )
     return (
         f"{agents_dir}/ holds a NATIVE {target_framework} team ({built}; "
         f"{rel_to_root(log_path, output_root)}) inside this bridge target. No bridge mode "
