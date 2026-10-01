@@ -5,7 +5,7 @@
 
 - Modules mapped: **180**
 - Packages: **7**
-- Internal import edges: **423**
+- Internal import edges: **426**
 - Distinct external dependencies: **7**
 
 ---
@@ -103,7 +103,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.code_index_artifacts` |
 | `agentteams.codex_mcp_emit` | `agentteams.atomicio`, `agentteams.mcp_emit`, `agentteams.toml_write` | `agentteams.cli.artifacts` |
-| `agentteams.control_plane_io` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync` |
+| `agentteams.control_plane_io` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.frameworks.base`, `agentteams.multi_sync` |
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry` | `agentteams.cli.commands` |
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fences` | `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
@@ -128,10 +128,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.framework_research` | `agentteams.frameworks.format_spec` | `agentteams.cli.generate`, `agentteams.framework_conformance` |
 | `agentteams.frameworks` | — | — |
 | `agentteams.frameworks._goose_sandbox_emit` | `agentteams.frameworks._sandbox_emit`, `agentteams.host_features` | `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.control_plane_io`, `agentteams.frameworks.goose` |
-| `agentteams.frameworks._linux_sandbox_emit` | — | `agentteams.frameworks.base`, `agentteams.frameworks.codex` |
-| `agentteams.frameworks._sandbox_emit` | — | `agentteams.cli.commands`, `agentteams.cli.generate_helpers`, `agentteams.cli.grant_commands`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.multi_sync` |
+| `agentteams.frameworks._linux_sandbox_emit` | — | `agentteams.control_plane_io`, `agentteams.frameworks.base`, `agentteams.frameworks.codex` |
+| `agentteams.frameworks._sandbox_emit` | — | `agentteams.cli.commands`, `agentteams.cli.generate_helpers`, `agentteams.cli.grant_commands`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.multi_sync` |
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.output_plan` |
+| `agentteams.frameworks.base` | `agentteams.control_plane_io`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.output_plan` |
 | `agentteams.frameworks.claude` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.registry`, `agentteams.interop` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
@@ -1071,6 +1071,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks._goose_sandbox_emit",
+        "agentteams.frameworks._linux_sandbox_emit",
         "agentteams.frameworks._sandbox_emit"
       ],
       "external": [],
@@ -1354,7 +1355,9 @@ digraph "agentteams architecture" {
       "path": "agentteams/frameworks/base.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.control_plane_io",
         "agentteams.frameworks._linux_sandbox_emit",
+        "agentteams.frameworks._sandbox_emit",
         "agentteams.yaml_frontmatter"
       ],
       "external": [],
@@ -3288,6 +3291,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.control_plane_io",
+      "target": "agentteams.frameworks._linux_sandbox_emit"
+    },
+    {
+      "source": "agentteams.control_plane_io",
       "target": "agentteams.frameworks._sandbox_emit"
     },
     {
@@ -3448,7 +3455,15 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.frameworks.base",
+      "target": "agentteams.control_plane_io"
+    },
+    {
+      "source": "agentteams.frameworks.base",
       "target": "agentteams.frameworks._linux_sandbox_emit"
+    },
+    {
+      "source": "agentteams.frameworks.base",
+      "target": "agentteams.frameworks._sandbox_emit"
     },
     {
       "source": "agentteams.frameworks.base",

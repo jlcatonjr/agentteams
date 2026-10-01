@@ -54,6 +54,7 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _exclusive_read_deny_paths,
     _inject_sandbox_block,
     _sandbox_feature_enabled,
+    sibling_deny_dirs,
 )
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -253,6 +254,8 @@ class ClaudeAdapter(FrameworkAdapter):
                     deny_read_resolved_abspath=bool(
                         manifest.get("resolve_deny_read_abspath")
                     ),
+                    # Present sibling teams, computed by the CLI (transient; never from input).
+                    sibling_deny_dirs=sibling_deny_dirs(manifest),
                 )
                 # The sandbox block's denyWrite names the verify-key store DIRECTORY, and bwrap
                 # cannot start on a missing deny path, so the store's frozen sentinel is emitted

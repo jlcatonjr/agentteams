@@ -87,8 +87,21 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(/.claude/settings.json)",
         "Edit(/.claude/settings.local.json)",
         "Edit(/.claude/hooks/**)",
+        # 2026-09-30: the sibling teams' trust-root files (never a whole agents dir).
+        *_sibling_rules(".github/agents"),
+        *_sibling_rules(".codex/agents"),
+        *_sibling_rules(".goose/recipes"),
+        "Edit(/.goose/sandbox.sb)",
+        "Edit(/.codex/config.toml)",
     ]
     assert "Edit(/.claude/**)" not in permission_deny_rules("claude")
+
+
+def _sibling_rules(agents: str) -> list[str]:
+    refs = f"{agents}/references"
+    return [f"Edit(/{refs}/agent-privilege.json)", f"Edit(/{refs}/authorized-verify-keys/**)",
+            f"Edit(/{refs}/security-approvers.txt)", f"Edit(/{refs}/authorized-managers.txt)",
+            f"Edit(/{refs}/management-authority.json)", f"Edit(/{refs}/build-log.json)"]
 
 
 def test_control_plane_ancestors_are_top_down_and_deduplicated():
@@ -123,15 +136,22 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
         governed_roster_paths,
     )
 
+    from agentteams.frameworks._sandbox_emit import (
+        ALL_TEAM_FRAMEWORKS,
+        CODEX_CONFIG_REL,
+        team_agents_dir,
+    )
+
     text = LAUNCHER.read_text(encoding="utf-8")
     body = re.search(r"CONTROL_PLANE_REL=\(([^)]*)\)", text).group(1)
-    expected = {*protected_write_paths("claude"), *protected_write_paths("goose"), ".goose/sandbox.sb",
-                *governed_roster_paths("claude"), *governed_roster_paths("goose"),
-                GRANT_ROSTER_PROJECT_REL}
+    expected = {*(p for fw in ALL_TEAM_FRAMEWORKS for p in protected_write_paths(fw)),
+                *(p for fw in ALL_TEAM_FRAMEWORKS for p in governed_roster_paths(fw)),
+                ".goose/sandbox.sb", CODEX_CONFIG_REL, GRANT_ROSTER_PROJECT_REL}
     assert set(body.split()) == expected
     assert re.search(r"^TEAM_MARKER_REL=(\S+)$", text, re.M).group(1) == TEAM_MARKER_REL
     teams = re.search(r"TEAM_DIRS_REL=\(([^)]*)\)", text).group(1).split()
-    assert teams == [".claude/agents", ".goose/recipes"]
+    assert teams == [team_agents_dir(fw) for fw in ALL_TEAM_FRAMEWORKS]
+    assert teams == [".claude/agents", ".goose/recipes", ".github/agents", ".codex/agents"]
 
 
 # --- mechanism: raw bubblewrap ----------------------------------------------------------------
@@ -385,17 +405,3 @@ def test_launcher_allows_a_bare_config_dir_without_a_team(tmp_path):
     (p / ".claude" / "settings.local.json").write_text("{}", encoding="utf-8")
     r = _check("--scratch", str(p))
     assert r.returncode == 0, r.stderr
-
-
-def test_two_framework_project_warns_that_goose_is_not_denied(tmp_path, capsys):
-    """@security PR-B condition B: a documented manual step also needs a generate-time warning."""
-    from agentteams.cli.generate_helpers import _warn_goose_under_claude_sandbox
-
-    agents = tmp_path / ".claude" / "agents"
-    agents.mkdir(parents=True)
-    m = {"framework": "claude", "host_features": ["claude:sandbox"]}
-    assert _warn_goose_under_claude_sandbox(m, agents) is False
-    (tmp_path / ".goose" / "recipes").mkdir(parents=True)
-    assert _warn_goose_under_claude_sandbox(m, agents) is True
-    assert '".goose"' in capsys.readouterr().err
-    assert _warn_goose_under_claude_sandbox({"framework": "claude"}, agents) is False

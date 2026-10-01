@@ -60,9 +60,13 @@ _SANDBOX_COMMENT_LINES: list[str] = [
     "NEXT session reads. Claude Code binds the entry read-only over the project, so `.claude`",
     "cannot be renamed, replaced or written from Bash (you, outside a session, are",
     "unaffected). Status: VERIFIED on Linux with Claude Code 2.1.251 (read-only bind in its",
-    "bwrap argv; a sandboxed `mv .claude` fails), under the AppArmor precondition above. In a project that",
-    "ALSO has a goose team, `.goose` is NOT denied here (a missing deny path stops bwrap):",
-    "add \".goose\" to denyWrite yourself if both teams share the project.",
+    "bwrap argv; a sandboxed `mv .claude` fails), under the AppArmor precondition above.",
+    "Sibling teams (2026-09-30): when the project held a codex, copilot or goose agentteams team",
+    "at generation, denyWrite also names `.codex`, `.github/agents` or `.goose` (only those present:",
+    "a missing deny path stops bwrap). Claude Code self-binds each deny path's parent, so `.github`",
+    "cannot be renamed while `.github/workflows` stays writable (product-verified, Claude Code",
+    "2.1.251, Linux; re-run after upgrades). REMOVE an entry from your .claude/settings.json BEFORE",
+    "deleting that team, or every sandboxed command fails (\"Can't mkdir ... Not a directory\").",
 ]
 
 
@@ -99,6 +103,10 @@ _SIGNING_KEY_COMMENT_LINES: list[str] = [
     "for Claude Code 2.1.251 on Ubuntu with the documented bwrap AppArmor profile installed",
     "(macOS is UNVERIFIED). A denyRead path that does not exist was tolerated by bwrap on Claude Code 2.1.251",
     "(Linux); older builds are untested.",
+    "The list also carries Edit(...) rules for the SIBLING teams' trust-root files (.github/agents,",
+    ".codex/agents and .goose/recipes: switch, verify-key store, rosters, build-log.json; plus",
+    ".goose/sandbox.sb and .codex/config.toml), emitted whether or not those teams exist. They do",
+    "NOT cover copilot/codex agent files or .github/copilot-instructions.md (Edit-tool writable).",
 ]
 
 
@@ -255,6 +263,24 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     rules += [f"Edit(/{p})" for p in (*governed_roster_paths(framework), GRANT_ROSTER_PROJECT_REL)]
     rules += [f"Edit(/{p})" for p in _CLAUDE_SETTINGS_PATHS]
     rules.append(f"Edit(/{_GATE_HOOK_PATH.rsplit('/', 1)[0]}/**)")
+    if framework == "claude":
+        rules += _sibling_permission_deny_rules()
+    return rules
+
+
+def _sibling_permission_deny_rules() -> list[str]:
+    """Return the ``Edit(...)`` rules for the sibling teams' trust-root FILES (2026-09-30).
+
+    Unconditional: an ``Edit`` rule needs no existing path. Scoped to the trust roots (switch,
+    verify-key store, rosters, team marker, the goose profile, Codex's config), never a whole
+    agents dir: authoring copilot/codex agent files with the Edit tool stays possible.
+    """
+    rules: list[str] = []
+    for key in ("copilot", "codex", "goose"):
+        store = _verify_key_store_path(key)
+        rules += [f"Edit(/{_AGENT_PRIVILEGE_SWITCH[key]})", f"Edit(/{store}/**)"]
+        rules += [f"Edit(/{p})" for p in (*governed_roster_paths(key), team_marker_path(key))]
+    rules += ["Edit(/.goose/sandbox.sb)", f"Edit(/{CODEX_CONFIG_REL})"]
     return rules
 
 
@@ -409,10 +435,34 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #: - DELIBERATELY NOT denied: the ledgers (``security-decisions.log.csv`` etc.; the in-sandbox gate
 #:   rewrites them to consume use counts, and their integrity is signatures + hash chains) and
 #:   ``signing-governed.marker`` (creating it only makes the workspace stricter).
+#: - SIBLING team dirs (2026-09-30): the table below also maps the copilot and codex team keys.
+#:   Their trust roots reach the Claude ``denyWrite`` only as whole dirs, and only when present at
+#:   generation (:data:`SIBLING_DENY_DIRS`). ``permission_deny_rules`` covers their files always, and
+#:   the launcher and the goose Seatbelt profile list them. The Claude set
+#:   (:data:`_PROTECTED_WRITE_PATHS`) is unchanged.
 _AGENT_PRIVILEGE_SWITCH: dict[str, str] = {
     "claude": ".claude/agents/references/agent-privilege.json",
     "goose": ".goose/recipes/references/agent-privilege.json",
+    # 2026-09-30 (team-dir control plane): the copilot (copilot-vscode + copilot-cli share
+    # ``.github/agents``) and codex team dirs hold the same framework-neutral trust roots. They
+    # emit no sandbox of their own; the Claude block, the goose Seatbelt profile and the launcher
+    # protect them. agents-md (``.agents``, shared with Codex skills) is out of scope.
+    "copilot": ".github/agents/references/agent-privilege.json",
+    "codex": ".codex/agents/references/agent-privilege.json",
 }
+
+#: Every team key whose trust roots are protected, in launcher ``TEAM_DIRS_REL`` order.
+ALL_TEAM_FRAMEWORKS: tuple[str, ...] = ("claude", "goose", "copilot", "codex")
+
+#: Framework id -> team key (the two copilot adapters share one team dir).
+TEAM_KEY_BY_FRAMEWORK: dict[str, str] = {
+    "claude": "claude", "goose": "goose", "copilot-vscode": "copilot", "copilot-cli": "copilot",
+    "codex": "codex",
+}
+
+#: Codex's project config (approval and sandbox policy; an upstream claim, unverified here).
+#: Protect-if-present everywhere: agentteams never emits it and emits no stub for it.
+CODEX_CONFIG_REL = ".codex/config.toml"
 _GATE_HOOK_PATH = ".claude/hooks/constitutional-gate.py"
 
 #: The verify-key store's name inside the team ``references/``. ``decision_log`` reads
@@ -448,19 +498,31 @@ def _verify_key_store_path(framework: str) -> str:
 
 
 def protected_write_paths(framework: str) -> tuple[str, ...]:
-    """Project-root-relative control-plane paths an in-sandbox agent of ``framework`` must not write.
+    """Project-root-relative control-plane paths an in-sandbox agent must not write, for a team.
 
     Args:
-        framework: ``"claude"`` or ``"goose"`` (the frameworks with an emitted sandbox).
+        framework: A team key of :data:`ALL_TEAM_FRAMEWORKS`.
 
     Returns:
-        The switch path for that framework's default agents dir, the gate hook, then the
-        verify-key store directory (see the comment above for its unverified Claude arm).
+        The switch path for that team's default agents dir, the gate hook (claude and goose
+        only: copilot and codex emit none), then the verify-key store directory.
 
     Raises:
-        KeyError: ``framework`` emits no sandbox.
+        KeyError: ``framework`` is not a protected team key.
     """
-    return (_AGENT_PRIVILEGE_SWITCH[framework], _GATE_HOOK_PATH, _verify_key_store_path(framework))
+    if framework in ("claude", "goose"):
+        return (_AGENT_PRIVILEGE_SWITCH[framework], _GATE_HOOK_PATH, _verify_key_store_path(framework))
+    return (_AGENT_PRIVILEGE_SWITCH[framework], _verify_key_store_path(framework))
+
+
+def team_agents_dir(framework: str) -> str:
+    """Return a team key's project-root-relative default agents dir (e.g. ``.github/agents``)."""
+    return _AGENT_PRIVILEGE_SWITCH[framework].rsplit("/", 2)[0]
+
+
+def team_marker_path(framework: str) -> str:
+    """Return a team key's project-root-relative team marker (``<agents dir>/references/build-log.json``)."""
+    return f"{team_agents_dir(framework)}/{TEAM_MARKER_REL}"
 
 
 #: The Claude set (kept under its original name for existing importers).
@@ -515,34 +577,35 @@ def governed_roster_paths(framework: str) -> tuple[str, ...]:
     """Project-root-relative operator-only rosters/config of ``framework``'s default team dir.
 
     Args:
-        framework: ``"claude"`` or ``"goose"``.
+        framework: A team key of :data:`ALL_TEAM_FRAMEWORKS`.
 
     Returns:
         The approver roster, the authorized-manager roster and ``management-authority.json``,
         derived from the switch's ``references/`` dir.
 
     Raises:
-        KeyError: ``framework`` emits no sandbox.
+        KeyError: ``framework`` is not a protected team key.
     """
     references_dir = _AGENT_PRIVILEGE_SWITCH[framework].rsplit("/", 1)[0]
     return tuple(f"{references_dir}/{name}" for name in _GOVERNED_ROSTER_NAMES)
 
 
 def framework_config_dir(framework: str) -> str:
-    """Return ``framework``'s project-root-relative top-level config dir (``.claude``, ``.goose``).
+    """Return a team key's project-root-relative top-level config dir (``.claude``, ``.github``, …).
 
     Derived from the SAME source as :func:`protected_write_paths` (the switch path's first
     segment), so a team written under a non-default ``--output`` gets the same frame, and the
     existing mismatch warning (``cli.generate_helpers._warn_sandbox_deny_path_mismatch``) names it.
 
     Args:
-        framework: ``"claude"`` or ``"goose"``.
+        framework: A team key of :data:`ALL_TEAM_FRAMEWORKS`. ``.github`` (copilot) is used for
+            ancestors only, never as a Claude deny (it holds workflows and CODEOWNERS).
 
     Returns:
         The config dir, e.g. ``".claude"``.
 
     Raises:
-        KeyError: ``framework`` emits no sandbox.
+        KeyError: ``framework`` is not a protected team key.
     """
     return _AGENT_PRIVILEGE_SWITCH[framework].split("/", 1)[0]
 
@@ -568,6 +631,71 @@ def control_plane_ancestors(paths: tuple[str, ...] | list[str]) -> tuple[str, ..
             if anc not in out:
                 out.append(anc)
     return tuple(sorted(out))
+
+
+#: Sibling team key -> the directory the Claude block write-denies when that team is present.
+#: ``.codex`` and ``.goose`` whole (no renameable ancestor below the project root); ``.github/agents``
+#: only, never ``.github`` (workflows, CODEOWNERS). Claude Code 2.1.251 self-binds each deny path's
+#: PARENT read-write (captured argv), so ``.github`` becomes a mount point and cannot be renamed
+#: while ``.github/workflows`` stays writable (product itest, RUN_CLAUDE_SANDBOX_ITEST=1).
+SIBLING_DENY_DIRS: dict[str, str] = {"codex": ".codex", "copilot": ".github/agents", "goose": ".goose"}
+
+#: Transient manifest key carrying the COMPUTED sibling deny dirs (``cli.generate_helpers``). Never
+#: persisted (the ``_`` prefix keeps it out of the manifest fingerprint; the build log records named
+#: keys only). Honoured only as a ``tuple`` (a JSON brief or manifest can only yield a list, so an
+#: input-supplied value is ignored) and only for :data:`SIBLING_DENY_DIRS` values.
+SIBLING_DENY_DIRS_KEY = "_sibling_deny_dirs"
+
+
+def _real_dir_chain(project_root: str, rel: str) -> bool:
+    """True iff every component of ``rel`` under ``project_root`` is a real dir (never a symlink)."""
+    path = project_root
+    for part in rel.split("/"):
+        path = os.path.join(path, part)
+        if os.path.islink(path) or not os.path.isdir(path):
+            return False
+    return True
+
+
+def present_sibling_deny_dirs(project_root: str | os.PathLike[str]) -> tuple[str, ...]:
+    """Return the sibling deny dirs whose agentteams team is present under ``project_root``, sorted.
+
+    A team is present when its default agents dir and ``references/`` are real directories (no
+    component a symlink) holding a regular-file, non-symlink team marker. A symlinked ``.github``,
+    ``.codex``, agents dir or marker is rejected: a deny through a symlink would protect the
+    target, not the path the next session reads.
+
+    Args:
+        project_root: The project root (where the merged ``.claude/settings.json`` applies).
+
+    Returns:
+        E.g. ``(".codex", ".github/agents")``.
+    """
+    root = os.fspath(project_root)
+    out: list[str] = []
+    for key, deny in SIBLING_DENY_DIRS.items():
+        if not _real_dir_chain(root, f"{team_agents_dir(key)}/references"):
+            continue
+        marker = os.path.join(root, team_marker_path(key))
+        if os.path.isfile(marker) and not os.path.islink(marker):
+            out.append(deny)
+    return tuple(sorted(out))
+
+
+def sibling_deny_dirs(manifest: dict[str, Any]) -> tuple[str, ...]:
+    """Return the computed sibling deny dirs carried by ``manifest`` (:data:`SIBLING_DENY_DIRS_KEY`).
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        The allowed, de-duplicated dirs in sorted order; ``()`` when absent or not computed.
+    """
+    value = manifest.get(SIBLING_DENY_DIRS_KEY)
+    if not isinstance(value, tuple):
+        return ()
+    allowed = set(SIBLING_DENY_DIRS.values())
+    return tuple(sorted({v for v in value if isinstance(v, str) and v in allowed}))
 
 
 def _sandbox_fails_closed_on(platform: str | None = None) -> bool:
@@ -599,6 +727,7 @@ def _build_sandbox_block(
     *,
     platform: str | None = None,
     resolve_abspath: bool = False,
+    sibling_deny_dirs: tuple[str, ...] | list[str] = (),
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -615,6 +744,9 @@ def _build_sandbox_block(
             profile read-exclusion and no ``allowRead``.
         platform: Override for ``sys.platform`` (tests); see :func:`_sandbox_fails_closed_on`.
         resolve_abspath: Emit the signing-key entries as absolute paths (P3-3 opt-in).
+        sibling_deny_dirs: Sibling team dirs PRESENT at generation
+            (:func:`present_sibling_deny_dirs`), appended to ``denyWrite``. Never an absent one:
+            a missing deny path stops bwrap.
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
@@ -639,7 +771,8 @@ def _build_sandbox_block(
     # read-only mount point: renaming it (the ancestor-rename route to a planted tree) gives
     # EBUSY and a planted `.claude/settings.local.json` is refused. A deny only removes
     # capability, whatever the write roots; permissions.deny is unaffected (built-in tools).
-    filesystem["denyWrite"] = [*_PROTECTED_WRITE_PATHS, framework_config_dir("claude")]
+    filesystem["denyWrite"] = [*_PROTECTED_WRITE_PATHS, framework_config_dir("claude"),
+                               *sibling_deny_dirs]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
@@ -663,6 +796,7 @@ def _inject_sandbox_block(
     deny_read: list[str] | None = None,
     *,
     deny_read_resolved_abspath: bool = False,
+    sibling_deny_dirs: tuple[str, ...] = (),
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
@@ -685,6 +819,8 @@ def _inject_sandbox_block(
             signing-key ``denyRead``, the ``permissions.deny`` rules and their comment are
             emitted whether or not it is given.
         deny_read_resolved_abspath: The P3-3 opt-in; also resolves the signing-key entries.
+        sibling_deny_dirs: Present sibling team dirs for ``denyWrite`` (see
+            :func:`_build_sandbox_block`).
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
@@ -707,7 +843,8 @@ def _inject_sandbox_block(
             "the requested sandbox confinement block."
         )
     data["sandbox"] = _build_sandbox_block(
-        write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath
+        write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath,
+        sibling_deny_dirs=sibling_deny_dirs,
     )
     # Same branch as the sandbox block, never one without the other (R11): the built-in tools
     # are bound by permissions, not by the sandbox.

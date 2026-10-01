@@ -180,3 +180,48 @@ Never export `AGENTTEAMS_GRANT_SIGNING_KEY` into the shell that launches `claude
 `--output` keeps its store elsewhere, so a sandboxed agent could plant its own public key there and
 then sign a grant that verifies. Use the default agents dir, or add the store to `denyWrite` and
 `permissions.deny` by hand. `--update` warns when `--output` is not the default.
+
+### 2026-09-30 — The copilot and codex team dirs' trust roots were writable from every sandbox
+
+**Affected:** `main` before this fix. This covers every project holding a copilot
+(`.github/agents`) or codex (`.codex/agents`) agentteams team next to a sandboxed or launcher-confined
+agent. **Severity:** medium. The operator's C-5 gate for that team could be forged.
+
+Those team dirs hold the same framework-neutral trust roots as `.claude/agents`: the
+`enforce_decision_signing` switch, the verify-key store, the rosters and the team marker. No arm
+protected them. A confined agent could, for example, switch signing off and append an unsigned PASS
+row, which the operator's next `agentteams --update --output .github/agents --overwrite` would then
+honour.
+
+**Fix:**
+- The Claude block write-denies each present sibling team dir (`.codex`, `.github/agents`,
+  `.goose`). Status: product-verified, Claude Code 2.1.251, Linux, including a `.github` rename
+  refusal with a writable `.github/workflows`.
+- `permissions.deny` covers their trust-root files. Status: product-unverified.
+- The launcher requires and ro-binds them. Status: mechanism-verified.
+- The goose Seatbelt profile denies them. Status: unverified.
+- Copilot and codex teams get the roster stubs and store sentinel whenever the switch is emitted.
+
+**Action:**
+1. Run `agentteams --update` for each copilot and codex team, outside any sandbox. Until you do,
+   `sandbox/confine-run.sh` refuses the project on Linux.
+2. Re-merge the claude team's `sandbox` block.
+3. Remove a sibling's `denyWrite` entry BEFORE deleting that team.
+
+**Residuals:**
+- **Fake marker.** A planted `build-log.json` in an empty `.github/agents` or `.codex/agents`
+  makes the launcher refuse to start. This is denial of service only: nothing is granted.
+- **Copilot is not fully covered.** Its prompt-level roots (`.github/agents/*.agent.md`,
+  `.github/copilot-instructions.md`) stay writable through the Edit tool, and the gate hook is
+  the only check on them.
+- **Bash in `.github/agents`.** Denying `.github/agents` blocks routine in-sandbox Bash cleanup
+  and `sed` there, including of `_build-description.json`, which is tracked separately.
+- **`.codex` whole-deny.** It is untested against Codex CLI's own in-project writes.
+- **`.codex/config.toml`.** It is protect-if-present, so a launcher-confined process can create
+  it while it is absent.
+- **Teams added later.** A team created after the block was merged stays Bash-writable until you
+  re-merge. `--update` and `--check` name it.
+- **Profile mismatch.** A pre-existing cooperative claude or goose team still lacks its store and
+  rosters, so a launcher emitted by another confined team refuses the project. This predates the
+  fix.
+- **Out of scope.** `.agents` (agents-md) and Codex's own sandbox are not covered.

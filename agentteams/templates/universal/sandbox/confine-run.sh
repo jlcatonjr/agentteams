@@ -58,7 +58,10 @@
 #   disable the check. The approver/manager rosters are required only when that team's switch is
 #   present. A required entry that is absent is a DIE (a writable parent would let the process create
 #   it); anything else absent is skipped. The project-root references/security-approvers.txt (the
-#   grant roster) is protect-if-present only. --protect PATH (repeatable) ro-binds an extra path,
+#   grant roster) is protect-if-present only. Four team dirs are covered (TEAM_DIRS_REL): .claude/agents,
+#   .goose/recipes, .github/agents (copilot) and .codex/agents (codex); .codex/config.toml is
+#   protect-if-present. Only .github/agents/* maps to a team: .github/workflows is never protected,
+#   and its self-bound ancestor .github stays writable. --protect PATH (repeatable) ro-binds an extra path,
 #   e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
 #   Status: mechanism-verified (raw bwrap probes), product-unverified. The macOS branch is unchanged.
 #
@@ -112,10 +115,16 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .goose/recipes/references/agent-privilege.json .goose/recipes/references/authorized-verify-keys
                     .goose/recipes/references/security-approvers.txt .goose/recipes/references/authorized-managers.txt
                     .goose/recipes/references/management-authority.json
+                    .github/agents/references/agent-privilege.json .github/agents/references/authorized-verify-keys
+                    .github/agents/references/security-approvers.txt .github/agents/references/authorized-managers.txt
+                    .github/agents/references/management-authority.json
+                    .codex/agents/references/agent-privilege.json .codex/agents/references/authorized-verify-keys
+                    .codex/agents/references/security-approvers.txt .codex/agents/references/authorized-managers.txt
+                    .codex/agents/references/management-authority.json .codex/config.toml
                     .goose/sandbox.sb references/security-approvers.txt )
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
 TEAM_MARKER_REL=references/build-log.json
-TEAM_DIRS_REL=( .claude/agents .goose/recipes )
+TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents )
 CP_ANC=(); CP_RO=()
 # DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
 # launcher's environment by default: only these benign vars (when set) plus any --env-allow name and
@@ -216,8 +225,11 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
   local r="$1" rel="$2" team
   case "$rel" in
     .goose/sandbox.sb) return 0 ;;   # macOS-only artifact
+    .codex/config.toml) return 0 ;;  # Codex's own config: protect-if-present (never stubbed)
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
+    .github/agents/*) team="$r/.github/agents" ;;   # never .github/* (workflows stay unprotected)
+    .codex/agents/*) team="$r/.codex/agents" ;;
     *) return 0 ;;                   # project-root grant roster: protect-if-present
   esac
   cp_present "$team/$TEAM_MARKER_REL" || return 0   # not an agentteams team (e.g. hand-written)

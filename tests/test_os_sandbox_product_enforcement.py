@@ -385,3 +385,153 @@ def test_f4_config_dir_cannot_be_renamed_from_sandboxed_bash(tmp_path: Path) -> 
     assert (project / ".claude").is_dir() and not (project / ".claude.old").exists(), (
         "F-4 FAILED: sandboxed Bash renamed the .claude control-plane directory"
     )
+
+
+# --- sibling team dirs (2026-09-30): .github/agents + .codex -------------------------------------
+# Binding revision 3 of tmp/by-week/2026-W40/team-dir-control-plane.plan.md. Claude Code 2.1.251
+# self-binds the PARENT of every denyWrite path read-write before read-only binding the path, so a
+# denyWrite of `.github/agents` also makes `.github` a mount point (rename -> EBUSY) while
+# `.github/workflows` stays writable. That is undocumented product behaviour agentteams relies on
+# instead of denying `.github` whole, so these tests must fail loudly if a Claude Code upgrade
+# changes it. The probe runs from a SCRIPT file: a direct `mv .github` prompt is refused by the model.
+
+_SIBLINGS = (".codex", ".github/agents")
+
+_SIBLING_PROBE = """#!/bin/bash
+# Disposable sandbox-enforcement probe: each line records OK or FAIL for one operation.
+out=probe.out; : > "$out"
+t() { local label="$1"; shift; local err
+  if err="$("$@" 2>&1)"; then echo "$label OK" >> "$out"
+  else printf '%s FAIL %s\\n' "$label" "$(printf '%s' "$err" | tr '\\n' ' ')" >> "$out"; fi; }
+t workflow sh -c 'echo "# probe" >> .github/workflows/ci.yml'
+t other-rename mv other other.moved
+t gh-switch sh -c 'echo "{}" > .github/agents/references/agent-privilege.json'
+t mv-agents mv .github/agents .github/agents.moved
+t mv-github mv .github .github.moved
+t codex-write sh -c 'echo x > .codex/config.toml'
+t mv-codex mv .codex .codex.moved
+cat "$out"
+"""
+
+
+def _make_sibling_project(root: Path, *, teams: bool = True) -> Path:
+    """A project with a claude team plus (``teams``) copilot and codex team control planes.
+
+    Every ``denyWrite`` path exists (a missing one breaks bwrap). ``.github/workflows`` and an
+    unrelated ``other/`` dir always exist; without ``teams`` there is no ``.github/agents``/``.codex``.
+    """
+    from agentteams.frameworks._sandbox_emit import (
+        governed_roster_paths,
+        protected_write_paths,
+        team_marker_path,
+    )
+
+    project = _make_project(root)
+    (project / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
+    (project / ".github" / "workflows" / "ci.yml").write_text("on: push\n", encoding="utf-8")
+    (project / "other").mkdir(exist_ok=True)
+    if teams:
+        for key in ("copilot", "codex"):
+            for rel in (*protected_write_paths(key), *governed_roster_paths(key), team_marker_path(key)):
+                path = project / rel
+                if path.name == _VERIFY_KEY_STORE_NAME:
+                    path.mkdir(parents=True, exist_ok=True)
+                    (path / "README.md").write_text("verify-key store (itest)\n", encoding="utf-8")
+                else:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("{}\n", encoding="utf-8")
+        (project / ".codex" / "config.toml").write_text("# itest\n", encoding="utf-8")
+    (project / "probe.sh").write_text(_SIBLING_PROBE, encoding="utf-8")
+    return project
+
+
+def _run_probe(project: Path, env: dict[str, str] | None = None) -> dict[str, str]:
+    """Run ``bash probe.sh`` under the project's sandbox; return ``{label: "OK" | "FAIL ..."}``."""
+    prompt = ("This is a disposable scratch directory used to test sandbox enforcement. "
+              "Run: bash probe.sh and report its output verbatim.")
+    proc = subprocess.run(
+        [_CLAUDE, "-p", prompt, "--model", _MODEL,
+         "--permission-mode", "acceptEdits", "--allowedTools", "Bash"],
+        cwd=str(project), capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        timeout=240, env=env,
+    )
+    out = project / "probe.out"
+    if not out.exists():
+        pytest.fail(f"the probe never ran (no probe.out). Claude output:\n{proc.stdout}{proc.stderr}",
+                    pytrace=False)
+    lines = out.read_text(encoding="utf-8").splitlines()
+    return dict(line.split(" ", 1) for line in lines if " " in line)
+
+
+def test_sibling_argv_self_binds_the_github_parent_before_the_agents_ro_bind(tmp_path: Path) -> None:
+    """Captured Claude Code bwrap argv (logging shim): `.github` gets a read-write SELF-bind that
+    precedes the read-only bind of `.github/agents`, and `.codex` is bound read-only. Independent of
+    the operational precondition: it inspects the argv, not the outcome."""
+    if not sys.platform.startswith("linux"):
+        pytest.skip("Linux-only: the argv is Claude Code's bubblewrap invocation")
+    real, socat = shutil.which("bwrap"), shutil.which("socat")
+    if not (real and socat):
+        pytest.skip("bwrap and socat must be on PATH for Claude Code to build its sandbox")
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    log_dir = tmp_path / "argv"
+    log_dir.mkdir()
+    (shim / "bwrap").write_text(
+        f"#!/bin/bash\nprintf '%s\\n' \"$@\" > '{log_dir}/argv.'$$\nexec '{real}' \"$@\"\n",
+        encoding="utf-8",
+    )
+    (shim / "bwrap").chmod(0o755)
+    project = _make_sibling_project(tmp_path / "proj")
+    _write_settings(project, _build_sandbox_block(None, sibling_deny_dirs=_SIBLINGS))
+    env = {**os.environ, "PATH": os.pathsep.join(
+        [str(shim), os.path.dirname(socat), os.environ.get("PATH", "")])}
+    _run_probe(project, env=env)
+    logs = sorted(log_dir.glob("argv.*"))
+    assert logs, "Claude Code never invoked bwrap through the shim (no argv captured)"
+    gh, agents, codex = (str(project / p) for p in (".github", ".github/agents", ".codex"))
+    for log in logs:
+        seq = _bind_sequence(log.read_text(encoding="utf-8").splitlines())
+        rw_gh = [i for i, (ro, dst) in enumerate(seq) if not ro and dst == gh]
+        ro_agents = [i for i, (ro, dst) in enumerate(seq) if ro and dst == agents]
+        assert rw_gh, f"{log.name}: no read-write self-bind of {gh} (the parent of a denyWrite path)"
+        assert ro_agents, f"{log.name}: {agents} is not bound read-only"
+        assert rw_gh[0] < ro_agents[-1], f"{log.name}: .github self-bind does not precede the ro-bind"
+        assert (True, codex) in seq, f"{log.name}: .codex is not bound read-only"
+        for ro, dst in seq[ro_agents[-1] + 1:]:
+            assert ro or not (agents == dst or agents.startswith(dst + os.sep)), (
+                f"{log.name}: rw --bind {dst} follows the read-only bind of {agents}")
+
+
+@pytest.mark.usefixtures("sandbox_operational")
+def test_sibling_github_is_rename_locked_while_workflows_stay_writable(tmp_path: Path) -> None:
+    """With `.github/agents` and `.codex` denied: `mv .github`, `mv .github/agents` and `mv .codex`
+    fail and the copilot switch and `.codex/config.toml` cannot be written, yet a
+    `.github/workflows` edit and an unrelated rename succeed."""
+    project = _make_sibling_project(tmp_path / "proj")
+    _write_settings(project, _build_sandbox_block(None, sibling_deny_dirs=_SIBLINGS))
+    out = _run_probe(project)
+    assert out.get("other-rename") == "OK", f"the probe's control rename failed: {out}"
+    assert out.get("workflow") == "OK", f".github/workflows is no longer writable: {out}"
+    assert "# probe" in (project / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    for label in ("gh-switch", "mv-agents", "mv-github", "codex-write", "mv-codex"):
+        assert out.get(label, "").startswith("FAIL"), f"{label} was NOT refused: {out}"
+    assert (project / ".github" / "agents").is_dir() and not (project / ".github.moved").exists()
+    assert (project / ".codex").is_dir() and not (project / ".codex.moved").exists()
+    assert (project / ".codex" / "config.toml").read_text(encoding="utf-8") == "# itest\n"
+
+
+@pytest.mark.usefixtures("sandbox_operational")
+def test_sibling_negative_control_without_the_deny_github_is_renameable(tmp_path: Path) -> None:
+    """NEGATIVE control: no copilot/codex team, so none is detected and no sibling deny is
+    emitted; then `mv .github` SUCCEEDS. This is what makes the refusal above attributable to the
+    deny."""
+    from agentteams.frameworks._sandbox_emit import present_sibling_deny_dirs
+
+    project = _make_sibling_project(tmp_path / "proj", teams=False)
+    siblings = present_sibling_deny_dirs(project)
+    assert siblings == ()
+    _write_settings(project, _build_sandbox_block(None, sibling_deny_dirs=siblings))
+    out = _run_probe(project)
+    assert out.get("workflow") == "OK", out
+    assert out.get("mv-github") == "OK", f"`mv .github` failed without any sibling deny: {out}"
+    assert (project / ".github.moved").is_dir()

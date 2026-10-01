@@ -138,6 +138,22 @@ paths** — `references/agent-privilege.json` and `.claude/hooks/constitutional-
 the enforcement plane that governs it (`agentteams/frameworks/_sandbox_emit.py:25-208`).
 The `constitutional-gate.py` hook of S19 is itself one of these protected paths.
 
+**Sibling team dirs (2026-09-30).** The copilot (`.github/agents`) and codex (`.codex/agents`)
+team dirs carry the same trust roots but emit no sandbox of their own, so every other arm covers
+them:
+
+| Arm | Coverage of `.github/agents` / `.codex/agents` | Status |
+|---|---|---|
+| Claude `denyWrite` | `.github/agents`, `.codex` (and `.goose`) when that team is present at generation; never `.github` | product-verified, Claude Code 2.1.251, Linux |
+| Claude `permissions.deny` | `Edit(...)` on each trust-root file | emitted, product-unverified |
+| `confine-run.sh` | required once the team marker exists; `.github/workflows` never bound | mechanism-verified |
+| goose Seatbelt | trust roots; `.github` ancestor literals only with a copilot team | UNVERIFIED |
+
+Claude Code self-binds each deny path's parent, so `.github` cannot be renamed while
+`.github/workflows` stays writable. Remove a sibling's `denyWrite` entry before deleting that
+team: a missing deny path stops bwrap. Copilot's `*.agent.md` files stay Edit-tool writable, so
+copilot teams are not fully covered.
+
 The `exclusive` profile additionally emits **`denyRead` of credential directories**
 (SSH, AWS, and similar). This is **outbound hardening** — it targets *files, not
 environment variables*, and it stops the confined agent from *reading your* credential

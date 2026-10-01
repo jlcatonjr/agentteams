@@ -54,6 +54,7 @@ from agentteams.frameworks.registry import FRAMEWORKS
 # tests/redteam references that resolve them via cli.generate keep working.
 from agentteams.cli.generate_helpers import (  # noqa: F401
     _sweep_capability_key,
+    _apply_sibling_team_denies,
     _emit_agent_privilege_config,
     _emit_privilege_artifacts,
     _preflight_sandboxed_write,
@@ -192,6 +193,7 @@ def _run_generate_inner(
         # and the operator did not pass --allow-unenforced-confinement. Fail closed.
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+    _apply_sibling_team_denies(manifest, project_root, output_dir)  # transient; + advisories
 
     print(f"  Output directory: {output_dir}")
 
