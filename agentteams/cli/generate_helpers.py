@@ -303,6 +303,35 @@ def _warn_sibling_teams_under_claude_sandbox(
     return lacking
 
 
+def _advise_protect_prompt_roots(manifest: dict, project_root: Path, present: tuple[str, ...]) -> bool:
+    """Print a one-line advisory recommending ``protect_prompt_roots`` (follow-up #8 phase 2).
+
+    Fires when a Claude sandbox is on (this claude run emits one, or a merged one is live), the
+    brief has not opted in, and a non-Claude agentteams team exists in the project.
+
+    Args:
+        manifest: The team manifest.
+        project_root: The project root.
+        present: :func:`present_sibling_deny_dirs` of ``project_root`` (the non-Claude teams).
+
+    Returns:
+        Whether the advisory was printed.
+    """
+    from agentteams.frameworks._prompt_root_protect import prompt_roots_enabled
+    from agentteams.frameworks._sandbox_emit import _sandbox_feature_enabled
+
+    framework = manifest.get("framework") or ""
+    non_claude = bool(present) or framework not in ("", "claude")
+    sandbox_on = (framework == "claude" and _sandbox_feature_enabled(manifest)) or (
+        _live_claude_sandbox(project_root) is not None)
+    if prompt_roots_enabled(manifest) or not (sandbox_on and non_claude):
+        return False
+    print("  ·  Advisory: a Claude sandbox is on and this project holds a non-Claude agent team; set "
+          "\"protect_prompt_roots\": true in the brief to write-protect the prompt roots those "
+          "harnesses read (opt-in; it also blocks in-sandbox authoring of them).", file=sys.stderr)
+    return True
+
+
 def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: Path) -> tuple[str, ...]:
     """Compute the present sibling team dirs onto the manifest (transient) and print the advisories.
 
@@ -333,10 +362,18 @@ def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: P
     sub = team_agents_dir(team) if team else ""
     if sub and project_root.resolve() == output_dir.resolve() and output_dir.as_posix().endswith("/" + sub):
         project_root = output_dir.parents[sub.count("/")]
+        from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
+
+        # #8 phase 2: prompt-root presence and the RENDER-TIME write-root ban re-check use the real
+        # project root. write_root_policy.enforce() already ran (generate.py) against the agents dir;
+        # every case was checked by @security to be no weaker (stricter for absolute <p>/... roots).
+        if isinstance(manifest.get(PROJECT_ROOT_KEY), Path):
+            manifest[PROJECT_ROOT_KEY] = project_root.resolve()
     present = present_sibling_deny_dirs(project_root)
     manifest[SIBLING_DENY_DIRS_KEY] = present
     _warn_live_sandbox_deny_paths_missing(project_root)
     _warn_sibling_teams_under_claude_sandbox(manifest, project_root, output_dir, present)
+    _advise_protect_prompt_roots(manifest, project_root, present)
     from agentteams.team_dir_advisories import print_team_dir_advisories
 
     print_team_dir_advisories(project_root)  # #11: planted markers, Codex config keys (detection)

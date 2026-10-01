@@ -148,6 +148,8 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # P3-3 opt-in: emitted only when the description sets it true; build_manifest
         # omits it otherwise so the default exclusive block stays byte-identical.
         "resolve_deny_read_abspath",
+        # Follow-up #8 phase 2 opt-in: emitted only when the description sets it true.
+        "protect_prompt_roots",
         # CC-2 opt-out: set by the CLI layer (generate.py) from --allow-fallback-fail-open
         # after build_manifest returns; emitted only when true.
         "fallback_fail_open",

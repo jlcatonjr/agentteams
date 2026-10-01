@@ -18,6 +18,12 @@ import os
 import sys
 from typing import Any
 
+from agentteams.frameworks._prompt_root_protect import (
+    PROMPT_ROOT_COMMENT_LINES,
+    present_prompt_roots,
+    prompt_root_edit_rules,
+)
+
 
 #: Comment lines appended to the emitted settings example when the sandbox block is
 #: injected. Explains that the boundary is inert until merged (same convention as the
@@ -105,8 +111,9 @@ _SIGNING_KEY_COMMENT_LINES: list[str] = [
     "(Linux); older builds are untested.",
     "The list also carries Edit(...) rules for the SIBLING teams' trust-root files (.github/agents,",
     ".codex/agents and .goose/recipes: switch, verify-key store, rosters, build-log.json; plus",
-    ".goose/sandbox.sb and .codex/config.toml), emitted whether or not those teams exist. They do",
-    "NOT cover copilot/codex agent files or .github/copilot-instructions.md (Edit-tool writable).",
+    ".goose/sandbox.sb and .codex/config.toml), emitted whether or not those teams exist. Unless the",
+    "brief sets protect_prompt_roots: true, they do NOT cover copilot/codex agent files or",
+    ".github/copilot-instructions.md (Edit-tool writable).",
 ]
 
 
@@ -740,6 +747,7 @@ def _build_sandbox_block(
     resolve_abspath: bool = False,
     sibling_deny_dirs: tuple[str, ...] | list[str] = (),
     project_root: str | None = None,
+    protect_prompt_roots: bool = False,
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -760,7 +768,9 @@ def _build_sandbox_block(
             (:func:`present_sibling_deny_dirs`), appended to ``denyWrite``. Never an absent one:
             a missing deny path stops bwrap.
         project_root: The absolute project root (``_write_roots.PROJECT_ROOT_KEY``), for the
-            project-ancestor ban; ``None`` skips only that check.
+            project-ancestor ban and the prompt-root presence check; ``None`` skips both.
+        protect_prompt_roots: Append the PRESENT prompt roots (:func:`present_prompt_roots`) to
+            ``denyWrite`` (follow-up #8 phase 2, opt-in).
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
@@ -791,6 +801,9 @@ def _build_sandbox_block(
     # capability, whatever the write roots; permissions.deny is unaffected (built-in tools).
     filesystem["denyWrite"] = [*_PROTECTED_WRITE_PATHS, framework_config_dir("claude"),
                                *sibling_deny_dirs]
+    if protect_prompt_roots:
+        filesystem["denyWrite"] += [p for p in present_prompt_roots(project_root)
+                                    if p not in filesystem["denyWrite"]]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
@@ -816,6 +829,7 @@ def _inject_sandbox_block(
     deny_read_resolved_abspath: bool = False,
     sibling_deny_dirs: tuple[str, ...] = (),
     project_root: str | None = None,
+    protect_prompt_roots: bool = False,
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
@@ -841,6 +855,8 @@ def _inject_sandbox_block(
         sibling_deny_dirs: Present sibling team dirs for ``denyWrite`` (see
             :func:`_build_sandbox_block`).
         project_root: Forwarded to :func:`_build_sandbox_block` (write-root validation).
+        protect_prompt_roots: Add the prompt-root ``Edit`` rules, ``denyWrite`` entries and
+            comment (follow-up #8 phase 2, opt-in; off leaves the output unchanged).
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
@@ -865,12 +881,16 @@ def _inject_sandbox_block(
     data["sandbox"] = _build_sandbox_block(
         write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath,
         sibling_deny_dirs=sibling_deny_dirs, project_root=project_root,
+        protect_prompt_roots=protect_prompt_roots,
     )
     # Same branch as the sandbox block, never one without the other (R11): the built-in tools
     # are bound by permissions, not by the sandbox.
     permissions = data.setdefault("permissions", {})
     deny = permissions.setdefault("deny", [])
-    for rule in permission_deny_rules("claude"):
+    rules = permission_deny_rules("claude")
+    if protect_prompt_roots:
+        rules += prompt_root_edit_rules(project_root)
+    for rule in rules:
         if rule not in deny:
             deny.append(rule)
     comment = data.get("_comment")
@@ -882,5 +902,7 @@ def _inject_sandbox_block(
                 if deny_read_resolved_abspath
                 else _READ_EXCLUSION_COMMENT_LINES
             )
+        if protect_prompt_roots:
+            extra += PROMPT_ROOT_COMMENT_LINES
         data["_comment"] = comment + extra
     return json.dumps(data, indent=2, sort_keys=True) + "\n"

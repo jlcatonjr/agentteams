@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (opt-in prompt-root prevention: follow-up #8 phase 2)
+
+- **New brief field `protect_prompt_roots` (boolean, default false).** It is copied into the manifest
+  only when `true`. With it off, every emitted file is byte-identical to before.
+- **Claude sandbox block.** When the flag is on, `permissions.deny` gains unconditional `Edit(...)` rules
+  for the prompt roots: `.github/copilot-instructions.md`, `.github/instructions/**`,
+  `.github/prompts/**`, `.github/agents/**`, `AGENTS.md`, `.goosehints`, `.codex/**`,
+  `.goose/recipes/**`, `CLAUDE.md`, `CLAUDE.local.md` and `.mcp.json`. `.agentteams/**` is added only
+  when it exists. `denyWrite` names only the roots present at generation, because a missing deny path
+  stops bwrap. Symlinked roots are skipped. The rule set lives in the new pinned
+  `frameworks/_prompt_root_protect.py`.
+- **Launcher `confine-run.sh --protect-prompt-roots` (Linux).** It ro-binds each of those roots that
+  exists under every writable root. The roots are protect-if-present: an absent root is never required
+  and never a die. A symlinked root is refused (`cp_real`). `--check` lists them as `prompt-roots (ro)`.
+  On macOS the flag only warns that nothing is enforced. The Linux goose runner example passes the flag
+  when the brief opts in.
+- **`SANDBOX RELAXATION: prompt-root protection removed`.** `write_root_policy` prints this when the
+  live `.claude/settings.json` deny still carries prompt-root rules that the new render drops. That
+  happens when the flag is turned off, removed from the brief, or the sandbox is off. It warns only.
+- **Advisory.** Generation recommends the flag when a Claude sandbox is on and the project holds a
+  non-Claude team.
+- **Fixed `--output <project>/.claude/agents`.** The transient project root now names the project
+  rather than the agents dir.
+- **Not covered:** `.github/workflows`. The goose Seatbelt profile is deferred.
+- **Re-pinned:** `_sandbox_emit.py`, `_goose_sandbox_emit.py`, `confine-run.sh`,
+  `write_root_policy.py` and `integrity.py`. The new `_prompt_root_protect.py` is pinned too.
 ### chore (hygiene: follow-ups #20, #21, #22, #25)
 
 - **#25 `codex_translation` is template-authoritative.** The fence is machine-generated metadata (the tool limit and

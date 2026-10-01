@@ -538,6 +538,9 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         # P3-3 opt-in: emit only when true (keeps the default block byte-identical); resolves
         # denyRead `~/` paths to abspaths in the emitter so enforcement does not depend on `~`.
         **({"resolve_deny_read_abspath": True} if description.get("resolve_deny_read_abspath") else {}),
+        # Follow-up #8 phase 2 opt-in: emit only when true (flag off keeps the manifest and every
+        # emitted sandbox byte-identical). Only a JSON true counts.
+        **({"protect_prompt_roots": True} if description.get("protect_prompt_roots") is True else {}),
         # Opt-in override for the framework-watch ≤24h standard-conformance-check section. Emitted
         # only when the brief sets an explicit bool; otherwise absent, and cli/generate.py defaults
         # it on for teams that maintain framework adapters (a "framework-adapters" component).

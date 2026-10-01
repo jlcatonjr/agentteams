@@ -458,6 +458,10 @@
       "type": "boolean",
       "description": "P3-3 opt-in carried from the project description (emitted only when true). When true, the exclusive profile's denyRead paths are resolved to expanduser'd absolute paths at emit time, removing the dependency on ~ expansion by Claude Code (see project-description.schema.json)."
     },
+    "protect_prompt_roots": {
+      "type": "boolean",
+      "description": "Follow-up #8 phase 2 opt-in carried from the project description (emitted only when true): adds the prompt-root Edit rules and present-only denyWrite entries to the Claude sandbox block, and --protect-prompt-roots to the Linux goose runner example (see project-description.schema.json)."
+    },
     "framework_conformance_check": {
       "type": "boolean",
       "description": "Opt-in override carried from the project description (emitted only when set to an explicit bool). Controls whether the framework-watch reference emits its ≤24h standard-conformance-check section; when absent, cli/generate.py defaults it on for teams that maintain framework adapters. See project-description.schema.json and references/provider-adapter-refresh.procedure.md §7."

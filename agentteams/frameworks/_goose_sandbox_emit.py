@@ -690,6 +690,7 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
     # bans, metacharacters refused) AND single-quoted (defence in depth; double quotes expand $()).
     roots = validate_write_roots(manifest.get("workspace_write_roots") or ["."], manifest)
     writable_flags = " ".join(f"--writable {_runner_root_expr(r)}" for r in roots)
+    writable_flags += " --protect-prompt-roots" if manifest.get("protect_prompt_roots") is True else ""
     # exclusive read-exclusion parity with the macOS Seatbelt path: carry operator sibling read-denies
     # as --exclude (the launcher already tmpfs-masks the built-in credential dirs, so only extras here).
     exclude_flags = ""
