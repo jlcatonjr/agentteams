@@ -53,7 +53,10 @@ done
 # run. Prints: <hash> TAB <escaped unit instance> TAB <agentteams package dir> TAB <has flag 0|1>,
 # or exits 3 with the reason on stderr.
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-read -r HASH ESCAPED PKG HASFLAG < <("$PY" -I - "$PROJECT" "$PY" "$UNIT_DIR" "$HOME" <<'PYEOF'
+# The check's source is read into a variable first: a heredoc nested inside a process substitution
+# is mis-parsed by bash 3.2 (macOS) when its body contains a backtick.
+PYSRC=""
+IFS= read -r -d '' PYSRC <<'PYEOF' || true
 import hashlib, json, os, sys
 project, py, unit_dir, home = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 real = os.path.realpath(project)
@@ -122,7 +125,8 @@ except (ImportError, AttributeError, SystemExit):
     has_flag = 0
 print(hashlib.sha256(real.encode()).hexdigest()[:16], escape(real), pkg, has_flag, sep="\t")
 PYEOF
-) || exit 2
+CHECK_OUT="$("$PY" -I -c "$PYSRC" "$PROJECT" "$PY" "$UNIT_DIR" "$HOME")" || exit 2
+IFS=$'\t' read -r HASH ESCAPED PKG HASFLAG <<< "$CHECK_OUT"
 [ -n "${HASH:-}" ] || { echo "refusing: containment check produced no result" >&2; exit 2; }
 
 DIRS=()
