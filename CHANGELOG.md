@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Installer:** also refuses when `sys.base_prefix`, the state dir, the unit dir or the log dir
   lies inside the project or an `allowWrite` root.
 - **Docs:** "concurrent edit wins" is now documented as best effort.
+- **Carry hardening (@security delta review):** a carried block is re-screened with the policy
+  denylist and high-severity `scan_content` findings. A failing block is not carried; it stays in
+  the backup and a notice says so. Carrying is limited to agent files: `.github/agents/*.agent.md`,
+  `.claude/agents/*.md` and `.goose/recipes/*.yaml`, never `references/`, `CLAUDE.md` or
+  `AGENTS.md`. The denylist now also catches capability-lift and identity phrasing.
 
 ### security (capability keys; `sandbox.excludedCommands`)
 

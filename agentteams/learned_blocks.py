@@ -342,6 +342,16 @@ _POLICY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
                                  rf"{_NEAR}\binstructions?\b"),
         ("instruction override", r"\bdisregard"),
         ("instruction override", rf"\byou{_GAP}are{_GAP}now\b"),
+        ("identity change", rf"\bact{_GAP}as\b"),
+        ("identity change", rf"\bnew{_GAP}roles?\b"),
+        ("identity change", rf"\bnew{_GAP}(?:system{_GAP})?instructions?\b"),
+        ("identity change", rf"\bfrom{_GAP}now{_GAP}on{_GAP}you\b"),
+        ("capability lift", rf"\blimitations?{_GAP}(?:(?:is|are|have{_GAP}been|has{_GAP}been)"
+                            rf"{_GAP})?lifted\b"),
+        ("capability lift", rf"\byou{_GAP}(?:may|can){_GAP}now{_GAP}(?:write|edit|run|delete)\b"),
+        ("capability lift", rf"\brestrictions?{_GAP}(?:(?:is|are|have{_GAP}been|has{_GAP}been)"
+                            rf"{_GAP})?(?:removed|no{_GAP}longer{_GAP}apply)\b"),
+        ("capability lift", r"\bunrestricted\b"),
         ("constitutional-tier claim", rf"\btier{_GAP}(?:1|one|i)\b"),
         ("constitutional-tier claim", r"\bC\s*-\s*[1-5]\b"),
         ("constitutional-tier claim", rf"\bconstitutional{_GAP}core\b"),
@@ -519,6 +529,58 @@ def host_kind(rel_path: str, text: str) -> str | None:
     return None
 
 
+def screen_problems(content: str) -> list[str]:
+    """Return the policy-denylist and high-severity ``scan_content`` findings for a block.
+
+    Args:
+        content: Canonical block content.
+
+    Returns:
+        Problems (empty when the block may be carried or propagated).
+    """
+    from agentteams.scan import scan_content
+
+    problems = policy_problems(content)
+    for finding in scan_content(content, filename="<learned-block>"):
+        if finding.severity == "high":
+            problems.append(f"scan high {finding.category} (line {finding.line}): {finding.message}")
+    return problems
+
+
+#: ``(parent dir, parent's parent dir, file suffix)`` of the agent files a block may be carried in.
+_AGENT_FILE_HOMES: tuple[tuple[str, str, str], ...] = (
+    (".github", "agents", ".agent.md"),
+    (".claude", "agents", ".md"),
+    (".goose", "recipes", ".yaml"),
+)
+
+
+#: Entry/instruction files that share an agents dir's suffix but are not agent files.
+_NOT_AGENT_FILES = frozenset({"CLAUDE.md", "AGENTS.md", "README.md", "SETUP-REQUIRED.md"})
+
+
+def is_agent_file(path: Path) -> bool:
+    """Return True for an agent file a learned block lives in (and only those).
+
+    ``.github/agents/*.agent.md``, ``.claude/agents/*.md`` and ``.goose/recipes/*.yaml`` directly in
+    the agents dir — never ``references/``, ``CLAUDE.md``, ``AGENTS.md`` or any other file.
+
+    Args:
+        path: The (absolute or project-relative) file path.
+
+    Returns:
+        Whether a learned block may be carried into this file on regeneration.
+    """
+    parts = Path(os.path.abspath(path)).parts
+    if len(parts) < 3:
+        return False
+    top, agents, name = parts[-3], parts[-2], parts[-1]
+    if name in _NOT_AGENT_FILES:
+        return False
+    return any(top == t and agents == a and name.endswith(sfx) and len(name) > len(sfx)
+               and not name.startswith(".") for t, a, sfx in _AGENT_FILE_HOMES)
+
+
 def carry_block_text(rel_path: str, source: str, dest: str) -> tuple[str, list[str]]:
     """Carry *source*'s learned block into *dest* when *dest* has none.
 
@@ -557,7 +619,10 @@ def carry_block_text(rel_path: str, source: str, dest: str) -> tuple[str, list[s
             return dest, []
         return dest, ["the regenerated file already carries a different AGENTTEAMS-LEARNED block; "
                       "the on-disk block was kept only in the backup"]
-    problems = content_problems(content)
+    # Re-screen: a carry keeps agent-written text through --overwrite / full replace, so it gets
+    # the same policy + scan gate as a sync write. A failing block is NOT carried (it survives
+    # only in the pre-update backup) and the notice names why.
+    problems = content_problems(content) + screen_problems(content)
     new = compose(dest, parsed, content) if not problems else dest
     problems = problems or verify_composed(dest, new, kind, content)
     if problems:
@@ -572,12 +637,13 @@ def carry_learned_block(rel_path: str, fresh: str, target: Path) -> tuple[str, l
     Args:
         rel_path: The output path relative to the agents dir.
         fresh: The fresh render about to be merged or written.
-        target: The on-disk file (read only when it is a regular file, never via a symlink).
+        target: The on-disk file (read only when it is a regular file, never via a symlink, and only
+            when :func:`is_agent_file` says it is an agent file).
 
     Returns:
         ``(fresh, possibly carrying the block, notices)`` — see :func:`carry_block_text`.
     """
-    if not (rel_path.endswith(".md") or rel_path.endswith(".yaml")):
+    if not is_agent_file(target):
         return fresh, []
     try:
         if not stat.S_ISREG(os.lstat(target).st_mode):

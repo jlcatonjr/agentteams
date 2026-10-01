@@ -70,8 +70,10 @@ propagated. Case-insensitive on NFKC-normalised text with format characters remo
 of whitespace and punctuation between words. It matches instruction overrides ("ignore … previous
 instructions", "disregard", "you are now"), constitutional-tier claims ("Tier-1", "C-1".."C-5",
 "Constitutional Core", "override(s)"), governance bypasses ("skip/bypass/disable/ignore … @security
-/adversarial/conflict-auditor", "without clearance", "no need for clearance") and permission/tool
-widening (`permissionMode`, `bypassPermissions`, "dangerously", `allowedTools`, `tools:`, `hooks:`,
+/adversarial/conflict-auditor", "without clearance", "no need for clearance"), identity changes
+("act as", "new role", "new (system) instructions", "from now on you"), capability lifts
+("limitation(s) (is/are) lifted", "you may/can now write/edit/run/delete", "restriction(s)
+removed / no longer apply", "unrestricted") and permission/tool widening (`permissionMode`, `bypassPermissions`, "dangerously", `allowedTools`, `tools:`, `hooks:`,
 `mcpServers`).
 
 ### `render_block(content, indent)`
@@ -86,6 +88,17 @@ The marker lines plus content at `indent` (empty lines stay empty).
 
 Each top-level recipe key mapped to its raw text (duplicates get a `#n` suffix).
 
+### `screen_problems(content)`
+
+`policy_problems` plus every high-severity `scan.scan_content` finding — the re-screen a carried
+block must pass.
+
+### `is_agent_file(path)`
+
+True only for `.github/agents/*.agent.md`, `.claude/agents/*.md` and `.goose/recipes/*.yaml`
+directly in the agents dir; never `references/`, `CLAUDE.md`, `AGENTS.md`, `README.md` or
+`SETUP-REQUIRED.md`.
+
 ### `host_kind(rel_path, text)`
 
 `MARKDOWN` for `.md`, `RECIPE` for a goose-recipe-shaped `.yaml`, else `None`.
@@ -93,12 +106,14 @@ Each top-level recipe key mapped to its raw text (duplicates get a `#n` suffix).
 ### `carry_block_text(rel_path, source, dest)`
 
 Carry `source`'s block into `dest` when `dest` has none, behind the same gates as a sync write
-(`content_problems`, `verify_composed`). Returns `(text, notices)`; a block that cannot be carried
+(`content_problems`, `screen_problems`, `verify_composed`). A block that fails the re-screen is not
+carried: it survives only in the pre-update backup, and a notice says so. Returns `(text, notices)`; a block that cannot be carried
 safely produces a notice (it survives in the backup).
 
 ### `carry_learned_block(rel_path, fresh, target)`
 
-Carry the on-disk file's block into its fresh render. `emit.emit_all` calls it for every rendered
+Carry the on-disk file's block into its fresh render, for agent files only (`is_agent_file`).
+`emit.emit_all` calls it for every rendered
 file before any merge, overwrite or machine-managed full replace (unfenced goose recipes take the
 latter, which used to delete the block), and `structural_merge.post_merge_structural` re-applies it
 after a fence merge. A symlinked target is never read.

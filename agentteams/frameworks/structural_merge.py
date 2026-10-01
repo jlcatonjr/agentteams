@@ -35,7 +35,11 @@ def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, 
     Returns:
         ``(content, notices)`` — *merged* (possibly reconciled) and any operator notices.
     """
-    merged, notices = carry_block_text(rel_path, fresh, merged)
+    # Only agent files directly in the agents dir (emit already carried the block into `fresh`
+    # for those alone); never references/, CLAUDE.md or AGENTS.md.
+    notices: list[str] = []
+    if "/" not in rel_path and Path(rel_path).name not in ("CLAUDE.md", "AGENTS.md"):
+        merged, notices = carry_block_text(rel_path, fresh, merged)
     if rel_path.endswith(".yaml"):
         merged, more = reconcile_sub_recipes(fresh, merged)
         return merged, notices + list(more)
