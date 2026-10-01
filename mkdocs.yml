@@ -216,6 +216,7 @@ nav:
       - parallel-plan: api-reference/parallel-plan.md
       - liaison-logs: api-reference/liaison-logs.md
       - control-plane-io: api-reference/control-plane-io.md
+      - team-dir-advisories: api-reference/team-dir-advisories.md
       - host-features: api-reference/host-features.md
       - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
       - rank-conformance: api-reference/rank-conformance.md

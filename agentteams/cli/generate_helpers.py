@@ -337,6 +337,9 @@ def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: P
     manifest[SIBLING_DENY_DIRS_KEY] = present
     _warn_live_sandbox_deny_paths_missing(project_root)
     _warn_sibling_teams_under_claude_sandbox(manifest, project_root, output_dir, present)
+    from agentteams.team_dir_advisories import print_team_dir_advisories
+
+    print_team_dir_advisories(project_root)  # #11: planted markers, Codex config keys (detection)
     return present
 
 

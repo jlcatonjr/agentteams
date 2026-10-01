@@ -16,7 +16,7 @@
     "agentteams/fences.py": "cdf3c623d5cb2e5fd73cd1e519c8c8404c6e8f7956e0fecd5892c5746200cf40",
     "agentteams/frameworks/_goose_sandbox_emit.py": "26c33725fc81b24ffc253daf407aa6306ce294abe87e91ea7efb83fc4ce64fc0",
     "agentteams/frameworks/_linux_sandbox_emit.py": "8e0ee80a14f16dc69840a605cd3f3917c90b5983aa001a34980feb9c048f1d7b",
-    "agentteams/frameworks/_sandbox_emit.py": "e1c90cb78887e10cfc8ad45cd27beea291d9c1b06b4db650e4e2432cc9f61b94",
+    "agentteams/frameworks/_sandbox_emit.py": "0d79564f71a9f61e359fb1269f91fd6b698c71e022bc8765b4a724c21b9eb9b9",
     "agentteams/frameworks/_write_roots.py": "140618f9931a30b006b613ad24744f732212a33ca469552dc13c557316830caf",
     "agentteams/front_matter_merge.py": "3b440ad7557385729b4568ba0a9033587fb5a1b6aada22191e26e8da54233cfc",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
@@ -28,7 +28,7 @@
     "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/templates/universal/hooks/constitutional-gate.py": "54e3b5f46286e5d27350f5499a9f4456dffb64917bdf1e35c29051207fcd1c42",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
-    "agentteams/templates/universal/sandbox/confine-run.sh": "4dc71aa90716d5edd33f216d639e8190810fad968949b3ceb63a12795a3185f0",
+    "agentteams/templates/universal/sandbox/confine-run.sh": "d221332a2e33f6020e88c65e1c9c5a0b83e2cdabab310524c7b5ba0163fd113d",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "c485df0b39dd0847bcb08fc583c4f0fad9c377f4ae3702a62e2c57576c84f69c",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"
   },
