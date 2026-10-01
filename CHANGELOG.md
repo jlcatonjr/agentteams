@@ -6,6 +6,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (`--sync-agent-docs`: learned agent notes propagate across frameworks)
+
+- **The learned block.** Agents record what they learn in one explicit block of their own agent file:
+  `<!-- AGENTTEAMS-LEARNED:BEGIN -->` … `<!-- AGENTTEAMS-LEARNED:END -->`. It goes in the markdown body
+  for `.github/agents` and `.claude/agents`, and at the end of `instructions: |` for `.goose/recipes`.
+- **`agentteams --sync-agent-docs --project P`** propagates exactly that block between the copies of
+  each agent. It is report-only by default. `--apply` writes `.github/agents` and `.goose/recipes`;
+  `.claude/agents` is only staged, unless the operator adds `--include-claude`, which prints the diff
+  and writes.
+- **Direction.** It comes from a three-way baseline in `$XDG_STATE_HOME/agentteams/<hash>/`, outside
+  the project. If both copies changed, that is a conflict: it is recorded and nothing is written. An
+  emptied block is backed up before it propagates; a removed block never propagates.
+- **What is never touched.** Front matter, template fences and recipe keys stay byte-identical, which
+  is checked before each write. Recipes must also keep the same structural-check result and top-level
+  keys.
+- **Content gates.** Blocks with a `scan_content` finding are quarantined. Blocks carrying fence
+  tokens, or line breaks that could dedent out of the recipe scalar, are refused.
+- **Filesystem safety.** Symlinked dirs and files and hard-linked files are refused. Files are never
+  created, reads use `O_NOFOLLOW` through dir fds, and writes are atomic. The target's digest is
+  re-checked just before the rename, so a concurrent edit wins, and an exclusive lock prevents
+  overlapping runs. The mode reads no brief, pin or config. A no-op run writes nothing.
+- New modules `agent_doc_sync.py` and `learned_blocks.py` are integrity-pinned, and the manifest is
+  re-pinned.
+- **`scripts/install-agent-doc-sync.sh`** (operator-only; dry run by default; `--apply` and `--remove`)
+  installs a systemd *user* `agentteams-doc-sync@<project>.path` and its `.service`. The service runs a
+  fixed `env -i … python -I -m agentteams.cli.app --sync-agent-docs --project P --apply` with a 5 s
+  debounce, a 300 s timeout, start and trigger limits, and `UMask=0077`. The script refuses root or
+  sudo, unsafe unit values, and an interpreter or agentteams package that sits inside the project or
+  any `allowWrite` root. `agentteams.cli.app` now runs as a module (`python -m agentteams.cli.app`).
+- The agent-updater template tells agents to write their learnings into this block, and explains how
+  the block propagates. The example snapshots are regenerated.
+
+### security (capability keys; `sandbox.excludedCommands`)
+
+- `front_matter_merge.CAPABILITY_FRONT_MATTER_KEYS` (pinned) now includes `hooks`, `mcpServers`,
+  `permissionMode` and `skills`. An agent self-edit that adds any of these is reported as a
+  capability proposal, never applied silently. The manifest is re-pinned.
+- **Measured on Claude Code 2.1.251:** a command in `sandbox.excludedCommands` still runs
+  unsandboxed when an environment assignment is put in front of it (`LD_PRELOAD=… <excluded>`).
+  agentteams never emits the key, and a pinned test checks every settings example. Generation and
+  `--check` now print a HIGH warning when the live `.claude/settings.json` uses it, and
+  `--check-wiring` fails.
+- The details are in the new SECURITY.md advisory. A draft upstream report has been written for the
+  operator to send.
 ### fix (interop projection marker is deterministic)
 
 - The `origin: interop` marker records `source_dir` as the team-relative path (`.github/agents`). It no longer

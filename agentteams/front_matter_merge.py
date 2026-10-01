@@ -169,6 +169,13 @@ CAPABILITY_FRONT_MATTER_KEYS: frozenset[str] = frozenset({
     "capabilities",
     "model",
     "agents",
+    # Claude subagent keys that grant capability (self-updating-agents plan, second revision
+    # item 7, 2026-10-01): an agent that can edit its own file could add any of these, and the
+    # next --update must report it as a capability proposal, never apply it silently.
+    "hooks",            # per-agent hook commands: arbitrary shell at tool events
+    "mcpServers",       # per-agent MCP servers: new tools/processes
+    "permissionMode",   # e.g. bypassPermissions: disables every permission check
+    "skills",           # preloaded skills: instructions + scripts
 })
 
 #: Back-compat alias for the private name this module used before the sets were unified.

@@ -124,6 +124,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`sync_classifier`](sync-classifier.md) | Generalized three-way classifier for native ↔ canonical synchronization |
 | [`canonical`](canonical.md) | Durable exploded on-disk canonical agent format — the hub `multi_sync` reconciles through |
 | [`capability_map`](capability-map.md) | Canonical tool-scope vocabulary and framework ↔ canonical capability mapping, shared by `interop` and this family |
+| [`agent_doc_sync`](agent-doc-sync.md) | `--sync-agent-docs`: propagates each agent's `AGENTTEAMS-LEARNED` block across its `.github`/`.claude`/`.goose` copies (three-way baseline outside the project, content gates, no file creation) |
+| [`learned_blocks`](learned-blocks.md) | Pure-text parse/compose/verify of the learned block in markdown agent files and goose recipes |
 
 ## Standalone Modules
 

@@ -416,3 +416,15 @@ def test_guard_does_not_fire_on_a_legitimate_partial_narrowing():
 def test_guard_no_op_when_existing_has_no_front_matter():
     guarded, notices = _restore_blanked_front_matter_blocks("---\nagents: \n---\nx\n", "no front matter here\n")
     assert notices == []
+
+
+# --- pinned: the capability key set (self-updating-agents plan, second revision item 7) ------
+
+def test_capability_key_set_is_pinned():
+    """Every capability-bearing key stays in the set; removing one is a C-3 weakening."""
+    from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS
+
+    required = {"tools", "allowed-tools", "disallowedTools", "capabilities", "model", "agents",
+                "hooks", "mcpServers", "permissionMode", "skills"}
+    assert required <= CAPABILITY_FRONT_MATTER_KEYS
+    assert _CAPABILITY_FRONT_MATTER_KEYS is CAPABILITY_FRONT_MATTER_KEYS

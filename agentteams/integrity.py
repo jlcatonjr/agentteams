@@ -134,6 +134,13 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
+    # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
+    # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
+    # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude
+    # staging rule — are a boundary: a silent edit weakening one turns agent-written text into an
+    # unreviewed write into another framework's agent file.
+    "agentteams/agent_doc_sync.py",
+    "agentteams/learned_blocks.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 
