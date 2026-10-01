@@ -257,11 +257,11 @@ class ClaudeAdapter(FrameworkAdapter):
                     # Present sibling teams, computed by the CLI (transient; never from input).
                     sibling_deny_dirs=sibling_deny_dirs(manifest),
                 )
-                # The sandbox block's denyWrite names the verify-key store DIRECTORY, and bwrap
-                # cannot start on a missing deny path, so the store's frozen sentinel is emitted
-                # in THIS branch and only here: never the deny without the sentinel, nor the
-                # sentinel without the deny. It never touches operator ``*.pub.pem`` files.
-                files.append((VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT))
+                # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
+                # missing deny path). Its frozen sentinel is emitted for every team by
+                # FrameworkAdapter.extra_output_files (super() above), so a deny never ships
+                # without it. The old "sentinel only with the deny" rule is superseded
+                # (2026-09-30): the sentinel reads like an empty store.
             files.append(("../settings.hooks.example.json", example))
         return files
 

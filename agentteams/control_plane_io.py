@@ -40,23 +40,15 @@ def stubs_enabled(framework: str, manifest: dict[str, Any]) -> bool:
         manifest: The team manifest (``host_features`` / ``privilege_profile``).
 
     Returns:
-        ``_sandbox_feature_enabled`` for claude, ``_goose_sandbox_feature_enabled`` for goose.
-        For copilot-vscode, copilot-cli and codex (2026-09-30): True whenever the switch is
-        emitted (the manifest carries ``enforce_decision_signing``) or confinement is requested,
-        WHATEVER that team's own profile. A launcher emitted by ANY confined team in the repo
-        requires these entries once the team marker exists, so a cooperative copilot/codex team
-        must not brick it; a stub reads exactly like an absent file. False for every other
-        framework (agents-md is out of scope).
+        For every team framework (claude, goose, copilot-vscode, copilot-cli, codex): True
+        whenever the switch is emitted (the manifest carries ``enforce_decision_signing``) or
+        confinement is requested, WHATEVER that team's own profile or platform. A launcher
+        emitted by ANY confined team in the repo requires these entries once the team's switch
+        exists, so no team (cooperative claude/goose included, since 2026-09-30) may brick it.
+        A stub reads exactly like an absent file. False for every other framework (agents-md is
+        out of scope).
     """
-    if framework == "claude":
-        from agentteams.frameworks._sandbox_emit import _sandbox_feature_enabled
-
-        return _sandbox_feature_enabled(manifest)
-    if framework == "goose":
-        from agentteams.frameworks._goose_sandbox_emit import _goose_sandbox_feature_enabled
-
-        return _goose_sandbox_feature_enabled(manifest)
-    if framework in ("copilot-vscode", "copilot-cli", "codex"):
+    if framework in ("claude", "goose", "copilot-vscode", "copilot-cli", "codex"):
         from agentteams.frameworks._linux_sandbox_emit import _sandbox_confinement_requested
 
         return "enforce_decision_signing" in manifest or _sandbox_confinement_requested(manifest)
@@ -92,7 +84,10 @@ def write_control_plane_stubs(
     Raises:
         OSError: A stub could not be created for a reason other than "already exists".
     """
-    if not stubs_enabled(framework, manifest):
+    # The launcher requires the rosters whenever the team's SWITCH exists on disk, so honour that
+    # too: a manifest built without the switch key (multi_sync) must not leave a team unhealed.
+    switch_on_disk = (output_dir / "references" / "agent-privilege.json").is_file()
+    if not (stubs_enabled(framework, manifest) or switch_on_disk):
         return []
     from agentteams.frameworks._sandbox_emit import CONTROL_PLANE_STUB_TEXT
 

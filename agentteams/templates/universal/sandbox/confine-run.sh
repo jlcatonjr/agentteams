@@ -257,7 +257,7 @@ control_plane_binds() {
         # planted .pub.pem, a gate hook or a roster naming itself. Refuse (never create).
         team="$(cp_required "$r" "$rel")"
         [ -n "$team" ] || continue
-        die "control-plane path '$r/$rel' is missing although the agentteams team '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with its sandbox enabled (agentteams --update) so it is emitted, then retry."
+        die "control-plane path '$r/$rel' is missing although the agentteams team '$team' exists: a confined process could create it (fail-closed; never created). Regenerate the team with current agentteams (agentteams --update) so it is emitted (agentteams before 2026-09-30 did not emit it for every framework and platform), then retry."
       fi
       p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )
