@@ -128,6 +128,37 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
     )
 
 
+def _warn_claude_team_unsandboxed(manifest: dict, output_dir: Path) -> bool:
+    """rc8: advise when a confined/exclusive Claude team has no enabled sandbox merged live.
+
+    The emitted block lives in ``settings.hooks.example.json`` and never takes effect until the
+    operator merges it into ``.claude/settings.json``. Read-only; never echoes settings content.
+
+    Args:
+        manifest: The team manifest.
+        output_dir: The team's agents dir (the live settings sit at ``<output_dir>/../settings.json``).
+
+    Returns:
+        True iff the advisory was printed.
+    """
+    from agentteams.frameworks.claude import _sandbox_feature_enabled
+
+    if manifest.get("framework") != "claude" or not _sandbox_feature_enabled(manifest):
+        return False
+    try:
+        data = json.loads((output_dir.parent / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+    sandbox = data.get("sandbox") if isinstance(data, dict) else None
+    if isinstance(sandbox, dict) and sandbox.get("enabled") is True:
+        return False
+    print("  NOTE: this Claude team requests confinement, but no enabled sandbox block is merged into "
+          ".claude/settings.json, so it runs UNCONFINED. Merge the sandbox block from "
+          ".claude/settings.hooks.example.json (operator step; agentteams never edits settings.json).",
+          file=sys.stderr)
+    return True
+
+
 def _warn_live_sandbox_fails_open(manifest: dict, output_dir: Path) -> bool:
     """Warn when the merged Claude ``settings.json`` sandbox lacks ``failIfUnavailable``.
 
@@ -161,7 +192,8 @@ def _warn_live_sandbox_fails_open(manifest: dict, output_dir: Path) -> bool:
     if sandbox.get("failIfUnavailable") is True:
         return False
     print(
-        f"  !  {live}: the merged sandbox block has no \"failIfUnavailable\": true, so it FAILS "
+        f"  !  {output_dir.parent.name}/{live.name}: the merged sandbox block has no "
+        "\"failIfUnavailable\": true, so it FAILS "
         "OPEN — if Claude Code cannot start its sandbox (e.g. bwrap or socat missing on Linux) "
         "it runs every command UNSANDBOXED. Fix: add \"failIfUnavailable\": true to the "
         "\"sandbox\" object (or re-merge the sandbox block from settings.hooks.example.json).",
@@ -372,6 +404,9 @@ def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: P
     present = present_sibling_deny_dirs(project_root)
     manifest[SIBLING_DENY_DIRS_KEY] = present
     _warn_live_sandbox_deny_paths_missing(project_root)
+    # rc8: on every generate/--update/--dry-run/--check (was real writes only): read-only notices.
+    _warn_live_sandbox_fails_open(manifest, output_dir)
+    _warn_claude_team_unsandboxed(manifest, output_dir)
     _warn_sibling_teams_under_claude_sandbox(manifest, project_root, output_dir, present)
     _advise_protect_prompt_roots(manifest, project_root, present)
     from agentteams.team_dir_advisories import print_team_dir_advisories
@@ -401,7 +436,6 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
     except OSError as exc:
         print(f"  !  agent-privilege config write failed: {exc}", file=sys.stderr)
         path = None  # the sandbox warnings below still apply (3b: never skipped by a failed write)
-    _warn_live_sandbox_fails_open(manifest, output_dir)
     _warn_legacy_signing_keys(manifest)
     if path is None:
         return
