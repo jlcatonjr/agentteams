@@ -253,6 +253,57 @@ def _live_claude_sandbox(project_root: Path) -> tuple[Path, list[str]] | None:
     return live, [d for d in deny if isinstance(d, str) and d] if isinstance(deny, list) else []
 
 
+def live_excluded_commands_warning(project_root: Path) -> str | None:
+    """Return a HIGH-severity warning when the live Claude settings use ``sandbox.excludedCommands``.
+
+    Measured on Claude Code 2.1.251 (SECURITY.md, "Claude Code sandbox.excludedCommands is not a
+    safe boundary"): an excluded command still runs UNSANDBOXED when an environment assignment is
+    prefixed (``LD_PRELOAD=… <excluded command>``, ``PYTHONPATH=… <excluded command>``), so every
+    entry is an escape from the sandbox for anything that can choose the prefix. agentteams never
+    emits the key. Output-only: the entries themselves are not echoed (the live file may hold
+    secrets); only their count.
+
+    Args:
+        project_root: The project root holding ``.claude/settings.json``.
+
+    Returns:
+        The warning text, or None when the key is absent or empty.
+    """
+    live = project_root / ".claude" / "settings.json"
+    try:
+        data = json.loads(live.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    sandbox = data.get("sandbox") if isinstance(data, dict) else None
+    excluded = sandbox.get("excludedCommands") if isinstance(sandbox, dict) else None
+    if not excluded:
+        return None
+    count = len(excluded) if isinstance(excluded, list) else 1
+    return (
+        f"WARNING (HIGH): {live} sets sandbox.excludedCommands ({count} entr"
+        f"{'y' if count == 1 else 'ies'}). Measured on Claude Code 2.1.251: an excluded command "
+        "prefixed with an environment assignment (e.g. LD_PRELOAD=... or PYTHONPATH=... before "
+        "it) still runs OUTSIDE the sandbox with that variable set, so each entry is a sandbox "
+        "escape. Remove sandbox.excludedCommands (see SECURITY.md)."
+    )
+
+
+def _warn_live_sandbox_excluded_commands(project_root: Path) -> bool:
+    """Print :func:`live_excluded_commands_warning` to stderr when it applies.
+
+    Args:
+        project_root: The project root holding ``.claude/settings.json``.
+
+    Returns:
+        True iff the warning was printed.
+    """
+    warning = live_excluded_commands_warning(project_root)
+    if warning is None:
+        return False
+    print(f"  !  {warning}", file=sys.stderr)
+    return True
+
+
 def _deny_entry_path(project_root: Path, entry: str) -> Path:
     """Resolve a ``denyWrite`` entry the way the emitted block writes them (``~``, absolute, relative)."""
     path = Path(entry).expanduser()
@@ -435,6 +486,7 @@ def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: P
     present = present_sibling_deny_dirs(project_root)
     manifest[SIBLING_DENY_DIRS_KEY] = present
     _warn_live_sandbox_deny_paths_missing(project_root)
+    _warn_live_sandbox_excluded_commands(project_root)
     # rc8: on every generate/--update/--dry-run/--check (was real writes only): read-only notices.
     _warn_live_sandbox_fails_open(manifest, output_dir)
     _warn_claude_team_unsandboxed(manifest, output_dir)

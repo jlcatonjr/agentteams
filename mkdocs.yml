@@ -244,6 +244,8 @@ nav:
       - sync-classifier: api-reference/sync-classifier.md
       - sync-pin: api-reference/sync-pin.md
       - multi-sync: api-reference/multi-sync.md
+      - agent-doc-sync: api-reference/agent-doc-sync.md
+      - learned-blocks: api-reference/learned-blocks.md
   - Template Authoring: template-authoring.md
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md

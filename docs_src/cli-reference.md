@@ -1166,6 +1166,63 @@ Override the change-detection anchor (default: the pin's recorded `last_synced_c
 
 ---
 
+## Agent-Doc Sync (Learned Blocks)
+
+Agents record what they learn in an explicit block of their own agent file —
+`<!-- AGENTTEAMS-LEARNED:BEGIN -->` … `<!-- AGENTTEAMS-LEARNED:END -->` (markdown body, or the end
+of a goose recipe's `instructions: |`). `--sync-agent-docs` moves **only that block** between the
+copies of one agent in `.github/agents`, `.claude/agents` and `.goose/recipes`. It runs outside
+every agent session (an agent in a Claude Code sandbox cannot write `.claude/agents`); the
+operator can install a systemd user unit for it with `scripts/install-agent-doc-sync.sh`
+(dry-run by default). See [`agent_doc_sync`](api-reference/agent-doc-sync.md).
+
+Direction comes from a baseline kept in `$XDG_STATE_HOME/agentteams/<project hash>/` (default
+`~/.local/state`), never in the project: the copy that changed is the source; copies changed
+differently are a conflict and nothing is written. Front matter, template fences and recipe keys
+are never touched; a block with a security-scan finding or a fence token is quarantined. Files are
+never created, symlinks are refused, and the mode reads no brief, pin or config. Exit codes: `0`
+in sync or changes applied/staged, `1` a conflict, quarantine, refusal or concurrent-edit skip,
+`2` fatal.
+
+What this does and does not change:
+
+- **Claude-only projects.** Self-update still means the Edit tool, with one Claude Code approval
+  prompt per edit of `.claude/agents/*.md`. Claude Code requires that approval itself, and
+  `acceptEdits` does not remove it.
+- **Notes from goose or Copilot agents** reach `.claude/agents` only through the operator's
+  `--apply --include-claude` review. They are never written unattended.
+- **Nothing is relaxed.** No sandbox `denyWrite` entry is dropped. agentteams never uses
+  `sandbox.excludedCommands`; see the SECURITY.md advisory.
+
+### `--sync-agent-docs`
+
+Run one learned-block sync over `--project <dir>` (required; `--output`, `--description`,
+`--self`, `--update` and `--fleet` are refused). Report-only unless `--apply`: in that default
+check mode nothing is written, not even the baseline. A no-op run writes nothing.
+
+### `--apply`
+
+With `--sync-agent-docs`: write `.github/agents` and `.goose/recipes` targets and the baseline.
+`.claude/agents` targets are only **staged** (listed, and recorded in `pending-claude.json` in the
+state dir), so an unattended run never writes Claude agent files.
+
+### `--include-claude`
+
+With `--sync-agent-docs --apply`: also write `.claude/agents` targets. Each diff is printed and
+needs a y/N answer; "no" leaves the target staged. The flag is refused (exit 2) unless stdin and
+stdout are a terminal and `CLAUDECODE` is unset, so it cannot run from an agent shell or a unit.
+Run it in your own terminal. This is the operator review step; the installed unit never passes it.
+
+### `--restore-removed`
+
+With `--sync-agent-docs --apply`: re-insert the agreed learned block into copies an agent removed
+it from. Those copies are otherwise excluded from sync, and every run (including the default check)
+prints a WARNING and exits 1. A block that a regeneration removed (the file matches its build-log
+hash) is re-synced without this flag. Regeneration (`--update`, `--merge`, `--overwrite`) now
+carries the block itself.
+
+---
+
 ## Exit Codes
 
 | Code | Meaning |

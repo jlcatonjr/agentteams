@@ -171,6 +171,11 @@ def run_standalone_modes(
             from agentteams.frameworks.claude import verify_sandbox_wiring
 
             ok, messages = verify_sandbox_wiring(wiring_root)
+            from agentteams.cli.generate_helpers import live_excluded_commands_warning
+
+            excluded = live_excluded_commands_warning(wiring_root)
+            if excluded:
+                ok, messages = False, [excluded, *messages]
             # #6: advisory version tripwire (never changes ok / the exit status).
             from agentteams.cli.itest_tripwire import tripwire_notes
 

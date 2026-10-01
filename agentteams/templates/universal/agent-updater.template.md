@@ -182,6 +182,12 @@ These maintenance practices keep deployed teams compatible with `--update --merg
 - If the content audit is unexpected (a `USER-EDITABLE`-region deletion, a material shrink Notice, or a broad skip set), stop and restore from backup before attempting another run. A bare non-zero exit alone is **not** a restore trigger — diagnose it first (it is frequently a post-merge attestation crash over a complete, non-destructive merge); restore only if the merge itself failed or the content audit shows real loss.
 - Keep newest backup snapshots until verification and review complete; after commit, retain/prune backups per repository policy.
 
+### 6) Learned Operational Notes
+
+- Record what an agent learns about this project (a working command, a pitfall, a file location) in that agent's own learned block: the lines between `<!-- AGENTTEAMS-LEARNED:BEGIN -->` and `<!-- AGENTTEAMS-LEARNED:END -->`, each marker on its own line at column 0, in the body after any template fence (not in front matter, and not inside an `AGENTTEAMS:BEGIN/END` fence). In a goose recipe the block sits at the end of `instructions: |`, indented like the rest of it.
+- Only that block propagates to the agent's other framework copies, via `agentteams --sync-agent-docs --project <dir>` run outside every agent session (by the operator, or the operator-installed unit from `scripts/install-agent-doc-sync.sh`). `.github/agents` and `.goose/recipes` copies are updated automatically; `.claude/agents` copies only after the operator reviews them with `--apply --include-claude`.
+- Keep capability changes (tools, model, hooks, MCP servers, permission modes) and fence markers out of the block: front matter is not synced, and a block carrying a fence token or a security-scan finding is quarantined, not propagated. If two copies of the block were changed differently, the sync records a conflict and writes nothing — reconcile them by hand.
+
 ## Living Document Rules
 
 - **No dated audit snapshots** in agent docs — record counts belong in data files

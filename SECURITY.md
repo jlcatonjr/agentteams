@@ -125,6 +125,12 @@ specifically:
 - `--revert-migration` is intentionally ungated (it is the recovery path).
 - `--migrate` no longer hard-errors on a stale snapshot tag; with `--yes`
   it moves the tag to current HEAD.
+- `--sync-agent-docs` writes agent files from outside every sandbox. It moves only the
+  `AGENTTEAMS-LEARNED` block, scan- and policy-gates it, and never creates files. It writes
+  `.claude/agents` only with `--apply --include-claude`, which needs an interactive y/N at a
+  terminal and is refused when `CLAUDECODE` is set. Both of its modules are integrity-pinned.
+  "Concurrent edit wins" is best effort: there is a small window between the re-check and the
+  rename.
 
 ## Signing from a trusted install
 
@@ -160,6 +166,46 @@ carries no marker; a signed marker is planned for the next grant schema version.
 - the current directory is on `sys.path`.
 
 ## Advisories
+
+### 2026-10-01 — Claude Code sandbox.excludedCommands is not a safe boundary (2.1.251)
+
+**Affected:** any project whose live `.claude/settings.json` sets `sandbox.excludedCommands`,
+measured on Claude Code 2.1.251 (Linux). agentteams has never emitted the key. **Severity:** high
+for anyone who adds it: it is an escape from the sandbox, not a narrow exception.
+
+Measured with `sandbox.excludedCommands = ["/bin/bash /abs/fixed.sh"]` and
+`allowUnsandboxedCommands: false`. The script itself was write-denied, and paths are sanitized:
+
+| Command run by the agent | Result |
+|---|---|
+| `/bin/bash /abs/fixed.sh` (exact) | runs **unsandboxed** (intended) |
+| `PROBE_ENV=1 /bin/bash /abs/fixed.sh` | runs **unsandboxed, with the variable set** |
+| `cd X && /bin/bash /abs/fixed.sh` | runs **unsandboxed** |
+| `/bin/bash /abs/fixed.sh extra-arg` | sandboxed |
+| `env VAR=1 /bin/bash /abs/fixed.sh` | sandboxed |
+| `/bin/bash /abs/fixed.sh; touch /tmp/evil; echo >> .claude/agents/x` | the chained writes are **blocked** (each subcommand must match) |
+
+So a leading environment assignment survives the exclusion match. Put a variable such as
+`LD_PRELOAD=/proj/x.so` or `PYTHONPATH=/proj/lib` in front of the excluded command, and an agent
+runs code it wrote **outside** the sandbox, whatever the excluded script does. Only the
+`PROBE_ENV` form was measured; these variables follow from it. Write-protecting the script
+does not help.
+
+**agentteams' response:**
+- The key is never emitted. A pinned test checks every Claude settings example (cooperative,
+  confined, exclusive, with and without prompt-root protection).
+- Generation, `--update` and `--check` print a HIGH warning when the live `settings.json` uses the
+  key, and `--check-wiring` fails. Only the number of entries is printed, never their values.
+- The self-updating-agents design dropped its `excludedCommands` wrapper. Propagating learned agent
+  notes now runs outside every agent session, through `--sync-agent-docs` from an operator-installed
+  systemd user unit (`scripts/install-agent-doc-sync.sh`).
+
+**Action:** remove `sandbox.excludedCommands` from `.claude/settings.json` and
+`.claude/settings.local.json`. Run anything that must run unsandboxed from outside the agent
+session.
+
+**Upstream:** the report has been drafted for the operator to send to Anthropic. It has not been
+sent yet.
 
 ### 2026-09-30 — Brief write roots could widen the next sandbox or run shell in the operator's shell
 

@@ -20,6 +20,9 @@ _BRIDGE_USAGE_HINT = (
 )
 def _validate_option_combinations(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     """Validate explicit incompatible option pairs and mode-specific constraints."""
+    from agentteams.cli.agent_doc_sync_switch import validate_agent_doc_sync_args
+
+    validate_agent_doc_sync_args(parser, args)
     # The Goose source/model switch is a standalone action (dispatched in app.py before
     # the generate pipeline); it cannot be combined with generation/bridge/convert/interop.
     if (

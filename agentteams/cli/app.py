@@ -105,6 +105,11 @@ def _main_dispatch(
     *,
     migrate_exemption: bool = False,
 ) -> int:
+    # --sync-agent-docs: standalone, dispatched before anything reads a brief/pin/config.
+    if getattr(args, "sync_agent_docs", False):
+        from agentteams.cli.agent_doc_sync_switch import run_agent_doc_sync_cli
+        return run_agent_doc_sync_cli(args)
+
     import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
 
     # --backup-mirror overrides AGENTTEAMS_BACKUP_MIRROR for this run so the
@@ -521,3 +526,7 @@ def _main_dispatch(
     return run_generate(
         args, strict_manual_placeholders, migrate_exemption=migrate_exemption
     )
+
+
+if __name__ == "__main__":  # `python -I -m agentteams.cli.app ...` (the doc-sync unit's entry)
+    sys.exit(main())
