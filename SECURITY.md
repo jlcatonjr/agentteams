@@ -163,7 +163,7 @@ carries no marker; a signed marker is planned for the next grant schema version.
 
 ### 2026-09-30 — Brief write roots could widen the next sandbox or run shell in the operator's shell
 
-**Affected:** `main` before this fix. This covers every confined or exclusive team. **Severity:**
+**Affected:** `1.0.0-rc.7` and earlier; fixed in `1.0.0-rc.8`. This covers every confined or exclusive team. **Severity:**
 high.
 
 The brief's `workspace_write_roots` and `coordination_write_roots` went straight into the
@@ -276,7 +276,7 @@ then sign a grant that verifies. Use the default agents dir, or add the store to
 
 ### 2026-09-30 — The copilot and codex team dirs' trust roots were writable from every sandbox
 
-**Affected:** `main` before this fix. This covers every project holding a copilot
+**Affected:** `1.0.0-rc.7` and earlier; fixed in `1.0.0-rc.8`. This covers every project holding a copilot
 (`.github/agents`) or codex (`.codex/agents`) agentteams team next to a sandboxed or launcher-confined
 agent. **Severity:** medium. The operator's C-5 gate for that team could be forged.
 
@@ -292,7 +292,9 @@ honour.
   refusal with a writable `.github/workflows`.
 - `permissions.deny` covers their trust-root files. Status: product-unverified.
 - The launcher requires and ro-binds them. Status: mechanism-verified.
-- The goose Seatbelt profile denies them. Status: unverified.
+- The goose Seatbelt profile denies them. Status: mechanism-verified on GitHub `macos-latest` (Darwin 25.6,
+  arm64, unnested `sandbox-exec`) for the switch, verify-key store, `.codex/config.toml` and ancestor renames
+  (`tests/test_goose_seatbelt_mechanism.py`, #87).
 - Copilot and codex teams get the roster stubs and store sentinel whenever the switch is emitted.
 
 **Action:**
@@ -320,7 +322,8 @@ honour.
   and `sed` there, including of `_build-description.json`, which is tracked separately.
 - **`.codex` whole-deny.** It is untested against Codex CLI's own in-project writes.
 - **`.codex/config.toml`.** It is protect-if-present, so a launcher-confined process can create
-  it while it is absent.
+  it while it is absent. Since #11 the launcher and generation warn on its security-relevant keys on every
+  run (key-based detection).
 - **Teams added later.** A team created after the block was merged stays Bash-writable until you
   re-merge. `--update` and `--check` name it.
 - **Profile mismatch.** A pre-existing cooperative claude or goose team still lacks its store and
