@@ -226,14 +226,24 @@ def _emit_privilege_artifacts(
     if not privilege or privilege.get("privilege_profile") not in {"confined", "exclusive"}:
         # 2026-09-30: a cooperative agentteams team (marker present) still needs its store
         # sentinel, or a confined sibling's launcher refuses the project. Write-if-absent.
+        # Never follows a planted symlink: the store dir must resolve inside the team, and the file
+        # is created O_EXCL|O_NOFOLLOW (nothing, not even a dangling link, may already be there).
+        from agentteams.control_plane_io import _create_exclusive
+
         agents_dir = framework_agents_dir(root, framework)
         sentinel = agents_dir / VERIFY_KEY_STORE_SENTINEL_REL
         if not (agents_dir / TEAM_MARKER_REL).is_file() or sentinel.exists() or sentinel.is_symlink():
             return []
+        team = agents_dir.resolve()
+        if not sentinel.parent.resolve().is_relative_to(team):
+            return []
         if not dry_run:
             sentinel.parent.mkdir(parents=True, exist_ok=True)
-            sentinel.write_text(VERIFY_KEY_STORE_SENTINEL_TEXT, encoding="utf-8")
-        return [str(sentinel.resolve())]
+            if not sentinel.parent.resolve().is_relative_to(team):  # raced into a link
+                return []
+            if not _create_exclusive(sentinel, VERIFY_KEY_STORE_SENTINEL_TEXT):
+                return []
+        return [str(team / VERIFY_KEY_STORE_SENTINEL_REL)]
     from agentteams.host_features import expand_privilege_profile
 
     profile = privilege["privilege_profile"]

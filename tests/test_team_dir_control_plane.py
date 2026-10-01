@@ -279,6 +279,44 @@ def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, 
     assert (agents / VERIFY_KEY_STORE_SENTINEL_REL).read_text() == "operator text"
 
 
+def _cooperative_team_without_store(p: Path) -> Path:
+    agents = p / ".github" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "references" / "build-log.json").write_text("{}", encoding="utf-8")
+    return agents
+
+
+def test_multi_sync_sentinel_write_refuses_a_symlinked_store_parent(tmp_path):
+    from agentteams import multi_sync
+
+    agents = _cooperative_team_without_store(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (agents / "references" / "authorized-verify-keys").symlink_to(outside)
+    assert multi_sync._emit_privilege_artifacts(tmp_path, "copilot-vscode", None, dry_run=False) == []
+    assert not any(outside.iterdir())
+
+
+def test_multi_sync_sentinel_write_never_follows_a_dangling_symlink(tmp_path):
+    from agentteams import multi_sync
+
+    agents = _cooperative_team_without_store(tmp_path)
+    store = agents / "references" / "authorized-verify-keys"
+    store.mkdir()
+    target = tmp_path / "victim.txt"
+    (store / "README.md").symlink_to(target)
+    assert multi_sync._emit_privilege_artifacts(tmp_path, "copilot-vscode", None, dry_run=False) == []
+    assert not target.exists()
+
+
+def test_multi_sync_sentinel_write_skips_non_agentteams_dirs(tmp_path):
+    from agentteams import multi_sync
+
+    (tmp_path / ".github" / "agents").mkdir(parents=True)  # hand-written: no build-log marker
+    assert multi_sync._emit_privilege_artifacts(tmp_path, "copilot-vscode", None, dry_run=False) == []
+    assert not (tmp_path / ".github" / "agents" / "references").exists()
+
+
 # --- T2: permissions.deny ------------------------------------------------------------------------
 
 def test_permission_rules_cover_every_sibling_trust_root_file_but_no_agents_dir():
