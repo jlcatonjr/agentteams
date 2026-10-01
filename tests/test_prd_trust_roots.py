@@ -110,8 +110,8 @@ def test_goose_control_plane_keeps_the_claude_hook_and_launcher_covers_it():
 
 # --- stubs: stub == absent for every reader -----------------------------------------------------
 
-def _team(tmp_path: Path, stub: bool) -> Path:
-    root = tmp_path / ("stub" if stub else "absent")
+def _team(tmp_path: Path, stub: bool, layout: str = "") -> Path:
+    root = tmp_path / ("stub" if stub else "absent") / layout  # "" keeps the plain team dir
     (root / "references").mkdir(parents=True)
     if stub:
         for name, text in CONTROL_PLANE_STUB_TEXT.items():
@@ -150,10 +150,12 @@ if hasattr(_grants, "_assert_approver_on_roster"):
     READERS["grant_assert_approver"] = lambda r: _grants._assert_approver_on_roster("@security", r)
 
 
+@pytest.mark.parametrize("layout", ["", ".github/agents", ".codex/agents"])  # 2026-09-30: copilot/codex
 @pytest.mark.parametrize("reader", sorted(READERS))
-def test_stub_equals_absent(tmp_path, reader):
+def test_stub_equals_absent(tmp_path, reader, layout):
     fn = READERS[reader]
-    assert _outcome(lambda: fn(_team(tmp_path, True))) == _outcome(lambda: fn(_team(tmp_path, False)))
+    assert _outcome(lambda: fn(_team(tmp_path, True, layout))) == \
+        _outcome(lambda: fn(_team(tmp_path, False, layout)))
 
 
 def test_management_authority_stub_declares_nothing():
@@ -237,8 +239,14 @@ def test_management_emission_predicate_matrix(tmp_path, framework, sandbox, mana
 def test_stub_predicate_is_per_framework():
     assert cpio.stubs_enabled("claude", {"host_features": ["goose:sandbox"]}) is False
     assert cpio.stubs_enabled("goose", {"host_features": ["claude:sandbox"]}) is False
-    assert cpio.stubs_enabled("codex", {"privilege_profile": "confined"}) is False
     assert cpio.stubs_enabled("goose", {"privilege_profile": "confined"}) is True
+    # 2026-09-30: copilot/codex follow the switch (or a confinement request), whatever the profile.
+    for fw in ("codex", "copilot-vscode", "copilot-cli"):
+        assert cpio.stubs_enabled(fw, {"privilege_profile": "confined"}) is True
+        assert cpio.stubs_enabled(fw, {"privilege_profile": "cooperative",
+                                       "enforce_decision_signing": False}) is True
+        assert cpio.stubs_enabled(fw, {"privilege_profile": "cooperative"}) is False
+    assert cpio.stubs_enabled("agents-md", {"privilege_profile": "confined"}) is False
 
 
 def test_multi_sync_projects_the_stubs(tmp_path):

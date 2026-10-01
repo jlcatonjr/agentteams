@@ -310,6 +310,20 @@ Enable reading this file (defaults to true when the file exists):
 
 In repositories using the agentteams `copilot-vscode` framework, each agent role has its own `.agent.md` file in `.github/agents/`. These files are the instruction sets for that agent role and encode its scope of action directly. Privilege constraints belong in the agent's instruction file, not in VS Code settings.
 
+`.github/agents/references/` also holds the team's trust roots: the `enforce_decision_signing`
+switch (`agent-privilege.json`), the `authorized-verify-keys/` store, the approver and manager
+rosters, and `build-log.json`. agentteams emits no Copilot sandbox. Since 2026-09-30 the other
+arms protect these files:
+- Claude-sandboxed agents in the same repo are covered by `denyWrite` of `.github/agents`, which
+  keeps `.github` non-renameable and `.github/workflows` writable, plus `permissions.deny` `Edit`
+  rules.
+- Goose's Seatbelt profile covers them.
+- `sandbox/confine-run.sh` covers them. It refuses the project until the team is regenerated
+  with its roster stubs and store sentinel.
+
+The `*.agent.md` files themselves stay Edit-tool writable. See the workspace-privilege-scoping
+reference ("Sibling team dirs") for status labels and residuals.
+
 ---
 
 ## Common Privilege Profiles

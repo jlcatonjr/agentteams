@@ -40,8 +40,13 @@ def stubs_enabled(framework: str, manifest: dict[str, Any]) -> bool:
         manifest: The team manifest (``host_features`` / ``privilege_profile``).
 
     Returns:
-        ``_sandbox_feature_enabled`` for claude, ``_goose_sandbox_feature_enabled`` for goose,
-        False for every other framework (no emitted sandbox, no launcher requirement).
+        ``_sandbox_feature_enabled`` for claude, ``_goose_sandbox_feature_enabled`` for goose.
+        For copilot-vscode, copilot-cli and codex (2026-09-30): True whenever the switch is
+        emitted (the manifest carries ``enforce_decision_signing``) or confinement is requested,
+        WHATEVER that team's own profile. A launcher emitted by ANY confined team in the repo
+        requires these entries once the team marker exists, so a cooperative copilot/codex team
+        must not brick it; a stub reads exactly like an absent file. False for every other
+        framework (agents-md is out of scope).
     """
     if framework == "claude":
         from agentteams.frameworks._sandbox_emit import _sandbox_feature_enabled
@@ -51,6 +56,10 @@ def stubs_enabled(framework: str, manifest: dict[str, Any]) -> bool:
         from agentteams.frameworks._goose_sandbox_emit import _goose_sandbox_feature_enabled
 
         return _goose_sandbox_feature_enabled(manifest)
+    if framework in ("copilot-vscode", "copilot-cli", "codex"):
+        from agentteams.frameworks._linux_sandbox_emit import _sandbox_confinement_requested
+
+        return "enforce_decision_signing" in manifest or _sandbox_confinement_requested(manifest)
     return False
 
 

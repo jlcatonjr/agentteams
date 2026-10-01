@@ -202,7 +202,22 @@ class FrameworkAdapter(ABC):
         )
 
         rel = self.sandbox_launcher_rel_path()
-        return linux_sandbox_output_files(manifest, rel) + macos_sandbox_output_files(manifest, rel)
+        files = linux_sandbox_output_files(manifest, rel) + macos_sandbox_output_files(manifest, rel)
+        # 2026-09-30: a copilot/codex team dir holds the same trust roots as the claude/goose ones,
+        # and the launcher requires its verify-key store once the team marker exists. Emit the
+        # frozen sentinel under the SAME predicate as the roster stubs (control_plane_io); the
+        # claude and goose adapters emit their own, so no rel_path is emitted twice.
+        from agentteams.control_plane_io import stubs_enabled
+        from agentteams.frameworks._sandbox_emit import (
+            TEAM_KEY_BY_FRAMEWORK,
+            VERIFY_KEY_STORE_SENTINEL_REL,
+            VERIFY_KEY_STORE_SENTINEL_TEXT,
+        )
+
+        fid = self.framework_id
+        if TEAM_KEY_BY_FRAMEWORK.get(fid) in ("copilot", "codex") and stubs_enabled(fid, manifest):
+            files.append((VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT))
+        return files
 
     def vscode_tasks_rel_path(self) -> str | None:
         """Return the path to .vscode/tasks.json relative to this framework's agents dir.

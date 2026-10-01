@@ -6,6 +6,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the `.github/agents` and `.codex/agents` team-dir control planes)
+
+- The copilot team dir (`.github/agents`, shared by copilot-vscode and copilot-cli) and the codex
+  team dir (`.codex/agents`) hold the same trust roots as `.claude/agents`: the
+  `enforce_decision_signing` switch, the verify-key store, the approver and manager rosters,
+  `management-authority.json` and the `build-log.json` team marker. No arm protected them, so a
+  Claude-sandboxed, goose-confined or launcher-confined agent could relax the switch, plant a
+  verify key or add itself to a roster that the next copilot or codex session, or the operator's
+  `--update --overwrite` gate for that team, would trust. Remediation row
+  `control-plane-codex-github-teams`.
+- **Claude block.** `denyWrite` now also names `.codex`, `.github/agents` and `.goose`, but only
+  for a team that is PRESENT at generation, meaning a real directory (never a symlink) with a
+  team marker. A missing deny path stops bwrap for every command, so an absent team is never
+  named. `.github` itself is not denied, so workflows and CODEOWNERS stay editable. Claude Code
+  2.1.251 self-binds each deny path's parent, which makes `.github` a mount point, so
+  `mv .github` gives EBUSY while a `.github/workflows` write succeeds. Status:
+  **product-verified, Claude Code 2.1.251, Linux**. Captured argv and probes are in
+  `tests/test_os_sandbox_product_enforcement.py::test_sibling_*`, which includes the negative
+  control where `mv .github` succeeds without the deny. Re-run after Claude Code upgrades.
+  The present-team list is computed only: a value supplied in a brief or manifest is ignored.
+- **`permissions.deny`** gains `Edit(...)` rules for each sibling team's trust-root FILES:
+  switch, store (`/**`), the three rosters, `build-log.json`, `.goose/sandbox.sb` and
+  `.codex/config.toml`. These are emitted whether or not the team exists. They are scoped to
+  those files and never cover a whole agents dir. Status: emitted, product-unverified;
+  unverified under `bypassPermissions`.
+- **Launcher** (`sandbox/confine-run.sh`, sha re-pinned). `TEAM_DIRS_REL` adds `.github/agents`
+  and `.codex/agents`, and `CONTROL_PLANE_REL` adds their switch, store and rosters, plus
+  `.codex/config.toml` as protect-if-present. Only `.github/agents/*` maps to a team:
+  `.github/workflows` is never bound, and `.github` is self-bound, so it is rename-locked but
+  still writable. Status: mechanism-verified, raw bubblewrap through the launcher.
+- **Goose Seatbelt profile** denies the copilot and codex trust roots. It emits `.codex`
+  ancestor-rename literals always, and `.github` literals only when a copilot team is present,
+  so a goose agent can still create `.github`. Status: UNVERIFIED (no macOS host).
+- **Stubs and sentinel.** Copilot and codex teams now get the comment-only roster stubs and the
+  verify-key store `README.md` sentinel whenever the switch is emitted, whatever their own
+  `privilege_profile`, so a mixed-profile repo is never bricked. A stub reads exactly like an
+  absent file for every reader. This adds 4 new files per copilot/codex team (copilot teams are
+  often git-tracked).
+- **Advisories.** Every generate, `--update` and `--check` now names each `denyWrite` entry in
+  the merged `.claude/settings.json` that no longer exists (bwrap's "Can't mkdir … Not a
+  directory"). It also names each present sibling team that the live `denyWrite` lacks. This
+  replaces the goose-only hand-edit warning.
+- **Migration.** On Linux, `sandbox/confine-run.sh` now REFUSES (exit 2, "missing although the
+  agentteams team … exists") a project whose pre-existing copilot or codex team lacks the new
+  entries. Run `agentteams --update` for that team (outside any sandbox) and the stubs and
+  sentinel are written. **Remove a sibling's entry from `.claude/settings.json` BEFORE deleting
+  that team**, or every sandboxed Bash command fails. After adding a sibling team, re-merge the
+  sandbox block from a regenerated claude team.
+- **Residuals** (also in `SECURITY.md`):
+  - A planted fake `build-log.json` makes the launcher require absent entries. This is
+    denial of service only.
+  - Copilot's prompt-level roots (`.github/agents/*.agent.md`,
+    `.github/copilot-instructions.md`) stay Edit-tool writable, so copilot teams are NOT fully
+    covered.
+  - Denying `.github/agents` blocks routine in-sandbox Bash cleanup or `sed` there.
+  - The `.codex` whole-deny is untested against Codex CLI's own in-project writes.
+  - `.codex/config.toml` can still be created by a launcher-confined process when absent.
+  - A team created after the block was merged stays Bash-writable until you re-merge (advised).
+  - `.agents` (agents-md) is out of scope.
+
 ### verified (Claude Code sandbox arm on Linux)
 
 - Claude Code's native sandbox arm now has an end-to-end Linux pass. The operator ran it on

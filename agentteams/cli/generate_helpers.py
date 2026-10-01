@@ -204,37 +204,138 @@ def _warn_legacy_signing_keys(manifest: dict) -> bool:
     return True
 
 
-def _warn_goose_under_claude_sandbox(manifest: dict, output_dir: Path) -> bool:
-    """Warn when a Claude sandbox is emitted into a project that also holds a goose team (F-4).
+def _live_claude_sandbox(project_root: Path) -> tuple[Path, list[str]] | None:
+    """Return ``(settings path, denyWrite entries)`` of the merged, enabled Claude sandbox, or None."""
+    live = project_root / ".claude" / "settings.json"
+    try:
+        data = json.loads(live.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    sandbox = data.get("sandbox") if isinstance(data, dict) else None
+    if not (isinstance(sandbox, dict) and sandbox.get("enabled") is True):
+        return None
+    fs = sandbox.get("filesystem")
+    deny = fs.get("denyWrite") if isinstance(fs, dict) else None
+    return live, [d for d in deny if isinstance(d, str) and d] if isinstance(deny, list) else []
 
-    The Claude block write-denies `.claude` as a whole, but not `.goose`: a deny path that does not
-    exist stops bwrap starting, and most Claude projects have no `.goose`. In a two-framework
-    project the goose switch and verify-key store therefore stay writable (and renameable) by a
-    Claude-sandboxed process unless the operator adds `".goose"` to `denyWrite` by hand
-    (@security PR-B condition B). Informational and read-only.
+
+def _deny_entry_path(project_root: Path, entry: str) -> Path:
+    """Resolve a ``denyWrite`` entry the way the emitted block writes them (``~``, absolute, relative)."""
+    path = Path(entry).expanduser()
+    return path if path.is_absolute() else project_root / entry
+
+
+def _warn_live_sandbox_deny_paths_missing(project_root: Path) -> list[str]:
+    """Name each ``denyWrite`` entry of the merged ``.claude/settings.json`` that no longer exists.
+
+    On Linux Claude Code's bwrap cannot start with a missing deny path, so EVERY sandboxed command
+    fails (M1) — e.g. after a sibling team named in ``denyWrite`` was deleted. Read-only and
+    informational; runs on every generate/``--update``/``--check`` of any framework.
 
     Args:
-        manifest: The team manifest (``framework`` and the sandbox request gate the notice).
-        output_dir: The team's agents dir; its grandparent is the project root for the default
-            layout.
+        project_root: The project root holding ``.claude/settings.json``.
 
     Returns:
-        True iff the notice was printed.
+        The missing entries (empty when there is no enabled merged sandbox).
     """
-    from agentteams.frameworks._sandbox_emit import _sandbox_feature_enabled
+    live = _live_claude_sandbox(project_root)
+    if live is None:
+        return []
+    settings, entries = live
+    missing = [e for e in entries if not _deny_entry_path(project_root, e).exists()]
+    for entry in missing:
+        print(
+            f"  !  {settings}: sandbox.filesystem.denyWrite names {entry!r}, which does not exist. "
+            "On Linux Claude Code's bwrap then fails EVERY sandboxed command (\"Can't mkdir ... Not "
+            f"a directory\"). Fix: remove {entry!r} from denyWrite in {settings} (remove an entry "
+            "BEFORE deleting the team it protects).",
+            file=sys.stderr,
+        )
+    return missing
 
-    if manifest.get("framework") != "claude" or not _sandbox_feature_enabled(manifest):
-        return False
-    if not (output_dir.parent.parent / ".goose" / "recipes").is_dir():
-        return False
-    print(
-        "  !  this project also holds a goose team (.goose/recipes). The Claude sandbox block "
-        "write-denies .claude but not .goose, so the goose switch and verify-key store stay "
-        "writable from a Claude-sandboxed process. Add \".goose\" to sandbox.filesystem.denyWrite "
-        "when you merge the block into .claude/settings.json.",
-        file=sys.stderr,
+
+def _warn_sibling_teams_under_claude_sandbox(
+    manifest: dict, project_root: Path, output_dir: Path, present: tuple[str, ...]
+) -> list[str]:
+    """Name each sibling team dir the merged Claude ``denyWrite`` lacks (generalises the goose warning).
+
+    The emitted block names only the sibling teams present at ITS generation, so a codex, copilot or
+    goose team created after the block was merged stays Bash-writable (and renameable) from a
+    Claude-sandboxed process until the operator re-merges. Counts the team this run generates
+    into its default dir as present. Read-only and informational.
+
+    Args:
+        manifest: The team manifest (``framework``).
+        project_root: The project root holding ``.claude/settings.json``.
+        output_dir: This run's agents dir.
+        present: :func:`present_sibling_deny_dirs` of ``project_root``.
+
+    Returns:
+        The lacking deny dirs (empty when there is no enabled merged sandbox).
+    """
+    from agentteams.frameworks._sandbox_emit import (
+        SIBLING_DENY_DIRS,
+        TEAM_KEY_BY_FRAMEWORK,
+        team_agents_dir,
     )
-    return True
+
+    live = _live_claude_sandbox(project_root)
+    if live is None:
+        return []
+    settings, entries = live
+    expected = set(present)
+    team = TEAM_KEY_BY_FRAMEWORK.get(manifest.get("framework") or "")
+    if team in SIBLING_DENY_DIRS and output_dir.resolve() == (project_root / team_agents_dir(team)).resolve():
+        expected.add(SIBLING_DENY_DIRS[team])
+    have = {_deny_entry_path(project_root, e).resolve() for e in entries}
+    lacking = sorted(d for d in expected if (project_root / d).resolve() not in have)
+    if lacking:
+        print(
+            f"  !  {settings}: this project holds agentteams team dir(s) {', '.join(lacking)} that the "
+            "merged sandbox denyWrite does not name, so their switch, verify-key store and rosters "
+            "stay writable (and renameable) from Claude-sandboxed Bash. Fix: add "
+            f"{json.dumps(lacking)} to sandbox.filesystem.denyWrite once the dir exists (or re-merge "
+            "the block from a regenerated claude team's settings.hooks.example.json).",
+            file=sys.stderr,
+        )
+    return lacking
+
+
+def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: Path) -> tuple[str, ...]:
+    """Compute the present sibling team dirs onto the manifest (transient) and print the advisories.
+
+    The single place the transient ``SIBLING_DENY_DIRS_KEY`` is set: any input-supplied value is
+    discarded first, and the computed tuple is what the Claude block's ``denyWrite`` and the goose
+    Seatbelt ``.github`` ancestor literals read. Runs on every generate/update/heal/``--check``.
+
+    Args:
+        manifest: The team manifest (mutated: the transient key).
+        project_root: The project root.
+        output_dir: This run's agents dir.
+
+    Returns:
+        The present sibling deny dirs.
+    """
+    from agentteams.frameworks._sandbox_emit import (
+        SIBLING_DENY_DIRS_KEY,
+        TEAM_KEY_BY_FRAMEWORK,
+        present_sibling_deny_dirs,
+        team_agents_dir,
+    )
+
+    manifest.pop(SIBLING_DENY_DIRS_KEY, None)
+    # `project_root` is the pre-normalisation --output: when it names the agents dir itself
+    # (`--output <p>/.claude/agents`), strip the framework's default sub-path. Any other layout
+    # keeps the given path, where no sibling is found: nothing is denied (safe under M1).
+    team = TEAM_KEY_BY_FRAMEWORK.get(manifest.get("framework") or "")
+    sub = team_agents_dir(team) if team else ""
+    if sub and project_root.resolve() == output_dir.resolve() and output_dir.as_posix().endswith("/" + sub):
+        project_root = output_dir.parents[sub.count("/")]
+    present = present_sibling_deny_dirs(project_root)
+    manifest[SIBLING_DENY_DIRS_KEY] = present
+    _warn_live_sandbox_deny_paths_missing(project_root)
+    _warn_sibling_teams_under_claude_sandbox(manifest, project_root, output_dir, present)
+    return present
 
 
 def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
@@ -257,7 +358,6 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
         path = None  # the sandbox warnings below still apply (3b: never skipped by a failed write)
     _warn_live_sandbox_fails_open(manifest, output_dir)
     _warn_legacy_signing_keys(manifest)
-    _warn_goose_under_claude_sandbox(manifest, output_dir)
     if path is None:
         return
     _warn_sandbox_deny_path_mismatch(manifest, output_dir)

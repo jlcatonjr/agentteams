@@ -231,9 +231,8 @@ Two properties matter for the privilege model:
   roots, and `permissions.deny` is unchanged (no `Edit(/.claude/**)`, which would block agents'
   own Write-tool edits there). For a team generated under a non-default `--output`, the config
   dir is derived from the same switch path as the other entries, and the existing
-  deny-path-mismatch warning names it. **Two frameworks in one project:** `.goose` is not
-  added (a missing deny path stops bwrap); add `".goose"` to `denyWrite` by hand if a goose team
-  shares the project. The goose Seatbelt profile denies `file-write-unlink` and
+  deny-path-mismatch warning names it. **Several frameworks in one project:** see the sibling
+  team-dir bullet below (`.codex`, `.github/agents` and `.goose` are denied when present). The goose Seatbelt profile denies `file-write-unlink` and
   `file-write-create` on each control-plane ancestor literal (`.goose`, `.goose/recipes`,
   `.goose/recipes/references`, `.claude`, `.claude/hooks`) — **unverified**, no macOS host has
   run it. `sandbox/confine-run.sh` (Linux) read-only binds every control-plane path it finds
@@ -245,6 +244,38 @@ Two properties matter for the privilege model:
   saw a sandboxed `mv .claude` fail), under the AppArmor precondition above. Tracked follow-up: pinning the
   control plane *outside* the write root (defence in depth; needed where the chain is not
   mount-protected, i.e. Seatbelt).
+- **Sibling team dirs: `.github/agents` (copilot) and `.codex/agents` (codex), 2026-09-30.**
+  These dirs hold the same trust roots as `.claude/agents`: the switch, the verify-key store, the
+  three rosters and the `build-log.json` team marker. They emit no sandbox of their own, so the
+  other arms protect them:
+
+  | Arm | What it protects | Status |
+  |---|---|---|
+  | Claude `denyWrite` | `.codex` (whole), `.github/agents` (never `.github`), `.goose` (whole), each only when that team is **present at generation** (real dir, no symlink, with a team marker) | **product-verified, Claude Code 2.1.251, Linux** (`test_sibling_*`: captured argv, `mv .github` EBUSY, `.github/workflows` writable, negative control); re-run after upgrades |
+  | Claude `permissions.deny` | `Edit(...)` on each sibling trust-root **file**, plus `.goose/sandbox.sb` and `.codex/config.toml`, always emitted | emitted, product-unverified; unverified under `bypassPermissions` |
+  | `sandbox/confine-run.sh` | the four team dirs; entries required once the marker exists; `.codex/config.toml` protect-if-present; `.github/workflows` never bound | mechanism-verified (raw bubblewrap via the launcher) |
+  | goose Seatbelt | the copilot and codex roots; `.codex` ancestors always, `.github` ancestors only with a copilot team present | UNVERIFIED (no macOS host) |
+
+  Claude Code self-binds the parent of every `denyWrite` path read-write before it ro-binds the
+  path. That is why denying `.github/agents` also makes `.github` non-renameable while
+  `.github/workflows` stays editable. The behaviour is undocumented, and the product itest pins
+  it.
+
+  Copilot and codex teams get the roster stubs and the store sentinel whenever the switch is
+  emitted, whatever their own profile. A stub reads like an absent file.
+
+  **Before deleting a sibling team, remove its entry from `.claude/settings.json`.** A missing
+  deny path makes bwrap fail every command ("Can't mkdir … Not a directory"). Every generate,
+  `--update` and `--check` names such stale entries, and also names present teams that the live
+  block lacks.
+
+  Residuals:
+  - A planted fake marker causes a launcher refusal (denial of service only).
+  - Copilot `*.agent.md` and `copilot-instructions.md` stay Edit-tool writable, so copilot is
+    NOT fully covered.
+  - Bash cleanup in `.github/agents` is blocked.
+  - The `.codex` whole-deny is untested against Codex CLI's own writes.
+  - `.agents` (agents-md) is out of scope.
 - **The operator's private signing key is read-denied in every profile (F-1).** Every emitted
   sandbox — `confined` as well as `exclusive`, and a `cooperative` team with `claude:sandbox` —
   puts `~/.config/agentteams/keys` in `denyRead` (a `confined` block gets that entry and **no**

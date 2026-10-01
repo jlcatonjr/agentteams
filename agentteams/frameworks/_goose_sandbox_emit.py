@@ -220,6 +220,8 @@ def _build_seatbelt_profile(
     deny_read: list[str] | None = None,
     egress_endpoint: str | None = None,
     deny_network: bool = False,
+    *,
+    copilot_present: bool = False,
 ) -> str:
     """Build the ``sandbox.sb`` Apple-Seatbelt profile text for goose confinement.
 
@@ -246,6 +248,9 @@ def _build_seatbelt_profile(
         deny_network: When True (``exclusive``), deny all network except a sanctioned
             loopback proxy. When False (``confined``, the default), leave egress open and
             disclose that in the profile.
+        copilot_present: A copilot agentteams team (``.github/agents``) was present at generation.
+            Only then are the ``.github`` ancestor-rename literals emitted: a create-deny on the
+            ``.github`` literal would stop a goose agent CREATING ``.github`` in a repo without one.
 
     Returns:
         The profile text (ends with a trailing newline).
@@ -256,12 +261,14 @@ def _build_seatbelt_profile(
             at or inside the operator signing-key directory.
     """
     from agentteams.frameworks._sandbox_emit import (
+        CODEX_CONFIG_REL,
         GRANT_ROSTER_PROJECT_REL,
         assert_roots_clear_of_signing_keys,
         control_plane_ancestors,
         governed_roster_paths,
         protected_write_paths,
         signing_key_deny_read,
+        team_marker_path,
     )
     roots = list(write_roots) if write_roots else ["."]
     assert_roots_clear_of_signing_keys(roots)
@@ -331,13 +338,21 @@ def _build_seatbelt_profile(
     # hook the next Claude session runs). The grant roster gets no ancestor rule: a create-deny
     # on the `references` literal would stop a goose agent creating a project `references/` dir.
     control_plane = [*protected_write_paths("goose"), ".goose/sandbox.sb", *governed_roster_paths("goose")]
-    cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (*control_plane, GRANT_ROSTER_PROJECT_REL)) if e]
+    # 2026-09-30: the copilot and codex team dirs' trust roots too (UNVERIFIED on a macOS host).
+    # Unconditional: a deny on a missing path also stops the agent creating it. Their ancestor
+    # rename literals: `.codex` always (like `.claude`); `.github` only with a copilot team present.
+    sib = {k: [*protected_write_paths(k), *governed_roster_paths(k), team_marker_path(k)]
+           for k in ("copilot", "codex")}
+    sib["codex"].append(CODEX_CONFIG_REL)
+    anc_paths = [*control_plane, *sib["codex"], *(sib["copilot"] if copilot_present else [])]
+    cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
+        *control_plane, *sib["copilot"], *sib["codex"], GRANT_ROSTER_PROJECT_REL)) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",
         "(deny file-write*",
         *[f"    {e}" for e in cp_exprs],
         ")",
-        *_seatbelt_ancestor_rename_rules(control_plane_ancestors(control_plane)),
+        *_seatbelt_ancestor_rename_rules(control_plane_ancestors(anc_paths)),
         "",
         ";; --- Network egress ---",
     ]
@@ -584,8 +599,11 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     # Network isolation is an EXCLUSIVE-only property (operator decision 2026-W39): the
     # default confined profile leaves egress open so a goose team can reach its LLM.
     deny_network = manifest.get("privilege_profile") == "exclusive"
+    from agentteams.frameworks._sandbox_emit import SIBLING_DENY_DIRS, sibling_deny_dirs
+
     profile_text = _build_seatbelt_profile(
-        write_roots, deny_read, egress_endpoint, deny_network=deny_network
+        write_roots, deny_read, egress_endpoint, deny_network=deny_network,
+        copilot_present=SIBLING_DENY_DIRS["copilot"] in sibling_deny_dirs(manifest),
     )
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint
