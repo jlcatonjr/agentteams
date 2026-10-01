@@ -340,6 +340,9 @@ def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: P
     from agentteams.team_dir_advisories import print_team_dir_advisories
 
     print_team_dir_advisories(project_root)  # #11: planted markers, Codex config keys (detection)
+    from agentteams.prompt_roots import print_prompt_root_warnings
+
+    print_prompt_root_warnings(project_root)  # #8: prompt-root changes since last build (detection)
     return present
 
 
@@ -765,5 +768,10 @@ def _handle_check(
         )
         for _f in _integrity_findings:
             print(f"  ✗ {_f.describe()}", file=sys.stderr)
+        has_any = True
+    from agentteams.prompt_roots import strict_failure
+
+    if getattr(args, "strict_prompt_roots", False) and strict_failure():  # #8: warn-only by default
+        print("\n--strict-prompt-roots: failing on the PROMPT-ROOT CHANGED warning above.", file=sys.stderr)
         has_any = True
     return 1 if has_any else 0

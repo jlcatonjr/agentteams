@@ -84,6 +84,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`liaison_logs`](liaison-logs.md) | Cross-repository coordination logs and artifacts |
 | [`control_plane_io`](control-plane-io.md) | Write-if-absent sandbox roster stubs and the in-sandbox write preflight |
 | [`team_dir_advisories`](team-dir-advisories.md) | Generation-time advisories for planted team markers and planted Codex config keys (detection only) |
+| [`prompt_roots`](prompt-roots.md) | Prompt-root change detection: per-fence hashes in the build-log, `PROMPT-ROOT CHANGED` warning, `--strict-prompt-roots` (detection only) |
 | [`parallel_plan`](parallel-plan.md) | Parallelisation analysis over a plan's `depends_on` column |
 | [`feature_inventory`](feature-inventory.md) | Generated inventory of the shipped feature surface |
 | [`front_matter_reconcile`](front-matter-reconcile.md) | Report (and optionally apply) template-vs-deployed YAML front-matter divergence |

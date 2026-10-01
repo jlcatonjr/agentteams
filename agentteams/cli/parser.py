@@ -162,6 +162,14 @@ def _build_parser() -> argparse.ArgumentParser:
              "(exit code 1 if drift or structural changes are detected)",
     )
     parser.add_argument(
+        "--strict-prompt-roots",
+        action="store_true",
+        dest="strict_prompt_roots",
+        help="With --check: also exit 1 when a prompt root (copilot-instructions.md, AGENTS.md, "
+             ".github/prompts/**, a team agent file, ...) changed since the last build. Without "
+             "it the PROMPT-ROOT CHANGED warning is advisory",
+    )
+    parser.add_argument(
         "--refresh-index",
         action="store_true",
         dest="refresh_index",
