@@ -36,8 +36,9 @@ from pathlib import Path
 
 from agentteams.atomicio import atomic_rewrite_csv_rows
 
-#: Where the ledger lives. **Tracked**, unlike the run artifacts it is promoted from: a finding
-#: that only exists in a gitignored directory is a finding that did not survive the week.
+#: Where the ledger lives. Designed to be tracked (a finding that only exists in a gitignored
+#: directory did not survive the week), but since the 2026-08-31 public reset it is a LOCAL file:
+#: gitignored, and the ledger test skips when it is absent (CI).
 FINDINGS_LEDGER_REL = "references/redteam-findings.log.csv"
 
 #: The provider/model documentation register that citations resolve into.

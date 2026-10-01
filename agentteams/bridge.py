@@ -198,12 +198,12 @@ def skip_notice(count: int, *, merge_only: bool) -> str:
     """
     if merge_only:
         return (
-            f"{count} target file(s) were left untouched because they carry no "
-            "AGENTTEAMS-BRIDGE fence — the intended --bridge-merge behaviour, since "
-            "an unfenced file holds user-authored content. See bridge-merge.report.md "
+            f"{count} project-owned target file(s) (no AGENTTEAMS-BRIDGE fence) were left "
+            "untouched. This is expected, not drift: an unfenced file holds user-authored "
+            "content, which --bridge-merge never edits. See bridge-merge.report.md "
             "for the per-file reason. Do NOT reach for --bridge-refresh to 'fix' this: "
-            "it overwrites those files unconditionally. To bring a file under bridge "
-            "management, add the fence to it."
+            "it overwrites those files unconditionally. Only for a file the bridge SHOULD own, "
+            "add the fence to it to bring it under bridge management."
         )
     return (
         f"{count} existing bridge file(s) were not overwritten. Use --bridge-merge to "
@@ -535,7 +535,7 @@ def run_bridge(
                     )
                 else:
                     merge_report_lines.append(
-                        f"- skipped (no AGENTTEAMS-BRIDGE fence in existing file): "
+                        f"- project-owned, left untouched (no AGENTTEAMS-BRIDGE fence; expected): "
                         f"{rel_to_root(path, output_root)}"
                     )
                 result.skipped.append(str(path))

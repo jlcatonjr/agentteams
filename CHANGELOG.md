@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### chore (hygiene: follow-ups #20, #21, #22, #25)
+
+- **#25 `codex_translation` is template-authoritative.** The fence is machine-generated metadata (the tool limit and
+  hand-off list in each `.codex/agents/*.toml`), so a shorter render is a removed hand-off or tool, never lost
+  enrichment. Under the default `--shrink-policy=preserve` it now propagates. **Rule 12:** a hand edit inside that
+  fence is overwritten on the next `--update`. `fences.py` is re-pinned.
+- **#25 bridge wording.** `--bridge-merge` now reports a project-owned entry file (no `AGENTTEAMS-BRIDGE` fence) as
+  "project-owned, left untouched (expected)" rather than "skipped". It points at fence adoption only for files the
+  bridge should own.
+- **#20** `signed_ledger` warns once when `cryptography` is below the pinned 50.0.0, for example a base-environment
+  copy. It still signs. `signed_ledger.py` is re-pinned. New `scripts/setup-dev-venv.sh` creates a gitignored
+  `.venv` with `.[test,research,signing]`; it is dry-run by default. The packaging test's `importorskip` now needs
+  `build.__main__`, so a stray `build/` directory cannot satisfy it. The fence-balance test no longer errors at
+  collection when it finds no rendered files.
+- **#21** `plan_steps.write_steps` and `plan_steps.update_step` write steps CSVs through `csv.DictWriter` with a
+  read-back check. Stale test and "tracked" references in the red-team modules are corrected.
+
 ### feat (prompt-root change detection: follow-up #8 phase 1)
 
 - **New `agentteams/prompt_roots.py`.** Every generate and `--update` records a `prompt_root_hashes`

@@ -564,3 +564,11 @@ def test_signing_closure_covers_every_module_run_with_the_key(tmp_path):
         assert rel in operator_signing.SIGNING_CLOSURE
         assert rel in integrity.ENFORCEMENT_MODULES
 
+
+
+@pytest.fixture(autouse=True)
+def _no_cryptography_floor_warning(monkeypatch):
+    """The #20 one-shot floor warning depends on the host's cryptography; keep goldens host-neutral."""
+    from agentteams.cli import signed_ledger
+
+    monkeypatch.setattr(signed_ledger, "_CRYPTO_WARNED", [True])

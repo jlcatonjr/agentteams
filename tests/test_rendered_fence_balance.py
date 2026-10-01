@@ -97,7 +97,8 @@ def test_the_check_has_something_to_read() -> None:
 
 
 @pytest.mark.parametrize(
-    "path", _rendered_files(), ids=lambda p: str(p.relative_to(REPO_ROOT))
+    "path", _rendered_files(),
+    ids=lambda p: str(p.relative_to(REPO_ROOT)) if isinstance(p, Path) else "none"
 )
 def test_rendered_fences_are_balanced(path: Path) -> None:
     """Every BEGIN pairs with its own END, in order, with no fence opening inside another.

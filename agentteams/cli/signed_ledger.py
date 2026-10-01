@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -79,6 +81,24 @@ SIG_SCHEME_HMAC = "hmac"
 SIG_SCHEME_ED25519 = "ed25519"
 
 
+#: The pinned ``cryptography`` floor (``references/dependency-pins.json``, the ``[signing]`` extra;
+#: locked by ``tests/test_supply_chain_pins.py``). Below it, signing still works but warns once.
+CRYPTOGRAPHY_MIN_VERSION = (50, 0, 0)
+_CRYPTO_WARNED: list[bool] = []
+
+
+def _warn_if_old_cryptography(version: str) -> None:
+    """Warn once on stderr when ``version`` is below :data:`CRYPTOGRAPHY_MIN_VERSION` (#20)."""
+    parts = tuple(int(x) for x in re.findall(r"\d+", version)[:3])
+    if _CRYPTO_WARNED or not parts or parts >= CRYPTOGRAPHY_MIN_VERSION:
+        return
+    _CRYPTO_WARNED.append(True)
+    floor = ".".join(map(str, CRYPTOGRAPHY_MIN_VERSION))
+    print(f"Warning: cryptography {version} is below the pinned {floor} (the [signing] extra; "
+          "known CVEs). Install agentteams[signing] in its own venv rather than relying on a "
+          "base-environment copy.", file=sys.stderr)
+
+
 def _require_cryptography():
     """Import the Ed25519 backend, or FAIL CLOSED (never silently degrade to HMAC).
 
@@ -109,6 +129,9 @@ def _require_cryptography():
             "asymmetric backend and is NEVER downgraded to HMAC (install the extra from the git source: "
             f"`{agentteams_install_command('signing')}`)."
         ) from exc
+    import cryptography
+
+    _warn_if_old_cryptography(getattr(cryptography, "__version__", ""))
     return Ed25519PrivateKey, Ed25519PublicKey, serialization, InvalidSignature
 
 
