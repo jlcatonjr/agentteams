@@ -387,16 +387,14 @@ def test_characterization(name, tmp_path, monkeypatch, capsys):
     assert got == EXPECTED[name]
 
 
-# ``max_uses: null`` — RECORDED CURRENT BEHAVIOUR: ``int(None)`` raises an uncaught TypeError
-# (a traceback, not a clean error). COMMIT-3-FLIP: the max_uses fix replaces this with a clean
-# ``Error:`` line and exit 1; this test is flipped in that commit, not deleted.
+# ``max_uses: null`` used to raise an uncaught TypeError traceback; it is now a clean exit-1 error.
 @pytest.mark.parametrize("flag", ["--sign-grant", "--issue-grant"])
-def test_max_uses_null_currently_raises_type_error(flag, tmp_path, monkeypatch):
+def test_max_uses_null_is_a_clean_error(flag, tmp_path, monkeypatch, capsys):
     spec = _grant(max_uses=None, permitted_ops="read")
     argv = _sg(tmp_path, monkeypatch, spec=spec) if flag == "--sign-grant" else _ig(
         tmp_path, monkeypatch, spec=spec)
-    with pytest.raises(TypeError):
-        main(argv)
+    assert main(argv) == 1
+    assert "max_uses must be an integer (got None)" in capsys.readouterr().err
 
 
 def test_parser_refuses_a_non_rendering_framework_first(tmp_path, monkeypatch):

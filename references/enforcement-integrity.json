@@ -8,7 +8,7 @@
     "agentteams/cli/governance_targets.py": "8071d65931e7fd6bcecc5ccc1c1009481dd9f06e04e4440053be84f250185645",
     "agentteams/cli/grants.py": "b62c5e23cc3b845a5d45e7532a2ee4b4f9b4c4c8cf4136dda2e18d621aacb4a7",
     "agentteams/cli/management_directives.py": "1caf147f1826d969007a88cdb5636cdc94596ee92f41be5a5e1d6af711534a3e",
-    "agentteams/cli/operator_signing.py": "ebe0c937855f22739d47e92cf9f6427c9a39209da492b0c257865f44bcbf2e8e",
+    "agentteams/cli/operator_signing.py": "ee10ec8345b55112d04d0c6dd50c7adeeef1750b12d97c84b44e59d3e5c65c5e",
     "agentteams/cli/security_gate.py": "5adcec4ecec679ddb4761fc30173b72c0628fa72a0caa23c352c021ea4c864f5",
     "agentteams/cli/signed_ledger.py": "1175d82ee98734a040bab8c16fac58cac087f21c2238b215ee7d6e87d763ab7c",
     "agentteams/fences.py": "cdf3c623d5cb2e5fd73cd1e519c8c8404c6e8f7956e0fecd5892c5746200cf40",

@@ -396,10 +396,17 @@ def grant_spec_kwargs(spec: dict) -> dict:
     import secrets
     from datetime import datetime, timezone
 
+    try:
+        max_uses = int(spec["max_uses"])
+    except TypeError:
+        # `null` (or a list/object) used to escape as an uncaught TypeError traceback. A
+        # non-integer string keeps raising ValueError from int() unchanged.
+        raise ValueError(
+            f"grant spec max_uses must be an integer (got {spec['max_uses']!r})") from None
     return dict(
         issuer_team=str(spec["issuer_team"]), holder_team=str(spec["holder_team"]),
         target_path=str(spec["target_path"]), permitted_ops=str(spec["permitted_ops"]),
-        expires_at=str(spec["expires_at"]), max_uses=int(spec["max_uses"]),
+        expires_at=str(spec["expires_at"]), max_uses=max_uses,
         approver=str(spec["approver"]), ticket_id=str(spec["ticket_id"]),
         reason_code=str(spec["reason_code"]),
         grant_id=f"grant-{secrets.token_hex(8)}",
