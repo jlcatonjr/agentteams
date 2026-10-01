@@ -37,7 +37,9 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
+import posixpath
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -593,7 +595,10 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         return []
     if not is_sandbox_capable("goose"):
         return []
-    write_roots = manifest.get("workspace_write_roots") or ["."]
+    from agentteams.frameworks._write_roots import validate_write_roots
+
+    # Follow-up #2: the one write-root chokepoint (hard bans) before any profile text is built.
+    write_roots = validate_write_roots(manifest.get("workspace_write_roots") or ["."], manifest)
     deny_read = _goose_read_deny_paths(manifest)
     egress_endpoint = manifest.get("goose_egress_proxy") or None
     # Network isolation is an EXCLUSIVE-only property (operator decision 2026-W39): the
@@ -618,6 +623,23 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
     ]
+
+
+def _runner_root_expr(root: str) -> str:
+    """Return the bash expression for one VALIDATED write root in the goose Linux runner.
+
+    ``.`` is the repo root, ``~/x`` is under ``$HOME``, an absolute root is itself (never
+    ``$REPO_ROOT//abs``), anything else is under ``$REPO_ROOT``. The literal part is
+    ``shlex.quote``-d, so it can never expand even if validation were bypassed.
+    """
+    rel = posixpath.normpath(root)
+    if rel == ".":
+        return '"$REPO_ROOT"'
+    if root.startswith("~/"):
+        return '"$HOME"/' + shlex.quote(posixpath.normpath(root[2:]))
+    if posixpath.isabs(root):
+        return shlex.quote(rel)
+    return '"$REPO_ROOT"/' + shlex.quote(rel)
 
 
 def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
@@ -655,8 +677,13 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
     convention). The one requirement the launcher cannot self-satisfy is documented: run it as the
     workspace-owning user (bwrap ``--unshare-user`` as root loses DAC over your files).
     """
-    roots = manifest.get("workspace_write_roots") or ["."]
-    writable_flags = " ".join(f'--writable "$REPO_ROOT/{r}"' if r != "." else '--writable "$REPO_ROOT"' for r in roots)
+    from agentteams.frameworks._write_roots import path_char_problem, validate_write_roots
+
+    # Follow-up #2 (2026-09-30): roots used to be pasted RAW into this operator-run bash script, so a
+    # brief root like `x$(cmd)` executed in the operator's unsandboxed shell. Now validated (hard
+    # bans, metacharacters refused) AND single-quoted (defence in depth; double quotes expand $()).
+    roots = validate_write_roots(manifest.get("workspace_write_roots") or ["."], manifest)
+    writable_flags = " ".join(f"--writable {_runner_root_expr(r)}" for r in roots)
     # exclusive read-exclusion parity with the macOS Seatbelt path: carry operator sibling read-denies
     # as --exclude (the launcher already tmpfs-masks the built-in credential dirs, so only extras here).
     exclude_flags = ""
@@ -666,10 +693,8 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
         # A manifest path is DATA (C-4): reject shell/quote-breaking + control chars so it cannot
         # break or inject into the emitted script — parity with the Seatbelt path's fail-closed
         # validation. Unsafe paths are skipped (read-exclusion NOT enforced) with a visible note.
-        def _safe(p: str) -> bool:
-            return not any(c in p for c in '"$`\\\n\r') and all(ord(c) >= 0x20 for c in p)
-        safe = [p for p in raw if _safe(p)]
-        exclude_flags = "".join(f' --exclude "{p}"' for p in safe)
+        safe = [p for p in raw if path_char_problem(p) is None]
+        exclude_flags = "".join(f" --exclude {shlex.quote(p)}" for p in safe)
         n_bad = len(raw) - len(safe)
         if n_bad:
             skipped_note = (

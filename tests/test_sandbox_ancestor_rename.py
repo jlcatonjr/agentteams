@@ -86,6 +86,9 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(/references/security-approvers.txt)",
         "Edit(/.claude/settings.json)",
         "Edit(/.claude/settings.local.json)",
+        # follow-up #2: the operator-merged / operator-run examples
+        "Edit(/.claude/settings.hooks.example.json)",
+        "Edit(/.goose/confined-run.example.sh)",
         "Edit(/.claude/hooks/**)",
         # 2026-09-30: the sibling teams' trust-root files (never a whole agents dir).
         *_sibling_rules(".github/agents"),
@@ -139,6 +142,8 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
     from agentteams.frameworks._sandbox_emit import (
         ALL_TEAM_FRAMEWORKS,
         CODEX_CONFIG_REL,
+        OPERATOR_EXAMPLE_PATHS,
+        framework_config_dir,
         team_agents_dir,
     )
 
@@ -146,8 +151,11 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
     body = re.search(r"CONTROL_PLANE_REL=\(([^)]*)\)", text).group(1)
     expected = {*(p for fw in ALL_TEAM_FRAMEWORKS for p in protected_write_paths(fw)),
                 *(p for fw in ALL_TEAM_FRAMEWORKS for p in governed_roster_paths(fw)),
-                ".goose/sandbox.sb", CODEX_CONFIG_REL, GRANT_ROSTER_PROJECT_REL}
+                ".goose/sandbox.sb", CODEX_CONFIG_REL, GRANT_ROSTER_PROJECT_REL,
+                *(p for p in OPERATOR_EXAMPLE_PATHS if not p.startswith(".claude/"))}
     assert set(body.split()) == expected
+    dirs = re.search(r"CONTROL_PLANE_DIRS_REL=\(([^)]*)\)", text).group(1).split()
+    assert dirs == [framework_config_dir("claude")]  # .claude/* examples are covered by the dir
     assert re.search(r"^TEAM_MARKER_REL=(\S+)$", text, re.M).group(1) == TEAM_MARKER_REL
     teams = re.search(r"TEAM_DIRS_REL=\(([^)]*)\)", text).group(1).split()
     assert teams == [team_agents_dir(fw) for fw in ALL_TEAM_FRAMEWORKS]
@@ -235,16 +243,20 @@ def test_mechanism_without_the_fix_the_rename_succeeds(tmp_path):
 
 @_bwrap
 def test_mechanism_confine_run_layout_every_ancestor_is_ebusy_writes_still_work(tmp_path):
-    """The launcher itself, end to end: ancestors EBUSY, switch read-only, writes inside allowed."""
+    """The launcher itself, end to end: `.claude` is a read-only mount point (follow-up #2, R1:
+    the live settings.json baseline is protected from every confined agent), so its rename is
+    EBUSY and everything beneath it is EROFS; the rest of the project stays writable."""
     p = _project(tmp_path)
     ancestors = list(control_plane_ancestors(protected_write_paths("claude")))
     launcher = ["bash", str(LAUNCHER), "--scratch", str(p), "--"]
     out = _probe(launcher, p, ancestors)
+    assert out["rename:.claude"] == "EBUSY", out
     for d in ancestors:
-        assert out[f"rename:{d}"] == "EBUSY", (d, out)
+        assert out[f"rename:{d}"] in {"EBUSY", "EROFS"}, (d, out)
     assert out["link"] == "EXDEV"
-    assert out["unlink"] == "EBUSY" and out["overwrite"] == "EROFS"
-    assert out["inside"] == "OK" and out["root"] == "OK"
+    assert out["unlink"] in {"EBUSY", "EROFS"} and out["overwrite"] == "EROFS"
+    assert out["local"] == "EROFS" and out["inside"] == "EROFS"
+    assert out["root"] == "OK"
 
 
 @_bwrap

@@ -371,6 +371,23 @@ In the project description:
 `workspace_write_roots` (optional, default `["."]`) overrides the confined roots.
 `.` means the whole generated project tree is the workspace.
 
+> **Write roots are validated, and widening needs the operator.** The brief is agent-writable,
+> so a sandboxed agent could add roots that the operator's next `--update` would emit. These are
+> refused in every emitter, through the pinned `frameworks/_write_roots.py`:
+> - `/`, `~`, `$HOME` and their ancestors;
+> - the signing-key directory, and anything at, inside or above it;
+> - home credential and persistence paths;
+> - `~user`;
+> - the project control plane (`.git`, `.claude`, `.goose`, `.codex`, `.github/agents`,
+>   `.github/hooks`, `sandbox`, `.agentteams`) and any ancestor of the project;
+> - shell, SBPL and glob metacharacters.
+>
+> A **new** root outside the project (absolute, `~/…`, `../…`) needs `--accept-write-root PATH`
+> on the operator's command line, unless the live `.claude/settings.json` `allowWrite` already
+> holds it. Every added root is printed as `SANDBOX WIDENING` with its source, and
+> `--check-wiring` reports a widening as a widening, never as "re-merge". Signed grant roots skip
+> acceptance but not the bans. See `SECURITY.md` (2026-09-30 advisory) for the residuals.
+
 > **Typos fail closed.** Only `cooperative`, `confined`, and `exclusive` are accepted.
 > A misspelled profile (e.g. `"exclusve"`) is **rejected at build with a non-zero exit** —
 > it is never silently downgraded to unconfined, because a value that *looks* like a

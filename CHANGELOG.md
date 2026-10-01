@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (brief write roots can no longer widen the sandbox silently)
+
+- **Breaking.** For confined and exclusive teams, generation refuses these sandbox write roots:
+  - `/`, `~`, `$HOME` and their ancestors;
+  - the signing-key directory, and anything at, inside or above it;
+  - home credential and persistence paths (`~/.ssh`, `~/.gnupg`, `~/.aws`, shell rc files,
+    `~/.local/bin`, `~/.config/{systemd,autostart,git,gh,goose,fish,gcloud}`, `~/.kube`,
+    `~/.docker`, `~/.azure`, `~/.claude`, …) and any ancestor of them. The list is not
+    exhaustive; acceptance of every external root is the real control;
+  - `~user`;
+  - the project control plane (`.git`, `.claude`, `.goose`, `.codex`, `.github/agents`,
+    `.github/hooks`, `sandbox`, `.agentteams`) and any ancestor of the project;
+  - any shell, SBPL or glob metacharacter.
+
+  The check runs in the new pinned `agentteams/frameworks/_write_roots.py`, which every emitter
+  calls: the Claude block, goose Seatbelt, the goose Linux runner and `--sync` projection. A
+  root that is (or passes through) a symlink out of the project counts as external.
+- **Breaking.** A NEW write root outside the project (absolute, `~/…` or `../…`) needs
+  `--accept-write-root PATH`, unless the live `.claude/settings.json` `allowWrite` already holds
+  it. Only Claude has that baseline, for `generate` and for `--sync`; every other framework has
+  none. A `~/` value matches its shell-expanded form, and the printed remedy is shell-quoted.
+  - Grant roots are exempt (Ed25519-signed), but the bans still apply to them.
+  - The flag is argv only. A brief key `accept_write_root(s)` is refused.
+- Generation (and `--sync`, for external roots) prints `SANDBOX WIDENING` for every root it adds, with its source: brief,
+  coordination (unsigned) or signed grant. `--check-wiring` no longer says "re-merge" on a
+  widening.
+- **Fixed (HIGH):** the goose Linux runner pasted roots raw into an operator-run bash script, so
+  `x$(cmd)` ran in the operator's shell. Roots are now validated and shell-quoted.
+  A `protected_read_paths` entry that fails the same character check is skipped with a notice
+  (its read-exclusion is not enforced), as before; safe ones are now shell-quoted. Absolute and `~/` roots now render
+  correctly (previously `$REPO_ROOT//abs`).
+- `confine-run.sh` now ro-binds the whole `.claude` directory when present. This mirrors Claude's
+  own `.claude` denyWrite, so the live `settings.json` baseline is protected from confined goose,
+  copilot and codex agents too. It also protects `.goose/confined-run.example.sh` (if present).
+- `permissions.deny` now has `Edit(...)` rules for `.claude/settings.hooks.example.json` and
+  `.goose/confined-run.example.sh`. Product-unverified.
+- The integrity manifest pins `_write_roots.py` and `cli/write_root_policy.py`, and is re-hashed
+  for `_sandbox_emit.py`, `_goose_sandbox_emit.py`, `confine-run.sh` and `integrity.py`.
+
 ### fixed (a generated team no longer bricks the confine-run launcher)
 
 - A freshly generated **confined goose team on Linux** was refused by its own launcher: the

@@ -285,7 +285,8 @@ def test_launcher_hand_written_claude_agents_without_build_log_passes(tmp_path):
     (p / ".claude" / "agents" / "reviewer.md").write_text("---\nname: r\n---\n")
     r = _check("--scratch", str(p))
     assert r.returncode == 0, r.stderr
-    assert "control-plane (ro): <none>" in r.stdout
+    # no team-marker requirement; only the whole-dir `.claude` protect-if-present (follow-up #2)
+    assert f"control-plane (ro): {p.resolve() / '.claude'}\n" in r.stdout  # dir only, no ancestors
 
 
 @_linux_bwrap
@@ -384,7 +385,7 @@ def test_mechanism_launcher_makes_rosters_and_marker_read_only(tmp_path):
     out = dict(line.split(" ", 1) for line in res.stdout.splitlines())
     assert out["roster"] == "EROFS" and out["grant"] == "EROFS"
     assert out["marker"] in {"EBUSY", "EROFS"}
-    assert out["inside"] == "OK"
+    assert out["inside"] == "EROFS"  # follow-up #2: all of `.claude` is read-only in the launcher
 
 
 # --- permissions.deny ---------------------------------------------------------------------------

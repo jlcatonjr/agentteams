@@ -72,6 +72,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # one sibling emitter left unpinned, so a silent edit dropping a control-plane entry weakened
     # every emitted goose/macOS boundary without tripping --verify-integrity or E4.
     "agentteams/frameworks/_goose_sandbox_emit.py",
+    # The write-root chokepoint (follow-up #2, 2026-09-30; @security CLEAR_WITH_CONDITIONS). Every
+    # emitter refuses hard-banned roots through it, and the CLI acceptance gate below uses it; a
+    # silent edit here re-opens `~`, `/` or shell injection into the operator-run goose runner.
+    "agentteams/frameworks/_write_roots.py",
+    "agentteams/cli/write_root_policy.py",   # --accept-write-root gate + widening notice
     # The settings example that WIRES the gate hook into PreToolUse and receives the injected
     # sandbox block (2026-09-30). Neutering its hook wiring disables the gate once merged: the same
     # D-1 class as the pinned hook template below. Safe to pin: the sandbox block is injected into

@@ -494,14 +494,14 @@
     },
     "workspace_write_roots": {
       "type": "array",
-      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at project root. Defaults to [\".\"] when confinement is active and no override is given.",
+      "description": "Directories the confined agent may write to, relative to the merged .claude/settings.json at project root. Defaults to [\".\"] when confinement is active and no override is given. Validated at generation (fail-closed): '/', '~', $HOME and their ancestors, the signing-key directory, home credential/persistence paths, the project control plane (.git, .claude, .goose, .codex, .github/agents, .github/hooks, sandbox, .agentteams) and shell/glob metacharacters are refused. A NEW root outside the project (absolute, ~/..., ../...) needs the operator's --accept-write-root PATH unless the live .claude/settings.json allowWrite already holds it. This file is agent-writable data; generation prints every added root with its source.",
       "items": {
         "type": "string"
       }
     },
     "coordination_write_roots": {
       "type": "array",
-      "description": "Sibling/adjacent-repo write roots for cross-repo coordination, carried from the project description (emitted only when set). Unioned into workspace_write_roots at generation so every sandbox emitter sees them; on Linux they become confine-run.sh `--coord-root` binds that fail closed when missing.",
+      "description": "Sibling/adjacent-repo write roots for cross-repo coordination, carried from the project description (emitted only when set). Unioned into workspace_write_roots at generation so every sandbox emitter sees them; on Linux they become confine-run.sh `--coord-root` binds that fail closed when missing. Validated at generation (fail-closed): '/', '~', $HOME and their ancestors, the signing-key directory, home credential/persistence paths, the project control plane (.git, .claude, .goose, .codex, .github/agents, .github/hooks, sandbox, .agentteams) and shell/glob metacharacters are refused. A NEW root outside the project (absolute, ~/..., ../...) needs the operator's --accept-write-root PATH unless the live .claude/settings.json allowWrite already holds it. This file is agent-writable data; generation prints every added root with its source.",
       "items": {
         "type": "string"
       }

@@ -633,7 +633,23 @@ def test_wiring_write_roots_mismatch_fails(tmp_path):
         live={"sandbox": _sandbox(roots=["./src"])},
     )
     ok, msgs = verify_sandbox_wiring(tmp_path)
+    # follow-up #2: emitted "." is WIDER than live "./src" -> the widening message, never "re-merge"
+    assert not ok and any("WIDENS allowWrite by ['.']" in m for m in msgs)
+    assert not any("re-merge so the boundary matches" in m for m in msgs)
+    assert not any("./src" in m for m in msgs)  # live values are never echoed
+
+
+def test_wiring_write_roots_narrowing_says_re_merge(tmp_path):
+    from agentteams.frameworks.claude import verify_sandbox_wiring
+
+    _write_claude(
+        tmp_path,
+        example={"sandbox": _sandbox(roots=["./src"])},
+        live={"sandbox": _sandbox(roots=["./src", "/srv/other"])},
+    )
+    ok, msgs = verify_sandbox_wiring(tmp_path)
     assert not ok and any("write roots differ" in m for m in msgs)
+    assert not any("WIDENS" in m or "/srv/other" in m for m in msgs)
 
 
 def test_wiring_correctly_merged_passes(tmp_path):
