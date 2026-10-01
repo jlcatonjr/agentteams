@@ -379,7 +379,7 @@ Modifier for \-\-update: after a backup is written, also copy it to DIR/<output\
 Update every agent\-infrastructure workspace under DIR and its subfolders with \-\-update \-\-merge. Discovers .github/agents/ and .claude/ targets, snapshots each git workspace via a commit, applies the merge, then analyses the diff. Default is a DRY\-RUN preview; pass \-\-yes to apply. Non\-destructive: merge\-only; .claude is bridge\-merged.
 .TP
 .B \-\-fleet\-frameworks {github,claude,goose,both,all}
-Which infrastructures to update per workspace (default: both). `both` = copilot\-vscode + claude (backward\-compatible). `all` = copilot\-vscode + claude + goose. `goose` = Goose workspaces only.
+Which infrastructures to update per workspace (default: both). `both` = copilot\-vscode + claude (backward\-compatible). `all` = copilot\-vscode + claude + goose + codex (a .codex/agents team with a marker; an interop projection gets its refresh command, never an \-\-update). `goose` = Goose workspaces only.
 .TP
 .B \-\-fleet\-report DIR
 Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
