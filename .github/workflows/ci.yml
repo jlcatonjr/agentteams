@@ -13,6 +13,10 @@ on:
   # auto-merge commit and restore the rc.4 post-merge safety-net claim.
   workflow_dispatch:
 
+# Least privilege for every job (follow-up #5, @security C7): no job needs to write.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -55,3 +59,36 @@ jobs:
       - name: Lint — durable artifacts must not cite gitignored tmp/ paths (RSR1)
         if: runner.os == 'Linux'
         run: bash scripts/check-durable-tmp-refs.sh
+
+  # Follow-up #5 (2026-09-30): the goose Seatbelt profile under the REAL sandbox-exec on an unnested
+  # macOS runner, plus the macOS launcher gate. ADVISORY until 2026-10-14 (remediation row
+  # macos-seatbelt-job-required): a red result is visible but does not block merges yet.
+  macos-seatbelt:
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install package and pytest
+        run: pip install -e ".[test]"
+
+      - name: Goose Seatbelt mechanism probes (sandbox-exec)
+        env:
+          RUN_GOOSE_SEATBELT_PROBES: "1"
+        run: pytest -v tests/test_goose_seatbelt_mechanism.py tests/test_os_sandbox_enforcement.py
+
+      - name: macOS launcher gate (mac-escape-tests.sh)
+        run: |
+          d="$HOME/agentteams-mac-gate"; mkdir -p "$d"
+          cp agentteams/templates/universal/sandbox/confine-run.sh agentteams/templates/universal/sandbox/mac-escape-tests.sh "$d/"
+          chmod +x "$d"/*.sh
+          bash "$d/mac-escape-tests.sh" | tee "$d/out.txt" || true
+          pass=$(grep -c '^  PASS' "$d/out.txt" || true)
+          bad=$(grep -Ec '^  (UNTRUSTED|INDETERMINATE|FAIL)' "$d/out.txt" || true)
+          echo "PASS=$pass UNTRUSTED/INDETERMINATE/FAIL=$bad"
+          # the egress gate needs network and may be INDETERMINATE: reported, not required
+          [ "$pass" -gt 0 ] && [ "$(grep -E '^  (UNTRUSTED|INDETERMINATE|FAIL)' "$d/out.txt" | grep -vic egress || true)" -eq 0 ]

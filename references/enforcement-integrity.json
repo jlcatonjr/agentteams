@@ -14,7 +14,7 @@
     "agentteams/cli/signed_ledger.py": "1175d82ee98734a040bab8c16fac58cac087f21c2238b215ee7d6e87d763ab7c",
     "agentteams/cli/write_root_policy.py": "18848eb06cf34dd2d9deec646aa6370e9746a0995de67b483f6f2ffffe7edb80",
     "agentteams/fences.py": "cdf3c623d5cb2e5fd73cd1e519c8c8404c6e8f7956e0fecd5892c5746200cf40",
-    "agentteams/frameworks/_goose_sandbox_emit.py": "e4957a176de9b7bbcaa92f1fcdc34870b7bd1c0ce4e01e9e1e2b1498d50383f9",
+    "agentteams/frameworks/_goose_sandbox_emit.py": "26c33725fc81b24ffc253daf407aa6306ce294abe87e91ea7efb83fc4ce64fc0",
     "agentteams/frameworks/_linux_sandbox_emit.py": "8e0ee80a14f16dc69840a605cd3f3917c90b5983aa001a34980feb9c048f1d7b",
     "agentteams/frameworks/_sandbox_emit.py": "e1c90cb78887e10cfc8ad45cd27beea291d9c1b06b4db650e4e2432cc9f61b94",
     "agentteams/frameworks/_write_roots.py": "140618f9931a30b006b613ad24744f732212a33ca469552dc13c557316830caf",
@@ -29,7 +29,7 @@
     "agentteams/templates/universal/hooks/constitutional-gate.py": "54e3b5f46286e5d27350f5499a9f4456dffb64917bdf1e35c29051207fcd1c42",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
     "agentteams/templates/universal/sandbox/confine-run.sh": "4dc71aa90716d5edd33f216d639e8190810fad968949b3ceb63a12795a3185f0",
-    "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "055105834e5f529609e2fe3c52eb79c89fe5b56157399f31ec18dc4f41e98564",
+    "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "c485df0b39dd0847bcb08fc583c4f0fad9c377f4ae3702a62e2c57576c84f69c",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
