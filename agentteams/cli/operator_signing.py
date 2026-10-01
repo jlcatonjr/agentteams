@@ -15,8 +15,12 @@ too, so the HMAC ``--issue-grant`` payload construction is pinned by the same en
 edits to this orchestration and unnoticed drift. It does not defend against unpinned code running
 in the same process: the dispatch chain (``app.py``, ``parser.py``, ``agentteams/__init__.py``,
 ``.pth`` files) can patch ``Path.read_text`` or this module's primitives, or call
-``signed_ledger`` directly. The decision display is printed immediately before signing with no
-confirmation: it is a RECORD, not a gate. The durable mitigation is to sign from a pinned install
+``signed_ledger`` directly. Since #9 (2026-09-30) the display is a GATE: both minters show the
+payload and its review digest, then require a y/N answer on a terminal, or, with no terminal,
+``--confirm-review-sha256 <digest>`` on the operator's argv, before the key is read. Since #10 the
+running install is checked (``signer_location``) and signing from a checkout or an agent-writable
+root is refused unless ``--allow-checkout-signing``. Both are speed bumps for an honest operator
+against the in-process limit above: a script can compute the digest. The durable mitigation is to sign from a pinned install
 outside every agent write root (a release-tag pin of the git source, for example
 ``pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>"``;
 agentteams is not on PyPI).
@@ -49,6 +53,7 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/governance_targets.py",
     "agentteams/cli/management_directives.py",
     "agentteams/atomicio.py",
+    "agentteams/cli/signer_location.py",
     "agentteams/frameworks/_sandbox_emit.py",
     "agentteams/integrity.py",
 })
@@ -64,8 +69,8 @@ _TRUSTED_INSTALL_HINT = (
 )
 _TRUSTED_INSTALL_WARNING = (
     "the integrity check catches in-place edits to the signing code, not unpinned code running in "
-    "this same process (the CLI dispatch chain, .pth files), and the pre-sign display is a record, "
-    f"not a gate. To rule that out, {_TRUSTED_INSTALL_HINT}."
+    "this same process (the CLI dispatch chain, .pth files); the confirm gate binds the payload, "
+    f"not the code showing it. To rule that out, {_TRUSTED_INSTALL_HINT}."
 )
 
 
@@ -228,15 +233,115 @@ GRANT_SPEC_REQUIRED: tuple[str, ...] = (
 )
 
 
-def _read_operator_private_key() -> str | None:
-    """Read the operator private key PEM named by :data:`KEYFILE_ENV`; print the error on failure.
+#: Display-spoofing code points refused in any spec string (#9, @security P2-2): C0/C1 controls,
+#: DEL, zero-width and bidi controls, BOM.
+_SPOOF_CODEPOINTS = frozenset([*range(0x00, 0x20), 0x7F, *range(0x80, 0xA0), *range(0x200B, 0x2010),
+                               *range(0x202A, 0x202F), *range(0x2066, 0x206A), 0xFEFF,
+                               0x061C, 0x2028, 0x2029, *range(0x2060, 0x2065), 0x180E])
 
-    Prints the fail-closed "not set" error, the keyfile location warnings, or the read error to
-    stderr exactly as both minters always have. Between the env check and the key read it runs
-    :func:`presign_integrity_check`, so a drifted signing closure refuses with the key unread.
+
+def _spoofing_problem(value: object, where: str = "spec") -> str | None:
+    """Return where a display-spoofing character sits in ``value`` (keys and values), else None."""
+    if isinstance(value, str):
+        bad = next((c for c in value if ord(c) in _SPOOF_CODEPOINTS), None)
+        return f"{where} contains U+{ord(bad):04X}" if bad is not None else None
+    if isinstance(value, dict):
+        for k, v in value.items():
+            found = _spoofing_problem(k, f"{where} key") or _spoofing_problem(v, f"{where}.{k}")
+            if found:
+                return found
+    if isinstance(value, list):
+        for i, v in enumerate(value):
+            found = _spoofing_problem(v, f"{where}[{i}]")
+            if found:
+                return found
+    return None
+
+
+def review_digest(kind: str, spec: dict, team_dir: Path, key_id: str,
+                  ledger_root: Path | None = None) -> str:
+    """Return the sha256 the operator confirms: kind, spec, team dir, key id and ledger root.
+
+    Args:
+        kind: ``"decision"`` or ``"grant"``.
+        spec: The in-memory spec that will be signed (never re-read after this).
+        team_dir: The team dir the row is verified against.
+        key_id: The verify key's file stem.
+        ledger_root: The grant ledger root (grants only).
 
     Returns:
-        The PEM text, or None after printing why it could not be read.
+        The hex digest.
+    """
+    import hashlib
+
+    payload = {"kind": kind, "spec": spec, "team_dir": Path(team_dir).resolve().as_posix(),
+               "key_id": key_id,
+               "ledger_root": Path(ledger_root).resolve().as_posix() if ledger_root else ""}
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _confirm(digest: str, confirm_sha256: str | None) -> bool:
+    """The #9 gate: a y/N on a terminal, else an exact ``--confirm-review-sha256`` match."""
+    print(f"  review sha256   : {digest}")
+    if confirm_sha256 is not None:
+        if confirm_sha256.strip().lower() == digest:
+            return True
+        print("Error: --confirm-review-sha256 does not match this payload's review digest "
+              "(the spec, team dir, key or ledger changed). Refusing; the key was not read.",
+              file=sys.stderr)
+        return False
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        try:
+            answer = input("Sign this payload? [y/N] ")
+        except EOFError:
+            answer = ""
+        if answer.strip().lower() in ("y", "yes"):
+            return True
+        print("Not signed (declined). The key was not read.", file=sys.stderr)
+        return False
+    print("Error: no terminal to confirm on. Review the payload above, then re-run with "
+          f"--confirm-review-sha256 {digest} (operator argv only; --yes does not apply). "
+          "The key was not read.", file=sys.stderr)
+    return False
+
+
+def _location_gate(project_roots: list[Path], allow_checkout: bool) -> bool | None:
+    """Run the install-location check; print findings.
+
+    Returns:
+        None when refused (printed), else whether an (a) refusal was overridden by the flag.
+    """
+    from agentteams.cli.signer_location import verify_install_location
+
+    findings = verify_install_location(project_roots)
+    refusals = [f for f in findings if f.refuse]
+    for finding in findings:
+        if not finding.refuse:
+            print(f"Warning: install location ({finding.criterion}): {finding.message}", file=sys.stderr)
+    if refusals and not allow_checkout:
+        print("Error: refusing to sign from an install an agent may be able to edit:", file=sys.stderr)
+        for finding in refusals:
+            print(f"  {finding.message}", file=sys.stderr)
+        print(f"  {_TRUSTED_INSTALL_HINT[0].upper()}{_TRUSTED_INSTALL_HINT[1:]}; or, knowingly, pass "
+              "--allow-checkout-signing. The key was not read.", file=sys.stderr)
+        return None
+    for finding in refusals:
+        print(f"WARNING: --allow-checkout-signing: signing despite: {finding.message}. "
+              f"{_TRUSTED_INSTALL_WARNING}", file=sys.stderr)
+    return bool(refusals)
+
+
+def _signing_preflight(project_roots: list[Path], allow_checkout: bool) -> tuple[str, bool] | None:
+    """Everything before the display, key unread: env, key file present, integrity, install location.
+
+    Args:
+        project_roots: Projects whose sandbox ``allowWrite`` roots count as agent-writable.
+        allow_checkout: ``--allow-checkout-signing`` (operator argv).
+
+    Returns:
+        ``(key file path, overridden)`` where ``overridden`` says an install-location refusal was
+        overridden by ``--allow-checkout-signing``; None after printing why signing is refused.
     """
     keyfile = os.getenv(KEYFILE_ENV, "")
     if not keyfile:
@@ -248,15 +353,42 @@ def _read_operator_private_key() -> str | None:
         return None
     if not presign_integrity_check():
         return None
+    if not Path(keyfile).is_file():
+        print(f"Error: cannot read operator private key file: {keyfile!r} does not exist or is not "
+              "a file. Refusing to sign (fail-closed).", file=sys.stderr)
+        return None
+    overridden = _location_gate(project_roots, allow_checkout)
+    if overridden is None:
+        return None
     from agentteams.frameworks._sandbox_emit import signing_keyfile_warnings
 
     for warning in signing_keyfile_warnings(keyfile):
         print(f"Warning: {warning}", file=sys.stderr)
+    return keyfile, overridden
+
+
+def _read_operator_private_key(keyfile: str) -> str | None:
+    """Read the operator private key PEM from ``keyfile`` (after preflight, display and confirm).
+
+    Returns:
+        The PEM text, or None after printing the read error.
+    """
     try:
         return Path(keyfile).read_text(encoding="utf-8")
     except OSError as exc:
         print(f"Error: cannot read operator private key file: {exc}", file=sys.stderr)
         return None
+
+
+def _project_roots(team_dir: Path) -> list[Path]:
+    """The cwd plus the nearest ancestor of ``team_dir`` holding ``.claude/settings.json``."""
+    roots = [Path.cwd().resolve()]
+    for parent in Path(team_dir).resolve().parents:
+        if (parent / ".claude" / "settings.json").is_file():
+            if parent not in roots:
+                roots.append(parent)
+            break
+    return roots
 
 
 def sign_decision_team_refusal(output_dir: Path) -> str | None:
@@ -281,7 +413,8 @@ def sign_decision_team_refusal(output_dir: Path) -> str | None:
             "dir). Refusing to sign (fail-closed).")
 
 
-def sign_decision(output_dir: Path, spec_path: str) -> int:
+def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
+                  allow_checkout: bool = False) -> int:
     """Mint and append one operator Ed25519-signed constraint-relaxing decision row.
 
     Reads a JSON spec (the decision fields + effect_* + derives_from + key_id), loads the operator
@@ -290,9 +423,15 @@ def sign_decision(output_dir: Path, spec_path: str) -> int:
     grant signing domain, signs the canonical payload with Ed25519, verifies it against the team's
     verify-key store, and appends the signed row.
 
+    Order (#9/#10): spec → classification and refusals → preflight (env, key file present,
+    integrity, install location) → display → confirm → key read → sign. The signed row is built
+    from the same in-memory spec the review digest covers.
+
     Args:
         output_dir: The resolved team dir the row is appended under.
         spec_path: Path to the JSON decision spec.
+        confirm_sha256: ``--confirm-review-sha256`` (no terminal); None prompts on a terminal.
+        allow_checkout: ``--allow-checkout-signing``; recorded in the signed ``conditions_verified``.
 
     Returns:
         0 on success, 1 on any error (fail-closed).
@@ -316,8 +455,10 @@ def sign_decision(output_dir: Path, spec_path: str) -> int:
         print("Error: spec must be a JSON object with a non-empty action_reviewed", file=sys.stderr)
         return 1
 
-    private_pem = _read_operator_private_key()
-    if private_pem is None:
+    spoof = _spoofing_problem(spec)
+    if spoof:
+        print(f"Error: refusing to sign: {spoof} (a display-spoofing character). The key was not "
+              "read.", file=sys.stderr)
         return 1
 
     row = {k: str(v) for k, v in spec.items()}
@@ -340,6 +481,22 @@ def sign_decision(output_dir: Path, spec_path: str) -> int:
         print(f"Error: this decision is categorically NON-ELIGIBLE: it {reason}.", file=sys.stderr)
         return 1
 
+    from agentteams.cli.grants import payload_claims_grant_purpose
+
+    if payload_claims_grant_purpose(dl._decision_signature_values(row)):
+        # PR-E domain separation: never sign a decision payload that is also a grant payload.
+        print("Error: refusing to sign — this decision's payload begins with the capability-"
+              "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
+        return 1
+    preflight = _signing_preflight(_project_roots(output_dir), allow_checkout)
+    if preflight is None:
+        return 1
+    keyfile, overridden = preflight
+    if overridden:
+        note = "signed-from-checkout (--allow-checkout-signing)"
+        row["conditions_verified"] = (f"{row.get('conditions_verified', '').strip()} | {note}"
+                                      if (row.get("conditions_verified") or "").strip() else note)
+
     # MAJOR-4: show the full derived material effect, not just a class label, before writing.
     profile = ec.effect_profile_from_row(row)
     print("About to sign a constraint-relaxing security decision:")
@@ -353,13 +510,12 @@ def sign_decision(output_dir: Path, spec_path: str) -> int:
     print(f"  destructive/xrepo/bulk: {profile.destructive}/{profile.cross_repo}/{profile.bulk}")
     print(f"  derives_from    : {row.get('derives_from', '')}")
     print(f"  key_id          : {row.get('key_id', '')}")
-
-    from agentteams.cli.grants import payload_claims_grant_purpose
-
-    if payload_claims_grant_purpose(dl._decision_signature_values(row)):
-        # PR-E domain separation: never sign a decision payload that is also a grant payload.
-        print("Error: refusing to sign — this decision's payload begins with the capability-"
-              "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
+    print(f"  team dir        : {Path(output_dir).resolve()}")
+    print(f"  signature values: {json.dumps(dl._decision_signature_values(row), ensure_ascii=True)}")
+    if not _confirm(review_digest("decision", row, output_dir, row.get("key_id", "")), confirm_sha256):
+        return 1
+    private_pem = _read_operator_private_key(keyfile)
+    if private_pem is None:
         return 1
     try:
         values = dl._decision_signature_values(row)
@@ -462,18 +618,23 @@ def report_issued(record: dict[str, str], ledger_root: Path, team_dir: Path) -> 
     print(f"  verified against team dir {team_dir}")
 
 
-def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]]) -> int:
+def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]], *,
+               confirm_sha256: str | None = None, allow_checkout: bool = False) -> int:
     """Mint and append one operator Ed25519-signed capability grant.
 
-    Error precedence is part of the contract: spec → ``key_id`` → env → key read → *then*
-    ``resolve_dirs`` (whose ``ValueError`` names a non-rendering ``--framework``), which is why the
-    directory lookup is injected as a zero-argument callable rather than resolved by the caller.
-    It is CALLED before the key read (it runs unpinned adapter code, which must not run with the
-    key in memory) and its error is re-raised after, so the reported precedence is unchanged.
+    Error precedence is part of the contract (amended #9, 2026-09-30): spec → ``key_id`` →
+    spoofing refusal → env and key-file existence → integrity → install location → *then*
+    ``resolve_dirs`` (whose ``ValueError`` names a non-rendering ``--framework``) → ``max_uses`` →
+    display → confirm → key read → sign. ``resolve_dirs`` is injected as a zero-argument callable
+    and runs before the key read (it runs unpinned adapter code, which must not run with the key in
+    memory). The grant id and timestamp are minted once, displayed, and signed as shown.
 
     Args:
         spec_path: Path to the JSON grant spec (the grant fields plus ``key_id``).
         resolve_dirs: Returns ``(ledger_root, team_dir)``; may raise ``ValueError``.
+        confirm_sha256: ``--confirm-review-sha256`` (no terminal); None prompts on a terminal.
+        allow_checkout: ``--allow-checkout-signing`` (warned loudly; grants carry no free-text
+            signed field, so it is not recorded in the row).
 
     Returns:
         0 on success, 1 on any error (fail-closed).
@@ -488,23 +649,41 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]]) ->
         print("Error: --sign-grant spec must name a key_id (the verify key's file stem)",
               file=sys.stderr)
         return 1
-    # Resolve the directories BEFORE the key read (@security K1): resolve_dirs runs unpinned
-    # adapter code, which must never execute while the key is in memory. Its error is held and
-    # re-raised after the env/key checks, so error precedence is unchanged.
-    dirs_error: Exception | None = None
+    spoof = _spoofing_problem(spec)
+    if spoof:
+        print(f"Error: refusing to sign: {spoof} (a display-spoofing character). The key was not "
+              "read.", file=sys.stderr)
+        return 1
+    preflight = _signing_preflight([Path.cwd().resolve()], allow_checkout)
+    if preflight is None:
+        return 1
+    keyfile, _ = preflight
+    # resolve_dirs runs unpinned adapter code: always before the key read (@security K1).
     try:
         ledger_root, team_dir = resolve_dirs()
+        kwargs = grant_spec_kwargs(spec)
     except (grants.GrantError, ValueError) as exc:
-        dirs_error = exc
-    private_pem = _read_operator_private_key()
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    # Re-check against the HOLDER team's project too (its allowWrite roots), still key-unread.
+    if _location_gate(_project_roots(team_dir), allow_checkout) is None:
+        return 1
+    print("About to sign a capability grant (widens the holder's sandbox allowWrite):")
+    for name in ("issuer_team", "holder_team", "target_path", "permitted_ops", "expires_at",
+                 "max_uses", "approver", "ticket_id", "reason_code", "issuer_root", "grant_id",
+                 "timestamp"):
+        print(f"  {name:<16}: {kwargs.get(name)!r}")
+    print(f"  {'key_id':<16}: {key_id!r}")
+    print(f"  {'ledger root':<16}: {Path(ledger_root).resolve()}")
+    print(f"  {'team dir':<16}: {Path(team_dir).resolve()}")
+    if not _confirm(review_digest("grant", spec, team_dir, key_id, ledger_root), confirm_sha256):
+        return 1
+    private_pem = _read_operator_private_key(keyfile)
     if private_pem is None:
         return 1
     try:
-        if dirs_error is not None:
-            raise dirs_error
         record = grants.sign_ed25519_grant(
-            ledger_root, team_dir=team_dir, private_pem=private_pem, key_id=key_id,
-            **grant_spec_kwargs(spec),
+            ledger_root, team_dir=team_dir, private_pem=private_pem, key_id=key_id, **kwargs,
         )
     except (grants.GrantError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -520,6 +699,7 @@ __all__ = [
     "grant_spec_kwargs",
     "load_grant_spec",
     "presign_integrity_check",
+    "review_digest",
     "report_issued",
     "sign_decision",
     "sign_decision_team_refusal",

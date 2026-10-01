@@ -18,6 +18,8 @@ import pytest
 from agentteams import integrity
 from agentteams.cli.commands import _run_verify_integrity
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
 #: The deployed constitutional-gate hook, pinned by the enforcement-integrity manifest. Absent

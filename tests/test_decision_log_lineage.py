@@ -16,6 +16,8 @@ import pytest
 
 from agentteams.cli import decision_log as dl
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 _COLUMNS = [
     "timestamp", "requesting_agent", "action_reviewed", "verdict",
     "conditions", "conditions_verified", "evidence", "derives_from",

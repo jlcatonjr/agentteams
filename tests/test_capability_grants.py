@@ -33,6 +33,8 @@ pytest.importorskip("cryptography", reason="the 'signing' extra is not installed
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 _KEY = "test-grant-key"
 _FAR_FUTURE = "2099-01-01T00:00:00Z"
 _KEY_ID = "op-grant"

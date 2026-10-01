@@ -143,6 +143,8 @@ READERS = {
 }
 from agentteams.cli import grants as _grants  # noqa: E402
 
+pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
+
 # The grant readers (the Ed25519-grants change may move them; include whichever exist).
 if hasattr(_grants, "_roster_names_an_approver"):
     READERS["grant_roster_names_an_approver"] = lambda r: _grants._roster_names_an_approver(r)

@@ -1070,6 +1070,28 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--confirm-review-sha256",
+        dest="confirm_review_sha256",
+        default=None,
+        metavar="HEX",
+        help=(
+            "With --sign-decision/--sign-grant and no terminal: the review digest the minter "
+            "printed for the payload you reviewed. Signing proceeds only on an exact match "
+            "(otherwise a terminal y/N prompt is required). --yes does not apply to signing."
+        ),
+    )
+    parser.add_argument(
+        "--allow-checkout-signing",
+        action="store_true",
+        dest="allow_checkout_signing",
+        default=False,
+        help=(
+            "Knowingly sign from an agentteams install inside the current directory, a git work "
+            "tree or a sandbox allowWrite root (refused otherwise). Warned on every use and, for "
+            "decisions, recorded in the signed row."
+        ),
+    )
+    parser.add_argument(
         "--sign-decision",
         dest="sign_decision",
         default=None,

@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (operator signing: confirm gate and trusted-install check)
+
+- **#9: the pre-sign display is now a gate.** `--sign-decision` and `--sign-grant` now run in this order:
+  1. spec checks;
+  2. the integrity check;
+  3. the install-location check;
+  4. key-file existence;
+  5. directory resolution;
+  6. the display, which now includes a grant display and a review sha256;
+  7. confirmation: `Sign this payload? [y/N]` on a terminal; without a terminal,
+     `--confirm-review-sha256 <digest>` on the operator's argv;
+  8. only then the key read and the signature.
+
+  `--yes` never applies. Specs containing C0/C1 controls, ESC, bidi or zero-width characters are
+  refused. The grant id and timestamp are minted once, shown, and signed as shown. **Breaking:** scripted
+  signing without a terminal needs the digest.
+- **#10: install location.** The new pinned `agentteams/cli/signer_location.py`, part of the signing
+  closure, **refuses** to sign when the package, `sys.prefix` or `sys.executable` lies inside the current
+  directory, a git work tree or a sandbox `allowWrite` root. Override with `--allow-checkout-signing`,
+  which warns on every use and is recorded in the signed decision. It also warns on ownership and
+  permissions, a `RECORD` mismatch, `.pth` imports, and the current directory on `sys.path`. New
+  `SECURITY.md` section: "Signing from a trusted install".
+- The integrity manifest is re-hashed for `operator_signing.py`, `integrity.py` and the new module.
+
 ### security (launcher residuals: planted markers and planted Codex config made visible)
 
 - **Planted marker.** A confined process can create an empty team dir holding only
