@@ -304,6 +304,21 @@ Check for template drift and structural changes without writing any files. Exits
 
 When the structural diff reports a manifest-promotion event (manifest fingerprint changed, fingerprint unavailable, or `fingerprint_algo_version` bumped), `--check` runs the full render pipeline in memory and reconciles each promoted file against its on-disk content; fingerprint-only promotions whose rendered output matches disk byte-for-byte are demoted back to unchanged. `--check` and `--update --dry-run` report the same `has_changes` set for the same inputs.
 
+### `--strict-prompt-roots`
+
+With `--check`, also exit `1` when a prompt root changed since the last build. Prompt roots are the
+files other harnesses read as instructions: `.github/copilot-instructions.md`,
+`.github/instructions/**`, `.github/prompts/**`, root `AGENTS.md`, `.goosehints`, `CLAUDE.md` /
+`.claude/CLAUDE.md`, and each present team's agent files. Every generate, `--update` and `--check`
+compares them with the `prompt_root_hashes` recorded in every present team's build-log and prints a
+`PROMPT-ROOT CHANGED since last build` warning. Emitted files are compared per `AGENTTEAMS` fenced
+region, so an edit in a USER-EDITABLE region never warns. Without this flag the warning is advisory
+and the exit status is unchanged.
+
+This is detection only: the build-log is agent-writable, and a fresh generate or `--update`
+re-baselines (it prints a `PROMPT-ROOT RE-BASELINE` notice first when it re-records over a detected
+change). See [`prompt_roots`](api-reference/prompt-roots.md).
+
 ### `--refresh-index`
 
 Rebuild only `references/memory-index.json` in the output directory. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).

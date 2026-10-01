@@ -733,6 +733,9 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
             result.written + result.merged + result.unchanged, output_dir
         ),
     }
+    from agentteams import prompt_roots  # #8 phase 1: per-fence prompt-root hashes (detection only)
+
+    prompt_roots.add_to_build_log(log, output_dir, result.written + result.merged + result.unchanged)
     log_path = output_dir / "references" / "build-log.json"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(json.dumps(log, indent=2), encoding="utf-8")

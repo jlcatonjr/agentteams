@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (prompt-root change detection: follow-up #8 phase 1)
+
+- **New `agentteams/prompt_roots.py`.** Every generate and `--update` records a `prompt_root_hashes`
+  map in the team's build-log: per `AGENTTEAMS` fenced region for emitted prompt roots
+  (`.github/copilot-instructions.md`, `AGENTS.md`, `.goosehints`, `CLAUDE.md`, `.claude/CLAUDE.md`, and
+  the team's agent files), whole-file for `.github/instructions/**` and `.github/prompts/**`.
+- **`PROMPT-ROOT CHANGED since last build` warning** on every generate, `--update` and `--check`,
+  compared against every present team's build-log. Edits in USER-EDITABLE regions never trip it.
+  Paths are `repr`-escaped.
+- **New `--strict-prompt-roots`:** `--check` exits 1 on the warning. Without it the warning is advisory.
+- Detection only: the build-log is agent-writable, and a fresh generation re-baselines. Generate and
+  `--update` print a `PROMPT-ROOT RE-BASELINE` notice before re-recording over a detected change.
+
 ### fix (goose recipes and AGENTS.md rendering: follow-ups #15, #16)
 
 - **#15: goose legacy tool agents are swept.** The legacy tool-agent sweep now takes the
