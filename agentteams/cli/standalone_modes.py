@@ -150,16 +150,27 @@ def run_standalone_modes(
     # -----------------------------------------------------------------------
     if getattr(args, "check_wiring", False):
         framework = str(manifest.get("framework") or "claude")
+        # The verifiers read <project>/.claude/... and <project>/.goose/...; --output names the
+        # team's agents dir, so map a default agents dir back to its project root (a non-default
+        # layout is passed through unchanged). Before this, the default layout always reported
+        # "nothing to verify" (remediation row check-wiring-passes-agents-dir).
+        from agentteams.frameworks._sandbox_emit import TEAM_KEY_BY_FRAMEWORK, team_agents_dir
+
+        team_key = TEAM_KEY_BY_FRAMEWORK.get(framework)
+        sub = team_agents_dir(team_key) if team_key else ""
+        wiring_root = output_dir
+        if sub and output_dir.resolve().as_posix().endswith("/" + sub):
+            wiring_root = output_dir.resolve().parents[sub.count("/")]
         if framework == "goose":
             # P1-1: goose has its own Seatbelt/GOOSE_SANDBOX wiring verifier (macOS-enforced;
             # honest exit-neutral "not enforceable here" notice on Linux/Windows).
             from agentteams.frameworks._goose_sandbox_emit import verify_goose_sandbox_wiring
 
-            ok, messages = verify_goose_sandbox_wiring(output_dir, manifest)
+            ok, messages = verify_goose_sandbox_wiring(wiring_root, manifest)
         elif framework == "claude":
             from agentteams.frameworks.claude import verify_sandbox_wiring
 
-            ok, messages = verify_sandbox_wiring(output_dir)
+            ok, messages = verify_sandbox_wiring(wiring_root)
             # #6: advisory version tripwire (never changes ok / the exit status).
             from agentteams.cli.itest_tripwire import tripwire_notes
 
