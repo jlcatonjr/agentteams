@@ -86,6 +86,25 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def _team_relative(source_dir: Path) -> str:
+    """The source dir as its project-relative team path (``.github/agents``, …) when it is one.
+
+    Location-independent, so a projection into a temp dir records the same value as one in place
+    (render-consistency diffs stay stable) and no absolute home path reaches a committed file.
+    Anything else (e.g. ``.agentteams/canonical``) is recorded by its last two path components.
+    """
+    parts = Path(source_dir).resolve().parts
+    return "/".join(parts[-2:]) if len(parts) >= 2 else str(source_dir)
+
+
+def _same_but_timestamp(existing: Any, payload: dict[str, Any]) -> bool:
+    """True when an existing marker equals ``payload`` in every field but ``generated_at``."""
+    if not isinstance(existing, dict):
+        return False
+    strip = lambda d: {k: v for k, v in d.items() if k != "generated_at"}  # noqa: E731
+    return strip(existing) == strip(payload)
+
+
 def _rel_or_abs(path: Path, root: Path) -> str:
     """``path`` relative to ``root`` when inside it (no home-dir leak into a committed file)."""
     try:
@@ -324,7 +343,7 @@ def _marker_payload(
         "file_hashes": hashes,
         "template_hashes": {},
         "origin": INTEROP_ORIGIN,
-        "source_dir": _rel_or_abs(source_dir, project_root),
+        "source_dir": _team_relative(source_dir),
         "source_framework": source_framework,
         "source_build_log_sha256": (
             hashlib.sha256(source_log_path.read_bytes()).hexdigest()
@@ -389,6 +408,12 @@ def write_projection_marker(
         return result
     payload = _marker_payload(agents_dir, framework, source_dir, source_framework,
                               files_written, agent_slugs)
+    existing = _read_json(agents_dir / _MARKER_REL) if origin == INTEROP_ORIGIN else None
+    if _same_but_timestamp(existing, payload):
+        # Idempotent: an unchanged projection keeps the committed marker byte-identical (no churn,
+        # stable render-consistency diffs). Only generated_at would have changed.
+        result.skipped = "projection unchanged; the existing interop marker is kept"
+        return result
     try:
         result.marker = _write_marker_file(agents_dir / "references",
                                            json.dumps(payload, indent=2) + "\n")

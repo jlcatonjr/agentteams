@@ -139,11 +139,15 @@ def test_never_clobbers_a_native_build_log(tmp_path):
 def test_an_existing_interop_marker_is_refreshed(tmp_path):
     root, src, agents = _project(tmp_path)
     assert run_interop(src, "codex", agents).success
-    first = _marker(agents)["generated_at"]
+    first = _marker(agents)
     result = run_interop(src, "codex", agents, overwrite=True)
-    assert result.success and result.marker_files
-    assert _marker(agents)["generated_at"] >= first
+    # unchanged projection: the committed marker is kept byte-identical (no timestamp churn)
+    assert result.success and _marker(agents) == first
     assert not any("recognised agentteams team" in n for n in result.notices)  # first time only
+    # a real change refreshes it
+    next(src.glob("*.agent.md")).write_text(next(src.glob("*.agent.md")).read_text() + "\nchanged\n")
+    result = run_interop(src, "codex", agents, overwrite=True)
+    assert result.success and result.marker_files and _marker(agents)["file_hashes"] != first["file_hashes"]
 
 
 def test_symlinked_references_dir_is_refused(tmp_path):
@@ -414,3 +418,36 @@ def test_c5_a_native_build_log_appearing_before_the_replace_is_kept(tmp_path, mo
     assert not result.success and any("native build-log" in e for e in result.errors)
     assert (agents / "references" / "build-log.json").read_text() == native
     assert not [p for p in (agents / "references").iterdir() if p.name.endswith(".tmp")]
+
+
+def test_marker_is_stable_across_reprojection_and_location(tmp_path):
+    """researchteam render-consistency: a temp-dir re-projection must equal the committed marker
+    apart from generated_at, and an unchanged in-place re-run must not rewrite it."""
+    import json as _json
+
+    from agentteams import projection_marker as pm
+
+    def project(root):
+        src = root / ".github" / "agents"
+        (src / "references").mkdir(parents=True)
+        (src / "references" / "build-log.json").write_text(_json.dumps({"project_name": "P", "agent_slug_list": ["a"]}))
+        dst = root / ".codex" / "agents"
+        dst.mkdir(parents=True)
+        f = dst / "a.toml"
+        f.write_text("x = 1\n")
+        res = pm.write_projection_marker(dst, "codex", source_dir=src, source_framework="copilot-vscode",
+                                         files_written=[str(f)])
+        assert not res.error, res.error
+        return dst / "references" / "build-log.json"
+
+    a = _json.loads(project(tmp_path / "repo").read_text())
+    b = _json.loads(project(tmp_path / "tmpcopy").read_text())
+    a.pop("generated_at"); b.pop("generated_at")
+    assert a == b and a["source_dir"] == ".github/agents"
+    assert "/" + str(tmp_path).strip("/") not in _json.dumps(a)
+    marker = tmp_path / "repo" / ".codex" / "agents" / "references" / "build-log.json"
+    before = marker.read_bytes()
+    f = tmp_path / "repo" / ".codex" / "agents" / "a.toml"
+    res = pm.write_projection_marker(f.parent, "codex", source_dir=tmp_path / "repo" / ".github" / "agents",
+                                     source_framework="copilot-vscode", files_written=[str(f)])
+    assert res.skipped and marker.read_bytes() == before
