@@ -46,6 +46,9 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/decision_log.py",
     "agentteams/cli/grants.py",
     "agentteams/cli/effect_classifier.py",
+    "agentteams/cli/governance_targets.py",
+    "agentteams/cli/management_directives.py",
+    "agentteams/atomicio.py",
     "agentteams/frameworks/_sandbox_emit.py",
     "agentteams/integrity.py",
 })
@@ -98,6 +101,17 @@ def _git_ok(cwd: Path, *args: str) -> str | None:
     return res.stdout
 
 
+def _git_blob_id(path: Path) -> str | None:
+    """git's blob id for ``path``'s bytes, computed here so git never runs a content filter on it."""
+    import hashlib
+
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
 def _git_drift_warnings(root: Path) -> list[str]:
     """Warn when the manifest or a signing-closure module differs from HEAD / the latest tag.
 
@@ -113,13 +127,24 @@ def _git_drift_warnings(root: Path) -> list[str]:
         return []
     paths = [integrity.MANIFEST_REL_PATH, *sorted(SIGNING_CLOSURE)]
     warnings: list[str] = []
-    changed = _git_ok(root, "diff", "--name-only", "HEAD", "--", *paths)
-    if changed and changed.split():
+    # Compare against HEAD WITHOUT running repo-defined content filters (@security K3): `git diff`
+    # would run a planted `.gitattributes` clean filter as the operator, outside the sandbox, with
+    # the keyfile env set. `ls-tree` only reads object ids; the working-tree side is hashed here.
+    listed = _git_ok(root, "ls-tree", "HEAD", "--", *paths) or ""
+    head_ids = {}
+    for line in listed.splitlines():
+        meta, _, name = line.partition("\t")
+        parts = meta.split()
+        if len(parts) == 3:
+            head_ids[name] = parts[2]
+    changed = [rel for rel in paths if head_ids.get(rel) != _git_blob_id(root / rel)]
+    if changed:
         warnings.append(
-            f"the signing code or its manifest differs from git HEAD ({', '.join(changed.split())}); "
+            f"the signing code or its manifest differs from git HEAD ({', '.join(changed)}); "
             "review that diff before signing.")
     tag = (_git_ok(root, "describe", "--tags", "--abbrev=0") or "").strip()
-    tagged_text = _git_ok(root, "show", f"{tag}:{integrity.MANIFEST_REL_PATH}") if tag else None
+    # `cat-file blob` never applies filters/textconv (unlike `show`).
+    tagged_text = _git_ok(root, "cat-file", "blob", f"{tag}:{integrity.MANIFEST_REL_PATH}") if tag else None
     if tagged_text is None:
         return warnings
     try:
@@ -131,8 +156,8 @@ def _git_drift_warnings(root: Path) -> list[str]:
     differ = sorted(rel for rel in SIGNING_CLOSURE if tagged.get(rel) != current.get(rel))
     if differ:
         warnings.append(
-            f"the signing code differs from the latest release tag {tag} ({', '.join(differ)}): "
-            "it is not released signing code.")
+            f"the signing code differs from the nearest local tag {tag} (unverified: a local tag can "
+            f"be created by anyone who can write the repository) ({', '.join(differ)}).")
     return warnings
 
 
@@ -442,6 +467,8 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]]) ->
     Error precedence is part of the contract: spec → ``key_id`` → env → key read → *then*
     ``resolve_dirs`` (whose ``ValueError`` names a non-rendering ``--framework``), which is why the
     directory lookup is injected as a zero-argument callable rather than resolved by the caller.
+    It is CALLED before the key read (it runs unpinned adapter code, which must not run with the
+    key in memory) and its error is re-raised after, so the reported precedence is unchanged.
 
     Args:
         spec_path: Path to the JSON grant spec (the grant fields plus ``key_id``).
@@ -460,11 +487,20 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]]) ->
         print("Error: --sign-grant spec must name a key_id (the verify key's file stem)",
               file=sys.stderr)
         return 1
+    # Resolve the directories BEFORE the key read (@security K1): resolve_dirs runs unpinned
+    # adapter code, which must never execute while the key is in memory. Its error is held and
+    # re-raised after the env/key checks, so error precedence is unchanged.
+    dirs_error: Exception | None = None
+    try:
+        ledger_root, team_dir = resolve_dirs()
+    except (grants.GrantError, ValueError) as exc:
+        dirs_error = exc
     private_pem = _read_operator_private_key()
     if private_pem is None:
         return 1
     try:
-        ledger_root, team_dir = resolve_dirs()
+        if dirs_error is not None:
+            raise dirs_error
         record = grants.sign_ed25519_grant(
             ledger_root, team_dir=team_dir, private_pem=private_pem, key_id=key_id,
             **grant_spec_kwargs(spec),

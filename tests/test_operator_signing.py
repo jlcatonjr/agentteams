@@ -490,9 +490,10 @@ def test_head_drift_warns_but_signs(tmp_path, monkeypatch, capsys, _pin_source_r
     _regenerate(_pin_source_root)
     rc, _out, err = _sign_with(_sd(tmp_path, monkeypatch), monkeypatch, capsys)
     assert rc == 0, err
-    assert ("differs from git HEAD (agentteams/cli/grants.py, "
-            "references/enforcement-integrity.json)") in err
-    assert "differs from the latest release tag v0.0.1 (agentteams/cli/grants.py)" in err
+    assert ("differs from git HEAD (references/enforcement-integrity.json, "
+            "agentteams/cli/grants.py)") in err
+    assert "differs from the nearest local tag v0.0.1 (unverified" in err
+    assert "(agentteams/cli/grants.py)" in err
 
 
 def test_tag_drift_warns_when_head_is_clean(tmp_path, monkeypatch, capsys, _pin_source_root):
@@ -502,7 +503,7 @@ def test_tag_drift_warns_when_head_is_clean(tmp_path, monkeypatch, capsys, _pin_
     rc, _out, err = _sign_with(_sg(tmp_path, monkeypatch), monkeypatch, capsys)
     assert rc == 0, err
     assert "differs from git HEAD" not in err
-    assert "differs from the latest release tag v0.0.1 (agentteams/cli/decision_log.py)" in err
+    assert "(agentteams/cli/decision_log.py)" in err
 
 
 def test_pip_layout_without_git_or_manifest_changes_no_output(tmp_path, monkeypatch, capsys):
@@ -547,3 +548,54 @@ def test_self_check_has_no_environment_override() -> None:
                operator_signing._checkout_warning):
         source = inspect.getsource(fn)
         assert "os.getenv" not in source and "os.environ" not in source, fn.__name__
+
+
+def test_planted_clean_filter_in_the_source_repo_never_runs(tmp_path, monkeypatch, capsys,
+                                                            _pin_source_root):
+    """@security K3: `git diff`/`git show` run repo-defined content filters (a planted
+    .gitattributes + filter.*.clean) as the operator, outside the sandbox, with the keyfile env
+    set. The self-check compares via ls-tree object ids and Python-computed blob ids instead."""
+    marker = tmp_path / "filter-ran"
+    (_pin_source_root / ".gitattributes").write_text("* filter=evil\n", encoding="utf-8")
+    _git(_pin_source_root, "config", "filter.evil.clean", f"touch '{marker}'; cat")
+    _git(_pin_source_root, "config", "filter.evil.smudge", f"touch '{marker}'; cat")
+    _append(_pin_source_root / "agentteams/cli/grants.py")
+    _regenerate(_pin_source_root)
+    # Anti-vacuous: an ordinary `git diff HEAD` here DOES run the planted clean filter.
+    subprocess.run(["git", "-C", str(_pin_source_root), "diff", "--quiet", "HEAD", "--",
+                    "agentteams/cli/grants.py"], capture_output=True, check=False)
+    assert marker.exists(), "the planted clean filter did not run under git diff: test would be vacuous"
+    marker.unlink()
+    rc, _out, err = _sign_with(_sd(tmp_path, monkeypatch), monkeypatch, capsys)
+    assert rc == 0, err
+    assert "differs from git HEAD" in err  # drift is still detected without filters
+    assert not marker.exists(), "the signing self-check executed a repo-planted content filter"
+
+
+def test_sign_grant_resolves_dirs_before_the_key_is_read(tmp_path, monkeypatch):
+    """@security K1: resolve_dirs runs unpinned adapter code; it must not run with the key in memory."""
+    from agentteams.cli import operator_signing
+
+    order: list[str] = []
+    monkeypatch.setattr(operator_signing, "_read_operator_private_key",
+                        lambda: order.append("key") or None)
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps({**_grant(), "key_id": "op"}), encoding="utf-8")
+
+    def resolve():
+        order.append("dirs")
+        return tmp_path, tmp_path
+
+    assert operator_signing.sign_grant(str(spec), resolve) == 1  # key unavailable → refuse
+    assert order == ["dirs", "key"]
+
+
+def test_signing_closure_covers_every_module_run_with_the_key(tmp_path):
+    """@security K2: modules the minters execute between the key read and the append."""
+    from agentteams import integrity
+    from agentteams.cli import operator_signing
+
+    for rel in ("agentteams/cli/governance_targets.py", "agentteams/cli/management_directives.py",
+                "agentteams/atomicio.py"):
+        assert rel in operator_signing.SIGNING_CLOSURE
+        assert rel in integrity.ENFORCEMENT_MODULES

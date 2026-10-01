@@ -16,7 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pre-sign self-check.** Before the key is read, the signing closure is verified against the
   integrity manifest. Drift there, a missing manifest or an unreadable one REFUSES. Drift
   elsewhere, a closure that differs from git `HEAD` or the latest release tag, and signing from a
-  checkout inside a git work tree all WARN. There is no environment override.
+  checkout inside a git work tree all WARN. There is no environment override. The tag comparison
+  uses the nearest LOCAL tag, which is unverified (an agent that can commit can also tag). Git is
+  never run through a content filter: `git diff` would execute a planted `.gitattributes` clean filter
+  as the operator, outside the sandbox. Directory resolution happens before the key is read, and
+  `atomicio.py` is now pinned as part of the signing closure.
 - **What this does and does not cover.** It closes in-place edits to the signing code and
   unnoticed drift. It does NOT defend against unpinned code in the same process (the CLI dispatch
   chain, `.pth` files), and the pre-sign display is a record, not a gate. Sign from a pinned

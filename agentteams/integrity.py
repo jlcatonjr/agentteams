@@ -117,6 +117,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # payloads (plus the --issue-grant spec helpers). It was carved out of the high-churn
     # commands.py / grant_commands.py, whose runners are now one-line delegators.
     "agentteams/cli/operator_signing.py",
+    # Runs during the signed append (writes the ledger) inside operator_signing's closure.
+    "agentteams/atomicio.py",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use

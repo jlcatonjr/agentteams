@@ -85,11 +85,16 @@ agent write root, and run `--verify-integrity` first.
 
 **The pre-sign self-check** (`presign_integrity_check`, run before the key is read). Both minters
 verify the signing closure (`SIGNING_CLOSURE`: this module, `signed_ledger.py`, `decision_log.py`,
-`grants.py`, `effect_classifier.py`, `_sandbox_emit.py`, `integrity.py`) against the integrity
+`grants.py`, `effect_classifier.py`, `governance_targets.py`, `management_directives.py`,
+`atomicio.py`, `_sandbox_emit.py`, `integrity.py`) against the integrity
 manifest. They **refuse** on drift in that closure, on a missing manifest the repository should
 carry, or on an unreadable manifest, and the key is never read. They **warn** (and still sign) on
-drift in other pinned modules, on a closure that differs from git `HEAD` or the latest release tag
-(git runs with repo config neutralised), and when the package sits inside a git work tree or
+drift in other pinned modules, and on a closure that differs from git `HEAD` or from the nearest
+local tag. A local tag is **unverified**: anyone who can write the repository can create one, so
+an agent that can commit and tag silences both comparisons. Git runs with repo config neutralised
+and never through a content filter (`ls-tree` object ids against Python-computed blob ids, and
+`cat-file blob`, because `git diff`/`show` would run a planted `.gitattributes` clean filter as the
+operator), and when the package sits inside a git work tree or
 the current directory. There is no environment override. The check lives in the module it
 protects, so deleting it is itself recorded by the manifest: a speed bump with a trail, not a
 boundary. An agent that edits the closure AND regenerates the manifest passes it, which is what
