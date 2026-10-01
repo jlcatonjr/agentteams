@@ -52,7 +52,7 @@ ACCEPTED_WEAKNESSES_REL = "references/redteam-accepted-weaknesses.csv"
 #: acceptances (documented limits / bounded partials of the *public* tool) so the CI audit — which
 #: cannot see the gitignored private ledger — can still confirm them. The private ledger stays the
 #: "genuine weakness map" for sensitive entries; the two are kept disjoint by provenance
-#: (test_redteam_public_acceptances.py), and adding a PID here is an @security-reviewed
+#: (tests/test_redteam_issue16_regression.py), and adding a PID here is an @security-reviewed
 #: classification act (issue #16, B-c1/B-c2).
 PUBLIC_ACCEPTANCES_REL = "references/redteam-public-acceptances.csv"
 UNCONTROLLED_PROBES_REL = "references/redteam-uncontrolled-probes.csv"
@@ -434,7 +434,7 @@ def load_accepted_weaknesses(root: Path) -> dict[str, tuple[str, str]]:
     a weakness cannot be accepted in the suite and unaccepted in the daily audit. The private
     ledger wins on the (expected-empty) intersection, so a public row can never shadow or override
     a sensitive private classification; the two are asserted disjoint by
-    ``tests/test_redteam_public_acceptances.py``. This function only READS both files — it never
+    ``tests/test_redteam_issue16_regression.py``. This function only READS both files — it never
     copies a private row into the public one (issue #16, B-c2).
 
     Args:

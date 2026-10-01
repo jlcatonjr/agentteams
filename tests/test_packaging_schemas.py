@@ -38,7 +38,7 @@ def _expected_schema_arcnames() -> list[str]:
 
 
 def test_wheel_bundles_all_schemas(tmp_path: Path) -> None:
-    pytest.importorskip("build", reason="`build` backend not installed (pip install -e .[test])")
+    pytest.importorskip("build.__main__", reason="`build` backend not installed (pip install -e .[test])")
     expected = _expected_schema_arcnames()
     assert expected, "no source schemas found — SCHEMAS_DIR wrong?"
 
