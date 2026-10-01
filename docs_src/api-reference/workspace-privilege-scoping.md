@@ -609,6 +609,39 @@ emitted block, so nothing changes for existing teams. Note this removes the `~` 
 it does **not** by itself prove the OS denies the path — that still owes the in-sandbox
 escape test above (or the RH-4 harness).
 
+### Opt-in: protect other harnesses' prompt roots (`protect_prompt_roots`)
+
+Some files are read as instructions by another harness: Copilot, Codex, goose, or Claude Code's
+own `CLAUDE.md`. By default a Claude-sandboxed agent can rewrite them. Set
+`protect_prompt_roots: true` in the project description to close that (follow-up #8 phase 2).
+It is off by default because it also stops sandboxed agents from authoring those files, and that
+includes an in-sandbox `agentteams --update`. Regenerate from outside the sandbox.
+
+**The roots:**
+- `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/` and `.github/agents/`;
+- `AGENTS.md` and `.goosehints`;
+- `.codex/` and `.goose/recipes/`;
+- `CLAUDE.md`, `CLAUDE.local.md` and `.mcp.json`;
+- `.agentteams/`, only when present.
+
+`.github/workflows` is never protected.
+
+**What each arm does:**
+- **Claude block.** `permissions.deny` gains an `Edit(...)` rule for every root. These rules bind
+  the built-in tools. `sandbox.filesystem.denyWrite` names only the roots that existed at
+  generation, because a missing deny path stops bwrap. A root created later needs a regeneration.
+- **Linux launcher.** `sandbox/confine-run.sh --protect-prompt-roots` ro-binds every root present
+  under each writable root. An absent root is skipped. A symlinked root is refused.
+  `--check` lists the protected roots as `prompt-roots (ro)`. The Linux goose runner example passes
+  the flag when the brief opts in. On macOS the launcher only warns, and the goose Seatbelt profile
+  is unchanged (deferred).
+- **Relaxation.** When the live `.claude/settings.json` still carries the rules and the new render
+  drops them, generation prints `SANDBOX RELAXATION: prompt-root protection removed`. That happens
+  when the flag is turned off or removed. The notice warns; it does not block.
+
+Generation recommends the flag when a Claude sandbox is on and the project also holds a
+non-Claude team.
+
 ### P3b — inbound exclusion (operator-run, advisory only)
 
 What P3a does **not** do: stop *another* team from reading *your* workspace. Nothing

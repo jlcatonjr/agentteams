@@ -10,6 +10,10 @@ the generation-time half (follow-up #2, ``brief-json-privilege-tamper``, 2026-09
   The baseline is read only from the live ``.claude/settings.json`` (protected by the Claude
   sandbox and, since this change, by ``confine-run.sh``); for other frameworks it is empty.
 
+It also prints ``SANDBOX RELAXATION: prompt-root protection removed`` when the live
+``.claude/settings.json`` ``permissions.deny`` carries prompt-root ``Edit`` rules
+(``protect_prompt_roots``, follow-up #8 phase 2) that the new render drops: warn only.
+
 HONEST LIMIT: an agent can plant ``--accept-write-root`` in a script the operator later runs
 (a Makefile, a task, an "operator script"). The widening notice names every accepted external
 root and where it came from, so it is visible, not prevented.
@@ -24,6 +28,11 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable
 
+from agentteams.frameworks._prompt_root_protect import (
+    ALL_PROMPT_ROOT_EDIT_RULES,
+    prompt_root_edit_rules,
+    prompt_roots_enabled,
+)
 from agentteams.frameworks._write_roots import (
     FORBIDDEN_ACCEPTANCE_KEYS,
     PROJECT_ROOT_KEY,
@@ -58,6 +67,58 @@ def live_claude_allow_write(project_root: Path) -> list[str]:
     fs = sandbox.get("filesystem") if isinstance(sandbox, dict) else None
     allow = fs.get("allowWrite") if isinstance(fs, dict) else None
     return [r for r in allow if isinstance(r, str) and r] if isinstance(allow, list) else []
+
+
+def live_claude_permission_deny(project_root: Path) -> list[str]:
+    """Return ``permissions.deny`` of the live ``.claude/settings.json`` (else ``[]``).
+
+    Args:
+        project_root: The project root.
+
+    Returns:
+        The live deny rule strings, or an empty list when absent or unreadable.
+    """
+    try:
+        data = json.loads((project_root / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    perms = data.get("permissions") if isinstance(data, dict) else None
+    deny = perms.get("deny") if isinstance(perms, dict) else None
+    return [r for r in deny if isinstance(r, str)] if isinstance(deny, list) else []
+
+
+def warn_prompt_root_relaxation(manifest: dict[str, Any], *, framework_id: str, confined: bool) -> list[str]:
+    """Print ``SANDBOX RELAXATION`` when the live deny has prompt-root rules the new render drops.
+
+    Fires when ``protect_prompt_roots`` was turned off or removed from the (agent-writable) brief,
+    or the sandbox itself was turned off. Warn only: visible, not prevented.
+
+    Args:
+        manifest: The team manifest (reads ``protect_prompt_roots`` and the project root).
+        framework_id: The target framework (only claude renders ``.claude/settings.json``).
+        confined: Whether the new render carries the sandbox block (and so any deny rules).
+
+    Returns:
+        The dropped rules (empty when nothing is dropped).
+    """
+    if framework_id != "claude" or not isinstance(manifest.get(PROJECT_ROOT_KEY), Path):
+        return []
+    root = manifest[PROJECT_ROOT_KEY]
+    if root.parts[-2:] == (".claude", "agents"):  # `--output <project>/.claude/agents`
+        root = root.parents[1]
+    project_root = str(root)
+    live = [r for r in live_claude_permission_deny(root) if r in ALL_PROMPT_ROOT_EDIT_RULES]
+    kept = set(prompt_root_edit_rules(project_root)) if confined and prompt_roots_enabled(manifest) else set()
+    dropped = [r for r in dict.fromkeys(live) if r not in kept]
+    if dropped:
+        print(
+            "  !  SANDBOX RELAXATION: prompt-root protection removed: the live .claude/settings.json "
+            f"permissions.deny carries {', '.join(dropped)}, which the new render drops "
+            "(protect_prompt_roots is off or absent in the brief, or the sandbox is off). Review "
+            "before re-merging; the brief is agent-writable.",
+            file=sys.stderr,
+        )
+    return dropped
 
 
 def begin(manifest: dict[str, Any], project_root: Path) -> list[str]:
@@ -110,6 +171,7 @@ def enforce(
     Raises:
         WriteRootPolicyError: A root is hard-banned, or an external root is unaccepted.
     """
+    warn_prompt_root_relaxation(manifest, framework_id=framework_id, confined=confined)
     if not confined:
         return
     roots = list(manifest.get("workspace_write_roots") or ["."])

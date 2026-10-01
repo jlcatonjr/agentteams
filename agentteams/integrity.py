@@ -72,6 +72,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # one sibling emitter left unpinned, so a silent edit dropping a control-plane entry weakened
     # every emitted goose/macOS boundary without tripping --verify-integrity or E4.
     "agentteams/frameworks/_goose_sandbox_emit.py",
+    # Opt-in prompt-root protection (follow-up #8 phase 2, 2026-10-01): the Edit rules and
+    # present-only denyWrite set _sandbox_emit.py emits, and the RELAXATION-notice rule set.
+    "agentteams/frameworks/_prompt_root_protect.py",
     # The write-root chokepoint (follow-up #2, 2026-09-30; @security CLEAR_WITH_CONDITIONS). Every
     # emitter refuses hard-banned roots through it, and the CLI acceptance gate below uses it; a
     # silent edit here re-opens `~`, `/` or shell injection into the operator-run goose runner.

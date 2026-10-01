@@ -56,6 +56,7 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _sandbox_feature_enabled,
     sibling_deny_dirs,
 )
+from ._prompt_root_protect import prompt_roots_enabled
 from ._write_roots import project_root_of
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -258,6 +259,7 @@ class ClaudeAdapter(FrameworkAdapter):
                     # Present sibling teams, computed by the CLI (transient; never from input).
                     sibling_deny_dirs=sibling_deny_dirs(manifest),
                     project_root=project_root_of(manifest),  # transient, CLI-set (never input)
+                    protect_prompt_roots=prompt_roots_enabled(manifest),  # #8 phase 2, opt-in
                 )
                 # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
                 # missing deny path). Its frozen sentinel is emitted for every team by

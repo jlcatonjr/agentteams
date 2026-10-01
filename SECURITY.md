@@ -305,9 +305,17 @@ honour.
 - **Fake marker.** A planted `build-log.json` in an empty `.github/agents` or `.codex/agents`
   makes the launcher refuse to start. This is denial of service only: nothing is granted. Since #11 the launcher
   and generation name the marker as possibly planted and say how to remove it.
-- **Copilot is not fully covered.** Its prompt-level roots (`.github/agents/*.agent.md`,
+- **Copilot is not fully covered by default.** Its prompt-level roots (`.github/agents/*.agent.md`,
   `.github/copilot-instructions.md`) stay writable through the Edit tool, and the gate hook is
-  the only check on them.
+  the only check on them. **Opt-in** `protect_prompt_roots: true` (follow-up #8 phase 2) changes that.
+  It adds `Edit(...)` rules for every prompt root, present-only `denyWrite` entries, and
+  `confine-run.sh --protect-prompt-roots`. With it on, sandboxed agents cannot author Copilot, Codex or
+  goose agents and instructions, and neither can an in-sandbox `--update`. Three limits remain:
+  - `.github/workflows` is never covered.
+  - The goose macOS Seatbelt profile is deferred.
+  - A root created after generation is not in `denyWrite` until the next generation.
+
+  Turning the flag off is detected, not prevented: generation prints `SANDBOX RELAXATION`.
 - **Bash in `.github/agents`.** Denying `.github/agents` blocks routine in-sandbox Bash cleanup
   and `sed` there, including of `_build-description.json`, which is tracked separately.
 - **`.codex` whole-deny.** It is untested against Codex CLI's own in-project writes.

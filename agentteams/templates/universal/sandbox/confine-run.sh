@@ -35,8 +35,8 @@
 # Usage:
 #   sandbox/confine-run.sh --scratch DIR [--egress deny|proxy|host] [--proxy ADDR:PORT]
 #          [--netns NAME] [--exclude PATH]... [--writable PATH]... [--coord-root PATH]... [--protect PATH]...
-#          [--setenv VAR=VAL]... [--env-allow VAR]... [--cpu-max SEC] [--nproc-max N] [--mem-max MiB] [--check]
-#          -- CMD [ARGS...]
+#          [--setenv VAR=VAL]... [--env-allow VAR]... [--cpu-max SEC] [--nproc-max N] [--mem-max MiB]
+#          [--protect-prompt-roots] [--check] -- CMD [ARGS...]
 #
 # --coord-root PATH (repeatable): bind a sibling/adjacent-repo write root for cross-repo
 #   coordination. UNLIKE --writable (which mkdir -p's a missing path), a coordination target
@@ -64,6 +64,14 @@
 #   and its self-bound ancestor .github stays writable. --protect PATH (repeatable) ro-binds an extra path,
 #   e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
 #   Status: mechanism-verified (raw bwrap probes), product-unverified. The macOS branch is unchanged.
+#
+# --protect-prompt-roots (OPT-IN, follow-up #8 phase 2, 2026-10-01; Linux/bwrap branch only): also
+#   ro-bind each EXISTING prompt root (PROMPT_ROOTS_REL below: the files other harnesses read as
+#   instructions) under every writable root, with the same ancestor self-binds and symlink refusal
+#   (cp_real). Protect-if-present: an absent root is skipped, never required, never a die. A
+#   symlinked root (e.g. CLAUDE.md -> AGENTS.md) is a die: move it or drop the flag. Off by default
+#   because it blocks confined agents from authoring Copilot/Codex/goose agents and instructions.
+#   .github/workflows is never protected. On macOS it is NOT enforced (a warning; deferred).
 #
 # macOS AUGMENTATION (2026-W36) - added ONLY to the macOS (Darwin) branch. TWO DISTINCT mechanisms;
 # do NOT conflate them (only group (i) is an actual Seatbelt/sandbox-exec feature):
@@ -127,6 +135,12 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
 # the settings/hooks the next Claude session trusts. Mirrors Claude's own `.claude` denyWrite, so a
 # confined goose/copilot/codex agent cannot rewrite them either. A mount point cannot be renamed.
 CONTROL_PLANE_DIRS_REL=( .claude )
+# Prompt roots (follow-up #8 phase 2), read-only only with --protect-prompt-roots, protect-if-present.
+# Locked by a test to agentteams' _prompt_root_protect PROMPT_ROOT_FILES + PROMPT_ROOT_DIRS +
+# PROMPT_ROOT_PRESENT_ONLY_DIRS. Never .github/workflows.
+PROMPT_ROOTS_REL=( .github/copilot-instructions.md AGENTS.md .goosehints CLAUDE.md CLAUDE.local.md .mcp.json
+                   .github/instructions .github/prompts .github/agents .codex .goose/recipes .agentteams )
+PROTECT_PROMPT_ROOTS=0; PR_RO=()
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
 TEAM_MARKER_REL=references/build-log.json
 TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents )
@@ -157,6 +171,7 @@ while [ $# -gt 0 ]; do
     --cpu-max)  CPU_MAX="${2:-}";  shift 2 ;;   # macOS: RLIMIT_CPU (SEC cpu-seconds); no-op on Linux
     --nproc-max) NPROC_MAX="${2:-}"; shift 2 ;; # macOS: RLIMIT_NPROC (dedicated-uid only); no-op on Linux
     --mem-max)  MEM_MAX="${2:-}";  shift 2 ;;   # macOS: interface-only, UNCAPPED; no-op on Linux
+    --protect-prompt-roots) PROTECT_PROMPT_ROOTS=1; shift ;;  # opt-in: ro-bind the present prompt roots (Linux)
     --check)   CHECK=1; shift ;;
     -h|--help) grep '^#' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --) shift; CMD=("$@"); break ;;
@@ -304,6 +319,13 @@ control_plane_binds() {
       p="$(cp_real "$r/$rel")" || exit 2
       prot+=( "$p" )
     done
+    if [ "$PROTECT_PROMPT_ROOTS" -eq 1 ]; then   # opt-in, protect-if-present (never required)
+      for rel in "${PROMPT_ROOTS_REL[@]}"; do
+        cp_present "$r/$rel" || continue
+        p="$(cp_real "$r/$rel")" || exit 2
+        prot+=( "$p" ); PR_RO+=( "$p" )
+      done
+    fi
     for rel in "${CONTROL_PLANE_REL[@]}"; do
       if ! cp_present "$r/$rel"; then
         # Absent. A hole when the entry is REQUIRED (cp_required): its parent is rename-locked yet
@@ -495,6 +517,7 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
     echo "confine-run:    A hard memory cap requires a VM / container / Linux host (Layer B). Proceeding UNCAPPED." >&2
   fi
   [ "$EGRESS" = host ] && echo "confine-run: WARNING --egress host - network NOT confined (fs/read still apply)." >&2
+  [ "$PROTECT_PROMPT_ROOTS" -eq 1 ] && echo "confine-run: WARNING --protect-prompt-roots is Linux-only; prompt roots are NOT protected on macOS (deferred)." >&2
   echo "confine-run: WARNING macOS Seatbelt path is ENFORCEMENT-UNVERIFIED until an on-mac deny test passes." >&2
 }
 
@@ -519,6 +542,7 @@ if [ "$CHECK" -eq 1 ]; then
   fi
   echo "  read-excluded     : ${MASKED[*]:-<none present>}"
   echo "  control-plane (ro): ${CP_RO[*]:-<none>}$( [ "${#CP_ANC[@]}" -gt 0 ] && echo " (rename-locked ancestors: ${CP_ANC[*]})" )"
+  [ "$PROTECT_PROMPT_ROOTS" -eq 1 ] && echo "  prompt-roots (ro) : ${PR_RO[*]:-<none present>}"
   echo "  coord-roots       : ${COORD_RESOLVED[*]:-<none>}$( [ "${#COORD_RESOLVED[@]}" -gt 0 ] && echo " (cross-repo binds; existence pre-verified, fail-closed if missing)" )"
   echo "  env allowlist     : ${ENV_ALLOW_ALL[*]} (default-deny; all other env vars dropped)"
   echo "  cpu-max (RLIMIT)  : ${CPU_MAX:-<none>}$( [ -n "$CPU_MAX" ] && echo " cpu-sec (POSIX RLIMIT_CPU, per-process, kernel-enforced, DoS-bound)" )"
