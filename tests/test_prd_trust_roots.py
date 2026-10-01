@@ -222,26 +222,24 @@ def test_management_emission_predicate_matrix(tmp_path, framework, sandbox, mana
     refs = team / "references"
     predicate = bool(managers) or is_mgmt
     cfg = refs / "management-authority.json"
-    assert cfg.exists() == (sandbox or predicate)
+    # 2026-09-30: claude/goose follow the switch like every team framework; this manifest carries
+    # the switch, so the stubs are always written (a stub reads exactly like an absent file).
+    assert cfg.exists()
     if cfg.exists():
         data = json.loads(cfg.read_text())
         is_stub = data.get("note", "").startswith("stub")
         assert is_stub == (not predicate)
     roster = refs / "authorized-managers.txt"
-    assert roster.exists() == (sandbox or bool(managers))
+    assert roster.exists()
     if roster.exists():
         assert (roster.read_text() == CONTROL_PLANE_STUB_TEXT["authorized-managers.txt"]) == (not managers)
-    assert (refs / "security-approvers.txt").exists() == sandbox
-    if not sandbox and not predicate:  # byte-identical to before PR-D: only the switch
-        assert sorted(p.name for p in refs.iterdir()) == ["agent-privilege.json"]
+    assert (refs / "security-approvers.txt").exists()
 
 
 def test_stub_predicate_is_per_framework():
-    assert cpio.stubs_enabled("claude", {"host_features": ["goose:sandbox"]}) is False
-    assert cpio.stubs_enabled("goose", {"host_features": ["claude:sandbox"]}) is False
-    assert cpio.stubs_enabled("goose", {"privilege_profile": "confined"}) is True
-    # 2026-09-30: copilot/codex follow the switch (or a confinement request), whatever the profile.
-    for fw in ("codex", "copilot-vscode", "copilot-cli"):
+    # 2026-09-30: EVERY team framework follows the switch (or a confinement request), whatever
+    # its own profile or platform, so no team can brick a sibling's launcher.
+    for fw in ("claude", "goose", "codex", "copilot-vscode", "copilot-cli"):
         assert cpio.stubs_enabled(fw, {"privilege_profile": "confined"}) is True
         assert cpio.stubs_enabled(fw, {"privilege_profile": "cooperative",
                                        "enforce_decision_signing": False}) is True

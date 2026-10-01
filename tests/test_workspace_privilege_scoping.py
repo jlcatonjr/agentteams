@@ -1043,7 +1043,9 @@ def test_load_verify_key_treats_a_sentinel_only_store_as_absent(tmp_path):
         assert _err(present, key_id) == _err(absent, key_id)
 
 
-def test_claude_sentinel_is_emitted_only_alongside_the_deny(monkeypatch):
+def test_claude_deny_never_ships_without_the_sentinel(monkeypatch):
+    """2026-09-30 contract: the sentinel ships with EVERY claude team (base adapter); the deny
+    only with the sandbox. The invariant that matters, deny implies sentinel, still holds."""
     import agentteams.frameworks.claude as claude_mod
 
     def _emit(manifest):
@@ -1053,28 +1055,38 @@ def test_claude_sentinel_is_emitted_only_alongside_the_deny(monkeypatch):
         return deny, _STORE_SENTINEL in files
 
     assert _emit({"host_features": ["claude:sandbox"]}) == (True, True)
-    assert _emit({"privilege_profile": "cooperative", "host_features": []}) == (False, False)
+    assert _emit({"privilege_profile": "cooperative", "host_features": []}) == (False, True)
     real = claude_mod._read_template_asset
     for missing in ("hooks/constitutional-gate.py", "hooks/settings.hooks.example.json"):
         monkeypatch.setattr(
             claude_mod, "_read_template_asset", lambda rel, m=missing: "" if rel == m else real(rel)
         )
-        assert _emit({"host_features": ["claude:sandbox"]}) == (False, False), missing
+        assert _emit({"host_features": ["claude:sandbox"]}) == (False, True), missing
     assert not any(p.endswith(".pem") for p, _ in ClaudeAdapter().extra_output_files(
         {"host_features": ["claude:sandbox"]}))
 
 
-def test_goose_sentinel_is_emitted_only_alongside_the_seatbelt_deny(monkeypatch):
+def test_goose_sentinel_ships_on_every_platform(monkeypatch):
+    """2026-09-30 regression: the sentinel shipped only with the darwin Seatbelt profile, so a
+    confined goose team on Linux was refused by its own launcher. It now ships with every goose
+    team from the base adapter on every platform; the Seatbelt profile stays darwin-only."""
     import sys
 
     from agentteams.frameworks._goose_sandbox_emit import goose_sandbox_output_files
+    from agentteams.frameworks.goose import GooseAdapter
 
-    confined = {"privilege_profile": "confined", "host_features": ["goose:sandbox"]}
-    for plat in ("linux", "win32", "darwin"):
-        monkeypatch.setattr(sys, "platform", plat)
-        files = dict(goose_sandbox_output_files(confined))
-        assert ("../sandbox.sb" in files) == (_STORE_SENTINEL in files) == (plat == "darwin")
-        assert goose_sandbox_output_files({"privilege_profile": "cooperative"}) == []
+    for profile in ("confined", "cooperative"):
+        m = {"privilege_profile": profile, "framework": "goose"}
+        if profile == "confined":
+            m["host_features"] = ["goose:sandbox"]
+        for plat in ("linux", "win32", "darwin"):
+            monkeypatch.setattr(sys, "platform", plat)
+            rels = [r for r, _ in GooseAdapter().extra_output_files(m)]
+            assert _STORE_SENTINEL in rels, (profile, plat)
+            assert len(rels) == len(set(rels)), (profile, plat, rels)
+            sb = dict(goose_sandbox_output_files(m))
+            assert ("../sandbox.sb" in sb) == (plat == "darwin" and profile == "confined")
+            assert _STORE_SENTINEL not in sb  # single source: the base adapter
 
 
 def test_pinned_sync_projects_the_sentinel_with_the_deny(tmp_path):

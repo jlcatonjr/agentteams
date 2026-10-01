@@ -37,7 +37,11 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.canonical import load_canonical, materialize_canonical
-from agentteams.frameworks._sandbox_emit import VERIFY_KEY_STORE_SENTINEL_REL
+from agentteams.frameworks._sandbox_emit import (
+    TEAM_MARKER_REL,
+    VERIFY_KEY_STORE_SENTINEL_REL,
+    VERIFY_KEY_STORE_SENTINEL_TEXT,
+)
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.sync_baseline import load_baseline, write_baseline
@@ -215,11 +219,31 @@ def _emit_privilege_artifacts(
     Builds a privilege-bearing manifest from the team-level ``privilege`` block and calls the
     framework adapter's ``extra_output_files``, writing back only the files whose basename is
     in :data:`_PRIVILEGE_ARTIFACT_BASENAMES` (the OS-boundary set). This keeps confinement
-    projected across the pinned-sync frameworks without re-emitting unrelated extras. No-op
-    when no confining privilege is present. Returns the project-relative paths written.
+    projected across the pinned-sync frameworks without re-emitting unrelated extras. With no
+    confining privilege, only the verify-key store sentinel is written, and only if absent in an
+    agentteams team (build-log marker present). Returns the project-relative paths written.
     """
     if not privilege or privilege.get("privilege_profile") not in {"confined", "exclusive"}:
-        return []
+        # 2026-09-30: a cooperative agentteams team (marker present) still needs its store
+        # sentinel, or a confined sibling's launcher refuses the project. Write-if-absent.
+        # Never follows a planted symlink: the store dir must resolve inside the team, and the file
+        # is created O_EXCL|O_NOFOLLOW (nothing, not even a dangling link, may already be there).
+        from agentteams.control_plane_io import _create_exclusive
+
+        agents_dir = framework_agents_dir(root, framework)
+        sentinel = agents_dir / VERIFY_KEY_STORE_SENTINEL_REL
+        if not (agents_dir / TEAM_MARKER_REL).is_file() or sentinel.exists() or sentinel.is_symlink():
+            return []
+        team = agents_dir.resolve()
+        if not sentinel.parent.resolve().is_relative_to(team):
+            return []
+        if not dry_run:
+            sentinel.parent.mkdir(parents=True, exist_ok=True)
+            if not sentinel.parent.resolve().is_relative_to(team):  # raced into a link
+                return []
+            if not _create_exclusive(sentinel, VERIFY_KEY_STORE_SENTINEL_TEXT):
+                return []
+        return [str(team / VERIFY_KEY_STORE_SENTINEL_REL)]
     from agentteams.host_features import expand_privilege_profile
 
     profile = privilege["privilege_profile"]

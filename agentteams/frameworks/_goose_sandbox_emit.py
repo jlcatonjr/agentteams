@@ -608,16 +608,15 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint
     )
-    # The profile's control-plane deny names the verify-key store directory, so its frozen
-    # sentinel ships with the profile and only with it (Seatbelt tolerates a missing path, but the
-    # store must exist for parity with the bwrap arms and for the same emit-together invariant).
-    # This closes key PLANTING; the profile also read-denies the operator private key (F-1).
+    # The profile's control-plane deny names the verify-key store directory. Its frozen sentinel
+    # ships with EVERY team from FrameworkAdapter.extra_output_files, on every platform: emitting
+    # it here only on darwin left a confined goose team on Linux refused by its own launcher
+    # (2026-09-30). The profile closes key PLANTING and read-denies the operator private key (F-1).
     # Goose has no Claude-style `permissions` system: the Seatbelt profile binds every process
     # goose runs, so there is no separate built-in-tool gap to close here.
     return [
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
-        (VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT),
     ]
 
 

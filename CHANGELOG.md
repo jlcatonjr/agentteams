@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (a generated team no longer bricks the confine-run launcher)
+
+- A freshly generated **confined goose team on Linux** was refused by its own launcher: the
+  verify-key-store sentinel (`references/authorized-verify-keys/README.md`) shipped only with the
+  macOS Seatbelt profile, but `confine-run.sh` requires it for every agentteams team in a writable
+  root. A **cooperative claude team** beside any confined team did the same to that team's
+  launcher. The sentinel is now emitted for every team framework, profile and platform (one
+  emitter, `base.py`). The roster stubs follow one predicate for all five frameworks (the switch is
+  emitted, confinement is requested, or the switch is already on disk). `multi_sync` writes the
+  sentinel (if absent) into an existing agentteams team it projects without confining privilege.
+- The launcher stays fail-closed. Its hint for a missing entry now says to regenerate with current
+  agentteams (`--update`), and notes that older versions did not emit the entry everywhere.
+- Every emitted settings file and Seatbelt profile is byte-identical to the previous release
+  (checked for all five frameworks × three profiles × Linux/macOS). The only changes are the
+  added sentinel and the launcher's hint text. The integrity manifest is re-hashed for
+  `_goose_sandbox_emit.py`, `_sandbox_emit.py` (comment only) and `confine-run.sh`.
+- New end-to-end tests generate each framework × profile (plus a mixed confined-goose and
+  cooperative-claude repo, and a multi_sync projection) and run `confine-run.sh --check`. A
+  deleted sentinel is still refused with exit 2.
+
 ### security (the operator signing path is integrity-pinned)
 
 - `--sign-decision` and `--sign-grant` read the operator's Ed25519 private key and built, showed

@@ -203,11 +203,13 @@ class FrameworkAdapter(ABC):
 
         rel = self.sandbox_launcher_rel_path()
         files = linux_sandbox_output_files(manifest, rel) + macos_sandbox_output_files(manifest, rel)
-        # 2026-09-30: a copilot/codex team dir holds the same trust roots as the claude/goose ones,
-        # and the launcher requires its verify-key store once the team marker exists. Emit the
-        # frozen sentinel under the SAME predicate as the roster stubs (control_plane_io); the
-        # claude and goose adapters emit their own, so no rel_path is emitted twice.
-        from agentteams.control_plane_io import stubs_enabled
+        # The launcher requires every agentteams team's verify-key store once the team marker
+        # (build-log.json) exists, whatever that team's own profile and platform. So the frozen
+        # sentinel ships with EVERY team, unconditionally and from this single source. It reads
+        # exactly like an empty store: readers resolve only `<key_id>.pub.pem`. Before
+        # 2026-09-30 the claude/goose adapters emitted it only inside their sandbox branches
+        # (goose only on darwin), which left a confined goose team on Linux, and a cooperative
+        # claude team beside any confined team, refused by the launcher.
         from agentteams.frameworks._sandbox_emit import (
             TEAM_KEY_BY_FRAMEWORK,
             VERIFY_KEY_STORE_SENTINEL_REL,
@@ -215,7 +217,7 @@ class FrameworkAdapter(ABC):
         )
 
         fid = self.framework_id
-        if TEAM_KEY_BY_FRAMEWORK.get(fid) in ("copilot", "codex") and stubs_enabled(fid, manifest):
+        if fid in TEAM_KEY_BY_FRAMEWORK:
             files.append((VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT))
         return files
 

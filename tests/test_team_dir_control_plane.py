@@ -184,8 +184,9 @@ def _generate(project: Path, framework: str, out: str, monkeypatch, *, profile: 
         brief["privilege_profile"] = profile
     path = project / f"brief-{framework}.json"
     path.write_text(json.dumps(brief), encoding="utf-8")
+    offline = [] if framework == "goose" else ["--security-offline"]  # goose refuses offline intel
     rc = build_team.main(["--description", str(path), "--framework", framework,
-                          "--output", str(project / out), "--yes", "--no-scan", "--security-offline"])
+                          "--output", str(project / out), "--yes", "--no-scan", *offline])
     assert rc == 0
 
 
@@ -214,6 +215,106 @@ def test_generation_emits_present_siblings_stubs_and_sentinel_and_never_persists
         r = subprocess.run(["bash", str(LAUNCHER), "--scratch", str(p), "--check", "--", "true"],
                            capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
+
+
+_TEAM_OUT = {"claude": ".claude/agents", "goose": ".goose/recipes",
+             "copilot-vscode": ".github/agents", "codex": ".codex/agents"}
+
+
+def _launcher_check(project: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(["bash", str(LAUNCHER), "--scratch", str(project), "--check", "--", "true"],
+                          capture_output=True, text=True)
+
+
+@_linux_bwrap
+@pytest.mark.parametrize("profile", ["confined", "cooperative"])
+@pytest.mark.parametrize("framework", sorted(_TEAM_OUT))
+def test_every_generated_team_passes_the_launcher_check(tmp_path, monkeypatch, framework, profile):
+    """Follow-up #1 (2026-09-30): a freshly generated team of any framework and profile must not
+    brick the launcher (confined goose on Linux and cooperative claude used to: no store sentinel)."""
+    p = (tmp_path / "proj").resolve()
+    (p / ".github" / "workflows").mkdir(parents=True)
+    _generate(p, framework, _TEAM_OUT[framework], monkeypatch, profile=profile)
+    r = _launcher_check(p)
+    assert r.returncode == 0, r.stderr
+
+
+@_linux_bwrap
+def test_mixed_confined_goose_and_cooperative_claude_pass_the_launcher_check(tmp_path, monkeypatch):
+    p = (tmp_path / "proj").resolve()
+    (p / ".github" / "workflows").mkdir(parents=True)
+    _generate(p, "goose", ".goose/recipes", monkeypatch, profile="confined")
+    _generate(p, "claude", ".claude/agents", monkeypatch, profile="cooperative")
+    r = _launcher_check(p)
+    assert r.returncode == 0, r.stderr
+    # Fail closed is kept: a team whose sentinel is deleted is refused, with the regenerate hint.
+    (p / ".claude/agents" / VERIFY_KEY_STORE_SENTINEL_REL).unlink()
+    (p / ".claude/agents" / VERIFY_KEY_STORE_SENTINEL_REL).parent.rmdir()
+    r = _launcher_check(p)
+    assert r.returncode == 2 and "agentteams --update" in r.stderr, r.stderr
+
+
+@_linux_bwrap
+def test_multi_sync_cooperative_projection_keeps_the_launcher_working(tmp_path, monkeypatch):
+    """An agentteams team (marker present) projected by multi_sync without confining privilege
+    still gets its store sentinel (write-if-absent), so a confined sibling's launcher accepts it."""
+    from agentteams import multi_sync
+
+    p = (tmp_path / "proj").resolve()
+    (p / ".github" / "workflows").mkdir(parents=True)
+    _generate(p, "codex", ".codex/agents", monkeypatch, profile="confined")
+    _generate(p, "copilot-vscode", ".github/agents", monkeypatch, profile="cooperative")
+    agents = p / ".github" / "agents"
+    store = (agents / VERIFY_KEY_STORE_SENTINEL_REL).parent
+    shutil.rmtree(store)  # as left by an agentteams that predates the unconditional sentinel
+    assert _launcher_check(p).returncode == 2
+    written = multi_sync._emit_privilege_artifacts(p, "copilot-vscode", {"privilege_profile": "cooperative"},
+                                                   dry_run=False)
+    assert written == [str((agents / VERIFY_KEY_STORE_SENTINEL_REL).resolve())]
+    r = _launcher_check(p)
+    assert r.returncode == 0, r.stderr
+    # write-if-absent: an existing store README is never overwritten
+    (agents / VERIFY_KEY_STORE_SENTINEL_REL).write_text("operator text", encoding="utf-8")
+    assert multi_sync._emit_privilege_artifacts(p, "copilot-vscode", None, dry_run=False) == []
+    assert (agents / VERIFY_KEY_STORE_SENTINEL_REL).read_text() == "operator text"
+
+
+def _cooperative_team_without_store(p: Path) -> Path:
+    agents = p / ".github" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "references" / "build-log.json").write_text("{}", encoding="utf-8")
+    return agents
+
+
+def test_multi_sync_sentinel_write_refuses_a_symlinked_store_parent(tmp_path):
+    from agentteams import multi_sync
+
+    agents = _cooperative_team_without_store(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (agents / "references" / "authorized-verify-keys").symlink_to(outside)
+    assert multi_sync._emit_privilege_artifacts(tmp_path, "copilot-vscode", None, dry_run=False) == []
+    assert not any(outside.iterdir())
+
+
+def test_multi_sync_sentinel_write_never_follows_a_dangling_symlink(tmp_path):
+    from agentteams import multi_sync
+
+    agents = _cooperative_team_without_store(tmp_path)
+    store = agents / "references" / "authorized-verify-keys"
+    store.mkdir()
+    target = tmp_path / "victim.txt"
+    (store / "README.md").symlink_to(target)
+    assert multi_sync._emit_privilege_artifacts(tmp_path, "copilot-vscode", None, dry_run=False) == []
+    assert not target.exists()
+
+
+def test_multi_sync_sentinel_write_skips_non_agentteams_dirs(tmp_path):
+    from agentteams import multi_sync
+
+    (tmp_path / ".github" / "agents").mkdir(parents=True)  # hand-written: no build-log marker
+    assert multi_sync._emit_privilege_artifacts(tmp_path, "copilot-vscode", None, dry_run=False) == []
+    assert not (tmp_path / ".github" / "agents" / "references").exists()
 
 
 # --- T2: permissions.deny ------------------------------------------------------------------------
@@ -245,10 +346,10 @@ def test_sentinel_and_stub_predicate_matrix(monkeypatch, plat, profile, framewor
         m["enforce_decision_signing"] = True
     rels = [rel for rel, _ in FRAMEWORKS[framework]().extra_output_files(m)]
     assert len(rels) == len(set(rels)), rels
-    if framework in ("copilot-vscode", "copilot-cli", "codex"):
-        expected = switch or profile != "cooperative"
-        assert cpio.stubs_enabled(framework, m) is expected
-        assert (VERIFY_KEY_STORE_SENTINEL_REL in rels) is expected
+    if framework in ("claude", "goose", "copilot-vscode", "copilot-cli", "codex"):
+        # 2026-09-30: one predicate for every team framework; the sentinel is unconditional.
+        assert cpio.stubs_enabled(framework, m) is (switch or profile != "cooperative")
+        assert VERIFY_KEY_STORE_SENTINEL_REL in rels
 
 
 @pytest.mark.parametrize("framework", sorted(FRAMEWORKS))

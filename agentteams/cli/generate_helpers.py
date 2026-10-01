@@ -96,7 +96,7 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
         manifest: The team manifest (``framework``, ``host_features``).
         output_dir: The team's agents dir.
     """
-    from agentteams.control_plane_io import stubs_enabled
+    from agentteams.frameworks._linux_sandbox_emit import _sandbox_confinement_requested
     from agentteams.frameworks._sandbox_emit import (
         _AGENT_PRIVILEGE_SWITCH,
         governed_roster_paths,
@@ -104,7 +104,9 @@ def _warn_sandbox_deny_path_mismatch(manifest: dict, output_dir: Path) -> None:
     )
 
     framework = manifest.get("framework") or ""
-    if framework not in _AGENT_PRIVILEGE_SWITCH or not stubs_enabled(framework, manifest):
+    # Gate on a REAL sandbox request: the stub predicate is now true for every team that carries
+    # the switch, and a cooperative team must not be told a sandbox protects these paths.
+    if framework not in _AGENT_PRIVILEGE_SWITCH or not _sandbox_confinement_requested(manifest):
         return
     sub = tuple(Path(_AGENT_PRIVILEGE_SWITCH[framework]).parts[:2])  # e.g. (".claude", "agents")
     if tuple(output_dir.parts[-2:]) == sub:

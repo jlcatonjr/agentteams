@@ -423,8 +423,9 @@ _DEFAULT_PROTECTED_READ_PATHS: tuple[str, ...] = (
 #:   ``references/``. Unprotected, an agent could plant its own public key and self-sign a
 #:   relaxing authorization (2026-09-30). Its path is DERIVED from the switch path (one
 #:   per-framework agents-dir mapping, no second copy). A missing deny path stops bwrap
-#:   initializing, so the store must exist whenever this deny is emitted: the adapters emit
-#:   :data:`VERIFY_KEY_STORE_SENTINEL_REL` from the SAME branch that emits the deny.
+#:   initializing, so the store must exist whenever this deny is emitted: ``base.py`` emits
+#:   :data:`VERIFY_KEY_STORE_SENTINEL_REL` for EVERY team framework, unconditionally (2026-09-30;
+#:   supersedes the earlier same-branch rule, which left confined goose on Linux without it).
 #:   HONEST LIMITS: this closes the key-PLANTING route via Bash only; the built-in Write/Edit
 #:   tools ignore ``denyWrite`` and are bound by :func:`permission_deny_rules` instead. The
 #:   private key FILE is read-denied separately (:data:`SIGNING_KEY_DIR`, F-1). Claude Code's
