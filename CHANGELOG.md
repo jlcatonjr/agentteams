@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (the operator signing path is integrity-pinned)
+
+- `--sign-decision` and `--sign-grant` read the operator's Ed25519 private key and built, showed
+  and signed the payload in UNPINNED modules (`commands.py`, `grant_commands.py`); only the
+  crypto and ledger code was pinned. All of it now lives in the new pinned
+  `agentteams/cli/operator_signing.py`, and both runners are one-line delegators. Operator output
+  is unchanged, as the characterization tests confirm.
+- **Pre-sign self-check.** Before the key is read, the signing closure is verified against the
+  integrity manifest. Drift there, a missing manifest or an unreadable one REFUSES. Drift
+  elsewhere, a closure that differs from git `HEAD` or the latest release tag, and signing from a
+  checkout inside a git work tree all WARN. There is no environment override. The tag comparison
+  uses the nearest LOCAL tag, which is unverified (an agent that can commit can also tag). Git is
+  never run through a content filter: `git diff` would execute a planted `.gitattributes` clean filter
+  as the operator, outside the sandbox. Directory resolution happens before the key is read, and
+  `atomicio.py` is now pinned as part of the signing closure.
+- **What this does and does not cover.** It closes in-place edits to the signing code and
+  unnoticed drift. It does NOT defend against unpinned code in the same process (the CLI dispatch
+  chain, `.pth` files), and the pre-sign display is a record, not a gate. Sign from a pinned
+  install outside every agent write root. An interactive confirm before signing is logged as a
+  follow-up.
+- `max_uses: null` in a grant spec now produces a clean error instead of a `TypeError` traceback.
+
 ### security (the `.github/agents` and `.codex/agents` team-dir control planes)
 
 - The copilot team dir (`.github/agents`, shared by copilot-vscode and copilot-cli) and the codex

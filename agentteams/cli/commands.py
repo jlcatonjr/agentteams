@@ -16,6 +16,7 @@ from pathlib import Path
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 from agentteams.capability_hints import agentteams_install_command
 from agentteams.cli import security_gate
+from agentteams.cli import operator_signing  # pinned signing path (pin-signing-cli-modules)
 from agentteams.frameworks.registry import FRAMEWORKS
 from agentteams.cli.commands_output import _resolve_output_dir  # CH-07 carve; re-exported
 
@@ -1075,32 +1076,12 @@ def _run_list_exceptions(args: argparse.Namespace) -> int:
     return 0
 
 
-def _sign_decision_team_refusal(output_dir: Path) -> str | None:
-    """F-2: return why ``output_dir`` is not a team root ``--sign-decision`` may append to, or None.
-
-    The gate reads the decisions log and the verify-key store relative to the TEAM dir, so a row
-    minted anywhere else (``--project .``, a bare CWD) was a silent no-op the gate never read. A
-    team is detected by ``references/agent-privilege.json`` OR ``references/build-log.json``.
-    """
-    refs = output_dir / "references"
-    if (refs / "agent-privilege.json").is_file() or (refs / "build-log.json").is_file():
-        return None
-    return (f"{output_dir} is not an agentteams team dir (no references/agent-privilege.json or "
-            "references/build-log.json). The gate reads the decisions log and the verify-key store "
-            "relative to the team dir; pass --output <project>/.claude/agents (or the team's agents "
-            "dir). Refusing to sign (fail-closed).")
-
-
 def _run_sign_decision(args: argparse.Namespace) -> int:
     """``--sign-decision``: operator-only Ed25519 minter for a constraint-relaxing decision row.
 
-    Reads a JSON spec (the decision fields + effect_* + derives_from + key_id), loads the operator
-    private key from the file named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE``, refuses a
-    categorically non-eligible row, prints the row's derived material effect for a deliberate
-    second look, signs the canonical payload with Ed25519, and appends the signed row. It is the
-    only minter of Ed25519 relaxing rows. Every emitted sandbox read-denies the key FILE when it
-    sits in ``~/.config/agentteams/keys`` (a key elsewhere, symlinked, or wider than 600 draws a
-    warning but still signs); an inherited environment variable is not denied.
+    A one-line delegator: everything that touches the operator key or the signed payload lives
+    in the integrity-pinned :func:`agentteams.cli.operator_signing.sign_decision`
+    (pin-signing-cli-modules). This runner only chooses the team dir and the spec path.
 
     Args:
         args: Parsed CLI namespace (``sign_decision`` is the spec path).
@@ -1108,100 +1089,4 @@ def _run_sign_decision(args: argparse.Namespace) -> int:
     Returns:
         0 on success, 1 on any error (fail-closed).
     """
-    import json
-    import os
-
-    from agentteams.cli import decision_log as dl
-    from agentteams.cli import effect_classifier as ec
-    from agentteams.cli import signed_ledger as sl
-
-    output_dir = _resolve_output_dir(args)
-    refusal = _sign_decision_team_refusal(output_dir)
-    if refusal:
-        print(f"Error: {refusal}", file=sys.stderr)
-        return 1
-    try:
-        spec = json.loads(Path(args.sign_decision).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"Error: cannot read --sign-decision spec: {exc}", file=sys.stderr)
-        return 1
-    if not isinstance(spec, dict) or not (spec.get("action_reviewed") or "").strip():
-        print("Error: spec must be a JSON object with a non-empty action_reviewed", file=sys.stderr)
-        return 1
-
-    keyfile = os.getenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", "")
-    if not keyfile:
-        print(
-            "Error: AGENTTEAMS_DECISION_ED25519_KEYFILE is not set — it must name the operator "
-            "private key file (never an agent env). Refusing to sign (fail-closed).",
-            file=sys.stderr,
-        )
-        return 1
-    from agentteams.frameworks._sandbox_emit import signing_keyfile_warnings
-
-    for warning in signing_keyfile_warnings(keyfile):
-        print(f"Warning: {warning}", file=sys.stderr)
-    try:
-        private_pem = Path(keyfile).read_text(encoding="utf-8")
-    except OSError as exc:
-        print(f"Error: cannot read operator private key file: {exc}", file=sys.stderr)
-        return 1
-
-    row = {k: str(v) for k, v in spec.items()}
-    row["sig_scheme"] = sl.SIG_SCHEME_ED25519
-    row.setdefault("verdict", "PASS")
-
-    # Classify the row up front. derive_effect_class / requires_operator_signature raise
-    # EffectClassifierError on a dangerous self-declared effect_class divergence — catch it here so
-    # a malformed spec fails closed with a clear message rather than an unhandled traceback.
-    # (non_eligibility_reason does not raise; it is grouped here only so all classifier calls that
-    # can fail share one guard.)
-    try:
-        reason = ec.non_eligibility_reason(row, kind="decision")
-        derived_class = ec.derive_effect_class(row, kind="decision")
-        needs_operator = ec.requires_operator_signature(row, kind="decision")
-    except ec.EffectClassifierError as exc:
-        print(f"Error: inconsistent effect declaration: {exc}", file=sys.stderr)
-        return 1
-    if reason is not None:
-        print(f"Error: this decision is categorically NON-ELIGIBLE: it {reason}.", file=sys.stderr)
-        return 1
-
-    # MAJOR-4: show the full derived material effect, not just a class label, before writing.
-    profile = ec.effect_profile_from_row(row)
-    print("About to sign a constraint-relaxing security decision:")
-    print(f"  action_reviewed : {row.get('action_reviewed')}")
-    print(f"  verdict         : {row.get('verdict')}")
-    print(f"  derived class   : {derived_class}")
-    print(f"  needs operator  : {needs_operator}")
-    print(f"  grants          : {list(profile.grants_capabilities)}")
-    print(f"  write targets   : {list(profile.write_targets)}")
-    print(f"  relaxes         : {list(profile.relaxes)}")
-    print(f"  destructive/xrepo/bulk: {profile.destructive}/{profile.cross_repo}/{profile.bulk}")
-    print(f"  derives_from    : {row.get('derives_from', '')}")
-    print(f"  key_id          : {row.get('key_id', '')}")
-
-    from agentteams.cli.grants import payload_claims_grant_purpose
-
-    if payload_claims_grant_purpose(dl._decision_signature_values(row)):
-        # PR-E domain separation: never sign a decision payload that is also a grant payload.
-        print("Error: refusing to sign — this decision's payload begins with the capability-"
-              "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
-        return 1
-    try:
-        values = dl._decision_signature_values(row)
-        row["signature"] = sl.ed25519_sign(private_pem, values)
-        # F-2 verify-before-append: the key the GATE will load (this team's store, by key_id)
-        # must verify the new signature, or the row is refused now rather than at gate time.
-        public_pem = dl._load_verify_key(output_dir, row.get("key_id", ""))
-        if not sl.ed25519_verify(public_pem, values, row["signature"]):
-            raise RuntimeError(
-                f"the signature does not verify against {dl._VERIFY_KEY_STORE_REL}/"
-                f"{row.get('key_id', '')}.pub.pem in {output_dir} (a private/public key mismatch, "
-                "or the public key was provisioned into another team dir). Nothing appended.")
-        dl.append_signed_decision_row(output_dir, row)
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-    print(f"\nSigned decision appended to {output_dir / 'references' / 'security-decisions.log.csv'}")
-    return 0
+    return operator_signing.sign_decision(_resolve_output_dir(args), args.sign_decision)
