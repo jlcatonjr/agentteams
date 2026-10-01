@@ -1080,7 +1080,8 @@ class TestGooseAdapter:
         instr = self.adapter.finalize_output_path("../copilot-instructions.md", "instructions")
         assert (agents_dir / instr).resolve() == Path("/project/AGENTS.md")
 
-        hints_path, _ = self.adapter.extra_output_files(GOOSE_MANIFEST)[0]
+        rels = [rel for rel, _ in self.adapter.extra_output_files(GOOSE_MANIFEST)]
+        hints_path = next(rel for rel in rels if rel.endswith(".goosehints"))
         assert (agents_dir / hints_path).resolve() == Path("/project/.goosehints")
 
 
