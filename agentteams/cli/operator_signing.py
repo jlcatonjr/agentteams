@@ -58,8 +58,9 @@ _REFUSE_REASONS = frozenset({"manifest-missing", "unreadable"})
 
 _TRUSTED_INSTALL_HINT = (
     "sign from a pinned install outside every agent write root (a release-tag pin of the git "
-    'source, e.g. pipx install "agentteams[signing] @ '
-    'git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first'
+    "source, e.g. "
+    'pipx install "agentteams[signing] @ git+https://github.com/jlcatonjr/agentteams.git@v<tag>"'
+    ") and run --verify-integrity first"
 )
 _TRUSTED_INSTALL_WARNING = (
     "the integrity check catches in-place edits to the signing code, not unpinned code running in "
