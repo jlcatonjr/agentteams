@@ -675,6 +675,18 @@ def test_check_wiring_dispatch_returns_nonzero_when_unmerged(tmp_path):
     assert rc == 1
 
 
+@pytest.mark.parametrize("merged,expected", [(False, 1), (True, 0)])
+def test_check_wiring_dispatch_maps_the_default_agents_dir_to_the_project(tmp_path, merged, expected):
+    """Regression (check-wiring-passes-agents-dir): --output is <project>/.claude/agents in real use."""
+    from agentteams.cli.standalone_modes import run_standalone_modes
+    block = _sandbox()
+    _write_claude(tmp_path, example={"sandbox": block}, live={"sandbox": dict(block)} if merged else None)
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True, exist_ok=True)
+    rc = run_standalone_modes(_wiring_args(), {"framework": "claude"}, {}, agents, agents)
+    assert rc == expected
+
+
 def test_check_wiring_dispatch_returns_zero_when_merged(tmp_path):
     from agentteams.cli.standalone_modes import run_standalone_modes
     block = _sandbox()

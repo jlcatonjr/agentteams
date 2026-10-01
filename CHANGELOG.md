@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (`--check-wiring` never ran for the default layout)
+
+- `--check-wiring` passed the team's agents dir (`<project>/.claude/agents`) to verifiers that read
+  `<project>/.claude/...`. With the default `--output`, every run reported "no emitted settings example found —
+  nothing to verify" and exited 0, so an unmerged or fail-open sandbox was never flagged. A default agents dir
+  (`.claude/agents`, `.goose/recipes`) is now mapped back to its project root. A regression test uses the real
+  layout. Found while verifying mathAgents' newly merged sandbox.
+
 ### docs (rc8 consistency)
 
 - Superseded statements in the rc.8 notes, `docs_src/api-reference/cli.md` (signing gate, `signer_location.py`
