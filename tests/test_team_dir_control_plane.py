@@ -537,7 +537,8 @@ def test_goose_output_threads_copilot_presence(monkeypatch):
 def _live(p: Path, deny: list[str]) -> None:
     (p / ".claude").mkdir(parents=True, exist_ok=True)
     (p / ".claude" / "settings.json").write_text(json.dumps(
-        {"sandbox": {"enabled": True, "filesystem": {"allowWrite": ["."], "denyWrite": deny}}}))
+        {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                     "filesystem": {"allowWrite": ["."], "denyWrite": deny}}}))
 
 
 def test_stale_deny_advisory_names_each_missing_entry(tmp_path, capsys):

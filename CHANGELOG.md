@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.8] - 2026-10-01
+
+### release notes (rc8)
+
+- `--update`, `--dry-run` and `--check` now print the fail-open notice: a merged Claude sandbox without
+  `failIfUnavailable`. Before this it printed on real writes only. A new advisory names a confined or exclusive
+  Claude team with **no enabled sandbox merged** in `.claude/settings.json`, because that team runs unconfined.
+  Both are read-only.
+- Install hints now pin `v1.0.0-rc.8`, which is derived from the package version. The tag is SSH-signed by the
+  operator; see `SECURITY.md`, "Signing from a trusted install".
+
 ### feat (opt-in prompt-root prevention: follow-up #8 phase 2)
 
 - **New brief field `protect_prompt_roots` (boolean, default false).** It is copied into the manifest

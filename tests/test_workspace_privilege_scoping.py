@@ -1229,10 +1229,10 @@ def test_live_sandbox_without_fail_if_unavailable_gets_an_update_notice(tmp_path
     monkeypatch.setattr(sys, "platform", "win32")  # advisory-only block there: no notice
     assert _warn_live_sandbox_fails_open(m, agents) is False
 
-    # Wired into the generate/update path via _emit_agent_privilege_config.
+    # rc8: wired into the every-run hook (generate/--update/--dry-run/--check), not the write path;
+    # the path is printed project-relative (no absolute home path).
     monkeypatch.setattr(sys, "platform", "linux")
     capsys.readouterr()
-    generate_helpers._emit_agent_privilege_config(
-        {"framework": "claude", "enforce_decision_signing": False}, agents
-    )
-    assert "FAILS OPEN" in capsys.readouterr().err
+    generate_helpers._apply_sibling_team_denies({"framework": "claude"}, tmp_path, agents)
+    err = capsys.readouterr().err
+    assert "FAILS OPEN" in err and str(tmp_path) not in err
