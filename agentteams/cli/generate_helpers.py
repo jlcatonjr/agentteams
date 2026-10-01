@@ -364,6 +364,37 @@ def _advise_protect_prompt_roots(manifest: dict, project_root: Path, present: tu
     return True
 
 
+def _advise_codex_projection_outside_session(
+    manifest: dict, project_root: Path, present: tuple[str, ...]
+) -> bool:
+    """Cond 14: once an interop ``.codex`` team is present, the Claude block denies ``.codex`` whole.
+
+    Args:
+        manifest: The team manifest.
+        project_root: The project root.
+        present: :func:`present_sibling_deny_dirs` of ``project_root``.
+
+    Returns:
+        Whether the advisory was printed (a Claude sandbox is on and ``.codex/agents`` carries an
+        ``origin: "interop"`` marker).
+    """
+    from agentteams.frameworks._sandbox_emit import _sandbox_feature_enabled
+    from agentteams.projection_marker import (
+        INTEROP_ORIGIN,
+        codex_session_advisory,
+        existing_marker_origin,
+    )
+
+    if ".codex" not in present:
+        return False
+    sandbox_on = (manifest.get("framework") == "claude" and _sandbox_feature_enabled(manifest)) or (
+        _live_claude_sandbox(project_root) is not None)
+    if not sandbox_on or existing_marker_origin(project_root / ".codex" / "agents") != INTEROP_ORIGIN:
+        return False
+    print(f"  ·  Advisory: {codex_session_advisory(project_root)}", file=sys.stderr)
+    return True
+
+
 def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: Path) -> tuple[str, ...]:
     """Compute the present sibling team dirs onto the manifest (transient) and print the advisories.
 
@@ -409,6 +440,7 @@ def _apply_sibling_team_denies(manifest: dict, project_root: Path, output_dir: P
     _warn_claude_team_unsandboxed(manifest, output_dir)
     _warn_sibling_teams_under_claude_sandbox(manifest, project_root, output_dir, present)
     _advise_protect_prompt_roots(manifest, project_root, present)
+    _advise_codex_projection_outside_session(manifest, project_root, present)
     from agentteams.team_dir_advisories import print_team_dir_advisories
 
     print_team_dir_advisories(project_root)  # #11: planted markers, Codex config keys (detection)
@@ -758,7 +790,8 @@ def _handle_check(
     sdreport = None
     try:
         old_log = drift.load_build_log(output_dir)
-        sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
+        if not drift.is_interop_marker(old_log):  # a projection marker is no native baseline
+            sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)
     except FileNotFoundError:
         sdreport = None  # no build-log — structural diff not available
 
@@ -823,7 +856,8 @@ def _handle_check(
             or non_exempt_drift
             or sdreport.team_membership_changed
         )
-    has_any = dreport.has_drift or structural_fail
+    # An interop marker is "unverifiable", never clean (cond 13): --check fails on it.
+    has_any = dreport.has_drift or structural_fail or dreport.unverifiable is not None
     # R5 (D5): fail --check when an enforcement module drifts from — or is absent from —
     # the integrity manifest. This is the CI/pre-commit fail-closed boundary for the
     # "edited an enforcement module without regenerating the manifest" trap; an

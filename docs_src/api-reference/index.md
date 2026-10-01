@@ -83,6 +83,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`plan_steps_todo`](plan-steps-todo.md) | TodoWrite projection of plan `.steps.csv` (CSV is canonical; TodoWrite is the projection) |
 | [`liaison_logs`](liaison-logs.md) | Cross-repository coordination logs and artifacts |
 | [`control_plane_io`](control-plane-io.md) | Write-if-absent sandbox roster stubs and the in-sandbox write preflight |
+| [`projection_marker`](projection-marker.md) | The `origin: "interop"` team marker an interop / multi_sync projection writes, control plane first |
 | [`team_dir_advisories`](team-dir-advisories.md) | Generation-time advisories for planted team markers and planted Codex config keys (detection only) |
 | [`prompt_roots`](prompt-roots.md) | Prompt-root change detection: per-fence hashes in the build-log, `PROMPT-ROOT CHANGED` warning, `--strict-prompt-roots` (detection only) |
 | [`parallel_plan`](parallel-plan.md) | Parallelisation analysis over a plan's `depends_on` column |

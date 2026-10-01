@@ -369,6 +369,7 @@ def _run_generate_inner(
             old_log = drift.load_build_log(output_dir)
         except FileNotFoundError:
             old_log = {}
+        old_log = drift.native_baseline(old_log, output_dir)  # cond 13: a projection marker is none
 
         # Compute structural diff: additions, removals, drifted, unchanged
         sdreport = drift.compute_structural_diff(old_log, manifest, TEMPLATES_DIR)

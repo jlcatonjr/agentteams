@@ -538,11 +538,34 @@ def _project_and_rebaseline(
         # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege
         # block so a confined/exclusive pinned-sync team stays confined after projection.
         _emit_privilege_artifacts(root, fw, privilege, dry_run=dry_run)
+        if not dry_run:
+            _mark_projected_team(agents_dir, fw, canonical_dir, canonical_cai, res.converted, notices)
         projected.append(fw)
         if not dry_run:
             native_cai = export_to_cai(agents_dir, fw)
             write_baseline(canonical_dir, fw, native_cai, native_source_dir=str(agents_dir))
     return projected
+
+
+def _mark_projected_team(
+    agents_dir: Path, framework: str, canonical_dir: Path, canonical_cai: dict[str, Any],
+    converted: list[str], notices: list[str] | None,
+) -> None:
+    """Write the projection's ``origin: "interop"`` team marker, control plane first.
+
+    ``projection_marker.write_projection_marker`` never overwrites a native build-log and writes
+    no marker when a control-plane write fails (the error is printed and added to *notices*).
+    """
+    from agentteams.projection_marker import print_marker_outcome, write_projection_marker
+
+    outcome = write_projection_marker(
+        agents_dir, framework, source_dir=canonical_dir, source_framework="canonical",
+        files_written=list(converted),
+        agent_slugs=[str(a.get("slug")) for a in canonical_cai.get("agents", []) if a.get("slug")],
+    )
+    print_marker_outcome(outcome, label=f"[{framework}] ")
+    if outcome.error and notices is not None:
+        notices.append(f"[{framework}] {outcome.error}; NO team marker was written")
 
 
 def _backup_before_projection(agents_dir: Path, framework: str) -> None:

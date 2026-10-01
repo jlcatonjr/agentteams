@@ -19,6 +19,7 @@ from typing import Any
 from agentteams import capability_map as _capability_map
 from agentteams.frameworks.base import FrameworkAdapter as _FrameworkAdapter
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
+from agentteams.projection_marker import mark_interop_projection, write_projection_marker  # noqa: F401
 from agentteams.yaml_frontmatter import (
     parse_yaml_front_matter as _parse_yaml_front_matter,
 )
@@ -43,6 +44,8 @@ class InteropResult:
     bundle_files: list[str] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
     dry_run: bool = False
+    #: The ``origin: "interop"`` team marker and the control-plane files written before it.
+    marker_files: list[str] = field(default_factory=list)
 
     @property
     def success(self) -> bool:
@@ -768,8 +771,11 @@ def run_interop(
         overwrite: Replace existing target files.
         skills_only: Import only the source team's skills (see :func:`import_from_cai`).
 
+    A real, error-free, non-skills-only run then writes the team marker, control plane first
+    (``projection_marker.mark_interop_projection``); a refused marker is an error.
+
     Returns:
-        The :class:`InteropResult`.
+        The :class:`InteropResult` (``marker_files`` lists the marker and the files before it).
 
     Raises:
         ValueError: For an invalid mode, ``skills_only`` with ``bundle`` mode, or any
@@ -809,6 +815,8 @@ def run_interop(
             result=result,
         )
 
+    if not (dry_run or skills_only) and result.success:  # the team marker, control plane first
+        mark_interop_projection(result, cai, source_dir, target_framework, target_dir)
     return result
 
 

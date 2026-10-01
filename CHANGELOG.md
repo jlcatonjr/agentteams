@@ -6,6 +6,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (interop-projected Codex teams were invisible: no team marker)
+
+- No interop path wrote `references/build-log.json`, the agentteams team marker. So a `.codex/agents` team
+  written by `agentteams --interop-from … --framework codex` or by a `multi_sync` projection (researchteam,
+  mathAgents, baseAgent) went unseen. Fleet, the freshness scan, `--check`, the Claude block's present-sibling
+  denies and the `confine-run.sh` required-entry check all skipped it. The new `projection_marker` module fixes
+  this.
+- **Write order.** A real run of either path into codex, copilot or goose now writes the team's control plane
+  first, then an `origin: "interop"` marker with empty `template_hashes`. A dry run or a skills-only run writes
+  nothing.
+  - The control plane is the switch, the verify-key store sentinel and the roster stubs. Each is
+    write-if-absent and never follows a symlink. The switch mirrors the source team's.
+  - Claude is excluded, because a marker there makes the launcher require the gate hook.
+- **Failure handling.**
+  - The marker never overwrites a native build-log.
+  - A failed control-plane write writes no marker and reports an error.
+  - A symlinked agents dir, `references/` or marker is refused.
+- **The marker authorises nothing.**
+  - `--check`, `drift` and `--framework-freshness` report `unverifiable (interop projection: no template
+    hashes)`. `--check` fails on it, and the render is never the freshest or "current".
+  - `--update` treats the marker as no prior build.
+  - The merge's "unmodified since build" set ignores it.
+  - The foreign-output check does not count it.
+- **Recognition.**
+  - `--fleet-frameworks all` discovers `.codex/agents` teams. An interop team gets a SKIP row with its
+    refresh command; a native one gets `--update --merge --framework codex`.
+  - `bridge.native_team_notice` knows codex.
+  - The launcher's missing-entry message names the interop re-run (`confine-run.sh` and the integrity
+    manifest are re-pinned).
+- **Advisory.** Once `.codex` is a team, the Claude block write-denies it whole, so an interop into it from
+  in-session Bash fails. The interop run and generation now print an advisory to run the projection outside
+  any Claude session.
+
 ### fix (`--check-wiring` never ran for the default layout)
 
 - `--check-wiring` passed the team's agents dir (`<project>/.claude/agents`) to verifiers that read

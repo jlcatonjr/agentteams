@@ -50,7 +50,7 @@ _FLEET_OUTPUT_DIR_NAME = ".agentteams-fleet"
 # artifact would be mis-discovered as its own workspace).
 _PRUNE_DIRS = {
     "node_modules", ".git", _BACKUP_DIR_NAME, "__pycache__", ".venv", "venv",
-    ".github", ".claude", ".goose", "tmp",
+    ".github", ".claude", ".goose", ".codex", "tmp",
     # The fleet's OWN output/backup tree. The default --fleet-report root is
     # ``<parent>/.agentteams-fleet/`` (see run_fleet), which holds per-run reports
     # AND operator backup snapshots (e.g. manual-backup-*/). Walking it would
@@ -195,6 +195,7 @@ def _agent_paths(ws: Path) -> list[str]:
         "CLAUDE.md",
         ".goose/recipes",
         ".goosehints",
+        ".codex/agents",
         "AGENTS.md",
     ):
         if (ws / rel).exists():
@@ -332,6 +333,36 @@ def _goose_kind(ws: Path) -> str:
     return "none"
 
 
+_CODEX_MARKER = Path(".codex") / "agents" / "references" / "build-log.json"
+
+
+def _codex_kind(ws: Path) -> str:
+    """Classify a ``.codex/agents`` team by its marker: 'interop', 'direct', or 'none'.
+
+    Only an agentteams team (a regular, non-symlink ``references/build-log.json``) counts. A
+    marker with ``origin: "interop"`` (``projection_marker``) is a projection, refreshed by
+    re-running the interop, never by a native ``--update`` (unparseable = 'direct').
+    """
+    marker = ws / _CODEX_MARKER
+    if marker.is_symlink() or not marker.is_file():
+        return "none"
+    from agentteams.projection_marker import INTEROP_ORIGIN, existing_marker_origin
+
+    return "interop" if existing_marker_origin(marker.parent.parent) == INTEROP_ORIGIN else "direct"
+
+
+def _codex_interop_hint(ws: Path) -> str:
+    """The refresh command for an interop-projected Codex team (its marker names the source)."""
+    source = "<source agents dir>"
+    with contextlib.suppress(OSError, ValueError):
+        data = json.loads((ws / _CODEX_MARKER).read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("source_dir"), str) and data["source_dir"]:
+            source = data["source_dir"]
+    return (f"interop projection (origin: interop) — refresh by re-running it outside any agent "
+            f"sandbox: agentteams --interop-from {source} --framework codex --output . --overwrite "
+            "(fleet never runs --overwrite)")
+
+
 def discover_workspaces(
     parent: Path,
     frameworks: str = "both",
@@ -352,6 +383,7 @@ def discover_workspaces(
             gh = (dirpath / ".github" / "agents").is_dir()
             cl = (dirpath / ".claude").is_dir()
             gs = (dirpath / ".goose" / "recipes").is_dir()
+            cx = _codex_kind(dirpath) != "none"   # an agentteams .codex/agents team (marker)
         except (PermissionError, OSError):
             continue  # unreadable dir (e.g. mode 000) — skip, never fatal
         # Never treat a git LINKED worktree (or submodule) as its own workspace:
@@ -360,19 +392,19 @@ def discover_workspaces(
         # (2026-09-08 @security HALT, finding 4). The parent itself is exempt —
         # the operator pointed the run at it deliberately.
         if dirpath != parent and _is_linked_worktree(dirpath):
-            if (gh or cl or gs) and skipped_worktrees is not None:
+            if (gh or cl or gs or cx) and skipped_worktrees is not None:
                 skipped_worktrees.append(dirpath)  # record for a visible SKIP row
             continue
         if frameworks == "github":
-            cl = gs = False
+            cl = gs = cx = False
         elif frameworks == "claude":
-            gh = gs = False
+            gh = gs = cx = False
         elif frameworks == "goose":
-            gh = cl = False
+            gh = cl = cx = False
         elif frameworks == "both":   # legacy: copilot + claude only
-            gs = False
-        # "all" includes all three frameworks
-        if gh or cl or gs:
+            gs = cx = False
+        # "all" includes every framework (copilot, claude, goose and codex)
+        if gh or cl or gs or cx:
             found.add(dirpath)
     return sorted(found)
 
@@ -595,6 +627,18 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
         ]
         if descriptor.name == "brief.json":
             argv.append("--no-scan")
+    elif target == "codex-direct":
+        if descriptor is None:
+            return None
+        argv = [
+            "--description", str(descriptor),
+            "--output", str(ws),       # normalize_output_path appends .codex/agents
+            "--framework", "codex",
+            "--update", "--merge", "--yes",
+            "--shrink-policy", shrink_policy,
+        ]
+        if descriptor.name == "brief.json":
+            argv.append("--no-scan")
     elif target == "goose-bridge":
         argv = [
             "--bridge-from", str(ws / ".github" / "agents"),
@@ -632,6 +676,10 @@ def _plan_targets(ws: Path, frameworks: str) -> list[str]:
             targets.append("goose-bridge")
         elif kind == "direct":
             targets.append("goose-direct")
+    if frameworks == "all":
+        kind = _codex_kind(ws)
+        if kind != "none":
+            targets.append(f"codex-{kind}")
     return targets
 
 
@@ -699,6 +747,13 @@ def run_fleet(args, parser) -> int:
                     detail="ambiguous .claude (no bridge signal, no resolvable descriptor) — manual review",
                 ))
                 print("    claude: SKIP (ambiguous — manual review)")
+                continue
+
+            if target == "codex-interop":   # never a native --update over a projection
+                hint = _codex_interop_hint(ws)
+                wr.targets.append(TargetResult(workspace=str(ws), target="codex", status="SKIP",
+                                               detail=hint))
+                print(f"    codex: SKIP ({hint})")
                 continue
 
             argv = _target_argv(target, ws, descriptor, dry_run=not apply, shrink_policy=shrink_policy)

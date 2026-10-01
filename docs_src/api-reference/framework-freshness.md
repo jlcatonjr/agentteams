@@ -26,7 +26,8 @@ Freshness verdict for a single provider render directory.
 - `agentteams_version` (`str | None`) — Generator version the render recorded, or `None`.
 - `changed_templates` (`list[str]`) — Template paths whose content changed since this render's build-log baseline.
 - `missing_templates` (`list[str]`) — Templates recorded by the render but absent on disk now.
-- `unverifiable` (`bool`) — `True` when the build-log predates template-hash tracking, so drift cannot be computed.
+- `unverifiable` (`bool`) — `True` when the build-log predates template-hash tracking, or is an interop projection marker, so drift cannot be computed. An unverifiable render is never the `freshest` one, and `print_report` never calls it current.
+- `interop` (`bool`) — `True` when the build-log is an `origin: "interop"` projection marker ([`projection_marker`](projection-marker.md)). It is reported as `unverifiable (interop projection: no template hashes)`.
 
 **Properties:**
 

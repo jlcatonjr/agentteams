@@ -40,10 +40,10 @@ Each `(workspace, target)` row is one of:
 | `OK` | Merge succeeded; only fenced/generated regeneration and intel churn. |
 | `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. |
 | `FAIL` | The merge itself errored (e.g. invalid/absent descriptor, bridge source missing). |
-| `SKIP` | Ambiguous `.claude/` (no bridge signal and no resolvable descriptor) — left for manual review. |
+| `SKIP` | Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
 | `WOULD-UPDATE` | Dry-run preview only. |
 
-> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, or `"goose-bridge"`. A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified). Filter for these explicitly so manual-review rows are not dropped.
+> **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, `"goose-bridge"`, or `"codex-direct"` (a native `.codex/agents` team, `--update --merge --framework codex`, `all` only). A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified); an interop-projected Codex team's `SKIP` row carries `target = "codex"`. Filter for these explicitly so manual-review rows are not dropped.
 
 ### Safety guarantees
 
@@ -94,7 +94,7 @@ Aggregate result for one workspace.
 
 > *Source: `agentteams/fleet.py`*
 
-Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, `archive`, and the fleet's own `.agentteams-fleet` output/backup tree, never recurses into `.github`/`.claude` internals, and skips git linked worktrees (and submodules) — their agent infra is covered via the main working tree. If `skipped_worktrees` (a keyword-only `list[Path]`) is passed, each excluded linked worktree that carries agent infra is appended to it so the caller can surface the exclusion as a visible report row.
+Return the sorted list of workspace directories under `parent` (recursively) that contain `.github/agents/` and/or `.claude/` (and, for `goose`/`all`, a Goose-bridged workspace). `frameworks` (`"github"` | `"claude"` | `"goose"` | `"both"` | `"all"`) filters which infrastructure qualifies a directory: `"both"` is the legacy default (copilot + claude only); `"all"` adds Goose and Codex. A Codex team qualifies only with a regular, non-symlink `.codex/agents/references/build-log.json` marker, native or `origin: "interop"`. Prunes `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `.codex`, `tmp`, `.worktrees`, `archive`, and the fleet's own `.agentteams-fleet` output/backup tree, never recurses into `.github`/`.claude` internals, and skips git linked worktrees (and submodules) — their agent infra is covered via the main working tree. If `skipped_worktrees` (a keyword-only `list[Path]`) is passed, each excluded linked worktree that carries agent infra is appended to it so the caller can surface the exclusion as a visible report row.
 
 **Returns:** `list[Path]`
 

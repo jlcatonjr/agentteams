@@ -268,11 +268,13 @@ def test_interop_emits_toml_only_and_guards_shared_files(tmp_path: Path) -> None
     tomls = sorted(target.glob("*.toml"))
     assert [p.stem for p in tomls] == ["orchestrator", "security", "wasm-wat-expert"]
     # Zero writes outside .codex/agents: every pre-existing file is byte-identical and the
-    # only new files are the TOML agents.
+    # only new files are the TOML agents plus (2026-10-01) the team marker and the control plane
+    # it requires, all inside .codex/agents/references (projection_marker).
     for path, data in before.items():
         assert path.read_bytes() == data, f"{path} was modified"
     new = {p for p in tmp_path.rglob("*") if p.is_file()} - set(before)
-    assert new == set(tomls)
+    assert new == set(tomls) | {Path(p) for p in result.marker_files}
+    assert all(Path(p).is_relative_to(target / "references") for p in result.marker_files)
     assert not (tmp_path / ".agents").exists()
     assert any("AGENTS.md" in n for n in result.notices)
 

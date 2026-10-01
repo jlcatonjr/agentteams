@@ -23,6 +23,45 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+#: ``origin`` of a projection marker (``projection_marker.INTEROP_ORIGIN``): an interop /
+#: multi_sync projection's build-log, with EMPTY ``template_hashes``. It authorises nothing.
+INTEROP_ORIGIN = "interop"
+
+#: The explicit verdict every reader gives an interop marker instead of "current"/"clean".
+INTEROP_UNVERIFIABLE = "unverifiable (interop projection: no template hashes)"
+
+
+def is_interop_marker(build_log: Any) -> bool:
+    """Return True when ``build_log`` is an ``origin: "interop"`` projection marker.
+
+    Such a marker records what a projection wrote, never a template baseline, so it must not
+    yield a freshness/drift "current" verdict or authorise an overwrite (security cond 13).
+
+    Args:
+        build_log: A parsed build-log (any JSON value).
+
+    Returns:
+        True for a dict whose ``origin`` is :data:`INTEROP_ORIGIN`.
+    """
+    return isinstance(build_log, dict) and build_log.get("origin") == INTEROP_ORIGIN
+
+
+def native_baseline(build_log: dict[str, Any], agents_dir: Path) -> dict[str, Any]:
+    """Return ``build_log`` as an ``--update`` baseline: ``{}`` (with a notice) for an interop marker.
+
+    Args:
+        build_log: The loaded build-log (``{}`` when there is none).
+        agents_dir: The team's agents dir (named in the notice).
+
+    Returns:
+        ``build_log`` unchanged, or ``{}`` when it is an interop projection marker (cond 13).
+    """
+    if not is_interop_marker(build_log):
+        return build_log
+    print(f"  ·  {agents_dir}/references/build-log.json is an interop projection marker "
+          f"({INTEROP_UNVERIFIABLE}): treated as no prior build.")
+    return {}
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -36,6 +75,8 @@ class DriftReport:
         self.missing_templates: list[str] = []
         self.new_templates: list[str] = []
         self.unchanged: list[str] = []
+        #: Set (to :data:`INTEROP_UNVERIFIABLE`) when the build-log cannot be compared at all.
+        self.unverifiable: str | None = None
 
     @property
     def has_drift(self) -> bool:
@@ -134,6 +175,11 @@ def detect_drift(
     if build_log is None:
         build_log = load_build_log(agents_dir)
 
+    if is_interop_marker(build_log):
+        report = DriftReport()
+        report.unverifiable = INTEROP_UNVERIFIABLE  # never "no drift": nothing to compare
+        return report
+
     recorded_hashes: dict[str, str] = build_log.get("template_hashes", {})
     output_files: list[dict[str, Any]] = build_log.get("output_files_map", [])
 
@@ -187,6 +233,11 @@ def print_drift_report(report: DriftReport) -> None:
     Args:
         report: DriftReport from detect_drift().
     """
+    if report.unverifiable:
+        print(f"Drift: {report.unverifiable}. This team was written by an interop projection; "
+              "refresh it by re-running that projection (agentteams --interop-from <source> "
+              "--framework <fw> --output <project> --overwrite), or generate it natively.")
+        return
     if not report.has_drift and not report.new_templates:
         print("No drift detected. All templates match the last build.")
         return

@@ -22,6 +22,7 @@ Results of a content-drift detection run.
 - `missing_templates` (`list[str]`) — Templates referenced in the build-log that no longer exist.
 - `new_templates` (`list[str]`) — Templates found on disk not recorded in the build-log.
 - `unchanged` (`list[str]`) — Templates that match the build-log hash.
+- `unverifiable` (`str | None`) — `INTEROP_UNVERIFIABLE` when the build-log is an `origin: "interop"` projection marker ([`projection_marker`](projection-marker.md)), which has no template hashes to compare. `print_drift_report` then prints that verdict and the interop refresh command, and `--check` fails rather than reporting clean.
 
 **Properties:**
 
@@ -92,6 +93,27 @@ Detect content drift by comparing current template hashes against the build-log.
 
 - `FileNotFoundError` — If `build-log.json` is not found.
 - `ValueError` — If `build-log.json` exists but is malformed JSON.
+
+---
+
+### `is_interop_marker(build_log)`
+
+> *Source: `agentteams/drift.py`*
+
+True when `build_log` is a dict whose `origin` is `INTEROP_ORIGIN` (`"interop"`), meaning a
+projection marker written by `projection_marker.write_projection_marker`. Readers use it so that
+such a marker never yields a "current" or "clean" verdict and never authorises an overwrite
+(security condition 13). `detect_drift` returns an `unverifiable` report for it.
+`emit._unmodified_since_build` treats it as having no unmodified files.
+
+---
+
+### `native_baseline(build_log, agents_dir)`
+
+> *Source: `agentteams/drift.py`*
+
+Returns `build_log` unchanged, or `{}` with a printed notice when it is an interop projection
+marker. `--update` uses it, so a projection marker is never taken as a prior native build.
 
 ---
 
@@ -221,6 +243,14 @@ Compares every file in `build-log.json`'s `file_hashes` against its current on-d
 ---
 
 ## Module Constants
+
+### `INTEROP_ORIGIN` / `INTEROP_UNVERIFIABLE`
+
+> *Source: `agentteams/drift.py`*
+
+`"interop"`, the `origin` of a projection marker. `"unverifiable (interop projection: no template
+hashes)"` is the explicit verdict that `detect_drift`, `framework_freshness` and `--check` give
+such a marker.
 
 ### `FINGERPRINT_ALGO_VERSION`
 

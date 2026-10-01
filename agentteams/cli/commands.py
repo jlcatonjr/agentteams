@@ -617,6 +617,9 @@ def _run_interop(
     if result.bundle_files:
         bundle_verb = "Would write" if dry_run else "Wrote"
         print(f"  {bundle_verb} {len(result.bundle_files)} interop bundle file(s).")
+    if result.marker_files:
+        print(f"  Wrote the team marker (origin: interop, last of {len(result.marker_files)} "
+              f"file(s) incl. control plane): {result.marker_files[-1]}")
 
     return 0 if result.success else 1
 def _run_absorb(

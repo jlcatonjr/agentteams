@@ -284,6 +284,8 @@ def _unmodified_since_build(output_dir: Path) -> frozenset[str]:
         from agentteams import drift as _drift
 
         build_log = _drift.load_build_log(output_dir)
+        if _drift.is_interop_marker(build_log):
+            return frozenset()  # a projection marker authorises no overwrite (cond 13)
         recorded = set(build_log.get("file_hashes", {}))
         modified = {c["rel_path"] for c in _drift.detect_user_customizations(
             output_dir, build_log=build_log
