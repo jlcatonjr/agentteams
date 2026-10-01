@@ -27,12 +27,173 @@ remediation row ``pin-signing-cli-modules``.
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
 #: The env var naming the operator's Ed25519 private key FILE (never the key itself).
 KEYFILE_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"
+
+#: The signing closure: the pinned modules the minters execute with the key in memory. Drift in
+#: any of them (vs the integrity manifest) REFUSES the minter before the key is read; drift in any
+#: other pinned module only warns. A constant in this pinned module, so shrinking it is recorded.
+SIGNING_CLOSURE: frozenset[str] = frozenset({
+    "agentteams/cli/operator_signing.py",
+    "agentteams/cli/signed_ledger.py",
+    "agentteams/cli/decision_log.py",
+    "agentteams/cli/grants.py",
+    "agentteams/cli/effect_classifier.py",
+    "agentteams/frameworks/_sandbox_emit.py",
+    "agentteams/integrity.py",
+})
+
+#: Finding reasons that refuse regardless of the module (nothing can be verified).
+_REFUSE_REASONS = frozenset({"manifest-missing", "unreadable"})
+
+_TRUSTED_INSTALL_HINT = (
+    "sign from a pinned install outside every agent write root (a release-tag pin of the git "
+    'source, e.g. pipx install "agentteams[signing] @ '
+    'git+https://github.com/jlcatonjr/agentteams.git@v<tag>") and run --verify-integrity first'
+)
+_TRUSTED_INSTALL_WARNING = (
+    "the integrity check catches in-place edits to the signing code, not unpinned code running in "
+    "this same process (the CLI dispatch chain, .pth files), and the pre-sign display is a record, "
+    f"not a gate. To rule that out, {_TRUSTED_INSTALL_HINT}."
+)
+
+
+def _source_root() -> Path:
+    """The running package's source root (where ``references/enforcement-integrity.json`` lives)."""
+    import agentteams as _at
+
+    return Path(_at.__file__).resolve().parent.parent
+
+
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
+    """Run a read-only git command hardened against repo-planted config (fsmonitor, hooks).
+
+    Same command-line overrides and environment as ``integrity._manifest_expected`` (@security
+    PR-D C1): the repository being inspected is one an agent can write, so its own config must
+    not be able to run code here. Returns None when git is unavailable or times out.
+    """
+    try:
+        return subprocess.run(
+            ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+             "-c", "core.untrackedCache=false", "-C", str(cwd), *args],
+            capture_output=True, text=True, timeout=10, check=False,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _git_ok(cwd: Path, *args: str) -> str | None:
+    """stdout of a successful hardened git command, else None."""
+    res = _git(cwd, *args)
+    if res is None or res.returncode != 0:
+        return None
+    return res.stdout
+
+
+def _git_drift_warnings(root: Path) -> list[str]:
+    """Warn when the manifest or a signing-closure module differs from HEAD / the latest tag.
+
+    Drift detection only: an agent that can edit the closure can also regenerate the manifest
+    (which :func:`presign_integrity_check` alone cannot see), but that two-step edit still shows
+    up here against a commit the agent did not make. Skipped when ``root`` is not the top level
+    of a git work tree (a pip install, a bare copy).
+    """
+    from agentteams import integrity
+
+    top = _git_ok(root, "rev-parse", "--show-toplevel")
+    if top is None or Path(top.strip()).resolve() != root.resolve():
+        return []
+    paths = [integrity.MANIFEST_REL_PATH, *sorted(SIGNING_CLOSURE)]
+    warnings: list[str] = []
+    changed = _git_ok(root, "diff", "--name-only", "HEAD", "--", *paths)
+    if changed and changed.split():
+        warnings.append(
+            f"the signing code or its manifest differs from git HEAD ({', '.join(changed.split())}); "
+            "review that diff before signing.")
+    tag = (_git_ok(root, "describe", "--tags", "--abbrev=0") or "").strip()
+    tagged_text = _git_ok(root, "show", f"{tag}:{integrity.MANIFEST_REL_PATH}") if tag else None
+    if tagged_text is None:
+        return warnings
+    try:
+        tagged = json.loads(tagged_text).get("modules", {})
+        current = json.loads((root / integrity.MANIFEST_REL_PATH).read_text(encoding="utf-8")
+                             ).get("modules", {})
+    except (OSError, ValueError, AttributeError):
+        return warnings
+    differ = sorted(rel for rel in SIGNING_CLOSURE if tagged.get(rel) != current.get(rel))
+    if differ:
+        warnings.append(
+            f"the signing code differs from the latest release tag {tag} ({', '.join(differ)}): "
+            "it is not released signing code.")
+    return warnings
+
+
+def _checkout_warning(root: Path) -> str | None:
+    """C5: warn when the signing package itself sits where an agent may be able to edit it."""
+    pkg = (root / "agentteams").resolve()
+    in_git = (_git_ok(pkg, "rev-parse", "--is-inside-work-tree") or "").strip() == "true"
+    if not in_git and not pkg.is_relative_to(Path.cwd().resolve()):
+        return None
+    return (f"signing with the agentteams package at {pkg}, which is inside a git work tree or "
+            "under the current directory: code an agent may be able to edit.")
+
+
+def presign_integrity_check() -> bool:
+    """Verify the signing closure against the integrity manifest BEFORE the key is read.
+
+    Refuses (prints the reason, returns False) on any manifest finding in :data:`SIGNING_CLOSURE`,
+    on a missing manifest the repository should carry, or on an unreadable manifest (fail-closed,
+    as ``generate_helpers._verify_enforcement_integrity`` does). Other pinned-module drift, a
+    closure that differs from git HEAD or the latest release tag, and a signing package inside a
+    git work tree or the current directory print warnings only. There is no environment override.
+    In a pip install there is no manifest, so the check is a natural no-op. This check lives
+    inside the module it protects: an edit that deletes it is still recorded by the manifest, so
+    it is a speed bump with a recorded trail, not a boundary.
+
+    Returns:
+        True when signing may proceed.
+    """
+    from agentteams import integrity
+
+    root = _source_root()
+    try:
+        findings = integrity.verify(root)
+        unreadable = ""
+    except RuntimeError as exc:
+        findings = [integrity.IntegrityFinding(rel_path=integrity.MANIFEST_REL_PATH, expected="",
+                                               actual="", reason="unreadable")]
+        unreadable = str(exc)
+    blocking = [f for f in findings if f.rel_path in SIGNING_CLOSURE or f.reason in _REFUSE_REASONS]
+    if blocking:
+        print("Error: refusing to sign: the operator signing code does not match "
+              f"{root / integrity.MANIFEST_REL_PATH}:", file=sys.stderr)
+        for finding in blocking:
+            detail = unreadable if finding.reason == "unreadable" else finding.describe()
+            print(f"  {detail}", file=sys.stderr)
+        print("  If the change is yours and intended, review it and run "
+              f"`agentteams --write-integrity-manifest`; otherwise {_TRUSTED_INSTALL_HINT}. "
+              "The key was not read (fail-closed).", file=sys.stderr)
+        return False
+    for finding in findings:
+        print(f"Warning: enforcement-module drift outside the signing path: {finding.describe()}",
+              file=sys.stderr)
+    warnings = _git_drift_warnings(root)
+    checkout = _checkout_warning(root)
+    if checkout:
+        warnings.append(checkout)
+    for warning in warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
+    if warnings:
+        print(f"Warning: {_TRUSTED_INSTALL_WARNING}", file=sys.stderr)
+    return True
 
 #: Spec fields every grant minter requires.
 GRANT_SPEC_REQUIRED: tuple[str, ...] = (
@@ -45,13 +206,12 @@ def _read_operator_private_key() -> str | None:
     """Read the operator private key PEM named by :data:`KEYFILE_ENV`; print the error on failure.
 
     Prints the fail-closed "not set" error, the keyfile location warnings, or the read error to
-    stderr exactly as both minters always have.
+    stderr exactly as both minters always have. Between the env check and the key read it runs
+    :func:`presign_integrity_check`, so a drifted signing closure refuses with the key unread.
 
     Returns:
         The PEM text, or None after printing why it could not be read.
     """
-    import os
-
     keyfile = os.getenv(KEYFILE_ENV, "")
     if not keyfile:
         print(
@@ -59,6 +219,8 @@ def _read_operator_private_key() -> str | None:
             "private key file (never an agent env). Refusing to sign (fail-closed).",
             file=sys.stderr,
         )
+        return None
+    if not presign_integrity_check():
         return None
     from agentteams.frameworks._sandbox_emit import signing_keyfile_warnings
 
@@ -310,8 +472,10 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]]) ->
 __all__ = [
     "GRANT_SPEC_REQUIRED",
     "KEYFILE_ENV",
+    "SIGNING_CLOSURE",
     "grant_spec_kwargs",
     "load_grant_spec",
+    "presign_integrity_check",
     "report_issued",
     "sign_decision",
     "sign_decision_team_refusal",

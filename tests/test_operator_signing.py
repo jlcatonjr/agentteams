@@ -20,6 +20,8 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -178,6 +180,50 @@ CASES = {
     "issue-write-refusal": lambda t, m: _ig(t, m, spec=_grant()),
 }
 
+# --------------------------------------------------------------------------------------------
+# The pre-sign self-check reads the running package's source root (manifest, git HEAD, latest
+# tag). To keep the characterization deterministic regardless of the developer's checkout state,
+# every test here points it at a HERMETIC source root: a temp git repo holding a copy of the
+# pinned modules, a manifest written from those copies, one commit and one release tag.
+# --------------------------------------------------------------------------------------------
+
+REPO = Path(__file__).resolve().parents[1]
+_GIT_ID = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+           "-c", "tag.gpgsign=false", "-c", "core.hooksPath=/dev/null"]
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", *_GIT_ID, "-C", str(root), *args], check=True, capture_output=True)
+
+
+def _hermetic_src(tmp: Path, *, git: bool = True, manifest: bool = True) -> Path:
+    from agentteams import integrity
+
+    root = tmp / "src"
+    for rel in integrity.ENFORCEMENT_MODULES:
+        if rel in integrity.INSTALLED_COPIES or not (REPO / rel).is_file():
+            continue
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO / rel, root / rel)
+    if manifest:
+        integrity.write_manifest(root)
+    if git:
+        _git(root, "init", "-q")
+        _git(root, "add", "-A")
+        _git(root, "commit", "-q", "-m", "release")
+        _git(root, "tag", "v0.0.1")
+    return root
+
+
+@pytest.fixture(autouse=True)
+def _pin_source_root(tmp_path, monkeypatch):
+    from agentteams.cli import operator_signing
+
+    src = _hermetic_src(tmp_path)
+    monkeypatch.setattr(operator_signing, "_source_root", lambda: src)
+    return src
+
+
 _HOME_RE = re.escape(os.path.expanduser("~"))
 
 
@@ -232,16 +278,31 @@ _ISSUED = ("Issued capability grant grant-<ID> ({scheme}): team-b → team-a may
            "  appended to <TMP>/team/references/capability-grants.log.csv\n"
            "  verified against team dir <TMP>/team\n")
 
+# Commit 2 (pre-sign self-check) — the ONLY output change: every case that gets past the env
+# check now prints the C5 checkout warning plus the trusted-install line (the hermetic source root
+# is a clean git repo matching its manifest, HEAD and its tag, so no refusal or drift warning).
+_PRESIGN = (
+    "Warning: signing with the agentteams package at <TMP>/src/agentteams, which is inside a git "
+    "work tree or under the current directory: code an agent may be able to edit.\n"
+    "Warning: the integrity check catches in-place edits to the signing code, not unpinned code "
+    "running in this same process (the CLI dispatch chain, .pth files), and the pre-sign display "
+    "is a record, not a gate. To rule that out, sign from a pinned install outside every agent "
+    "write root (a release-tag pin of the git source, e.g. pipx install \"agentteams[signing] @ "
+    "git+https://github.com/jlcatonjr/agentteams.git@v<tag>\") and run --verify-integrity "
+    "first.\n"
+)
+
 EXPECTED: dict[str, tuple[int, str, str]] = {
     "decision-success": (
         0,
         _DISPLAY + "\nSigned decision appended to <TMP>/team/references/security-decisions.log.csv\n",
-        _KEY_WARN,
+        _PRESIGN + _KEY_WARN,
     ),
     "decision-env-unset": (1, "", _NOT_SET),
     "decision-unreadable-key": (
         1, "",
-        "Error: cannot read operator private key file: [Errno 2] No such file or directory: "
+        _PRESIGN + "Error: cannot read operator private key file: [Errno 2] No such file or "
+        "directory: "
         "'<TMP>/absent.key'\n",
     ),
     "decision-not-a-team-dir": (
@@ -261,40 +322,41 @@ EXPECTED: dict[str, tuple[int, str, str]] = {
     ),
     "decision-non-eligible": (
         1, "",
-        _KEY_WARN + "Error: this decision is categorically NON-ELIGIBLE: it authorizes a write to governance/trust root "
+        _PRESIGN + _KEY_WARN + "Error: this decision is categorically NON-ELIGIBLE: it authorizes a write to governance/trust root "
         "'references/authorized-verify-keys/x.pub.pem'.\n",
     ),
     "decision-classifier-error": (
-        1, "", _KEY_WARN + "Error: inconsistent effect declaration: row declares "
+        1, "", _PRESIGN + _KEY_WARN + "Error: inconsistent effect declaration: row declares "
         "effect_class='non-relaxing' but its derived effect is 'relaxing': the relaxing class is "
         "derived from effect, never self-declared, and a disagreement is refused (fail-closed). "
         "Correct the declaration or the effect fields.\n",
     ),
     "decision-grant-purpose": (
         1, _DISPLAY,
-        _KEY_WARN + "Error: refusing to sign — this decision's payload begins with the capability-"
+        _PRESIGN + _KEY_WARN + "Error: refusing to sign — this decision's payload begins with the capability-"
         "grant purpose tag (use --sign-grant for grants).\n",
     ),
     "decision-verify-mismatch": (
         1, _DISPLAY,
-        _KEY_WARN + "Error: the signature does not verify against "
+        _PRESIGN + _KEY_WARN + "Error: the signature does not verify against "
         "references/authorized-verify-keys/op-1.pub.pem in <TMP>/team (a private/public key "
         "mismatch, or the public key was provisioned into another team dir). Nothing appended.\n",
     ),
-    "grant-success": (0, _ISSUED.format(scheme="ed25519", ops="write"), _KEY_WARN),
+    "grant-success": (0, _ISSUED.format(scheme="ed25519", ops="write"), _PRESIGN + _KEY_WARN),
     "grant-env-unset": (1, "", _NOT_SET),
     "grant-missing-key-id": (
         1, "", "Error: --sign-grant spec must name a key_id (the verify key's file stem)\n",
     ),
     "grant-unreadable-key": (
         1, "",
-        "Error: cannot read operator private key file: [Errno 2] No such file or directory: "
+        _PRESIGN + "Error: cannot read operator private key file: [Errno 2] No such file or "
+        "directory: "
         "'<TMP>/absent.key'\n",
     ),
     "grant-bad-framework": (
-        1, "", _KEY_WARN + "Error: --framework 'canonical' has no team directory for grants\n",
+        1, "", _PRESIGN + _KEY_WARN + "Error: --framework 'canonical' has no team directory for grants\n",
     ),
-    "grant-missing-roster": (1, "", _KEY_WARN + "Error: cross-workspace grant authorization requires an explicit approver "
+    "grant-missing-roster": (1, "", _PRESIGN + _KEY_WARN + "Error: cross-workspace grant authorization requires an explicit approver "
         "roster; references/security-approvers.txt is absent or names no approver (refusing the "
         "built-in security/@security self-clear fallback — add at least one approver to the "
         "roster before issuing or honouring a grant)\n"),
@@ -305,7 +367,7 @@ EXPECTED: dict[str, tuple[int, str, str]] = {
     ),
     "grant-bad-framework-env-unset": (1, "", _NOT_SET),
     "grant-bad-framework-bad-max-uses": (
-        1, "", _KEY_WARN + "Error: --framework 'canonical' has no team directory for grants\n",
+        1, "", _PRESIGN + _KEY_WARN + "Error: --framework 'canonical' has no team directory for grants\n",
     ),
     "issue-success": (0, _ISSUED.format(scheme="hmac", ops="read"), ""),
     "issue-write-refusal": (1, "", "Error: grant 'grant-<ID>' permits 'write' but is hmac-signed: a grant that "
@@ -342,3 +404,148 @@ def test_parser_refuses_a_non_rendering_framework_first(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         main(_sg(tmp_path, monkeypatch, framework="canonical", key=False))
     assert exc.value.code == 2
+
+
+# --------------------------------------------------------------------------------------------
+# T5 — the pre-sign integrity self-check (binding revisions D1, C1-C5). It runs after the env
+# check and BEFORE the key file is opened: the refusal cases name a key file that does not
+# exist, so "cannot read operator private key" in the output would mean the key read happened.
+# --------------------------------------------------------------------------------------------
+
+_REFUSAL = "Error: refusing to sign: the operator signing code does not match"
+
+
+def _append(path: Path, text: str = "\n# tampered\n") -> None:
+    path.write_text(path.read_text(encoding="utf-8") + text, encoding="utf-8")
+
+
+def _sign_with(argv: list[str], mp: pytest.MonkeyPatch, capsys, key: Path | None = None):
+    if key is not None:
+        mp.setenv(_KEY_ENV, str(key))
+    capsys.readouterr()
+    rc = main(argv)
+    cap = capsys.readouterr()
+    return rc, cap.out, cap.err
+
+
+def _assert_refused_unread(rc: int, out: str, err: str, *needles: str) -> None:
+    assert rc == 1 and out == ""
+    assert _REFUSAL in err and "The key was not read (fail-closed)." in err
+    assert "cannot read operator private key" not in err  # the key file was never opened
+    for needle in needles:
+        assert needle in err, (needle, err)
+
+
+@pytest.mark.parametrize("rel", ["agentteams/cli/operator_signing.py",
+                                 "agentteams/cli/signed_ledger.py",
+                                 "agentteams/frameworks/_sandbox_emit.py"])
+def test_closure_drift_refuses_decision_before_key_read(rel, tmp_path, monkeypatch, capsys,
+                                                        _pin_source_root):
+    _append(_pin_source_root / rel)
+    argv = _sd(tmp_path, monkeypatch)
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    _assert_refused_unread(rc, out, err, f"{rel}: modified", "--write-integrity-manifest")
+    assert not (tmp_path / "team" / "references" / "security-decisions.log.csv").exists()
+
+
+def test_closure_drift_refuses_grant_before_key_read(tmp_path, monkeypatch, capsys,
+                                                     _pin_source_root):
+    _append(_pin_source_root / "agentteams/cli/grants.py")
+    argv = _sg(tmp_path, monkeypatch)
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    _assert_refused_unread(rc, out, err, "agentteams/cli/grants.py: modified")
+    assert not (tmp_path / "team" / grants.GRANT_LOG_REL).exists()
+
+
+def test_missing_tracked_manifest_refuses(tmp_path, monkeypatch, capsys, _pin_source_root):
+    (_pin_source_root / "references" / "enforcement-integrity.json").unlink()
+    argv = _sd(tmp_path, monkeypatch)
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    _assert_refused_unread(rc, out, err, "the integrity manifest is missing")
+
+
+def test_unreadable_manifest_refuses(tmp_path, monkeypatch, capsys, _pin_source_root):
+    (_pin_source_root / "references" / "enforcement-integrity.json").write_text("{not json")
+    argv = _sg(tmp_path, monkeypatch)
+    rc, out, err = _sign_with(argv, monkeypatch, capsys, key=tmp_path / "absent.key")
+    _assert_refused_unread(rc, out, err, "unable to read enforcement integrity manifest")
+
+
+def test_non_closure_drift_warns_and_still_signs(tmp_path, monkeypatch, capsys, _pin_source_root):
+    _append(_pin_source_root / "agentteams/scan.py")
+    rc, _out, err = _sign_with(_sd(tmp_path, monkeypatch), monkeypatch, capsys)
+    assert rc == 0, err
+    assert ("Warning: enforcement-module drift outside the signing path: agentteams/scan.py: "
+            "modified") in err
+    assert _REFUSAL not in err
+
+
+def _regenerate(root: Path) -> None:
+    from agentteams import integrity
+
+    integrity.write_manifest(root)
+
+
+def test_head_drift_warns_but_signs(tmp_path, monkeypatch, capsys, _pin_source_root):
+    """A closure edit WITH a regenerated manifest passes verify; git HEAD still sees it."""
+    _append(_pin_source_root / "agentteams/cli/grants.py")
+    _regenerate(_pin_source_root)
+    rc, _out, err = _sign_with(_sd(tmp_path, monkeypatch), monkeypatch, capsys)
+    assert rc == 0, err
+    assert ("differs from git HEAD (agentteams/cli/grants.py, "
+            "references/enforcement-integrity.json)") in err
+    assert "differs from the latest release tag v0.0.1 (agentteams/cli/grants.py)" in err
+
+
+def test_tag_drift_warns_when_head_is_clean(tmp_path, monkeypatch, capsys, _pin_source_root):
+    _append(_pin_source_root / "agentteams/cli/decision_log.py")
+    _regenerate(_pin_source_root)
+    _git(_pin_source_root, "commit", "-q", "-am", "unreleased signing change")
+    rc, _out, err = _sign_with(_sg(tmp_path, monkeypatch), monkeypatch, capsys)
+    assert rc == 0, err
+    assert "differs from git HEAD" not in err
+    assert "differs from the latest release tag v0.0.1 (agentteams/cli/decision_log.py)" in err
+
+
+def test_pip_layout_without_git_or_manifest_changes_no_output(tmp_path, monkeypatch, capsys):
+    """No manifest, no git, outside cwd: the self-check is a silent no-op (commit-1 output)."""
+    from agentteams.cli import operator_signing
+
+    src = _hermetic_src(tmp_path / "pip", git=False, manifest=False)
+    monkeypatch.setattr(operator_signing, "_source_root", lambda: src)
+    got = _run("decision-success", tmp_path, monkeypatch, capsys)
+    rc, out, err = EXPECTED["decision-success"]
+    assert got == (rc, out, err.replace(_PRESIGN, ""))
+
+
+def test_planted_fsmonitor_in_the_source_repo_never_runs(tmp_path, monkeypatch, capsys,
+                                                         _pin_source_root):
+    """The git comparisons use the same -c overrides as integrity._manifest_expected (PR-D C1)."""
+    marker = tmp_path / "fsmonitor-ran"
+    hook = tmp_path / "fsmonitor.sh"
+    hook.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+    _git(_pin_source_root, "config", "core.fsmonitor", str(hook))
+    _append(_pin_source_root / "agentteams/cli/grants.py")  # make `git diff HEAD` do real work
+    _regenerate(_pin_source_root)
+    # Anti-vacuous: an UNhardened git command in this repo does execute the planted hook.
+    subprocess.run(["git", "-C", str(_pin_source_root), "status", "--porcelain"],
+                   capture_output=True, check=False)
+    assert marker.exists(), "planted fsmonitor did not run unhardened — the test would be vacuous"
+    marker.unlink()
+    rc, _out, err = _sign_with(_sd(tmp_path, monkeypatch), monkeypatch, capsys)
+    assert rc == 0, err
+    assert "differs from git HEAD" in err  # the hardened comparison did run
+    assert not marker.exists(), "the signing self-check executed a repo-planted core.fsmonitor"
+
+
+def test_self_check_has_no_environment_override() -> None:
+    """D1: no env var can switch the self-check off (only the key path comes from the env)."""
+    import inspect
+
+    from agentteams.cli import operator_signing
+
+    for fn in (operator_signing.presign_integrity_check, operator_signing._git_drift_warnings,
+               operator_signing._checkout_warning):
+        source = inspect.getsource(fn)
+        assert "os.getenv" not in source and "os.environ" not in source, fn.__name__
