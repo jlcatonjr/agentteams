@@ -30,7 +30,7 @@ The durable fix is elsewhere: [move enforcement into the harness](../security-ha
 
 Modules whose integrity the constitution depends on. Each is listed because a silent edit to it would disable or weaken a control rather than merely change behaviour:
 
-- **Destructive-action gate / clearance authenticity (C-2, C-5):** `cli/security_gate.py`, `cli/decision_log.py`.
+- **Destructive-action gate / clearance authenticity (C-2, C-5):** `cli/security_gate.py`, `cli/decision_log.py`, and the operator signing path `cli/operator_signing.py` (the only code that reads the operator Ed25519 private key; see [the pinned operator signing path](cli.md#the-pinned-operator-signing-path)).
 - **Deterministic content scanner (C-4):** `scan.py`.
 - **Fence / constraint controls (C-1):** `fences.py`, `unfenced.py`.
 - **Capability comparison and grants (C-3, P2):** `front_matter_merge.py`, `front_matter_reconcile.py`, `cli/grants.py`, `rank_conformance.py`.

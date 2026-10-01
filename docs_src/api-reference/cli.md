@@ -38,6 +38,7 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `commands.py` | Sub-command runners for `--convert`, `--interop-*` and `--bridge-*`. |
 | `security_gate.py` | The destructive-action gate: requires a recorded PASS decision, or an explicit waiver, before a destructive operation proceeds. |
 | `decision_log.py` | Authenticates rows in the security-decisions log (HMAC signing/verification, chain-intactness checks); carved from `security_gate.py` at its own CH-07 ceiling. |
+| `operator_signing.py` | The operator Ed25519 signing path for `--sign-decision` and `--sign-grant` (and the `--issue-grant` spec helpers): key read, payload construction, the pre-sign display, the pre-sign refusals, signing, verify-before-append and the append. Integrity-pinned (`integrity.ENFORCEMENT_MODULES`); the runners in `commands.py` / `grant_commands.py` are one-line delegators. See [below](#the-pinned-operator-signing-path). |
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
 | `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
 | `backup_switch.py` | Glue for `--stale-check` / `--stale-remediate` / `--prune-backups` / `--backup-mirror`. |
@@ -65,6 +66,56 @@ documents, 1488 of them backup snapshots, in a 51 MB committed artifact.
 [`update_report.report_run`](update-report.md) after the write phase and only when
 `--dry-run` was not passed. A failure to write the report must not turn a successful
 update into a failed one.
+
+## The pinned operator signing path
+
+`--sign-decision` and `--sign-grant` are the only code paths that read the operator's Ed25519
+private key (the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`). Everything between that
+env read and the appended row lives in `operator_signing.py`, which is listed in
+[`integrity.ENFORCEMENT_MODULES`](integrity.md), so an in-place edit to it shows up in
+`references/enforcement-integrity.json`, `--verify-integrity` and red-team phase 6. The
+`commands.py` and `grant_commands.py` runners only choose the spec path and the output/team dir.
+
+**What the pin does not cover.** It closes in-place edits and unnoticed drift. It does not defend
+against unpinned code in the same process: the dispatch chain (`app.py`, `parser.py`,
+`agentteams/__init__.py`, `.pth` files) can patch `Path.read_text` or this module's primitives,
+or call `signed_ledger` directly. The decision display is printed immediately before signing,
+with no confirmation, so it is a record, not a gate. Sign from a pinned install outside every
+agent write root, and run `--verify-integrity` first.
+
+### `sign_decision(output_dir, spec_path)`
+
+> *Source: `agentteams/cli/operator_signing.py`*
+
+Mint and append one Ed25519-signed constraint-relaxing decision row under the team dir
+`output_dir`. Order: team-dir refusal, spec load and shape check, key read, eligibility and
+effect classification, the derived-effect display, the PR-E grant-purpose refusal, sign,
+verify-before-append against the team's verify-key store, append. Returns 0, or 1 on any error
+(fail-closed).
+
+### `sign_grant(spec_path, resolve_dirs)`
+
+> *Source: `agentteams/cli/operator_signing.py`*
+
+Mint and append one Ed25519-signed capability grant. `resolve_dirs` is a zero-argument callable
+returning `(ledger_root, team_dir)`. It is injected rather than resolved by the caller so that its
+`ValueError` (a non-rendering `--framework`) still fires after the key read, keeping the error
+precedence spec → `key_id` → env → key read → directories. Returns 0, or 1 on any error.
+
+### `sign_decision_team_refusal(output_dir)`
+
+> *Source: `agentteams/cli/operator_signing.py`*
+
+F-2: the refusal sentence when `output_dir` holds neither `references/agent-privilege.json` nor
+`references/build-log.json`, else `None`.
+
+### `load_grant_spec(path, flag)` / `grant_spec_kwargs(spec)` / `report_issued(record, ledger_root, team_dir)`
+
+> *Source: `agentteams/cli/operator_signing.py`*
+
+The grant spec helpers shared with the HMAC `--issue-grant` runner: read and shape-check a spec
+against `GRANT_SPEC_REQUIRED`, map it to minter keyword arguments (fresh `grant_id` and
+timestamp), and print the post-append summary.
 
 ## Related pages
 

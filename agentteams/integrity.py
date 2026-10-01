@@ -111,6 +111,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # a silent edit to any would reopen exactly the gap it closes, without tripping E4.
     "agentteams/cli/signed_ledger.py",   # C-2/WS-B: HMAC + Ed25519 verify primitives (was unpinned;
                                          # verify_by_scheme is now the asymmetric authorization core)
+    # The operator SIGNING path (pin-signing-cli-modules, 2026-09-30; @security PR-E review: "pin
+    # them, or move the signing code into a pinned module"). The only code that reads the operator
+    # Ed25519 private key and builds/displays/refuses/signs/appends --sign-decision and --sign-grant
+    # payloads (plus the --issue-grant spec helpers). It was carved out of the high-churn
+    # commands.py / grant_commands.py, whose runners are now one-line delegators.
+    "agentteams/cli/operator_signing.py",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use

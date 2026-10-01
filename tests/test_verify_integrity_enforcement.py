@@ -215,3 +215,32 @@ def test_tampering_with_a_newly_pinned_control_trips_verify(tmp_path, rel, old, 
     root = _scratch_root_with_manifest(tmp_path)
     _tamper(root, rel, old, new)
     assert _run_verify_integrity(_args(root)) == 1
+
+
+# ---------------------------------------------------------------------------
+# pin-signing-cli-modules (2026-09-30; @security PR-E): the operator SIGNING path
+# (key read, payload build, display, pre-sign refusals, sign, verify-before-append,
+# append) lives in the pinned cli/operator_signing.py; an in-place edit must trip verify.
+# ---------------------------------------------------------------------------
+
+_OPERATOR_SIGNING = "agentteams/cli/operator_signing.py"
+
+
+def test_operator_signing_is_in_enforcement_modules() -> None:
+    assert _OPERATOR_SIGNING in integrity.ENFORCEMENT_MODULES
+
+
+@pytest.mark.skipif(not _GATE_HOOK.exists(), reason="deployed .claude/ hooks absent from this checkout (public release / CI)")
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        # redirect the key read to an attacker-chosen env var
+        ('KEYFILE_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"', 'KEYFILE_ENV = "ATTACKER_KEYFILE"'),
+        # neuter the PR-E domain-separation refusal
+        ("if payload_claims_grant_purpose(dl._decision_signature_values(row)):", "if False:"),
+    ],
+)
+def test_tampering_with_the_operator_signing_path_trips_verify(tmp_path, old, new) -> None:
+    root = _scratch_root_with_manifest(tmp_path)
+    _tamper(root, _OPERATOR_SIGNING, old, new)
+    assert _run_verify_integrity(_args(root)) == 1

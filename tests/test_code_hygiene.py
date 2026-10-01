@@ -59,6 +59,8 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # (beside the grants runners). Each addition belongs with the sibling it mirrors; a genuine
     # fix is a per-topic CH-07 carve of both files (emit-writers -> a config-emit module; CLI
     # runners -> per-topic runner modules), deferred as a larger blast-radius refactor.
+    # commands.py grew to 1207 before the 2026-09-30 pin-signing-cli-modules carve moved the
+    # --sign-decision body into the integrity-pinned cli/operator_signing.py (now 1092).
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130): itself a CH-07 carve of emit.py (the fence/merge extraction the
@@ -335,6 +337,7 @@ _REFACTOR_MODULES = (
     "agentteams/backup.py",
     "agentteams/output_plan.py",
     "agentteams/cli/schema_cache.py",
+    "agentteams/cli/operator_signing.py",
 )
 
 
