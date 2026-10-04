@@ -6,6 +6,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (branch lifecycle: `--branch-inventory`, `--branch-cleanup`, `--branch-post-merge`)
+
+Standardizes what happens to a branch after its work lands. This answers baseAgent's 2026-10-04
+handoff (`references/branch-lifecycle-policy.handoff.md`): 66 of its 67 branch refs were already
+merged, and no layer of the generated team ever deleted one.
+
+- **`--branch-inventory`** (`agentteams/branch_inventory.py`) is read-only. It classifies every
+  local branch and push-remote branch into ten states, applies holds (owner, link, open PR as head
+  or base, worktree, pin), and writes a deletion plan of leased commands plus a CSV/JSON report.
+- **Merged-by-PR,** a deviation from the handoff. Its ancestry-only "merged" misclassifies
+  squash-merged branches, and `git cherry` recognizes only a squash of a single-commit branch.
+  On agentteams itself, 13 squash-merged branches would have read as patch-equivalent or active.
+  A PR now counts only when all of these hold:
+  - the head repository is the push remote's;
+  - the base is the default branch, and the PR is merged;
+  - `head.sha` equals the tip;
+  - the merge commit is reachable;
+  - `refs/pull/<n>/head` is confirmed on the remote before deletion.
+  API failures are *unknown*. If open PRs cannot be checked, no remote deletion is planned.
+- **`--branch-cleanup PLAN --apply`** (`agentteams/branch_cleanup.py`) executes a plan under a
+  `@security` PASS for `branch-cleanup:<plan sha256>`. The clearance binds to that plan and
+  is consumed (C-5). Guards:
+  - re-inventory and skip drifted refs;
+  - re-check each ref just before deleting it;
+  - local refs first, with `-d`, or `update-ref -d <ref> <sha>` for PR-merged branches;
+  - remote refs one at a time, with `--force-with-lease` to the audited SHA;
+  - `archive/` tags that are never moved;
+  - stop at the first failure.
+  Deletions are recorded in the hash-chained `references/branch-deletions.log.csv`, with an
+  `attempt` row before each one.
+- **`--branch-post-merge BRANCH --apply`** deletes the branch just merged with `--no-ff` (its tip
+  is the second parent of the default tip, ancestry-only). It runs under an operator
+  **Ed25519-signed, time-bounded `branch-delete` capability grant**, and one run is one use.
+  `grants.py` adds `BRANCH_DELETE_OP` to a new operator-only op set, so an HMAC-signed grant is
+  refused, as `write` already was. A `@security` HALT on `branch-delete` stops both modes.
+- **Templates.** The new emitted reference `references/branch-lifecycle.reference.md` holds the
+  states, holds, guards, authorization, cadence and a manual sequence. Template changes:
+  - `git-operations`: Invariant rule 8, a Post-Merge Branch Step, and the `Branch disposition` and
+    `Branch inventory` Output Contract fields;
+  - `cleanup`: branches, stashes and worktrees join its scope, with a weekly sweep;
+  - `orchestrator`: closeout gate 7b;
+  - `security`: a review trigger;
+  - `github-workflows-merge`: step 7.
+- **Hook.** The runtime delete gate (`constitutional-gate.py`) now asks the operator before
+  `agentteams --branch-cleanup/--branch-post-merge … --apply`, because those git deletes run inside
+  the tool.
+- **Not adopted from the handoff:**
+  - an emitted `references/git-procedures.md`. That name was retired from templates on 2026-06-20
+    (`703b1e2`), and agentteams' own root file of that name is repository-specific. The stale
+    citation in researchteam's `.github`/`.codex` copies is logged for separate investigation.
+  - an emitted bash inventory script: the inventory is the CLI mode above.
+
 ### feat (`--sync-agent-docs`: learned agent notes propagate across frameworks)
 
 - **The learned block.** Agents record what they learn in one explicit block of their own agent file:

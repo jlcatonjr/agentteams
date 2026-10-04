@@ -210,6 +210,8 @@ references/runtime-handoffs.json
 references/adjacent-repos.md
 references/security-decisions.log.csv
 references/agentteams-remediation-log.csv
+# Branch-deletion ledger (agentteams --branch-cleanup / --branch-post-merge): operational record.
+references/branch-deletions.log.csv
 references/mcp-auto-detection-report.md
 references/redteam-audit.procedure.md
 references/launchd/

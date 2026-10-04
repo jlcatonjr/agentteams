@@ -195,6 +195,12 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "git branch -D feature",
         "git tag -d v1",
         "git update-ref -d refs/heads/x",
+        "agentteams --branch-cleanup plan.json --apply",
+        "agentteams --apply --branch-post-merge feat/x",
+        "agentteams --branch-cl plan.json --appl",
+        "python build_team.py --branch-post-m x --apply",
+        "python -m agentteams.cli.app --branch-cleanup p.json --apply",
+        "python -c 'from agentteams import branch_cleanup as b; b.run_post_merge(x, apply=True)'",
         "git worktree remove wt",
         "rmdir somedir",
         "find . -name '*.tmp' -delete",
@@ -293,6 +299,8 @@ def test_delete_commands_require_authorization(command: str) -> None:
         "ls -la",
         "git status",
         "git push origin main:main",       # normal push, not a ref-delete
+        "agentteams --branch-inventory --branch-report out",  # read-only
+        "agentteams --branch-cleanup plan.json",  # dry run
         "git branch --show-current",       # not a delete flag
         "grep -rn 'drop table' migrations/",  # searching SQL != executing it
         "docker ps -a",
