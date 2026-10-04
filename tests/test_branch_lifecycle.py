@@ -692,3 +692,43 @@ def test_grant_signed_via_cli_with_project_is_found(repo, tmp_path, monkeypatch,
                                     apply=True, api=FakeAPI())
     assert code == bc.EXIT_OK, lines
     assert "feat/e2e" not in repo.refs()
+
+
+def test_cleanup_authorized_by_signed_waiver_with_signing_enforced(repo, tmp_path, monkeypatch):
+    """The operator waiver path (reference §4): with enforce_decision_signing ON and
+    no decision key, an HMAC security waiver scoped to the plan's action id, max_uses=1,
+    authorizes exactly one --branch-cleanup run and is consumed by it."""
+    import hashlib
+    import hmac
+    import json
+    from datetime import datetime, timedelta, timezone
+
+    from agentteams.cli import security_gate
+
+    _merged(repo, "feat/w")
+    plan_path, plan = _plan(repo, tmp_path)
+    team = _team(repo)
+    (team / "references" / "agent-privilege.json").write_text(
+        json.dumps({"enforce_decision_signing": True}))
+    key = "session-only-key"
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", key)
+    row = {"timestamp": "2026-10-04T00:00:00Z", "waiver_id": "w-1",
+           "action_reviewed": bc.clearance_action(plan),
+           "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).strftime(
+               "%Y-%m-%dT%H:%M:%SZ"),
+           "max_uses": "1", "uses": "0", "approver": "security", "ticket_id": "T",
+           "reason_code": "R", "conditions_verified": "verified", "signature": ""}
+    payload = "|".join(row[f].strip() for f in security_gate._WAIVER_SIGNATURE_FIELDS)
+    row["signature"] = hmac.new(key.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    log = team / "references" / "security-waivers.log.csv"
+    with log.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(row))
+        w.writeheader()
+        w.writerow(row)
+    code, lines = bc.run_cleanup(plan_path, _cfg(repo), team_dir=team, apply=True, api=FakeAPI())
+    assert code == bc.EXIT_OK, lines
+    assert "feat/w" not in repo.refs()
+    _merged(repo, "feat/w2")
+    plan2_path, _ = _plan(repo, tmp_path / "second")
+    code, _ = bc.run_cleanup(plan2_path, _cfg(repo), team_dir=team, apply=True, api=FakeAPI())
+    assert code == bc.EXIT_UNAUTHORIZED  # different plan, and the waiver is used up
