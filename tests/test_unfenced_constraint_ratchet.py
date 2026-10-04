@@ -65,12 +65,19 @@ _BASELINE: dict[str, int] = {
     "universal/adversarial.template.md": 4,
     "universal/agent-refactor.template.md": 1,
     "universal/agent-updater.template.md": 2,
-    "universal/cleanup.template.md": 2,
+    "universal/cleanup.template.md": 7,  # 2->7: Branch, Stash and Worktree Sweep (2026-10-04,
+                                         # branch lifecycle). Rendered output is wrapped in the
+                                         # retrofitted `content` fence, and the deletion guards are
+                                         # enforced by the integrity-pinned branch_cleanup.py, not
+                                         # by this prose — same reasoning as copilot-instructions.
     "universal/cli-tool-discovery.reference.template.md": 2,
     "universal/code-hygiene.template.md": 13,
     "universal/conflict-auditor.template.md": 1,
     "universal/external-retrieval-quality-gate.reference.template.md": 8,
-    "universal/git-operations.template.md": 2,
+    "universal/git-operations.template.md": 3,  # 2->3: Invariant rule 8, no branch deletion
+                                                # outside the branch-lifecycle guards (2026-10-04);
+                                                # rendered inside the `content` fence; enforced by
+                                                # branch_cleanup.py + the delete gate hook.
     "universal/github-workflows-merge.reference.template.md": 2,
     "universal/instruction-authority.reference.template.md": 14,
     "universal/navigator.template.md": 1,

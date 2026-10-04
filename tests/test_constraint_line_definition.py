@@ -163,7 +163,13 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # user-editable; that is acceptable because the DURABLE enforcement is the pinned code
     # (effect_classifier/decision_log/signed_ledger/exception_registry), not the constitution text.
     # The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 168), (
+    # 168 -> 174 (2026-10-04, branch lifecycle): +6 constraint lines — +5 in cleanup.template.md
+    # (Branch, Stash and Worktree Sweep) and +1 in git-operations.template.md (Invariant rule 8),
+    # per-file baselines raised in test_unfenced_constraint_ratchet.py. Both templates are wrapped
+    # whole in the retrofitted `content` fence at emit, and the deletion guards are enforced by the
+    # integrity-pinned branch_cleanup.py. The new branch-lifecycle.reference.template.md carries its
+    # own explicit fence, so it adds no file to the count. The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 174), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
         "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
     )

@@ -53,6 +53,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any file deletion in the project | Irreversible file loss |
 | Any command that deletes a repository or remote resource (`gh repo delete`, `gh api -X DELETE`) | Irreversible remote/repo loss — C-5 authorization required BEFORE execution |
 | Any command that deletes a git ref or worktree (`git push --delete`/`--mirror`/`--prune`, `git push … :ref`, `git branch`/`tag -d`/`-D`, `git update-ref -d`, `git worktree remove`) | Irreversible ref/history loss |
+| Any `agentteams --branch-cleanup … --apply` (needs your PASS on `branch-cleanup:<plan sha256>`, recorded before execution) or `--branch-post-merge … --apply` (runs under an operator Ed25519 `branch-delete` grant — verify it is the second-parent branch of the merge just pushed). A HALT on `branch-delete` stops both. Procedure: `references/branch-lifecycle.reference.md` §4 | Branch/ref loss — bulk and remote deletion |
 | Any destructive filesystem or infrastructure delete (`rm -rf`, `rmdir`, `shred`, `truncate`, `find … -delete`, `dd of=`, `kubectl delete`, `terraform destroy`, `docker rm`/`rmi`/`system prune`, cloud `… delete`, SQL `DROP`/`TRUNCATE`) | Irreversible data/resource loss |
 | Any modification to `.github/agents/*.agent.md` | Scope creep, privilege escalation |
 | Any operation that writes to an external repository | Cross-repo contamination |

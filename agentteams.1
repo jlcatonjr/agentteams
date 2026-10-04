@@ -2,7 +2,7 @@
 .SH NAME
 agentteams \- Generate a complete agent team for any project.
 .SH SYNOPSIS
-.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--materialize-native] [--adopt-orphans] [--check] [--strict-prompt-roots] [--refresh-index] [--agent-check] [--window-hours H] [--force] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--check-rank] [--check-rank-strict] [--check-wiring] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--interop-skills-only] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--allow-unenforced-confinement] [--accept-write-root PATH] [--allow-fallback-fail-open] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-grants] [--issue-grant SPEC.json] [--sign-grant SPEC.json] [--verify-directives] [--issue-directive] [--manager-team ID] [--managed-team ID] [--task-scope SCOPE] [--expires-at ISO8601] [--max-uses N] [--approver PRINCIPAL] [--audit-exceptions] [--list-exceptions] [--confirm-review-sha256 HEX] [--allow-checkout-signing] [--sign-decision SPEC.json] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--framework-freshness] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--sync-agent-docs] [--apply] [--include-claude] [--restore-removed] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
+.B agentteams [--description PATH] [--project PATH] [--framework NAME] [--output DIR] [--dry-run] [--json] [--overwrite] [--merge] [--yes] [--no-scan] [--cost-routing] [--update] [--prune] [--materialize-native] [--adopt-orphans] [--check] [--strict-prompt-roots] [--refresh-index] [--agent-check] [--window-hours H] [--force] [--query-index TEXT] [--query-k N] [--query-strategy QUERY_STRATEGY] [--refresh-code-index] [--query-code TEXT] [--code-query-k N] [--code-query-strategy CODE_QUERY_STRATEGY] [--code-kind CODE_KIND] [--fail-on-legacy-skip] [--no-vscode-tasks] [--refresh-graph] [--refresh-architecture] [--install-git-hooks] [--no-git-hooks] [--code-index-hook] [--no-add-fence-markers] [--scan-security] [--check-budget] [--check-rank] [--check-rank-strict] [--check-wiring] [--self] [--allow-foreign-output] [--allow-external-self-output] [--post-audit] [--auto-correct] [--enrich] [--strict-manual-placeholders] [--no-strict-manual-placeholders] [--security-offline] [--security-max-items N] [--security-no-nvd] [--migrate] [--convert-from DIR] [--interop-from DIR] [--interop-source-framework INTEROP_SOURCE_FRAMEWORK] [--interop-mode INTEROP_MODE] [--interop-skills-only] [--bridge-from DIR] [--bridge-source-framework BRIDGE_SOURCE_FRAMEWORK] [--pin-templates] [--reconcile-front-matter] [--reconcile-apply] [--absorb-from DIR] [--absorb-source-framework ABSORB_SOURCE_FRAMEWORK] [--absorb-apply] [--absorb-canonical-dir DIR] [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills] [--recipe-check] [--revert-migration] [--version] [--no-backup] [--shrink-policy SHRINK_POLICY] [--list-backups] [--restore-backup TIMESTAMP] [--add-fence-markers PATH] [--in-place] [--target-host-features TOKENS] [--allow-unenforced-confinement] [--accept-write-root PATH] [--allow-fallback-fail-open] [--capture-baseline PATH] [--baseline-label LABEL] [--check-baseline PATH] [--verify-waivers] [--verify-grants] [--issue-grant SPEC.json] [--sign-grant SPEC.json] [--verify-directives] [--issue-directive] [--manager-team ID] [--managed-team ID] [--task-scope SCOPE] [--expires-at ISO8601] [--max-uses N] [--approver PRINCIPAL] [--audit-exceptions] [--list-exceptions] [--confirm-review-sha256 HEX] [--allow-checkout-signing] [--sign-decision SPEC.json] [--redteam] [--redteam-probes MODULE] [--redteam-report DIR] [--redteam-freshness-check] [--accept-probe-baseline] [--write-integrity-manifest] [--verify-integrity] [--verify-backup TIMESTAMP] [--stale-check] [--framework-freshness] [--stale-remediate] [--stale-no-git] [--stale-restore TS] [--prune-backups KEEP] [--keep-within-days DAYS] [--backup-mirror DIR] [--fleet DIR] [--fleet-frameworks FLEET_FRAMEWORKS] [--fleet-report DIR] [--fleet-allow-no-verify] [--sync-init] [--pin FRAMEWORK] [--sync] [--sync-since COMMIT] [--frameworks FW1,FW2,...] [--sync-agent-docs] [--apply] [--include-claude] [--restore-removed] [--branch-inventory] [--branch-cleanup PLAN.json] [--branch-post-merge BRANCH] [--branch-report DIR] [--push-remote NAME] [--default-branch NAME] [--stale-days N] [--operator-email EMAIL] [--no-api] [--team-dir DIR] [--team-id ID] [--goose-source NAME] [--goose-model ID] [--goose-show] [--goose-config PATH] [--package-team SOURCE_DIR] [--package-source-framework NAME]
 .SH DESCRIPTION
 .PP
 Generate a complete agent team for any project.
@@ -406,13 +406,46 @@ Comma\-separated sync set for \-\-sync\-init (default: every registered framewor
 Propagate each agent's <!\-\- AGENTTEAMS\-LEARNED \-\-> block between its copies in .github/agents, .claude/agents and .goose/recipes of \-\-project. Report\-only unless \-\-apply. Never touches front matter, template fences or recipe keys; reads no brief.
 .TP
 .B \-\-apply
-With \-\-sync\-agent\-docs: write .github/agents and .goose/recipes targets (.claude/agents targets are staged for review unless \-\-include\-claude).
+With \-\-sync\-agent\-docs: write .github/agents and .goose/recipes targets (.claude/agents targets are staged for review unless \-\-include\-claude). With \-\-branch\-cleanup / \-\-branch\-post\-merge: execute instead of a dry run.
 .TP
 .B \-\-include\-claude
 With \-\-sync\-agent\-docs \-\-apply: also write .claude/agents targets after showing each diff and asking y/N. Refused unless stdin/stdout are a terminal and CLAUDECODE is unset (operator review; the unattended unit never passes this).
 .TP
 .B \-\-restore\-removed
 With \-\-sync\-agent\-docs \-\-apply: re\-insert the agreed learned block into copies an agent removed it from (they are otherwise excluded, with a warning every run).
+.TP
+.B \-\-branch\-inventory
+Read\-only: classify every local branch and every branch on the push remote of \-\-project (default: .) against the default branch, apply holds, and derive a deletion plan of leased commands. Never writes a ref (runs git fetch \-\-prune).
+.TP
+.B \-\-branch\-cleanup PLAN.json
+Execute a \-\-branch\-inventory deletion plan. Dry run unless \-\-apply; \-\-apply needs a @security PASS for action 'branch\-cleanup:<plan sha256[:12]>' (consumed).
+.TP
+.B \-\-branch\-post\-merge BRANCH
+Delete BRANCH just merged \-\-no\-ff (its tip must be the second parent of the push remote's default tip). Dry run unless \-\-apply; \-\-apply needs a valid operator Ed25519 'branch\-delete' capability grant (exit 3 when none).
+.TP
+.B \-\-branch\-report DIR
+With \-\-branch\-inventory: write branch\-inventory.csv/.json and branch\-deletion\-plan.json into DIR.
+.TP
+.B \-\-push\-remote NAME
+The only remote branch modes act on (default: origin).
+.TP
+.B \-\-default\-branch NAME
+Default branch (default: the push remote's HEAD).
+.TP
+.B \-\-stale\-days N
+Days without activity before unmerged work is stale (default: 14).
+.TP
+.B \-\-operator\-email EMAIL
+Author email treated as the operator (repeatable; git config user.email is always included). Other authors place an Owner hold. (default: [])
+.TP
+.B \-\-no\-api
+Do not query GitHub (no Merged\-by\-PR; no remote deletions planned).
+.TP
+.B \-\-team\-dir DIR
+Team agents dir holding the security log, roster and verify keys (default: the first of .claude/agents, .github/agents, .codex/agents under \-\-project).
+.TP
+.B \-\-team\-id ID
+Grant holder id for \-\-branch\-post\-merge (default: from build\-log).
 .TP
 .B \-\-goose\-source NAME
 Switch Goose's provider in config.yaml (e.g. ollama, openrouter). Applies that source's default model unless \-\-goose\-model is given.

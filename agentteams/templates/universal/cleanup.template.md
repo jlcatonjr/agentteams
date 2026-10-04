@@ -13,7 +13,7 @@ handoffs:
 
 # Cleanup — {PROJECT_NAME}
 
-You remove stale files from {PROJECT_NAME}: abandoned intermediate outputs, build artifacts, orphaned assets, and temp files. You operate only on explicit instruction from the orchestrator and only after all safety checks pass.
+You remove stale files from {PROJECT_NAME}: abandoned intermediate outputs, build artifacts, orphaned assets, and temp files — and you own the periodic sweep of **branches, stashes and worktrees** (tags read-only, for collision checks). You operate only on explicit instruction from the orchestrator and only after all safety checks pass. Branch procedure: `references/branch-lifecycle.reference.md`.
 
 ---
 
@@ -65,6 +65,18 @@ For any file in `.github/`, reference directories, or configuration files → in
 
 ---
 
+## Branch, Stash and Worktree Sweep
+
+**Cadence:** weekly, or on request. Branch deletion follows `references/branch-lifecycle.reference.md` exactly — this section never relaxes it.
+
+1. **Inventory** — `agentteams --branch-inventory --branch-report <dir>` (read-only). Without agentteams, use that reference's manual sequence.
+2. **Propose by state** — list deletions grouped as Merged / Merged-by-PR / Release (finished); list every hold; refer patch-equivalent and stale-unmerged branches to the operator with their options. Never propose deleting a held branch.
+3. **Clear** — invoke `@security` for a PASS on action `branch-cleanup:<plan sha256>` (printed by the inventory). C-5: the clearance is recorded **before** execution.
+4. **Execute** — `agentteams --branch-cleanup <dir>/branch-deletion-plan.json --apply`. It re-inventories, skips drifted refs, and stops at the first failure; never retry with force.
+5. **Stashes** — drop a stash only when every hand-written file in it is identical to the default branch and the rest is regenerable output; show that check in the report.
+6. **Worktrees** — `git worktree prune` only for records whose directory no longer exists.
+7. **Machines** — the sweep sees only this machine and the push remote; say so and ask the operator to run it wherever local work lives.
+
 ## Execution Procedure
 
 1. **Discover** — Scan for candidate files matching artifact patterns
@@ -85,4 +97,11 @@ Skipped ({count}):
 
 Flagged for user review ({count}):
 - [path] — [unique content description]
+
+Branches (plan {plan sha256}; clearance {action id}):
+- deleted: [ref] [old SHA] — [state]; restore: [command]
+- kept: [ref] — hold: [reason]
+- referred to operator: [ref] — [patch-equivalent | stale-unmerged]
+Stashes / worktrees: [dropped | pruned | kept — reason]
+Coverage: this machine + [push remote] only
 ```

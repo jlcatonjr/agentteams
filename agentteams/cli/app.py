@@ -110,6 +110,12 @@ def _main_dispatch(
         from agentteams.cli.agent_doc_sync_switch import run_agent_doc_sync_cli
         return run_agent_doc_sync_cli(args)
 
+    # --branch-inventory / --branch-cleanup / --branch-post-merge: standalone, read no brief.
+    from agentteams.cli.branch_switch import branch_mode_active
+    if branch_mode_active(args):
+        from agentteams.cli.branch_switch import run_branch_cli
+        return run_branch_cli(args)
+
     import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
 
     # --backup-mirror overrides AGENTTEAMS_BACKUP_MIRROR for this run so the

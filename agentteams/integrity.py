@@ -141,6 +141,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # unreviewed write into another framework's agent file.
     "agentteams/agent_doc_sync.py",
     "agentteams/learned_blocks.py",
+    # The branch lifecycle (2026-10-04). branch_cleanup deletes local and remote refs under a
+    # plan-bound @security clearance or an operator branch-delete grant; branch_inventory decides
+    # what is deletable (ancestry, Merged-by-PR, holds, api-unknown). A silent edit to either turns
+    # a guard (lease, drift skip, refs/pull check, HALT check) into unreviewed ref deletion.
+    "agentteams/branch_inventory.py",
+    "agentteams/branch_cleanup.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

@@ -103,6 +103,11 @@ GRANT_ROSTER_REL = "references/security-approvers.txt"
 #: The operation that widens the holder's sandbox ``allowWrite``.
 _WIDENING_OP = "write"
 
+#: Lets ``--branch-post-merge`` delete a just-merged branch (``agentteams.branch_cleanup``).
+BRANCH_DELETE_OP = "branch-delete"
+#: Ops only an operator Ed25519 signature may grant (sandboxed agents inherit the HMAC key).
+_OPERATOR_ONLY_OPS: frozenset[str] = frozenset({_WIDENING_OP, BRANCH_DELETE_OP})
+
 #: Business fields that MUST be present (non-empty) on every row, in fixed order (excludes
 #: ``timestamp``, ``prev_digest`` and ``signature``). ``uses`` is signed so a tampered
 #: counter invalidates the row (a future runtime-consume path would re-sign on increment;
@@ -195,7 +200,14 @@ def _grant_scheme(record: dict[str, str]) -> str:
 
 
 def _hmac_write_refusal(record: dict[str, str]) -> GrantError:
-    """The migration refusal for a non-Ed25519 grant that would widen ``allowWrite``."""
+    """Refusal for a non-Ed25519 grant of an operator-only op; ``write``-only wording is unchanged."""
+    ops = sorted(_permitted_ops(record) & _OPERATOR_ONLY_OPS)
+    if ops and ops != [_WIDENING_OP]:
+        return GrantError(
+            f"grant {record.get('grant_id')!r} permits {'/'.join(ops)!r} but is "
+            f"{_grant_scheme(record)}-signed: a grant of an operator-only op must be Ed25519-signed "
+            "by the operator. REFUSED. Sign it with `agentteams --sign-grant SPEC.json --framework "
+            "<fw> --project <repo>` (operator key via AGENTTEAMS_DECISION_ED25519_KEYFILE).")
     return GrantError(
         f"grant {record.get('grant_id')!r} permits 'write' but is {_grant_scheme(record)}-signed: "
         "a grant that widens the sandbox allowWrite must be Ed25519-signed by the operator (the "
@@ -324,7 +336,7 @@ def validate_grant(
     for field in _GRANT_SIGNATURE_FIELDS:
         if not (record.get(field) or "").strip():
             raise GrantError(f"grant is missing required field {field!r}")
-    if _WIDENING_OP in _permitted_ops(record) and _grant_scheme(record) != SIG_SCHEME_ED25519:
+    if _permitted_ops(record) & _OPERATOR_ONLY_OPS and _grant_scheme(record) != SIG_SCHEME_ED25519:
         raise _hmac_write_refusal(record)
     if not verify_grant_signature(record, key=key, team_dir=team_dir):
         raise GrantError(f"grant {record.get('grant_id')!r} has an invalid signature")
@@ -733,7 +745,7 @@ def _prepare_grant_record(
         ) from exc
     warn_if_only_root_roster(repo_root, team_dir)
     _assert_approver_on_roster(approver, team_dir)
-    if max_uses != 1:
+    if max_uses != 1 and _WIDENING_OP in _permitted_ops({"permitted_ops": permitted_ops}):
         # max_uses is validated at every generation but NOT decremented per write — the
         # generation-time widening path re-reads the ledger and does not consume a use
         # (expiry is the only active bound). An operator who sets max_uses=N expecting N
@@ -799,8 +811,9 @@ def issue_grant(
         GrantError: The grant permits ``write`` (migration message), any spec check in
             :func:`_prepare_grant_record` fails, or the signing key is unset.
     """
-    if _WIDENING_OP in _permitted_ops({"permitted_ops": permitted_ops}):
-        raise _hmac_write_refusal({"grant_id": grant_id, "sig_scheme": SIG_SCHEME_HMAC})
+    if _permitted_ops({"permitted_ops": permitted_ops}) & _OPERATOR_ONLY_OPS:
+        raise _hmac_write_refusal({"grant_id": grant_id, "sig_scheme": SIG_SCHEME_HMAC,
+                                   "permitted_ops": permitted_ops})
     record = _prepare_grant_record(
         repo_root, team_dir=team_dir, issuer_team=issuer_team, holder_team=holder_team,
         target_path=target_path, permitted_ops=permitted_ops, expires_at=expires_at,
@@ -936,6 +949,7 @@ def verify_grants(
 
 
 __all__ = [
+    "BRANCH_DELETE_OP",
     "GRANT_COLUMNS",
     "GRANT_KEY_ENV",
     "GRANT_LEDGER_COLUMNS",
