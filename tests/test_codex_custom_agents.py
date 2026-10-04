@@ -4,7 +4,8 @@ from baseAgent, 2026-09-29).
 Acceptance criteria covered here:
 * TOML round-trip through ``tomllib`` for bodies containing ``\"\"\"``, ``'''``, backslashes,
   non-ASCII characters, control characters and fenced code;
-* required keys; unique names; ``sandbox_mode`` only for read-only roles; no model, provider
+* required keys; unique names; an explicit ``sandbox_mode`` for every canonical tool list
+  (``workspace-write`` only with ``edit``), none for bespoke or undeclared tools; no model, provider
   or approval keys;
 * no duplicate H1;
 * the no-overwrite guard for ``AGENTS.md`` and ``AGENTS.override.md``;
@@ -125,28 +126,65 @@ def test_required_keys_and_no_forbidden_keys() -> None:
     assert not (set(doc) & _FORBIDDEN_KEYS)
     assert doc["name"] == "worker"
     assert doc["description"] == "Does things"
-    assert "sandbox_mode" not in doc
+    assert doc["sandbox_mode"] == "workspace-write"  # declares edit
+
+
+@pytest.mark.parametrize(
+    ("tools", "mode"),
+    [
+        ("['read', 'search']", "read-only"),
+        ("['read']", "read-only"),
+        ("['read', 'search', 'agent']", "read-only"),  # hands off, writes nothing
+        ("['read', 'search', 'todo', 'agent']", "read-only"),
+        ("['read', 'search', 'retrieval']", "read-only"),
+        ("['read', 'execute']", "read-only"),  # commands run; the sandbox blocks their writes
+        ("['read', 'search', 'execute', 'agent']", "read-only"),
+        ("['read', 'search', 'edit']", "workspace-write"),
+        ("['read', 'edit', 'search', 'execute', 'todo', 'agent']", "workspace-write"),
+        ("['read', 'search', 'runCommands']", None),  # bespoke tool: cannot classify
+        ("['Read', 'Search']", "read-only"),  # case-insensitive
+    ],
+)
+def test_sandbox_mode_follows_the_declared_tools(tools: str, mode: str | None) -> None:
+    doc = tomllib.loads(
+        CodexAdapter().render_agent_file(_agent("A", tools, "# A\n\nBody.\n"), "a", {})
+    )
+    assert doc.get("sandbox_mode") == mode
+    if mode == "read-only":
+        assert "not a ceiling" in doc["developer_instructions"]
 
 
 @pytest.mark.parametrize(
     ("tools", "read_only"),
     [
-        ("['read', 'search']", True),
-        ("['read']", True),
-        ("['read', 'search', 'edit']", False),
+        ("['read', 'search', 'agent']", True),
+        ("['read', 'search', 'todo']", True),
         ("['read', 'execute']", False),
-        ("['read', 'search', 'runCommands']", False),  # unknown bespoke tool: not read-only
-        ("['read', 'search', 'agent']", False),
+        ("['read', 'retrieval']", False),
+        ("['read', 'edit']", False),
+        ("['read', 'runCommands']", False),
+        (None, False),
     ],
 )
-def test_sandbox_mode_only_for_read_only_roles(tools: str, read_only: bool) -> None:
+def test_is_read_only_means_no_way_to_change_the_workspace(tools, read_only: bool) -> None:
+    from agentteams.frameworks.codex import is_read_only
+    parsed = None if tools is None else [t.strip(" '") for t in tools.strip("[]").split(",")]
+    assert is_read_only(parsed) is read_only
+
+
+def test_command_running_role_is_told_commands_may_not_write() -> None:
     doc = tomllib.loads(
-        CodexAdapter().render_agent_file(_agent("A", tools, "# A\n\nBody.\n"), "a", {})
+        CodexAdapter().render_agent_file(_agent("A", "['read', 'execute']", "# A\n\nB\n"), "a", {})
     )
-    assert ("sandbox_mode" in doc) is read_only
-    if read_only:
-        assert doc["sandbox_mode"] == "read-only"
-        assert "not a ceiling" in doc["developer_instructions"]
+    assert doc["sandbox_mode"] == "read-only"
+    assert "you may run commands, but not ones that write" in doc["developer_instructions"]
+
+
+def test_unsupported_sandbox_mode_is_refused() -> None:
+    from agentteams.frameworks.codex import render_codex_agent_toml
+    with pytest.raises(ValueError):
+        render_codex_agent_toml(name="a", description="d", developer_instructions="x",
+                                sandbox_mode="danger-full-access")
 
 
 def test_no_tools_declared_means_no_sandbox_mode() -> None:
@@ -283,7 +321,7 @@ def test_interop_emits_toml_only_and_guards_shared_files(tmp_path: Path) -> None
     assert len(names) == len(set(names))
     by_name = {d["name"]: d for d in docs}
     assert by_name["security"]["sandbox_mode"] == "read-only"
-    assert "sandbox_mode" not in by_name["orchestrator"]
+    assert by_name["orchestrator"]["sandbox_mode"] == "workspace-write"
     assert "sandbox_mode" not in by_name["wasm-wat-expert"]
     wasm = by_name["wasm-wat-expert"]["developer_instructions"]
     assert wasm.startswith("<!-- Bespoke custom agent -->\n# Wasm\n\nVerbatim body — é.\n")
