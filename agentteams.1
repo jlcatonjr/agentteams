@@ -418,7 +418,7 @@ With \-\-sync\-agent\-docs \-\-apply: re\-insert the agreed learned block into c
 Read\-only: classify every local branch and every branch on the push remote of \-\-project (default: .) against the default branch, apply holds, and derive a deletion plan of leased commands. Never writes a ref (runs git fetch \-\-prune).
 .TP
 .B \-\-branch\-cleanup PLAN.json
-Execute a \-\-branch\-inventory deletion plan. Dry run unless \-\-apply; \-\-apply needs a @security PASS for action 'branch\-cleanup:<plan sha256[:12]>' (consumed).
+Execute a \-\-branch\-inventory deletion plan. Dry run unless \-\-apply; \-\-apply needs a @security PASS for action 'branch\-cleanup:<plan sha256>' (consumed).
 .TP
 .B \-\-branch\-post\-merge BRANCH
 Delete BRANCH just merged \-\-no\-ff (its tip must be the second parent of the push remote's default tip). Dry run unless \-\-apply; \-\-apply needs a valid operator Ed25519 'branch\-delete' capability grant (exit 3 when none).
@@ -442,7 +442,7 @@ Author email treated as the operator (repeatable; git config user.email is alway
 Do not query GitHub (no Merged\-by\-PR; no remote deletions planned).
 .TP
 .B \-\-team\-dir DIR
-Team agents dir holding the security log, roster and verify keys (default: the first of .claude/agents, .github/agents, .codex/agents under \-\-project).
+Team agents dir holding the security log, roster and verify keys: one of .claude/agents, .github/agents or .codex/agents under \-\-project (default: the first that exists). Any other path is refused.
 .TP
 .B \-\-team\-id ID
 Grant holder id for \-\-branch\-post\-merge (default: from build\-log).
