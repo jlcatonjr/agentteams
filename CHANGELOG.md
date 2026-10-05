@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     produces a warning.
   - **Review report:** `AGENTTEAMS_SHRINK_REPORT=<path>.json` lists every pinned section with its
     old and new bodies, its exact entry, and each lost token classified against agentteams'
-    template history (`retired` / `current` / `never`).
+    template history (`retired` / `current` / `never`, or `unknown` when not run from a
+    full-history agentteams checkout, e.g. a shallow CI clone).
 - **Codex native renders are fenced.** A natively rendered Codex agent used to carry its whole
   template body outside every fence (only `codex_translation` was fenced), so `--update --merge`
   never refreshed it. The body is now wrapped in a `content` fence plus a Project-Specific Notes

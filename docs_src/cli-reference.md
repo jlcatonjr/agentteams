@@ -26,7 +26,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--scan-security] [--check-budget] [--self] [--allow-external-self-output]
            [--post-audit] [--auto-correct] [--enrich]
            [--strict-manual-placeholders] [--no-strict-manual-placeholders]
-           [--no-backup] [--shrink-policy {preserve,warn,halt,allow}]
+           [--no-backup] [--shrink-allow FILE:FENCE@DIGEST] [--shrink-policy {preserve,warn,halt,allow}]
            [--list-backups] [--restore-backup TIMESTAMP]
            [--add-fence-markers PATH] [--in-place]
            [--prune-backups [KEEP]] [--keep-within-days DAYS] [--backup-mirror DIR]
@@ -561,9 +561,15 @@ entry, and each lost token classified against agentteams' template history:
 - `retired`: it was in a past template and is gone now;
 - `current`: it is still in a template;
 - `never`: it was never in a template, which means project enrichment;
-- `unknown`: provenance could not be checked (not running from an agentteams git checkout).
+- `unknown`: provenance could not be checked (not running from an agentteams git checkout, or the
+  checkout is shallow, like CI's default `fetch-depth: 1`).
 
-Release a section only when every lost token is `retired`.
+**Deciding.** The conservative rule is to release a section only when every lost token is
+`retired`. Token provenance can't see a renumbered list or a placeholder rendered differently,
+though. The 2026-10-04 fleet update therefore used a line-level standard: release when every line
+the update removes is template-owned (still in the current template ignoring list numbering, a
+rendering of a placeholder line, or retired template text). Any project-written line keeps the
+section pinned.
 
 **Wrappers.** Tools that wrap agentteams and can't pass flags, such as `researchteam update`, use
 `AGENTTEAMS_SHRINK_ALLOW` (`;`-separated) for one invocation. Every active entry is printed at the
