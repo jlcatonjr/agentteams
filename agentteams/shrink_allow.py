@@ -187,8 +187,17 @@ def track(used: set[str], report: "Report", rel_path: str, existing: str | None,
 
 
 def _agentteams_checkout() -> Path | None:
+    """The agentteams git checkout with FULL history, or None.
+
+    A shallow clone (CI's default ``fetch-depth: 1``) has no template history, so every retired
+    token would read as ``never``; provenance is then ``unknown`` rather than misleading.
+    """
     root = Path(__file__).resolve().parents[1]
-    return root if (root / ".git").exists() and (root / _TEMPLATES_REL).is_dir() else None
+    if not ((root / ".git").exists() and (root / _TEMPLATES_REL).is_dir()):
+        return None
+    shallow = subprocess.run(["git", "-C", str(root), "rev-parse", "--is-shallow-repository"],
+                             capture_output=True, text=True, check=False).stdout.strip()
+    return None if shallow == "true" else root
 
 
 def token_provenance(token: str, checkout: Path | None) -> str:

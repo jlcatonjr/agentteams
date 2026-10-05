@@ -125,7 +125,7 @@ def test_review_report_lists_pinned_sections_with_provenance(tmp_path, monkeypat
 def test_token_provenance_uses_template_history():
     checkout = shrink_allow._agentteams_checkout()
     if checkout is None:
-        pytest.skip("not running from an agentteams git checkout")
+        pytest.skip("not running from a full-history agentteams git checkout (CI is shallow)")
     # Retired from git-operations.template.md on 2026-06-20 (703b1e2).
     assert shrink_allow.token_provenance("references/git-procedures.md", checkout) == "retired"
     assert shrink_allow.token_provenance("references/github-workflows-merge.reference.md",
