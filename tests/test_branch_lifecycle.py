@@ -102,18 +102,26 @@ class Repo:
 class FakeAPI:
     """Stub of :class:`agentteams.branch_inventory.GitHubAPI`."""
 
-    def __init__(self, *, open_prs=(), closed=None, protected=(), fail_open=False) -> None:
+    def __init__(self, *, open_prs=(), closed=None, protected=(), fail_open=False,
+                 rules_verdict="ok") -> None:
         self.repo = REPO
         self.open_prs = list(open_prs)
         self.closed = closed or {}
         self.protected = set(protected)
         self.fail_open = fail_open
+        self.rules_verdict = rules_verdict
+        self.plan_unavailable = False
+        self.calls: list[str] = []
 
     def get(self, path: str):
+        self.calls.append(path)
         if path.startswith("branches/"):
             return "ok", {"protected": unquote(path.split("/", 1)[1]) in self.protected}
         if path.startswith("rules/branches/"):
-            return "ok", []
+            if self.rules_verdict == bi.API_PLAN_UNAVAILABLE:
+                self.plan_unavailable = True
+                return bi.API_PLAN_UNAVAILABLE, None
+            return (self.rules_verdict, None) if self.rules_verdict != "ok" else ("ok", [])
         if path.startswith("pulls/"):
             number = int(path.split("/")[1])
             for prs in self.closed.values():
@@ -306,6 +314,71 @@ def test_api_unknown_blocks_every_remote_deletion(repo):
     assert inv["meta"]["api_status"] == bi.API_UNKNOWN
     assert "api-unknown" in rec(inv, "feat/u")["holds"]
     assert [i["ref_type"] for i in inv["plan"]["items"]] == ["local"]
+
+
+def test_plan_without_protection_lets_a_merged_remote_branch_go(repo):
+    """GitHub Free, private repo: the rulesets endpoint answers the plan-limit 403. The branches
+    endpoint already said protected: false, so the branch is unprotected, not unknown."""
+    repo.branch("feat/p", {"p.txt": "p\n"})
+    repo.merge_no_ff("feat/p")
+    inv = inventory(repo, FakeAPI(rules_verdict=bi.API_PLAN_UNAVAILABLE))
+    assert inv["meta"]["api_status"] == "ok"
+    r = rec(inv, "feat/p")
+    assert r["protected"] == "no" and "api-unknown" not in r["holds"] and r["action"] == "delete"
+    assert any("not available on this repository's GitHub plan" in n for n in inv["meta"]["notes"])
+
+
+def test_any_other_rules_failure_still_blocks_remote_deletion(repo):
+    repo.branch("feat/q", {"q.txt": "q\n"})
+    repo.merge_no_ff("feat/q")
+    inv = inventory(repo, FakeAPI(rules_verdict=bi.API_UNKNOWN))
+    assert inv["meta"]["api_status"] == bi.API_UNKNOWN
+    assert "api-unknown" in rec(inv, "feat/q")["holds"]
+    assert [i["ref_type"] for i in inv["plan"]["items"]] == ["local"]
+
+
+def test_protected_branch_never_reaches_the_rules_endpoint(repo):
+    repo.branch("keep/x", {"x.txt": "x\n"})
+    repo.merge_no_ff("keep/x")
+    api = FakeAPI(protected={"keep/x"}, rules_verdict=bi.API_PLAN_UNAVAILABLE)
+    assert rec(inventory(repo, api), "keep/x")["state"] == "protected"
+    assert not any(c.startswith("rules/branches/keep") for c in api.calls)
+
+
+@pytest.mark.parametrize(("stdout", "stderr", "verdict"), [
+    ('{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.","status":"403"}',
+     "gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)",
+     bi.API_PLAN_UNAVAILABLE),
+    ('{"message":"Resource not accessible by integration","status":"403"}',
+     "gh: Resource not accessible by integration (HTTP 403)", bi.API_UNKNOWN),
+    ("", "gh: Bad credentials (HTTP 401)", bi.API_UNKNOWN),
+    ('{"message":"Not Found","status":"404"}', "gh: Not Found (HTTP 404)", bi.API_NOT_FOUND),
+])
+def test_gh_path_recognises_only_the_exact_plan_limit_403(monkeypatch, stdout, stderr, verdict):
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(bi.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 1, stdout, stderr))
+    api = bi.GitHubAPI(REPO)
+    assert api.get("rules/branches/x")[0] == verdict
+    assert api.plan_unavailable is (verdict == bi.API_PLAN_UNAVAILABLE)
+
+
+@pytest.mark.parametrize(("code", "body", "verdict"), [
+    (403, b'{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature."}',
+     bi.API_PLAN_UNAVAILABLE),
+    (403, b'{"message":"API rate limit exceeded"}', bi.API_UNKNOWN),
+    (403, b"not json", bi.API_UNKNOWN),
+    (404, b"{}", bi.API_NOT_FOUND),
+])
+def test_token_path_recognises_only_the_exact_plan_limit_403(monkeypatch, code, body, verdict):
+    import io
+    import urllib.error
+    monkeypatch.setenv("GH_TOKEN", "t")
+
+    def boom(*a, **k):
+        raise urllib.error.HTTPError("https://api.github.com/x", code, "x", {}, io.BytesIO(body))
+    monkeypatch.setattr(bi.urllib.request, "urlopen", boom)
+    assert bi.GitHubAPI(REPO).get("rules/branches/x")[0] == verdict
 
 
 def test_missing_pull_ref_refuses_merged_by_pr_deletion(repo):

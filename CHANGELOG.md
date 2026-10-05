@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (branch inventory: private repositories on GitHub Free no longer block every remote deletion)
+
+- **Problem.** On a private repository on GitHub Free, the rulesets endpoint
+  (`rules/branches/{branch}`) answers HTTP 403 "Upgrade to GitHub Pro or make this repository public
+  to enable this feature." The inventory mapped that to unknown, so `api_status` became unknown and
+  every remote branch was held (`api-unknown`): no remote branch could ever be deleted there.
+- **Fix.** `GitHubAPI.get` returns a distinct `plan-unavailable` verdict for exactly that 403 message,
+  on both the token and the `gh` paths. Only `_protection` acts on it, and only after the branches
+  endpoint has already reported `protected: false`: the branch is then unprotected, and the report
+  notes that protection was read from the branches endpoint. Every other failure, including any
+  other 403, stays unknown (fail-closed).
+- **Tests.** Plan-limit 403 leads to deletion. Another rules failure still blocks. A protected branch
+  never reaches the rules endpoint. Both HTTP paths recognise only the exact message.
+
 ### fix (Codex: explicit `sandbox_mode` for every canonical role; read-only means no edit/execute/retrieval)
 
 - **Read-only rule.** `is_read_only` was true only when the declared tools were a subset of
