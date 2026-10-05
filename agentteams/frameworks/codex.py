@@ -100,6 +100,13 @@ _TRANSLATION_BLOCK_RE = re.compile(
     rf"<!--\s*AGENTTEAMS:END\s+{_TRANSLATION_FENCE_ID}\s*-->\n?",
     re.DOTALL,
 )
+# Any AGENTTEAMS fence opener; used to tell a natively rendered (unfenced) body from a projected one.
+_ANY_FENCE_RE = re.compile(r"<!--\s*AGENTTEAMS:BEGIN\s+")
+_CONTENT_BEGIN = "<!-- AGENTTEAMS:BEGIN content v=1 -->"
+_CONTENT_END = "<!-- AGENTTEAMS:END content -->"
+# Where hand-written text starts in a legacy body: the notes heading or a learned block.
+_USER_TAIL_RE = re.compile(r"^(?:## Project-Specific Notes\b|<!-- AGENTTEAMS-LEARNED:BEGIN)", re.M)
+_INSTRUCTIONS_OPEN = "developer_instructions = '''\n"
 _DECLARED_TOOLS_PREFIX = "Declared tools: "
 _CANONICAL_NAME_PREFIX = "Canonical agent name: "
 _HANDOFF_LINE_PREFIX = "- Hand off to `"
@@ -326,6 +333,60 @@ def _ensure_single_leading_h1(body: str, name: str) -> str:
     return f"# {name}\n\n{body.strip()}".strip()
 
 
+def _fence_native_body(body: str) -> str:
+    """Wrap an unfenced agent body in a ``content`` fence plus a Project-Specific Notes section.
+
+    The Markdown path gets the same treatment in ``emit._normalize_generated_content`` /
+    ``_ensure_project_notes_section``, but a TOML file skips it, so a natively rendered Codex agent
+    used to carry its whole template body OUTSIDE every fence. ``--update --merge`` then treated
+    that body as preserved-forever user content and never refreshed it (2026-10-04: agentteams'
+    own agent-updater, cleanup, git-operations and security TOMLs were stale). A body that already
+    has fences (a projection of a fenced ``.github`` agent) is returned unchanged.
+    """
+    if _ANY_FENCE_RE.search(body):
+        return body
+    from agentteams.fences import PROJECT_NOTES_SECTION
+
+    return _content_wrap(body) + PROJECT_NOTES_SECTION
+
+
+def retrofit_legacy_toml(text: str) -> str | None:
+    """Retrofit a ``content`` fence onto a legacy Codex TOML whose agent body is unfenced.
+
+    Only the instructions body — the text between ``developer_instructions = '''`` and the
+    ``codex_translation`` fence — is wrapped; the TOML keys and the translation block stay as they
+    are, so the next merge replaces the body like any other fence. Called by ``emit_all`` before it
+    merges a ``.toml`` target; the pre-retrofit file is backed up there first.
+
+    Args:
+        text: The on-disk TOML.
+
+    Returns:
+        The retrofitted TOML, or None when there is nothing to do (no instructions block, no
+        translation fence, or the body already carries a fence).
+    """
+    start = text.find(_INSTRUCTIONS_OPEN)
+    block = _TRANSLATION_BLOCK_RE.search(text)
+    if start < 0 or block is None or block.start() < start:
+        return None
+    body_start = start + len(_INSTRUCTIONS_OPEN)
+    body = text[body_start:block.start()]
+    if not body.strip() or _ANY_FENCE_RE.search(body):
+        return None
+    # Hand-written text stays OUTSIDE the fence: anything from the first Project-Specific Notes
+    # heading or learned block onward is the project's, and the next merge must keep it.
+    cut = _USER_TAIL_RE.search(body)
+    template, tail = (body[:cut.start()], body[cut.start():]) if cut else (body, "")
+    if not template.strip():
+        return None
+    return text[:body_start] + _content_wrap(template) + tail + text[block.start():]
+
+
+def _content_wrap(text: str) -> str:
+    """``text`` inside a ``content`` fence, ending with a newline."""
+    return f"{_CONTENT_BEGIN}\n{text.strip()}\n{_CONTENT_END}\n"
+
+
 def _translation_block(
     display_name: str, tools: list[str] | None, handoffs: list[dict[str, Any]]
 ) -> str:
@@ -501,6 +562,8 @@ class CodexAdapter(AgentsMdAdapter):
         if not manifest.get("interop_source_framework"):
             body = body.replace(".github/agents", ".codex/agents")
         body = _ensure_single_leading_h1(body, name)
+        if not manifest.get("interop_source_framework"):  # an interop import stays verbatim
+            body = _fence_native_body(body)
         instructions = body.rstrip() + "\n\n" + _translation_block(name, tools, handoffs) + "\n"
         return render_codex_agent_toml(
             name=agent_slug,

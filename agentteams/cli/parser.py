@@ -774,6 +774,19 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--shrink-allow",
+        metavar="FILE:FENCE",
+        action="append",
+        dest="shrink_allow",
+        default=[],
+        help=(
+            "Lift the shrink guard for ONE named section, e.g. git-operations.agent.md:content "
+            "(repeatable; also AGENTTEAMS_SHRINK_ALLOW, ';'-separated). Grant only after reading "
+            "the section's old and new bodies: the template update is applied and the old body "
+            "goes to a .lost sidecar. Every other section keeps --shrink-policy."
+        ),
+    )
+    parser.add_argument(
         "--shrink-policy",
         choices=("preserve", "additive", "warn", "halt", "allow"),
         default="preserve",

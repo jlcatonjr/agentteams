@@ -22,6 +22,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security template.** The read-only limit now names the canonical definition's `tools:` front
   matter (Goose recipes and Codex TOMLs have none) and binds where the runtime does not enforce it.
 
+### feat (`--shrink-allow`: per-section shrink-guard overrides) and fix (Codex agent bodies now update)
+
+- **`--shrink-allow FILE:FENCE@DIGEST`** (repeatable; also `AGENTTEAMS_SHRINK_ALLOW` for wrappers
+  such as `researchteam update`) lifts `--shrink-policy preserve` for one reviewed section.
+  - The digest binds the override to the reviewed on-disk body, so a leftover or inherited entry
+    can't release anything else.
+  - The old body goes to the `.lost` sidecar. Overrides are refused without a backup dir, and the
+    active entries are printed at the start of each run.
+  - **Why:** the guard counts a reference the template retired as lost enrichment, so it pinned
+    stale bodies indefinitely.
+  - **Scale, from a 2026-10-04 dry run:** 20 sections pinned in researchteam (including
+    `git-operations` and `cleanup`) and 49 in musicmaker.
+  - **Consequence:** template updates, including the branch-lifecycle procedure, never reached
+    those teams.
+  - **Entry checks:** a malformed or escaping entry is a usage error, and an unmatched entry
+    produces a warning.
+  - **Review report:** `AGENTTEAMS_SHRINK_REPORT=<path>.json` lists every pinned section with its
+    old and new bodies, its exact entry, and each lost token classified against agentteams'
+    template history (`retired` / `current` / `never`, or `unknown` when not run from a
+    full-history agentteams checkout, e.g. a shallow CI clone).
+- **Codex native renders are fenced.** A natively rendered Codex agent used to carry its whole
+  template body outside every fence (only `codex_translation` was fenced), so `--update --merge`
+  never refreshed it. The body is now wrapped in a `content` fence plus a Project-Specific Notes
+  section, matching the Markdown path. Two cases are unchanged:
+  - Projections of fenced `.github` agents.
+  - Interop imports, which stay verbatim.
+- **Codex legacy retrofit.** On `--update --merge --yes`, an existing Codex TOML with an unfenced
+  body gets a `content` fence around its template text only, with a backup first. These stay
+  outside the fence and are kept:
+  - hand-written Project-Specific Notes and learned blocks;
+  - the TOML keys;
+  - the translation block.
+  The next merge then refreshes the template text. The retrofit needs a backup dir.
+- **Test:** `test_rendered_fence_balance` now requires a real section id, so the id-less
+  learned-block markers quoted in the agent-updater template are no longer misread as fences.
+- **Docs:** `--team-dir` now documents that paths outside the project's team dirs are refused.
+
 ### feat (branch lifecycle: `--branch-inventory`, `--branch-cleanup`, `--branch-post-merge`)
 
 Standardizes what happens to a branch after its work lands. This answers baseAgent's 2026-10-04
