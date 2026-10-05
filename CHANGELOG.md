@@ -52,6 +52,11 @@ merged, and no layer of the generated team ever deleted one.
 - **Hook.** The runtime delete gate (`constitutional-gate.py`) now asks the operator before
   `agentteams --branch-cleanup/--branch-post-merge … --apply`, because those git deletes run inside
   the tool.
+- **Signing-enforced workspaces** (#102). With `enforce_decision_signing: true` and no
+  decision key, an unsigned PASS cannot clear `--branch-cleanup`. The reference (§4) documents
+  the C-2 path: an operator-minted security waiver scoped to `branch-cleanup:<plan sha256>`, with
+  `max_uses` 1, a short expiry and a session-only key. It is consumed by the run, and a test
+  covers it.
 - **Not adopted from the handoff:**
   - an emitted `references/git-procedures.md`. That name was retired from templates on 2026-06-20
     (`703b1e2`), and agentteams' own root file of that name is repository-specific. The stale
