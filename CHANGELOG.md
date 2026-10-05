@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Codex: explicit `sandbox_mode` for every canonical role; read-only means no edit/execute/retrieval)
+
+- **Read-only rule.** `is_read_only` was true only when the declared tools were a subset of
+  `{read, search}`, so read-only roles that hand off (`agent`) or track work (`todo`) got no
+  `sandbox_mode` and inherited the session's sandbox. It is now true when the tools are canonical and
+  include none of `edit`, `execute` or `retrieval`.
+- **Explicit mode for every canonical role.** New `sandbox_mode_for`: `workspace-write` only when a
+  role declares `edit`, otherwise `read-only` (command-running roles may run commands that do not
+  write). Bespoke or undeclared tool lists still get none.
+- **API.** `render_codex_agent_toml(read_only=...)` becomes `sandbox_mode=...` and refuses other
+  values such as `danger-full-access`.
+- **Behaviour change.** Command-running roles that must write (builds, git) now get `read-only` on
+  Codex; a per-agent write-set field in the brief schema is the proposed follow-up.
+- **Security template.** The read-only limit now names the canonical definition's `tools:` front
+  matter (Goose recipes and Codex TOMLs have none) and binds where the runtime does not enforce it.
+
 ### feat (`--shrink-allow`: per-section shrink-guard overrides) and fix (Codex agent bodies now update)
 
 - **`--shrink-allow FILE:FENCE@DIGEST`** (repeatable; also `AGENTTEAMS_SHRINK_ALLOW` for wrappers

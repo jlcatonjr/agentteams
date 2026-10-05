@@ -197,4 +197,5 @@ def test_hand_added_codex_keys_are_reset_by_projection(tmp_path: Path) -> None:
                                       'sandbox_mode = "danger-full-access"\nname = "orchestrator"'),
                          encoding="utf-8")
     sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "codex"])
-    assert "sandbox_mode" not in tomllib.loads(toml_path.read_text(encoding="utf-8"))
+    # the hand-added value is replaced by the projected one (the orchestrator declares edit)
+    assert tomllib.loads(toml_path.read_text(encoding="utf-8"))["sandbox_mode"] == "workspace-write"

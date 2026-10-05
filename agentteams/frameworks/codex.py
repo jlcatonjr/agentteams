@@ -3,8 +3,8 @@ codex.py — Framework adapter for the OpenAI Codex CLI: custom agents as TOML.
 
 Agent files:  .codex/agents/<slug>.toml  (Codex custom agents — one TOML file per agent)
 Instructions: AGENTS.md (repo root), written only when absent or already Codex-generated
-Format:       TOML: ``name``, ``description``, ``developer_instructions`` (+ ``sandbox_mode``
-              = "read-only" for read-only roles). No ``model``, provider or approval keys.
+Format:       TOML: ``name``, ``description``, ``developer_instructions`` (+ ``sandbox_mode``,
+              see below). No ``model``, provider or approval keys.
 Handoffs:     translated into a "Hand off to" section inside ``developer_instructions``
               (``handoff_delivery_mode() == "native"``; parsed back by ``parse_agent_source``)
 
@@ -25,8 +25,12 @@ Verified upstream facts (2026-09-29; references/codex-agent-infrastructure-exper
   hyphenated agentteams slug is therefore used verbatim as ``name``.
   ``developer_instructions`` must not be blank.
 
-``sandbox_mode = "read-only"`` is emitted only for agents whose declared tools are all
-read-only (``read``/``search``). It is a DEFAULT, NOT A CEILING: Codex subagents inherit the
+Every agent whose declared tools are all canonical tokens gets an explicit ``sandbox_mode``, so
+none inherits one silently: ``"workspace-write"`` when it declares ``edit``, otherwise
+``"read-only"``. That includes agents that may run commands but not edit (``execute`` without
+``edit``): Codex's read-only sandbox still runs commands but blocks their writes. An agent with a
+bespoke tool outside the canonical vocabulary, or no tool list, gets none, because its write
+capability cannot be classified. ``sandbox_mode`` is a DEFAULT, NOT A CEILING: Codex subagents inherit the
 parent's sandbox policy, and CLI permission overrides are re-applied to spawned children, so
 it cannot confine an agent more tightly than the session that spawns it allows. Tool grants
 are likewise not enforced by Codex; the declared list is stated as a self-imposed limit.
@@ -58,6 +62,7 @@ __all__ = [
     "h1_count",
     "is_read_only",
     "render_codex_agent_toml",
+    "sandbox_mode_for",
     "toml_multiline_string",
 ]
 
@@ -83,10 +88,10 @@ _TOML_HEADER = (
     "# to spawned children. No model, provider or approval keys are emitted on purpose.\n"
 )
 
-#: Declared tools that leave the workspace untouched. An agent whose declared tools are a
-#: non-empty subset of these gets ``sandbox_mode = "read-only"``; anything else (including an
-#: unrecognised bespoke tool such as ``runCommands``, or no declaration at all) gets none.
-_READ_ONLY_TOOLS = frozenset({"read", "search"})
+#: Canonical tokens that let an agent change the workspace (directly, or through a command or
+#: the retrieval CLI). An agent declaring none of them is read-only (``is_read_only``).
+_WRITE_CAPABLE_TOOLS = frozenset({"edit", "execute", "retrieval"})
+_CANONICAL_TOOLS = frozenset(_capability_map.CANONICAL_TOOL_SCOPES)
 
 # The translation block is an AGENTTEAMS fence so `--update --merge` refreshes it.
 _TRANSLATION_FENCE_ID = "codex_translation"
@@ -182,7 +187,7 @@ def render_codex_agent_toml(
     name: str,
     description: str,
     developer_instructions: str,
-    read_only: bool,
+    sandbox_mode: str | None,
 ) -> str:
     """Render one Codex custom-agent TOML document.
 
@@ -190,7 +195,8 @@ def render_codex_agent_toml(
         name: The Codex agent name (authoritative over the file name).
         description: Human-facing guidance for when to use the agent.
         developer_instructions: The agent's instructions (Markdown).
-        read_only: Emit ``sandbox_mode = "read-only"`` (a default, not a ceiling).
+        sandbox_mode: ``"read-only"``, ``"workspace-write"`` or ``None`` (omit the key). A
+            default, not a ceiling.
 
     Returns:
         TOML text that parses with ``tomllib``.
@@ -207,8 +213,10 @@ def render_codex_agent_toml(
         f"name = {_toml_basic_string(name)}",
         f"description = {_toml_basic_string(description)}",
     ]
-    if read_only:
-        lines.append('sandbox_mode = "read-only"')
+    if sandbox_mode is not None:
+        if sandbox_mode not in ("read-only", "workspace-write"):
+            raise ValueError(f"Codex custom agent {name!r}: unsupported sandbox_mode {sandbox_mode!r}")
+        lines.append(f"sandbox_mode = {_toml_basic_string(sandbox_mode)}")
     lines.append(f"developer_instructions = {toml_multiline_string(developer_instructions)}")
     return "\n".join(lines) + "\n"
 
@@ -248,16 +256,41 @@ def _declared_tools(content: str) -> list[str] | None:
     return list(dict.fromkeys(t for t in tools if t))
 
 
+def _canonical(tools: list[str] | None) -> set[str] | None:
+    """The declared tools as canonical tokens, or ``None`` when undeclared or bespoke."""
+    toks = {t.lower() for t in tools or []}
+    return toks if toks and toks <= _CANONICAL_TOOLS else None
+
+
 def is_read_only(tools: list[str] | None) -> bool:
-    """True when *tools* is a non-empty set of read-only tools only.
+    """True when *tools* are canonical and grant no way to change the workspace: none of
+    ``edit``, ``execute`` or ``retrieval`` (``agent`` and ``todo`` hand off or track work only).
 
     Args:
         tools: Declared tools, or ``None`` when undeclared.
 
     Returns:
-        Whether ``sandbox_mode = "read-only"`` applies.
+        Whether the agent is a read-only role.
     """
-    return bool(tools) and all(t.lower() in _READ_ONLY_TOOLS for t in tools or [])
+    toks = _canonical(tools)
+    return toks is not None and not toks & _WRITE_CAPABLE_TOOLS
+
+
+def sandbox_mode_for(tools: list[str] | None) -> str | None:
+    """The ``sandbox_mode`` to emit for *tools*: ``"workspace-write"`` when they declare
+    ``edit``, ``"read-only"`` for any other canonical declaration (read-only roles, and
+    command-running roles whose commands may not write), ``None`` when undeclared or bespoke.
+
+    Args:
+        tools: Declared tools, or ``None`` when undeclared.
+
+    Returns:
+        The sandbox mode, or ``None`` to omit the key.
+    """
+    toks = _canonical(tools)
+    if toks is None:
+        return None
+    return "workspace-write" if "edit" in toks else "read-only"
 
 
 def _outside_code_fences(lines: list[str]) -> list[bool]:
@@ -373,12 +406,14 @@ def _translation_block(
             "Codex does not enforce these grants. Treat the list as a limit you impose on "
             "yourself: do not use capabilities outside it, even when the session allows them.",
         ]
-        if is_read_only(tools):
+        if sandbox_mode_for(tools) == "read-only":
             parts += [
                 "",
                 'This agent file sets `sandbox_mode = "read-only"`. That is a default, not a '
                 "ceiling: subagents inherit the parent session's sandbox, and CLI permission "
-                "overrides are re-applied to spawned children. Do not write files regardless.",
+                "overrides are re-applied to spawned children. Do not write files regardless"
+                + ("." if is_read_only(tools) else
+                   "; you may run commands, but not ones that write."),
             ]
     else:
         parts.append(
@@ -534,7 +569,7 @@ class CodexAdapter(AgentsMdAdapter):
             name=agent_slug,
             description=description or name,
             developer_instructions=instructions,
-            read_only=is_read_only(tools),
+            sandbox_mode=sandbox_mode_for(tools),
         )
 
     def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
