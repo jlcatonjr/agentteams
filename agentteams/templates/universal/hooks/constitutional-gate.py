@@ -77,6 +77,12 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     (r"\bgit\b[^\n]*\b(?:branch|tag)\s+(?:-[a-zA-Z]*[dD]\b|--delete\b)|"
      r"\bgit\b[^\n]*\bupdate-ref\s+-d\b|\bgit\b[^\n]*\bworktree\s+remove\b",
      "git branch/tag/ref/worktree deletion (any -C/--git-dir prefix)"),
+    # argparse accepts unique prefixes (`--branch-c`, `--appl`), and the CLI is reachable as
+    # `agentteams`, `python -m agentteams.cli.app` or `build_team.py`; the Python API too.
+    (r"\b(?:agentteams|build_team)\b[^\n]*--branch-[cp][\w-]*[^\n]*--appl[\w-]*|"
+     r"\b(?:agentteams|build_team)\b[^\n]*--appl[\w-]*[^\n]*--branch-[cp][\w-]*|"
+     r"\bbranch_cleanup\b[^\n]*\b(?:run_cleanup|run_post_merge|execute_items)\b",
+     "branch deletion through agentteams (its git deletes run inside the tool, unseen here)"),
     (r"\brm\s+\S|\b(?:unlink|srm|wipe|rmdir|shred|truncate)\b|\bfind\b[^\n]*\s-delete\b|"
      r"\bdd\b[^\n]*\bof=|>\|\s*\S|(?:^|[;&|])\s*:\s*>\s*\S|\bmv\b[^\n]*\s/dev/null\b|\bcp\s+/dev/null\b",
      "irreversible filesystem deletion or truncation/overwrite"),

@@ -1206,6 +1206,9 @@ With `--sync-agent-docs`: write `.github/agents` and `.goose/recipes` targets an
 `.claude/agents` targets are only **staged** (listed, and recorded in `pending-claude.json` in the
 state dir), so an unattended run never writes Claude agent files.
 
+With `--branch-cleanup` or `--branch-post-merge`: execute instead of the default dry run (see
+[Branch Lifecycle](#branch-lifecycle)).
+
 ### `--include-claude`
 
 With `--sync-agent-docs --apply`: also write `.claude/agents` targets. Each diff is printed and
@@ -1220,6 +1223,101 @@ it from. Those copies are otherwise excluded from sync, and every run (including
 prints a WARNING and exits 1. A block that a regeneration removed (the file matches its build-log
 hash) is re-synced without this flag. Regeneration (`--update`, `--merge`, `--overwrite`) now
 carries the block itself.
+
+---
+
+## Branch Lifecycle
+
+What happens to a branch after its work lands. Three standalone modes act on `--project`
+(default: the current directory) and read no brief. The procedure they implement is the emitted
+`references/branch-lifecycle.reference.md` that `@git-operations` and `@cleanup` follow. See
+[`branch_inventory`](api-reference/branch-inventory.md) and
+[`branch_cleanup`](api-reference/branch-cleanup.md).
+
+**How a branch is judged.**
+- **Ancestry:** a branch is merged when its tip is an ancestor of the default branch and it owns
+  at least one commit off the default branch's first-parent history. An ancestor that owns none
+  (an empty fresh branch, or a fast-forward merge) counts only once it has been idle more than
+  `--stale-days`.
+- **Merged-by-PR:** a squash- or rebase-merged branch counts as merged when the GitHub API
+  verifies the PR. The PR must be from the push remote's own repository and merged into the
+  default branch, with `head.sha` equal to the tip.
+- **Patch-equivalent:** `git cherry` shows no unique patches, but the branch is neither an
+  ancestor nor PR-verified. These are referred to the operator and never deleted.
+
+**Holds** keep a branch whatever its state: an author outside the operator list, a GitHub link
+to the branch in a tracked file, an open PR that uses it as head or base, a worktree, or a
+workflow pin. Any API failure counts as *unknown*. If open PRs cannot be checked, no remote
+deletion is planned.
+
+**Exit codes:** `0` done, or a dry run; `1` refused or failed; `3` no authorization (an operator or
+`@security` step is needed).
+
+### `--branch-inventory`
+
+Read-only. It runs `git fetch --prune` on the push remote, then classifies every local branch and
+every push-remote branch. It prints one row per ref, with the state, action and holds, followed by
+the deletion plan's sha256 and the summary line used in `@git-operations`' Output Contract
+(`Branch inventory: clean | N merged-undeleted | …`). It never writes a ref.
+
+### `--branch-report DIR`
+
+With `--branch-inventory`: write `branch-inventory.csv`, `branch-inventory.json` and
+`branch-deletion-plan.json` into `DIR`. The plan lists each deletion's exact leased command and
+its restore command.
+
+### `--branch-cleanup PLAN.json`
+
+Execute a deletion plan. The default is a dry run, which consumes nothing. With `--apply` it
+requires a `@security` **PASS** recorded for the action `branch-cleanup:<plan
+sha256>` (the full digest). That clearance covers exactly that plan, and the gate consumes it.
+
+Before acting, it re-inventories and skips any ref whose tip or verdict drifted. Each deletion then
+works as follows:
+- **Re-check:** the ref is re-checked just before deletion (ancestry, or the PR plus
+  `refs/pull/<n>/head`).
+- **Local refs** go first:
+  - ancestry-merged: `git branch -d`;
+  - PR-merged: compare-and-delete `git update-ref -d <ref> <sha>`;
+  - never `-D`.
+- **Remote refs** are deleted one at a time with `--force-with-lease` to the audited SHA.
+- **Release branches** are tagged `archive/<branch>` first. Tags are never moved.
+- **The first failure stops the run.**
+- **Ledger:** every deletion is recorded in the hash-chained `references/branch-deletions.log.csv`,
+  with an `attempt` row written before the command runs. A `@security` HALT on `branch-delete`
+  blocks the mode.
+
+### `--branch-post-merge BRANCH`
+
+Delete the branch a session just merged with `--no-ff`. Its local and remote tips must both be the
+**second parent** of the push remote's default-branch tip. It is a dry run unless `--apply`.
+`--apply` requires an operator **Ed25519-signed, time-bounded `branch-delete` capability grant**
+(`--sign-grant` with `"permitted_ops": "branch-delete"`). One run counts as one use. An HMAC grant
+is refused. With no usable grant it exits `3`; use `--branch-cleanup` under a clearance instead.
+
+### `--push-remote NAME`, `--default-branch NAME`, `--stale-days N`
+
+- `--push-remote`: the only remote acted on (default `origin`).
+- `--default-branch`: the default branch (default: the push remote's `HEAD`).
+- `--stale-days`: the inactivity threshold that separates *active* from *stale-unmerged*
+  (default 14).
+
+### `--operator-email EMAIL`
+
+Repeatable. Author emails treated as the operator. `git config user.email` is always included, and
+any other author of a branch's own commits places an Owner hold.
+
+### `--no-api`
+
+Do not query GitHub. Merged-by-PR is not evaluated, and no remote deletion is planned.
+
+### `--team-dir DIR`, `--team-id ID`
+
+- `--team-dir`: the team agents directory holding the security decisions log, the approver roster
+  and the verify-key store. The default is the first of `.claude/agents`, `.github/agents` and
+  `.codex/agents` that exists.
+- `--team-id`: the grant holder id for `--branch-post-merge`. The default is the slug of the build
+  log's `project_name`.
 
 ---
 

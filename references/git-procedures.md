@@ -16,6 +16,12 @@ Before staging any changes, verify:
 2. No absolute filesystem paths in staged content (OPSEC — see `@security` trigger list)
 3. `docs/` rebuilt if `docs_src/` was modified: `mkdocs build --clean`
 4. No backup files (`.bak`, `.bak[0-9]`) or `__pycache__` staged
+5. If any CLI flag or help string changed: `python -m agentteams.man > agentteams.1`. CI
+   diff-checks the man page and no local test does, so a help-text edit made after the last
+   regeneration fails CI (PR #101, 2026-10-04).
+6. If an integrity-pinned module changed (`agentteams/integrity.py` ENFORCEMENT_MODULES): after
+   `@security` review, `agentteams --write-integrity-manifest` and review the diff. Re-pin after
+   *every* later edit to a pinned module, including message-only edits.
 
 If any check fails, resolve before staging.
 
@@ -428,3 +434,24 @@ only content inside bridge fences and skips unfenced files with a notice.
 Recovery procedure when destruction has occurred: see
 `references/bridge-refresh-safety.md` §IV. The recovery primitive is
 `git checkout HEAD -- <file>`, which only works for tracked files.
+
+## E. Branch Lifecycle (after a merge, and the weekly sweep)
+
+The full procedure is the emitted `.claude/agents/references/branch-lifecycle.reference.md` (the
+same file in `.github/agents/references/` and `.codex/agents/references/`). This repository
+squash-merges PRs, so most merged branches are **Merged-by-PR**, not ancestors of `main`. Use the
+tool rather than ancestry by hand:
+
+```bash
+agentteams --branch-inventory --branch-report tmp/by-week/<week>/branch-audit   # read-only
+agentteams --branch-cleanup tmp/by-week/<week>/branch-audit/branch-deletion-plan.json      # dry run
+# @security records PASS for action branch-cleanup:<plan sha256> (printed above). This repo
+# enforces signed decisions, so the operator authenticates it with a one-use waiver instead
+# (branch-lifecycle reference §4, "When the workspace enforces signed decisions"). Then:
+agentteams --branch-cleanup tmp/by-week/<week>/branch-audit/branch-deletion-plan.json --apply
+```
+
+GitHub's `delete_branch_on_merge` is **on** for this repository, so a merged PR's remote head is
+normally already gone; the local copy is what the sweep removes. A local `--no-ff` merge is
+followed by `agentteams --branch-post-merge <branch>` (`--apply` needs an operator `branch-delete`
+grant). Deletions are recorded in `references/branch-deletions.log.csv`.

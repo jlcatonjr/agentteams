@@ -204,6 +204,14 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Branch lifecycle reference (always — git-operations / cleanup / orchestrator closeout)
+    files.append({
+        "path": "references/branch-lifecycle.reference.md",
+        "template": f"{agents_dir}branch-lifecycle.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Work summary references (always — work-summarizer support)
     files.append({
         "path": "references/work-summary-spec.reference.md",

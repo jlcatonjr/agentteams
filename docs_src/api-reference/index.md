@@ -126,6 +126,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`capability_map`](capability-map.md) | Canonical tool-scope vocabulary and framework ↔ canonical capability mapping, shared by `interop` and this family |
 | [`agent_doc_sync`](agent-doc-sync.md) | `--sync-agent-docs`: propagates each agent's `AGENTTEAMS-LEARNED` block across its `.github`/`.claude`/`.goose` copies (three-way baseline outside the project, content gates, no file creation) |
 | [`learned_blocks`](learned-blocks.md) | Pure-text parse/compose/verify of the learned block in markdown agent files and goose recipes |
+| [`branch_inventory`](branch-inventory.md) | `--branch-inventory`: read-only branch classification (ancestry, Merged-by-PR via the GitHub API, holds) and a leased deletion plan |
+| [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
 
 ## Standalone Modules
 
