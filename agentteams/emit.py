@@ -52,6 +52,7 @@ from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-export
     _shrink_notice_sid,
     _write_lost_fence_sidecars,
 )
+from agentteams.project_notes import _ensure_project_notes_section, _is_agent_doc  # noqa: E402,F401  (CH-07 carve)
 # Backup subsystem extracted to agentteams/backup.py (CH-07); re-exported so
 # cli/, build_team, drift, and tests resolve emit.<symbol> unchanged.
 from agentteams.frameworks.structural_merge import post_merge_structural
@@ -197,60 +198,6 @@ def _normalize_generated_content(rel_path: str, content: str) -> str:
     return normalized
 
 
-_PROJECT_NOTES_HEADING = "## Project-Specific Notes"
-_PROJECT_NOTES_SECTION = (
-    "\n"
-    "## Project-Specific Notes\n"
-    "\n"
-    "> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions "
-    "for this agent. This section lies outside every `AGENTTEAMS` fence and is "
-    "preserved verbatim across `agentteams --update --merge`.\n"
-)
-
-
-def _is_agent_doc(rel_path: str, content: str) -> bool:
-    """Return True when rel_path/content is a generated agent persona document.
-
-    Agent personas carry YAML front matter; reference files, instruction files,
-    and SETUP-REQUIRED.md do not and are excluded.
-    """
-    if not rel_path.endswith(".md"):
-        return False
-    base = rel_path.rsplit("/", 1)[-1]
-    if "references/" in rel_path:
-        return False
-    # Skills (operational tool docs) carry front matter but are not agent
-    # personas — they must not get the "Project-Specific Notes" persona section.
-    if rel_path.startswith("../skills/") or "/skills/" in rel_path:
-        return False
-    if base in {"copilot-instructions.md", "CLAUDE.md", "AGENTS.md", "SETUP-REQUIRED.md"}:
-        return False
-    return bool(_YAML_FM_RE.match(content))
-
-
-def _ensure_project_notes_section(rel_path: str, content: str) -> str:
-    """Append the USER-EDITABLE 'Project-Specific Notes' section if absent.
-
-    Pure append: existing content — including project-authored orphan fences
-    and hand edits outside the templated structure — is never rewritten, only
-    extended. Idempotent: a file that already carries the section is returned
-    unchanged. Applied to merged output as well as fresh renders, so existing
-    fleet files gain the section on ``--update --merge`` (migration path b).
-    """
-    if not _is_agent_doc(rel_path, content):
-        return content
-    if _PROJECT_NOTES_HEADING in content:
-        return content
-    if not content.endswith("\n"):
-        content += "\n"
-    return content + _PROJECT_NOTES_SECTION
-
-
-# Concrete file paths (foo/bar.py, foo.md) or backtick-quoted identifiers.
-
-
-
-
 def _front_matter_baseline(output_dir: Path) -> dict[str, dict[str, str]]:
     """Return the per-file front matter recorded at last generation.
 
@@ -308,6 +255,7 @@ def emit_all(
     backup_path: Path | None = None,
     auto_fence_legacy: bool = False,
     brief_derived_files: frozenset[str] = frozenset(),
+    shrink_allow: frozenset[str] | None = None,
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -341,6 +289,9 @@ def emit_all(
         brief_derived_files: Basenames whose fences the brief owns for this run
                         (never preserved on shrink); empty unless the brief
                         declares them. See ``fences._BRIEF_DERIVED_FILES``.
+        shrink_allow:   Reviewed ``<rel path>:<fence id>@<digest>`` shrink overrides, already
+                        resolved by the caller (``shrink_allow.resolve``: flags + env); None or
+                        empty means none. Refused without a backup dir.
 
     Returns:
         EmitResult with results of all write operations.
@@ -348,6 +299,12 @@ def emit_all(
     Raises:
         ValueError: If both *overwrite* and *merge* are True.
     """
+    from agentteams import shrink_allow as _sa
+
+    _allow = _sa.announce(shrink_allow or frozenset(), has_backup=backup_path is not None,
+                          dry_run=dry_run)
+    _allow_used: set[str] = set()
+    _pinned = _sa.Report()
     if overwrite and merge:
         raise ValueError("overwrite and merge are mutually exclusive")
 
@@ -422,10 +379,13 @@ def emit_all(
                 _pre_text = target.read_text(encoding="utf-8")
             except OSError:
                 _pre_text = None
-            if _pre_text is not None and not _FENCE_BEGIN_RE.search(_pre_text):
-                from agentteams.fence_inject import _unique_fence_id, _wrap_body
-                _auto_wrapped = _wrap_body(_pre_text, _unique_fence_id(_pre_text))
-                auto_fenced_now = True
+            # A TOML retrofit needs a backup dir (security A4 condition 1); Markdown never did.
+            if _pre_text is not None and (backup_path is not None or dry_run
+                                          or not rel_path.endswith(".toml")):
+                from agentteams.fence_inject import legacy_retrofit
+                _auto_wrapped = legacy_retrofit(rel_path, _pre_text)
+                auto_fenced_now = _auto_wrapped is not None
+            if auto_fenced_now and _auto_wrapped is not None:
                 if dry_run:
                     result.fence_injected.append(f"{target} (dry-run)")
                 else:
@@ -471,14 +431,18 @@ def emit_all(
                     additive_on_shrink=(shrink_policy == "additive"),
                     rel_path=rel_path,
                     brief_derived_files=brief_derived_files,
+                    shrink_allow=_allow,
                 )
+                _sa.track(_allow_used, _pinned, rel_path, existing_text, mr)
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
                 # Annotate so operators understand what the real run will do
                 # with each shrink — preserve in place, or sidecar+write.
                 for notice in mr.shrink_notices:
                     if shrink_policy == "preserve" and _shrink_notice_sid(notice) in mr.lost_fence_bodies:
-                        why = "structural migration" if mr.migrated else "template-/brief-authoritative fence"
+                        why = ("structural migration" if mr.migrated else "operator --shrink-allow"
+                               if _shrink_notice_sid(notice) in mr.shrink_overridden
+                               else "template-/brief-authoritative fence")
                         suffix = f" ({why}: the real run will replace it and keep the prior body in a .lost.<sid>.md sidecar in the backup dir)"
                     elif shrink_policy == "preserve":
                         suffix = " (existing enriched body will be retained; template update suppressed for this fence — use --shrink-policy=allow to force)"
@@ -655,7 +619,9 @@ def emit_all(
                 file_is_unmodified=(rel_path in _unmodified),
                 rel_path=rel_path,
                 brief_derived_files=brief_derived_files,
+                shrink_allow=_allow,
             )
+            _sa.track(_allow_used, _pinned, rel_path, existing_text, merge_result)
             # Front-matter drift: the template's front matter moved on while this file kept its
             # own. Merge cannot fix it — front matter lies outside every fence and is preserved
             # deliberately — so the remediation is to say so. Without this, a template `tools:`
@@ -785,6 +751,8 @@ def emit_all(
         except OSError as exc:
             result.errors.append(f"Failed to write {target}: {exc}")
 
+    _sa.warn_unused(_allow, _allow_used)
+    _pinned.write()
     return result
 
 

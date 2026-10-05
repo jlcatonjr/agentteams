@@ -41,8 +41,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: observed in exactly 1 of 54 rendered files, so a check over one framework could miss it.
 RENDER_ROOTS = (".github/agents", ".claude/agents")
 
-_BEGIN_RE = re.compile(r"AGENTTEAMS[A-Z_-]*:BEGIN\s+(\S+)")
-_END_RE = re.compile(r"AGENTTEAMS[A-Z_-]*:END\s+(\S+)")
+# A fence id is a lower_snake_case section id (FENCE-CONVENTIONS rule 2). Requiring one keeps the
+# id-less learned-block markers (`<!-- AGENTTEAMS-LEARNED:BEGIN -->`, PR #99), which the
+# agent-updater template quotes in prose, from being misread as a fence with id "-->`".
+_BEGIN_RE = re.compile(r"AGENTTEAMS[A-Z_-]*:BEGIN\s+([a-z][a-z0-9_]*)\b")
+_END_RE = re.compile(r"AGENTTEAMS[A-Z_-]*:END\s+([a-z][a-z0-9_]*)\b")
 
 
 def _rendered_files() -> list[Path]:

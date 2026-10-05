@@ -50,6 +50,17 @@ from agentteams.front_matter_merge import (  # noqa: F401
 )
 
 _LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)", re.MULTILINE)
+#: The user-editable notes section appended to every generated agent persona (Markdown, and the
+#: body of a natively rendered Codex TOML). Public so ``emit`` and ``frameworks.codex`` share it.
+PROJECT_NOTES_SECTION = (
+    "\n"
+    "## Project-Specific Notes\n"
+    "\n"
+    "> ⚙️ **USER-EDITABLE** — project-specific rules, overrides, and extensions "
+    "for this agent. This section lies outside every `AGENTTEAMS` fence and is "
+    "preserved verbatim across `agentteams --update --merge`.\n"
+)
+
 _PATH_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:py|md|json|yaml|yml|toml|csv|tsv|sql|sh)\b")
 _BACKTICK_IDENT_RE = re.compile(r"`([^`\n]+)`")
 
@@ -86,6 +97,11 @@ class MergeResult:
     lost_fence_bodies: dict[str, str] = field(default_factory=dict)
     #: True when the merge was a whole-body structural migration (see _is_whole_body_migration).
     migrated: bool = False
+    #: Sections whose shrink suppression an operator override (``--shrink-allow``) lifted.
+    shrink_overridden: list[str] = field(default_factory=list)
+    #: Sections kept on shrink: sid -> (on-disk region kept, template region suppressed). Feeds
+    #: the ``AGENTTEAMS_SHRINK_REPORT`` review (:mod:`agentteams.shrink_allow`).
+    shrink_pinned: dict[str, tuple[str, str]] = field(default_factory=dict)
     # Front-matter keys whose template value moved on while the on-disk file kept its own.
     # Merge preserves everything outside a fence BY DESIGN — that is what protects user edits —
     # so this never changes what is written. It exists because the preservation was also silent:
@@ -928,6 +944,13 @@ def _strip_corrupt_fence_tail(content: str) -> str:
     return "\n".join(kept)
 
 
+def _shrink_key(rel_path: str, sid: str, block: str) -> str:
+    """The ``--shrink-allow`` entry for an on-disk section (see :func:`shrink_allow.key`)."""
+    from agentteams.shrink_allow import key
+
+    return key(rel_path, sid, block)
+
+
 def _merge_fenced_content(
     new_rendered: str,
     existing_on_disk: str,
@@ -937,6 +960,7 @@ def _merge_fenced_content(
     file_is_unmodified: bool = False,
     rel_path: str = "",
     brief_derived_files: frozenset[str] = frozenset(),
+    shrink_allow: frozenset[str] = frozenset(),
 ) -> MergeResult:
     """Merge fenced sections from *new_rendered* into *existing_on_disk*.
 
@@ -956,6 +980,10 @@ def _merge_fenced_content(
             write is blocked.
         brief_derived_files: Basenames treated as brief-authoritative for this merge
             (see :data:`_BRIEF_DERIVED_FILES`); empty unless the brief declares them.
+        shrink_allow: Operator-reviewed ``<rel path>:<fence id>@<digest>`` overrides
+            (:mod:`agentteams.shrink_allow`): a named section whose on-disk body still matches the
+            reviewed digest takes the replace path even when it would shrink (its old body goes
+            to the ``.lost`` sidecar).
 
     Returns:
         MergeResult describing what changed.  ``merged_content`` is empty on
@@ -1104,9 +1132,14 @@ def _merge_fenced_content(
                     notice = _detect_fence_shrink(
                         sid, existing_regions.get(sid, ""), new_regions[sid]
                     )
+                    overridden = bool(notice and shrink_allow) and _shrink_key(
+                        rel_path, sid, existing_regions.get(sid, "")) in shrink_allow
+                    if overridden:
+                        result.shrink_overridden.append(sid)
                     if (
                         notice
                         and additive_on_shrink
+                        and not overridden
                         and not _is_template_authoritative(sid, rel_path, brief_derived_files)
                     ):
                         # Additive update: splice the template's NEW heading-delimited
@@ -1127,6 +1160,7 @@ def _merge_fenced_content(
                         else:
                             output_lines.append(existing_regions[sid])
                             result.sections_preserved.append(sid)
+                            result.shrink_pinned[sid] = (existing_regions[sid], new_regions[sid])
                             result.shrink_notices.append(
                                 notice
                                 + " (additive: no new heading-delimited sub-section to splice; "
@@ -1135,6 +1169,7 @@ def _merge_fenced_content(
                     elif (
                         notice
                         and preserve_on_shrink
+                        and not overridden
                         and not _is_template_authoritative(sid, rel_path, brief_derived_files)
                     ):
                         # Respectful update: the new render would drop enriched
@@ -1143,12 +1178,16 @@ def _merge_fenced_content(
                         # no .lost.<sid>.md sidecar is needed.
                         output_lines.append(existing_regions[sid])
                         result.sections_preserved.append(sid)
+                        result.shrink_pinned[sid] = (existing_regions[sid], new_regions[sid])
                         result.shrink_notices.append(notice)
                     else:
                         output_lines.append(new_regions[sid])
                         result.sections_replaced.append(sid)
                         if notice:
-                            result.shrink_notices.append(notice)
+                            result.shrink_notices.append(
+                                notice + (" (operator override --shrink-allow: template update "
+                                          "applied; old body saved to the .lost sidecar)"
+                                          if overridden else ""))
                             # W22 data-loss recovery: capture the pre-merge body
                             # so emit_all can write a .lost.<sid>.md sidecar.
                             result.lost_fence_bodies[sid] = _fence_body(
@@ -1290,6 +1329,8 @@ def _shrink_notice_lines(
         line = f"{rel_path}: {notice}"
         if shrink_policy == "preserve" and merge_result.migrated:
             line += " — replaced (structural migration)"
+        elif shrink_policy == "preserve" and sid in merge_result.shrink_overridden:
+            line += " — replaced (operator --shrink-allow, reviewed-body digest matched)"
         elif shrink_policy == "preserve":
             line += " — replaced: this fence is template-/brief-authoritative and never preserved on shrink"
         sidecar = sidecar_paths.get(sid) if sid else None

@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-from agentteams import analyze, emit, fences, ingest, liaison_logs, render, template_pins
+from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
@@ -650,14 +650,14 @@ def _run_generate_inner(
         result = emit.emit_all(
             update_rendered,
             output_dir=output_dir,
-            dry_run=args.dry_run,
-            overwrite=args.overwrite,
+            dry_run=args.dry_run, overwrite=args.overwrite,
             merge=not args.overwrite,
             yes=args.yes,
             shrink_policy=getattr(args, "shrink_policy", "preserve"),
             backup_path=backup_path,
             auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
             brief_derived_files=brief_derived_files,
+            shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
@@ -880,14 +880,14 @@ def _run_generate_inner(
     result = emit.emit_all(
         final_rendered,
         output_dir=output_dir,
-        dry_run=args.dry_run,
-        overwrite=args.overwrite,
+        dry_run=args.dry_run, overwrite=args.overwrite,
         merge=args.merge,
         yes=args.yes,
         shrink_policy=getattr(args, "shrink_policy", "preserve"),
         backup_path=backup_path,
         auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
         brief_derived_files=brief_derived_files,
+        shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
     )
     emit.print_summary(result, manifest)
     build_team._persist_shrink_events(args, result, manifest, output_dir)

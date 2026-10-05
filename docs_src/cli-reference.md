@@ -543,6 +543,33 @@ By default, `--overwrite`, `--merge`, and `--update` all take an automatic backu
 
 Skip the automatic backup. The write proceeds without creating a backup.
 
+### `--shrink-allow FILE:FENCE@DIGEST`
+
+Repeatable. Lifts the shrink guard for **one reviewed section**. The entry gives the file and
+fence as the merge notice prints them, plus a 12-hex digest of the on-disk body you reviewed, for
+example `git-operations.agent.md:content@3f9c0a1b2d4e`. The override applies only while the
+on-disk body still matches that digest. So an entry left in an exported variable, a nested run or
+a CI job cannot release anything you did not review. The released section takes the template
+update, and its old body goes to a `.lost.<fence>.md` sidecar in the backup dir. Overrides are
+refused on a run with no backup dir (`--no-backup`).
+
+**Reviewing.** The guard can't tell a reference the template itself retired from a project's own
+enrichment. For example, the dead `references/git-procedures.md` citation pinned researchteam's
+`git-operations` body until 2026-10-04. Set `AGENTTEAMS_SHRINK_REPORT=<path>.json` on a dry run
+to get a report listing every pinned section, with its old and new bodies, its exact override
+entry, and each lost token classified against agentteams' template history:
+- `retired`: it was in a past template and is gone now;
+- `current`: it is still in a template;
+- `never`: it was never in a template, which means project enrichment;
+- `unknown`: provenance could not be checked (not running from an agentteams git checkout).
+
+Release a section only when every lost token is `retired`.
+
+**Wrappers.** Tools that wrap agentteams and can't pass flags, such as `researchteam update`, use
+`AGENTTEAMS_SHRINK_ALLOW` (`;`-separated) for one invocation. Every active entry is printed at the
+start of the run. An entry that releases nothing produces a warning, and a malformed entry is a
+usage error.
+
 ### `--shrink-policy {preserve,warn,halt,allow,additive}`
 
 *(T2.D5)* Controls behaviour when a fenced-region merge would lose
@@ -1315,7 +1342,8 @@ Do not query GitHub. Merged-by-PR is not evaluated, and no remote deletion is pl
 
 - `--team-dir`: the team agents directory holding the security decisions log, the approver roster
   and the verify-key store. The default is the first of `.claude/agents`, `.github/agents` and
-  `.codex/agents` that exists.
+  `.codex/agents` that exists. Any other path is refused (exit 1), because it would let a caller
+  supply its own trust anchors.
 - `--team-id`: the grant holder id for `--branch-post-merge`. The default is the slug of the build
   log's `project_name`.
 
