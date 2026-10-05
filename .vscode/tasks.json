@@ -423,36 +423,6 @@
       "detail": "AGENTTEAMS"
     },
     {
-      "label": "script: install-agent-doc-sync",
-      "type": "shell",
-      "command": "bash scripts/install-agent-doc-sync.sh",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": [],
-      "detail": "AGENTTEAMS"
-    },
-    {
-      "label": "script: install-sandbox-deps",
-      "type": "shell",
-      "command": "bash scripts/install-sandbox-deps.sh",
-      "group": {
-        "kind": "build",
-        "isDefault": false
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": [],
-      "detail": "AGENTTEAMS"
-    },
-    {
       "label": "script: run_daily_bridge_maintenance",
       "type": "shell",
       "command": "bash scripts/run_daily_bridge_maintenance.sh",
@@ -505,48 +475,6 @@
       "type": "shell",
       "command": "bash scripts/run_redteam_audit.sh",
       "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": [],
-      "detail": "AGENTTEAMS"
-    },
-    {
-      "label": "script: schedule-sandbox-itest",
-      "type": "shell",
-      "command": "bash scripts/schedule-sandbox-itest.sh",
-      "group": {
-        "kind": "test",
-        "isDefault": false
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": [],
-      "detail": "AGENTTEAMS"
-    },
-    {
-      "label": "script: setup-dev-venv",
-      "type": "shell",
-      "command": "bash scripts/setup-dev-venv.sh",
-      "group": "none",
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      },
-      "problemMatcher": [],
-      "detail": "AGENTTEAMS"
-    },
-    {
-      "label": "script: test-sandbox-apparmor-userns",
-      "type": "shell",
-      "command": "bash scripts/test-sandbox-apparmor-userns.sh",
-      "group": {
-        "kind": "test",
-        "isDefault": false
-      },
       "presentation": {
         "reveal": "always",
         "panel": "shared"
