@@ -117,7 +117,7 @@
           },
           "version": {
             "type": "string",
-            "description": "Version string (e.g., '3.11', '2e', '18')."
+            "description": "Version string (e.g., '3.11', '2e', '18'). With version_source, only the generation-time default."
           },
           "category": {
             "type": "string",
@@ -136,8 +136,33 @@
           },
           "docs_url": {
             "type": "string",
-            "format": "uri",
-            "description": "Official documentation URL for this tool (e.g., 'https://nodejs.org/docs/latest-v20.x/api/'). Used as {TOOL_DOCS_URL} in generated agent files."
+            "format": "uri-template",
+            "description": "Official documentation URL for this tool (e.g., 'https://nodejs.org/docs/latest-v20.x/api/'). May carry '{version}' and '{major_minor}' (the first two version components): without version_source they expand to 'version'; with it, the rendered doc tells the agent to substitute the resolved version. Used as {TOOL_DOCS_URL} in generated agent files."
+          },
+          "version_source": {
+            "type": "object",
+            "description": "Where the target project pins this tool's version (e.g., a Lean project's lean/lean-toolchain). When present, generated tool docs do not present 'version' as fixed: they tell the agent to read the pin file, run the resolver when one is given, and consult docs_url for the resolved version. agentteams itself never runs the resolver.",
+            "required": ["file", "pattern"],
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^(?!/)(?!(?:.*/)?\\.\\.(?:/|$)).+$",
+                "description": "Pin file path relative to the target project root, without '..' segments (e.g., 'lean/lean-toolchain')."
+              },
+              "pattern": {
+                "type": "string",
+                "format": "regex",
+                "pattern": "\\(\\?P<version>",
+                "description": "Python regular expression with a named group 'version', applied to the pin file (e.g., 'v(?P<version>[0-9][0-9.]*)')."
+              },
+              "resolver": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional shell command the agent runs to print the resolved version and documentation URLs (e.g., 'mathagents run lean_docs')."
+              }
+            }
           },
           "api_surface": {
             "type": "string",

@@ -24,7 +24,7 @@ SECTION MANIFEST
 
 ## Official Documentation
 
-Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}
+Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}{TOOL_VERSION_RESOLUTION}
 
 Verify SQL dialect features, configuration parameters, and data types against this documentation.
 

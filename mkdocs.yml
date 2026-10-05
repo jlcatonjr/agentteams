@@ -166,6 +166,7 @@ nav:
       - ingest: api-reference/ingest.md
       - analyze: api-reference/analyze.md
       - analyze-tools: api-reference/analyze-tools.md
+      - tool-version-source: api-reference/tool-version-source.md
       - manifest-format: api-reference/manifest-format.md
       - render: api-reference/render.md
       - emit: api-reference/emit.md

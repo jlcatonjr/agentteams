@@ -15,7 +15,7 @@
 
 ## Official Documentation
 
-{TOOL_DOCS_URL}
+{TOOL_DOCS_URL}{TOOL_VERSION_RESOLUTION}
 
 ## Key API Surface
 

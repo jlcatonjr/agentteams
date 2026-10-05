@@ -13,6 +13,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from agentteams.tool_version_source import tool_version_placeholders
+
 
 def _adapter_for_framework(framework: str):
     """Resolve the adapter instance for a framework id, or None if unknown.
@@ -380,9 +382,8 @@ def _tool_placeholder_map(tool_agent: dict[str, Any]) -> dict[str, str]:
     common_patterns = tool_agent.get("common_patterns", "") or "{MANUAL:TOOL_COMMON_PATTERNS}"
     return {
         "TOOL_NAME": tool_agent["tool_name"],
-        "TOOL_VERSION": tool_agent.get("tool_version", ""),
         "TOOL_CONFIG_FILES": config_files,
-        "TOOL_DOCS_URL": docs_url,
+        **tool_version_placeholders(tool_agent, docs_url),
         "TOOL_API_SURFACE": api_surface,
         "TOOL_COMMON_PATTERNS": common_patterns,
         "TOOL_INVOCATION_COMMAND": tool_agent.get("invocation_command", "{MANUAL:TOOL_INVOCATION_COMMAND}"),
@@ -410,10 +411,9 @@ def _reference_tool_placeholder_map(ref_tool: dict[str, Any]) -> dict[str, str]:
     common_patterns = ref_tool.get("common_patterns", "") or "{MANUAL:TOOL_COMMON_PATTERNS}"
     return {
         "TOOL_NAME": ref_tool["tool_name"],
-        "TOOL_VERSION": ref_tool.get("tool_version", ""),
         "TOOL_CATEGORY": ref_tool.get("tool_category", "library"),
         "TOOL_CONFIG_FILES": config_files,
-        "TOOL_DOCS_URL": docs_url,
+        **tool_version_placeholders(ref_tool, docs_url),
         "TOOL_API_SURFACE": api_surface,
         "TOOL_COMMON_PATTERNS": common_patterns,
     }

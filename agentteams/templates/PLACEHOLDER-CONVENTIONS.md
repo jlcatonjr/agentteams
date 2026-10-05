@@ -23,6 +23,15 @@ These are filled automatically by the rendering engine from the project descript
 - `{DIAGRAM_EXTENSION}` — Default file extension for diagram source files (e.g., "mmd")
 - `{COMPONENT_SLUG}` — Generic `<component-slug>` pattern used in file naming conventions
 - `{TOOL_DOCS_URL}` — Official documentation URL for the tool
+- `{TOOL_VERSION_RESOLUTION}` — Empty unless the tool entry declares `version_source`; then a
+  "Version resolution" block telling the agent to read the version from the target project's pin
+  file (`file` + `pattern`), run `resolver` when given, and consult `docs_url` with the resolved
+  version substituted. Placed directly after `{TOOL_DOCS_URL}` on the same line, so a tool without
+  `version_source` renders byte-identically. With `version_source`, `{TOOL_VERSION}` renders as
+  "(version pinned in <file>; generation-time default <version>)" rather than a fixed version.
+  `docs_url` may carry lower-case `{version}` / `{major_minor}`: expanded from `version` when there
+  is no `version_source`, left for the agent to substitute when there is. See
+  `agentteams/tool_version_source.py`.
 - `{TOOL_API_SURFACE}` — Key classes, functions, and APIs the agent must understand
 - `{TOOL_COMMON_PATTERNS}` — Common usage patterns, anti-patterns, and version-specific gotchas
 - `{UNRESOLVED_TOOL_LIST}` — Markdown bullet list of tools missing `docs_url`, `api_surface`, or `common_patterns` after resolution (used in `tool-doc-researcher.template.md`)

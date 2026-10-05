@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (tool docs follow the target project's pinned version; `AR_WRITER_DISPATCH` contract check)
+
+- **`tools[].version_source`.** Optional `{file, pattern, resolver?}` on a tool entry: `file` is the
+  pin file relative to the target project root (e.g. `lean/lean-toolchain`), `pattern` a Python regex
+  with a named group `version`, `resolver` an optional command the agent runs. `docs_url` may carry
+  `{version}` / `{major_minor}`. With `version_source`, generated tool docs and reference files no
+  longer present `version` as fixed: a new `{TOOL_VERSION_RESOLUTION}` block tells the agent to
+  resolve the pin, run the resolver, and consult the docs for the resolved version; `version` is
+  labelled the generation-time default. Without it, output is byte-identical. `ingest.validate`
+  rejects a pattern that does not compile or lacks the group. New pure helper
+  `tool_version_source.resolve_tool_version(tool, project_root)`.
+- **`AR_WRITER_DISPATCH` (warning).** `audit_agent_contract._check_writer_dispatch_grants` flags a
+  non-orchestrator agent whose `tools:` holds a write tool (`edit`/`write`/`create`, Claude
+  `Edit`/`Write`) and dispatch (`agent`, Claude `Task`), unless it is one of the template roles that
+  pair them (`agent-refactor`, `agent-updater`, `repo-liaison`, `work-summarizer`). Applies to
+  adopted bespoke agents too. A test re-derives the allowlist from the templates.
+
 ### fix (branch inventory: private repositories on GitHub Free no longer block every remote deletion)
 
 - **Problem.** On a private repository on GitHub Free, the rulesets endpoint

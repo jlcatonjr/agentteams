@@ -20,6 +20,7 @@ from agentteams.audit import (
     _check_invariant_core_present,
     _check_return_handoff_present,
     _check_readonly_tool_declarations,
+    _check_writer_dispatch_grants,
     _check_dangling_agent_slugs,
     _check_ch14_inline_data_blocks,
     _check_ch20_duplicate_descriptions,
@@ -663,6 +664,91 @@ You write code and modify files.
     file_map = {"producer.agent.md": content}
     findings = _check_readonly_tool_declarations(file_map, agent_ext=".agent.md")
     assert not findings
+
+
+# ---------------------------------------------------------------------------
+# _check_writer_dispatch_grants (AR_WRITER_DISPATCH)
+# ---------------------------------------------------------------------------
+
+def _writer_dispatch_agent(tools_line: str) -> str:
+    return f"""\
+---
+name: Prover — TestProject
+description: "x"
+{tools_line}
+model: ["x"]
+---
+
+# Prover
+
+> ⛔ **Do not modify or omit.**
+"""
+
+
+@pytest.mark.parametrize("tools_line, ext, path", [
+    ("tools: ['read', 'edit', 'agent']", ".agent.md", "lean-prover.agent.md"),
+    ("tools: Read, Edit, Write, Grep, Glob, Bash, Task", ".md", ".claude/agents/lean-prover.md"),
+    ("tools:\n  - read\n  - edit\n  - agent", ".agent.md", "lean-prover.agent.md"),
+])
+def test_writer_dispatch_flagged_for_adopted_agent(tools_line, ext, path):
+    """An adopted writer that also dispatches is held to the generated agents' constraint."""
+    findings = _check_writer_dispatch_grants({path: _writer_dispatch_agent(tools_line)}, agent_ext=ext)
+    assert [f.code for f in findings] == ["AR_WRITER_DISPATCH"]
+    assert findings[0].severity == "warning"
+    assert findings[0].category == "AGENT_REFACTOR"
+    assert "orchestrator holds dispatch" in findings[0].description
+
+
+@pytest.mark.parametrize("tools_line", [
+    "tools: ['read', 'edit', 'search']",      # writer, no dispatch
+    "tools: ['read', 'search', 'agent']",     # dispatcher, no write (workstream-expert shape)
+    "tools: Read, Grep, Glob, Task",
+    "tools: Read, Grep, Glob, Bash(python -m agentteams.research:*)",
+])
+def test_writer_dispatch_not_flagged_without_both_grants(tools_line):
+    file_map = {"prover.agent.md": _writer_dispatch_agent(tools_line)}
+    assert not _check_writer_dispatch_grants(file_map, agent_ext=".agent.md")
+
+
+@pytest.mark.parametrize("slug", ["orchestrator", "agent-updater", "work-summarizer"])
+def test_writer_dispatch_exempts_orchestrator_and_allowlist(slug):
+    file_map = {f"{slug}.agent.md": _writer_dispatch_agent("tools: ['read', 'edit', 'agent']")}
+    assert not _check_writer_dispatch_grants(file_map, agent_ext=".agent.md")
+
+
+def test_writer_dispatch_ignores_tools_outside_front_matter():
+    content = _writer_dispatch_agent("tools: ['read']") + "\ntools: ['edit', 'agent']\n"
+    assert not _check_writer_dispatch_grants({"x.agent.md": content}, agent_ext=".agent.md")
+
+
+def test_writer_dispatch_allowlist_matches_the_templates():
+    """The allowlist is the set of non-orchestrator templates that pair write with dispatch.
+
+    Re-derived from the template front matter each run, so a template that gains or loses the
+    pairing fails here until the constant moves with it.
+    """
+    from agentteams.audit_agent_contract import (
+        _DISPATCH_TOKENS, _WRITE_TOKENS, _WRITER_DISPATCH_ALLOWLIST, _declared_tool_tokens,
+    )
+    templates = Path(__file__).resolve().parents[1] / "agentteams" / "templates"
+    derived: set[str] = set()
+    scanned = 0
+    for path in templates.rglob("*.template.md"):
+        tokens = _declared_tool_tokens(path.read_text(encoding="utf-8"))
+        if not tokens:
+            continue
+        scanned += 1
+        if tokens & _WRITE_TOKENS and tokens & _DISPATCH_TOKENS:
+            derived.add(path.name[: -len(".template.md")])
+    assert scanned >= 25, f"only {scanned} templates carried a tools: key — parser regression?"
+    assert "orchestrator" in derived
+    assert derived - {"orchestrator"} == set(_WRITER_DISPATCH_ALLOWLIST)
+
+
+def test_run_post_audit_wires_writer_dispatch_check():
+    import inspect
+    from agentteams import audit
+    assert "_check_writer_dispatch_grants(" in inspect.getsource(audit.run_post_audit)
 
 
 # ---------------------------------------------------------------------------
