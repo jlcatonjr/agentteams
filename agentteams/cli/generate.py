@@ -18,6 +18,9 @@ import sys
 from pathlib import Path
 
 from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
+from agentteams.adopted_agents import (
+    adoption_exclusions, agent_dir_label, discover_orphans, previously_adopted, read_adopted_agent_metadata,
+)
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
@@ -212,37 +215,24 @@ def _run_generate_inner(
     # (re)rendered — i.e. with --overwrite/--migrate (see flag help).
     # -----------------------------------------------------------------------
     if getattr(args, "adopt_orphans", False) and output_dir.exists():
-        # Source manifest always uses .agent.md paths; slugs are extension-independent.
-        _src_suffix = ".agent.md"
-        # "Planned" = agent files this build will EMIT (from output_files), not
-        # the roster — so legitimately-generated-but-non-roster files
-        # (team-builder, content-enricher) are not mistaken for orphans.
-        _emitted_slugs = {
-            Path(f["path"]).name[: -len(_src_suffix)]
-            for f in manifest.get("output_files", [])
-            if isinstance(f, dict) and str(f.get("path", "")).endswith(_src_suffix)
-        }
-        # Legacy tool-<slug>.agent.md files are migrated to docs/skills, not
-        # adopted as agents — never pull them back into the roster.
-        _tool_doc_slugs = {ta["slug"] for ta in manifest.get("tool_agents", [])}
-        # Use the framework's actual agent file extension for on-disk discovery.
+        # Discovery reads only name/description, from files already in output_dir (C-4).
         _agent_ext = adapter.get_file_extension("agent")
-        _orphan_slugs = sorted(
-            p.name[: -len(_agent_ext)]
-            for p in output_dir.glob(f"*{_agent_ext}")
-            if p.name[: -len(_agent_ext)] not in _emitted_slugs
-            and p.name[: -len(_agent_ext)] not in _tool_doc_slugs
-            # For Goose: skip non-recipe YAML files (require version: "1.0.0").
-            and (
-                _agent_ext != ".yaml"
-                or 'version: "1.0.0"' in p.read_text(encoding="utf-8", errors="ignore")
-            )
+        _orphan_slugs, _meta = discover_orphans(output_dir, _agent_ext, adoption_exclusions(manifest))
+        _adopted = analyze.adopt_orphan_agents(
+            manifest, _orphan_slugs, _meta, agent_dir=agent_dir_label(output_dir, project_root), agent_ext=_agent_ext,
         )
-        _adopted = analyze.adopt_orphan_agents(manifest, _orphan_slugs)
         if _adopted:
             print(f"  Adopted {len(_adopted)} orphan agent(s) into roster: {', '.join(_adopted)}")
         else:
             print("  --adopt-orphans: no orphan agent files to adopt.")
+    elif getattr(args, "update", False) and output_dir.exists():
+        # Carry forward agents an earlier adopt run routed to, so the re-rendered fence keeps their rows.
+        _agent_ext = adapter.get_file_extension("agent")
+        _prev = previously_adopted(output_dir, _agent_ext)
+        _meta = {s: read_adopted_agent_metadata(output_dir / f"{s}{_agent_ext}") for s in _prev}
+        analyze.adopt_orphan_agents(
+            manifest, _prev, _meta, agent_dir=agent_dir_label(output_dir, project_root), agent_ext=_agent_ext,
+        )
 
     # Step 4·preserve: on --update, record the agent slugs already deployed ON DISK so the
     # roster pruner never drops a DEPLOYED teammate's cross-ref merely because this run did

@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (adopted agents reach every orchestrator body, so a Claude orchestrator routes to them)
+
+- **Problem.** `--adopt-orphans` put bespoke agents only into the Copilot orchestrator's
+  `agents:`/`handoffs:` front matter. The Claude adapter strips that front matter, and the routing
+  table lists generated archetypes only, so the Claude orchestrator, the real top-level dispatcher
+  on Claude Code, never routed to them. In mathAgents, `.claude/agents/orchestrator.md` named 0 of
+  its 11 bespoke agents.
+- **Fix.** A new `{ADOPTED_AGENT_ROUTING_ROWS}` placeholder at the end of the `routing_table_rows`
+  fence gets one row per adopted agent on every framework (`agentteams/adopted_agents.py`).
+  - Rows are sorted by slug.
+  - Each row's trigger is the file's `description:`, treated as data (C-4): one line, `<`/`>`,
+    backticks and quotes removed, capped at 200 characters.
+  - Each row cites the agent's canonical file and marks it "maintained upstream" when a
+    `<!-- X-export: -->` provenance comment leads the body.
+  - The placeholder is `""` when nothing is adopted, so other teams render byte-identically.
+- **Carry-forward.** A later `--update` without `--adopt-orphans` keeps rows already on disk while
+  the agent file exists, instead of re-rendering the fence empty.
+- **Non-agent files.** `SETUP-REQUIRED.md` and other `.md` files without front matter are no longer
+  adopted. Before this change their adoption was invisible on Claude; it would now have shown up as
+  a routing row.
 ### feat (tool docs follow the target project's pinned version; `AR_WRITER_DISPATCH` contract check)
 
 - **`tools[].version_source`.** Optional `{file, pattern, resolver?}` on a tool entry: `file` is the

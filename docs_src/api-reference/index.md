@@ -101,6 +101,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`rank_conformance`](rank-conformance.md) | AP-2 rank-conformance validator — an agent's declared `tools:` must not exceed what its taxonomy rank (orchestrator / governance / domain / expert) permits (C-3) |
 | [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
 | [`bridge_subagents`](bridge-subagents.md) | Per-agent Claude subagent stub emitter (bridge:copilot-vscode-to-claude:subagents) |
+| [`adopted_agents`](adopted-agents.md) | `--adopt-orphans` routing rows: adopted agents reach every orchestrator body (Claude included) |
 | [`orphan_advisory`](orphan-advisory.md) | `--update` orphan-agent-file advisory: orphaned / bespoke-keep / bridge-managed-keep buckets |
 | [`bridge_subagents_goose`](bridge-subagents-goose.md) | Per-agent Goose stub-recipe emitter (bridge:`<src>`-to-goose:subagents) |
 | [`bridge_sources`](bridge-sources.md) | Source-team inventory, file collection, hashing + bridge-freshness check (framework-aware) |
