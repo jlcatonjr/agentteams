@@ -96,6 +96,31 @@ def _wrap_body(content: str, fence_id: str) -> str:
     return out + end
 
 
+def legacy_retrofit(rel_path: str, text: str) -> str | None:
+    """Return *text* with a retrofitted ``content`` fence, or None when it needs none.
+
+    A Codex ``.toml`` gets the fence around its instructions body only
+    (:func:`agentteams.frameworks.codex.retrofit_legacy_toml`); any other file gets it around the
+    whole body when it carries no fence at all. Used by ``emit_all``'s auto-fence-on-update.
+
+    Args:
+        rel_path: The output-relative path (its suffix selects the strategy).
+        text: The on-disk content.
+
+    Returns:
+        The retrofitted content, or None.
+    """
+    if rel_path.endswith(".toml"):
+        from agentteams.frameworks.codex import retrofit_legacy_toml
+
+        return retrofit_legacy_toml(text)
+    from agentteams.fences import _FENCE_BEGIN_RE
+
+    if _FENCE_BEGIN_RE.search(text):
+        return None
+    return _wrap_body(text, _unique_fence_id(text))
+
+
 def inject_fence_markers(
     path: Path | str,
     *,

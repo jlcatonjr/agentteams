@@ -127,6 +127,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`agent_doc_sync`](agent-doc-sync.md) | `--sync-agent-docs`: propagates each agent's `AGENTTEAMS-LEARNED` block across its `.github`/`.claude`/`.goose` copies (three-way baseline outside the project, content gates, no file creation) |
 | [`learned_blocks`](learned-blocks.md) | Pure-text parse/compose/verify of the learned block in markdown agent files and goose recipes |
 | [`branch_inventory`](branch-inventory.md) | `--branch-inventory`: read-only branch classification (ancestry, Merged-by-PR via the GitHub API, holds) and a leased deletion plan |
+| [`project_notes`](project-notes.md) | The USER-EDITABLE Project-Specific Notes section of agent personas (carved from `emit`) |
+| [`shrink_allow`](shrink-allow.md) | `--shrink-allow`: operator-reviewed per-section overrides of the shrink guard (template retirements vs enrichment) |
 | [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
 
 ## Standalone Modules

@@ -143,7 +143,7 @@ Outcome of `prune_backups()`.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset())`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset(), shrink_allow=None)`
 
 > *Source: `agentteams/emit.py`*
 
@@ -168,6 +168,7 @@ Write rendered files to `output_dir`.
 - `backup_path` (`Path | None`, keyword-only) — When provided and a shrink notice fires under `warn`, the full pre-merge body of every shrunken fence is written to `<backup_path>/<rel_path>.lost.<sid>.md` and the corresponding `EmitResult.notices` entry is annotated with `— recovery: <sidecar-path>`. This makes `warn` recoverable even when the operator didn't catch the notice — the sidecar is the durable evidence of what was dropped. Default: `None` (no sidecar written; notices are not annotated).
 - `auto_fence_legacy` (`bool`, keyword-only) — When `True`, a `--merge` run retrofits `AGENTTEAMS` fence markers into a legacy unfenced file instead of skipping it, so subsequent merges can update it. Off by default because retrofitting rewrites a file the operator has not opted in to having managed. Default: `False`.
 - `brief_derived_files` (`frozenset[str]`, keyword-only) — Basenames whose fences the brief owns for this run, so they are never preserved on shrink (see `fences._BRIEF_DERIVED_FILES`). The CLI passes the two retrieval references only when the brief *declares* `retrieval_integration`; an inferred contract leaves this empty. Default: `frozenset()`.
+- `shrink_allow` (`frozenset[str] | None`, keyword-only): reviewed `<rel path>:<fence id>@<digest>` shrink overrides, already resolved by the caller (`shrink_allow.resolve`, which reads the flags and the environment). An override releases one pinned section whose on-disk body matches the reviewed digest; the old body goes to a `.lost` sidecar. All overrides are refused when `backup_path` is None (unless `dry_run`). Default: `None` (no overrides). See [`shrink_allow`](shrink-allow.md).
 
 **Returns:** `EmitResult` — Results of all write operations.
 

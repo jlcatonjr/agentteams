@@ -25,6 +25,12 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
 
     validate_agent_doc_sync_args(parser, args)
     validate_branch_args(parser, args)
+    from agentteams.shrink_allow import ShrinkAllowError, resolve
+
+    try:  # --shrink-allow / AGENTTEAMS_SHRINK_ALLOW: a typo is a usage error, not a traceback
+        resolve(getattr(args, "shrink_allow", None))
+    except ShrinkAllowError as exc:
+        parser.error(str(exc))
     # The Goose source/model switch is a standalone action (dispatched in app.py before
     # the generate pipeline); it cannot be combined with generation/bridge/convert/interop.
     if (
