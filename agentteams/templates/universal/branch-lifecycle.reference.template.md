@@ -140,6 +140,16 @@ hold in the report.
      - `key_id`: the stem of the verify key's file name.
 - An HMAC-signed `branch-delete` grant is refused, because the HMAC key is visible inside a
   sandbox.
+- **When the workspace enforces signed decisions** (`references/agent-privilege.json`:
+  `enforce_decision_signing: true`) and no decision key is provisioned, an unsigned PASS row cannot
+  clear `--branch-cleanup`. Authenticate `@security`'s verdict with a C-2 security waiver
+  instead. The operator, in their own shell:
+  - mints one row in `references/security-waivers.log.csv` with `action_reviewed` set to
+    `branch-cleanup:<plan sha256>`, `approver` set to `security`, `max_uses` set to 1 and a short
+    `expires_at`;
+  - signs it with a session-only `AGENTTEAMS_WAIVER_SIGNING_KEY`;
+  - runs `--branch-cleanup <plan> --apply` in that same shell. The run consumes the waiver, and
+    the key is never written down.
 
 ## 5. Cadence and reporting
 

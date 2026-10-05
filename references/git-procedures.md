@@ -16,6 +16,12 @@ Before staging any changes, verify:
 2. No absolute filesystem paths in staged content (OPSEC — see `@security` trigger list)
 3. `docs/` rebuilt if `docs_src/` was modified: `mkdocs build --clean`
 4. No backup files (`.bak`, `.bak[0-9]`) or `__pycache__` staged
+5. If any CLI flag or help string changed: `python -m agentteams.man > agentteams.1`. CI
+   diff-checks the man page and no local test does, so a help-text edit made after the last
+   regeneration fails CI (PR #101, 2026-10-04).
+6. If an integrity-pinned module changed (`agentteams/integrity.py` ENFORCEMENT_MODULES): after
+   `@security` review, `agentteams --write-integrity-manifest` and review the diff. Re-pin after
+   *every* later edit to a pinned module, including message-only edits.
 
 If any check fails, resolve before staging.
 
@@ -439,7 +445,9 @@ tool rather than ancestry by hand:
 ```bash
 agentteams --branch-inventory --branch-report tmp/by-week/<week>/branch-audit   # read-only
 agentteams --branch-cleanup tmp/by-week/<week>/branch-audit/branch-deletion-plan.json      # dry run
-# @security records PASS for action branch-cleanup:<plan sha256> (printed above), then:
+# @security records PASS for action branch-cleanup:<plan sha256> (printed above). This repo
+# enforces signed decisions, so the operator authenticates it with a one-use waiver instead
+# (branch-lifecycle reference §4, "When the workspace enforces signed decisions"). Then:
 agentteams --branch-cleanup tmp/by-week/<week>/branch-audit/branch-deletion-plan.json --apply
 ```
 
