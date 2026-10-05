@@ -5,7 +5,7 @@
     "agentteams/agent_doc_sync.py": "2c74222a906831e9a6bf61c54b795aca2e199143fea270561a84ea9e48466276",
     "agentteams/atomicio.py": "58cb17c9a425ad77dad064ee50b8534d124ba6e197071b06b2214ce0dddb48d9",
     "agentteams/branch_cleanup.py": "c479f18086b4a0766fb0f577731013a616e5cf802ec2f76161b46e1bf6f53350",
-    "agentteams/branch_inventory.py": "b1c3e3b3fdb986027d9484326e342724d029e92ba3c88555047b1f3abd96ea94",
+    "agentteams/branch_inventory.py": "5df2d88d8ba68ecea86b4cac410f6cdff5ad43c496c97801dce8d1bf7a46faef",
     "agentteams/cli/decision_log.py": "2a386cea128825988504e59d8d25741f1d9d48b4bedfc25da519f4fd072099a9",
     "agentteams/cli/effect_classifier.py": "180fc2aab56b75f323e883b3d3534c29c6ea32d2e0058a17b3414aaa759bdd0a",
     "agentteams/cli/exception_registry.py": "63bda6a5c22482a6dd95e952fb1129d2bc7ad0452b5057244cf8259ed6c25d04",

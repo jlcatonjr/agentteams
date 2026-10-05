@@ -45,6 +45,11 @@ HOLDABLE_STATES = frozenset({"release-finished", "merged", "merged-by-pr", "patc
 #: Verdicts the API helper returns besides ``ok``.
 API_UNKNOWN = "unknown"
 API_NOT_FOUND = "notfound"
+#: GitHub's answer for a feature the repository's plan lacks: rulesets and classic branch protection
+#: on a private repository on GitHub Free. Only ``_protection`` reads it; to every other caller it is
+#: just "not ok", which is fail-closed.
+API_PLAN_UNAVAILABLE = "plan-unavailable"
+PLAN_UNAVAILABLE_MESSAGE = "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
 #: CSV column order of the inventory.
 CSV_COLUMNS: tuple[str, ...] = (
@@ -210,6 +215,15 @@ class GitHubAPI:
         self.repo = repo
         self.timeout = timeout
         self._token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+        #: Set once GitHub reports that the plan lacks protection/rulesets (for the report note).
+        self.plan_unavailable = False
+
+    def _plan_verdict(self, status: int, message: str) -> str:
+        """``API_PLAN_UNAVAILABLE`` for GitHub's exact plan-limit 403, else ``API_UNKNOWN``."""
+        if status == 403 and message.strip() == PLAN_UNAVAILABLE_MESSAGE:
+            self.plan_unavailable = True
+            return API_PLAN_UNAVAILABLE
+        return API_UNKNOWN
 
     def get(self, path: str) -> tuple[str, Any]:
         """GET ``path`` (relative to ``repos/<owner>/<name>/``, or absolute from ``/``).
@@ -235,7 +249,13 @@ class GitHubAPI:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 — fixed https host
                 return "ok", json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            return (API_NOT_FOUND if exc.code == 404 else API_UNKNOWN), None
+            if exc.code == 404:
+                return API_NOT_FOUND, None
+            try:
+                message = str(json.loads(exc.read().decode("utf-8")).get("message", ""))
+            except (OSError, ValueError, AttributeError):
+                message = ""
+            return self._plan_verdict(exc.code, message), None
         except (urllib.error.URLError, OSError, ValueError):
             return API_UNKNOWN, None
 
@@ -248,7 +268,15 @@ class GitHubAPI:
         except (OSError, subprocess.TimeoutExpired):
             return API_UNKNOWN, None
         if proc.returncode != 0:
-            return (API_NOT_FOUND if "HTTP 404" in proc.stderr else API_UNKNOWN), None
+            if "HTTP 404" in proc.stderr:
+                return API_NOT_FOUND, None
+            if "(HTTP 403)" in proc.stderr:
+                try:  # gh prints the error body as JSON on stdout
+                    message = str(json.loads(proc.stdout).get("message", ""))
+                except (ValueError, AttributeError):
+                    message = ""
+                return self._plan_verdict(403, message), None
+            return API_UNKNOWN, None
         try:
             return "ok", json.loads(proc.stdout)
         except ValueError:
@@ -412,6 +440,9 @@ def _protection(api: GitHubAPI, branch: str) -> str:
         return "yes"
     verdict, rules = api.get(f"rules/branches/{quoted}")
     if verdict == API_NOT_FOUND:
+        return "no"
+    if verdict == API_PLAN_UNAVAILABLE:
+        # The plan has no rulesets or classic protection, and branches/ already said protected: false.
         return "no"
     if verdict != "ok" or not isinstance(rules, list):
         return API_UNKNOWN
@@ -642,6 +673,9 @@ def build_inventory(cfg: InventoryConfig, *, api: GitHubAPI | None = None,
 
     for rec in refs:
         _decide(rec, api_facts.status)
+    if api is not None and getattr(api, "plan_unavailable", False):
+        api_facts.notes.append("branch protection read from the branches endpoint: rulesets and "
+                               "classic protection are not available on this repository's GitHub plan")
 
     meta = {
         "repo": str(repo), "push_remote": cfg.push_remote, "github_repo": gh_repo or "",
