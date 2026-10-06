@@ -332,6 +332,10 @@ def _run_generate_inner(
         if refusal and not getattr(args, "materialize_native", False):
             print(refusal, file=sys.stderr)
             return 1
+        if manifest.get("write_policy") == "orchestrator-only":
+            print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections, but never front "
+                  "matter, so agents keep their old tools. Run --reconcile-front-matter --reconcile-apply to "
+                  "narrow them (the audit reports any wide grant as AR_WRITE_POLICY).")
 
         from agentteams import drift
 

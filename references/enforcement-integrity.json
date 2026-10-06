@@ -28,7 +28,7 @@
     "agentteams/frameworks/goose_tool_scoping.py": "1ad2f46df08a80a92d1b091526b3bacdffac2feffaf87d68d0ee6d42b25e41bb",
     "agentteams/front_matter_merge.py": "4ea394d1c04b3f39b3beb78c35b7aba089d5b92b92d2c5ca28d8af438c0a5d24",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
-    "agentteams/integrity.py": "d5108d4b16ef6b4254ed2ea92ac193f21e06fdef496a0d11389e4f23fc1b8907",
+    "agentteams/integrity.py": "44552080069a5d69745d0f31852baf51c393f495d2bc200d6eb68510af78391b",
     "agentteams/learned_blocks.py": "7053362b4005f1024febe89cabdd6d2a26c1a0d71d21cd28b6f1fd244bbb360f",
     "agentteams/proposals.py": "64a669a6d364aa6920e2a9163cf8fe189efa2b01fbc28a8523cdf02ea157a34a",
     "agentteams/rank_conformance.py": "b5c1d0ce4c8b36677c38f5f873c2386537adeabcfea211880cc756291b6ba0d0",
@@ -42,6 +42,7 @@
     "agentteams/templates/universal/sandbox/confine-run.sh": "064d47060768ecfe629c000ce8d1cbf2bec533fa0b8fb1f665ab4df8f439dea5",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "c485df0b39dd0847bcb08fc583c4f0fad9c377f4ae3702a62e2c57576c84f69c",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
+    "agentteams/write_policy.py": "af25c9cece75dde5f24146e71786cee0080f4a3292147fd83ed0948ba4bb30ff",
     "scripts/goose-readfs-mcp.py": "bd4d2cd08087b3936ba638f8927f86cf1e1b6644d19cd6b63f97b45706b465d1"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",

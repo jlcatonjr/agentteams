@@ -172,6 +172,7 @@ def _build_final_rendered(
     content comparison only and does not write to disk.
     """
     from agentteams import graph as _graph
+    from agentteams import write_policy as _write_policy
 
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
     final: list[tuple[str, str]] = []
@@ -180,6 +181,9 @@ def _build_final_rendered(
         file_type = _guess_file_type(rel_path)
         if file_type == "agent":
             slug = Path(rel_path).stem.replace(".agent", "")
+            # write_policy "orchestrator-only": narrow tools and add the proposal sections before any adapter
+            # reads `tools:` (identity without the switch, so default teams stay byte-identical).
+            content = _write_policy.apply(content, slug, manifest)
             if adapter.handoff_delivery_mode() == "manifest":
                 handoffs = adapter.extract_handoffs(content)
                 if handoffs:
@@ -198,9 +202,13 @@ def _build_final_rendered(
         elif file_type == "builder":
             # Default hook is identity (copilot/claude keep the markdown builder);
             # adapters with non-markdown agents (Goose) wrap it as a runnable recipe.
-            content = adapter.render_builder_file(content, manifest)
+            content = adapter.render_builder_file(
+                _write_policy.apply(content, Path(rel_path).stem.replace(".agent", ""), manifest), manifest)
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final.append((final_path, content))
+
+    if _write_policy.enabled(manifest):
+        final.append(("references/write-policy.reference.md", _write_policy.reference_doc()))
 
     # Framework-specific sidecar files not derived from a template
     # (e.g. Goose's .goosehints integrator). Default is none.

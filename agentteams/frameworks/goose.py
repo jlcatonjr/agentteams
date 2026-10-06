@@ -98,6 +98,7 @@ from agentteams.frameworks.goose_coordination import (
     coordination_extension as _coordination_extension,
 )
 # goose_tool_scoping "grant": recipe grants from declared tools (references/goose-tool-scoping-spike.md).
+from agentteams import write_policy as _write_policy
 from agentteams.frameworks.goose_tool_scoping import (
     READFS_SCRIPT as _READFS_SCRIPT,
     declared_tools as _declared_tools,
@@ -262,13 +263,20 @@ class GooseAdapter(FrameworkAdapter):
             may_delegate = True
         # Opt-in MCP servers scoped to this agent (empty unless goose:mcp is on).
         mcp_exts, mcp_notes = _mcp_recipe_extensions(manifest, agent_slug)
+        # write_policy "orchestrator-only": a non-orchestrator recipe carries no operator MCP server (it can't
+        # be classified as read-only) and no coordination server (it writes request/log files).
+        restricted = _write_policy.enabled(manifest) and agent_slug not in _write_policy.ORCHESTRATOR_SLUGS
+        if restricted and mcp_exts:
+            mcp_notes = list(mcp_notes) + ["write_policy orchestrator-only: operator MCP servers withheld from "
+                                           "this non-orchestrator agent"]
+            mcp_exts = []
         if _grant_mode(manifest):
             mcp_exts, clash_notes = _filter_operator_mcp(list(mcp_exts))
             mcp_notes = list(mcp_notes) + clash_notes
         mcp_exts = list(scoped_stdio) + list(mcp_exts)
         # Phase 2: wire the first-party stdio coordination server into coordinator/liaison
         # recipes when the team declares coordination (file-based; only reads/records).
-        if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS:
+        if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS and not restricted:
             mcp_exts = list(mcp_exts) + [_coordination_extension()]
             mcp_notes = list(mcp_notes) + [
                 "agentteams_coordination (stdio): file-based cross-repo coordination tools "
@@ -387,6 +395,19 @@ class GooseAdapter(FrameworkAdapter):
         name, description = _extract_name_description(content, "team-builder", manifest)
         body = self._strip_yaml_front_matter(content)
         body = self._strip_handoffs_section(body).strip() or description or name
+        if _write_policy.enabled(manifest):
+            # Only the orchestrator writes: the builder gets the grant its (narrowed) declared tools give,
+            # like every other agent, and returns proposals/command requests instead of writing.
+            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content))
+            recipe = _emit_recipe(
+                title=name or "Team Builder",
+                description=description,
+                instructions=body,
+                extensions=extensions,
+                mcp_extensions=list(scoped_stdio),
+                available_tools=allowlists,
+            )
+            return _mark_declared(recipe, _declared_tools(content))
         return _emit_recipe(
             title=name or "Team Builder",
             description=description,
