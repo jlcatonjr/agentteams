@@ -197,6 +197,20 @@ def _main_dispatch(
     if getattr(args, "verify_waivers", False):
         return _run_verify_waivers(args)
 
+    # --apply-proposal / --run-request / --verify-proposal-ledger: orchestrator-only-writes pilot (P1).
+    if getattr(args, "apply_proposal", None):
+        from agentteams.cli.proposal_commands import run_apply_proposal
+        return run_apply_proposal(args)
+    if getattr(args, "run_request", None):
+        from agentteams.cli.proposal_commands import run_command_request
+        return run_command_request(args)
+    if getattr(args, "issue_dispatch", False):
+        from agentteams.cli.proposal_commands import run_issue_dispatch
+        return run_issue_dispatch(args)
+    if getattr(args, "verify_proposal_ledger", False):
+        from agentteams.cli.proposal_commands import run_verify_proposal_ledger
+        return run_verify_proposal_ledger(args)
+
     # --verify-grants / --issue-grant: standalone cross-workspace capability-grant ops (P2).
     if getattr(args, "verify_grants", False):
         return _run_verify_grants(args)

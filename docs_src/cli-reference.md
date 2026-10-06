@@ -793,6 +793,48 @@ corpus. Always `--dry-run` first.
 
 Read-only: report the validity (signature, expiry, use-limit, conditions) of every security waiver in `references/security-waivers.log.csv` under `--output`/`--project` (else CWD). Never mints or consumes a waiver. Exits non-zero if any waiver is invalid. Requires `AGENTTEAMS_WAIVER_SIGNING_KEY` to verify signatures; without it, rows report as unverifiable.
 
+### `--issue-dispatch`
+
+Orchestrator-only-writes pilot (P1). Records an HMAC-signed dispatch nonce for `--agent` under `--project` (else
+the current directory) and prints it. The orchestrator puts the nonce in the agent's task. Every proposal or
+request must carry it, and `--apply-proposal` / `--run-request` take the agent from this record, never from
+the caller. Needs `AGENTTEAMS_PROPOSAL_LEDGER_KEY` (or `AGENTTEAMS_DECISION_SIGNING_KEY`).
+
+### `--agent`
+
+The agent being dispatched, for `--issue-dispatch`.
+
+### `--apply-proposal`
+
+Orchestrator-only-writes pilot (P1). Applies one change or deletion proposal (`FILE.json`) under the brief's
+policy (`--description`). The agent comes from the proposal's dispatch nonce.
+
+The proposal is refused, and nothing is changed, if:
+- the path is outside the project, in the control plane, the brief itself, in `protected_paths`, or outside
+  the agent's `write_scopes`;
+- the content is not UTF-8 or is over the size cap;
+- the base is stale;
+- any gate fails. Gates run on a temporary copy of the proposed content.
+
+Otherwise it writes atomically, keeping the file's mode, and appends a signed ledger row. `--dry-run` runs
+the checks and gates (gates execute) without writing. See `api-reference/proposals.md`.
+
+### `--run-request`
+
+Orchestrator-only-writes pilot (P1). Runs one command request (`FILE.json`) only if its argv starts with one of
+the dispatched agent's registered prefixes and every remaining argument matches its pattern.
+- It runs with no shell, a scrubbed environment (no signing keys), the entry's pinned `cwd`, a timeout, and
+  `stdin=DEVNULL` or `stdin_from_content` after the entry's `stdin_gates` pass.
+- Writes outside `expected_writes` fail the run (exit 3).
+- A signed ledger row is appended.
+- `--dry-run` checks without running.
+
+### `--verify-proposal-ledger`
+
+Read-only. Verifies the signatures, hash chain and signed head anchor of `.agentteams/proposal-ledger.jsonl`
+under `--project` (else the current directory). Exit 1 when a row was edited, removed or reordered, the
+ledger was truncated, or it was rewritten without the key.
+
 ### `--verify-grants`
 
 Read-only: report the validity (signature scheme, signature, expiry, use-limit, approver roster) of every cross-workspace capability grant (P2) in `references/capability-grants.log.csv` under `--output`/`--project` (else CWD). The approver roster and the Ed25519 verify keys are read from the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes the team to — never from a project-root `references/security-approvers.txt` (a project-root roster is ignored for grants, with a warning). An HMAC-signed grant that permits `write` is reported as **refused**, with the migration step (re-sign it with `--sign-grant`). Never consumes a grant. Exits non-zero if any grant is invalid. HMAC rows need `AGENTTEAMS_GRANT_SIGNING_KEY`. See [Workspace Privilege Scoping](api-reference/workspace-privilege-scoping.md).

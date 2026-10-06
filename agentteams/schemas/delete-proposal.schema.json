@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Deletion proposal (orchestrator-only-writes pilot)",
+  "description": "Asks the orchestrator to delete one file. Applied by `agentteams --apply-proposal FILE`; the agent comes from the dispatch nonce.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "dispatch",
+    "path",
+    "base_sha256",
+    "rationale"
+  ],
+  "properties": {
+    "kind": {
+      "const": "delete-proposal"
+    },
+    "dispatch": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "path": {
+      "type": "string"
+    },
+    "base_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the file being deleted."
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent": {
+      "type": "string",
+      "description": "Optional; must equal the dispatched agent."
+    }
+  }
+}

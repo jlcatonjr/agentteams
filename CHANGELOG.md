@@ -6,6 +6,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (orchestrator-only-writes pilot, P1: dispatch nonces, `--apply-proposal` / `--run-request`, signed ledger)
+
+- **What.** The substrate for the opt-in pilot (operator decisions 2026-10-06; the design was reviewed by
+  mathAgents against its D39, then hardened after `@security`, `@adversarial` and `@code-hygiene` reviews).
+  Non-orchestrator agents return typed **change/deletion proposals** and **command requests** instead of
+  editing files or running commands. The orchestrator applies them with
+  `agentteams --apply-proposal` / `--run-request`.
+- **Identity.** It comes from a signed **dispatch nonce** (`--issue-dispatch --agent SLUG`) that every
+  artifact must carry, never from the caller. A mismatched `agent` field is refused.
+- **Policy fields** (brief):
+  - `write_policy`;
+  - `agent_policies` (per-agent `write_scopes`, and `commands` with an exact argv prefix, per-argument
+    patterns, optional pinned `cwd`, `variadic`, owned `writes` and `stdin_gates`);
+  - `proposal_gates`;
+  - `protected_paths`.
+- **Lint.** It refuses patterns admitting options or parent/absolute paths, shells, `{file}`/`{path}` inside
+  a larger argument, and write scopes covering the brief.
+- **Proposals.** A proposal is refused for:
+  - a path outside the project, in the control plane, the brief itself, a protected path, or outside the
+    agent's scopes;
+  - non-UTF-8 content or content over the size cap;
+  - a stale base;
+  - a failing gate. Gates run on the proposed content, with globs matched case-insensitively.
+
+  The destination is re-checked after the gates, then written atomically with its mode preserved.
+- **Requests.** A request runs only when its argv matches the agent's own entry. That closes the per-team
+  `argv[0]` hole (`lake env bash -c …`). `argv[0]` must resolve outside the project.
+- **Environment.** Gates and commands get a scrubbed environment, so signing keys never reach agent-run code.
+- **Undeclared writes fail the run** (exit 3).
+- **Ledger.** `.agentteams/proposal-ledger.jsonl` logs every action and refusal. Rows are HMAC-signed with an
+  operator key (`AGENTTEAMS_PROPOSAL_LEDGER_KEY`, else the decision-signing key), hash-chained and locked,
+  with a signed head anchor. `--verify-proposal-ledger` checks it. With no key, nothing runs.
+- **Integrity.** `proposals.py` and `cli/proposal_commands.py` are integrity-pinned.
+  `_write_roots.control_plane_of` is now public.
+- **Second review round.**
+  - The dispatch file stores only `HMAC(nonce)`, with a use limit (25) and compaction.
+  - A command that changes the ledger, head or dispatch records raises `LedgerTamperedError` and is never
+    chained onto. Dispatch records without a ledger fail verification.
+  - `.git/hooks`, `.git/config` and `.git/info` are watched.
+  - `writes` globs are linted: a literal first directory, never the control plane or the brief.
+  - Broader probes for argument patterns.
+  - Write-ahead ledger rows.
+  - Non-UTF-8 file names are handled.
+  - A run without a git worktree is refused.
+- **Third review round.**
+  - A timed-out command is still snapshotted and tamper-checked.
+  - The control-plane fingerprint adds ctime.
+  - git `hooks`/`config`/`info` are resolved via `git rev-parse --git-path`, covering linked worktrees and
+    `core.hooksPath`.
+  - Dispatch counting and compaction share one never-replaced lock file.
+  - Parent-path probes vary their leading segment.
+- **Final review round.**
+  - A timeout kills the command's whole process group.
+  - If git's own paths can't be resolved, the command is refused instead of running unwatched.
+  - `config.worktree` is watched.
+  - Arguments with a `..` segment are refused at run time.
+- **Residual (documented).** An allowed command that runs agent-written code (e.g. `lake build`) is arbitrary
+  execution. A same-user command can read the key from its parent's environment, so the ledger signature is
+  not a boundary against commands until P4's sandbox profiles. Paths ignored by git are invisible to the write
+  check.
+- **No generation change yet** (P2: switch and contract check; P3: templates and emitters; P4: confined
+  programs).
+
 ### fix (Goose audit: an operator MCP server's name no longer excuses a builtin of the same name)
 
 - **Problem.** A phase-3 review follow-up. The `AR_GOOSE_GRANT_EXCEEDED` check allowed any extension whose
