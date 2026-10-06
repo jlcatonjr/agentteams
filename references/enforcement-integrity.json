@@ -30,7 +30,7 @@
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
     "agentteams/integrity.py": "d5108d4b16ef6b4254ed2ea92ac193f21e06fdef496a0d11389e4f23fc1b8907",
     "agentteams/learned_blocks.py": "7053362b4005f1024febe89cabdd6d2a26c1a0d71d21cd28b6f1fd244bbb360f",
-    "agentteams/proposals.py": "3f5ad0562c1a031b143d28188ef6633fb2f0dcb266a43778bca8716b7a3b23c0",
+    "agentteams/proposals.py": "64a669a6d364aa6920e2a9163cf8fe189efa2b01fbc28a8523cdf02ea157a34a",
     "agentteams/rank_conformance.py": "b5c1d0ce4c8b36677c38f5f873c2386537adeabcfea211880cc756291b6ba0d0",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",

@@ -825,9 +825,9 @@ Orchestrator-only-writes pilot (P1). Runs one command request (`FILE.json`) only
 the dispatched agent's registered prefixes and every remaining argument matches its pattern.
 - It runs with no shell, a scrubbed environment (no signing keys), the entry's pinned `cwd`, a timeout, and
   `stdin=DEVNULL` or `stdin_from_content` after the entry's `stdin_gates` pass.
-- Writes outside `expected_writes` fail the run (exit 3).
+- Writes outside `expected_writes`, or a timeout, fail the run (exit 3).
 - A signed ledger row is appended.
-- `--dry-run` checks without running.
+- `--dry-run` runs the checks and the stdin gates, but not the command.
 
 ### `--verify-proposal-ledger`
 

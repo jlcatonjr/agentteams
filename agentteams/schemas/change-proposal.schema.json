@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Change proposal (orchestrator-only-writes pilot)",
-  "description": "What a non-orchestrator agent returns instead of editing a file. Applied by `agentteams --apply-proposal FILE --agent SLUG`; the agent identity comes from the orchestrator, not from this document.",
+  "description": "What a non-orchestrator agent returns instead of editing a file. Applied by `agentteams --apply-proposal FILE`; the agent identity comes from the orchestrator-issued `dispatch` nonce, not from this document.",
   "type": "object",
   "additionalProperties": false,
   "required": [

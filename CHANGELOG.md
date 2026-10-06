@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (proposals: doc drift found by the P1 closeout audit)
+
+- The change-proposal and command-request schema descriptions no longer say `--agent SLUG`. The agent comes
+  from the `dispatch` nonce.
+- `run_request`'s docstring no longer says `undeclared_writes` can be `None`. Outside a git worktree the
+  command is refused.
+- `load_policy` refuses an empty `stdin_gates` list, which would have accepted stdin content with no gate.
+- `--run-request` help, the CLI reference and the man page now say a timeout also exits 3, and that
+  `--dry-run` runs the stdin gates.
+
 ### feat (orchestrator-only-writes pilot, P1: dispatch nonces, `--apply-proposal` / `--run-request`, signed ledger)
 
 - **What.** The substrate for the opt-in pilot (operator decisions 2026-10-06; the design was reviewed by

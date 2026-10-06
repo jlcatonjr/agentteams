@@ -552,3 +552,8 @@ def test_published_schemas_accept_the_artifacts_the_cli_accepts(project, schema,
     bad = {**build(root), "dispatch": "not-a-nonce"}
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(bad, contract)
+
+
+def test_empty_stdin_gates_refused():
+    with pytest.raises(P.ProposalError, match="stdin_gates is empty"):
+        P.load_policy({"agent_policies": {"a": {"commands": [{"prefix": ["x"], "args": [], "stdin_gates": []}]}}})

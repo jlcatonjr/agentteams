@@ -970,7 +970,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Orchestrator-only-writes pilot: run one typed command request if its argv matches the "
             "dispatched agent's registered prefix and argument patterns. No shell, scrubbed environment "
             "(no signing keys), pinned cwd, timeout, stdin=DEVNULL or gated stdin_from_content. Writes "
-            "outside expected_writes fail the run (exit 3). Signed ledger row. --dry-run checks only."
+            "outside expected_writes, or a timeout, fail the run (exit 3). Signed ledger row. --dry-run runs "
+            "the checks and stdin gates but not the command."
         ),
     )
     parser.add_argument(
