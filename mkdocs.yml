@@ -228,6 +228,7 @@ nav:
       - front-matter-reconcile: api-reference/front-matter-reconcile.md
       - bridge-subagents: api-reference/bridge-subagents.md
       - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
+      - adopted-agents: api-reference/adopted-agents.md
       - orphan-advisory: api-reference/orphan-advisory.md
       - bridge-sources: api-reference/bridge-sources.md
       - hooks-emit: api-reference/hooks-emit.md

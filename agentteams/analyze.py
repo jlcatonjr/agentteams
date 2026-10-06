@@ -17,6 +17,7 @@ from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
 from agentteams._utils import _slugify, _slugify_tool_name
+from agentteams.adopted_agents import format_adopted_routing_rows
 from agentteams.analyze_tools import (  # CH-07 carve; re-exported
     classify_tool_importance,
     _classify_without_override,
@@ -481,6 +482,10 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
             )
         )
 
+    # Adopted-agent routing rows: empty until adopt_orphan_agents fills them, so a team
+    # with no adopted agents renders its orchestrator routing table byte-identically.
+    auto_resolved["ADOPTED_AGENT_ROUTING_ROWS"] = ""
+
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)
 
@@ -854,16 +859,33 @@ def _resolve_project_name(description: dict[str, Any]) -> str:
     return name or "MyProject"
 
 
-def adopt_orphan_agents(manifest: dict[str, Any], orphan_slugs: list[str]) -> list[str]:
+def adopt_orphan_agents(
+    manifest: dict[str, Any],
+    orphan_slugs: list[str],
+    metadata: dict[str, dict[str, str]] | None = None,
+    *,
+    agent_dir: str = "",
+    agent_ext: str = "",
+) -> list[str]:
     """Register pre-existing ("orphan") agent files into the team roster.
 
-    Adds each orphan slug to ``agent_slug_list`` and ``domain_agent_slugs`` (so
-    the orchestrator declares them as handoff targets) and re-renders the
-    matching placeholders. Records them under ``adopted_agents``. Deliberately
-    does NOT touch ``output_files`` — the adopted agents' own files are never
-    generated or overwritten, preserving their bespoke content.
+    Adds each orphan slug to ``agent_slug_list`` (so the orchestrator declares
+    them as handoff targets), records them under ``adopted_agents``, and renders
+    ``{ADOPTED_AGENT_ROUTING_ROWS}`` so every framework's orchestrator body routes
+    to them — not only Copilot's front matter, which the Claude adapter strips.
+    Deliberately does NOT touch ``output_files`` — the adopted agents' own files
+    are never generated or overwritten, preserving their bespoke content.
 
-    Returns the slugs newly adopted (those not already in the roster).
+    Args:
+        manifest: The team manifest, mutated in place.
+        orphan_slugs: Slugs of agent files found on disk with no template.
+        metadata: Per-slug ``adopted_agents.read_adopted_agent_metadata`` output;
+            absent slugs render a "no description" row.
+        agent_dir: Repository-relative agent directory, cited as each row's canonical file.
+        agent_ext: The framework's agent file extension.
+
+    Returns:
+        The slugs newly adopted (those not already in the roster).
     """
     existing = set(manifest.get("agent_slug_list", []))
     newly = [s for s in orphan_slugs if s and s not in existing]
@@ -884,4 +906,7 @@ def adopt_orphan_agents(manifest: dict[str, Any], orphan_slugs: list[str]) -> li
     placeholders = manifest.setdefault("auto_resolved_placeholders", {})
     # Placeholder key is UPPERCASE (resolve_placeholders matches {AGENT_SLUG_LIST}).
     placeholders["AGENT_SLUG_LIST"] = _format_agent_list(manifest["agent_slug_list"])
+    placeholders["ADOPTED_AGENT_ROUTING_ROWS"] = format_adopted_routing_rows(
+        manifest["adopted_agents"], metadata, agent_dir=agent_dir, agent_ext=agent_ext
+    )
     return newly
