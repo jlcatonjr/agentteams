@@ -138,7 +138,7 @@ Under `"write_policy": "orchestrator-only"`, generation makes the team pass the 
 - **Non-orchestrator agents, the team builder included:**
   - Their canonical `tools:` line is narrowed to `read`, `search` and `todo`, and `read` is always kept.
     `edit`, `execute`, `agent` and `retrieval` are dropped.
-  - Each framework derives its grants from that one line. Claude gets `Read, Grep, Glob`. Codex gets
+  - Each framework derives its grants from that one line. Claude gets `Read, Grep, Glob` (plus `TodoWrite` where `todo` was declared). Codex gets
     `sandbox_mode = "read-only"`. Goose, which is forced to grant mode (an explicit `"legacy"` is refused),
     gets `agentteams_readfs`. Copilot keeps the line as it is.
   - A "Write Policy: Return Proposals, Never Write" section is appended. It overrides any write wording
@@ -160,9 +160,14 @@ Under `"write_policy": "orchestrator-only"`, generation makes the team pass the 
 - **A `tools:` key the generator can't narrow cleanly** is refused rather than shadowed by a second key. That
   means any shape other than a one-line flow list.
 
-**Switching on an existing team.** `--update --merge` adds the sections, but front matter is never merged,
-so the old tools stay. `--update` prints a notice saying so, and the audit flags them. Then run
-`--reconcile-front-matter --reconcile-apply` to take the narrowed `tools:`.
+**Switching on an existing team.** `--update --merge` adds the sections, but it never merges front matter or
+recipe/TOML grants, so agents keep their old tools. `--update` prints a notice saying so, and the audit flags
+every one.
+- **Markdown agents (claude, copilot):** run `--reconcile-front-matter --reconcile-apply` to take the
+  narrowed `tools:`.
+- **Goose recipes and Codex TOML:** reconcile doesn't read these. Regenerate them, either with a fresh build
+  or with `--overwrite`. `--overwrite` is a destructive action, so it needs a recorded `@security`
+  clearance, and it backs files up first.
 
 **Not converted:**
 - Adopted (bespoke) agents are never re-rendered. The audit flags them, and converting them is the

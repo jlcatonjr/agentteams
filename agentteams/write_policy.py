@@ -74,16 +74,19 @@ This team runs `write_policy: "orchestrator-only"`: you are the only agent that 
 2. **On return**, save each artifact to a file and run
    `agentteams --apply-proposal FILE.json --description <brief>` or
    `agentteams --run-request FILE.json --description <brief>`. Add `--dry-run` first when unsure.
-3. **On refusal (exit 1) or undeclared writes (exit 3)**, do not apply the change by hand and do not retry
-   with a widened request. Report the refusal, and ask the agent for a corrected artifact or escalate to the
-   operator.
+3. **On a refusal or undeclared writes**, do not apply the change by hand and do not retry with a widened
+   request. Report it, and ask the agent for a corrected artifact or escalate to the operator.
+   - A refusal is exit 1 with a `[apply-proposal] refused:` or `[run-request] refused:` line on stderr.
+   - Undeclared writes or a timeout give exit 3.
+   - Any other exit code from `--run-request` is the command's own result.
 4. **At closeout**, run `agentteams --verify-proposal-ledger`.
 
 **This overrides the workflows above:**
 - **Workflows 0A and 0B:** wave or coordinated members return proposals for their sub-regions; you apply
   them, one at a time.
 - **Workflow 13** (spawning a child orchestrator) is disabled. A child would be a second writer with no
-  dispatch nonce. Run that work yourself, or ask the operator.
+  dispatch nonce. Run that work yourself, or ask the operator. Workflow 12 then applies only to
+  adjacent-repository orchestrators.
 
 Read a proposal's content yourself only when it is over the size cap or a gate warns. Full reference:
 `references/write-policy.reference.md`.
@@ -223,6 +226,6 @@ applies or runs it with `agentteams`, which checks it against the team's policy 
 | Code | Meaning |
 |---|---|
 | 0 | Applied, or the command ran (`--run-request` passes the command's own exit code through) |
-| 1 | Refused: schema, nonce, scope, protected path, stale base, gate or allowlist |
+| 1 | Refused: schema, nonce, scope, protected path, stale base, gate or allowlist. Stderr carries a `refused:` line; without one, a `--run-request` exit 1 is the command's own |
 | 3 | The command wrote outside `expected_writes`, or timed out |
 """

@@ -122,3 +122,33 @@ def test_goose_non_orchestrator_withholds_operator_mcp_and_coordination():
     recipe = GooseAdapter().render_agent_file(write_policy.apply(agent, "repo-liaison", manifest), "repo-liaison",
                                               manifest)
     assert "agentteams_coordination" not in recipe and "lean-mcp" not in recipe
+
+
+def test_switching_on_existing_goose_and_codex_teams_is_flagged_until_regenerated(tmp_path):
+    """Reconcile reads only markdown, so recipe/TOML grants stay wide after --update; the audit must say so."""
+    brief = json.loads(BRIEF.read_text(encoding="utf-8"))
+    off, on = tmp_path / "off.json", tmp_path / "on.json"
+    off.write_text(json.dumps(brief), encoding="utf-8")
+    brief.update(ON)
+    on.write_text(json.dumps(brief), encoding="utf-8")
+    procs = {}
+    for fw in ("goose", "codex"):
+        args = ("--project", str(tmp_path / fw), "--framework", fw, "--output", str(tmp_path / fw / "agents"),
+                "--no-scan", "--yes")
+        procs[fw] = subprocess.Popen(
+            f"{sys.executable} {REPO / 'build_team.py'} --description {off} {' '.join(args)} && "
+            f"{sys.executable} {REPO / 'build_team.py'} --description {on} {' '.join(args)} --update --merge",
+            shell=True, cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        for fw, proc in procs.items():
+            out, _ = proc.communicate(timeout=600)
+            assert proc.returncode == 0, out[-1500:]
+            assert "regenerate them" in out
+            errors = [f for f in run_post_audit(tmp_path / fw / "agents", analyze.build_manifest(brief, framework=fw),
+                                                ai_audit=False).agent_refactor_findings
+                      if f.code == "AR_WRITE_POLICY" and f.severity == "error"]
+            assert errors, f"{fw}: wide grants after --update must stay visible to the audit"
+    finally:
+        for proc in procs.values():
+            if proc.poll() is None:
+                proc.kill()
