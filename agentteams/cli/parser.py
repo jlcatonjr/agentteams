@@ -153,9 +153,13 @@ def _build_parser() -> argparse.ArgumentParser:
              "not produce (e.g. bespoke custom agents) into the team roster — the "
              "orchestrator's handoff list and domain routing — WITHOUT generating "
              "or overwriting their files. The opposite of --prune: integrate "
-             "orphans instead of removing them. Requires the orchestrator to be "
-             "(re)rendered, so use with --overwrite or --migrate (under --merge the "
-             "orchestrator front matter is preserved and adoption would not surface).",
+             "orphans instead of removing them. With --overwrite or --migrate the "
+             "orchestrator is re-rendered (overwrite clearance). With --update (merge) "
+             "every agent gets a routing row and the orchestrator's agents: list is "
+             "extended append-only, gated as `adopt-orphans-merge`: governed workspaces "
+             "only, and a signed decision whose scope is adopt-orphans-merge and whose "
+             "effect_grants list exactly agents:<slug> for the slugs a --dry-run --json "
+             "reports.",
     )
     parser.add_argument(
         "--check",

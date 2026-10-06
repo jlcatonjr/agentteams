@@ -290,3 +290,37 @@ def agent_dir_label(output_dir: Path, project_root: Path) -> str:
         return output_dir.resolve().relative_to(project_root.resolve()).as_posix()
     except ValueError:
         return output_dir.name
+
+
+def set_adopted_rows(
+    manifest: dict[str, Any],
+    slugs: list[str],
+    metadata: dict[str, dict[str, str]],
+    *,
+    agent_dir: str,
+    agent_ext: str,
+) -> None:
+    """Render routing rows for ``slugs`` WITHOUT adding them to the roster.
+
+    The merge-mode and carry-forward paths use this. Rows are advisory body text; the roster
+    (``agent_slug_list`` → front-matter ``agents:``) is a capability grant that only the gated
+    ``--overwrite --adopt-orphans`` path or ``cli.adopt_merge_gate`` may extend. In particular, rows
+    re-read from an on-disk orchestrator are file content, not a clearance (security review
+    condition 5), so they must never reach ``agents:``.
+
+    Args:
+        manifest: The team manifest; only ``auto_resolved_placeholders`` changes.
+        slugs: Slugs to render rows for.
+        metadata: Per-slug :func:`read_adopted_agent_metadata` output.
+        agent_dir: Repository-relative agent directory cited in each row.
+        agent_ext: The framework's agent file extension.
+
+    Returns:
+        None.
+
+    Raises:
+        Nothing.
+    """
+    manifest.setdefault("auto_resolved_placeholders", {})["ADOPTED_AGENT_ROUTING_ROWS"] = (
+        format_adopted_routing_rows(slugs, metadata, agent_dir=agent_dir, agent_ext=agent_ext)
+    )

@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (`--update --adopt-orphans`: gated, append-only adoption under merge)
+
+- **Why.** Adoption needed `--overwrite`, which re-renders every agent file. baseAgent folded bespoke
+  agents into its orchestrator by overwriting a scratch copy and carrying the front matter back by
+  hand, which was the riskiest step in its procedure.
+- **What.** With `--update`, `--adopt-orphans` now does two things:
+  - It renders routing rows for every adoptable agent.
+  - It extends the orchestrator's `agents:` list, append-only, after the clearance check described
+    below. A second run is byte-identical, and Project-Specific Notes are untouched.
+  - Claude orchestrators have no `agents:` list, so they get the rows only.
+- **Gate.** The new action is `adopt-orphans-merge` (`cli/adopt_merge_gate.py`, now an integrity-pinned
+  enforcement module). It implements the 2026-10-05 `@security` design review's conditions:
+  - It is allowed only in signing-governed workspaces.
+  - It needs a decision row; a waiver is never enough.
+  - The row must have `scope=adopt-orphans-merge`, and `effect_grants` must exactly match the slugs
+    being added. A superset or subset is refused, and the refusal names the difference.
+  - The operator's Ed25519 signature is required (Rule 15), and the Rule 15(d) aggregate cap is
+    checked.
+  - The clearance is spent once.
+  - The orchestrator is backed up before the write, and each run is recorded in
+    `references/adopt-orphans-merge.log.csv`.
+  - `--dry-run --json` adds an `adopt_orphans_merge` object listing the exact slugs to sign, without
+    spending the clearance.
+- **Refusals happen before the clearance is spent.** These cases refuse rather than guess, and no
+  clearance is consumed:
+  - an `agents:` value that is not a plain `  - slug` block list (flow lists, commented items, CRLF);
+  - a symlinked orchestrator or agent file;
+  - a backup failure;
+  - any other gate error, which is reported as a clean refusal.
+- **Known limit.** These grants are not added to `references/exception-registry.json`, so the aggregate
+  cap is checked but does not count them. Each run still needs a fresh Ed25519-signed decision.
+- **Carry-forward is rows-only.** A plain `--update` re-renders routing rows that an earlier adopt run
+  wrote, but it no longer adds those slugs to the roster. Body text is not a clearance (condition 5).
+
 ### security (decision signatures now cover `scope` and the `effect_*` columns)
 
 - **Problem.** A decision row's HMAC/Ed25519 payload covered `date`, `action_reviewed`, `verdict`,
