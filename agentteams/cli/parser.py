@@ -950,6 +950,57 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--apply-proposal",
+        metavar="FILE.json",
+        dest="apply_proposal",
+        default=None,
+        help=(
+            "Orchestrator-only-writes pilot: apply one typed change or deletion proposal under the brief's "
+            "policy (--description). The agent comes from the proposal's dispatch nonce. Checks write_scopes, "
+            "protected_paths, the control plane and the brief itself, size cap, stale base, pre-write gates "
+            "on the proposed content; atomic write; signed ledger row. --dry-run checks only (gates run)."
+        ),
+    )
+    parser.add_argument(
+        "--run-request",
+        metavar="FILE.json",
+        dest="run_request",
+        default=None,
+        help=(
+            "Orchestrator-only-writes pilot: run one typed command request if its argv matches the "
+            "dispatched agent's registered prefix and argument patterns. No shell, scrubbed environment "
+            "(no signing keys), pinned cwd, timeout, stdin=DEVNULL or gated stdin_from_content. Writes "
+            "outside expected_writes fail the run (exit 3). Signed ledger row. --dry-run checks only."
+        ),
+    )
+    parser.add_argument(
+        "--issue-dispatch",
+        action="store_true",
+        dest="issue_dispatch",
+        default=False,
+        help=(
+            "Orchestrator-only-writes pilot: record a signed dispatch nonce for --agent and print it. The "
+            "orchestrator puts the nonce in the agent's task; every proposal or request must carry it, and "
+            "--apply-proposal / --run-request take the agent from this record, never from the caller. "
+            "Needs AGENTTEAMS_PROPOSAL_LEDGER_KEY (or AGENTTEAMS_DECISION_SIGNING_KEY)."
+        ),
+    )
+    parser.add_argument(
+        "--agent",
+        metavar="SLUG",
+        dest="agent",
+        default=None,
+        help="The agent being dispatched, for --issue-dispatch.",
+    )
+    parser.add_argument(
+        "--verify-proposal-ledger",
+        action="store_true",
+        dest="verify_proposal_ledger",
+        default=False,
+        help="Read-only: verify the signatures, hash chain and signed head of .agentteams/proposal-ledger.jsonl "
+             "under --project (else CWD).",
+    )
+    parser.add_argument(
         "--verify-grants",
         action="store_true",
         dest="verify_grants",

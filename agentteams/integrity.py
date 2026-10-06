@@ -50,6 +50,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                            # orchestrator's `agents:` grant under --merge
     "scripts/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
                                     # construction, so any change to it must be a reviewed re-record
+    "agentteams/cli/proposal_commands.py",  # the CLI that hands artifacts to proposals.py
+    "agentteams/proposals.py",  # orchestrator-only-writes pilot: the one path that applies agents'
+                                # proposals and runs their commands; a silent widening defeats the policy
     "agentteams/frameworks/goose_tool_scoping.py",  # C-3 on Goose: declared tools -> recipe grants;
                                                      # a silent widening here re-arms every recipe
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a

@@ -100,6 +100,27 @@ def _at_or_inside(path: str, base: str) -> bool:
     return path == base or path.startswith(base.rstrip("/") + "/")
 
 
+def control_plane_of(rel: str, *, platform: str | None = None) -> str | None:
+    """Return the project control-plane entry a project-relative path is at or inside, else ``None``.
+
+    The public form of the ``_PROJECT_PROTECTED`` check, for other modules (``proposals``) that must
+    refuse the same paths.
+
+    Args:
+        rel: A project-relative POSIX path.
+        platform: Override for ``sys.platform`` (tests); compared case-insensitively on darwin.
+
+    Returns:
+        The matching entry (e.g. ``".claude"``), or ``None``.
+
+    Raises:
+        Nothing.
+    """
+    plat = sys.platform if platform is None else platform
+    norm = _fold(posixpath.normpath(rel), plat)
+    return next((p for p in _PROJECT_PROTECTED if _at_or_inside(norm, _fold(p, plat))), None)
+
+
 def project_root_of(manifest: dict[str, Any] | None) -> str | None:
     """Return the CLI-set project root (``None`` when absent or input-supplied, i.e. not a Path)."""
     value = (manifest or {}).get(PROJECT_ROOT_KEY)

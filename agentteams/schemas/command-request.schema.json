@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Command request (orchestrator-only-writes pilot)",
+  "description": "A command a non-orchestrator agent asks the orchestrator to run. Run by `agentteams --run-request FILE --agent SLUG` only if argv matches that agent's registered prefix and argument patterns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "dispatch",
+    "argv",
+    "purpose"
+  ],
+  "properties": {
+    "kind": {
+      "const": "command-request"
+    },
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "description": "An argument list; never a shell string."
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Project-relative working directory (default \".\")."
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expected_writes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Paths the command is expected to change; other changes are reported."
+    },
+    "stdin_from_content": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "content"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "description": "Content piped to the command after the gates matching path pass on it (e.g. a Lean draft to `lake env lean --stdin`)."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Optional; must equal the agent the dispatch nonce was issued to, else the artifact is refused."
+    },
+    "dispatch": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "The dispatch nonce from `agentteams --issue-dispatch`; the agent is read from its signed record."
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Change proposal (orchestrator-only-writes pilot)",
+  "description": "What a non-orchestrator agent returns instead of editing a file. Applied by `agentteams --apply-proposal FILE --agent SLUG`; the agent identity comes from the orchestrator, not from this document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "dispatch",
+    "path",
+    "base_sha256",
+    "content",
+    "rationale"
+  ],
+  "properties": {
+    "kind": {
+      "const": "change-proposal"
+    },
+    "path": {
+      "type": "string",
+      "description": "Project-relative POSIX path."
+    },
+    "base_sha256": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64}|absent)$",
+      "description": "sha256 of the file the agent read, or \"absent\" for a new file."
+    },
+    "content": {
+      "type": "string",
+      "description": "The full new file text."
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Registered gates to run (matching gates also run)."
+    },
+    "agent": {
+      "type": "string",
+      "description": "Optional; must equal the agent the dispatch nonce was issued to, else the artifact is refused."
+    },
+    "dispatch": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "The dispatch nonce from `agentteams --issue-dispatch`; the agent is read from its signed record."
+    }
+  }
+}
