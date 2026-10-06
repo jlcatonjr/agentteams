@@ -245,3 +245,15 @@ def test_goose_sub_recipes_and_codex_mcp_servers_refused():
     assert [sev for _, sev in _codes({"a.yaml": quoted}, ".yaml", "goose")] == ["error"]
     agent = 'name = "a"\nsandbox_mode = "read-only"\n[mcp_servers.fs]\ncommand = "x"\n'
     assert [sev for _, sev in _codes({"a.toml": agent}, ".toml", "codex")] == ["error"]
+
+
+def test_default_loader_still_follows_links(tmp_path):
+    """Without the switch, a linked agent file is still loaded, so the other per-agent checks see it."""
+    from agentteams.audit import _load_files_from_disk
+
+    team = tmp_path / "team"
+    team.mkdir()
+    real = tmp_path / "real.md"
+    real.write_text("---\nname: x\ntools: Edit\n---\n", encoding="utf-8")
+    (team / "linked.md").symlink_to(real)
+    assert "linked.md" in _load_files_from_disk(team, agent_ext=".md")

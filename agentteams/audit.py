@@ -179,7 +179,10 @@ def run_post_audit(
     if rendered_files is not None:
         file_map: dict[str, str] = {rel: content for rel, content in rendered_files}
     else:
-        file_map = _load_files_from_disk(output_dir, agent_ext=agent_ext, unreadable=unreadable)
+        file_map = _load_files_from_disk(
+            output_dir, agent_ext=agent_ext,
+            unreadable=unreadable if manifest.get("write_policy") == "orchestrator-only" else None,
+        )
 
     # --- Static checks (conflict-auditor style) ---
     result.static_findings.extend(_check_unresolved_placeholders(file_map))
@@ -915,8 +918,9 @@ def _load_files_from_disk(
         output_dir: Root agents directory path.
         agent_ext: The framework's agent-file extension. Goose ``.yaml`` recipes and Codex ``.toml``
             agents load too, so the per-agent checks see them on a disk audit.
-        unreadable: When given, receives the paths skipped as symlinks (files or directories) or as
-            undecodable, so a caller can report them instead of passing them silently.
+        unreadable: Strict mode. When given, symlinks (files or directories) are not followed, and they and
+            undecodable agent files are appended here so the caller can report them. When omitted, links are
+            followed as before, so the default audit still checks a linked agent file.
 
     Returns:
         Dict mapping relative path strings to file content.
@@ -928,10 +932,12 @@ def _load_files_from_disk(
         if _BACKUP_DIR_NAME in path.parts:
             continue
         rel = str(path.relative_to(output_dir))
-        if path.is_symlink() or any(p.is_symlink() for p in path.parents if output_dir in p.parents):
-            # Never follow a link out of the team directory into the audit (or the AI prompt); report it.
-            if unreadable is not None:
-                unreadable.append(rel)  # any link: a dangling or renamed one may still resolve to an agent
+        if unreadable is not None and (
+            path.is_symlink() or any(p.is_symlink() for p in path.parents if output_dir in p.parents)
+        ):
+            # Strict mode (write_policy): never follow a link out of the team directory into the audit (or the
+            # AI prompt); report it instead. A dangling or renamed link may still resolve to an agent.
+            unreadable.append(rel)
             continue
         if path.suffix not in {".md", ".csv"} and not path.name.endswith(agent_ext):
             continue

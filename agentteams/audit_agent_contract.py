@@ -504,7 +504,9 @@ def _check_goose_recipe_grants(
 _SHELL_TOKENS = frozenset({"execute", "bash", "shell"})
 #: Frameworks with no per-agent sandbox: a shell there is unconfined, so it is an error, not a warning
 #: (operator decision 2026-10-06: Copilot drops ``execute`` under the switch).
-_SHELL_WARN_FRAMEWORKS = frozenset({"claude"})  # any other framework (unknown ids included): a shell is an error
+#: Markdown-agent frameworks where a declared shell is a warning (until P4); for any other markdown framework,
+#: unknown ids included, it is an error. Goose recipes take their own branch, where a shell always warns.
+_SHELL_WARN_FRAMEWORKS = frozenset({"claude"})
 #: Slugs exempt from the policy: only the single shallowest file per slug (a deeper copy is checked like any
 #: agent, and two equally shallow copies are both checked).
 _WRITER_SLUGS = frozenset({"orchestrator"})
@@ -631,11 +633,16 @@ def _check_write_policy(
     ``AR_WRITE_POLICY`` findings, per non-orchestrator agent file (generated or adopted, when present in
     *file_map*):
 
-    * **error:** a write tool; dispatch (``Task``/``agent`` can start a subagent that writes); a tool not
-      known to be read-only; an absent, null or duplicated ``tools:`` key (the agent inherits every tool); a
-      shell on Copilot, which has no per-agent sandbox; a Codex ``sandbox_mode`` other than ``"read-only"``
-      (parsed as TOML; missing included, ``references/`` included, and the exemption needs ``name`` to match);
-      a Goose recipe granting ``edit``/``write``.
+    * **error (markdown agents):** a write tool; dispatch (``Task``/``agent`` can start a subagent that
+      writes); a tool not known to be read-only; a ``tools:`` key that is absent, null, empty, duplicated or
+      of any shape other than one line or a clean ``- item`` block list; a shell on any framework but claude.
+    * **error (Codex):** ``sandbox_mode``, parsed as TOML, other than ``"read-only"`` (missing included); any
+      ``mcp_servers``; invalid TOML. Every ``.toml`` is checked, ``references/`` included, and the exemption
+      needs ``name`` to match.
+    * **error (Goose):** missing ``extensions``; ``developer`` ``edit``/``write`` (or a marker declaring them);
+      ``summon`` or ``sub_recipes`` (dispatch); any extension other than ``developer``, ``analyze``,
+      ``summon``, ``agentteams_readfs`` and ``agentteams_coordination``.
+    * **error (disk audit):** a symlink or an unreadable agent file in the team directory.
     * **warning:** a shell elsewhere (Claude ``Bash``, Goose ``shell``). Nothing confines it before P4, so
       no brief field silences this.
     * **error, once:** ``agents-md``, which declares no per-agent tools and so cannot be checked.

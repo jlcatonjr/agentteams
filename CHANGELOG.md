@@ -24,8 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A shell on claude or Goose is a warning until the P4 sandbox. Only the shallowest orchestrator file is
   exempt.
 - **Disk audit fix.** An audit of an existing team now loads Goose `.yaml` recipes and Codex `.toml` agents.
-  Before, the per-agent checks never saw them on disk and passed silently. The loader now skips symlinks
-  and files that aren't UTF-8 instead of crashing; under the switch, each is reported as an error.
+  Before, the per-agent checks never saw them on disk and passed silently. A file that isn't UTF-8 no longer
+  crashes the loader. Under the switch, symlinks aren't followed, and each one, plus each unreadable agent
+  file, is reported as an error.
 - **Scope:** this is a static check of declarations, not runtime enforcement.
 - **Expected:** templates still grant writes until P3, so a team under the switch fails this check.
 
