@@ -3,7 +3,7 @@
 * The switch reaches the manifest only as ``"orchestrator-only"``; without it, generation is byte-identical.
 * Under the switch, every non-orchestrator agent file is checked per framework shape: front-matter tools
   (copilot, claude), Goose recipe grants, Codex ``sandbox_mode``. agents-md cannot be checked at all.
-* Until P3 changes the templates, a generated team under the switch fails this check (expected).
+* A team generated under the switch (P3) passes it on every framework.
 """
 
 from __future__ import annotations
@@ -184,37 +184,59 @@ def test_agents_md_cannot_be_enforced():
 # --- end to end: a generated team, audited from disk --------------------------------------------
 
 
-@pytest.fixture(scope="module", params=[("goose", ".yaml"), ("codex", ".toml")], ids=["goose", "codex"])
-def generated(request, tmp_path_factory):
-    """One team per framework whose agent files the disk loader used to skip (claude/copilot are unit-covered)."""
-    framework, ext = request.param
-    tmp_path = tmp_path_factory.mktemp(framework)
+_FRAMEWORKS = [("claude", ".md"), ("copilot-vscode", ".agent.md"), ("goose", ".yaml"), ("codex", ".toml")]
+
+
+@pytest.fixture(scope="module")
+def generated_teams(tmp_path_factory):
+    """One team per framework under the switch, built in parallel (each build is ~40s of mostly waiting)."""
+    root = tmp_path_factory.mktemp("teams")
     brief = json.loads(BRIEF.read_text(encoding="utf-8"))
     brief["write_policy"] = "orchestrator-only"
-    brief_path = tmp_path / "brief.json"
+    brief_path = root / "brief.json"
     brief_path.write_text(json.dumps(brief), encoding="utf-8")
-    out = tmp_path / "agents"
-    proc = subprocess.run(
-        [sys.executable, str(REPO / "build_team.py"), "--description", str(brief_path), "--project", str(tmp_path),
-         "--framework", framework, "--output", str(out), "--no-scan", "--yes"],
-        cwd=tmp_path, capture_output=True, text=True, timeout=300,
-    )
-    assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
-    return out, analyze.build_manifest(brief, framework=framework), ext
+    procs = {
+        fw: subprocess.Popen(
+            [sys.executable, str(REPO / "build_team.py"), "--description", str(brief_path), "--project",
+             str(root / fw), "--framework", fw, "--output", str(root / fw / "agents"), "--no-scan", "--yes"],
+            cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+        for fw, _ in _FRAMEWORKS
+    }
+    try:
+        for fw, proc in procs.items():
+            out, _ = proc.communicate(timeout=600)
+            assert proc.returncode == 0, f"{fw}: {out[-1500:]}"
+    finally:
+        for proc in procs.values():
+            if proc.poll() is None:
+                proc.kill()
+    return root, brief
 
 
-def test_generated_team_under_the_switch_is_flagged_until_p3(generated):
-    out, manifest, ext = generated
-    assert any(p.name.endswith(ext) for p in out.rglob("*")), f"no {ext} agent files generated"
-    result = run_post_audit(out, manifest, ai_audit=False)
-    flagged = {f.file for f in result.agent_refactor_findings if f.code == "AR_WRITE_POLICY"}
-    assert flagged, "the disk audit saw no agent files to check"
-    assert not any(Path(f).name.startswith("orchestrator.") for f in flagged)
+@pytest.mark.parametrize("framework, ext", _FRAMEWORKS)
+def test_generated_team_under_the_switch_passes(generated_teams, framework, ext):
+    root, brief = generated_teams
+    out = root / framework / "agents"
+    agents = [p for p in out.rglob("*") if p.name.endswith(ext) and p.is_file()
+              and "references" not in p.parts and p.name != "SETUP-REQUIRED.md"]
+    assert agents, f"no {ext} agent files generated"
+    result = run_post_audit(out, analyze.build_manifest(brief, framework=framework), ai_audit=False)
+    found = [f for f in result.agent_refactor_findings if f.code == "AR_WRITE_POLICY"]
+    assert not found, [(f.file, f.description[:120]) for f in found]
+    texts = {p.name: p.read_text(encoding="utf-8") for p in agents}
+    orch = next(t for n, t in texts.items() if n.startswith("orchestrator."))
+    assert "Write Policy: Applying Proposals" in orch
+    others = [t for n, t in texts.items() if not n.startswith(("orchestrator.", "bridge-orchestrator."))]
+    assert others and all("Write Policy: Return Proposals" in t for t in others)
+    assert (out / "references" / "write-policy.reference.md").is_file() or any(
+        p.name == "write-policy.reference.md" for p in out.rglob("*"))
 
 
-def test_same_team_without_the_switch_has_no_findings(generated):
-    out, manifest, _ = generated
-    result = run_post_audit(out, {k: v for k, v in manifest.items() if k != "write_policy"}, ai_audit=False)
+def test_same_team_without_the_switch_in_the_manifest_has_no_findings(generated_teams):
+    root, brief = generated_teams
+    manifest = {k: v for k, v in analyze.build_manifest(brief, framework="goose").items() if k != "write_policy"}
+    result = run_post_audit(root / "goose" / "agents", manifest, ai_audit=False)
     assert not [f for f in result.agent_refactor_findings if f.code == "AR_WRITE_POLICY"]
 
 

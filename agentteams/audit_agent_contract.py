@@ -27,6 +27,8 @@ from agentteams.audit_types import AuditFinding, _agent_slug, _is_agent_file
 from agentteams.frameworks.goose_recipe_read import developer_tools, recipe_extension_grants
 from agentteams.frameworks.goose_recipe_validate import _RECIPE_VERSION_RE
 from agentteams.frameworks.goose_tool_scoping import DISABLED, declared_from_marker, grant_extensions
+from agentteams.write_policy import ORCHESTRATOR_SLUGS as _ORCHESTRATOR_SLUGS
+from agentteams.write_policy import READ_ONLY_TOKENS as _READ_ONLY_TOKENS
 
 #: Pattern that identifies a self-declared read-only agent from its body text.
 #: Matches only explicit self-attributive declarations:
@@ -510,16 +512,10 @@ _SHELL_WARN_FRAMEWORKS = frozenset({"claude"})
 #: Slugs exempt from the policy: only the single shallowest file per slug (a deeper copy is checked like any
 #: agent, and two equally shallow copies are both checked).
 _WRITER_SLUGS = frozenset({"orchestrator"})
-_GOOSE_WRITER_SLUGS = frozenset({"orchestrator", "bridge-orchestrator"})
+_GOOSE_WRITER_SLUGS = _ORCHESTRATOR_SLUGS  # single source with the generator (write_policy.ORCHESTRATOR_SLUGS)
 #: Goose extensions a non-orchestrator recipe may carry: the read-only file server and the record-only
 #: coordination server. ``developer`` and ``analyze`` are judged by their tools; any other extension is refused.
 _GOOSE_READ_EXTENSIONS = frozenset({"agentteams_readfs", "agentteams_coordination"})
-#: Tools a non-orchestrator agent may hold under the switch: read, search and bookkeeping. Anything not here
-#: and not a known write/shell/dispatch token is refused as unclassifiable (``editFiles``, ``mcp__*``, ``*``).
-_READ_ONLY_TOKENS = frozenset({
-    "read", "search", "grep", "glob", "ls", "todo", "todowrite", "web", "fetch", "webfetch", "websearch",
-    "retrieval", "codebase", "usages", "problems",
-})
 #: ``tools:`` values YAML reads as null: the key is then effectively absent and the agent inherits every tool.
 _NULL_TOOLS = frozenset({"", "~", "null", "''", '""'})
 

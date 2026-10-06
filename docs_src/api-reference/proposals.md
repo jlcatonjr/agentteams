@@ -118,8 +118,6 @@ time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox pro
 - **The orchestrator exemption** covers only the shallowest `orchestrator` file (on Goose, also
   `bridge-orchestrator`). A deeper copy, or two equally shallow copies, are checked like any agent. On
   Codex, the exempt file's `name` must also be `orchestrator`.
-- **Expected until P3:** the templates still grant writes, so a generated team under the switch fails this
-  check.
 - **Coverage:** a disk audit (`--post-audit` on an existing team) sees every agent file in the team directory,
   adopted agents included, but skips symlinks and files that aren't UTF-8. The in-memory audit during
   generation sees only the rendered files.
@@ -131,6 +129,47 @@ time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox pro
   name.
 - **Not covered:** skills, and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex's
   `sandbox_mode` is a default, not a ceiling.
+
+## Generated teams under the switch (P3)
+
+Under `"write_policy": "orchestrator-only"`, generation makes the team pass the check above.
+`agentteams.write_policy.apply` runs before every framework adapter.
+
+- **Non-orchestrator agents, the team builder included:**
+  - Their canonical `tools:` line is narrowed to `read`, `search` and `todo`, and `read` is always kept.
+    `edit`, `execute`, `agent` and `retrieval` are dropped.
+  - Each framework derives its grants from that one line. Claude gets `Read, Grep, Glob`. Codex gets
+    `sandbox_mode = "read-only"`. Goose, which is forced to grant mode (an explicit `"legacy"` is refused),
+    gets `agentteams_readfs`. Copilot keeps the line as it is.
+  - A "Write Policy: Return Proposals, Never Write" section is appended. It overrides any write wording
+    in the body.
+- **The orchestrator** (and Goose `bridge-orchestrator`) keeps its tools. It gains a "Write Policy:
+  Applying Proposals" workflow:
+  - issue a dispatch nonce, apply or run artifacts, never retry by hand, verify the ledger at closeout;
+  - Workflows 0A and 0B members return proposals;
+  - Workflow 13 (child orchestrators) is disabled.
+- **The team ships** `references/write-policy.reference.md`, with the three artifact shapes and the exit
+  codes.
+- **Fences:** an unfenced body is wrapped whole, section included, so `--update --merge` refreshes both. A
+  body that already has fences gets the section in its own `write_policy` fence.
+- **Shell (`execute`)** is dropped everywhere until P4 can confine it (operator decision). Commands go
+  through `command-request`.
+
+- **Goose non-orchestrator recipes** carry no operator MCP server and no coordination server (it writes
+  request and log files) under the switch.
+- **A `tools:` key the generator can't narrow cleanly** is refused rather than shadowed by a second key. That
+  means any shape other than a one-line flow list.
+
+**Switching on an existing team.** `--update --merge` adds the sections, but front matter is never merged,
+so the old tools stay. `--update` prints a notice saying so, and the audit flags them. Then run
+`--reconcile-front-matter --reconcile-apply` to take the narrowed `tools:`.
+
+**Not converted:**
+- Adopted (bespoke) agents are never re-rendered. The audit flags them, and converting them is the
+  consumer's job.
+- Copilot handoff buttons stay. They're clicked by the user, not run by the agent.
+- **Codex project-level MCP servers** (`codex:mcp`) are inherited by subagents, and `sandbox_mode` doesn't
+  confine them. Keep them read-only, or off, for a team under the switch.
 
 ## Residual risk (stated, not hidden)
 

@@ -277,6 +277,12 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Orchestrator-only-writes pilot (opt-in): only the non-default value reaches the manifest, so a team
     # without the switch keeps a byte-identical manifest. The audit's AR_WRITE_POLICY check keys on it.
     write_policy = description.get("write_policy")
+    if write_policy == "orchestrator-only":
+        # Only grant-mode recipes derive their extensions from declared tools; a legacy recipe ships a full
+        # `developer` whatever the agent declares, so the narrowed tools would never reach Goose.
+        if goose_tool_scoping == "legacy":
+            raise ValueError('write_policy "orchestrator-only" requires goose_tool_scoping "grant" (or unset)')
+        goose_tool_scoping = "grant"
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted

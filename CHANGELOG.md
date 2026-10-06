@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (orchestrator-only-writes pilot P3: generated teams under the switch)
+
+- **Narrowing.** Under `"write_policy": "orchestrator-only"`, a new `agentteams/write_policy.py` runs before
+  every framework adapter (integrity-pinned).
+  - It narrows each non-orchestrator agent's canonical `tools:` line, team builder included, to `read`,
+    `search` and `todo`. `execute` is dropped too, until P4.
+  - It appends a "Return Proposals, Never Write" section that overrides any write wording in the body.
+  - Claude, Codex (`sandbox_mode = "read-only"`), Goose and Copilot all derive read-only grants from that
+    one line.
+- **Orchestrator.** It keeps its tools and gains an "Applying Proposals" workflow, which disables child
+  orchestrators and routes 0A/0B members through proposals.
+- **Reference doc.** The team ships `references/write-policy.reference.md`.
+- **Goose.** Under the switch it is forced to `goose_tool_scoping: "grant"`; an explicit `"legacy"` is
+  refused. The Goose team-builder recipe now takes its grant from its declared tools, not a hardcoded
+  `developer`.
+- **Result.** A team generated under the switch passes `AR_WRITE_POLICY` on claude, copilot-vscode, goose
+  and codex. A team without it is byte-identical, and the example snapshots are unchanged.
+- **Goose MCP.** Non-orchestrator Goose recipes carry no operator MCP or coordination server.
+- **Existing teams.** `--update --merge` adds the sections and prints a notice;
+  `--reconcile-front-matter --reconcile-apply` narrows the tools.
+- **Unreadable `tools:`.** A `tools:` key the generator can't narrow cleanly is refused.
+- **Codex.** Project-level MCP servers aren't confined by `sandbox_mode`, which the docs now say.
+
 ### feat (orchestrator-only-writes pilot P2: the `write_policy` switch and `AR_WRITE_POLICY`)
 
 - **Switch.** `"write_policy": "orchestrator-only"` now reaches the team manifest. Only that value does, so a

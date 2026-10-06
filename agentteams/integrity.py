@@ -51,6 +51,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "scripts/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
                                     # construction, so any change to it must be a reviewed re-record
     "agentteams/cli/proposal_commands.py",  # the CLI that hands artifacts to proposals.py
+    "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
     "agentteams/proposals.py",  # orchestrator-only-writes pilot: the one path that applies agents'
                                 # proposals and runs their commands; a silent widening defeats the policy
     "agentteams/frameworks/goose_tool_scoping.py",  # C-3 on Goose: declared tools -> recipe grants;
