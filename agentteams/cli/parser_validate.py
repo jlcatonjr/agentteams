@@ -125,14 +125,14 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                 parser.error(f"--fleet cannot be combined with {flag} (it operates on many workspaces)")
 
     if getattr(args, "adopt_orphans", False):
-        # Adoption rewrites the orchestrator front matter (agents: roster), which
-        # only happens on a full re-render. Under --merge front matter is
-        # preserved, so adoption would be a silent no-op — require overwrite/migrate.
-        if not (args.overwrite or args.migrate):
+        # Adoption extends the orchestrator's `agents:` roster. A full re-render (--overwrite /
+        # --migrate) does that through the `overwrite` clearance. Under --update's default merge,
+        # front matter is preserved, so the roster is extended only by the gated
+        # `adopt-orphans-merge` path (cli/adopt_merge_gate.py). Anything else would be a silent no-op.
+        if not (args.overwrite or args.migrate or getattr(args, "update", False)):
             parser.error(
-                "--adopt-orphans requires --overwrite or --migrate "
-                "(under --merge the orchestrator front matter is preserved, so "
-                "adoption would not take effect)"
+                "--adopt-orphans requires --overwrite, --migrate or --update "
+                "(--update merges: a gated, append-only extension of the orchestrator's agents: list)"
             )
         if args.prune:
             parser.error(

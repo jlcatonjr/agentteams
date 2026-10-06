@@ -18,9 +18,7 @@ import sys
 from pathlib import Path
 
 from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
-from agentteams.adopted_agents import (
-    adoption_exclusions, agent_dir_label, discover_orphans, previously_adopted, read_adopted_agent_metadata,
-)
+from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
@@ -208,31 +206,13 @@ def _run_generate_inner(
         return 1
 
     # -----------------------------------------------------------------------
-    # Step 4·adopt: --adopt-orphans — register pre-existing custom agent files
-    # into the roster before rendering, so the orchestrator declares them. Must
-    # run before _build_final_rendered. Never adds to output_files (their files
-    # are preserved, not regenerated). Effective only when the orchestrator is
-    # (re)rendered — i.e. with --overwrite/--migrate (see flag help).
+    # Step 4·adopt: --adopt-orphans / --update carry-forward (cli/adopt_step.py). Must run before
+    # _build_final_rendered. Under --update --adopt-orphans the gated, append-only extension of the
+    # orchestrator's agents: list is cleared and applied here, before anything else is written.
     # -----------------------------------------------------------------------
-    if getattr(args, "adopt_orphans", False) and output_dir.exists():
-        # Discovery reads only name/description, from files already in output_dir (C-4).
-        _agent_ext = adapter.get_file_extension("agent")
-        _orphan_slugs, _meta = discover_orphans(output_dir, _agent_ext, adoption_exclusions(manifest))
-        _adopted = analyze.adopt_orphan_agents(
-            manifest, _orphan_slugs, _meta, agent_dir=agent_dir_label(output_dir, project_root), agent_ext=_agent_ext,
-        )
-        if _adopted:
-            print(f"  Adopted {len(_adopted)} orphan agent(s) into roster: {', '.join(_adopted)}")
-        else:
-            print("  --adopt-orphans: no orphan agent files to adopt.")
-    elif getattr(args, "update", False) and output_dir.exists():
-        # Carry forward agents an earlier adopt run routed to, so the re-rendered fence keeps their rows.
-        _agent_ext = adapter.get_file_extension("agent")
-        _prev = previously_adopted(output_dir, _agent_ext)
-        _meta = {s: read_adopted_agent_metadata(output_dir / f"{s}{_agent_ext}") for s in _prev}
-        analyze.adopt_orphan_agents(
-            manifest, _prev, _meta, agent_dir=agent_dir_label(output_dir, project_root), agent_ext=_agent_ext,
-        )
+    _adopt_plan, _adopt_rc = run_adopt_step(args, manifest, output_dir, project_root, adapter.get_file_extension("agent"))
+    if _adopt_rc is not None:
+        return _adopt_rc
 
     # Step 4·preserve: on --update, record the agent slugs already deployed ON DISK so the
     # roster pruner never drops a DEPLOYED teammate's cross-ref merely because this run did
@@ -652,6 +632,7 @@ def _run_generate_inner(
         emit.print_summary(result, manifest)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
+        attach_dry_run_plan(_adopt_plan, result)
         if args.dry_run and result.dry_run_report is not None:
             emit.print_dry_run_report(
                 result, manifest,

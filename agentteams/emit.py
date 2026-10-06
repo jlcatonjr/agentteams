@@ -105,6 +105,9 @@ class DryRunReport:
     """
     entries: list[DryRunEntry] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
+    #: ``--update --merge --adopt-orphans`` plan (``cli.adopt_merge_gate``): the orchestrator, the
+    #: exact slugs its ``agents:`` list would gain, and the clearance status. ``None`` otherwise.
+    adopt_orphans_merge: dict[str, Any] | None = None
 
 
 @dataclass
@@ -807,6 +810,8 @@ def print_dry_run_report(
             "notices": list(report.notices),
             "counts": _dry_run_counts(report),
         }
+        if report.adopt_orphans_merge is not None:
+            payload["adopt_orphans_merge"] = report.adopt_orphans_merge
         print(_json.dumps(payload, indent=2), file=out)
         return
 

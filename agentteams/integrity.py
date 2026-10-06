@@ -46,6 +46,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/unfenced.py",            # C-1: constraint ratchet
     "agentteams/front_matter_merge.py",  # C-3: capability comparison
     "agentteams/front_matter_reconcile.py",
+    "agentteams/cli/adopt_merge_gate.py",  # C-3 + Rule 15: the one gated path that extends an
+                                           # orchestrator's `agents:` grant under --merge
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a
     # silent edit to any of them turns a check that fires into one that cannot, which is the
     # F-1 defect applied to the machinery built to catch F-1. Registry is included because it

@@ -6,6 +6,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (`--update --adopt-orphans`: gated, append-only adoption under merge)
+
+- **Why.** Adoption needed `--overwrite`, which re-renders every agent file. baseAgent folded bespoke
+  agents into its orchestrator by overwriting a scratch copy and carrying the front matter back by
+  hand, which was the riskiest step in its procedure.
+- **What.** With `--update`, `--adopt-orphans` now does two things:
+  - It renders routing rows for every adoptable agent.
+  - It extends the orchestrator's `agents:` list, append-only, after the clearance check described
+    below. A second run is byte-identical, and Project-Specific Notes are untouched.
+  - Claude orchestrators have no `agents:` list, so they get the rows only.
+- **Gate.** The new action is `adopt-orphans-merge` (`cli/adopt_merge_gate.py`, now an integrity-pinned
+  enforcement module). It implements the 2026-10-05 `@security` design review's conditions:
+  - It is allowed only in signing-governed workspaces.
+  - It needs a decision row; a waiver is never enough.
+  - The row must have `scope=adopt-orphans-merge`, and `effect_grants` must exactly match the slugs
+    being added. A superset or subset is refused, and the refusal names the difference.
+  - The operator's Ed25519 signature is required (Rule 15), and the Rule 15(d) aggregate cap is
+    checked.
+  - The clearance is spent once.
+  - The orchestrator is backed up before the write, and each run is recorded in
+    `references/adopt-orphans-merge.log.csv`.
+  - `--dry-run --json` adds an `adopt_orphans_merge` object listing the exact slugs to sign, without
+    spending the clearance.
+- **Refusals happen before the clearance is spent.** These cases refuse rather than guess, and no
+  clearance is consumed:
+  - an `agents:` value that is not a plain `  - slug` block list (flow lists, commented items, CRLF);
+  - a symlinked orchestrator or agent file;
+  - a backup failure;
+  - any other gate error, which is reported as a clean refusal.
+- **Known limit.** These grants are not added to `references/exception-registry.json`, so the aggregate
+  cap is checked but does not count them. Each run still needs a fresh Ed25519-signed decision.
+- **Carry-forward is rows-only.** A plain `--update` re-renders routing rows that an earlier adopt run
+  wrote, but it no longer adds those slugs to the roster. Body text is not a clearance (condition 5).
+
+### security (decision signatures now cover `scope` and the `effect_*` columns)
+
+- **Problem.** A decision row's HMAC/Ed25519 payload covered `date`, `action_reviewed`, `verdict`,
+  `conditions_verified`, `author`, `prev_digest` and the labelled axes `derives_from`, `sig_scheme` and
+  `key_id`, but not `scope` or the structured `effect_*` columns. `_scope_permits` narrows a clearance
+  by `scope`, and the effect columns derive the Rule 15 class. So someone without the key could clear a
+  narrow scope, which widens the clearance, or rewrite a signed row's `effect_grants`, and the
+  signature still verified. Found by the `@security` design review of merge-mode adopt (condition 1).
+- **Fix.** `_OPTIONAL_SIGNED_AXES` adds `scope`, `effect_class`, `effect_grants`, `effect_targets`,
+  `effect_relaxes`, `effect_destructive`, `effect_cross_repo` and `effect_bulk`. Each is signed as a
+  labelled `name=value` token, and only when non-empty. Rows without these columns sign byte-for-byte
+  as before. Every signer and verifier shares `_decision_signature_values`, so no copy can drift.
+  `references/enforcement-integrity.json` re-records `decision_log.py` only.
+- **Delimiter.** The payload is `|`-joined, so a `|` inside an optional-axis value could forge a
+  token boundary. For example, `sig_scheme="hmac|scope=X"` with an empty `scope` gives the same payload
+  as a signed `scope=X`. Any such value is now refused (fail-closed) when signing, verifying or
+  chaining.
+- **Migration.**
+  - A row signed before this change that carries a non-empty `scope` or `effect_*` cell no longer
+    verifies, and its action is refused (fail-closed).
+  - In a log with a `prev_digest` chain, that row's digest changes too. The chain check then fails
+    the gate for **every** action, so re-signing means re-chaining and re-signing every later row.
+  - None of the local decision logs checked (agentteams, mathAgents, baseAgent) has such a row.
+- **Not covered: rows signed before this change.** Their signature never covered `scope` or
+  `effect_*`. Clearing those cells restores the old payload, and the old signature verifies again, so
+  those rows are no better protected than before. Never "fix" a refused legacy row by clearing its
+  cells: re-sign it with the cells in place.
+
 ### fix (adopted agents reach every orchestrator body, so a Claude orchestrator routes to them)
 
 - **Problem.** `--adopt-orphans` put bespoke agents only into the Copilot orchestrator's
