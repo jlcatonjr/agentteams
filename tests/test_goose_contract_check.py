@@ -240,3 +240,30 @@ def test_windows_refuses_a_goose_from_the_current_directory(tmp_path, monkeypatc
     monkeypatch.setattr(scoping.os, "getcwd", lambda: str(tmp_path).upper())  # case differs: normcase matters
     monkeypatch.setattr(scoping.os.path, "normcase", lambda p: p.lower())
     assert "current directory" in scoping.goose_version_notice()
+
+
+@pytest.mark.parametrize("ext_type, flagged", [("builtin", True), ("platform", True), ("stdio", False),
+                                               ("streamable_http", False)])
+def test_operator_name_excuses_only_an_mcp_transport(ext_type, flagged):
+    """An operator server named like a Goose builtin must not excuse that builtin (phase-3 follow-up)."""
+    recipe = _emit("['read', 'search']").replace(
+        "extensions:\n", f"extensions:\n  - type: {ext_type}\n    name: computercontroller\n", 1)
+    findings = _check_goose_recipe_grants({"x.yaml": recipe}, agent_ext=".yaml", grant_mode=True,
+                                          operator_extensions={"x": frozenset({"computercontroller"})})
+    assert bool(findings) is flagged
+    if flagged:
+        assert "computercontroller" in findings[0].description
+
+
+def test_reader_records_each_items_own_type():
+    recipe = _HEAD + "extensions:\n  - type: stdio\n    name: a\n    env:\n      type: builtin\n  - type: builtin\n    name: b\n"
+    assert [(e["name"], e["type"]) for e in recipe_extension_grants(recipe)] == [("a", "stdio"), ("b", "builtin")]
+
+
+def test_nested_mcp_type_cannot_disguise_a_builtin():
+    """Attack direction: an outer `type: builtin` with a nested `env: {type: stdio}` is still a builtin."""
+    recipe = _emit("['read', 'search']").replace(
+        "extensions:\n", "extensions:\n  - type: builtin\n    name: computercontroller\n    env:\n      type: stdio\n", 1)
+    findings = _check_goose_recipe_grants({"x.yaml": recipe}, agent_ext=".yaml", grant_mode=True,
+                                          operator_extensions={"x": frozenset({"computercontroller"})})
+    assert findings and "computercontroller" in findings[0].description

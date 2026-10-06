@@ -362,6 +362,8 @@ _GOOSE_WRITE_TOOLS = frozenset({"write", "edit", "shell"})
 #: Extensions a grant recipe may carry besides those its declared tools grant: the first-party
 #: coordination server (wired by team configuration, record-only).
 _GOOSE_FIRST_PARTY_EXTRAS = frozenset({"agentteams_coordination"})
+#: Extension types an operator MCP server is emitted as (goose.py ``_goose_extension_for``).
+_GOOSE_OPERATOR_TYPES = frozenset({"stdio", "streamable_http"})
 #: Recipes outside grant scoping (bridge entry recipes keep the legacy extensions).
 _GOOSE_UNSCOPED_RECIPES = frozenset({"bridge-orchestrator.yaml"})
 
@@ -372,8 +374,14 @@ def _goose_exceeded(
     """List what a parsed recipe exposes beyond what its declared tools grant (empty when it matches)."""
     names, allow, stdio = grant_extensions(declared)
     problems = []
-    permitted = set(names) | {e["name"] for e in stdio} | _GOOSE_FIRST_PARTY_EXTRAS | set(extra_names)
-    unknown = sorted({e["name"] for e in extensions} - permitted)
+    permitted = set(names) | {e["name"] for e in stdio} | _GOOSE_FIRST_PARTY_EXTRAS
+    # An operator MCP server is always emitted as an MCP transport, so its name excuses only an entry of
+    # that type: a `type: builtin` (or platform) entry named like an operator server is still a builtin.
+    unknown = sorted({
+        e["name"] for e in extensions
+        if e["name"] not in permitted
+        and not (e["name"] in extra_names and e.get("type") in _GOOSE_OPERATOR_TYPES)
+    })
     if unknown:
         problems.append(f"extension(s) not granted by the declared tools: {', '.join(unknown)}")
     extra_dev = developer_tools(extensions) - set(allow.get("developer", []))
