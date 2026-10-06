@@ -133,7 +133,7 @@ In Goose 1.37 the `developer` extension has exactly four tools: `write`, `edit`,
 only one that can print a file's contents is `shell`, which can also write and run anything. `tree` and
 the `analyze` extension are read-only, but neither is confined to the workspace. A recipe that keeps
 `developer` also gets `analyze` added automatically, and `available_tools: []` means *unrestricted*.
-(Phase-0 spike, 2026-10-05; `references/plans/goose-read-only-agents.plan.md`.)
+(Spike, Goose 1.37.0, 2026-10-05; `references/goose-tool-scoping-spike.md`.)
 
 `scripts/goose-readfs-mcp.py` is a stdlib-only stdio MCP server that gives a read-only agent real read
 access with no write capability:
@@ -189,8 +189,10 @@ Verified live on Goose 1.37.0 against a stub model:
 - a path outside the workspace is refused;
 - a `shell` call fails with `Tool 'shell' not found`.
 
-The recipe's relative script path assumes Goose starts in the project root. Phase 2 will emit the
-extension from each agent's declared tools and settle the path. Until then, wire it in by hand.
+Set `"goose_tool_scoping": "grant"` in the brief to have agentteams emit this for every agent that declares
+`read` or `search`, and ship the script with the team (see `goose-privileges.md`). The relative script
+path assumes Goose starts in the project root. That was verified with `goose run` against an emitted
+recipe; Goose Desktop has not been verified.
 
 ## Best Practices
 

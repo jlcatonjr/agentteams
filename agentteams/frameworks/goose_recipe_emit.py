@@ -103,6 +103,7 @@ def _emit_recipe(
     response: dict[str, Any] | None = None,
     retry: dict[str, Any] | None = None,
     mcp_extensions: list[dict[str, Any]] | None = None,
+    available_tools: dict[str, list[str]] | None = None,
     mcp_notes: list[str] | None = None,
 ) -> str:
     """Serialize a Goose recipe to YAML (hand-built, schema version 1.0.0).
@@ -133,6 +134,13 @@ def _emit_recipe(
     hand-built YAML. ``mcp_notes`` are operator-visible, Goose-ignored ``#`` comments
     for in-scope servers that were NOT wired (skipped for safety/launch reasons).
     Both default to empty, so a non-opted-in build is byte-identical to baseline.
+
+    ``available_tools`` (``goose_tool_scoping: "grant"``) maps a builtin/platform extension name to
+    its allowlist, emitted as that extension's ``available_tools:`` line; a stdio entry in
+    ``mcp_extensions`` carries its own ``available_tools`` key. ``analyze`` is rendered as a platform
+    extension. Defaults to None, so legacy recipes are byte-identical, with one deliberate exception: a
+    recipe with no extensions at all is written ``extensions: []`` rather than a bare ``extensions:``,
+    which Goose 1.37 reads as "load the user's configured extensions" (see the spike record).
     """
     lines: list[str] = [
         f'version: "{_RECIPE_VERSION}"',
@@ -180,7 +188,19 @@ def _emit_recipe(
             lines.append(f"      command: {_yaml_dq(check['command'])}")
         if retry.get("on_failure"):
             lines.append(f"  on_failure: {_yaml_dq(retry['on_failure'])}")
-    lines.append("extensions:")
+    if not extensions and not mcp_extensions:
+        # A bare `extensions:` (null) or a missing key makes Goose 1.37 load the user's configured
+        # extensions, usually the full developer (verified live). An agent granted nothing gets an
+        # explicit empty list, which Goose honours as "no extensions".
+        lines.append("extensions: []")
+    else:
+        lines.append("extensions:")
+    allow = available_tools or {}
+
+    def _allow_line(name: str) -> list[str]:
+        # goose_tool_scoping "grant": an allowlist per extension (absent in legacy mode).
+        return [f"    available_tools: [{', '.join(allow[name])}]"] if name in allow else []
+
     for ext in extensions:
         if ext == "developer":
             lines += [
@@ -188,12 +208,12 @@ def _emit_recipe(
                 "    name: developer",
                 "    bundled: true",
                 "    timeout: 300",
-            ]
-        elif ext == "summon":
+            ] + _allow_line(ext)
+        elif ext in ("summon", "analyze"):
             lines += [
                 "  - type: platform",
-                "    name: summon",
-            ]
+                f"    name: {ext}",
+            ] + _allow_line(ext)
         else:
             # Generic builtin (Gap 1: scoped recipe_extensions may name other
             # bundled servers, e.g. memory). Rendered with the same bundled/timeout
@@ -218,6 +238,8 @@ def _emit_recipe(
             lines.append("    env_keys:")
             lines += [f"      - {_yaml_dq(k)}" for k in mx["env_keys"]]
         lines.append(f"    timeout: {int(mx.get('timeout', _MCP_EXT_TIMEOUT))}")
+        if mx.get("available_tools"):
+            lines.append(f"    available_tools: [{', '.join(mx['available_tools'])}]")
     if sub_recipes:
         # Column-0 managed-key comment (follow-up #15): the key is owned structurally on
         # --update --merge by goose_recipe_merge.reconcile_sub_recipes. Goose ignores it.

@@ -24,9 +24,10 @@
     "agentteams/frameworks/_prompt_root_protect.py": "1d875c4ecc8f8f7ab449d3b2a1b7fca9697a562b4f9a5a54269cf3ea19c79494",
     "agentteams/frameworks/_sandbox_emit.py": "84f264a83a56b45d69e5c9643219ca1683890e40122be9a7bbadb8d58a2d349d",
     "agentteams/frameworks/_write_roots.py": "140618f9931a30b006b613ad24744f732212a33ca469552dc13c557316830caf",
+    "agentteams/frameworks/goose_tool_scoping.py": "cf5f26656c9251fec415e52e05586b5023eceaa8b4914fca01a669df11b66124",
     "agentteams/front_matter_merge.py": "4ea394d1c04b3f39b3beb78c35b7aba089d5b92b92d2c5ca28d8af438c0a5d24",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
-    "agentteams/integrity.py": "cc8ee1d83e9e3b5a37b5e04d0ff6a82175fd0837a07d55fbc48dcf9b73ad1f56",
+    "agentteams/integrity.py": "994ce1b01dbaa2cdd961067ab8796b182670dfabccf589a888c67832e4bb8d3f",
     "agentteams/learned_blocks.py": "7053362b4005f1024febe89cabdd6d2a26c1a0d71d21cd28b6f1fd244bbb360f",
     "agentteams/rank_conformance.py": "b5c1d0ce4c8b36677c38f5f873c2386537adeabcfea211880cc756291b6ba0d0",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
@@ -39,7 +40,7 @@
     "agentteams/templates/universal/sandbox/confine-run.sh": "064d47060768ecfe629c000ce8d1cbf2bec533fa0b8fb1f665ab4df8f439dea5",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "c485df0b39dd0847bcb08fc583c4f0fad9c377f4ae3702a62e2c57576c84f69c",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
-    "scripts/goose-readfs-mcp.py": "0f8e40bcac041591a40d4dc01660ba25d714160edc73b5f7bb42bf29856c3583"
+    "scripts/goose-readfs-mcp.py": "bd4d2cd08087b3936ba638f8927f86cf1e1b6644d19cd6b63f97b45706b465d1"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1

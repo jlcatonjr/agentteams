@@ -103,23 +103,37 @@ extensions:
 
 ## Restricting Which Tools an Extension Exposes
 
-The `available_tools` key limits which tools from an extension are loaded. An empty list (default) means all tools are available.
+The `available_tools` key is an allowlist of the tools an extension exposes. Goose enforces it at
+dispatch: a withheld tool is not offered to the model, and a call to it fails with
+`-32002: Tool '<name>' not found`. This was verified against Goose 1.37.0 with a stub model, for
+builtin, platform and stdio extensions (`references/goose-tool-scoping-spike.md`).
+
+Facts that change how you use it (Goose 1.37.0):
+
+- **`developer` exposes exactly `write`, `edit`, `shell` and `tree`.** It has no `read_file` or
+  `list_directory`, so an allowlist naming those matches nothing. The only `developer` tool that can
+  print a file's contents is `shell`, which can also write and execute.
+- **An empty list means unrestricted.** `available_tools: []` does **not** disable an extension. To
+  switch one off, use a list that matches no tool, such as `[__none__]`. agentteams' recipe validator
+  rejects `[]`.
+- **`analyze` comes with `developer`.** Goose adds the `analyze` platform extension beside
+  `developer` unless the recipe lists it, so list it with `[__none__]` to keep it off.
+- **`tree` and `analyze` are not workspace-confined.** Both report structure (names, line counts,
+  function names) for any path the user can read.
+- **An allowlist fails closed.** A future Goose that renames a tool removes it; the agent never gains
+  one.
 
 ```yaml
 extensions:
-  developer:
-    enabled: true
-    type: builtin
+  - type: builtin
     name: developer
-    timeout: 300
     bundled: true
-    available_tools:
-      - read_file        # only allow reading files
-      - list_directory   # and listing directories
-      # write_file, shell, etc. are not loaded
+    timeout: 300
+    available_tools: [write, edit, tree]   # a writer without shell
+  - type: platform
+    name: analyze
+    available_tools: [__none__]            # off (an empty list would mean unrestricted)
 ```
-
-This is more targeted than disabling the extension entirely — useful when you want read access but not write or shell.
 
 ---
 
@@ -127,21 +141,42 @@ This is more targeted than disabling the extension entirely — useful when you 
 
 ### Read-only (no writes, no shell)
 
-> **Caution:** with `GOOSE_MODE: auto`, read-only is enforced *solely* by the `available_tools` allowlist — there is no prompt and no deny rule, so a single missing or mistyped entry silently grants autonomous writes/shell. Prefer a non-autonomous mode (`smart_approve` or `approve`) for read-only work, and/or add `never_allow` on `text_editor`/`shell` as defense-in-depth so a typo cannot grant silent writes.
+`developer` cannot be both read-only and able to read file contents. A read-only agent should drop
+`developer` entirely and read through `agentteams_readfs`
+(`scripts/goose-readfs-mcp.py`, see the Goose runtime guide). It is a stdlib stdio server whose only
+tools are `read_file`, `list_dir`, `find`, `grep` and `stat`. It has no write tool, is
+realpath-confined to the workspace, and refuses secrets inside it.
 
 ```yaml
 GOOSE_MODE: auto
 extensions:
-  developer:
-    enabled: true
-    type: builtin
-    name: developer
+  - type: stdio
+    name: agentteams_readfs
+    cmd: python3
+    args: ["scripts/goose-readfs-mcp.py", "--root", "."]
     timeout: 300
-    bundled: true
-    available_tools:
-      - read_file
-      - list_directory
+    available_tools: [read_file, list_dir, find, grep, stat]
 ```
+
+agentteams emits this automatically when the brief sets `"goose_tool_scoping": "grant"`. Each recipe's
+extensions are then derived from the agent's declared `tools:`:
+
+| Declared | Goose grant |
+|---|---|
+| `read`, `search` | `agentteams_readfs` (all five read tools) |
+| `edit` | `developer`: `write`, `edit`, `tree` |
+| `execute` | `developer`: `shell`, `tree` |
+| `agent` | `summon`: `delegate`, `load` |
+
+Any recipe that has `developer` also lists `analyze` as `[__none__]`. Under `"legacy"`, the default,
+every recipe keeps the whole `developer`. A merge keeps a recipe's on-disk `extensions:`, so switching an
+existing team to `grant` needs a full re-render (`--update --overwrite`, under the usual clearance).
+
+Bridge recipes (`--bridge-from`) and CAI interop imports are outside grant scoping and keep the legacy
+extensions.
+
+The stub-model runs started Goose in the project root, which the relative script path relies on.
+Other entry points (Goose Desktop, `goose session` started elsewhere) have not been verified.
 
 ### Fully interactive (prompt before everything)
 

@@ -58,6 +58,7 @@ from agentteams.frameworks.goose_docs import (
     _RESILIENT_RUNNER_SOURCE,
     _ROUTE_PROXY_SOURCE,
     _coordination_mcp_content,
+    _readfs_mcp_content,
     _goose_capabilities_content,
     _goosehints_content,
     _resilient_runner_content,
@@ -95,6 +96,14 @@ from agentteams.frameworks.goose_coordination import (
     COORDINATION_AGENT_SLUGS as _COORDINATION_AGENT_SLUGS,
     coordination_enabled as _coordination_enabled,
     coordination_extension as _coordination_extension,
+)
+# goose_tool_scoping "grant": recipe grants from declared tools (references/goose-tool-scoping-spike.md).
+from agentteams.frameworks.goose_tool_scoping import (
+    READFS_SCRIPT as _READFS_SCRIPT,
+    declared_tools as _declared_tools,
+    filter_operator_mcp as _filter_operator_mcp,
+    grant_extensions as _grant_extensions,
+    grant_mode as _grant_mode,
 )
 
 __all__ = [
@@ -241,9 +250,21 @@ class GooseAdapter(FrameworkAdapter):
         )
 
         # Gap 1: builtin extension set, opt-in scoped per agent (default ["developer"]).
-        extensions = _scoped_builtin_extensions(manifest)
+        # goose_tool_scoping "grant": derived from this agent's declared tools instead, each extension
+        # with an available_tools allowlist, readers on the read-only agentteams_readfs server, and
+        # summon (delegation / load handoffs) only for an agent that declares `agent`.
+        if _grant_mode(manifest):
+            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content))
+            may_delegate = "summon" in extensions
+        else:
+            extensions, allowlists, scoped_stdio = _scoped_builtin_extensions(manifest), None, []
+            may_delegate = True
         # Opt-in MCP servers scoped to this agent (empty unless goose:mcp is on).
         mcp_exts, mcp_notes = _mcp_recipe_extensions(manifest, agent_slug)
+        if _grant_mode(manifest):
+            mcp_exts, clash_notes = _filter_operator_mcp(list(mcp_exts))
+            mcp_notes = list(mcp_notes) + clash_notes
+        mcp_exts = list(scoped_stdio) + list(mcp_exts)
         # Phase 2: wire the first-party stdio coordination server into coordinator/liaison
         # recipes when the team declares coordination (file-based; only reads/records).
         if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS:
@@ -265,7 +286,7 @@ class GooseAdapter(FrameworkAdapter):
             # #15: never delegate to a tool (a doc, not an agent), a reserved bridge slug, or
             # a roster member with no recipe emitted or on disk (a dangling path).
             excluded = _sub_recipe_exclusions(manifest, team)
-            delegates = [h for h in targets if h["agent"] not in excluded]
+            delegates = [h for h in targets if h["agent"] not in excluded] if may_delegate else []
             sub_recipes = [
                 {
                     "name": _tool_name(h["agent"]),
@@ -278,13 +299,13 @@ class GooseAdapter(FrameworkAdapter):
             # Agents in the team roster but missing from the handoffs: block are still
             # valid delegation targets; include them at the end with empty descriptions.
             target_slugs = frozenset(h["agent"] for h in delegates)
-            for slug in sorted(team - target_slugs - excluded - frozenset([agent_slug])):
+            for slug in sorted(team - target_slugs - excluded - frozenset([agent_slug])) if may_delegate else ():
                 sub_recipes.append({
                     "name": _tool_name(slug),
                     "path": f"./{slug}.yaml",
                     "description": "",
                 })
-            if sub_recipes:
+            if sub_recipes and "summon" not in extensions:
                 extensions.append("summon")
             # Phase-4a: reference declared parameter keys in the orchestrator's
             # probe prompt so the Goose params<->{{ template }} coupling stays valid.
@@ -309,13 +330,15 @@ class GooseAdapter(FrameworkAdapter):
                 retry=recipe_retry,
                 mcp_extensions=mcp_exts,
                 mcp_notes=mcp_notes,
+                available_tools=allowlists,
             )
 
         # Non-orchestrator agent: depth-1 delegate whose own handoffs are
         # depth-2 -> represent them as `load(...)` references, not delegation.
-        if targets:
+        if targets and may_delegate:
             body = body + "\n\n" + _load_section(targets)
-            extensions.append("summon")
+            if "summon" not in extensions:
+                extensions.append("summon")
         # Gap 2: a non-orchestrator agent that declares parameters/response/retry is
         # a task-agent; emit them (and a params-coupled prompt). An agent declaring
         # none passes all-None → byte-identical to the prior baseline.
@@ -331,6 +354,7 @@ class GooseAdapter(FrameworkAdapter):
             retry=recipe_retry,
             mcp_extensions=mcp_exts,
             mcp_notes=mcp_notes,
+            available_tools=allowlists,
         )
 
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
@@ -573,6 +597,9 @@ class GooseAdapter(FrameworkAdapter):
             files.append(
                 ("../../scripts/goose-coordination-mcp.py", _coordination_mcp_content())
             )
+        # Grant-scoped recipes point readers at the read-only file server; ship it only in that mode.
+        if _grant_mode(manifest):
+            files.append((f"../../{_READFS_SCRIPT}", _readfs_mcp_content()))
         files.extend(goose_sandbox_output_files(manifest))
         # Linux companion to the darwin Seatbelt path: a goose-specific confined-run example that
         # wraps the neutral bwrap launcher with the settings a confined goose needs (writable XDG,

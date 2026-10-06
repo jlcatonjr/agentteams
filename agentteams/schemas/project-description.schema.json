@@ -289,6 +289,11 @@
         "type": "string"
       }
     },
+    "goose_tool_scoping": {
+      "type": "string",
+      "enum": ["legacy", "grant"],
+      "description": "How Goose recipes get their extensions. \"legacy\" (default): every recipe loads the whole developer builtin (shell + file writes). \"grant\": each recipe's extensions are derived from the agent's declared tools \u2014 read/search -> the read-only agentteams_readfs stdio server (scripts/goose-readfs-mcp.py, shipped only in this mode); edit -> developer [write, edit, tree]; execute -> developer [shell, tree]; agent -> summon [delegate, load]. Any recipe with developer turns off Goose's auto-added analyze extension. A read-only agent gets no developer at all. Merges keep a recipe's on-disk extensions, so switching an existing team to grant needs a full re-render (--update --overwrite)."
+    },
     "coordination_write_roots": {
       "type": "array",
       "description": "Sibling/adjacent-repo write roots this team coordinates into (cross-repo file-based coordination). Unioned into workspace_write_roots at generation (same merge point as capability grants) so every sandbox emitter — Claude allowWrite, Goose Seatbelt, and the Linux confine-run.sh launcher — sees them. On Linux these become `--coord-root` binds that FAIL CLOSED (never silently create the dir) when the declared sibling path is missing, so a misconfigured sibling surfaces as a clear error instead of a bwrap init crash. A declared coordination root is operator config and is weaker than an authenticated capability grant; both feed the same union. Presence of this field also signals a team that needs the coordination MCP surface. Validated at generation (fail-closed): '/', '~', $HOME and their ancestors, the signing-key directory, home credential/persistence paths, the project control plane (.git, .claude, .goose, .codex, .github/agents, .github/hooks, sandbox, .agentteams) and shell/glob metacharacters are refused. A NEW root outside the project (absolute, ~/..., ../...) needs the operator's --accept-write-root PATH unless the live .claude/settings.json allowWrite already holds it. This file is agent-writable data; generation prints every added root with its source.",
