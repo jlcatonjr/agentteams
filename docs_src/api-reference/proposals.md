@@ -103,7 +103,7 @@ time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox pro
 |---|---|---|
 | claude | Any tool that isn't known to be read-only (see below); a `tools:` key that is absent, null, empty (`[]`), duplicated, or of any shape other than one line or a clean `- item` block list, since the agent may then inherit every tool | `Bash` |
 | copilot-vscode, copilot-cli | The same, plus `execute`, since Copilot has no per-agent sandbox | — |
-| goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`, or an extension other than `agentteams_readfs`/`agentteams_coordination`; missing `extensions` | A granted shell |
+| goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`; any extension other than `developer` and `analyze` (judged by the tools they grant), `agentteams_readfs` and `agentteams_coordination`; missing `extensions` | A granted shell |
 | codex | `sandbox_mode`, read as TOML, other than `"read-only"`, a missing key included; any `mcp_servers`; every `.toml` is checked, `references/` included | — |
 | agents-md | Always: it declares no per-agent tools, so the policy can't be checked | — |
 | any other | A shell too | — |
@@ -123,8 +123,9 @@ time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox pro
 - **Coverage:** a disk audit (`--post-audit` on an existing team) sees every agent file in the team directory,
   adopted agents included, but skips symlinks and files that aren't UTF-8. The in-memory audit during
   generation sees only the rendered files.
-- **Unreadable files are errors:** on a disk audit, a symlink (file or directory) or a non-UTF-8 agent file
-  in the team directory is reported, since the host may still load it.
+- **Unreadable files are errors:** under the switch, a disk audit doesn't follow symlinks. It reports each
+  one (file or directory), and each agent file it can't read or decode, since the host may still load it.
+  Without the switch, the audit follows links as before.
 - **Accepted residue:** under the switch, a Goose recipe can't carry any operator MCP server, even a
   read-only one, because the check can't tell what it does. The Goose extensions it does allow are trusted by
   name.
