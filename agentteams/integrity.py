@@ -52,7 +52,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                     # construction, so any change to it must be a reviewed re-record
     "agentteams/cli/proposal_commands.py",  # the CLI that hands artifacts to proposals.py
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
+    "agentteams/confinement.py",  # orchestrator-only-writes pilot: the runner's OS sandbox (C-3/C-5 boundary)
     "agentteams/proposal_runner.py",  # orchestrator-only-writes pilot: sole holder of the ledger key
+    "agentteams/proposal_policy.py",  # orchestrator-only-writes pilot: the policy half of proposals.py
     "agentteams/proposals.py",  # orchestrator-only-writes pilot: the one path that applies agents'
                                 # proposals and runs their commands; a silent widening defeats the policy
     "agentteams/frameworks/goose_tool_scoping.py",  # C-3 on Goose: declared tools -> recipe grants;

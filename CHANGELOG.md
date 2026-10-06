@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (orchestrator-only-writes pilot P4b: confined execution in the runner)
+
+- **Confinement.** The out-of-session runner now runs every `--run-request` command, and every pre-write
+  gate, in an OS sandbox built from the brief's new `confined_programs`. The new module is
+  `agentteams/confinement.py` (integrity-pinned).
+  - **macOS (Seatbelt):** writes go only to the declared roots and a private `TMPDIR`. The ledger, queue,
+    `.git` and control plane are denied, the key directory is read-denied, and only the declared `exec`
+    paths can run.
+  - **Linux (bwrap):** the same write rules, plus a PID namespace with `--die-with-parent`. There is no
+    program allowlist (operator decision C).
+- **Leftover processes.** Any process still running after the command exits is killed, and the run fails.
+- **Fail closed.** With no usable sandbox (probed live; `sandbox-exec` can't nest) the runner refuses, unless
+  the brief sets `allow_unconfined_runs`, which is logged on each run.
+- **Declared writes.** Changes inside an agent's confined write roots count as declared, but only when a
+  sandbox actually ran.
+- **Run-time root checks.**
+  - Write roots must be real directories inside the project, with no symlink.
+  - Exec paths and writable places (including `TMPDIR`) may not overlap, and `/` and home are refused.
+  - Roots may not cover protected paths or the brief.
+  - Nested `.git` directories are write-denied on macOS.
+  - The runner refuses to start with a ledger key in its environment.
+- **Residual risk** (named in `docs_src/api-reference/confinement.md`): reads and network stay open,
+  agent-supplied Lean `#eval` runs inside the bounds, a macOS `setsid` escapee, and the Linux gaps.
+- **Exit criterion met.** A real `lake build` runs inside the sandbox with `exec: ["~/.elan"]` and
+  `write: [".lake"]`.
+- **Concurrency.** A concurrent `max_uses` test confirms one nonce is claimed at most `max_uses` times.
+- **CI.** The `macos-seatbelt` job runs the live confinement tests.
+- **Module split (CH-07).** The policy half of `proposals.py` moves to `agentteams/proposal_policy.py`
+  (integrity-pinned), and `proposals` re-exports it.
+
 ### feat (orchestrator-only-writes pilot P4a: out-of-session runner and key custody)
 
 - **Why.** Live macOS probes found two blockers:

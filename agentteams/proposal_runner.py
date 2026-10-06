@@ -14,8 +14,8 @@ orchestrator's CLI talks to it through a queue:
 
 Queue content is data (C-4). Every request is re-validated by :mod:`agentteams.proposals`, exactly as a
 direct CLI call is. The runner pins the project root, the brief and the policy at start, and stops serving
-if the brief changes. ``run-request`` is refused until P4b confines commands: an unconfined child would sit
-beside the key.
+if the brief changes. Every command and gate it starts runs in the OS sandbox (:mod:`agentteams.confinement`,
+P4b). With no usable sandbox it refuses, unless the brief's logged ``allow_unconfined_runs`` opt-out is set.
 
 Stdlib only; integrity-pinned. POSIX only (``fcntl``, ``O_NOFOLLOW``).
 """
@@ -43,7 +43,7 @@ CLAIMED_REL = ".agentteams/queue-claimed"
 LOCK_REL = ".agentteams/runner.lock"
 HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 
-#: Request kinds the runner serves. ``run-request`` is refused until P4b.
+#: Request kinds the runner serves. Commands and gates run confined (P4b).
 KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger")
 REQUEST_MAX_BYTES = 2 * 1024 * 1024
 HEARTBEAT_STALE_SECONDS = 15
@@ -125,6 +125,12 @@ class Runner:
         for rel in (".agentteams", QUEUE_DIR_REL, REQUESTS_REL, ACKS_REL, RESULTS_REL, CLAIMED_REL):
             if (self.root / rel).is_symlink():
                 raise RunnerError(f"{rel} is a symlink; refusing to serve")
+        leaked = [name for name in P.KEY_ENV if os.environ.get(name)]
+        if leaked:
+            # A confined child can read this process's exec-time environment (KERN_PROCARGS2): never hold a key
+            # there, even an unused one.
+            raise RunnerError(f"unset {', '.join(leaked)} before starting the runner; it reads the key from its "
+                              "key file only, and a confined child could read this process's environment")
         P.use_key_file(key_file)
         (self.root / ".agentteams").mkdir(mode=0o700, exist_ok=True)
         self._lock_fd = os.open(self.root / LOCK_REL, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -157,9 +163,10 @@ class Runner:
             return {"nonce": P.issue_dispatch(self.root, str(request.get("agent") or ""))}
         if kind == "apply-proposal":
             return P.apply_proposal(request.get("artifact"), root=self.root, policy=self.policy,
-                                    dry_run=bool(request.get("dry_run")), allow_gates=False)
+                                    dry_run=bool(request.get("dry_run")), confine=True)
         if kind == "run-request":
-            raise RunnerError("run-request is refused until commands run confined (P4b)")
+            return P.run_request(request.get("artifact"), root=self.root, policy=self.policy,
+                                 dry_run=bool(request.get("dry_run")), confine=True)
         if kind == "verify-ledger":
             return {"problems": P.verify_ledger(self.root)}
         raise RunnerError("unknown request kind")

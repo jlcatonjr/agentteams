@@ -79,7 +79,7 @@ jobs:
       - name: Goose Seatbelt mechanism probes (sandbox-exec)
         env:
           RUN_GOOSE_SEATBELT_PROBES: "1"
-        run: pytest -v tests/test_goose_seatbelt_mechanism.py tests/test_os_sandbox_enforcement.py
+        run: pytest -v tests/test_goose_seatbelt_mechanism.py tests/test_os_sandbox_enforcement.py tests/test_confinement.py
 
       - name: macOS launcher gate (mac-escape-tests.sh)
         run: |

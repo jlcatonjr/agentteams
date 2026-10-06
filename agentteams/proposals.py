@@ -64,23 +64,27 @@ import hashlib
 import hmac
 import json
 import os
-import posixpath
 import re
 import secrets
 import shutil
 import stat
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from agentteams import confinement as _confinement
+from agentteams.proposal_policy import (  # re-exported: the policy half of this module (CH-07 carve)
+    DEFAULT_SIZE_CAP,  # noqa: F401  re-exported
+    Policy,
+    ProposalError,
+    _in_scope,
+    load_policy,  # noqa: F401  re-exported
+)
 from agentteams.atomicio import _atomic_write_text
 from agentteams.frameworks._write_roots import control_plane_of
 
-#: Proposal content above this many bytes is refused; the orchestrator must review and write it itself.
-DEFAULT_SIZE_CAP = 256 * 1024
 GATE_TIMEOUT = 120
 COMMAND_TIMEOUT = 600
 DISPATCH_TTL_HOURS = 24
@@ -101,7 +105,6 @@ DEFAULT_KEY_FILE = KEY_DIR + "/proposal-ledger.key"
 
 #: Environment variables passed to gates and commands; everything else (signing keys, tokens) is withheld.
 SAFE_ENV = ("HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "USER", "LOGNAME", "TERM", "ELAN_HOME")
-_SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _KEYS = {
     "change-proposal": ({"kind", "dispatch", "path", "base_sha256", "content", "rationale"}, {"gates", "agent"}),
@@ -109,10 +112,6 @@ _KEYS = {
     "command-request": ({"kind", "dispatch", "argv", "purpose"},
                         {"cwd", "expected_writes", "stdin_from_content", "agent"}),
 }
-
-
-class ProposalError(Exception):
-    """A proposal or request is refused (the message says why)."""
 
 
 class LedgerTamperedError(ProposalError):
@@ -127,111 +126,14 @@ class UndeclaredWritesError(ProposalError):
         self.result = result
 
 
-@dataclass
-class Policy:
-    """A team's registered orchestrator-only-writes policy."""
-
-    agent_policies: dict[str, dict[str, Any]] = field(default_factory=dict)
-    gates: dict[str, dict[str, Any]] = field(default_factory=dict)
-    protected_paths: list[str] = field(default_factory=list)
-    size_cap: int = DEFAULT_SIZE_CAP
-    brief_rel: str | None = None
-
-
-# --- policy -------------------------------------------------------------------------------------
-
-
-_PROBE_STEMS = ("x", "x.lean", "x.py", "x.json", "x.txt", "x.md", "1", "CX-1", "a-b", "MathAgents")
-_PROBE_FORMS = {"-{}": "an option", "--{}": "an option", "--plugin={}": "an option", "../{}": "a parent path",
-                "a/../{}": "a parent path", "a/../../{}": "a parent path", "b/../{}": "a parent path",
-                "z/../{}": "a parent path", "x/../{}": "a parent path", "foo/../{}": "a parent path",
-                "0/../{}": "a parent path", "/{}": "an absolute path",
-                "/etc/{}": "an absolute path", "~/{}": "a home path"}
-
-
-def _pattern_too_broad(pattern: str) -> str | None:
-    """Probe a pattern with option-, parent-, absolute- and home-shaped strings around common stems.
-
-    A sampling lint, not a proof: it refuses the shapes that reopen the argv[0] hole (``.*``, ``[a-z].*``,
-    ``.+\\.lean``), and the residual is documented.
-    """
-    for form, what in _PROBE_FORMS.items():
-        for stem in _PROBE_STEMS:
-            if re.fullmatch(pattern, form.format(stem)):
-                return what
-    return None
-
-
-def _writes_glob_problem(glob: str, brief_rel: str | None) -> str | None:
-    g = str(glob).replace("\\", "/")
-    first = g.split("/", 1)[0]
-    if not first or any(c in first for c in "*?[") or g.startswith(("/", "~", "..")):
-        return "must start with a literal project directory"
-    if control_plane_of(first, platform="darwin"):
-        return "is inside the project control plane"
-    if brief_rel and fnmatch.fnmatch(brief_rel.lower(), g.lower()):
-        return "covers the brief"
-    return None
-
-
-def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None) -> Policy:
-    """Build a :class:`Policy` from a project description, validating its shape and linting patterns.
-
-    Args:
-        brief: The parsed brief (``agent_policies``, ``proposal_gates``, ``protected_paths``).
-        brief_rel: The brief's project-relative path, which no proposal may change (``None`` when outside).
-
-    Returns:
-        The policy.
-
-    Raises:
-        ProposalError: A field has the wrong shape, a pattern does not compile or admits options or
-            parent/absolute paths, a gate templates ``{file}``/``{path}`` inside a larger argument or runs a
-            shell, or a write scope covers the brief.
-    """
-    agents = brief.get("agent_policies") or {}
-    gates = brief.get("proposal_gates") or {}
-    protected = brief.get("protected_paths") or []
-    if not isinstance(agents, dict) or not isinstance(gates, dict) or not isinstance(protected, list):
-        raise ProposalError("agent_policies and proposal_gates must be objects, protected_paths a list")
-    for name, gate in gates.items():
-        argv = gate.get("argv") if isinstance(gate, dict) else None
-        if not (isinstance(argv, list) and argv and all(isinstance(a, str) for a in argv)):
-            raise ProposalError(f"proposal_gates.{name} needs a non-empty argv list of strings")
-        if os.path.basename(argv[0]) in _SHELLS:
-            raise ProposalError(f"proposal_gates.{name} runs a shell; give the gate's own program instead")
-        for arg in argv:
-            if ("{file}" in arg or "{path}" in arg) and arg not in ("{file}", "{path}"):
-                raise ProposalError(f"proposal_gates.{name}: {{file}}/{{path}} must be whole arguments, not {arg!r}")
-    for name, pol in agents.items():
-        if not isinstance(pol, dict):
-            raise ProposalError(f"agent_policies.{name} must be an object")
-        for entry in pol.get("commands") or []:
-            prefix = entry.get("prefix") if isinstance(entry, dict) else None
-            if not (isinstance(prefix, list) and prefix and all(isinstance(p, str) for p in prefix)):
-                raise ProposalError(f"agent_policies.{name}.commands needs non-empty string prefixes")
-            if os.path.basename(prefix[0]) in _SHELLS:
-                raise ProposalError(f"agent_policies.{name}: a command may not start with a shell ({prefix[0]})")
-            for pattern in entry.get("args") or []:
-                try:
-                    re.compile(pattern)
-                except re.error as exc:
-                    raise ProposalError(f"agent_policies.{name}: bad argument pattern {pattern!r}: {exc}") from exc
-                broad = _pattern_too_broad(pattern)
-                if broad:
-                    raise ProposalError(f"agent_policies.{name}: pattern {pattern!r} admits {broad}; narrow it")
-            for glob in entry.get("writes") or []:
-                problem = _writes_glob_problem(glob, brief_rel)
-                if problem:
-                    raise ProposalError(f"agent_policies.{name}: writes glob {glob!r} {problem}")
-            if "stdin_gates" in entry and not entry["stdin_gates"]:
-                raise ProposalError(f"agent_policies.{name}: stdin_gates is empty; stdin content would run ungated")
-            for gate in entry.get("stdin_gates") or []:
-                if gate not in gates:
-                    raise ProposalError(f"agent_policies.{name}: unknown stdin gate {gate!r}")
-        if brief_rel and _in_scope(brief_rel, pol.get("write_scopes") or []):
-            raise ProposalError(f"agent_policies.{name}.write_scopes covers the brief ({brief_rel}); refused (C-3)")
-    return Policy(agents, gates, [str(p) for p in protected], brief_rel=brief_rel)
+def _sandbox_for(policy: Policy) -> str | None:
+    """The usable sandbox, or None when the policy's logged opt-out allows running unconfined."""
+    sandbox = _confinement.available()
+    if sandbox is None and not policy.allow_unconfined:
+        raise ProposalError("no usable OS sandbox here (sandbox-exec/bwrap missing, or this process is already "
+                            "sandboxed); refusing to run unconfined. Start the runner outside every agent "
+                            "session, or set allow_unconfined_runs in the brief (every run is then logged)")
+    return sandbox
 
 
 # --- keys, records, ledger ----------------------------------------------------------------------
@@ -499,19 +401,6 @@ def _rel_inside(root: Path, path: Any) -> str:
     return rel
 
 
-def _in_scope(rel: str, scopes: list[str]) -> bool:
-    """True when ``rel`` is a listed file or lies under a listed directory (a scope ending in ``/``)."""
-    folded = rel.lower()
-    for scope in scopes:
-        raw = str(scope).replace("\\", "/")
-        norm = posixpath.normpath(raw).lower()
-        if norm.startswith(("..", "/")) or norm == ".":
-            continue  # never widen to the root or outside it
-        if (raw.endswith("/") and folded.startswith(norm + "/")) or folded == norm:
-            return True
-    return False
-
-
 def _protected(rel: str, patterns: list[str]) -> str | None:
     folded = rel.lower()
     for p in patterns:
@@ -579,24 +468,40 @@ def _gates_for(rel: str, requested: Any, policy: Policy) -> list[str]:
     return list(dict.fromkeys(list(requested) + matching))
 
 
-def _run_gates(root: Path, rel: str, content: str, names: list[str], policy: Policy) -> list[dict[str, Any]]:
-    """Run each gate on a temporary copy of the proposed content; raise on the first failure."""
+def _run_gates(root: Path, rel: str, content: str, names: list[str], policy: Policy,
+               *, confine: bool = False) -> list[dict[str, Any]]:
+    """Run each gate on a temporary copy of the proposed content; raise on the first failure.
+
+    With *confine*, each gate runs in the OS sandbox: it may write only its temp dir and run only its
+    ``exec`` paths (default: its own program and a shebang interpreter).
+    """
     results: list[dict[str, Any]] = []
     if not names:
         return results
     env = _scrubbed_env()
+    sandbox = _sandbox_for(policy) if confine else None
     with tempfile.TemporaryDirectory(prefix="agentteams-proposal-") as tmp:
+        env = {**env, "TMPDIR": tmp} if confine else env
         candidate = Path(tmp) / Path(rel).name
         candidate.write_text(content, encoding="utf-8")
         for name in names:
             argv = [str(candidate) if a == "{file}" else rel if a == "{path}" else a for a in policy.gates[name]["argv"]]
             argv[0] = _resolve_program(root, argv[0], env)
+            if sandbox:
+                gate_exec = _confinement.gate_exec_paths(policy.gates[name], argv[0])
+                try:
+                    _confinement.check_roots(root, gate_exec, [], Path(tmp))
+                except _confinement.ConfinementError as exc:
+                    raise ProposalError(f"gate {name}: {exc}") from exc
+                argv = _confinement.wrap(argv, sandbox=sandbox, root=root, cwd=root, exec_paths=gate_exec,
+                                         write_roots=[], tmp_dir=Path(tmp))
             try:
                 proc = subprocess.run(argv, cwd=root, env=env, stdin=subprocess.DEVNULL, capture_output=True,
                                       text=True, timeout=GATE_TIMEOUT, shell=False)
             except (OSError, subprocess.SubprocessError) as exc:
                 raise ProposalError(f"gate {name} could not run: {exc}") from exc
-            results.append({"gate": name, "exit": proc.returncode})
+            results.append({"gate": name, "exit": proc.returncode,
+                            **({"confined": sandbox or "unconfined-opt-out"} if confine else {})})
             if proc.returncode != 0:
                 tail = (proc.stdout + proc.stderr).strip()[-600:]
                 raise ProposalError(f"gate {name} refused the proposed content (exit {proc.returncode}): {tail}")
@@ -639,7 +544,7 @@ def _check_base(root: Path, rel: str, base: Any) -> Path:
 
 
 def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
-                   allow_gates: bool = True) -> dict[str, Any]:
+                   allow_gates: bool = True, confine: bool = False) -> dict[str, Any]:
     """Validate, gate and (unless ``dry_run``) apply one change or deletion proposal.
 
     Args:
@@ -648,8 +553,10 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
         policy: The team's policy (:func:`load_policy`).
         dry_run: Run every check and gate (gates execute) but change nothing.
         allow_gates: When False, refuse a proposal that any gate would check rather than run the gate. The
-            out-of-session runner passes False until its children run confined (P4b): an unconfined gate is
-            a child of the key holder and can load session-writable code.
+            out-of-session runner confines gates instead (``confine=True``). An unconfined gate is a child
+            of the key holder and can load session-writable code.
+        confine: Run gates in the OS sandbox (the runner does). Refuses when none is usable, unless the
+            brief's logged ``allow_unconfined_runs`` opt-out is set.
 
     Returns:
         ``{agent, path, base_sha256, new_sha256, gates, written}`` (``new_sha256`` is ``None`` for a deletion).
@@ -688,8 +595,8 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
         gate_names = _gates_for(rel, artifact.get("gates") or [], policy)
         if gate_names and not allow_gates:
             raise ProposalError(f"gate(s) {', '.join(gate_names)} can't run unconfined beside the ledger key "
-                                "(refused until the runner confines commands, P4b)")
-        gate_results = _run_gates(root, rel, content, gate_names, policy)
+                                "(run them confined: confine=True)")
+        gate_results = _run_gates(root, rel, content, gate_names, policy, confine=confine)
         new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         if not dry_run:
             rel = _check_destination(root, rel, policy, agent)  # re-resolve after the gates ran
@@ -798,7 +705,8 @@ def _snapshot(root: Path, env: dict[str, str]) -> dict[str, Any] | None:
     return snap
 
 
-def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False) -> dict[str, Any]:
+def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
+                confine: bool = False) -> dict[str, Any]:
     """Validate and (unless ``dry_run``) run one command request.
 
     Args:
@@ -806,6 +714,11 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         root: The project root.
         policy: The team's policy.
         dry_run: Check everything (gates on ``stdin_from_content`` execute) but run nothing.
+        confine: Run the command (and its stdin gates) in the OS sandbox from the agent's
+            ``confined_programs`` entry (the runner does). Refused without such an entry, when the
+            program lies outside its ``exec`` paths, or when no sandbox is usable and the brief has no logged
+            ``allow_unconfined_runs`` opt-out. Any process still alive after the command exits is killed
+            before the write check, and the run fails.
 
     Returns:
         ``{agent, argv, exit, stdout, stderr, undeclared_writes, ran}``. Outside a git worktree the command
@@ -847,6 +760,25 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             expected_rel.add(rel)
         env = _scrubbed_env()
         program = _resolve_program(root, argv[0], env)
+        jail = None
+        if confine:
+            jail = policy.confined.get(agent)
+            if jail is None:
+                raise ProposalError(f"{agent} has no confined_programs entry; the runner runs nothing unconfined")
+            if not _confinement.exec_allows(program, jail["exec"]):
+                raise ProposalError(f"{program} is outside {agent}'s confined exec paths; refused")
+            for rel in jail["write"]:
+                prefix = rel.strip("/").lower() + "/"
+                hit = _protected(prefix + "x", policy.protected_paths) or any(
+                    str(p).replace("\\", "/").lower().startswith(prefix) for p in policy.protected_paths) or (
+                    policy.brief_rel and _in_scope(policy.brief_rel, [prefix]))
+                if hit:
+                    raise ProposalError(f"confined_programs.{agent}.write {rel!r} covers a protected path or the "
+                                        "brief; changes there would count as declared")
+            try:  # before any snapshot or ledger row: a swapped root must refuse, not trip the write check
+                _confinement.check_roots(root, jail["exec"], jail["write"])
+            except _confinement.ConfinementError as exc:
+                raise ProposalError(f"confined_programs.{agent}: {exc}") from exc
         stdin_bytes = None
         spec = artifact.get("stdin_from_content")
         if spec is not None:
@@ -855,7 +787,8 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 raise ProposalError("stdin_from_content must be exactly {path, content}")
             if "stdin_gates" not in entry:
                 raise ProposalError("this command entry accepts no stdin content (no stdin_gates registered)")
-            _run_gates(root, _rel_inside(root, spec["path"]), spec["content"], list(entry["stdin_gates"]), policy)
+            _run_gates(root, _rel_inside(root, spec["path"]), spec["content"], list(entry["stdin_gates"]), policy,
+                       confine=confine)
             stdin_bytes = spec["content"].encode("utf-8")
         if dry_run:
             return {"agent": agent, "argv": argv, "exit": None, "stdout": "", "stderr": "",
@@ -864,12 +797,27 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         if before is None:
             raise ProposalError("the project is not a git worktree, or git's own paths could not be resolved; "
                                 "refusing to run unchecked (fail-closed)")
-        record(root, {"action": "run-request-start", "agent": agent, "argv": argv, "purpose": purpose.strip()[:300]})
+        sandbox = _sandbox_for(policy) if jail is not None else None
+        confined_as = sandbox or ("unconfined-opt-out" if jail is not None else None)
+        record(root, {"action": "run-request-start", "agent": agent, "argv": argv, "purpose": purpose.strip()[:300],
+                      **({"confined": confined_as} if confined_as else {})})
         before = _snapshot(root, env)  # re-taken after the write-ahead row, so only the command's changes count
-        timed_out, group_killed = False, False
+        timed_out, group_killed, survivors = False, False, False
+        run_tmp = tempfile.mkdtemp(prefix="agentteams-run-") if jail is not None else None
+        command = [program, *argv[1:]]
+        if run_tmp is not None:
+            env = {**env, "TMPDIR": run_tmp}
+            try:
+                checked_roots = _confinement.check_roots(root, jail["exec"], jail["write"], Path(run_tmp))
+            except _confinement.ConfinementError as exc:
+                shutil.rmtree(run_tmp, ignore_errors=True)
+                raise ProposalError(f"confined_programs.{agent}: {exc}") from exc
+            if sandbox:
+                command = _confinement.wrap(command, sandbox=sandbox, root=root, cwd=cwd, exec_paths=jail["exec"],
+                                            write_roots=checked_roots, tmp_dir=Path(run_tmp))
         try:
             # Own process group, so a timeout kills everything the command started before the final check.
-            child = subprocess.Popen([program, *argv[1:]], cwd=cwd, env=env,
+            child = subprocess.Popen(command, cwd=cwd, env=env,
                                      stdin=subprocess.PIPE if stdin_bytes is not None else subprocess.DEVNULL,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,
                                      start_new_session=True)
@@ -888,6 +836,15 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 group_killed = False  # the group had already exited; recorded on the timeout row
             out, err = child.communicate()
             proc = subprocess.CompletedProcess(argv, -9, out or b"", err or b"")
+        if jail is not None:
+            # Anything the command left running could write after the snapshot: kill the group, fail the run.
+            try:
+                os.killpg(child.pid, 9)
+                survivors = True
+            except ProcessLookupError:
+                survivors = False  # the group is empty: nothing outlived the command
+            if run_tmp:
+                shutil.rmtree(run_tmp, ignore_errors=True)
         after = _snapshot(root, env)
         if after is None:
             raise LedgerTamperedError("the git worktree vanished during the command; nothing more is recorded")
@@ -896,7 +853,15 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         if tampered:
             # Never chain onto a ledger the command altered: stop and leave it for the operator.
             raise LedgerTamperedError(f"the command changed {', '.join(tampered)}; nothing more is recorded")
-        undeclared = sorted(f for f in changed if f not in expected_rel)
+        # Under confinement, the operator-declared write roots (build dirs) bound what the kernel let the command
+        # write, so changes inside them count as declared; anything else changed is still undeclared.
+        # Only when a sandbox actually ran: under the unconfined opt-out nothing at the OS level bounded them.
+        roots = [w.strip("/") + "/" for w in jail["write"]] if jail is not None and sandbox else []
+        def exempt(f: str) -> bool:  # inside a root, and never a protected file or the brief (any glob shape)
+            return bool(roots) and f.startswith(tuple(roots)) and not _protected(f, policy.protected_paths) \
+                and not (policy.brief_rel and f.lower() == policy.brief_rel.lower())
+
+        undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f))
         if timed_out:
             record(root, {"action": "run-request-timeout", "agent": agent, "argv": argv,
                           "group_killed": group_killed, "undeclared_writes": undeclared, "purpose": purpose.strip()[:300]})
@@ -906,12 +871,16 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 {"agent": agent, "argv": argv, "exit": -9, "stdout": proc.stdout.decode("utf-8", "replace"),
                  "stderr": proc.stderr.decode("utf-8", "replace"), "undeclared_writes": undeclared, "ran": True})
         record(root, {"action": "run-request", "agent": agent, "argv": argv, "exit": proc.returncode,
-                      "undeclared_writes": undeclared, "purpose": purpose.strip()[:300]})
+                      "undeclared_writes": undeclared, "purpose": purpose.strip()[:300],
+                      **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {})})
         result = {"agent": agent, "argv": argv, "exit": proc.returncode,
                   "stdout": proc.stdout.decode("utf-8", "replace"), "stderr": proc.stderr.decode("utf-8", "replace"),
                   "undeclared_writes": undeclared, "ran": True}
         if undeclared:
             raise UndeclaredWritesError(f"command wrote outside its declared writes: {', '.join(undeclared)}", result)
+        if survivors:
+            raise UndeclaredWritesError("command left processes running after it exited; they were killed and "
+                                        "the run fails", result)
         return result
     except (UndeclaredWritesError, LedgerTamperedError):
         raise  # recorded in the run-request row, or deliberately not recorded (tampered ledger)
