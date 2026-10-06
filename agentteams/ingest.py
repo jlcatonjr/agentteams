@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams._utils import _slugify
+from agentteams.tool_version_source import version_source_errors
 
 
 # ---------------------------------------------------------------------------
@@ -832,6 +833,11 @@ def validate(description: dict[str, Any]) -> list[str]:
             errors.append(
                 f"Component slug must be lowercase alphanumeric with hyphens: {component.get('slug')!r}"
             )
+
+    # A bad `version_source.pattern` would otherwise surface only when an agent applies it.
+    for tool in description.get("tools", []):
+        if isinstance(tool, dict):
+            errors.extend(version_source_errors(tool))
 
     return errors
 

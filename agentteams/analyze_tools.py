@@ -100,6 +100,16 @@ def _merge_known_tool_metadata(tool: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _version_source_field(tool: dict[str, Any]) -> dict[str, Any]:
+    """``{"version_source": ...}`` when the brief declares one, else ``{}``.
+
+    Carried only when present so a manifest built from a brief without it is unchanged.
+    Rendering is in ``tool_version_source.tool_version_placeholders``.
+    """
+    source = tool.get("version_source")
+    return {"version_source": dict(source)} if isinstance(source, dict) else {}
+
+
 # ---------------------------------------------------------------------------
 # Tool doc detection
 #
@@ -147,6 +157,7 @@ def detect_tool_agents(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "docs_url": tool.get("docs_url", ""),
             "api_surface": tool.get("api_surface", ""),
             "common_patterns": tool.get("common_patterns", ""),
+            **_version_source_field(tool),
         })
     return agents
 
@@ -178,5 +189,6 @@ def detect_reference_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "docs_url": tool.get("docs_url", ""),
             "api_surface": tool.get("api_surface", ""),
             "common_patterns": tool.get("common_patterns", ""),
+            **_version_source_field(tool),
         })
     return refs

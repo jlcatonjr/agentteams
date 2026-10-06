@@ -2,9 +2,10 @@
 
 Carved out of ``audit`` when adding one check pushed that module past the CH-07 ceiling; it had
 been sitting at 999 of 1000 lines with the ratchet holding it there, so any addition forced this.
-The seam was already in the file: these five checks all read a single agent file and ask whether
+The seam was already in the file: these checks all read a single agent file and ask whether
 it still declares what an agent is required to declare — an Invariant Core, a return handoff,
-tools consistent with its own read-only claim, and a reachable instruction-authority ordering.
+tools consistent with its own read-only claim, a reachable instruction-authority ordering, and no
+write-plus-dispatch pairing outside the roles the templates grant it to.
 They need no manifest, no output directory, and no filesystem access.
 
 What deliberately stayed behind in ``audit``: the placeholder/front-matter checks (file *shape*,
@@ -243,3 +244,106 @@ def _check_readonly_tool_declarations(
     return findings
 
 
+
+
+#: Non-orchestrator agents whose templates grant both a write tool and dispatch. Derived from the
+#: ``tools:`` front matter in ``agentteams/templates/`` — every other template keeps the two
+#: apart. ``tests/test_audit.py`` re-derives this set from the templates, so a template that gains
+#: or loses the pairing fails a test until this constant is updated with it.
+_WRITER_DISPATCH_ALLOWLIST: frozenset[str] = frozenset({
+    "agent-refactor",
+    "agent-updater",
+    "repo-liaison",
+    "work-summarizer",
+})
+
+#: Write tokens across frameworks: copilot-vscode ``edit``/``write``/``create`` and Claude Code's
+#: ``Edit``/``Write`` (compared lower-cased), plus the Claude editors that also write files.
+_WRITE_TOKENS = frozenset({"edit", "write", "create", "multiedit", "notebookedit"})
+
+#: Dispatch tokens: copilot-vscode ``agent`` and Claude Code's ``Task`` (also exposed as ``Agent``).
+_DISPATCH_TOKENS = frozenset({"agent", "task"})
+
+_FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
+_TOOLS_LINE_RE = re.compile(r"^tools\s*:[ \t]*(.*)$", re.MULTILINE)
+
+
+def _declared_tool_tokens(content: str) -> set[str]:
+    """Lower-cased tool names from an agent file's ``tools:`` front-matter key.
+
+    Reads all three shapes the frameworks emit or a hand-written agent may use: a flow list
+    (``tools: ['read', 'edit']``), Claude Code's comma string (``tools: Read, Edit, Task``) and a
+    YAML block list. A scoped grant such as ``Bash(python -m x:*)`` reduces to ``bash``.
+    """
+    fm = _FRONT_MATTER_RE.match(content)
+    if not fm:
+        return set()
+    m = _TOOLS_LINE_RE.search(fm.group(1))
+    if not m:
+        return set()
+    value = m.group(1).strip()
+    if value:
+        items = value.strip("[]").split(",")
+    else:
+        items = []
+        for line in fm.group(1)[m.end():].splitlines()[1:]:
+            stripped = line.strip()
+            if not stripped.startswith("- "):
+                break
+            items.append(stripped[2:])
+    tokens: set[str] = set()
+    for item in items:
+        name = item.strip().strip("'\"").split("(", 1)[0].strip().lower()
+        if name:
+            tokens.add(name)
+    return tokens
+
+
+def _check_writer_dispatch_grants(
+    file_map: dict[str, str],
+    *,
+    agent_ext: str,
+) -> list[AuditFinding]:
+    """Check that no non-orchestrator agent holds both a write tool and dispatch.
+
+    agentteams' own templates keep the two apart for every domain agent: the orchestrator holds
+    dispatch, and a writer hands back to it rather than spawning agents itself. Only the roles in
+    ``_WRITER_DISPATCH_ALLOWLIST`` combine them. The check applies the same constraint to every
+    agent file in the team, including bespoke agents a project adopted, so an adopted agent is
+    held to what agentteams requires of the agents it generates.
+
+    ``severity="warning"``, for the reason ``_check_instruction_authority_reachable`` gives:
+    existing consumers' adopted agents predate the check, and failing their audit would break
+    builds for teams that did nothing wrong when they were written.
+
+    Args:
+        file_map: Rendered file content keyed by relative path.
+        agent_ext: The framework's agent-file extension.
+
+    Returns:
+        List of AuditFinding for agents outside the allowlist that hold both grants.
+    """
+    findings: list[AuditFinding] = []
+    for rel_path, content in file_map.items():
+        if not _is_agent_file(rel_path, agent_ext):
+            continue
+        slug = _agent_slug(rel_path, agent_ext)
+        if slug == "orchestrator" or slug in _WRITER_DISPATCH_ALLOWLIST:
+            continue
+        tokens = _declared_tool_tokens(content)
+        writes = tokens & _WRITE_TOKENS
+        dispatch = tokens & _DISPATCH_TOKENS
+        if writes and dispatch:
+            findings.append(AuditFinding(
+                category="AGENT_REFACTOR",
+                code="AR_WRITER_DISPATCH",
+                severity="warning",
+                file=rel_path,
+                description=(
+                    f"'{slug}' holds write tool(s) ({', '.join(sorted(writes))}) and dispatch "
+                    f"({', '.join(sorted(dispatch))}). The orchestrator holds dispatch for "
+                    "writers; a writer returns to the orchestrator through a handoff instead of "
+                    "dispatching agents itself. Drop the dispatch grant."
+                ),
+            ))
+    return findings

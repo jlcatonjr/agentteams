@@ -20,7 +20,7 @@ SECTION MANIFEST
 
 ## Official Documentation
 
-Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}
+Consult the official {TOOL_NAME} documentation at: {TOOL_DOCS_URL}{TOOL_VERSION_RESOLUTION}
 
 Verify CLI flags, configuration options, and rule/plugin behavior against this documentation.
 

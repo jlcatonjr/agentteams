@@ -19,6 +19,7 @@ Filled automatically by the rendering engine from the project description and ma
 {STYLE_REFERENCE_PATH} → style_reference field (or {MANUAL:STYLE_REFERENCE_PATH} if null)
 {DIAGRAM_TOOLS}        → detected diagram tool(s) e.g. "Mermaid or Graphviz/DOT"
 {TOOL_DOCS_URL}        → tool's docs_url from the brief (or {MANUAL:TOOL_DOCS_URL} if absent)
+{TOOL_VERSION_RESOLUTION} → "" unless the tool declares version_source; then the pin-file resolution block (append to the {TOOL_DOCS_URL} line)
 {TOOL_API_SURFACE}     → tool's api_surface from the brief (or {MANUAL:TOOL_API_SURFACE} if absent)
 {TOOL_COMMON_PATTERNS} → tool's common_patterns from the brief (or {MANUAL:TOOL_COMMON_PATTERNS} if absent)
 ```

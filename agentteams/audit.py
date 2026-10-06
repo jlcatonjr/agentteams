@@ -27,6 +27,7 @@ from agentteams.audit_agent_contract import (  # re-exported for callers/tests (
     _check_invariant_core_present,
     _check_readonly_tool_declarations,
     _check_return_handoff_present,
+    _check_writer_dispatch_grants,
 )
 from agentteams.audit_types import (  # re-exported for callers/tests
     AuditFinding,
@@ -186,6 +187,7 @@ def run_post_audit(
         supports_handoffs=_adapter.supports_handoffs() if _adapter else True,
     ))
     result.agent_refactor_findings.extend(_check_readonly_tool_declarations(file_map, agent_ext=agent_ext))
+    result.agent_refactor_findings.extend(_check_writer_dispatch_grants(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir, agent_ext=agent_ext))
 

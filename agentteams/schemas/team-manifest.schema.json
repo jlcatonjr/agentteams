@@ -279,6 +279,10 @@
             "type": "string",
             "description": "Official documentation URL carried through from the project description."
           },
+          "version_source": {
+            "type": "object",
+            "description": "version_source carried through from the project description; present only when the brief declares one."
+          },
           "api_surface": {
             "type": "string",
             "description": "Key API surface text carried through from the project description."
@@ -330,6 +334,10 @@
           "docs_url": {
             "type": "string",
             "description": "Official documentation URL carried through from the project description."
+          },
+          "version_source": {
+            "type": "object",
+            "description": "version_source carried through from the project description; present only when the brief declares one."
           },
           "api_surface": {
             "type": "string",
