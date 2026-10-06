@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Command request (orchestrator-only-writes pilot)",
-  "description": "A command a non-orchestrator agent asks the orchestrator to run. Run by `agentteams --run-request FILE --agent SLUG` only if argv matches that agent's registered prefix and argument patterns.",
+  "description": "A command a non-orchestrator agent asks the orchestrator to run. Run by `agentteams --run-request FILE` only if argv matches the dispatched agent's registered prefix and argument patterns.",
   "type": "object",
   "additionalProperties": false,
   "required": [

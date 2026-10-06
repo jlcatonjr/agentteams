@@ -217,6 +217,8 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None) -> Polic
                 problem = _writes_glob_problem(glob, brief_rel)
                 if problem:
                     raise ProposalError(f"agent_policies.{name}: writes glob {glob!r} {problem}")
+            if "stdin_gates" in entry and not entry["stdin_gates"]:
+                raise ProposalError(f"agent_policies.{name}: stdin_gates is empty; stdin content would run ungated")
             for gate in entry.get("stdin_gates") or []:
                 if gate not in gates:
                     raise ProposalError(f"agent_policies.{name}: unknown stdin gate {gate!r}")
@@ -750,8 +752,8 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         dry_run: Check everything (gates on ``stdin_from_content`` execute) but run nothing.
 
     Returns:
-        ``{agent, argv, exit, stdout, stderr, undeclared_writes, ran}``. ``undeclared_writes`` is ``None``
-        when the project is not a git worktree (the check could not run).
+        ``{agent, argv, exit, stdout, stderr, undeclared_writes, ran}``. Outside a git worktree the command
+        is refused, so ``undeclared_writes`` is always a list.
 
     Raises:
         ProposalError: The request is malformed or not allowed (nothing runs), or the command wrote outside its

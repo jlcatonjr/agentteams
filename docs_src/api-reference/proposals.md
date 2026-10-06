@@ -64,7 +64,7 @@ Every operation needs an operator key: `AGENTTEAMS_PROPOSAL_LEDGER_KEY`, else
 **Environment.** Gates and commands get only locale and `HOME`-type variables plus a PATH of absolute
 entries. Signing keys and tokens are never passed.
 
-**Undeclared writes fail the run** (exit 3).
+**Undeclared writes fail the run** (exit 3; a timeout exits 3 too).
 - **What is compared:** tracked and untracked files by content hash, and the watched control plane by
   size, mtime, ctime and inode, before and after the command.
   - The control plane covers `.agentteams`, `.claude`, `.goose`, `.codex`, `.github/agents`,
