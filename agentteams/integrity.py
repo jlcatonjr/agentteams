@@ -48,6 +48,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/front_matter_reconcile.py",
     "agentteams/cli/adopt_merge_gate.py",  # C-3 + Rule 15: the one gated path that extends an
                                            # orchestrator's `agents:` grant under --merge
+    "scripts/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
+                                    # construction, so any change to it must be a reviewed re-record
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a
     # silent edit to any of them turns a check that fires into one that cannot, which is the
     # F-1 defect applied to the machinery built to catch F-1. Registry is included because it

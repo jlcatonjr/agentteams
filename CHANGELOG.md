@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Goose: `agentteams_readfs`, a read-only file server so read-only agents can actually read)
+
+- **Problem.** In Goose 1.37 the only tool that can print a file's contents is `developer.shell`, which
+  can also write and execute. Read-only agents either held full `developer` (an over-grant: every
+  recipe agentteams emits) or, scoped to `tree`/`analyze`, could not read the files they audit. A phase-0
+  stub-model spike also showed that `tree` and `analyze` are not workspace-confined.
+- **Added.** `scripts/goose-readfs-mcp.py`: a stdlib-only stdio MCP server.
+  - Tools: `read_file`, `list_dir`, `find`, `grep`, `stat`.
+  - Read-only by construction. A source scan (a tripwire, mutation-tested against sixteen injected write or
+    exec forms) checks for write, delete, exec and network calls.
+  - `realpath`-confined to `--root` (`..`, absolute paths and outward symlinks are refused). Files open
+    `O_NOFOLLOW|O_NONBLOCK`, and the handle must match the inode that was checked.
+  - A case-insensitive deny list (VCS internals, `.env*`, keys and keystores, `.ssh/`, `.aws/`, credentials,
+    Terraform state) refuses those files even inside the root. A filesystem root is refused as `--root`.
+  - Bounded reads, results, walked entries, depth and `grep` time (5 seconds). Every cap is reported in the
+    result, never a silent "no matches".
+  - Clean errors for malformed requests.
+  - Pinned in `references/enforcement-integrity.json`.
+- **Verified live** on Goose 1.37.0: read works, an outside path is refused, and `shell` is absent.
+- **Next:** phase 2 wires this into recipes, derived from each agent's declared tools, and phase 3
+  adds the contract check (`references/plans/goose-read-only-agents.plan.md`).
+
 ### feat (`--update --adopt-orphans`: gated, append-only adoption under merge)
 
 - **Why.** Adoption needed `--overwrite`, which re-renders every agent file. baseAgent folded bespoke

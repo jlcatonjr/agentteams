@@ -127,6 +127,71 @@ goose run \
 Then: parse the JSON (skip any leading banner), treat a non-zero exit / timeout / empty output
 as "no result," and continue — the background tier is best-effort by construction.
 
+## Read-only agents: the `agentteams_readfs` server
+
+In Goose 1.37 the `developer` extension has exactly four tools: `write`, `edit`, `shell` and `tree`. The
+only one that can print a file's contents is `shell`, which can also write and run anything. `tree` and
+the `analyze` extension are read-only, but neither is confined to the workspace. A recipe that keeps
+`developer` also gets `analyze` added automatically, and `available_tools: []` means *unrestricted*.
+(Phase-0 spike, 2026-10-05; `references/plans/goose-read-only-agents.plan.md`.)
+
+`scripts/goose-readfs-mcp.py` is a stdlib-only stdio MCP server that gives a read-only agent real read
+access with no write capability:
+
+| Tool | Does |
+|---|---|
+| `read_file` | Reads a text file with line numbers (`offset`/`limit` to page). Binary files are reported, not dumped |
+| `list_dir` | Lists one directory |
+| `find` | Finds files by glob |
+| `grep` | Searches text files by regular expression |
+| `stat` | Reports a path's type, size and modification time |
+
+- **Read-only by construction.** No tool writes, and the source contains no write, delete, exec or
+  network call. Three walls keep it that way:
+  - a source scan, which is a tripwire rather than a proof, and is mutation-tested against sixteen injected
+    write or exec forms;
+  - code review;
+  - the pin in `references/enforcement-integrity.json`.
+- **Confined.** Every path is resolved with `realpath` and must stay under `--root`, so `..`, absolute
+  paths and symlinks pointing outside are refused.
+  - Files open `O_NOFOLLOW|O_NONBLOCK`, and the handle must be the regular file that was checked (same
+    device and inode).
+  - Inside the root, case-insensitively, these are refused: VCS internals, `.env*` (except
+    `.env.example`, `.env.sample` and `.env.template`), keys and keystores (`*.pem`, `*.p12`, `*.pfx`,
+    `*.jks`), `.ssh/`, `.aws/`, `credentials*`, Terraform state and variables, and similar files. Add
+    more with `--deny GLOB`.
+  - A filesystem root (`/`) is refused as `--root`.
+- **Bounded, and says so.** Each request is capped:
+  - bytes, lines and results;
+  - walked entries and depth;
+  - `grep` time, at 5 seconds (it uses `SIGALRM`, so the limit applies only where the OS provides it);
+  - file size for `grep`.
+
+  A result that hit a cap says so, so a truncated search never reads as "no matches".
+- **Residual.** A hard link inside the root to a file elsewhere on the same filesystem reads like any
+  workspace file. Creating one needs write access to the workspace.
+
+A read-only recipe uses it **instead of** `developer`:
+
+```yaml
+extensions:
+  - type: stdio
+    name: agentteams_readfs
+    cmd: python3
+    args: ["scripts/goose-readfs-mcp.py", "--root", "."]
+    timeout: 60
+    available_tools: [read_file, list_dir, find, grep, stat]
+```
+
+Verified live on Goose 1.37.0 against a stub model:
+- the recipe offers only the five read tools;
+- `read_file` returns workspace content;
+- a path outside the workspace is refused;
+- a `shell` call fails with `Tool 'shell' not found`.
+
+The recipe's relative script path assumes Goose starts in the project root. Phase 2 will emit the
+extension from each agent's declared tools and settle the path. Until then, wire it in by hand.
+
 ## Best Practices
 
 1. **Never put the live turn behind `goose run`.** Direct-call the local model for interactive
