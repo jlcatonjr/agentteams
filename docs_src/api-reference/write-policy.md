@@ -21,4 +21,5 @@ so that only the orchestrator can write.
 | `reference_doc() -> str` | The `references/write-policy.reference.md` shipped with a team under the switch. |
 
 A static narrowing of declared tools, not runtime enforcement. The runtime boundary is the proposal CLI
-(`agentteams --apply-proposal` / `--run-request`) and, from P4, the OS sandbox profiles.
+(`agentteams --apply-proposal` / `--run-request`), served by the out-of-session runner in an OS sandbox
+([`proposal_runner`](proposal-runner.md), [`confinement`](confinement.md)).

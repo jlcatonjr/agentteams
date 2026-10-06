@@ -31,8 +31,10 @@ commands. They return one of three artifacts:
    - `--dry-run` runs every check, *including the gates, which execute*, but changes nothing.
 4. **Audit.** `agentteams --verify-proposal-ledger --project ROOT` checks the ledger.
 
-Every operation needs an operator key: `AGENTTEAMS_PROPOSAL_LEDGER_KEY`, else
-`AGENTTEAMS_DECISION_SIGNING_KEY`. Without one, everything is refused.
+Every operation needs an operator key. Under the switch only the out-of-session runner holds it, as a
+0600 file in `~/.config/agentteams/keys` (see [Out-of-session runner](#out-of-session-runner-p4a)). A
+direct, non-switch call uses `AGENTTEAMS_PROPOSAL_LEDGER_KEY`, else `AGENTTEAMS_DECISION_SIGNING_KEY`. Without
+a key, everything is refused.
 
 ## Checks
 
@@ -97,15 +99,19 @@ brief without it, or with `"default"`, produces a byte-identical team. Under the
 audit checks every agent file except the orchestrator.
 
 This is a **static check of what agent files declare**, not runtime enforcement: it stops nothing at run
-time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox profiles.
+time. The runtime boundary is the out-of-session runner and its OS sandbox ([`confinement`](confinement.md)).
 
 | Framework | Error | Warning |
 |---|---|---|
 | claude | Any tool that isn't known to be read-only (see below); a `tools:` key that is absent, null, empty (`[]`), duplicated, or of any shape other than one line or a clean `- item` block list, since the agent may then inherit every tool | `Bash` |
-| copilot-vscode, copilot-cli | The same, plus `execute`, since Copilot has no per-agent sandbox | — |
 | goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`; any extension other than `developer` and `analyze` (judged by the tools they grant), `agentteams_readfs` and `agentteams_coordination`; missing `extensions` | A granted shell |
-| codex | `sandbox_mode`, read as TOML, other than `"read-only"`, a missing key included; any `mcp_servers`; every `.toml` is checked, `references/` included | — |
-| agents-md | Always: it declares no per-agent tools, so the policy can't be checked | — |
+
+Generation refuses the switch on copilot-vscode, copilot-cli, codex and agents-md (P4a key custody), so this
+table lists only the frameworks a team under the switch can use. The check itself also knows the other
+shapes:
+- **Copilot:** any non-read-only tool, plus `execute`.
+- **Codex:** `sandbox_mode` other than `"read-only"`, and any `mcp_servers`.
+- **agents-md:** always flagged.
 | any other | A shell too | — |
 
 - **Read-only tokens:** `read`, `search`, `grep`, `glob`, `ls`, `todo`, `todowrite`, `web`, `fetch`, `webfetch`,

@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (write-policy P4 closeout)
+
+- **Brief schema.** `proposal_gates` entries now accept `exec`; before, a standard JSON-Schema validator
+  rejected a valid P4b brief. The `write_policy` description now describes the runner, the sandbox and the
+  claude/goose-only rule.
+- **Help text.** `--issue-dispatch` help, the CLI reference, the man page and the `proposals` docstrings no
+  longer say every call needs an environment key. Under the switch the runner holds a key file.
+- **Docs.** Removed "from P4" future tense. The `AR_WRITE_POLICY` table now lists only the frameworks the
+  switch allows. `--serve-requests` docs cover confinement and the no-sandbox refusal.
+
 ### feat (orchestrator-only-writes pilot P4b: confined execution in the runner)
 
 - **Confinement.** The out-of-session runner now runs every `--run-request` command, and every pre-write

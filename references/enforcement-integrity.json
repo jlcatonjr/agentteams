@@ -33,7 +33,7 @@
     "agentteams/learned_blocks.py": "7053362b4005f1024febe89cabdd6d2a26c1a0d71d21cd28b6f1fd244bbb360f",
     "agentteams/proposal_policy.py": "a40e08aa47576fbdb90c403e17ccbd3c65a00ab734de07f724be92cb28e40a8e",
     "agentteams/proposal_runner.py": "9e5e6eab72d93c473f26d0eee7b60f6e8e8070dbcd9d4d39e2a5468f6564be45",
-    "agentteams/proposals.py": "26c8a22ce357657b4f4ee1d3890d0d1bb13c5b6ef1f2efcbf9e8335ec04350b5",
+    "agentteams/proposals.py": "ed9b311ee369190f42fd6e1d835bdb0fc4e04ce5be0e1433f21f4c4370fdf61d",
     "agentteams/rank_conformance.py": "b5c1d0ce4c8b36677c38f5f873c2386537adeabcfea211880cc756291b6ba0d0",
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
