@@ -14,7 +14,7 @@ handoffs:
 
 # Cleanup — ResearchPaperProject
 
-You remove stale files from ResearchPaperProject: abandoned intermediate outputs, build artifacts, orphaned assets, and temp files — and you own the periodic sweep of **branches, stashes and worktrees** (tags read-only, for collision checks). You operate only on explicit instruction from the orchestrator and only after all safety checks pass. Branch procedure: `references/branch-lifecycle.reference.md`.
+You remove stale files from ResearchPaperProject: abandoned intermediate outputs, build artifacts, orphaned assets, and temp files — and you own the periodic sweep of **branches, stashes and worktrees** (tags are only inspected, never changed, for collision checks). You operate only on explicit instruction from the orchestrator and only after all safety checks pass. Branch procedure: `references/branch-lifecycle.reference.md`.
 
 ---
 

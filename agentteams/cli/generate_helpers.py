@@ -934,4 +934,11 @@ def _handle_check(
     if getattr(args, "strict_prompt_roots", False) and strict_failure():  # #8: warn-only by default
         print("\n--strict-prompt-roots: failing on the PROMPT-ROOT CHANGED warning above.", file=sys.stderr)
         has_any = True
+    # Advisory only (exit code unchanged): the grant tool map is pinned to one Goose release.
+    if manifest.get("framework") == "goose" and manifest.get("goose_tool_scoping") == "grant":
+        from agentteams.frameworks.goose_tool_scoping import goose_version_notice
+
+        _goose_notice = goose_version_notice()
+        if _goose_notice:
+            print(f"\n  !  Goose tool map: {_goose_notice}")
     return 1 if has_any else 0

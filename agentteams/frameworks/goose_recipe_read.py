@@ -232,3 +232,107 @@ def _recipe_retry(yaml_text: str) -> dict[str, Any] | None:
         retry["checks"] = checks
     return retry or None
 
+
+
+#: Every tool the Goose 1.37 ``developer`` builtin exposes; an unscoped ``developer`` grants all four.
+DEVELOPER_TOOLS = frozenset({"write", "edit", "shell", "tree"})
+#: Stands in for a value the reader cannot interpret: treated as an unscoped ``developer`` (worst case).
+UNPARSED = "<unparsed>"
+_EXT_KEY_RE = re.compile(r"^extensions:(.*)$", re.MULTILINE)
+_ITEM_NAME_RE = re.compile(r"^\s*-?\s*name:\s*(.*)$", re.MULTILINE)
+_ITEM_ALLOW_RE = re.compile(r"^\s*available_tools:\s*(.*)$", re.MULTILINE)
+
+
+def _uncomment(value: str) -> str:
+    """Strip an inline ``# comment`` and surrounding quotes/whitespace from a scalar."""
+    return value.split("#", 1)[0].strip().strip("\"'").strip()
+
+
+def recipe_extension_grants(yaml_text: str) -> list[dict[str, Any]] | None:
+    """Read a recipe's top-level ``extensions`` as ``[{name, available_tools}]``, failing safe.
+
+    Deliberately not built on :func:`_recipe_section`, which stops at a column-0 line and so would cut
+    a zero-indent ``- type:`` list short. Every shape this reader cannot interpret becomes the worst case:
+    an entry named :data:`UNPARSED` that callers treat as an unscoped ``developer``.
+
+    Args:
+        yaml_text: The recipe YAML.
+
+    Returns:
+        * ``None`` when the key is missing, bare or ``null``/``~``: Goose 1.37 then loads the user's
+          configured extensions (fail-open).
+        * ``[]`` for ``extensions: []`` (with or without a trailing comment).
+        * Otherwise one entry per list item. ``available_tools`` is ``None`` when the item has no
+          allowlist, an empty one (``[]`` is unrestricted) or one in a form this reader does not parse.
+        * ``[{"name": UNPARSED, ...}]`` for a flow-style value, or for a second ``extensions:`` key
+          (ambiguous: a reader may take either).
+
+    Raises:
+        Nothing.
+    """
+    keys = list(_EXT_KEY_RE.finditer(yaml_text))
+    if not keys:
+        return None
+    if len(keys) > 1:
+        return [{"name": UNPARSED, "available_tools": None}]
+    value = _uncomment(keys[0].group(1))
+    if value in ("null", "~"):
+        return None
+    if value == "[]":
+        return []
+    if value:
+        return [{"name": UNPARSED, "available_tools": None}]
+    block: list[str] = []
+    for line in yaml_text[keys[0].end():].splitlines()[1:]:
+        if line.strip().startswith("#"):
+            continue
+        if line and not line[0].isspace() and not line.startswith("- "):
+            break
+        block.append(line)
+    # A new item starts only at the first dash's indentation; deeper "- " lines (an item's args or a
+    # block-style allowlist) continue the current item.
+    dashes = [len(line) - len(line.lstrip()) for line in block if re.match(r"^\s*-\s", line)]
+    item_indent = dashes[0] if dashes else None
+    items: list[str] = []
+    for line in block:
+        if item_indent is not None and re.match(r"^\s*-\s", line) and len(line) - len(line.lstrip()) == item_indent:
+            items.append(line)
+        elif items and line.strip():
+            items[-1] += "\n" + line
+    if not items:
+        return None
+    parsed = []
+    for item in items:
+        # The item's own name is its shallowest `name:` line; nested content may carry others.
+        name_lines = sorted(_ITEM_NAME_RE.finditer(item), key=lambda m: len(m.group(0)) - len(m.group(0).lstrip(" -")))
+        name = name_lines[0] if name_lines else None
+        allow = _ITEM_ALLOW_RE.search(item)
+        tools = None
+        if allow:
+            raw = _uncomment(allow.group(1)) if "[" not in allow.group(1) else allow.group(1).split("]", 1)[0] + "]"
+            if raw.startswith("[") and raw.endswith("]"):
+                tools = [_uncomment(t) for t in raw[1:-1].split(",") if _uncomment(t)] or None
+        parsed.append({"name": _uncomment(name.group(1)) if name else UNPARSED, "available_tools": tools})
+    return parsed
+
+
+def developer_tools(extensions: list[dict[str, Any]]) -> set[str]:
+    """Return the ``developer`` tools a parsed extension list exposes.
+
+    An unscoped ``developer`` and any :data:`UNPARSED` entry expose all four tools.
+
+    Args:
+        extensions: Output of :func:`recipe_extension_grants`.
+
+    Returns:
+        The exposed ``developer`` tool names.
+
+    Raises:
+        Nothing.
+    """
+    tools: set[str] = set()
+    for ext in extensions:
+        if ext["name"] in ("developer", UNPARSED):
+            allow = ext["available_tools"]
+            tools |= set(DEVELOPER_TOOLS if allow is None else DEVELOPER_TOOLS & set(allow))
+    return tools
