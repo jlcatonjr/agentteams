@@ -112,9 +112,13 @@ def test_dispatch_and_proposal_round_trip(runner):
     assert _roundtrip(runner, {"kind": "verify-ledger"})["result"]["problems"] == []
 
 
-def test_run_request_refused_until_commands_are_confined(runner):
-    result = _roundtrip(runner, {"kind": "run-request", "artifact": {}})
-    assert not result["ok"] and "P4b" in result["error"]
+def test_run_request_needs_a_confined_entry(runner):
+    nonce = _roundtrip(runner, {"kind": "issue-dispatch", "agent": "producer"})["result"]["nonce"]
+    runner.policy = P.load_policy({"agent_policies": {"producer": {"commands": [
+        {"prefix": [PY, "-c", "pass"], "args": []}]}}})
+    artifact = {"kind": "command-request", "dispatch": nonce, "argv": [PY, "-c", "pass"], "purpose": "t"}
+    result = _roundtrip(runner, {"kind": "run-request", "artifact": artifact})
+    assert not result["ok"] and "no confined_programs entry" in result["error"]
 
 
 def test_refusal_is_a_result_not_a_crash(runner):
@@ -231,10 +235,14 @@ def test_runner_refuses_a_brief_without_the_switch(project, key_file):
         R.Runner(root, root / "brief.json", policy)
 
 
-def test_gates_refused_until_commands_are_confined(runner, project):
+def test_gates_run_confined_in_the_runner(runner, project):
     import hashlib
+
+    from agentteams import confinement as C
+    toolchain = os.path.dirname(os.path.dirname(os.path.realpath(PY)))
     gated = P.load_policy({"agent_policies": {"producer": {"write_scopes": ["src/"]}},
-                           "proposal_gates": {"g": {"glob": "src/*.py", "argv": [PY, "-c", "pass", "{file}"]}}})
+                           "proposal_gates": {"g": {"glob": "src/*.py", "argv": [PY, "-c", "pass", "{file}"],
+                                                    "exec": [toolchain, os.path.dirname(PY)]}}})
     runner.policy = gated
     nonce = _roundtrip(runner, {"kind": "issue-dispatch", "agent": "producer"})["result"]["nonce"]
     target = runner.root / "src" / "a.py"
@@ -242,8 +250,12 @@ def test_gates_refused_until_commands_are_confined(runner, project):
                 "base_sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "content": "x = 3\n",
                 "rationale": "gated"}
     result = _roundtrip(runner, {"kind": "apply-proposal", "artifact": artifact})
-    assert not result["ok"] and "P4b" in result["error"]
-    assert target.read_text() == "x = 1\n"
+    if C.available():
+        assert result["ok"], result
+        assert target.read_text() == "x = 3\n"
+    else:  # no usable sandbox and no opt-out: refused, nothing written
+        assert not result["ok"] and "no usable OS sandbox" in result["error"]
+        assert target.read_text() == "x = 1\n"
 
 
 def test_symlinked_queue_dir_refused(runner, tmp_path):

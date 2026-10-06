@@ -5,7 +5,8 @@ Under the switch, only the orchestrator writes. Every other generated agent (the
 * has its canonical ``tools:`` line narrowed to :data:`NARROWED_TOKENS` before any framework adapter reads it.
   Each adapter derives its grants from that line: Claude's tool mapping, Codex ``sandbox_mode``, Goose grant
   extensions and Copilot's pass-through. One narrowing therefore reaches every framework. ``execute`` is
-  dropped too, until the P4 sandbox profiles can confine a shell (operator decision 2026-10-06);
+  dropped too: agents hold no shell, and commands go through the runner's confined ``--run-request``
+  (operator decisions 2026-10-06);
 * gets a fenced section telling it to return a change proposal, deletion proposal or command request
   instead of writing, dispatching or running anything. That section overrides any write wording in the
   body (operator decision 2026-10-06: an appended override, not per-template edits).
@@ -71,7 +72,8 @@ This team runs `write_policy: "orchestrator-only"`: you are the only agent that 
 The `agentteams` commands below don't act themselves. They queue each request for the operator's runner
 (`agentteams --serve-requests`), which runs outside your session and alone holds the ledger key. If a
 command says no runner is serving, ask the operator to start one; never look for the key yourself.
-`--run-request` is refused until the runner confines commands.
+The runner runs every command and gate in an OS sandbox built from the brief's `confined_programs`. An
+agent with no entry gets no command runs.
 
 1. **Before dispatching** an agent, run `agentteams --issue-dispatch --agent <slug>` and pass the printed
    nonce to the agent as its `dispatch` value. It is single-purpose: one task, a limited number of uses,
@@ -239,8 +241,15 @@ agentteams --serve-requests --project <root> --description <brief>
   file named by `AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE`. Agent sessions can't read that directory, and can't
   write `.agentteams/`.
 - **The brief is pinned** at start. If it changes, the runner stops and must be restarted.
-- **Until P4b:** the runner refuses `--run-request`, and any proposal a gate would check, until it can
-  confine commands.
+- **Confinement.** The runner runs every command and gate in an OS sandbox, configured per agent by
+  `confined_programs` in the brief: `{"agent": {"exec": [...], "write": [...]}}`.
+  - Writes go only to the declared roots and a private `TMPDIR`. The ledger, the queue, `.git` and the
+    control plane stay protected, and the key directory is unreadable.
+  - On macOS only the declared `exec` paths can run. Give the toolchain *root* (e.g. `~/.elan`): Homebrew
+    Python, for one, re-executes a binary inside its framework.
+  - Changes inside the write roots count as declared.
+  - With no usable sandbox the runner refuses, unless the brief sets `allow_unconfined_runs` (each such run
+    is logged).
 - **Crash recovery:** a stale heartbeat makes every request refuse. Restart the runner and re-queue.
 
 ## Exit codes (`agentteams --apply-proposal` / `--run-request`)

@@ -230,6 +230,8 @@ nav:
       - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
       - adopted-agents: api-reference/adopted-agents.md
       - proposals: api-reference/proposals.md
+      - confinement: api-reference/confinement.md
+      - proposal_policy: api-reference/proposal-policy.md
       - proposal_runner: api-reference/proposal-runner.md
       - write_policy: api-reference/write-policy.md
       - orphan-advisory: api-reference/orphan-advisory.md

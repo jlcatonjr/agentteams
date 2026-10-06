@@ -38,7 +38,7 @@ and stops serving if the brief changes.
 | Name | Purpose |
 |---|---|
 | `Runner(root, brief_path, policy, *, key_file=None)` | Takes key-file custody (`proposals.use_key_file`), the runner lock and the pinned brief hash. |
-| `Runner.serve_once()` / `serve_forever()` / `close()` | Serve the queue. Kinds: `issue-dispatch`, `apply-proposal`, `verify-ledger`. Refused until P4b confines commands: `run-request`, and any proposal a gate would check. An unconfined gate is a child of the key holder and can load session-writable code. |
+| `Runner.serve_once()` / `serve_forever()` / `close()` | Serve the queue. Kinds: `issue-dispatch`, `apply-proposal`, `run-request`, `verify-ledger`. Every command and gate runs confined (P4b, [`confinement`](confinement.md)). An unconfined child of the key holder could load session-writable code and read the key. |
 | `enqueue(root, request) -> str` | Queue a request (CLI side). Refuses when no runner is alive. |
 | `wait_result(root, request_id, *, timeout=120.0) -> dict` | Wait for and acknowledge a result. |
 | `runner_alive(root) -> bool` | Whether a heartbeat is fresh. |

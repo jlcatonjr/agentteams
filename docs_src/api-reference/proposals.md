@@ -113,8 +113,8 @@ time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox pro
   dispatch (`Task`/`agent`, which can start a subagent that writes), `editFiles`, `runCommands`, MCP tools
   (`mcp__…`) and `*`.
 
-- **Shell warnings can't be silenced yet.** Nothing confines a shell before the P4 sandbox profiles, so no
-  brief field quiets them.
+- **Shell warnings can't be silenced.** Agents hold no shell under the switch (operator decision B):
+  commands go through the runner's confined `--run-request`, so no brief field quiets a shell warning.
 - **The orchestrator exemption** covers only the shallowest `orchestrator` file (on Goose, also
   `bridge-orchestrator`). A deeper copy, or two equally shallow copies, are checked like any agent. On
   Codex, the exempt file's `name` must also be `orchestrator`.
@@ -152,8 +152,8 @@ Under `"write_policy": "orchestrator-only"`, generation makes the team pass the 
   codes.
 - **Fences:** an unfenced body is wrapped whole, section included, so `--update --merge` refreshes both. A
   body that already has fences gets the section in its own `write_policy` fence.
-- **Shell (`execute`)** is dropped everywhere until P4 can confine it (operator decision). Commands go
-  through `command-request`.
+- **Shell (`execute`)** is dropped everywhere (operator decisions of 2026-10-06). Commands go through
+  `command-request`, which the runner runs confined.
 
 - **Goose non-orchestrator recipes** carry no operator MCP server and no coordination server (it writes
   request and log files) under the switch.
@@ -180,16 +180,19 @@ every one.
 
 - An allowed command that runs agent-written code is arbitrary execution, whatever the allowlist says.
   `lake build` compiles Lean that can do IO at compile time, and a test runner executes test files.
-  Contain these with the OS sandbox profiles (P4).
-- The undeclared-write check doesn't see paths ignored by git. Those belong to the sandbox's confined roots.
-- **Until P4, the ledger signature is not a boundary against commands.** A command runs as the same user, so
-  it can read its parent process's environment (on Linux `/proc/<pid>/environ`), and with it the key.
-  A process that leaves its process group (`setsid`) can also outlive the after-snapshot.
+  The runner contains them in the OS sandbox (P4b): writes go only to the agent's declared roots, and on
+  macOS only the declared programs can run. Inside those bounds, the code can still do anything.
+- The undeclared-write check doesn't see paths ignored by git. Under the runner the sandbox bounds them to
+  the declared roots.
+- **Direct mode (no runner) keeps the P1 risks.** A command run directly by the CLI runs as the same user,
+  unconfined, so it can read its parent's exec-time environment, and with it an environment key. Under the
+  switch the CLI never runs directly. A process that leaves its process group (`setsid`) can still outlive
+  the after-snapshot on macOS; on Linux, bwrap's PID namespace and `--die-with-parent` stop it.
 - **Dry runs execute gates** and don't count against a nonce's use limit, so one nonce can trigger
   unlimited gate runs. Gates are registered by the operator, but they still run code on agent-supplied
   content.
-- **Writes outside the project** (e.g. `~/.gitconfig`, shell rc files) are not detected by this check. Only
-  the P4 sandbox stops them.
+- **Writes outside the project** (e.g. `~/.gitconfig`, shell rc files) are not detected by this check. Under
+  the runner, the sandbox refuses them.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and
   home-shaped arguments around common stems (`.*`, `[a-z].*`, `.+\\.lean`), but it is not a proof.
 
@@ -208,7 +211,8 @@ agentteams --serve-requests --project <root> --description <brief>
   so only the runner writes the ledger.
 - **Frameworks.** The switch is allowed only where such a session sandbox exists: claude and goose, with
   `privilege_profile` not `"cooperative"`. Generation refuses it elsewhere.
-- **`--run-request`** is refused by the runner until P4b runs commands confined.
+- **Confined execution (P4b).** The runner runs every command and gate in an OS sandbox from the brief's
+  `confined_programs`. See [`confinement`](confinement.md).
 
 Details, queue layout and residual risks: [`proposal_runner`](proposal-runner.md).
 
