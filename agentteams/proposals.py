@@ -58,7 +58,7 @@ Stdlib only; integrity-pinned.
 
 from __future__ import annotations
 
-import fcntl
+import fcntl  # POSIX-only: the pilot's confinement (Seatbelt/bwrap) is POSIX-only too
 import fnmatch
 import hashlib
 import hmac
@@ -237,6 +237,8 @@ def _key() -> bytes:
 
 
 def _mac(key: bytes, body: dict[str, Any]) -> str:
+    # Signs canonical JSON rather than reusing cli/signed_ledger's '|'-joined fields, whose delimiter
+    # ambiguity let a crafted field forge another row's signature.
     return hmac.new(key, json.dumps(body, sort_keys=True).encode("utf-8"), hashlib.sha256).hexdigest()
 
 

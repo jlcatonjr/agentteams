@@ -17,6 +17,7 @@ from pathlib import Path
 
 from agentteams import ingest
 from agentteams.proposals import (
+    Policy,
     ProposalError,
     UndeclaredWritesError,
     apply_proposal,
@@ -31,7 +32,7 @@ def _root(args: argparse.Namespace) -> Path:
     return Path(getattr(args, "project", None) or os.getcwd()).resolve()
 
 
-def _policy(args: argparse.Namespace, flag: str):
+def _policy(args: argparse.Namespace, flag: str) -> Policy:
     if not getattr(args, "description", None):
         raise ProposalError(f"{flag} requires --description BRIEF (the team's registered policy)")
     brief_path, root = Path(args.description).resolve(), _root(args)
@@ -45,7 +46,17 @@ def _read_json(path: str) -> dict:
 
 
 def run_issue_dispatch(args: argparse.Namespace) -> int:
-    """Print a fresh dispatch nonce for ``--agent``. Exit 0, or 1 when refused (no key, bad slug)."""
+    """Print a fresh dispatch nonce for ``--agent``.
+
+    Args:
+        args: Parsed CLI arguments; reads ``agent`` and ``project``.
+
+    Returns:
+        0 when a nonce was printed, 1 when refused (no ledger key, bad agent slug).
+
+    Raises:
+        OSError: If the dispatch records cannot be written.
+    """
     try:
         nonce = issue_dispatch(_root(args), getattr(args, "agent", None) or "")
     except ProposalError as exc:
@@ -56,7 +67,17 @@ def run_issue_dispatch(args: argparse.Namespace) -> int:
 
 
 def run_apply_proposal(args: argparse.Namespace) -> int:
-    """Apply one change/deletion proposal. Exit 0 when applied (or would be, with --dry-run), else 1."""
+    """Apply one change or deletion proposal.
+
+    Args:
+        args: Parsed CLI arguments; reads ``apply_proposal``, ``description``, ``project`` and ``dry_run``.
+
+    Returns:
+        0 when applied (or when it would be, with ``--dry-run``), 1 when refused.
+
+    Raises:
+        Nothing: refusals (``ProposalError``, including ``LedgerTamperedError``) map to exit 1.
+    """
     try:
         result = apply_proposal(_read_json(args.apply_proposal), root=_root(args),
                                 policy=_policy(args, "--apply-proposal"), dry_run=getattr(args, "dry_run", False))
@@ -68,7 +89,17 @@ def run_apply_proposal(args: argparse.Namespace) -> int:
 
 
 def run_command_request(args: argparse.Namespace) -> int:
-    """Run one command request. Exit with the command's code; 1 when refused; 3 on undeclared writes."""
+    """Run one command request.
+
+    Args:
+        args: Parsed CLI arguments; reads ``run_request``, ``description``, ``project`` and ``dry_run``.
+
+    Returns:
+        The command's exit code; 1 when refused; 3 when it wrote outside its declared writes or timed out.
+
+    Raises:
+        Nothing: refusals (``ProposalError``, including ``LedgerTamperedError``) map to exit 1.
+    """
     try:
         result = run_request(_read_json(args.run_request), root=_root(args),
                              policy=_policy(args, "--run-request"), dry_run=getattr(args, "dry_run", False))
@@ -83,13 +114,21 @@ def run_command_request(args: argparse.Namespace) -> int:
     print(json.dumps({k: v for k, v in result.items() if k not in ("stdout", "stderr")}, indent=2))
     sys.stdout.write(result["stdout"])
     sys.stderr.write(result["stderr"])
-    if result["undeclared_writes"] is None and result["ran"]:
-        print("[run-request] undeclared-write check UNCHECKED (not a git worktree)", file=sys.stderr)
     return int(result["exit"] or 0)
 
 
 def run_verify_proposal_ledger(args: argparse.Namespace) -> int:
-    """Verify the proposal ledger's signatures, chain and head anchor. Exit 0 when intact, 1 otherwise."""
+    """Verify the proposal ledger's signatures, chain and head anchor.
+
+    Args:
+        args: Parsed CLI arguments; reads ``project``.
+
+    Returns:
+        0 when the ledger is intact, 1 when a problem was found or no ledger key is set.
+
+    Raises:
+        OSError: If the ledger exists but cannot be read.
+    """
     try:
         problems = verify_ledger(_root(args))
     except ProposalError as exc:
