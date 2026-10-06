@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **209**
+- Modules mapped: **210**
 - Packages: **7**
-- Internal import edges: **533**
+- Internal import edges: **535**
 - Distinct external dependencies: **7**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 113 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 114 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 40 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -103,7 +103,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.parser` | `agentteams`, `agentteams.capability_hints`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.backup_switch`, `agentteams.cli.branch_switch`, `agentteams.cli.fleet_switch`, `agentteams.cli.goose_switch`, `agentteams.cli.package_switch`, `agentteams.cli.parser_validate`, `agentteams.cli.sync_switch`, `agentteams.emit`, `agentteams.frameworks.registry` | `agentteams.cli.app` |
 | `agentteams.cli.parser_validate` | `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.branch_switch`, `agentteams.shrink_allow` | `agentteams.cli.parser` |
 | `agentteams.cli.post_emit_checks` | `agentteams.emit`, `agentteams.scan` | `agentteams.cli.generate` |
-| `agentteams.cli.proposal_commands` | `agentteams.ingest`, `agentteams.proposals` | `agentteams.cli.app` |
+| `agentteams.cli.proposal_commands` | `agentteams.ingest`, `agentteams.proposal_runner`, `agentteams.proposals` | `agentteams.cli.app` |
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
 | `agentteams.cli.render_pipeline` | `agentteams.emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.render`, `agentteams.vscode_tasks`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers` |
 | `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.security_refs` |
@@ -197,7 +197,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.project_notes` | `agentteams.fences` | `agentteams.emit` |
 | `agentteams.projection_marker` | `agentteams`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit` | `agentteams.bridge`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync` |
 | `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.cli.generate_helpers` |
-| `agentteams.proposals` | `agentteams.atomicio`, `agentteams.frameworks._write_roots` | `agentteams.cli.proposal_commands` |
+| `agentteams.proposal_runner` | `agentteams.proposals` | `agentteams.cli.proposal_commands` |
+| `agentteams.proposals` | `agentteams.atomicio`, `agentteams.frameworks._write_roots` | `agentteams.cli.proposal_commands`, `agentteams.proposal_runner` |
 | `agentteams.provenance` | — | — |
 | `agentteams.rank_conformance` | `agentteams.analyze`, `agentteams.audit_types`, `agentteams.capability_map` | `agentteams.cli.standalone_modes` |
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
@@ -1118,6 +1119,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.ingest",
+        "agentteams.proposal_runner",
         "agentteams.proposals"
       ],
       "external": [],
@@ -2145,6 +2147,16 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.fences"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.proposal_runner": {
+      "package": "agentteams",
+      "path": "agentteams/proposal_runner.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.proposals"
       ],
       "external": [],
       "repo_local": []
@@ -3771,6 +3783,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.proposal_commands",
+      "target": "agentteams.proposal_runner"
+    },
+    {
+      "source": "agentteams.cli.proposal_commands",
       "target": "agentteams.proposals"
     },
     {
@@ -4596,6 +4612,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.prompt_roots",
       "target": "agentteams.fences"
+    },
+    {
+      "source": "agentteams.proposal_runner",
+      "target": "agentteams.proposals"
     },
     {
       "source": "agentteams.proposals",

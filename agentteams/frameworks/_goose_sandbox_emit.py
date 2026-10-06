@@ -224,6 +224,7 @@ def _build_seatbelt_profile(
     deny_network: bool = False,
     *,
     copilot_present: bool = False,
+    protect_ledger: bool = False,
 ) -> str:
     """Build the ``sandbox.sb`` Apple-Seatbelt profile text for goose confinement.
 
@@ -352,9 +353,11 @@ def _build_seatbelt_profile(
     # Linux launcher has ro-bound it since #86. Before this only the Claude gate hook was denied, so
     # a goose agent on macOS could flip the claude team's switch, plant a verify key or rewrite the
     # live settings.json allowWrite baseline. A subpath deny covers the dir entry itself (rename).
+    # write_policy "orchestrator-only" (P4a): the ledger dir too; only the out-of-session runner writes it.
+    ledger = (".agentteams",) if protect_ledger else ()
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
         *control_plane, framework_config_dir("claude"), *sib["copilot"], *sib["codex"],
-        GRANT_ROSTER_PROJECT_REL)) if e]
+        GRANT_ROSTER_PROJECT_REL, *ledger)) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",
         "(deny file-write*",
@@ -615,6 +618,7 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
     profile_text = _build_seatbelt_profile(
         write_roots, deny_read, egress_endpoint, deny_network=deny_network,
         copilot_present=SIBLING_DENY_DIRS["copilot"] in sibling_deny_dirs(manifest),
+        protect_ledger=manifest.get("write_policy") == "orchestrator-only",
     )
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint

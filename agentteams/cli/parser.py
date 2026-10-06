@@ -987,6 +987,41 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--serve-requests",
+        action="store_true",
+        dest="serve_requests",
+        default=False,
+        help=(
+            "Orchestrator-only-writes pilot: run the out-of-session runner for --project under the brief's "
+            "policy (--description). Start it OUTSIDE every agent session. It alone holds the ledger key "
+            "(from AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE or ~/.config/agentteams/keys/proposal-ledger.key) and "
+            "serves the orchestrator's queued dispatch, proposal and ledger requests. --once serves the queue "
+            "once and exits."
+        ),
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        dest="once",
+        default=False,
+        help="With --serve-requests: serve the requests queued now, then exit.",
+    )
+    parser.add_argument(
+        "--wait-result",
+        metavar="ID",
+        dest="wait_result",
+        default=None,
+        help="Orchestrator-only-writes pilot: wait again for the runner's result for a queued request ID.",
+    )
+    parser.add_argument(
+        "--wait-timeout",
+        metavar="SECONDS",
+        dest="wait_timeout",
+        type=float,
+        default=None,
+        help="Seconds the queue-mode proposal commands wait for the runner (default 120).",
+    )
+    parser.add_argument(
         "--agent",
         metavar="SLUG",
         dest="agent",

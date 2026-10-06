@@ -829,6 +829,20 @@ the dispatched agent's registered prefixes and every remaining argument matches 
 - A signed ledger row is appended.
 - `--dry-run` runs the checks and the stdin gates, but not the command.
 
+### `--serve-requests`
+
+Orchestrator-only-writes pilot (P4a). Runs the out-of-session runner for `--project` under the brief's policy
+(`--description`).
+- **Where:** start it outside every agent session.
+- **Key:** it alone holds the ledger key, read from `AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE` or
+  `~/.config/agentteams/keys/proposal-ledger.key` (mode 0600).
+- **What it serves:** the orchestrator's queued dispatch, proposal and ledger requests.
+- **`--once`:** serves the queue once, then exits.
+- **The brief is pinned:** if it changes, the runner stops.
+
+Under the switch, `--issue-dispatch`, `--apply-proposal`, `--run-request` and `--verify-proposal-ledger` queue
+for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` waits again for one request.
+
 ### `--verify-proposal-ledger`
 
 Read-only. Verifies the signatures, hash chain and signed head anchor of `.agentteams/proposal-ledger.jsonl`

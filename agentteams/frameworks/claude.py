@@ -260,6 +260,7 @@ class ClaudeAdapter(FrameworkAdapter):
                     sibling_deny_dirs=sibling_deny_dirs(manifest),
                     project_root=project_root_of(manifest),  # transient, CLI-set (never input)
                     protect_prompt_roots=prompt_roots_enabled(manifest),  # #8 phase 2, opt-in
+                    protect_ledger=manifest.get("write_policy") == "orchestrator-only",  # P4a
                 )
                 # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
                 # missing deny path). Its frozen sentinel is emitted for every team by

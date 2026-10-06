@@ -204,6 +204,12 @@ def _main_dispatch(
     if getattr(args, "run_request", None):
         from agentteams.cli.proposal_commands import run_command_request
         return run_command_request(args)
+    if getattr(args, "serve_requests", False):
+        from agentteams.cli.proposal_commands import run_serve_requests
+        return run_serve_requests(args)
+    if getattr(args, "wait_result", None):
+        from agentteams.cli.proposal_commands import run_wait_result
+        return run_wait_result(args)
     if getattr(args, "issue_dispatch", False):
         from agentteams.cli.proposal_commands import run_issue_dispatch
         return run_issue_dispatch(args)

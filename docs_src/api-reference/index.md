@@ -102,6 +102,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
 | [`bridge_subagents`](bridge-subagents.md) | Per-agent Claude subagent stub emitter (bridge:copilot-vscode-to-claude:subagents) |
 | [`proposals`](proposals.md) | Orchestrator-only-writes pilot (P1): apply typed change proposals and run typed command requests under per-agent policy; hash-chained ledger |
+| [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
 | [`write_policy`](write-policy.md) | Orchestrator-only-writes pilot (P3): narrow generated non-orchestrator agents to read-only tools and add the proposal sections |
 | [`adopted_agents`](adopted-agents.md) | `--adopt-orphans` routing rows: adopted agents reach every orchestrator body (Claude included) |
 | [`orphan_advisory`](orphan-advisory.md) | `--update` orphan-agent-file advisory: orphaned / bespoke-keep / bridge-managed-keep buckets |

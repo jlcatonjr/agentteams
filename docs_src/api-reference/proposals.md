@@ -193,6 +193,25 @@ every one.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and
   home-shaped arguments around common stems (`.*`, `[a-z].*`, `.+\\.lean`), but it is not a proof.
 
+## Out-of-session runner (P4a)
+
+Under the switch the orchestrator never holds the ledger key, and its `agentteams` commands don't act
+themselves. They queue requests for the runner, which the operator starts outside every agent session:
+
+```
+agentteams --serve-requests --project <root> --description <brief>
+```
+
+- **Key custody.** The runner reads the key from `~/.config/agentteams/keys/proposal-ledger.key` (0600), or
+  from `AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE`. Under file custody, environment keys are ignored.
+- **Session sandboxes.** They read-deny that directory, and under the switch they write-deny `.agentteams/`,
+  so only the runner writes the ledger.
+- **Frameworks.** The switch is allowed only where such a session sandbox exists: claude and goose, with
+  `privilege_profile` not `"cooperative"`. Generation refuses it elsewhere.
+- **`--run-request`** is refused by the runner until P4b runs commands confined.
+
+Details, queue layout and residual risks: [`proposal_runner`](proposal-runner.md).
+
 ## Ledger
 
 `.agentteams/proposal-ledger.jsonl` gets one row per dispatch, apply, deletion, run and refusal. Dispatch
