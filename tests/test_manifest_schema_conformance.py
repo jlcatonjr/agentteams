@@ -145,6 +145,9 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Emitted only when a project opts into grant-scoped Goose recipes (or names legacy
         # explicitly); build_manifest omits it otherwise so legacy recipes stay byte-identical.
         "goose_tool_scoping",
+        # Orchestrator-only-writes pilot (P2): emitted only for "orchestrator-only"; build_manifest
+        # omits it otherwise so a team without the switch stays byte-identical.
+        "write_policy",
         # Emitted only when an exclusive project supplies extra P3a read-exclusion
         # paths; build_manifest omits it otherwise.
         "protected_read_paths",

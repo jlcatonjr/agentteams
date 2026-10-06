@@ -28,6 +28,7 @@ from agentteams.audit_agent_contract import (  # re-exported for callers/tests (
     _check_invariant_core_present,
     _check_readonly_tool_declarations,
     _check_return_handoff_present,
+    _check_write_policy,
     _check_writer_dispatch_grants,
 )
 from agentteams.frameworks.goose import _tool_name as _goose_tool_name
@@ -174,10 +175,11 @@ def run_post_audit(
     _adapter = _adapter_for(manifest)
 
     # Build file map: prefer in-memory over disk to avoid stale-read race
+    unreadable: list[str] = []
     if rendered_files is not None:
         file_map: dict[str, str] = {rel: content for rel, content in rendered_files}
     else:
-        file_map = _load_files_from_disk(output_dir)
+        file_map = _load_files_from_disk(output_dir, agent_ext=agent_ext, unreadable=unreadable)
 
     # --- Static checks (conflict-auditor style) ---
     result.static_findings.extend(_check_unresolved_placeholders(file_map))
@@ -203,6 +205,10 @@ def run_post_audit(
     result.agent_refactor_findings.extend(_check_goose_recipe_grants(
         file_map, agent_ext=agent_ext, grant_mode=manifest.get("goose_tool_scoping") == "grant",
         operator_extensions=_goose_operator_extensions(manifest),
+    ))
+    result.agent_refactor_findings.extend(_check_write_policy(
+        file_map, agent_ext=agent_ext, framework=str(manifest.get("framework", "")),
+        enabled=manifest.get("write_policy") == "orchestrator-only", unreadable=unreadable,
     ))
     result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir, agent_ext=agent_ext))
@@ -900,11 +906,17 @@ def _build_ai_context(
 # Disk helpers
 # ---------------------------------------------------------------------------
 
-def _load_files_from_disk(output_dir: Path) -> dict[str, str]:
+def _load_files_from_disk(
+    output_dir: Path, *, agent_ext: str = ".md", unreadable: list[str] | None = None
+) -> dict[str, str]:
     """Load all generated files from an output directory.
 
     Args:
         output_dir: Root agents directory path.
+        agent_ext: The framework's agent-file extension. Goose ``.yaml`` recipes and Codex ``.toml``
+            agents load too, so the per-agent checks see them on a disk audit.
+        unreadable: When given, receives the paths skipped as symlinks (files or directories) or as
+            undecodable, so a caller can report them instead of passing them silently.
 
     Returns:
         Dict mapping relative path strings to file content.
@@ -915,11 +927,17 @@ def _load_files_from_disk(output_dir: Path) -> dict[str, str]:
     for path in output_dir.rglob("*"):
         if _BACKUP_DIR_NAME in path.parts:
             continue
-        if path.suffix not in {".md", ".csv"}:
-            continue
         rel = str(path.relative_to(output_dir))
+        if path.is_symlink() or any(p.is_symlink() for p in path.parents if output_dir in p.parents):
+            # Never follow a link out of the team directory into the audit (or the AI prompt); report it.
+            if unreadable is not None:
+                unreadable.append(rel)  # any link: a dangling or renamed one may still resolve to an agent
+            continue
+        if path.suffix not in {".md", ".csv"} and not path.name.endswith(agent_ext):
+            continue
         try:
             file_map[rel] = path.read_text(encoding="utf-8")
-        except OSError:
-            pass
+        except (OSError, UnicodeDecodeError):
+            if unreadable is not None and path.name.endswith(agent_ext):
+                unreadable.append(rel)
     return file_map

@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (orchestrator-only-writes pilot P2: the `write_policy` switch and `AR_WRITE_POLICY`)
+
+- **Switch.** `"write_policy": "orchestrator-only"` now reaches the team manifest. Only that value does, so a
+  team without it, or with `"default"`, is byte-identical.
+- **Check.** Under the switch, the audit's `AR_WRITE_POLICY` check flags any non-orchestrator agent that can
+  write:
+  - claude and copilot: any tool not on a read-only allowlist (writes, dispatch, `editFiles`, MCP tools,
+    `*`), or a `tools:` key that is absent, null, empty, duplicated or of any shape other than one line or a
+    clean block list (the agent may inherit everything);
+  - copilot: also `execute`, since Copilot has no per-agent sandbox;
+  - Goose: a recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`, or any
+    extension that isn't known to be read-only;
+  - Codex: any `sandbox_mode` other than `"read-only"`, read as TOML, or any `mcp_servers`;
+  - agents-md: always, since it can't be checked.
+
+  A shell on claude or Goose is a warning until the P4 sandbox. Only the shallowest orchestrator file is
+  exempt.
+- **Disk audit fix.** An audit of an existing team now loads Goose `.yaml` recipes and Codex `.toml` agents.
+  Before, the per-agent checks never saw them on disk and passed silently. The loader now skips symlinks
+  and files that aren't UTF-8 instead of crashing; under the switch, each is reported as an error.
+- **Scope:** this is a static check of declarations, not runtime enforcement.
+- **Expected:** templates still grant writes until P3, so a team under the switch fails this check.
+
 ### fix (proposals: doc drift found by the P1 closeout audit)
 
 - The change-proposal and command-request schema descriptions no longer say `--agent SLUG`. The agent comes

@@ -516,6 +516,11 @@
       "enum": ["legacy", "grant"],
       "description": "Goose recipe extension mode, carried from the project description (emitted only when set; absent means legacy). See the project-description schema."
     },
+    "write_policy": {
+      "type": "string",
+      "enum": ["orchestrator-only"],
+      "description": "Orchestrator-only-writes pilot, carried from the project description only when set to \"orchestrator-only\" (absent means default). Turns on the AR_WRITE_POLICY audit check."
+    },
     "coordination_write_roots": {
       "type": "array",
       "description": "Sibling/adjacent-repo write roots for cross-repo coordination, carried from the project description (emitted only when set). Unioned into workspace_write_roots at generation so every sandbox emitter sees them; on Linux they become confine-run.sh `--coord-root` binds that fail closed when missing. Validated at generation (fail-closed): '/', '~', $HOME and their ancestors, the signing-key directory, home credential/persistence paths, the project control plane (.git, .claude, .goose, .codex, .github/agents, .github/hooks, sandbox, .agentteams) and shell/glob metacharacters are refused. A NEW root outside the project (absolute, ~/..., ../...) needs the operator's --accept-write-root PATH unless the live .claude/settings.json allowWrite already holds it. This file is agent-writable data; generation prints every added root with its source.",

@@ -19,6 +19,7 @@ slugs against paths on disk).
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -494,4 +495,216 @@ def _check_goose_recipe_grants(
                     f"{', '.join(sorted(writes))}." + advice
                 ),
             ))
+    return findings
+
+
+# --- write_policy "orchestrator-only": only the orchestrator writes (pilot P2) ------------------
+
+#: Shell tokens: copilot ``execute``, Claude Code's ``Bash``, Goose ``developer`` ``shell``.
+_SHELL_TOKENS = frozenset({"execute", "bash", "shell"})
+#: Frameworks with no per-agent sandbox: a shell there is unconfined, so it is an error, not a warning
+#: (operator decision 2026-10-06: Copilot drops ``execute`` under the switch).
+_SHELL_WARN_FRAMEWORKS = frozenset({"claude"})  # any other framework (unknown ids included): a shell is an error
+#: Slugs exempt from the policy: only the single shallowest file per slug (a deeper copy is checked like any
+#: agent, and two equally shallow copies are both checked).
+_WRITER_SLUGS = frozenset({"orchestrator"})
+_GOOSE_WRITER_SLUGS = frozenset({"orchestrator", "bridge-orchestrator"})
+#: Goose extensions a non-orchestrator recipe may carry: the read-only file server and the record-only
+#: coordination server. ``developer`` and ``analyze`` are judged by their tools; any other extension is refused.
+_GOOSE_READ_EXTENSIONS = frozenset({"agentteams_readfs", "agentteams_coordination"})
+#: Tools a non-orchestrator agent may hold under the switch: read, search and bookkeeping. Anything not here
+#: and not a known write/shell/dispatch token is refused as unclassifiable (``editFiles``, ``mcp__*``, ``*``).
+_READ_ONLY_TOKENS = frozenset({
+    "read", "search", "grep", "glob", "ls", "todo", "todowrite", "web", "fetch", "webfetch", "websearch",
+    "retrieval", "codebase", "usages", "problems",
+})
+#: ``tools:`` values YAML reads as null: the key is then effectively absent and the agent inherits every tool.
+_NULL_TOOLS = frozenset({"", "~", "null", "''", '""'})
+
+
+def _tools_key_problem(content: str) -> str | None:
+    """Why the front matter's ``tools:`` cannot be trusted, else ``None``.
+
+    Fails closed on every shape :func:`_declared_tool_tokens` might misread: absent or null (the agent
+    inherits every tool), duplicated, a flow list spanning lines, a block scalar, or a block list with
+    anything but ``- item`` lines.
+    """
+    fm = _FRONT_MATTER_RE.match(content)
+    matches = list(_TOOLS_LINE_RE.finditer(fm.group(1))) if fm else []
+    if len(matches) > 1:
+        return "declares `tools:` more than once (YAML keeps the last; this audit can't tell which one runs)"
+    if not matches:
+        return "has no `tools:` declaration, so the agent inherits every tool, writes included"
+    value = matches[0].group(1).split(" #", 1)[0].strip()
+    if value[:1] in (">", "|", "{", "&", "*", "!"):
+        return f"has a `tools:` value of a shape this check can't read ({value[:12]!r})"
+    if value.replace(" ", "") == "[]":
+        return "has an empty `tools:` list, which a host may read as 'inherit every tool'; declare read tools"
+    # The lines up to the next top-level key belong to this value. Only two shapes are read the same way by
+    # YAML and by _declared_tool_tokens: a one-line value with nothing after it, or a block list of
+    # consecutive `- item` lines. Anything else (a continued scalar, a multi-line flow list, a blank or
+    # comment line inside the list) is refused rather than guessed at.
+    tail = []
+    for line in fm.group(1)[matches[0].end():].splitlines()[1:]:
+        if line.strip() and not line[:1].isspace() and not line.startswith(("-", "#")):
+            break  # the next key (a column-0 comment is not one: YAML skips it and keeps reading the list)
+        tail.append(line)
+    while tail and not tail[-1].strip():
+        tail.pop()
+    if value.lower() not in _NULL_TOOLS:
+        if tail:
+            return "has a `tools:` value continued on later lines, which this check can't read; use one line"
+        return None
+    if not tail:
+        return "has a null `tools:` value, so the agent inherits every tool, writes included"
+    if any(not line.strip().startswith("- ") for line in tail):
+        return "has a `tools:` block list with lines other than consecutive `- item`, which this check can't read"
+    return None
+
+
+def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tuple[list[str], list[str]]:
+    """Return ``(errors, warnings)`` for one non-orchestrator agent file under the switch."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    if agent_ext == ".toml":
+        try:
+            data = tomllib.loads(content)
+        except tomllib.TOMLDecodeError as exc:
+            return [f"is not valid TOML ({exc}), so its sandbox_mode cannot be read"], warnings
+        mode = data.get("sandbox_mode")
+        if data.get("mcp_servers"):
+            errors.append("declares mcp_servers, which sandbox_mode does not confine")
+        if mode != "read-only":
+            errors.append(f"sandbox_mode is {mode!r}, not 'read-only' (a missing key inherits the parent's mode)")
+        return errors, warnings
+    if agent_ext == ".yaml":
+        # Judge what the recipe actually exposes, not only its marker (the marker states its own authority).
+        extensions = recipe_extension_grants(content)
+        if extensions is None:
+            return ["recipe has missing or null `extensions`, so Goose loads the user's extensions"], warnings
+        dev = developer_tools(extensions)
+        declared = declared_from_marker(content) or frozenset()
+        writes = (dev & (_GOOSE_WRITE_TOOLS - {"shell"})) | (declared & _READWRITE_TOOLS)
+        if writes:
+            errors.append(f"recipe grants {', '.join(sorted(writes))}")
+        summon = [e for e in extensions if e["name"] == "summon" and e["available_tools"] != [DISABLED]]
+        if summon or "agent" in declared:
+            errors.append("recipe grants summon (dispatch), which can start a sub-recipe that writes")
+        if re.search(r"^[\"']?sub_recipes[\"']?\s*:", content, re.MULTILINE):
+            errors.append("recipe declares sub_recipes (dispatch), which can run a sub-recipe that writes")
+        others = sorted({e["name"] for e in extensions}
+                        - _GOOSE_READ_EXTENSIONS - {"developer", "analyze", "summon"})
+        if others:
+            errors.append(f"recipe carries extension(s) this check can't classify as read-only: {', '.join(others)}")
+        if "shell" in dev or "execute" in declared:
+            warnings.append("recipe grants a shell, which is unconfined until the P4 sandbox profiles")
+        return errors, warnings
+    problem = _tools_key_problem(content)
+    if problem:
+        return [problem], warnings
+    tokens = _declared_tool_tokens(content)
+    writes, shell, dispatch = tokens & _WRITE_TOKENS, tokens & _SHELL_TOKENS, tokens & _DISPATCH_TOKENS
+    unknown = tokens - _READ_ONLY_TOKENS - _WRITE_TOKENS - _SHELL_TOKENS - _DISPATCH_TOKENS
+    if writes:
+        errors.append(f"declares write tool(s) {', '.join(sorted(writes))}")
+    if dispatch:
+        errors.append(f"declares dispatch ({', '.join(sorted(dispatch))}), which can start a subagent that writes")
+    if unknown:
+        errors.append(f"declares tool(s) this check can't classify as read-only: {', '.join(sorted(unknown))}")
+    if shell and framework not in _SHELL_WARN_FRAMEWORKS:
+        errors.append(f"declares {', '.join(sorted(shell))}, and {framework} has no per-agent sandbox")
+    elif shell:
+        warnings.append(f"declares {', '.join(sorted(shell))}, which is unconfined until the P4 sandbox profiles")
+    return errors, warnings
+
+
+def _check_write_policy(
+    file_map: dict[str, str],
+    *,
+    agent_ext: str,
+    framework: str,
+    enabled: bool,
+    unreadable: list[str] | None = None,
+) -> list[AuditFinding]:
+    """Under ``write_policy: "orchestrator-only"``, check that only the orchestrator can write.
+
+    ``AR_WRITE_POLICY`` findings, per non-orchestrator agent file (generated or adopted, when present in
+    *file_map*):
+
+    * **error:** a write tool; dispatch (``Task``/``agent`` can start a subagent that writes); a tool not
+      known to be read-only; an absent, null or duplicated ``tools:`` key (the agent inherits every tool); a
+      shell on Copilot, which has no per-agent sandbox; a Codex ``sandbox_mode`` other than ``"read-only"``
+      (parsed as TOML; missing included, ``references/`` included, and the exemption needs ``name`` to match);
+      a Goose recipe granting ``edit``/``write``.
+    * **warning:** a shell elsewhere (Claude ``Bash``, Goose ``shell``). Nothing confines it before P4, so
+      no brief field silences this.
+    * **error, once:** ``agents-md``, which declares no per-agent tools and so cannot be checked.
+
+    Only the shallowest ``orchestrator`` and ``bridge-orchestrator`` file is exempt; a deeper or equally
+    shallow second copy is checked like any agent, so naming a file ``orchestrator`` elsewhere exempts nothing.
+
+    Args:
+        file_map: Team file content keyed by relative path.
+        agent_ext: The framework's agent-file extension.
+        framework: The framework id from the manifest.
+        enabled: Whether the manifest carries ``write_policy: "orchestrator-only"``.
+        unreadable: Team paths the disk loader could not read (symlinks, non-UTF-8). A host may still load
+            them as agents, so each is an error rather than a silent skip.
+
+    Returns:
+        The findings (none when the switch is off).
+
+    Raises:
+        Nothing.
+    """
+    if not enabled:
+        return []
+    if framework == "agents-md":
+        return [AuditFinding(
+            category="AGENT_REFACTOR", code="AR_WRITE_POLICY", severity="error", file="AGENTS.md",
+            description=("write_policy \"orchestrator-only\" cannot be enforced on agents-md: it declares no "
+                         "per-agent tools. Use a framework with per-agent tool declarations."),
+        )]
+    def is_agent(rel_path: str, content: str) -> bool:
+        if agent_ext == ".yaml":
+            return rel_path.endswith(".yaml")  # every recipe, not only those with an exact version line
+        if agent_ext == ".toml":
+            return rel_path.endswith(".toml")  # Codex loads every .toml under the agents dir, references/ too
+        return _is_agent_file(rel_path, agent_ext)
+
+    def codex_name(content: str) -> object:
+        try:
+            return tomllib.loads(content).get("name")
+        except tomllib.TOMLDecodeError:
+            return None
+
+    agents = sorted((p, c) for p, c in file_map.items() if is_agent(p, c))
+    exempt: set[str] = set()
+    for slug in _GOOSE_WRITER_SLUGS if framework == "goose" else _WRITER_SLUGS:
+        # Codex identifies an agent by its `name`, not its filename, so an exempt file must carry its own slug.
+        depths = sorted((Path(p).as_posix().count("/"), p) for p, c in agents if _agent_slug(p, agent_ext) == slug
+                        and (agent_ext != ".toml" or codex_name(c) == slug))
+        if depths and (len(depths) == 1 or depths[0][0] < depths[1][0]):
+            exempt.add(depths[0][1])
+    findings: list[AuditFinding] = [
+        AuditFinding(
+            category="AGENT_REFACTOR", code="AR_WRITE_POLICY", severity="error", file=rel_path,
+            description=("write_policy \"orchestrator-only\": this path is a symlink or not UTF-8, so the audit "
+                         "can't read it, but the host may still load it as an agent. Replace it with a regular "
+                         "UTF-8 file."),
+        )
+        for rel_path in sorted(unreadable or [])
+    ]
+    for rel_path, content in agents:
+        if rel_path in exempt:
+            continue
+        errors, warnings = _write_policy_problems(content, agent_ext, framework)
+        for severity, problems in (("error", errors), ("warning", warnings)):
+            for problem in problems:
+                findings.append(AuditFinding(
+                    category="AGENT_REFACTOR", code="AR_WRITE_POLICY", severity=severity, file=rel_path,
+                    description=(f"write_policy \"orchestrator-only\": '{_agent_slug(rel_path, agent_ext)}' "
+                                 f"{problem}. Non-orchestrator agents return a change proposal or command "
+                                 "request instead."),
+                ))
     return findings

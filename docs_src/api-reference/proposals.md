@@ -90,6 +90,47 @@ entries. Signing keys and tokens are never passed.
 - `{file}`/`{path}` used inside a larger argument;
 - write scopes that cover the brief.
 
+## The switch and the `AR_WRITE_POLICY` check (P2)
+
+`"write_policy": "orchestrator-only"` in the brief reaches the team manifest, and only that value does: a
+brief without it, or with `"default"`, produces a byte-identical team. Under the switch, the post-generation
+audit checks every agent file except the orchestrator.
+
+This is a **static check of what agent files declare**, not runtime enforcement: it stops nothing at run
+time. The runtime boundary is the proposal CLI plus, from P4, the OS sandbox profiles.
+
+| Framework | Error | Warning |
+|---|---|---|
+| claude | Any tool that isn't known to be read-only (see below); a `tools:` key that is absent, null, empty (`[]`), duplicated, or of any shape other than one line or a clean `- item` block list, since the agent may then inherit every tool | `Bash` |
+| copilot-vscode, copilot-cli | The same, plus `execute`, since Copilot has no per-agent sandbox | — |
+| goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`, or an extension other than `agentteams_readfs`/`agentteams_coordination`; missing `extensions` | A granted shell |
+| codex | `sandbox_mode`, read as TOML, other than `"read-only"`, a missing key included; any `mcp_servers`; every `.toml` is checked, `references/` included | — |
+| agents-md | Always: it declares no per-agent tools, so the policy can't be checked | — |
+| any other | A shell too | — |
+
+- **Read-only tokens:** `read`, `search`, `grep`, `glob`, `ls`, `todo`, `todowrite`, `web`, `fetch`, `webfetch`,
+  `websearch`, `retrieval`, `codebase`, `usages` and `problems`. Everything else is refused, including
+  dispatch (`Task`/`agent`, which can start a subagent that writes), `editFiles`, `runCommands`, MCP tools
+  (`mcp__…`) and `*`.
+
+- **Shell warnings can't be silenced yet.** Nothing confines a shell before the P4 sandbox profiles, so no
+  brief field quiets them.
+- **The orchestrator exemption** covers only the shallowest `orchestrator` file (on Goose, also
+  `bridge-orchestrator`). A deeper copy, or two equally shallow copies, are checked like any agent. On
+  Codex, the exempt file's `name` must also be `orchestrator`.
+- **Expected until P3:** the templates still grant writes, so a generated team under the switch fails this
+  check.
+- **Coverage:** a disk audit (`--post-audit` on an existing team) sees every agent file in the team directory,
+  adopted agents included, but skips symlinks and files that aren't UTF-8. The in-memory audit during
+  generation sees only the rendered files.
+- **Unreadable files are errors:** on a disk audit, a symlink (file or directory) or a non-UTF-8 agent file
+  in the team directory is reported, since the host may still load it.
+- **Accepted residue:** under the switch, a Goose recipe can't carry any operator MCP server, even a
+  read-only one, because the check can't tell what it does. The Goose extensions it does allow are trusted by
+  name.
+- **Not covered:** skills, and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex's
+  `sandbox_mode` is a default, not a ceiling.
+
 ## Residual risk (stated, not hidden)
 
 - An allowed command that runs agent-written code is arbitrary execution, whatever the allowlist says.
