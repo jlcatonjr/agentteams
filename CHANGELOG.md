@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (orchestrator-only-writes pilot P4a: out-of-session runner and key custody)
+
+- **Why.** Live macOS probes found two blockers:
+  - A sandboxed child reads a same-user parent's exec-time environment (`KERN_PROCARGS2`), so an
+    environment-variable key can't be protected.
+  - `sandbox-exec` can't nest, so an orchestrator inside its session sandbox can't confine commands.
+- **Runner.** `agentteams --serve-requests` (new `agentteams/proposal_runner.py`, integrity-pinned) runs
+  outside every agent session. It alone holds the ledger key, which it reads from a 0600 key file, and it
+  serves a queue under `.agentteams-queue/` with results in `.agentteams/`.
+  - Hardening: 32-hex ids, `O_NOFOLLOW`, atomic claim and write, no request content echoed, a pinned brief
+    hash, one runner per project, a heartbeat, and results deleted on acknowledgement.
+- **Queue mode.** Under the switch, `--issue-dispatch`, `--apply-proposal`, `--run-request` and
+  `--verify-proposal-ledger` queue and wait. `--wait-result` waits again for one request.
+- **Refused until P4b.** The runner refuses `--run-request`, and any proposal a gate would check, until P4b
+  confines commands. An unconfined gate is a child of the key holder and can load session-writable code.
+- **Key file.** It must sit in `~/.config/agentteams/keys` (read-denied to sessions), be owned by the
+  runner's user and have mode 0600.
+- **Start-up and queue mode.** The runner serves only a brief under the switch. Once a runner has served a
+  project, its lock keeps the CLI in queue mode.
+- **Session profiles.** Under the switch, Claude `denyWrite` and the Goose `.sb` add `.agentteams/`. Both
+  already read-deny `~/.config/agentteams/keys`.
+- **Key custody (operator decision).** The switch is now allowed only on claude and goose, with
+  `privilege_profile` not `"cooperative"`. Copilot, codex and agents-md sessions have no sandbox that keeps
+  the key file from the orchestrator, so generation refuses the switch there.
+
 ### fix (write-policy P3 closeout)
 
 - **Migration.** Switching on an existing team: reconcile narrows markdown agents only (claude, copilot).

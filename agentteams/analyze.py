@@ -283,6 +283,15 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         if goose_tool_scoping == "legacy":
             raise ValueError('write_policy "orchestrator-only" requires goose_tool_scoping "grant" (or unset)')
         goose_tool_scoping = "grant"
+        # Key custody (P4a, operator decision E): the out-of-session runner's key file is out of the
+        # orchestrator's reach only where a session sandbox denies the key directory: claude and goose,
+        # with a non-cooperative privilege_profile. Elsewhere the session could simply read it.
+        if framework not in ("claude", "goose"):
+            raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose only (their '
+                             f'session sandbox denies the ledger key); {framework} has no such sandbox')
+        if description.get("privilege_profile") == "cooperative":
+            raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '
+                             '"cooperative" turns it off')
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted

@@ -124,7 +124,7 @@ def test_goose_non_orchestrator_withholds_operator_mcp_and_coordination():
     assert "agentteams_coordination" not in recipe and "lean-mcp" not in recipe
 
 
-def test_switching_on_existing_goose_and_codex_teams_is_flagged_until_regenerated(tmp_path):
+def test_switching_on_an_existing_goose_team_is_flagged_until_regenerated(tmp_path):
     """Reconcile reads only markdown, so recipe/TOML grants stay wide after --update; the audit must say so."""
     brief = json.loads(BRIEF.read_text(encoding="utf-8"))
     off, on = tmp_path / "off.json", tmp_path / "on.json"
@@ -132,7 +132,7 @@ def test_switching_on_existing_goose_and_codex_teams_is_flagged_until_regenerate
     brief.update(ON)
     on.write_text(json.dumps(brief), encoding="utf-8")
     procs = {}
-    for fw in ("goose", "codex"):
+    for fw in ("goose",):  # codex: the switch is refused (P4a key custody)
         args = ("--project", str(tmp_path / fw), "--framework", fw, "--output", str(tmp_path / fw / "agents"),
                 "--no-scan", "--yes")
         procs[fw] = subprocess.Popen(

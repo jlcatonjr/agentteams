@@ -36,7 +36,7 @@ def _codes(file_map, agent_ext, framework):
 # --- the switch reaches the manifest only when set ----------------------------------------------
 
 
-def test_manifest_byte_identical_without_the_switch():
+def test_manifest_byte_identical_without_the_switch():  # noqa: D103
     desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "alpha", "name": "A"}]}
     base = analyze.build_manifest(dict(desc), framework="claude")
     default = analyze.build_manifest({**desc, "write_policy": "default"}, framework="claude")
@@ -47,7 +47,7 @@ def test_manifest_byte_identical_without_the_switch():
 
 
 @pytest.mark.parametrize("framework", ["claude", "copilot-vscode", "goose", "codex"])
-def test_rendered_team_byte_identical_without_the_switch(framework):
+def test_rendered_team_byte_identical_without_the_switch(framework):  # all frameworks: the switch is off
     from agentteams import render
 
     brief = json.loads(BRIEF.read_text(encoding="utf-8"))
@@ -184,8 +184,24 @@ def test_agents_md_cannot_be_enforced():
 # --- end to end: a generated team, audited from disk --------------------------------------------
 
 
-_FRAMEWORKS = [("claude", ".md"), ("copilot-vscode", ".agent.md"), ("copilot-cli", ".agent.md"),
-               ("goose", ".yaml"), ("codex", ".toml")]
+#: Frameworks the switch is allowed on (P4a key custody: their session sandbox denies the key directory).
+_FRAMEWORKS = [("claude", ".md"), ("goose", ".yaml")]
+
+
+@pytest.mark.parametrize("framework", ["copilot-vscode", "copilot-cli", "codex", "agents-md"])
+def test_switch_refused_where_no_session_sandbox_guards_the_key(framework):
+    desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
+            "write_policy": "orchestrator-only"}
+    with pytest.raises(ValueError, match="claude and goose only"):
+        analyze.build_manifest(desc, framework=framework)
+
+
+@pytest.mark.parametrize("framework", ["claude", "goose"])
+def test_switch_refused_with_a_cooperative_profile(framework):
+    desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
+            "write_policy": "orchestrator-only", "privilege_profile": "cooperative"}
+    with pytest.raises(ValueError, match="cooperative"):
+        analyze.build_manifest(desc, framework=framework)
 
 
 @pytest.fixture(scope="module")

@@ -68,6 +68,11 @@ _ORCHESTRATOR_SECTION = """
 This team runs `write_policy: "orchestrator-only"`: you are the only agent that writes. Other agents return
 `change-proposal`, `delete-proposal` and `command-request` JSON instead.
 
+The `agentteams` commands below don't act themselves. They queue each request for the operator's runner
+(`agentteams --serve-requests`), which runs outside your session and alone holds the ledger key. If a
+command says no runner is serving, ask the operator to start one; never look for the key yourself.
+`--run-request` is refused until the runner confines commands.
+
 1. **Before dispatching** an agent, run `agentteams --issue-dispatch --agent <slug>` and pass the printed
    nonce to the agent as its `dispatch` value. It is single-purpose: one task, a limited number of uses,
    24 hours.
@@ -220,6 +225,23 @@ applies or runs it with `agentteams`, which checks it against the team's policy 
 - **`argv`:** a list, never a shell string. It must match one of your registered command prefixes and
   argument patterns.
 - **`expected_writes`:** any other file the command writes fails the run.
+
+## The runner
+
+The orchestrator's `agentteams` commands queue requests for an out-of-session runner. The operator starts it
+outside every agent session:
+
+```
+agentteams --serve-requests --project <root> --description <brief>
+```
+
+- **The ledger key** is read from `~/.config/agentteams/keys/proposal-ledger.key` (mode 0600), or from the
+  file named by `AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE`. Agent sessions can't read that directory, and can't
+  write `.agentteams/`.
+- **The brief is pinned** at start. If it changes, the runner stops and must be restarted.
+- **Until P4b:** the runner refuses `--run-request`, and any proposal a gate would check, until it can
+  confine commands.
+- **Crash recovery:** a stale heartbeat makes every request refuse. Restart the runner and re-queue.
 
 ## Exit codes (`agentteams --apply-proposal` / `--run-request`)
 

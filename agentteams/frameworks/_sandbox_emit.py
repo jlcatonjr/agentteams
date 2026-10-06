@@ -124,6 +124,8 @@ _SIGNING_KEY_COMMENT_LINES: list[str] = [
 #: this value by a test. Not the whole ``~/.config/agentteams``: ``goose_config`` reads
 #: ``goose-sources.json`` there and silently falls back to built-ins when it cannot.
 SIGNING_KEY_DIR = "~/.config/agentteams/keys"
+#: The proposal ledger's directory; write-denied to every session under write_policy "orchestrator-only".
+LEDGER_DIR_REL = ".agentteams"
 
 #: The pre-F-1 private-key location. Key files there are denied TRANSITIONALLY (@security ruling
 #: (b), 2026-09-30); remove once a release has shipped the migration advisory. The glob form is
@@ -748,6 +750,7 @@ def _build_sandbox_block(
     sibling_deny_dirs: tuple[str, ...] | list[str] = (),
     project_root: str | None = None,
     protect_prompt_roots: bool = False,
+    protect_ledger: bool = False,
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -804,6 +807,9 @@ def _build_sandbox_block(
     if protect_prompt_roots:
         filesystem["denyWrite"] += [p for p in present_prompt_roots(project_root)
                                     if p not in filesystem["denyWrite"]]
+    if protect_ledger and LEDGER_DIR_REL not in filesystem["denyWrite"]:
+        # write_policy "orchestrator-only" (P4a): only the out-of-session runner writes the ledger.
+        filesystem["denyWrite"].append(LEDGER_DIR_REL)
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
@@ -830,6 +836,7 @@ def _inject_sandbox_block(
     sibling_deny_dirs: tuple[str, ...] = (),
     project_root: str | None = None,
     protect_prompt_roots: bool = False,
+    protect_ledger: bool = False,
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
@@ -881,7 +888,7 @@ def _inject_sandbox_block(
     data["sandbox"] = _build_sandbox_block(
         write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath,
         sibling_deny_dirs=sibling_deny_dirs, project_root=project_root,
-        protect_prompt_roots=protect_prompt_roots,
+        protect_prompt_roots=protect_prompt_roots, protect_ledger=protect_ledger,
     )
     # Same branch as the sandbox block, never one without the other (R11): the built-in tools
     # are bound by permissions, not by the sandbox.

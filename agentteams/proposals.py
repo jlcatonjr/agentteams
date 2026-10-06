@@ -68,6 +68,7 @@ import posixpath
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -91,6 +92,12 @@ DISPATCH_REL = ".agentteams/dispatches.jsonl"
 #: A lock file that is never replaced, so issue/compaction and use counting serialize on one inode.
 DISPATCH_LOCK_REL = ".agentteams/dispatches.lock"
 KEY_ENV = ("AGENTTEAMS_PROPOSAL_LEDGER_KEY", "AGENTTEAMS_DECISION_SIGNING_KEY")
+#: Key-file custody (P4a): the out-of-session runner reads the key from this file, never from its environment
+#: (a sandboxed child can read a same-user parent's exec-time environment via KERN_PROCARGS2). The file must sit
+#: in KEY_DIR, which every session sandbox read-denies.
+KEY_FILE_ENV = "AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE"
+KEY_DIR = "~/.config/agentteams/keys"
+DEFAULT_KEY_FILE = KEY_DIR + "/proposal-ledger.key"
 
 #: Environment variables passed to gates and commands; everything else (signing keys, tokens) is withheld.
 SAFE_ENV = ("HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "USER", "LOGNAME", "TERM", "ELAN_HOME")
@@ -230,7 +237,48 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None) -> Polic
 # --- keys, records, ledger ----------------------------------------------------------------------
 
 
+#: Set by :func:`use_key_file`; when set, it is the only key source (environment keys are ignored).
+_FILE_KEY: bytes | None = None
+
+
+def use_key_file(path: str | None = None) -> Path:
+    """Switch to key-file custody: read the ledger key from *path* and ignore every environment key.
+
+    Args:
+        path: The key file. Defaults to ``$AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE`` or :data:`DEFAULT_KEY_FILE`.
+
+    Returns:
+        The resolved key-file path.
+
+    Raises:
+        ProposalError: When the file is outside :data:`KEY_DIR`, missing, a symlink, not a regular file, not
+            owned by this user, readable by group or others, or empty.
+    """
+    global _FILE_KEY
+    target = Path(os.path.expanduser(path or os.environ.get(KEY_FILE_ENV) or DEFAULT_KEY_FILE))
+    key_dir = Path(os.path.expanduser(KEY_DIR)).resolve()
+    if not Path(os.path.abspath(target)).parent.resolve().is_relative_to(key_dir):
+        raise ProposalError(f"ledger key file {target} must sit in {KEY_DIR}, which session sandboxes read-deny")
+    try:
+        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise ProposalError(f"ledger key file {target} cannot be opened (missing or a symlink): {exc}") from exc
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o077 or st.st_uid != os.getuid():
+            raise ProposalError(f"ledger key file {target} must be a regular file you own, with mode 0600")
+        data = os.read(fd, 4096).strip()
+    finally:
+        os.close(fd)
+    if not data:
+        raise ProposalError(f"ledger key file {target} is empty")
+    _FILE_KEY = data
+    return target
+
+
 def _key() -> bytes:
+    if _FILE_KEY is not None:
+        return _FILE_KEY
     for name in KEY_ENV:
         value = os.environ.get(name)
         if value:
@@ -590,7 +638,8 @@ def _check_base(root: Path, rel: str, base: Any) -> Path:
     return target
 
 
-def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False) -> dict[str, Any]:
+def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
+                   allow_gates: bool = True) -> dict[str, Any]:
     """Validate, gate and (unless ``dry_run``) apply one change or deletion proposal.
 
     Args:
@@ -598,6 +647,9 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
         root: The project root.
         policy: The team's policy (:func:`load_policy`).
         dry_run: Run every check and gate (gates execute) but change nothing.
+        allow_gates: When False, refuse a proposal that any gate would check rather than run the gate. The
+            out-of-session runner passes False until its children run confined (P4b): an unconfined gate is
+            a child of the key holder and can load session-writable code.
 
     Returns:
         ``{agent, path, base_sha256, new_sha256, gates, written}`` (``new_sha256`` is ``None`` for a deletion).
@@ -633,7 +685,11 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
         if size > policy.size_cap:
             raise ProposalError(f"content is {size} bytes, over the {policy.size_cap}-byte cap; review it directly")
         _check_base(root, rel, artifact["base_sha256"])
-        gate_results = _run_gates(root, rel, content, _gates_for(rel, artifact.get("gates") or [], policy), policy)
+        gate_names = _gates_for(rel, artifact.get("gates") or [], policy)
+        if gate_names and not allow_gates:
+            raise ProposalError(f"gate(s) {', '.join(gate_names)} can't run unconfined beside the ledger key "
+                                "(refused until the runner confines commands, P4b)")
+        gate_results = _run_gates(root, rel, content, gate_names, policy)
         new_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         if not dry_run:
             rel = _check_destination(root, rel, policy, agent)  # re-resolve after the gates ran
@@ -652,7 +708,7 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
 
 def _record_refusal(root: Path, action: str, agent: str, reason: str) -> None:
     """Log a refusal when a ledger key exists (without one, the refusal is the 'no key' error itself)."""
-    if any(os.environ.get(name) for name in KEY_ENV):
+    if _FILE_KEY is not None or any(os.environ.get(name) for name in KEY_ENV):
         record(root, {"action": f"{action}-refused", "agent": agent, "reason": reason[:300]})
 
 
