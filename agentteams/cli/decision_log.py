@@ -299,8 +299,25 @@ def _decision_signature_payload(row: dict[str, str]) -> str:
 #: is bound into both the HMAC and the hash chain, so a keyless writer cannot add, clear, relabel,
 #: or rewrite any of them without breaking verification. ``sig_scheme``/``key_id`` MUST be signed
 #: (WS-B): otherwise an attacker could relabel a relaxing row's scheme ed25519→hmac and forge a
-#: cheap HMAC signature.
-_OPTIONAL_SIGNED_AXES: tuple[str, ...] = (_DERIVES_FROM_FIELD, "sig_scheme", "key_id")
+#: cheap HMAC signature. ``scope`` and the structured ``effect_*`` columns MUST be signed too:
+#: ``_scope_permits`` narrows a clearance by ``scope``, and the effect columns derive the Rule 15
+#: class (``effect_classifier``), so leaving them unsigned let a keyless writer clear a narrow
+#: scope (widening the grant) or rewrite a signed row's granted capabilities while its signature
+#: still verified (security review of merge-mode adopt, condition 1, 2026-10-05). Rows without
+#: these columns sign exactly as before.
+_OPTIONAL_SIGNED_AXES: tuple[str, ...] = (
+    _DERIVES_FROM_FIELD,
+    "sig_scheme",
+    "key_id",
+    "scope",
+    "effect_class",
+    "effect_grants",
+    "effect_targets",
+    "effect_relaxes",
+    "effect_destructive",
+    "effect_cross_repo",
+    "effect_bulk",
+)
 
 
 def _decision_signature_values(row: dict[str, str]) -> list[str]:
@@ -325,6 +342,15 @@ def _decision_signature_values(row: dict[str, str]) -> list[str]:
     for axis in _OPTIONAL_SIGNED_AXES:
         value = (row.get(axis) or "").strip()
         if value:
+            # Tokens are "|"-joined unescaped, so a "|" inside a value could forge a token
+            # boundary: sig_scheme="hmac|scope=X" with scope="" yields the same payload as
+            # sig_scheme="hmac", scope="X" — clearing a signed scope while the signature verifies.
+            # Labels alone do not prevent this; refusing the delimiter does (fail-closed).
+            if "|" in value:
+                raise RuntimeError(
+                    f"decision row field '{axis}' contains '|', the payload delimiter; refused "
+                    "(fail-closed): it could forge a signed-token boundary"
+                )
             values.append(f"{axis}={value}")
     return values
 

@@ -182,3 +182,57 @@ def test_key_id_traversal_refused(tmp_path):
         dl._assert_authorizing_row_is_authentic(
             row, output_dir=tmp_path, signing_active=True, action="grant-cross-repo-write"
         )
+
+
+@pytest.mark.parametrize(
+    "column, tampered",
+    [
+        ("effect_grants", "write:cross-repo;agents:attacker"),  # widen the granted capabilities
+        ("scope", "adopt-orphans-merge-widened"),               # rewrite the narrowing scope
+        ("effect_targets", "references/elsewhere.md"),
+        ("effect_class", "non-relaxing"),
+    ],
+)
+def test_scope_and_effect_axes_are_signed(tmp_path, column, tampered):
+    """A keyless writer cannot rewrite scope or an effect axis of a signed row (condition 1)."""
+    private_pem = _govern_with_key(tmp_path)
+    _log_with_ancestor(tmp_path)
+    row = _relaxing_row(scope="grant-cross-repo-write", effect_targets="references/x.md")
+    row["signature"] = _ed25519_sign(row, private_pem)
+    dl._assert_authorizing_row_is_authentic(
+        row, output_dir=tmp_path, signing_active=True, action="grant-cross-repo-write"
+    )
+    row[column] = tampered
+    with pytest.raises(RuntimeError):
+        dl._assert_authorizing_row_is_authentic(
+            row, output_dir=tmp_path, signing_active=True, action="grant-cross-repo-write"
+        )
+
+
+def test_clearing_a_signed_scope_breaks_hmac_verification():
+    """Clearing scope (which widens a narrow clearance) changes the HMAC payload too."""
+    row = {"date": "2026-10-05", "action_reviewed": "overwrite", "verdict": "PASS",
+           "conditions_verified": "verified", "author": "security", "scope": "overwrite"}
+    sig = dl.sign_decision_row(row, key="k")
+    assert dl.sign_decision_row(dict(row, scope=""), key="k") != sig
+
+
+def test_rows_without_new_axes_sign_exactly_as_before():
+    """Legacy rows (no scope/effect columns) keep their exact payload, so old signatures verify."""
+    row = {"date": "2026-10-05", "action_reviewed": "overwrite", "verdict": "PASS",
+           "conditions_verified": "verified", "author": "security", "prev_digest": "abc"}
+    assert dl._decision_signature_values(row) == ["2026-10-05", "overwrite", "PASS", "verified", "security", "abc"]
+
+
+def test_pipe_in_an_axis_value_cannot_forge_a_token_boundary():
+    """sig_scheme="hmac|scope=X" + scope="" would equal sig_scheme="hmac", scope="X" — refused."""
+    signed = {"date": "2026-10-05", "action_reviewed": "overwrite", "verdict": "PASS",
+              "conditions_verified": "verified", "author": "security",
+              "sig_scheme": "hmac", "scope": "overwrite"}
+    forged = dict(signed, sig_scheme="hmac|scope=overwrite", scope="")
+    with pytest.raises(RuntimeError, match="payload delimiter"):
+        dl._decision_signature_values(forged)
+    with pytest.raises(RuntimeError, match="payload delimiter"):
+        dl.sign_decision_row(forged, key="k")
+    # The honest row still signs.
+    assert dl.sign_decision_row(signed, key="k")
