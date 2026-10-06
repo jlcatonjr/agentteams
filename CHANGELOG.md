@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (write-policy P3 closeout)
+
+- **Migration.** Switching on an existing team: reconcile narrows markdown agents only (claude, copilot).
+  Goose recipes and Codex TOML must be regenerated, either with a fresh build or with `--overwrite`, which
+  needs a recorded `@security` clearance. The `--update` notice and the docs now say so; before, they
+  implied reconcile covered every framework.
+- **Exit codes.** The orchestrator's "Applying Proposals" section tells a refusal (exit 1 with a
+  `refused:` line) apart from a command's own exit code.
+- **Workflow 12.** The section now notes it applies only to adjacent-repository orchestrators while
+  Workflow 13 is off.
+- **copilot-cli** is now covered by the end-to-end write-policy test.
+
 ### feat (orchestrator-only-writes pilot P3: generated teams under the switch)
 
 - **Narrowing.** Under `"write_policy": "orchestrator-only"`, a new `agentteams/write_policy.py` runs before

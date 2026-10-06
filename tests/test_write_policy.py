@@ -184,7 +184,8 @@ def test_agents_md_cannot_be_enforced():
 # --- end to end: a generated team, audited from disk --------------------------------------------
 
 
-_FRAMEWORKS = [("claude", ".md"), ("copilot-vscode", ".agent.md"), ("goose", ".yaml"), ("codex", ".toml")]
+_FRAMEWORKS = [("claude", ".md"), ("copilot-vscode", ".agent.md"), ("copilot-cli", ".agent.md"),
+               ("goose", ".yaml"), ("codex", ".toml")]
 
 
 @pytest.fixture(scope="module")
