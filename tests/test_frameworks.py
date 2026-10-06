@@ -904,7 +904,8 @@ class TestGooseAdapter:
         monkeypatch.setattr("agentteams.frameworks.goose_docs._RESILIENT_RUNNER_SOURCE", missing)
         content = _resilient_runner_content()
         assert "Placeholder" in content
-        assert str(missing) in content
+        # S-8: the placeholder names only scripts/<file>, never the install path (home dir).
+        assert "scripts/does-not-exist.py" in content and str(missing.parent) not in content
 
     def test_goosehints_links_to_resilient_runner(self):
         content = _goosehints_content("Acme Team")
@@ -933,7 +934,8 @@ class TestGooseAdapter:
         monkeypatch.setattr("agentteams.frameworks.goose_docs._ROUTE_PROXY_SOURCE", missing)
         content = _route_proxy_content()
         assert "Placeholder" in content
-        assert str(missing) in content
+        # S-8: the placeholder names only scripts/<file>, never the install path (home dir).
+        assert "scripts/does-not-exist.py" in content and str(missing.parent) not in content
 
     def test_goosehints_links_to_route_proxy_as_primary_defense(self):
         content = _goosehints_content("Acme Team")

@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Goose: `goose_tool_scoping: "grant"`, recipe extensions derived from each agent's declared tools)
+
+- **Problem.** Every Goose recipe agentteams emits loads the whole `developer` builtin (shell + file
+  writes), so read-only agents such as `security`, `adversarial` and `quality-auditor` could write and
+  execute on Goose.
+- **Added.** A new brief field, `goose_tool_scoping: "legacy" | "grant"`, carried into the manifest only
+  when set. Legacy (the default) is unchanged apart from the empty-extensions fix below.
+- **What `grant` does.** Each recipe's extensions come from the agent's declared `tools:`, each with an
+  `available_tools` allowlist (`agentteams/frameworks/goose_tool_scoping.py`):
+  - `read`/`search` get the read-only `agentteams_readfs` server (#109).
+  - `edit` gets `developer` [write, edit, tree]; `execute` gets `developer` [shell, tree].
+  - `agent` gets `summon` [delegate, load]. An agent without `agent` gets no `summon`, no `load(...)`
+    handoff text and, if it is the orchestrator, no sub-recipes.
+  - Any recipe with `developer` lists Goose's auto-added `analyze` as `[__none__]` (off).
+  - A read-only agent gets no `developer` at all.
+  - Unknown tokens grant nothing.
+  - `scripts/goose-readfs-mcp.py` ships with the team only in this mode.
+- **Validator.** It now rejects `available_tools: []`, which Goose treats as unrestricted.
+- **Verified live** on Goose 1.37.0 with a stub model and an emitted `security.yaml`: only the five read
+  tools are offered, `README.md` is read, `.env` is refused, `shell` is absent, and nothing is written.
+- **Docs.** `goose-privileges.md` is corrected: its "read-only" profile allowlisted `developer` tools
+  (`read_file`, `list_directory`) that do not exist in Goose 1.37, so it granted nothing.
+- **Merge.** A merge keeps a recipe's on-disk `extensions:`, so switching an existing team to `grant`
+  needs a full re-render. An `--update` in grant mode now prints a notice listing recipes that still
+  load the whole `developer`.
+- **Fail-closed when nothing is granted.** An agent whose `tools:` grants nothing (unknown tokens only,
+  a block list, no line, or an ambiguous second `tools:` line) gets `extensions: []`. Verified live:
+  a bare or missing `extensions` makes Goose load the user's configured extensions, including full
+  `developer` and `shell`.
+- **Legacy fix, same cause.** In legacy mode, `recipe_extensions_mode: "replace"` with an empty
+  `recipe_extensions` (the documented "no developer, no shell" option) emitted a bare `extensions:`.
+  Goose then loaded the user's configured extensions, usually the full `developer`. It now emits
+  `extensions: []`. This is the one intended change to legacy output. Every other legacy recipe is
+  byte-identical (checked against a full mathAgents team rendered on main).
+- **Reserved names.** Operator MCP servers named `developer`, `analyze`, `summon` or
+  `agentteams_readfs` are not wired in grant mode.
+- **Out of scope.** Bridge recipes and CAI interop imports stay legacy-rendered.
+- **Placeholders (S-8).** The four shipped-script loaders share one helper
+  (`goose_docs._shipped_script`). A missing script's placeholder now names only `scripts/<file>`, never
+  the install path (which held the user's home directory), and exits non-zero.
+- **Evidence** is now tracked: `references/goose-tool-scoping-spike.md`, plus the re-runnable probe in
+  `scripts/goose-probe/`.
+
 ### feat (Goose: `agentteams_readfs`, a read-only file server so read-only agents can actually read)
 
 - **Problem.** In Goose 1.37 the only tool that can print a file's contents is `developer.shell`, which
@@ -26,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Pinned in `references/enforcement-integrity.json`.
 - **Verified live** on Goose 1.37.0: read works, an outside path is refused, and `shell` is absent.
 - **Next:** phase 2 wires this into recipes, derived from each agent's declared tools, and phase 3
-  adds the contract check (`references/plans/goose-read-only-agents.plan.md`).
+  adds the contract check (spike evidence: `references/goose-tool-scoping-spike.md`).
 
 ### feat (`--update --adopt-orphans`: gated, append-only adoption under merge)
 

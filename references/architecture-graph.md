@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **205**
+- Modules mapped: **206**
 - Packages: **7**
-- Internal import edges: **516**
+- Internal import edges: **519**
 - Distinct external dependencies: **7**
 
 ---
@@ -26,7 +26,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.cli` | 39 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
-| `agentteams.frameworks` | 22 | `agentteams` |
+| `agentteams.frameworks` | 23 | `agentteams` |
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 9 | — |
 
@@ -88,7 +88,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.exception_registry` | `agentteams.atomicio`, `agentteams.cli.signed_ledger` | `agentteams.cli.adopt_merge_gate`, `agentteams.cli.commands` |
 | `agentteams.cli.exit_codes` | `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.fleet_switch` | — | `agentteams.cli.parser` |
-| `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.cli.adopt_step`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.generate_helpers`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_root_policy`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.fences`, `agentteams.framework_research`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.render`, `agentteams.security_refs`, `agentteams.shrink_allow`, `agentteams.template_pins`, `agentteams.update_report` | `agentteams.cli.app` |
+| `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.cli.adopt_step`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.generate_helpers`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_root_policy`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.fences`, `agentteams.framework_research`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.render`, `agentteams.security_refs`, `agentteams.shrink_allow`, `agentteams.template_pins`, `agentteams.update_report` | `agentteams.cli.app` |
 | `agentteams.cli.generate_helpers` | `agentteams`, `agentteams.cli.artifacts`, `agentteams.cli.management_directives`, `agentteams.cli.render_pipeline`, `agentteams.control_plane_io`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.front_matter_reconcile`, `agentteams.integrity`, `agentteams.projection_marker`, `agentteams.prompt_roots`, `agentteams.team_dir_advisories` | `agentteams.cli.generate`, `agentteams.cli.standalone_modes` |
 | `agentteams.cli.goose_switch` | `agentteams.goose_config` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.governance_targets` | — | `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives` |
@@ -152,13 +152,14 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.format_spec` | — | `agentteams.audit`, `agentteams.framework_research`, `agentteams.frameworks.copilot_vscode`, `agentteams.output_plan` |
-| `agentteams.frameworks.goose` | `agentteams.bridge_subagents_goose`, `agentteams.capability_map`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.goose` | `agentteams.bridge_subagents_goose`, `agentteams.capability_map`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping` | `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.goose_coordination` | `agentteams.frameworks.goose` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
-| `agentteams.frameworks.goose_recipe_emit` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.goose` |
+| `agentteams.frameworks.goose_recipe_emit` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_tool_scoping` |
 | `agentteams.frameworks.goose_recipe_merge` | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.structural_merge` |
 | `agentteams.frameworks.goose_recipe_read` | — | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_validate` |
 | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_read` | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` |
+| `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks.goose_recipe_emit` | `agentteams.cli.generate`, `agentteams.frameworks.goose` |
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.audit_types`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.grant_commands`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop`, `agentteams.manifest_format`, `agentteams.multi_sync`, `agentteams.output_plan`, `agentteams.redteam.instantiate`, `agentteams.redteam.sweep`, `agentteams.render`, `agentteams.stale_detector` |
 | `agentteams.frameworks.structural_merge` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` | `agentteams.emit` |
 | `agentteams.front_matter_merge` | — | `agentteams.fences`, `agentteams.front_matter_reconcile`, `agentteams.sync_classifier`, `agentteams.unfenced` |
@@ -901,6 +902,7 @@ digraph "agentteams architecture" {
         "agentteams.errors",
         "agentteams.fences",
         "agentteams.framework_research",
+        "agentteams.frameworks.goose_tool_scoping",
         "agentteams.frameworks.registry",
         "agentteams.front_matter_reconcile",
         "agentteams.git_hooks",
@@ -1659,7 +1661,8 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.goose_docs",
         "agentteams.frameworks.goose_recipe_emit",
         "agentteams.frameworks.goose_recipe_read",
-        "agentteams.frameworks.goose_recipe_validate"
+        "agentteams.frameworks.goose_recipe_validate",
+        "agentteams.frameworks.goose_tool_scoping"
       ],
       "external": [],
       "repo_local": []
@@ -1720,6 +1723,16 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks.goose_recipe_read"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.frameworks.goose_tool_scoping": {
+      "package": "agentteams.frameworks",
+      "path": "agentteams/frameworks/goose_tool_scoping.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.frameworks.goose_recipe_emit"
       ],
       "external": [],
       "repo_local": []
@@ -3399,6 +3412,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.generate",
+      "target": "agentteams.frameworks.goose_tool_scoping"
+    },
+    {
+      "source": "agentteams.cli.generate",
       "target": "agentteams.frameworks.registry"
     },
     {
@@ -4166,6 +4183,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.frameworks.goose_recipe_validate"
     },
     {
+      "source": "agentteams.frameworks.goose",
+      "target": "agentteams.frameworks.goose_tool_scoping"
+    },
+    {
       "source": "agentteams.frameworks.goose_coordination",
       "target": "agentteams.frameworks.goose"
     },
@@ -4192,6 +4213,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.goose_recipe_validate",
       "target": "agentteams.frameworks.goose_recipe_read"
+    },
+    {
+      "source": "agentteams.frameworks.goose_tool_scoping",
+      "target": "agentteams.frameworks.goose_recipe_emit"
     },
     {
       "source": "agentteams.frameworks.registry",

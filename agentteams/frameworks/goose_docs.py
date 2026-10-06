@@ -25,6 +25,8 @@ __all__ = [
     "_resilient_runner_content",
     "_route_proxy_content",
     "_coordination_mcp_content",
+    "_readfs_mcp_content",
+    "_shipped_script",
     "_goose_capabilities_content",
     "_RESILIENT_RUNNER_SOURCE",
     "_ROUTE_PROXY_SOURCE",
@@ -94,6 +96,45 @@ def _goosehints_content(project_name: str) -> str:
     )
 
 
+def _shipped_script(source: Path) -> str:
+    """Return a first-party script's source, read from disk so the emitted copy never drifts.
+
+    Degrades to a placeholder that names only ``scripts/<file>`` (never the install path, which
+    carries the installing user's home directory: S-8) and exits non-zero, so a missing helper
+    fails closed rather than silently doing nothing.
+
+    Args:
+        source: The script's path inside the agentteams checkout.
+
+    Returns:
+        The script text, or the placeholder.
+
+    Raises:
+        Nothing.
+    """
+    try:
+        return source.read_text(encoding="utf-8")
+    except OSError:
+        return (
+            "#!/usr/bin/env python3\n"
+            f'"""Placeholder: scripts/{source.name} was not found in this agentteams install.\n'
+            "Reinstall agentteams or fetch the file from the agentteams source repo.\n"
+            '"""\n'
+            "raise SystemExit(1)\n"
+        )
+
+
+_READFS_MCP_SOURCE = Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-readfs-mcp.py"
+
+
+def _readfs_mcp_content() -> str:
+    """Return ``scripts/goose-readfs-mcp.py`` (the read-only file server), read from disk.
+
+    Shipped only under ``goose_tool_scoping: "grant"`` (``goose_tool_scoping.py``).
+    """
+    return _shipped_script(_READFS_MCP_SOURCE)
+
+
 _RESILIENT_RUNNER_SOURCE = Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-run-resilient.py"
 
 
@@ -117,17 +158,7 @@ def _resilient_runner_content() -> str:
     "schemas" / "mcp-server.schema.json"``). Degrades to an explanatory placeholder
     (never a crash) if the source file is unexpectedly missing from the install.
     """
-    try:
-        return _RESILIENT_RUNNER_SOURCE.read_text(encoding="utf-8")
-    except OSError:
-        return (
-            "#!/usr/bin/env python3\n"
-            '"""Placeholder: scripts/goose-run-resilient.py was not found in this\n'
-            "agentteams install (expected at "
-            f"{_RESILIENT_RUNNER_SOURCE}). Reinstall agentteams or fetch the file\n"
-            "from the agentteams source repo.\n"
-            '"""\n'
-        )
+    return _shipped_script(_RESILIENT_RUNNER_SOURCE)
 
 
 _ROUTE_PROXY_SOURCE = (
@@ -154,17 +185,7 @@ def _route_proxy_content() -> str:
     (not inline-duplicated) so the shipped copy can never drift from the tested one; degrades
     to an explanatory placeholder (never a crash) if the source file is missing.
     """
-    try:
-        return _ROUTE_PROXY_SOURCE.read_text(encoding="utf-8")
-    except OSError:
-        return (
-            "#!/usr/bin/env python3\n"
-            '"""Placeholder: scripts/goose-openrouter-route-proxy.py was not found in this\n'
-            "agentteams install (expected at "
-            f"{_ROUTE_PROXY_SOURCE}). Reinstall agentteams or fetch the file\n"
-            "from the agentteams source repo.\n"
-            '"""\n'
-        )
+    return _shipped_script(_ROUTE_PROXY_SOURCE)
 
 
 _COORDINATION_MCP_SOURCE = (
@@ -190,17 +211,7 @@ def _coordination_mcp_content() -> str:
     (shipped unconditionally), this is emitted only when the team declares
     ``coordination_write_roots`` — an inert sibling script otherwise adds surface for no reason.
     """
-    try:
-        return _COORDINATION_MCP_SOURCE.read_text(encoding="utf-8")
-    except OSError:
-        return (
-            "#!/usr/bin/env python3\n"
-            '"""Placeholder: scripts/goose-coordination-mcp.py was not found in this\n'
-            "agentteams install (expected at "
-            f"{_COORDINATION_MCP_SOURCE}). Reinstall agentteams or fetch the file\n"
-            "from the agentteams source repo.\n"
-            '"""\n'
-        )
+    return _shipped_script(_COORDINATION_MCP_SOURCE)
 
 
 def _goose_capabilities_content(project_name: str) -> str:

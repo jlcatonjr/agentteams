@@ -19,6 +19,7 @@ from pathlib import Path
 
 from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
+from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
@@ -630,6 +631,8 @@ def _run_generate_inner(
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
+        if framework_id == "goose" and manifest.get("goose_tool_scoping") == "grant" and not args.overwrite:
+            goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
         _sweep_capability_key(output_dir, result, dry_run=args.dry_run)
         attach_dry_run_plan(_adopt_plan, result)

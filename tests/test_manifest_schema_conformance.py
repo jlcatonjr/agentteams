@@ -142,6 +142,9 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Emitted only when a project declares cross-repo coordination roots (Phase 2);
         # build_manifest omits it otherwise.
         "coordination_write_roots",
+        # Emitted only when a project opts into grant-scoped Goose recipes (or names legacy
+        # explicitly); build_manifest omits it otherwise so legacy recipes stay byte-identical.
+        "goose_tool_scoping",
         # Emitted only when an exclusive project supplies extra P3a read-exclusion
         # paths; build_manifest omits it otherwise.
         "protected_read_paths",

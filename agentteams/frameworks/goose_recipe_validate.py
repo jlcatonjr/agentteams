@@ -42,6 +42,9 @@ _RECIPE_RETRY_CMD_RE = re.compile(r'^\s+command:\s*"', re.MULTILINE)
 _RECIPE_FORBIDDEN_ENVS_RE = re.compile(r"^\s*(-\s*)?envs:", re.MULTILINE)        # use env_keys
 _RECIPE_FORBIDDEN_SSE_RE = re.compile(r'^\s*(-\s*)?type:\s*["\']?sse\b', re.MULTILINE)  # use streamable_http
 _RECIPE_FORBIDDEN_CONTEXT_RE = re.compile(r"^\s*context:", re.MULTILINE)     # not a recipe field
+# `available_tools: []` means UNRESTRICTED in Goose 1.37 (spike case A1), never "no tools": an
+# extension meant to be off must use a non-matching allowlist such as [__none__].
+_RECIPE_FORBIDDEN_EMPTY_ALLOW_RE = re.compile(r"^\s*available_tools:\s*\[\s*\]", re.MULTILINE)
 
 
 def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> list[str]:
@@ -65,6 +68,8 @@ def _validate_recipe_yaml(yaml_text: str, recipes_dir: Path | None = None) -> li
         violations.append("forbidden type: sse (use streamable_http; sse is deprecated)")
     if _RECIPE_FORBIDDEN_CONTEXT_RE.search(yaml_text):
         violations.append("forbidden context: field (not a recipe field)")
+    if _RECIPE_FORBIDDEN_EMPTY_ALLOW_RE.search(yaml_text):
+        violations.append("forbidden available_tools: [] (unrestricted in Goose; use [__none__] to disable)")
     if _RECIPE_PARAMETERS_RE.search(yaml_text) and not _RECIPE_PARAM_KEY_RE.search(yaml_text):
         violations.append("parameters: block present but lists no '- key:' entries")
     if _RECIPE_RESPONSE_RE.search(yaml_text) and not _RECIPE_JSON_SCHEMA_RE.search(yaml_text):

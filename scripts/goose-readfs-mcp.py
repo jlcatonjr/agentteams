@@ -7,7 +7,7 @@ In Goose 1.37 the only tool that can print a file's contents is the ``developer`
 ``shell``, which can also write, delete and run anything. A read-only agent (an auditor) scoped
 down to ``tree``/``analyze`` is safe but cannot read the files it audits. This server gives such
 an agent real read tools with no write capability at all. See
-``references/plans/goose-read-only-agents.plan.md`` and the phase-0 spike: Goose enforces
+``references/goose-tool-scoping-spike.md`` (the phase-0 spike): Goose enforces
 ``available_tools`` on stdio extensions, and ``tree``/``analyze`` are not workspace-confined.
 
 SAFETY MODEL (read this before extending)
