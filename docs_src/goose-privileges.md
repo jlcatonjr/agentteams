@@ -172,6 +172,23 @@ Any recipe that has `developer` also lists `analyze` as `[__none__]`. Under `"le
 every recipe keeps the whole `developer`. A merge keeps a recipe's on-disk `extensions:`, so switching an
 existing team to `grant` needs a full re-render (`--update --overwrite`, under the usual clearance).
 
+Grant recipes carry a `# agentteams-declared-tools: …` comment, which Goose ignores. `--post-audit`
+compares what each marked recipe exposes with what those tools grant:
+
+- **`AR_GOOSE_GRANT_EXCEEDED` (error):** extra `developer` tools, `summon` without `agent`, `analyze` left
+  on, or any extension the declared tools don't grant (declared operator MCP servers and the
+  coordination server excepted). It is keyed on declared tools, so it catches a hand-widened recipe on any
+  agent.
+- **`AR_GOOSE_MARKER_MISSING` (error, grant mode):** a recipe without exactly one marker. Bridge recipes
+  are exempt.
+- **`AR_GOOSE_READONLY_WRITE` (warning):** an unmarked recipe (legacy, bridge or hand-written) whose prose
+  says read-only but which exposes `write`, `edit` or `shell`.
+- **`AR_GOOSE_EXTENSIONS_FAIL_OPEN`:** a missing, bare or `null` `extensions`. It is an error in grant mode
+  and a warning in legacy.
+
+`--check` prints an advisory when the installed Goose differs from the version the tool map was verified
+on (1.37.0). Re-run `scripts/goose-probe/` before relying on grant mode with another release.
+
 Bridge recipes (`--bridge-from`) and CAI interop imports are outside grant scoping and keep the legacy
 extensions.
 

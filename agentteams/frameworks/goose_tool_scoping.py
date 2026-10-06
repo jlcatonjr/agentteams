@@ -38,10 +38,14 @@ outside grant scoping and stay legacy-rendered. The map is pinned to
 from __future__ import annotations
 
 import ast
+import os
 import re
+import shutil
+import subprocess
 from typing import Any
 
 from agentteams.frameworks.goose_recipe_emit import _MCP_EXT_TIMEOUT
+from agentteams.frameworks.goose_recipe_read import UNPARSED, recipe_extension_grants
 
 #: The Goose release the tool names below were verified against (stub-model spike, 2026-10-05).
 #: Informational until the phase-3 version check reads it; re-run scripts/goose-probe/ before bumping.
@@ -220,7 +224,14 @@ def unscoped_recipes(recipes_dir: Any) -> list[str]:
     found = []
     for path in sorted(getattr(recipes_dir, "glob", lambda _p: [])("*.yaml")):
         text = _read_or_empty(path)
-        if 'version: "1.0.0"' in text and "name: developer" in text and "available_tools" not in text:
+        if 'version: "1.0.0"' not in text or declared_from_marker(text) is not None:
+            continue  # not a recipe, or a grant recipe (checked against its marker by the audit)
+        extensions = recipe_extension_grants(text)
+        # Unscoped = fail-open extensions, or a developer (or unreadable entry) with no allowlist.
+        # A developer scoped by hand (e.g. [write, edit, tree] for a writer) is not unscoped.
+        if extensions is None or any(
+            e["name"] in ("developer", UNPARSED) and e["available_tools"] is None for e in extensions
+        ):
             found.append(path.name)
     return found
 
@@ -245,3 +256,86 @@ def grant_merge_notice(recipes_dir: Any) -> list[str]:
             "extensions; re-render with --update --overwrite (under its usual clearance) to apply the scoping."
         )
     return names
+
+
+def goose_version_notice(goose_binary: str | None = None) -> str | None:
+    """Compare the installed Goose with :data:`GOOSE_MAP_VERSION`; return a notice when they differ.
+
+    The tool names in :data:`GOOSE_TOOL_MAP` were verified against one Goose release. A different
+    release may rename a tool. That fails closed, since the agent silently loses it, but it should be
+    re-verified with ``scripts/goose-probe/`` before being trusted.
+
+    Args:
+        goose_binary: The ``goose`` executable (default: found on ``PATH``).
+
+    Returns:
+        A one-line notice, or ``None`` when the installed version matches the pin.
+
+    Raises:
+        Nothing; an absent or unrunnable goose yields a notice saying so.
+    """
+    binary = goose_binary or shutil.which("goose")
+    if not binary:
+        return f"goose is not on PATH; cannot confirm the grant tool map (pinned to Goose {GOOSE_MAP_VERSION})."
+    if goose_binary is None and os.name == "nt" and (
+        os.path.normcase(os.path.dirname(os.path.abspath(binary))) == os.path.normcase(os.getcwd())
+    ):
+        # Windows' which() searches the current directory first: never run a goose planted in the repo.
+        return "refusing a goose found in the current directory; put the real goose on PATH."
+    try:
+        proc = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=10,
+                              stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return f"could not run `{binary} --version`; cannot confirm the grant tool map (pinned to {GOOSE_MAP_VERSION})."
+    found = re.search(r"\b(\d+\.\d+\.\d+)(\S*)", f"{proc.stdout or ''} {proc.stderr or ''}")
+    version = found.group(1) + found.group(2) if found else None
+    if version == GOOSE_MAP_VERSION:
+        return None
+    return (
+        f"installed Goose is {version or 'unknown'} but the grant tool map is pinned to "
+        f"{GOOSE_MAP_VERSION}; re-run scripts/goose-probe/ before trusting goose_tool_scoping on this version."
+    )
+
+
+#: Column-0 recipe comment recording the agent's declared tools (Goose ignores comments). The contract
+#: check compares what a recipe exposes with what these tools grant, so a hand-widened recipe is caught
+#: whatever its prose says.
+DECLARED_MARKER = "# agentteams-declared-tools:"
+_DECLARED_MARKER_RE = re.compile(r"^# agentteams-declared-tools:[ \t]*(.*)$", re.MULTILINE)
+
+
+def mark_declared(recipe: str, tools: frozenset[str]) -> str:
+    """Insert the declared-tools marker immediately before the recipe's ``extensions`` key.
+
+    Args:
+        recipe: An emitted grant-mode recipe.
+        tools: The agent's declared canonical tools.
+
+    Returns:
+        The recipe with one marker line (``none`` when nothing is declared).
+
+    Raises:
+        Nothing.
+    """
+    line = f"{DECLARED_MARKER} {', '.join(sorted(tools)) or 'none'}\n"
+    head, sep, tail = recipe.partition("\nextensions")
+    return f"{head}\n{line}extensions{tail}" if sep else recipe
+
+
+def declared_from_marker(recipe: str) -> frozenset[str] | None:
+    """Return the tools recorded by :func:`mark_declared`, or ``None`` when there is no single marker.
+
+    Args:
+        recipe: Recipe YAML.
+
+    Returns:
+        The declared tools (empty for ``none``); ``None`` for no marker or more than one.
+
+    Raises:
+        Nothing.
+    """
+    found = _DECLARED_MARKER_RE.findall(recipe)
+    if len(found) != 1:
+        return None
+    value = found[0].strip()
+    return frozenset() if value == "none" else frozenset(t.strip().lower() for t in value.split(",") if t.strip())

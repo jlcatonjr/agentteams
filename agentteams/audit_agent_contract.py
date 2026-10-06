@@ -20,8 +20,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 from agentteams.audit_types import AuditFinding, _agent_slug, _is_agent_file
+from agentteams.frameworks.goose_recipe_read import developer_tools, recipe_extension_grants
+from agentteams.frameworks.goose_recipe_validate import _RECIPE_VERSION_RE
+from agentteams.frameworks.goose_tool_scoping import DISABLED, declared_from_marker, grant_extensions
 
 #: Pattern that identifies a self-declared read-only agent from its body text.
 #: Matches only explicit self-attributive declarations:
@@ -344,6 +348,142 @@ def _check_writer_dispatch_grants(
                     f"({', '.join(sorted(dispatch))}). The orchestrator holds dispatch for "
                     "writers; a writer returns to the orchestrator through a handoff instead of "
                     "dispatching agents itself. Drop the dispatch grant."
+                ),
+            ))
+    return findings
+
+
+# --- Goose recipes: exposure must match the declared tools (goose_tool_scoping) -----------------
+
+#: The ``developer`` tools that change the workspace (``shell`` writes and executes).
+_GOOSE_WRITE_TOOLS = frozenset({"write", "edit", "shell"})
+
+
+#: Extensions a grant recipe may carry besides those its declared tools grant: the first-party
+#: coordination server (wired by team configuration, record-only).
+_GOOSE_FIRST_PARTY_EXTRAS = frozenset({"agentteams_coordination"})
+#: Recipes outside grant scoping (bridge entry recipes keep the legacy extensions).
+_GOOSE_UNSCOPED_RECIPES = frozenset({"bridge-orchestrator.yaml"})
+
+
+def _goose_exceeded(
+    extensions: list[dict[str, Any]], declared: frozenset[str], extra_names: frozenset[str] = frozenset()
+) -> list[str]:
+    """List what a parsed recipe exposes beyond what its declared tools grant (empty when it matches)."""
+    names, allow, stdio = grant_extensions(declared)
+    problems = []
+    permitted = set(names) | {e["name"] for e in stdio} | _GOOSE_FIRST_PARTY_EXTRAS | set(extra_names)
+    unknown = sorted({e["name"] for e in extensions} - permitted)
+    if unknown:
+        problems.append(f"extension(s) not granted by the declared tools: {', '.join(unknown)}")
+    extra_dev = developer_tools(extensions) - set(allow.get("developer", []))
+    if extra_dev:
+        problems.append(f"developer {', '.join(sorted(extra_dev))}")
+    for ext in extensions:
+        if ext["name"] == "summon":
+            granted = set(allow.get("summon", []))
+            exposed = {"delegate", "load"} if ext["available_tools"] is None else set(ext["available_tools"])
+            if exposed - granted:
+                problems.append(f"summon {', '.join(sorted(exposed - granted))}")
+    if developer_tools(extensions) and not any(
+        e["name"] == "analyze" and e["available_tools"] == [DISABLED] for e in extensions
+    ):
+        problems.append("analyze (auto-added beside developer; must be listed [__none__])")
+    return problems
+
+
+def _check_goose_recipe_grants(
+    file_map: dict[str, str],
+    *,
+    agent_ext: str,
+    grant_mode: bool,
+    operator_extensions: dict[str, frozenset[str]] | None = None,
+) -> list[AuditFinding]:
+    """Check Goose recipes' extensions against what their agents are meant to hold.
+
+    * ``AR_GOOSE_GRANT_EXCEEDED`` (error): a grant-mode recipe, identified by its
+      ``# agentteams-declared-tools:`` marker, exposes more than its declared tools grant: extra
+      ``developer`` tools, ``summon`` without ``agent``, ``analyze`` left on beside ``developer``, or any
+      extension the declared tools do not grant (operator MCP servers and the coordination server excepted).
+      This keys on declared tools, not prose. Residual: the marker states its own authority, so editing the
+      marker and the extensions together passes this check; recipes are hash-tracked in the build log, so
+      ``--check`` reports such a hand edit.
+    * ``AR_GOOSE_MARKER_MISSING`` (error, grant mode): a recipe without exactly one marker (bridge
+      recipes excepted), so the grant check cannot run.
+    * ``AR_GOOSE_READONLY_WRITE`` (warning): an unmarked recipe (legacy, bridge or hand-written) whose
+      instructions self-declare read-only exposes ``developer`` ``write``, ``edit`` or ``shell``.
+    * ``AR_GOOSE_EXTENSIONS_FAIL_OPEN``: a missing, bare or null ``extensions``, which Goose 1.37 reads as
+      "load the user's configured extensions". An error in grant mode, a warning in legacy.
+
+    Unparseable ``extensions`` shapes are read as an unscoped ``developer`` (worst case).
+
+    Args:
+        file_map: Rendered file content keyed by relative path.
+        agent_ext: The framework's agent file extension; only ``.yaml`` (Goose) is checked.
+        grant_mode: Whether the team uses ``goose_tool_scoping: "grant"``.
+        operator_extensions: Agent slug -> operator MCP extension names scoped to that agent (the adapter
+            wires a server only into the agents its ``scope`` lists, so only those may carry it).
+
+    Returns:
+        The findings.
+
+    Raises:
+        Nothing.
+    """
+    if agent_ext != ".yaml":
+        return []
+    advice = "" if grant_mode else ' Set "goose_tool_scoping": "grant" in the brief and re-render.'
+    findings: list[AuditFinding] = []
+    for rel_path, content in file_map.items():
+        if not rel_path.endswith(".yaml") or not _RECIPE_VERSION_RE.search(content):
+            continue
+        extensions = recipe_extension_grants(content)
+        if extensions is None:
+            findings.append(AuditFinding(
+                category="AGENT_REFACTOR", code="AR_GOOSE_EXTENSIONS_FAIL_OPEN",
+                severity="error" if grant_mode else "warning", file=rel_path,
+                description=(
+                    "Recipe has a missing, empty or null `extensions`, which Goose reads as \"load the user's "
+                    "configured extensions\" (usually full developer, including shell). Emit `extensions: []` "
+                    "for an agent granted nothing." + advice
+                ),
+            ))
+            continue
+        declared = declared_from_marker(content)
+        if declared is None and grant_mode and rel_path.rsplit("/", 1)[-1] not in _GOOSE_UNSCOPED_RECIPES:
+            # Without exactly one marker a grant recipe cannot be checked against its grant; deleting or
+            # doubling the marker must not quietly downgrade it to the prose check.
+            findings.append(AuditFinding(
+                category="AGENT_REFACTOR", code="AR_GOOSE_MARKER_MISSING", severity="error", file=rel_path,
+                description=(
+                    "Grant-mode recipe lacks exactly one `# agentteams-declared-tools:` marker, so its "
+                    "extensions cannot be checked against the agent's declared tools. Re-render it."
+                ),
+            ))
+            continue
+        if declared is not None:
+            slug = rel_path.rsplit("/", 1)[-1][: -len(".yaml")]
+            problems = _goose_exceeded(extensions, declared, (operator_extensions or {}).get(slug, frozenset()))
+            if problems:
+                findings.append(AuditFinding(
+                    category="AGENT_REFACTOR", code="AR_GOOSE_GRANT_EXCEEDED", severity="error",
+                    file=rel_path,
+                    description=(
+                        f"Recipe exposes more than its declared tools ({', '.join(sorted(declared)) or 'none'}) "
+                        f"grant: {'; '.join(problems)}. Re-render it; do not widen recipes by hand."
+                    ),
+                ))
+            continue
+        if not _READONLY_BODY_RE.search(content):
+            continue
+        writes = developer_tools(extensions) & _GOOSE_WRITE_TOOLS
+        if writes:
+            findings.append(AuditFinding(
+                category="AGENT_REFACTOR", code="AR_GOOSE_READONLY_WRITE", severity="warning",
+                file=rel_path,
+                description=(
+                    f"Agent declares itself read-only but its Goose recipe exposes developer "
+                    f"{', '.join(sorted(writes))}." + advice
                 ),
             ))
     return findings

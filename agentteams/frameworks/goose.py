@@ -104,6 +104,7 @@ from agentteams.frameworks.goose_tool_scoping import (
     filter_operator_mcp as _filter_operator_mcp,
     grant_extensions as _grant_extensions,
     grant_mode as _grant_mode,
+    mark_declared as _mark_declared,
 )
 
 __all__ = [
@@ -317,7 +318,7 @@ class GooseAdapter(FrameworkAdapter):
                     f"{p['key']}={{{{ {p['key']} }}}}" for p in recipe_parameters
                 )
                 prompt = f"{prompt}\n\nRuntime inputs: {refs}"
-            return _emit_recipe(
+            recipe = _emit_recipe(
                 title=name,
                 description=description,
                 instructions=body,
@@ -332,6 +333,7 @@ class GooseAdapter(FrameworkAdapter):
                 mcp_notes=mcp_notes,
                 available_tools=allowlists,
             )
+            return _mark_declared(recipe, _declared_tools(content)) if _grant_mode(manifest) else recipe
 
         # Non-orchestrator agent: depth-1 delegate whose own handoffs are
         # depth-2 -> represent them as `load(...)` references, not delegation.
@@ -343,7 +345,7 @@ class GooseAdapter(FrameworkAdapter):
         # a task-agent; emit them (and a params-coupled prompt). An agent declaring
         # none passes all-None → byte-identical to the prior baseline.
         prompt = _task_prompt(manifest, recipe_parameters)
-        return _emit_recipe(
+        recipe = _emit_recipe(
             title=name,
             description=description,
             instructions=body,
@@ -356,6 +358,7 @@ class GooseAdapter(FrameworkAdapter):
             mcp_notes=mcp_notes,
             available_tools=allowlists,
         )
+        return _mark_declared(recipe, _declared_tools(content)) if _grant_mode(manifest) else recipe
 
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
         """The team brief becomes AGENTS.md verbatim (strip any stray front matter).

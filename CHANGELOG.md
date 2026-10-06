@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Goose: recipe contract checks keyed on declared tools; Goose version pin) + fix (cleanup template tripped the read-only check)
+
+- **Declared-tools marker.** Grant-mode recipes now carry `# agentteams-declared-tools: <tools>`, a
+  column-0 comment that Goose ignores. `--post-audit` compares each marked recipe's exposure with what
+  those tools grant. Anything beyond that is **`AR_GOOSE_GRANT_EXCEEDED` (error)**:
+  - extra `developer` tools;
+  - `summon` without `agent`;
+  - `analyze` left on beside `developer`;
+  - any extension the declared tools don't grant, except the coordination server and operator MCP
+    servers whose `scope` lists that agent.
+
+  The check keys on declared tools, not prose, so it catches a hand-widened recipe on every agent.
+- **`AR_GOOSE_MARKER_MISSING` (error, grant mode).** A recipe without exactly one marker is an error, so
+  deleting or doubling the marker can't downgrade a recipe to the prose check. Bridge recipes are exempt.
+- **Residual.** The marker states its own authority, so editing the marker and the extensions together
+  passes the audit. Recipes are hash-tracked in the build log, and `--check` reports such a hand edit.
+- **Unmarked recipes** (legacy, bridge or hand-written) keep a prose-based check. If the instructions
+  self-declare read-only and the recipe exposes `developer` `write`, `edit` or `shell`, it reports
+  **`AR_GOOSE_READONLY_WRITE` (warning)** and recommends `goose_tool_scoping: "grant"`.
+- **`AR_GOOSE_EXTENSIONS_FAIL_OPEN`.** A missing, bare or `null`/`~` `extensions` makes Goose 1.37 load the
+  user's configured extensions. It is an error in grant mode and a warning in legacy.
+- **One fail-safe reader.** A single reader, `goose_recipe_read.recipe_extension_grants`, now serves the
+  audit and the merge notice. Any shape it can't interpret counts as an unscoped `developer`: flow style,
+  a duplicate `extensions` key, a block-style or empty allowlist. It strips inline `#` comments, and only
+  dashes at the item indentation start a new item, so nested `args:` lists are not misread.
+- **Version pin.** `--check` on a grant-mode Goose team compares the installed Goose version with
+  `GOOSE_MAP_VERSION` (1.37.0). It reads stdout and stderr, requires an exact match including any suffix,
+  passes `stdin=DEVNULL`, and on Windows refuses a `goose` resolved from the current directory. It is an
+  advisory and never changes the exit code. Re-verify with `scripts/goose-probe/` before trusting a new
+  release.
+- **Fix: `cleanup` false positive.** Since #101, `cleanup`'s "(tags read-only, for collision checks)"
+  matched the read-only self-declaration pattern. Because `cleanup` declares `edit`, every generated
+  team's `--post-audit` reported an `AR_READONLY_TOOL_VIOLATION` error. It now reads "(tags are only
+  inspected, never changed, for collision checks)".
+- **Tests.** Full Goose and Copilot teams must pass both checks. In a legacy Goose team, the warning set
+  must equal exactly the agents that self-declare read-only and declare only `read`/`search`.
+- **Not in this change.** `execute` still doesn't count as a write tool in the framework-neutral
+  read-only check (a deliberate, documented exclusion; the operator's call). On Goose, `shell` is checked.
+
 ### feat (Goose: `goose_tool_scoping: "grant"`, recipe extensions derived from each agent's declared tools)
 
 - **Problem.** Every Goose recipe agentteams emits loads the whole `developer` builtin (shell + file

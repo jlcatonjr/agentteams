@@ -23,12 +23,14 @@ from typing import Any
 
 from agentteams import living_doc as _living_doc
 from agentteams.audit_agent_contract import (  # re-exported for callers/tests (CH-07 carve)
+    _check_goose_recipe_grants,
     _check_instruction_authority_reachable,
     _check_invariant_core_present,
     _check_readonly_tool_declarations,
     _check_return_handoff_present,
     _check_writer_dispatch_grants,
 )
+from agentteams.frameworks.goose import _tool_name as _goose_tool_name
 from agentteams.audit_types import (  # re-exported for callers/tests
     AuditFinding,
     _agent_file_count,  # noqa: F401
@@ -133,6 +135,16 @@ class AuditResult:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _goose_operator_extensions(manifest: dict[str, Any]) -> dict[str, frozenset[str]]:
+    """Map each agent slug to the operator MCP extension names scoped to it (Goose adapter naming)."""
+    scoped: dict[str, set[str]] = {}
+    for server in manifest.get("mcp_servers") or []:
+        if isinstance(server, dict) and server.get("server_id"):
+            for slug in server.get("scope") or []:
+                scoped.setdefault(str(slug), set()).add(_goose_tool_name(str(server["server_id"])))
+    return {slug: frozenset(names) for slug, names in scoped.items()}
+
+
 def run_post_audit(
     output_dir: Path,
     manifest: dict[str, Any],
@@ -188,6 +200,10 @@ def run_post_audit(
     ))
     result.agent_refactor_findings.extend(_check_readonly_tool_declarations(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_writer_dispatch_grants(file_map, agent_ext=agent_ext))
+    result.agent_refactor_findings.extend(_check_goose_recipe_grants(
+        file_map, agent_ext=agent_ext, grant_mode=manifest.get("goose_tool_scoping") == "grant",
+        operator_extensions=_goose_operator_extensions(manifest),
+    ))
     result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir, agent_ext=agent_ext))
 
