@@ -241,6 +241,7 @@ UNPARSED = "<unparsed>"
 _EXT_KEY_RE = re.compile(r"^extensions:(.*)$", re.MULTILINE)
 _ITEM_NAME_RE = re.compile(r"^\s*-?\s*name:\s*(.*)$", re.MULTILINE)
 _ITEM_ALLOW_RE = re.compile(r"^\s*available_tools:\s*(.*)$", re.MULTILINE)
+_ITEM_TYPE_RE = re.compile(r"^\s*-?\s*type:\s*(.*)$", re.MULTILINE)
 
 
 def _uncomment(value: str) -> str:
@@ -262,7 +263,8 @@ def recipe_extension_grants(yaml_text: str) -> list[dict[str, Any]] | None:
         * ``None`` when the key is missing, bare or ``null``/``~``: Goose 1.37 then loads the user's
           configured extensions (fail-open).
         * ``[]`` for ``extensions: []`` (with or without a trailing comment).
-        * Otherwise one entry per list item. ``available_tools`` is ``None`` when the item has no
+        * Otherwise one entry per list item, with its ``type`` (``""`` when absent) and
+          ``available_tools``. ``available_tools`` is ``None`` when the item has no
           allowlist, an empty one (``[]`` is unrestricted) or one in a form this reader does not parse.
         * ``[{"name": UNPARSED, ...}]`` for a flow-style value, or for a second ``extensions:`` key
           (ambiguous: a reader may take either).
@@ -312,7 +314,10 @@ def recipe_extension_grants(yaml_text: str) -> list[dict[str, Any]] | None:
             raw = _uncomment(allow.group(1)) if "[" not in allow.group(1) else allow.group(1).split("]", 1)[0] + "]"
             if raw.startswith("[") and raw.endswith("]"):
                 tools = [_uncomment(t) for t in raw[1:-1].split(",") if _uncomment(t)] or None
-        parsed.append({"name": _uncomment(name.group(1)) if name else UNPARSED, "available_tools": tools})
+        type_lines = sorted(_ITEM_TYPE_RE.finditer(item), key=lambda m: len(m.group(0)) - len(m.group(0).lstrip(" -")))
+        ext_type = _uncomment(type_lines[0].group(1)) if type_lines else ""
+        parsed.append({"name": _uncomment(name.group(1)) if name else UNPARSED, "available_tools": tools,
+                       "type": ext_type})
     return parsed
 
 

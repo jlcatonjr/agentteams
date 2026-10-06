@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Goose audit: an operator MCP server's name no longer excuses a builtin of the same name)
+
+- **Problem.** A phase-3 review follow-up. The `AR_GOOSE_GRANT_EXCEEDED` check allowed any extension whose
+  name matched an operator MCP server scoped to the agent. An operator server whose ID normalizes to a Goose
+  builtin name (e.g. `computercontroller`) therefore excused a hand-added `type: builtin` extension of that
+  name.
+- **Fix.** The recipe reader now records each extension's own `type`. An operator name excuses only
+  `stdio` / `streamable_http` entries, the transports operator servers are emitted as. A builtin or platform
+  entry is always checked against the grant. No built-in name list is maintained, so the check doesn't
+  drift with Goose releases.
+
 ### feat (Goose: recipe contract checks keyed on declared tools; Goose version pin) + fix (cleanup template tripped the read-only check)
 
 - **Declared-tools marker.** Grant-mode recipes now carry `# agentteams-declared-tools: <tools>`, a
