@@ -351,3 +351,16 @@ def test_wrap_uses_the_checked_absolute_roots(project, tmp_path):
     assert checked == [os.path.realpath(project / "out")]
     profile = C.seatbelt_profile(root=project, exec_paths=PY_DIRS, write_roots=checked, tmp_dir=tmp_path)
     assert f'(subpath "{os.path.realpath(project / "out")}")' in profile
+
+
+
+def test_brief_schema_accepts_the_p4b_fields():
+    jsonschema = pytest.importorskip("jsonschema")
+    import json
+    schema = json.loads((Path(C.__file__).parent / "schemas" / "project-description.schema.json").read_text())
+    for key, value in {
+        "proposal_gates": {"g": {"glob": "*.lean", "argv": ["/usr/bin/true", "{file}"], "exec": ["/usr/bin"]}},
+        "confined_programs": {"lean-prover": {"exec": ["~/.elan"], "write": [".lake"]}},
+        "allow_unconfined_runs": False,
+    }.items():
+        jsonschema.validate(value, schema["properties"][key])

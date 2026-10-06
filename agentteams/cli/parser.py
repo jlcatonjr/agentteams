@@ -983,7 +983,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "Orchestrator-only-writes pilot: record a signed dispatch nonce for --agent and print it. The "
             "orchestrator puts the nonce in the agent's task; every proposal or request must carry it, and "
             "--apply-proposal / --run-request take the agent from this record, never from the caller. "
-            "Needs AGENTTEAMS_PROPOSAL_LEDGER_KEY (or AGENTTEAMS_DECISION_SIGNING_KEY)."
+            "Under write_policy orchestrator-only it queues for the --serve-requests runner, which holds the "
+            "key (a 0600 file in ~/.config/agentteams/keys); otherwise needs AGENTTEAMS_PROPOSAL_LEDGER_KEY "
+            "(or AGENTTEAMS_DECISION_SIGNING_KEY)."
         ),
     )
     parser.add_argument(

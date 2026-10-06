@@ -42,7 +42,7 @@ orchestrator into acting as a different agent.
 **Execution.** Gates and commands run with a scrubbed environment: an allowlist of locale and ``HOME``
 variables plus a PATH of absolute entries, and never a signing key. Allowed commands that run agent-written
 code (``lake build`` compiling a Lean file with compile-time IO, a test runner) are still arbitrary execution.
-Contain them with the OS sandbox profiles (pilot P4), not with this allowlist. Dry runs execute gates.
+The runner contains them in an OS sandbox (``confine=True``, :mod:`agentteams.confinement`), not this allowlist. Dry runs execute gates.
 
 **Undeclared writes fail the run.** Tracked, untracked and control-plane files are compared before and after.
 Paths ignored by git (build directories) are not seen; that is the sandbox's job.
@@ -50,8 +50,9 @@ Paths ignored by git (build directories) are not seen; that is the sandbox's job
 **Ledger.** Every action and every refusal appends an HMAC-signed, hash-chained row to
 ``.agentteams/proposal-ledger.jsonl``, under a file lock. ``.agentteams/proposal-ledger.head`` (also signed)
 anchors the row count and last hash, so an edited, removed, reordered, truncated or recomputed ledger fails
-:func:`verify_ledger`. The key is ``AGENTTEAMS_PROPOSAL_LEDGER_KEY`` (else ``AGENTTEAMS_DECISION_SIGNING_KEY``).
-Without one, every operation is refused.
+:func:`verify_ledger`. The runner reads the key from a 0600 file (:func:`use_key_file`); a direct, non-switch call
+uses ``AGENTTEAMS_PROPOSAL_LEDGER_KEY`` (else ``AGENTTEAMS_DECISION_SIGNING_KEY``). Without one, every operation
+is refused.
 
 Stdlib only; integrity-pinned.
 """

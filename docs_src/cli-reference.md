@@ -798,7 +798,9 @@ Read-only: report the validity (signature, expiry, use-limit, conditions) of eve
 Orchestrator-only-writes pilot (P1). Records an HMAC-signed dispatch nonce for `--agent` under `--project` (else
 the current directory) and prints it. The orchestrator puts the nonce in the agent's task. Every proposal or
 request must carry it, and `--apply-proposal` / `--run-request` take the agent from this record, never from
-the caller. Needs `AGENTTEAMS_PROPOSAL_LEDGER_KEY` (or `AGENTTEAMS_DECISION_SIGNING_KEY`).
+the caller. Under `write_policy: "orchestrator-only"` it queues for the `--serve-requests` runner, which holds
+the key as a 0600 file in `~/.config/agentteams/keys`. Otherwise it needs `AGENTTEAMS_PROPOSAL_LEDGER_KEY`
+(or `AGENTTEAMS_DECISION_SIGNING_KEY`).
 
 ### `--agent`
 
@@ -831,8 +833,12 @@ the dispatched agent's registered prefixes and every remaining argument matches 
 
 ### `--serve-requests`
 
-Orchestrator-only-writes pilot (P4a). Runs the out-of-session runner for `--project` under the brief's policy
-(`--description`).
+Orchestrator-only-writes pilot (P4a/P4b). Runs the out-of-session runner for `--project` under the brief's
+policy (`--description`).
+- **Confinement (P4b):** every command and gate it runs is confined in an OS sandbox from the brief's
+  `confined_programs`.
+- **No sandbox:** with no usable sandbox it refuses, unless `allow_unconfined_runs` is set (each such run is
+  logged).
 - **Where:** start it outside every agent session.
 - **Key:** it alone holds the ledger key, read from `AGENTTEAMS_PROPOSAL_LEDGER_KEY_FILE` or
   `~/.config/agentteams/keys/proposal-ledger.key` (mode 0600).

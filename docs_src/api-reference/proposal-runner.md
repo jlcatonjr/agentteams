@@ -73,5 +73,6 @@ The runner refuses to start when:
   session, including a proposal's full content.
 - **Acks aren't bound to their requester.** Another agent can acknowledge a result early, which deletes it.
   That is a denial of service, not a forgery.
-- **POSIX only.** The switch is refused on frameworks whose session sandbox doesn't deny the key directory
-  (copilot, codex, agents-md).
+- **POSIX only.** The runner needs `fcntl` and `O_NOFOLLOW`.
+- **Claude and goose only.** The switch is refused on frameworks whose session sandbox doesn't deny the key
+  directory (copilot, codex, agents-md).
