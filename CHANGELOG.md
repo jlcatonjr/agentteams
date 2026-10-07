@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses. Recording several clearances in advance now yields one use, not several. The refusal message keeps
   its `no matching PASS decision found` prefix.
 
+### fix (write-policy: readfs needs an explicit allowlist)
+
+- Under the switch, `AR_WRITE_POLICY` accepted an `agentteams_readfs` entry whose `available_tools` was `[]` or
+  missing, which Goose reads as unrestricted. It now requires a readable, non-empty list drawn from the shipped
+  tools. readfs exposes only its five read tools, so nothing extra was granted, but the per-agent MCP grant
+  work depends on exact allowlists (@security, grant-interface review).
+
 ### fix (build-log.json never records an absolute path, OI-21)
 
 - Claude build logs keyed skill files (`.claude/skills/<slug>/SKILL.md`) in `front_matter_baseline` by absolute
