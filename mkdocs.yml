@@ -235,6 +235,7 @@ nav:
       - confinement: api-reference/confinement.md
       - proposal_policy: api-reference/proposal-policy.md
       - proposal_runner: api-reference/proposal-runner.md
+      - git_exec: api-reference/git-exec.md
       - source_provenance: api-reference/source-provenance.md
       - user_regions: api-reference/user-regions.md
       - write_policy: api-reference/write-policy.md

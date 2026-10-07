@@ -28,13 +28,13 @@ import json
 import os
 import re
 import secrets
-import stat
 import time
 from pathlib import Path
 from typing import Any, Callable
 
 from agentteams import confinement as _confinement
 from agentteams import proposals as P
+from agentteams.atomicio import FileTooLargeError, read_regular_nofollow, write_new_atomic
 
 QUEUE_DIR_REL = ".agentteams-queue"
 REQUESTS_REL = ".agentteams-queue/requests"
@@ -61,29 +61,16 @@ class RunnerError(P.ProposalError):
 
 def _read_regular(path: Path, max_bytes: int) -> bytes:
     """Read a regular file without following a symlink, refusing anything larger than *max_bytes*."""
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise RunnerError("not a regular file")
-        data = os.read(fd, max_bytes + 1)
-    finally:
-        os.close(fd)
-    if len(data) > max_bytes:
-        raise RunnerError("request too large")
-    return data
+        return read_regular_nofollow(path, max_bytes)
+    except ValueError as exc:
+        raise RunnerError("request too large" if isinstance(exc, FileTooLargeError) else str(exc)) from exc
 
 
 def _write_new(directory: Path, name: str, data: bytes) -> None:
     """Write *data* to ``directory/name`` atomically: an exclusive temp file, then a rename."""
     directory.mkdir(parents=True, exist_ok=True)
-    tmp = directory / f".{name}.{secrets.token_hex(8)}.tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    try:
-        os.write(fd, data)
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.replace(tmp, directory / name)
+    write_new_atomic(directory, name, data)
 
 
 def _brief_hash(brief_path: Path) -> str:

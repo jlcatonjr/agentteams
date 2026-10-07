@@ -38,6 +38,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from agentteams.git_exec import run_git
+
 #: The env var naming the operator's Ed25519 private key FILE (never the key itself).
 KEYFILE_ENV = "AGENTTEAMS_DECISION_ED25519_KEYFILE"
 
@@ -53,6 +55,7 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/governance_targets.py",
     "agentteams/cli/management_directives.py",
     "agentteams/atomicio.py",
+    "agentteams/git_exec.py",  # CH-08: imported at module level, so it runs in the process that later holds the key
     "agentteams/cli/signer_location.py",
     "agentteams/frameworks/_sandbox_emit.py",
     "agentteams/integrity.py",
@@ -88,12 +91,7 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str] | None:
     not be able to run code here. Returns None when git is unavailable or times out.
     """
     try:
-        return subprocess.run(
-            ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
-             "-c", "core.untrackedCache=false", "-C", str(cwd), *args],
-            capture_output=True, text=True, timeout=10, check=False,
-            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
-        )
+        return run_git(cwd, *args, hardened=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return None
 

@@ -17,11 +17,12 @@ import contextlib
 import csv
 import io
 import os
+import secrets
 import shutil
 import stat
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 __all__ = [
     "_target_mode", "_atomic_write_text", "_atomic_copy", "_resolve_path",
@@ -187,3 +188,76 @@ def _resolve_path(output_dir: Path, rel_path: str) -> Path:
             f"(output_dir={output_dir}, rel_path={rel_path!r})"
         )
     return resolved
+
+
+class FileTooLargeError(ValueError):
+    """A custody read found the file larger than its cap."""
+
+
+def read_regular_nofollow(path: Path, max_bytes: int,
+                          check: Callable[[os.stat_result], None] | None = None) -> bytes:
+    """Read a regular file without following a symlink, refusing anything larger than *max_bytes* (CH-08).
+
+    The one custody read behind the ledger key file, the runner's queued requests and the operator-owned confined
+    file. It opens with ``O_NOFOLLOW | O_NONBLOCK`` (a FIFO swapped in can't hang the caller), checks the file it
+    actually opened with ``fstat``, runs *check* on that result for any further custody rule (owner, mode, the
+    inode a prior ``lstat`` saw), then reads at most ``max_bytes + 1`` bytes.
+
+    Args:
+        path: The file to read.
+        max_bytes: The largest size accepted.
+        check: Called with the opened file's ``fstat`` result; raise to refuse.
+
+    Returns:
+        The file's bytes.
+
+    Raises:
+        OSError: When the file can't be opened (missing, a symlink, unreadable).
+        ValueError: When it isn't a regular file; :class:`FileTooLargeError` (a ``ValueError``) when it is larger
+            than *max_bytes*.
+        Exception: Whatever *check* raises, unchanged.
+    """
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError("not a regular file")
+        if check is not None:
+            check(st)
+        data = os.read(fd, max_bytes + 1)
+    finally:
+        os.close(fd)
+    if len(data) > max_bytes:
+        raise FileTooLargeError(f"larger than {max_bytes} bytes")
+    return data
+
+
+def write_new_atomic(directory: Path, name: str, data: bytes, *, mode: int = 0o600) -> Path:
+    """Write *data* to ``directory/name`` atomically: an exclusive temp file, fsync, then a rename (CH-08).
+
+    The temp file is created ``O_EXCL | O_NOFOLLOW`` with *mode*, so nothing pre-planted at its name is followed or
+    reused. The caller creates *directory* and checks its custody first.
+
+    Args:
+        directory: An existing directory.
+        name: The final file name.
+        data: The bytes to write.
+        mode: The new file's permission bits.
+
+    Returns:
+        The final path.
+
+    Raises:
+        OSError: When the temp file can't be created or written, or the rename fails.
+    """
+    tmp = directory / f".{name}.{secrets.token_hex(8)}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    final = directory / name
+    os.replace(tmp, final)
+    return final
+

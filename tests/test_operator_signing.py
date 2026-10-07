@@ -564,7 +564,7 @@ def test_signing_closure_covers_every_module_run_with_the_key(tmp_path):
     from agentteams.cli import operator_signing
 
     for rel in ("agentteams/cli/governance_targets.py", "agentteams/cli/management_directives.py",
-                "agentteams/atomicio.py"):
+                "agentteams/atomicio.py", "agentteams/git_exec.py"):
         assert rel in operator_signing.SIGNING_CLOSURE
         assert rel in integrity.ENFORCEMENT_MODULES
 

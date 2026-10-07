@@ -37,6 +37,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
 # Default directory name for the fleet's own report/backup output (``run_fleet``
@@ -136,9 +137,8 @@ class WorkspaceResult:
 # ---------------------------------------------------------------------------
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True
-    )
+    # Not hardened: the fleet snapshot commits, and commit hooks are part of that contract.
+    return run_git(repo, *args)
 
 
 def _is_git_repo(path: Path) -> bool:
