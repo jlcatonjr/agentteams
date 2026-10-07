@@ -238,7 +238,7 @@ Validate generated Goose recipe YAML files in the \-\-output directory (or .goos
 Undo a previous \-\-migrate run. Runs 'git reset \-\-hard pre\-fencing\-snapshot' in the project directory and deletes the 'pre\-fencing\-snapshot' tag. Requires the project directory to be a git repository with that tag present.
 .TP
 .B \-\-version
-show program's version number and exit
+Show the agentteams version and the source it runs from (commit, branch, dirty), then exit.
 .TP
 .B \-\-no\-backup
 Skip automatic backup of existing agent files before any write operation. Not recommended for interactive use; intended for CI/scripted pipelines where an external snapshot mechanism is already in place.
