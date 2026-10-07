@@ -96,11 +96,11 @@ with no entry gets no command runs.
 4. **At closeout**, run `agentteams --verify-proposal-ledger`.
 5. **To change what the sandbox may run or write** (only when the user asks), never edit the operator file,
    add `confined_programs` to the brief, or write a script for it. Write the new object to
-   `tmp/confined-programs.json`, show it to the user, and give them this one command to run outside every
-   agent session:
-   `agentteams --install-confined tmp/confined-programs.json --project <root> --description <brief>`.
+   `confined-programs.candidate.json` in the project root (never commit it), show it to the user, and give
+   them this one command to run outside every agent session:
+   `agentteams --install-confined confined-programs.candidate.json --project <root> --description <brief>`.
    It prints the JSON and its sha256; they review it and rerun with `--confirm-review-sha256 <sha256>`, then
-   restart the runner. Don't run it yourself.
+   restart the runner. Don't run it yourself. Delete the candidate file once it is installed.
 
 **This overrides the workflows above:**
 - **Workflows 0A and 0B:** wave or coordinated members return proposals for their sub-regions; you apply
