@@ -9,7 +9,7 @@ runner starts inside an OS sandbox.
 
 ---
 
-## Configuration (brief)
+## Configuration (operator file or brief)
 
 ```json
 "confined_programs": {"lean-prover": {"exec": ["~/.elan"], "write": [".lake"]}},
@@ -26,6 +26,26 @@ runner starts inside an OS sandbox.
   - Changes inside a write root count as declared, so a build needn't list every output.
 - **Gates.** A gate may set `exec`. The default is its own program plus a shebang interpreter. Gates write
   only their temp dir.
+- **Where it lives (P5b).** Prefer the operator-owned file `~/.config/agentteams/confined/<project>-<hash>.json`
+  (`agentteams --confined-path`) over the brief, so machine paths stay out of the committed brief.
+  - Install it with `agentteams --install-confined FILE --description BRIEF`. That validates it against the
+    brief's gates and prints the exact JSON it would install with its sha256. Nothing is written until you
+    rerun it with `--confirm-review-sha256 <sha256>`. It then writes those bytes with mode 0600 in a 0700
+    directory. A hash that doesn't match, because the file changed after review, is refused.
+  - Write roots are literal directories. A `*`, `?` or `[` is refused, because the runner's containment checks
+    treat write roots as paths.
+  - The runner reads it at start and pins its hash. A change stops the runner, like a brief change does.
+  - It refuses a file that is a symlink, not yours, group- or world-writable, inside the project (case-folded on
+    macOS), over 64 KiB, or not a JSON object. It also refuses when the brief sets `confined_programs` too.
+  - The file is opened with `O_NOFOLLOW | O_NONBLOCK` and re-checked with `fstat`. A file swapped in after the
+    checks (same name, different inode) is refused, and a FIFO can't hang the runner.
+  - Agents can't write it. Session sandboxes write-confine to the workspace, and the emitted
+    `permissions.deny` carries `Edit(~/.config/agentteams/confined)` and `Edit(~/.config/agentteams/confined/**)`
+    for the built-in Edit/Write tools. Under the switch the orchestrator writes only the candidate JSON and gives
+    the user the one `--install-confined` command. It writes no script.
+  - Residual: whether Claude Code applies those deny rules to case variants (`~/.Config/...` on APFS) or to a
+    symlink alias made inside the project is not verified on the product. The custody checks can't tell an
+    agent from the operator (same uid). The session sandbox and the deny rules are the boundary.
 - **`allow_unconfined_runs`.** Decision A: off by default. With no usable sandbox the runner refuses;
   with this set, it runs unconfined and logs each run in the ledger as `"confined": "unconfined-opt-out"`.
 
@@ -97,5 +117,9 @@ runner starts inside an OS sandbox.
 | `wrap(argv, *, sandbox, root, cwd, exec_paths, write_roots, tmp_dir) -> list[str]` | Wrap a command. |
 | `seatbelt_profile(...)` / `bwrap_argv(...)` | The profile text or argv prefix. |
 | `load_confined(raw, gates, control_plane_of)` | Validate `confined_programs` and gates' `exec`. |
+| `confined_file_for(root) -> Path` | P5b: the operator-owned file's path for a project. |
+| `read_confined_file(root) -> tuple[dict, str] \| None` | P5b: read it with custody checks, as `(confined_programs, sha256)`. |
+| `confined_bytes(data) -> bytes` | P5b: the exact bytes installed (sorted, indented JSON): what the operator reviews and hashes. |
+| `install_confined_file(root, data) -> Path` | P5b: write those bytes atomically, mode 0600. Callers validate and confirm the review hash first. |
 | `exec_allows(program, exec_paths)` / `gate_exec_paths(gate, program)` | Exec allowlist helpers. |
 | `ConfinementError` | An unsafe path, or a bad entry. |

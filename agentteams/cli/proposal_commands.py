@@ -15,11 +15,13 @@ these commands don't act themselves: they queue the request for the out-of-sessi
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
 from pathlib import Path
 
+from agentteams import confinement as _confinement
 from agentteams import ingest
 from agentteams import proposal_runner as R
 from agentteams.proposals import (
@@ -43,7 +45,11 @@ def _policy(args: argparse.Namespace, flag: str) -> Policy:
         raise ProposalError(f"{flag} requires --description BRIEF (the team's registered policy)")
     brief_path, root = Path(args.description).resolve(), _root(args)
     brief_rel = brief_path.relative_to(root).as_posix() if brief_path.is_relative_to(root) else None
-    return load_policy(ingest.load(brief_path, scan_project=False), brief_rel=brief_rel)
+    try:
+        confined_file = _confinement.read_confined_file(root)
+    except _confinement.ConfinementError as exc:
+        raise ProposalError(str(exc)) from exc
+    return load_policy(ingest.load(brief_path, scan_project=False), brief_rel=brief_rel, confined_file=confined_file)
 
 
 def _read_json(path: str) -> dict:
@@ -208,6 +214,70 @@ def run_verify_proposal_ledger(args: argparse.Namespace) -> int:
         print(f"  ✗ {problem}", file=sys.stderr)
     print("Proposal ledger: OK" if not problems else f"Proposal ledger: {len(problems)} problem(s)")
     return 1 if problems else 0
+
+
+def run_confined_path(args: argparse.Namespace) -> int:
+    """Print the operator-owned ``confined_programs`` file for the project (P5b).
+
+    Args:
+        args: Parsed CLI arguments; reads ``project``.
+
+    Returns:
+        0.
+
+    Raises:
+        Nothing.
+    """
+    path = _confinement.confined_file_for(_root(args))
+    print(f"{path} ({'present' if os.path.lexists(path) else 'absent'})")
+    return 0
+
+
+def run_install_confined(args: argparse.Namespace) -> int:
+    """Validate a ``confined_programs`` object against the brief's policy and install it as the operator file.
+
+    Args:
+        args: Parsed CLI arguments; reads ``install_confined``, ``description``, ``project`` and
+            ``confirm_review_sha256``.
+
+    Returns:
+        0 when installed. 1 when the file is malformed, the policy refuses it, or the brief also defines
+        ``confined_programs``. Also 1 when ``--confirm-review-sha256`` is missing (the JSON and its hash are
+        printed for review) or doesn't match the bytes that would be installed.
+
+    Raises:
+        Nothing: errors map to exit 1.
+    """
+    try:
+        if not getattr(args, "description", None):
+            raise ProposalError("--install-confined requires --description BRIEF (its gates validate the file)")
+        data = _read_json(args.install_confined)
+        if not isinstance(data, dict):
+            raise ProposalError("the file must hold a JSON object of {agent: {exec, write}}")
+        brief_path, root = Path(args.description).resolve(), _root(args)
+        brief_rel = brief_path.relative_to(root).as_posix() if brief_path.is_relative_to(root) else None
+        # Static checks only: the runner repeats check_roots against the live tree before every command, and a
+        # write root such as lean/.lake may not exist yet.
+        load_policy(ingest.load(brief_path, scan_project=False), brief_rel=brief_rel,
+                    confined_file=(data, "candidate"))
+        payload = _confinement.confined_bytes(data)
+        digest = hashlib.sha256(payload).hexdigest()
+        confirmed = (getattr(args, "confirm_review_sha256", None) or "").strip().lower()
+        if not confirmed:
+            # The review step: the operator sees exactly what will be installed, and installs only those bytes.
+            sys.stdout.write(payload.decode("utf-8"))
+            print(f"[install-confined] review the JSON above (it will be installed at "
+                  f"{_confinement.confined_file_for(root)}), then rerun with --confirm-review-sha256 {digest}")
+            return 1
+        if confirmed != digest:
+            raise ProposalError(f"--confirm-review-sha256 does not match the file ({digest}); it changed after "
+                                "review, or the hash is wrong. Review it again")
+        path = _confinement.install_confined_file(root, data)
+    except (ProposalError, _confinement.ConfinementError, OSError, ValueError, TypeError) as exc:
+        print(f"[install-confined] refused: {exc}", file=sys.stderr)
+        return 1
+    print(f"[install-confined] installed {path} (sha256 {digest}); restart --serve-requests to load it")
+    return 0
 
 
 def run_serve_requests(args: argparse.Namespace) -> int:

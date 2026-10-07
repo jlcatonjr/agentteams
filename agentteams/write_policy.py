@@ -77,8 +77,9 @@ This team runs `write_policy: "orchestrator-only"`: you are the only agent that 
 The `agentteams` commands below don't act themselves. They queue each request for the operator's runner
 (`agentteams --serve-requests`), which runs outside your session and alone holds the ledger key. If a
 command says no runner is serving, ask the operator to start one; never look for the key yourself.
-The runner runs every command and gate in an OS sandbox built from the brief's `confined_programs`. An
-agent with no entry gets no command runs.
+The runner runs every command and gate in an OS sandbox built from `confined_programs`: the operator's own
+file (`agentteams --confined-path` prints where), or the brief's block when there is no such file. An agent
+with no entry gets no command runs.
 
 1. **Before dispatching** an agent, run `agentteams --issue-dispatch --agent <slug>` and pass the printed
    nonce to the agent as its `dispatch` value. It is single-purpose: one task, a limited number of uses,
@@ -93,6 +94,13 @@ agent with no entry gets no command runs.
    - Undeclared writes or a timeout give exit 3.
    - Any other exit code from `--run-request` is the command's own result.
 4. **At closeout**, run `agentteams --verify-proposal-ledger`.
+5. **To change what the sandbox may run or write** (only when the user asks), never edit the operator file,
+   add `confined_programs` to the brief, or write a script for it. Write the new object to
+   `tmp/confined-programs.json`, show it to the user, and give them this one command to run outside every
+   agent session:
+   `agentteams --install-confined tmp/confined-programs.json --project <root> --description <brief>`.
+   It prints the JSON and its sha256; they review it and rerun with `--confirm-review-sha256 <sha256>`, then
+   restart the runner. Don't run it yourself.
 
 **This overrides the workflows above:**
 - **Workflows 0A and 0B:** wave or coordinated members return proposals for their sub-regions; you apply
@@ -268,7 +276,12 @@ agentteams --serve-requests --project <root> --description <brief>
   write `.agentteams/`.
 - **The brief is pinned** at start. If it changes, the runner stops and must be restarted.
 - **Confinement.** The runner runs every command and gate in an OS sandbox, configured per agent by
-  `confined_programs` in the brief: `{"agent": {"exec": [...], "write": [...]}}`.
+  `confined_programs`: `{"agent": {"exec": [...], "write": [...]}}`.
+  - It comes from the operator's file, `~/.config/agentteams/confined/<project>-<hash>.json`
+    (`agentteams --confined-path`; install it with `agentteams --install-confined FILE`, which prints the JSON
+    and its sha256 and installs only with a matching `--confirm-review-sha256`), so machine paths
+    stay out of the committed brief. With no such file, the brief's block applies. Both at once are refused.
+    The file is pinned at start like the brief, and must be yours and not group- or world-writable.
   - Writes go only to the declared roots and a private `TMPDIR`. The ledger, the queue, `.git` and the
     control plane stay protected, and the key directory is unreadable.
   - On macOS only the declared `exec` paths can run. Give the toolchain *root* (e.g. `~/.elan`): Homebrew

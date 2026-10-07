@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from agentteams import confinement as _confinement
 from agentteams import proposals as P
 
 QUEUE_DIR_REL = ".agentteams-queue"
@@ -87,6 +88,15 @@ def _write_new(directory: Path, name: str, data: bytes) -> None:
 
 def _brief_hash(brief_path: Path) -> str:
     return hashlib.sha256(brief_path.read_bytes()).hexdigest()
+
+
+def _confined_hash(root: Path) -> str | None:
+    """The operator confined file's hash now (None when absent); a custody failure counts as a change."""
+    try:
+        found = _confinement.read_confined_file(root)
+    except (_confinement.ConfinementError, OSError):
+        return "unreadable"
+    return found[1] if found else None
 
 
 # --- the runner ---------------------------------------------------------------------------------
@@ -237,6 +247,8 @@ class Runner:
         """
         if _brief_hash(self.brief_path) != self.brief_sha:
             raise RunnerError("the brief changed since the runner started; restart it to load the new policy")
+        if _confined_hash(self.root) != self.policy.confined_file_sha:
+            raise RunnerError("the operator confined_programs file changed since the runner started; restart it")
         self._heartbeat()
         self._expire_results()
         served = 0

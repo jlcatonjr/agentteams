@@ -45,7 +45,12 @@ a key, everything is refused.
     `.github/hooks`, `sandbox`, `.agentteams`;
   - the brief itself;
   - anything matched by `protected_paths`. A pattern without wildcards also covers everything below it.
-- The path must be inside the agent's `write_scopes`.
+- The path must be inside the agent's `write_scopes`. Each scope is a file, a directory ending in `/`, or (P5b)
+  a pattern such as `reports/dossiers/*/strategy.md`. In a pattern, `*`, `?` and `[...]` match within one path
+  segment and never match a dot-segment, and a trailing `/` covers everything below the pattern, dot-files and
+  dot-directories included (`reports/*/` covers `reports/p2/.envrc`). The first segment must be
+  literal, with no `**`, `..`, absolute or `~` paths, and no control-plane segment. Protected paths and the
+  control plane still win over a matching scope.
 - Content is UTF-8 text within the size cap (256 KiB). A target that isn't UTF-8 is refused.
 - The base must not be stale.
 - Every requested gate, and every gate whose glob matches the path (case-insensitive), runs on a temporary

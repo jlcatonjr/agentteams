@@ -213,6 +213,12 @@ def _main_dispatch(
     if getattr(args, "issue_dispatch", False):
         from agentteams.cli.proposal_commands import run_issue_dispatch
         return run_issue_dispatch(args)
+    if getattr(args, "confined_path", False):
+        from agentteams.cli.proposal_commands import run_confined_path
+        return run_confined_path(args)
+    if getattr(args, "install_confined", None):
+        from agentteams.cli.proposal_commands import run_install_confined
+        return run_install_confined(args)
     if getattr(args, "verify_proposal_ledger", False):
         from agentteams.cli.proposal_commands import run_verify_proposal_ledger
         return run_verify_proposal_ledger(args)

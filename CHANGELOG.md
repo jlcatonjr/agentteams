@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (write-policy P5b: pattern write_scopes and an operator-owned confined_programs file)
+
+- **Pattern `write_scopes`.** A scope can now be a pattern such as `reports/dossiers/*/strategy.md`, so a
+  per-agent scope covers every dossier without a brief edit for each one.
+  - `*`, `?` and `[...]` match within one path segment. They never cross `/` and never match a dot-segment.
+  - A trailing `/` covers everything below the pattern, dot-files included.
+  - Refused at load: a wildcard first segment, `**`, `..`, absolute or `~` paths, and a control-plane first
+    segment.
+  - Protected paths and the control plane still win over a matching scope.
+- **Operator-owned `confined_programs`.** The runner now reads the sandbox config from
+  `~/.config/agentteams/confined/<project>-<hash>.json` when present, so machine paths stay out of the
+  committed brief. `--confined-path` prints that file's path. `--install-confined FILE` validates a new one,
+  prints the exact JSON and its sha256, and installs only on a rerun with a matching
+  `--confirm-review-sha256`.
+  - The runner refuses the file if it's a symlink, not yours, group- or world-writable, or inside the
+    project, and also when the brief sets `confined_programs` too.
+  - The runner pins the file's hash and stops if it changes.
+  - The file is re-checked after it's opened (same inode, regular file, opened non-blocking).
+  - Write roots must be literal directories.
+  - Under the switch the orchestrator never edits it and writes no script: it gives the user the one
+    `--install-confined` command.
+- **Agent reach.** Emitted `permissions.deny` now also carries `Edit(~/.config/agentteams/confined)`,
+  `Edit(~/.config/agentteams/confined/**)` and `Edit(~/.config/agentteams/keys/**)`. Before this, only Read
+  was denied on the key folder, so the built-in Write tool could create a file in it.
+
 ### fix (codex: read/search agents can read again)
 
 - **The bug.** On Codex, an agent declaring only `read`/`search` could read nothing. Codex reads through the

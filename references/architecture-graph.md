@@ -5,7 +5,7 @@
 
 - Modules mapped: **215**
 - Packages: **7**
-- Internal import edges: **549**
+- Internal import edges: **551**
 - Distinct external dependencies: **7**
 
 ---
@@ -103,7 +103,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.parser` | `agentteams`, `agentteams.capability_hints`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.backup_switch`, `agentteams.cli.branch_switch`, `agentteams.cli.fleet_switch`, `agentteams.cli.goose_switch`, `agentteams.cli.package_switch`, `agentteams.cli.parser_validate`, `agentteams.cli.sync_switch`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.source_provenance` | `agentteams.cli.app` |
 | `agentteams.cli.parser_validate` | `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.branch_switch`, `agentteams.shrink_allow` | `agentteams.cli.parser` |
 | `agentteams.cli.post_emit_checks` | `agentteams.emit`, `agentteams.scan` | `agentteams.cli.generate` |
-| `agentteams.cli.proposal_commands` | `agentteams.ingest`, `agentteams.proposal_runner`, `agentteams.proposals` | `agentteams.cli.app` |
+| `agentteams.cli.proposal_commands` | `agentteams.confinement`, `agentteams.ingest`, `agentteams.proposal_runner`, `agentteams.proposals` | `agentteams.cli.app` |
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
 | `agentteams.cli.render_pipeline` | `agentteams.emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.vscode_tasks`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers` |
 | `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.security_refs` |
@@ -116,7 +116,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.code_index_artifacts` |
 | `agentteams.codex_mcp_emit` | `agentteams.atomicio`, `agentteams.mcp_emit`, `agentteams.team_dir_advisories`, `agentteams.toml_write` | `agentteams.cli.artifacts` |
-| `agentteams.confinement` | `agentteams.frameworks._sandbox_emit` | `agentteams.proposal_policy`, `agentteams.proposals` |
+| `agentteams.confinement` | `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` |
 | `agentteams.control_plane_io` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync`, `agentteams.projection_marker` |
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry` | `agentteams.cli.commands` |
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.stale_detector` |
@@ -200,7 +200,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.projection_marker` | `agentteams`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit` | `agentteams.bridge`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync` |
 | `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.cli.generate_helpers` |
 | `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.proposals` |
-| `agentteams.proposal_runner` | `agentteams.proposals` | `agentteams.cli.proposal_commands` |
+| `agentteams.proposal_runner` | `agentteams.confinement`, `agentteams.proposals` | `agentteams.cli.proposal_commands` |
 | `agentteams.proposals` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks._write_roots`, `agentteams.proposal_policy` | `agentteams.cli.proposal_commands`, `agentteams.proposal_runner` |
 | `agentteams.provenance` | — | — |
 | `agentteams.rank_conformance` | `agentteams.analyze`, `agentteams.audit_types`, `agentteams.capability_map` | `agentteams.cli.standalone_modes` |
@@ -1126,6 +1126,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/cli/proposal_commands.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.confinement",
         "agentteams.ingest",
         "agentteams.proposal_runner",
         "agentteams.proposals"
@@ -2198,6 +2199,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/proposal_runner.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.confinement",
         "agentteams.proposals"
       ],
       "external": [],
@@ -3853,6 +3855,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.proposal_commands",
+      "target": "agentteams.confinement"
+    },
+    {
+      "source": "agentteams.cli.proposal_commands",
       "target": "agentteams.ingest"
     },
     {
@@ -4718,6 +4724,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.proposal_policy",
       "target": "agentteams.frameworks._write_roots"
+    },
+    {
+      "source": "agentteams.proposal_runner",
+      "target": "agentteams.confinement"
     },
     {
       "source": "agentteams.proposal_runner",

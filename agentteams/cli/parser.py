@@ -1064,6 +1064,24 @@ def _build_parser() -> argparse.ArgumentParser:
              "under --project (else CWD).",
     )
     parser.add_argument(
+        "--confined-path",
+        action="store_true",
+        dest="confined_path",
+        default=False,
+        help="Read-only (P5b): print the operator-owned confined_programs file for --project (else CWD), "
+             "under ~/.config/agentteams/confined/. The runner reads it instead of the brief's block.",
+    )
+    parser.add_argument(
+        "--install-confined",
+        metavar="FILE",
+        dest="install_confined",
+        default=None,
+        help="Operator-only (P5b): validate FILE (a JSON confined_programs object) against --description's "
+             "policy, print the exact JSON and its sha256, and install it as --project's operator-owned confined "
+             "file (mode 0600) only when rerun with that --confirm-review-sha256. Run it outside every agent "
+             "session; restart --serve-requests afterwards.",
+    )
+    parser.add_argument(
         "--verify-grants",
         action="store_true",
         dest="verify_grants",
@@ -1218,7 +1236,8 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "With --sign-decision/--sign-grant and no terminal: the review digest the minter "
             "printed for the payload you reviewed. Signing proceeds only on an exact match "
-            "(otherwise a terminal y/N prompt is required). --yes does not apply to signing."
+            "(otherwise a terminal y/N prompt is required). --yes does not apply to signing. "
+            "With --install-confined: the sha256 it printed for the JSON you reviewed; required to install."
         ),
     )
     parser.add_argument(
