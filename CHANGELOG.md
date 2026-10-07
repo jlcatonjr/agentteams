@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/enforcement-integrity.json`.
 - **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
 
+### docs (write-policy reference: `cwd` and `stdin_from_content`)
+
+- The generated `references/write-policy.reference.md` documented only `argv`, `purpose` and `expected_writes`
+  for a `command-request`. A researcher reading it would conclude it can't send a Lean draft on stdin. It now
+  also lists `cwd` (must equal the entry's pinned `cwd`) and `stdin_from_content: {path, content}` (accepted only
+  with `stdin_gates`, which run on it first), as `proposals.py` accepts them (mathAgents close-out audit).
+
 ### feat (write-policy: render-time warning for unnarrowed adopted agents)
 
 - Under `write_policy: "orchestrator-only"`, adopted (bespoke) agent files are never narrowed: they belong to
