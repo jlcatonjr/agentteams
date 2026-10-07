@@ -46,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the artifact exactly as it was returned, since nothing compares the copy with the original.
 - **`memory` is a capability key.** `CAPABILITY_FRONT_MATTER_KEYS` now includes Claude's `memory`, which
   enables Read, Write and Edit whatever `tools:` says. `--update --merge` reports it as a capability
-  proposal.
+  proposal only when a template declares `memory`. A `memory:` key added to an agent file by hand is not
+  reported. Under the switch, `AR_WRITE_POLICY` catches it.
 - **Ledger.** `apply-proposal` rows record `bytes`, for the P5 cost measurement.
 - `write_policy.py`, `proposals.py` and `front_matter_merge.py` are integrity-pinned.
   `references/enforcement-integrity.json` was regenerated for those three only. Stale local installed gate
