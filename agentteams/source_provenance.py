@@ -25,13 +25,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from agentteams.git_exec import run_git
+
 _COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}$")
 _UNKNOWN = {"kind": "unknown", "commit": None, "branch": None, "dirty": None}
 
 
 def _git(repo: Path, *args: str) -> str | None:
     try:
-        proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=10)
+        proc = run_git(repo, *args, hardened=True, timeout=10)
     except (OSError, subprocess.SubprocessError, ValueError):  # ValueError: undecodable output
         return None
     return proc.stdout.strip() if proc.returncode == 0 else None

@@ -26,12 +26,13 @@ harness (where agents cannot write it) and keep signing keys outside the agent's
 from __future__ import annotations
 
 import hashlib
-import os
 import importlib.util
 import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from agentteams.git_exec import run_git
 
 #: Modules whose integrity the constitution depends on. Each is here because a silent edit to
 #: it would disable or weaken a control rather than merely change behaviour.
@@ -140,6 +141,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/operator_signing.py",
     # Runs during the signed append (writes the ledger) inside operator_signing's closure.
     "agentteams/atomicio.py",
+    # CH-08 (2026-10-07): the shared git core and its read-only hardening; imported by the pinned proposals.py,
+    # operator_signing.py, signer_location.py and this module, so it sits in their closure.
+    "agentteams/git_exec.py",
     # #10 (2026-09-30): the install-location check the minters run before the key is read; in the
     # signing closure, so drift in it refuses signing.
     "agentteams/cli/signer_location.py",
@@ -228,13 +232,7 @@ def _manifest_expected(repo_root: Path) -> bool:
         # This runs from the gate hook, OUTSIDE the sandbox, in a repository the agent can write.
         # Command-line -c overrides the repo's own config, so a planted `core.fsmonitor` (which git
         # executes during ls-files) or hooks path cannot run code here (@security, PR-D C1).
-        tracked = subprocess.run(
-            ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
-             "-c", "core.untrackedCache=false", "-C", str(root),
-             "ls-files", "--error-unmatch", "--", MANIFEST_REL_PATH],
-            capture_output=True, text=True, timeout=10, check=False,
-            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
-        )
+        tracked = run_git(root, "ls-files", "--error-unmatch", "--", MANIFEST_REL_PATH, hardened=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return False
     return tracked.returncode == 0

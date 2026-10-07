@@ -38,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/enforcement-integrity.json`.
 - **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
 
+### refactor (CH-08: one custody read, one atomic write, one git core)
+
+- `atomicio.read_regular_nofollow` is now the one custody read behind the ledger key file, the runner's queued
+  requests and the operator-owned confined file: `O_NOFOLLOW | O_NONBLOCK`, an `fstat` check of the file
+  actually opened, an optional caller check, and a size cap. `atomicio.write_new_atomic` is the one
+  exclusive-temp-then-rename write. Each caller keeps its own error type and messages. One small tightening: a
+  ledger key file over 4 KiB is now refused instead of truncated.
+- New `agentteams/git_exec.py` (integrity-pinned, added to `ENFORCEMENT_MODULES` and the signing closure) is the
+  shared core behind the private `_git` helpers and the copies of the hardening (multi_sync, fleet,
+  source_provenance, operator_signing, signer_location, proposals, integrity). Each wrapper keeps its return
+  shape. Other one-off git calls are out of scope. The read-only hardening against
+  repository-planted config (`core.fsmonitor`, hooks, untracked cache) is written once. It now also covers the
+  runner's change snapshot (`proposals`) and `source_provenance`. `fleet` stays unhardened, because it commits.
+
 ### docs (write-policy reference: `cwd` and `stdin_from_content`)
 
 - The generated `references/write-policy.reference.md` documented only `argv`, `purpose` and `expected_writes`
