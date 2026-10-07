@@ -16,7 +16,8 @@ agent file over time.
 Public API
 ----------
 init_csv_stubs(refs_dir)
-    Create the CSV stub files (header row only) if they do not yet exist.
+    Create the CSV stub files (header row only; a new MCP need register may get seeded rows) if they do not
+    yet exist.
     Safe to call on every generation run — never overwrites existing data.
 
 migrate_inline_logs(adjacent_repos_md, refs_dir)
@@ -179,14 +180,18 @@ _CSV_REF_RE = re.compile(r"adjacent-repos-(changelog|coordination-log)\.csv")
 # Public: init_csv_stubs
 # ---------------------------------------------------------------------------
 
-def init_csv_stubs(refs_dir: Path, *, mcp_needs: bool = False) -> list[str]:
-    """Create CSV log stubs (header row only) if they do not already exist.
+def init_csv_stubs(refs_dir: Path, *, mcp_needs: bool = False,
+                   mcp_seed_rows: list[dict[str, str]] | None = None) -> list[str]:
+    """Create CSV log stubs if they do not already exist: header row only, except a new MCP need register, which
+    gets ``mcp_seed_rows``.
 
     Args:
         refs_dir: Absolute path to the ``references/`` directory inside the
                   agents output directory.
         mcp_needs: Also create the MCP need register (``mcp-needs.csv``). Only teams under
                    ``write_policy: "orchestrator-only"`` get it, so other teams stay unchanged.
+        mcp_seed_rows: Rows written into a *newly created* register (``mcp_need.seed_rows``): the brief's
+                   hints, unverified. An existing register is never touched.
 
     Returns:
         List of relative file names (within *refs_dir*) that were created.
@@ -204,7 +209,8 @@ def init_csv_stubs(refs_dir: Path, *, mcp_needs: bool = False) -> list[str]:
     ):
         target = refs_dir / fname
         if not target.exists():
-            _write_csv_header(target, headers)
+            seed = list(mcp_seed_rows or []) if fname == MCP_NEEDS_CSV else []
+            atomic_rewrite_csv_rows(target, seed, headers)
             created.append(fname)
     return created
 

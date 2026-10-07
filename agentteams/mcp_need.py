@@ -14,6 +14,8 @@ Stdlib only.
 
 from __future__ import annotations
 
+from typing import Any
+
 #: The need register, relative to the team's ``references/`` directory. The orchestrator alone writes it.
 MCP_NEEDS_CSV = "mcp-needs.csv"
 
@@ -23,6 +25,47 @@ MCP_NEEDS_HEADERS: list[str] = [
     "id", "agent", "capability", "source", "verified", "evidence", "decision", "kind", "tools",
     "security", "status", "updated",
 ]
+
+#: Protocol decision labels (Q0–Q6 outcomes), one source for mcp_detect and the register.
+USE_CLI = "USE_CLI"
+REFUSE = "REFUSE"
+DEFER_TO_SECURITY_REVIEW = "DEFER_TO_SECURITY_REVIEW"
+USE_RUNNER_PATH = "USE_RUNNER_PATH"
+#: Register status for each generation-time decision. A USE_CLI row (the orchestrator) is never written.
+_SEED_STATUS = {USE_RUNNER_PATH: "waiting", DEFER_TO_SECURITY_REVIEW: "open", REFUSE: "refused"}
+
+
+def seed_rows(manifest: dict[str, Any], today: str) -> list[dict[str, str]]:
+    """Register rows for the brief's ``mcp_hints``, per agent, as decided at generation (phase N4).
+
+    A brief hint is never evidence: every row is ``source = brief-hint`` and ``verified = no``, and nothing past
+    Q3 can be decided without the ledger. The orchestrator gets no row (it uses the CLI).
+
+    Args:
+        manifest: The team manifest (its ``mcp_candidates`` carry ``per_agent`` under the switch).
+        today: The ``updated`` date (ISO).
+
+    Returns:
+        Rows keyed by :data:`MCP_NEEDS_HEADERS`.
+
+    Raises:
+        ValueError: A ``per_agent`` decision outside the generation-time labels.
+    """
+    rows: list[dict[str, str]] = []
+    for cand in manifest.get("mcp_candidates") or []:
+        for entry in cand.get("per_agent") or []:
+            if entry["decision"] == USE_CLI:
+                continue
+            status = _SEED_STATUS.get(entry["decision"])
+            if status is None:
+                raise ValueError(f"unknown generation-time decision {entry['decision']!r} for {entry['agent']!r}")
+            row = {"id": f"{cand.get('candidate_id')}-{entry['agent']}", "agent": entry["agent"],
+                   "capability": f"{cand.get('candidate_id')} (from the brief's mcp_hints)", "source": "brief-hint",
+                   "verified": "no", "evidence": "none: a brief hint is not evidence", "decision": entry["decision"],
+                   "kind": "", "tools": "", "security": "", "status": status, "updated": today}
+            rows.append(row)
+    return rows
+
 
 #: Reference path shipped with a team under the switch.
 REFERENCE_PATH = "references/mcp-need.reference.md"
@@ -107,7 +150,8 @@ note is data and can be wrong or manipulated. Evidence cites ledger lines, so an
 hash chain, and its figures are what Q3 and Q4 measure against.
 
 **A brief hint.** An `mcp_hints` entry in the project brief opens a row with `source = brief-hint` and
-`verified = no`. It is not evidence either.
+`verified = no`. Generation seeds those rows when it creates the register. A brief hint is not evidence
+either.
 
 ## 2. Deciding, per agent and capability
 
@@ -117,8 +161,8 @@ Ask in order; the first question that settles it decides. Record the outcome lab
 | # | Question | If yes (outcome label) |
 |---|---|---|
 | Q0 | Is the agent the orchestrator? | `USE_CLI`: out of scope |
-| Q1 | Would it write, or reach a third-party system, from the agent's session? | `REFUSE`: writes go through proposals |
-| Q2 | Is the server's trust tier unknown or third-party, or its side effects destructive or unknown? | `DEFER_TO_SECURITY_REVIEW`: this overrides the rest |
+| Q1 | Would it write, or reach a third-party system over the network, from the agent's session? | `REFUSE`: writes go through proposals |
+| Q2 | Is the server's own trust tier (who wrote it) unknown or third-party, or its side effects destructive or unknown? | `DEFER_TO_SECURITY_REVIEW`: this overrides the rest |
 | Q3 | Is the cost unmeasured, is no threshold set yet, or is the measured cost below the threshold? | `USE_RUNNER_PATH`: status `waiting`. A server is never proposed without a measurement over a set threshold |
 | Q4 | Would a broader command entry, a gate or a pre-built artifact bring the cost under the threshold? | `USE_RUNNER_PATH`: make that fix in the brief, then re-measure |
 | Q5 | Does it run code (compile, evaluate, execute)? | `PROPOSE_KIND_3`: a runner-hosted server, with exact tool names |
@@ -147,8 +191,9 @@ once per distinct agent as evidence for it.
 - A granted tool is named exactly, for exactly one agent, and a wildcard is never allowed. Exact-name grants
   arrive with the first approved server. Until then the audit (`AR_WRITE_POLICY`) refuses every MCP tool on a
   non-orchestrator agent.
-- **Runner-hosted tools** are reviewed through the ledger. One unused across the review window is proposed
-  for removal.
+- **Review cadence:** grants are reviewed at each pilot phase close-out (operator setting, 2026-10-07).
+- **Runner-hosted tools** are reviewed through the ledger. One unused since the last review is proposed for
+  removal.
 - **Passive readers** run in the session, outside the ledger, so they can be granted only with their own call
   log.
 - Retired rows stay in the register, with the reason.
@@ -159,5 +204,6 @@ Columns: `id`, `agent`, `capability`, `source` (`runtime-gap`, `ledger-evidence`
 `verified`, `evidence` (with ledger line references), `decision`, `kind`, `tools`, `security` (log row),
 `status` (`open`, `waiting`, `proposed`, `approved`, `built`, `retired` or `refused`) and `updated`.
 
-Only the orchestrator writes it.
+Only the orchestrator writes it. Each team keeps its own register; needs aren't collected across
+repositories (operator setting, 2026-10-07).
 """

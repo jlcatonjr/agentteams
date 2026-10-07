@@ -41,6 +41,8 @@ coerced strictly (`value is True`), so a stringy `"false"` cannot flip a result.
 BUILD_MCP = "BUILD_MCP"
 USE_DIRECT_API = "USE_DIRECT_API"
 DEFER_TO_SECURITY_REVIEW = "DEFER_TO_SECURITY_REVIEW"
+# per-agent decisions under the switch, owned by agentteams.mcp_need (re-exported here):
+USE_CLI, REFUSE, USE_RUNNER_PATH
 
 
 @dataclass
@@ -49,21 +51,43 @@ class McpCandidate:
     recommendation: str
     rationale: str
     signals: dict[str, bool]
-    def to_manifest_entry(self) -> dict: ...   # team-manifest mcp_candidates item
+    agents: list[str] | None = None            # under write_policy "orchestrator-only" only
+    per_agent: list[dict] | None = None        # under write_policy "orchestrator-only" only
+    def to_manifest_entry(self) -> dict: ...   # team-manifest mcp_candidates item (None fields omitted)
 ```
 
 ```python
-evaluate_hint(hint: dict, *, target_host_count: int = 1) -> McpCandidate
+evaluate_hint(hint: dict, *, target_host_count: int = 1, write_policy: bool = False) -> McpCandidate
 ```
 Evaluate one integration hint (shape: the `mcp_hints` item in
 `agentteams/schemas/project-description.schema.json`). `target_host_count > 1` is itself
-evidence of cross-host reuse.
+evidence of cross-host reuse. With `write_policy` (the orchestrator-only switch), the candidate keeps
+its `agents` and gets a `per_agent` decision for each.
+- **Agents:** `used_by_components` names components, so each maps to its workstream expert (`<slug>-expert`).
+  A value already on the roster, or the orchestrator, is kept as is. Anything else is listed in the rationale
+  as ignored, never invented.
+- **Which result governs:** the project-level `recommendation` (for example `BUILD_MCP`) stays advisory, for
+  the operator. For non-orchestrator agents under the switch, `per_agent` governs, by the MCP-need protocol.
+
+```python
+classify_agent_need(agent: str, hint: dict) -> dict
+```
+One agent's decision under the agent MCP-need protocol ([`mcp_need`](mcp-need.md)) at generation time,
+before anything is measured:
+- `USE_CLI` for the orchestrator;
+- `REFUSE` for a capability that writes (`max_side_effect` `write` or `destructive`);
+- `DEFER_TO_SECURITY_REVIEW` when the hard gate fires (an unknown or third-party trust tier, or an
+  unknown side effect);
+- otherwise `USE_RUNNER_PATH`: wait for the ledger. A brief hint is never evidence, so generation never
+  proposes a server.
 
 ```python
 detect_mcp_candidates(description: dict, *, target_host_count: int = 1) -> list[McpCandidate]
 ```
 Evaluate every `mcp_hints` entry in a description. Returns `[]` when none are
-declared (the default — direct API). Duplicate `candidate_id` slugs are
+declared (the default — direct API). `analyze` passes the *effective* switch (`write_policy_frameworks`
+can turn it off for a framework), the roster and the component slugs. Direct callers that pass no
+`write_policy` get it from the description. Duplicate `candidate_id` slugs are
 disambiguated with a numeric suffix so a punctuation/case collision never
 silently drops a recommendation.
 

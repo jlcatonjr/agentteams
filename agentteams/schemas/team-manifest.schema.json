@@ -685,6 +685,25 @@
                 "type": "boolean"
               }
             }
+          },
+          "agents": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "Under write_policy orchestrator-only only: the agents the hint names (used_by_components)."
+          },
+          "per_agent": {
+            "type": "array",
+            "description": "Under write_policy orchestrator-only only: each agent's decision by the MCP-need protocol at generation time (no ledger evidence yet).",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["agent", "decision", "rationale"],
+              "properties": {
+                "agent": { "type": "string", "minLength": 1 },
+                "decision": { "type": "string", "enum": ["USE_CLI", "REFUSE", "DEFER_TO_SECURITY_REVIEW", "USE_RUNNER_PATH"] },
+                "rationale": { "type": "string" }
+              }
+            }
           }
         }
       }

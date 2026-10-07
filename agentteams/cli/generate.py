@@ -77,6 +77,17 @@ _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
 
+
+def _mcp_seed_rows(manifest: dict) -> list[dict[str, str]] | None:
+    """Brief-hint rows for a new MCP need register under the switch (MCP-need protocol N4), else ``None``."""
+    if not _write_policy.enabled(manifest):
+        return None
+    from datetime import date
+
+    from agentteams.mcp_need import seed_rows
+
+    return seed_rows(manifest, date.today().isoformat())
+
 def run_generate(
     args: argparse.Namespace,
     strict_manual_placeholders: bool,
@@ -672,7 +683,8 @@ def _run_generate_inner(
                 return 1
 
         if not args.dry_run and result.success:
-            created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest))
+            created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest),
+                                                  mcp_seed_rows=_mcp_seed_rows(manifest))
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
             build_team._write_run_log(manifest, result, output_dir, template_hashes)
@@ -910,7 +922,8 @@ def _run_generate_inner(
             return 1
 
     if not args.dry_run and result.success:
-        created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest))
+        created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest),
+                                              mcp_seed_rows=_mcp_seed_rows(manifest))
         if created:
             print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
 

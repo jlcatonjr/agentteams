@@ -637,7 +637,9 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # MCP-suitability detection (report §5). Advisory only — populated solely
     # when the description declares mcp_hints, so manifests for projects without
     # MCP integrations are unchanged. Never auto-provisions a server.
-    mcp_candidates = detect_mcp_candidates(description)
+    mcp_candidates = detect_mcp_candidates(
+        description, write_policy=write_policy == "orchestrator-only", roster=all_slugs,
+        components=[c["slug"] for c in components])
     if mcp_candidates:
         manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
     # Specified-server automation (report §5.4/§6): copy operator-DECLARED server
