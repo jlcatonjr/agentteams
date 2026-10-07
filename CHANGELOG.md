@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (P5b close-out consistency)
+
+- The `--serve-requests` CLI reference and the proposals runner section now say `confined_programs` comes from
+  the operator-owned file when present. The `install_confined_file` docstring no longer mentions a script.
+  `--version` documents the source it prints.
+
 ### fix (P5b follow-up: RSR1, no tmp/ path in the orchestrator's sandbox-change step)
 
 - #133's orchestrator "Applying proposals" step 5 put the candidate JSON under the gitignored scratch folder.

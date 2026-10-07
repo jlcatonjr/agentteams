@@ -245,8 +245,9 @@ agentteams --serve-requests --project <root> --description <brief>
   so only the runner writes the ledger.
 - **Frameworks.** The switch is allowed only where such a session sandbox exists: claude and goose, with
   `privilege_profile` not `"cooperative"`. Generation refuses it elsewhere.
-- **Confined execution (P4b).** The runner runs every command and gate in an OS sandbox from the brief's
-  `confined_programs`. See [`confinement`](confinement.md).
+- **Confined execution (P4b).** The runner runs every command and gate in an OS sandbox from
+  `confined_programs`: the operator-owned file (P5b) when present, otherwise the brief's block. See
+  [`confinement`](confinement.md).
 
 Details, queue layout and residual risks: [`proposal_runner`](proposal-runner.md).
 
