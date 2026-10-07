@@ -290,6 +290,12 @@ Used with `--update`: also delete agent files that are no longer part of the tea
 
 Register pre-existing agent files that the generated taxonomy does not produce (e.g. bespoke custom agents) into the team roster — the orchestrator's handoff list and domain routing — **without** generating or overwriting their files. The opposite of `--prune`: integrate orphans instead of removing them. Requires the orchestrator to be (re)rendered, so use with `--overwrite` or `--migrate` (under `--merge` the orchestrator front matter is preserved and adoption would not surface).
 
+**`--overwrite` never silently drops an adopted routing row** (CA-033). If the on-disk orchestrator carries
+`*(adopted)*` routing rows whose agent files still exist, and the fresh render wouldn't contain them (a plain
+`--overwrite` without `--adopt-orphans` rebuilds the routing fence from the brief alone), the run is refused
+(`[ADOPTED-ROWS] blocked`). Re-run with `--adopt-orphans`, or use `--update --merge`, which carries them. Delete
+an agent's file, or `--prune` it, to drop its row on purpose.
+
 ### `--materialize-native`
 
 Used with `--update` against a **bridge** target (a `.claude/`, `.github/`, etc. that bridges to a canonical framework maintained elsewhere): opt in to generating a full **native** team over the bridge. Without this flag, `--update` on a detected bridge **fails closed** with guidance (use `--bridge-merge` to refresh the bridge, or this flag to materialize a native team) rather than silently writing a full native team (D3). Bridge detection is positive and structured — a `references/bridges/<source>-to-<framework>/bridge-manifest.json` for the target framework, or an `AGENTTEAMS-BRIDGE` HTML-comment fence in a framework **entry file** — never a substring match on agent bodies and never absent-build-log (a first-generation native team legitimately has no build-log).
