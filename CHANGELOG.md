@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/enforcement-integrity.json`.
 - **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
 
+### feat (write-policy: render-time warning for unnarrowed adopted agents)
+
+- Under `write_policy: "orchestrator-only"`, adopted (bespoke) agent files are never narrowed: they belong to
+  the project. Before this, only the `AR_WRITE_POLICY` audit noticed, so a render looked successful (mathAgents'
+  first P5 render was reverted at a stop-condition). Every render now runs that check on the agent files it
+  doesn't generate (adopted ones, not files it skipped) and prints `[WRITE-POLICY]` naming any that fail. No
+  file is rewritten and the exit code is unchanged.
+
 ### fix (claude: the team-builder never ships canonical tool names)
 
 - Under `write_policy: "orchestrator-only"`, narrowing replaced the Claude team-builder's `allowed-tools` grant

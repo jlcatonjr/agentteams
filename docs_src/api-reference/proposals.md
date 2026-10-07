@@ -199,6 +199,11 @@ every one.
 - **Codex project-level MCP servers** (`codex:mcp`) are inherited by subagents, and `sandbox_mode` doesn't
   confine them. Keep them read-only, or off, for a team under the switch.
 
+- **Adopted agents are not narrowed.** An adopted (bespoke) agent file belongs to the project, so the generator
+  leaves it as it is. After each render under the switch, agentteams runs the `AR_WRITE_POLICY` check on the
+  agent files it doesn't generate (adopted ones, not files it skipped), and prints `[WRITE-POLICY]` naming any that fail. It changes no file and
+  no exit code. Narrow them yourself, for example with `agentteams.write_policy.apply`, or the audit fails.
+
 ## Residual risk (stated, not hidden)
 
 - An allowed command that runs agent-written code is arbitrary execution, whatever the allowlist says.
