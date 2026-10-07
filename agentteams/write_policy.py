@@ -281,6 +281,7 @@ agentteams --serve-requests --project <root> --description <brief>
     (`agentteams --confined-path`; install it with `agentteams --install-confined FILE`, which prints the JSON
     and its sha256 and installs only with a matching `--confirm-review-sha256`), so machine paths
     stay out of the committed brief. With no such file, the brief's block applies. Both at once are refused.
+    Its reserved `gate_exec` key can also hold gates' `exec` paths (P5c), instead of the brief.
     The file is pinned at start like the brief, and must be yours and not group- or world-writable.
   - Writes go only to the declared roots and a private `TMPDIR`. The ledger, the queue, `.git` and the
     control plane stay protected, and the key directory is unreadable.

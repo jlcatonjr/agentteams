@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (write-policy P5c: gate exec in the operator-owned confined file)
+
+- The operator file (`--install-confined`) can now hold gates' `exec` paths under a reserved top-level key,
+  `gate_exec: {gate: [paths]}`. A Python gate's interpreter root then stays out of the committed brief too.
+- Refused: a gate the brief doesn't define, a gate whose brief entry already sets `exec`, a malformed value,
+  and an agent named `gate_exec`.
+- The same custody checks, review-hash install and runner hash pin apply. A brief-set gate `exec` still works.
+
 ### docs (P5b close-out consistency)
 
 - The `--serve-requests` CLI reference and the proposals runner section now say `confined_programs` comes from
