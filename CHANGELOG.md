@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security gate: a superseded clearance can't be replayed, C-5)
+
+- `_latest_security_decision` skipped consumed rows. Once the newest clearance for an action was consumed, an
+  older unconsumed PASS that it had superseded became "latest" and could be used again (reported from
+  mathAgents' first P5 render). The newest row matching the action now decides, and if it is consumed the gate
+  refuses. Recording several clearances in advance now yields one use, not several. The refusal message keeps
+  its `no matching PASS decision found` prefix.
+
 ### fix (write-policy: readfs needs an explicit allowlist)
 
 - Under the switch, `AR_WRITE_POLICY` accepted an `agentteams_readfs` entry whose `available_tools` was `[]` or
@@ -26,6 +34,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proposal-only, as for agents. Before this, skills never matched a baseline, so nothing in their front matter
   was auto-applied.
 - Existing logs clean up at the next render.
+
+### feat (MCP-need protocol phase N4: per-agent detection under the switch)
+
+- **`mcp_detect` keeps the agents.** Under `write_policy: "orchestrator-only"`, each `mcp_candidates` entry
+  keeps the hint's `agents` (`used_by_components`, which it used to reduce to a count) and gets a
+  `per_agent` decision by the MCP-need protocol (`classify_agent_need`):
+  - `USE_CLI` for the orchestrator;
+  - `REFUSE` for a writing capability;
+  - `DEFER_TO_SECURITY_REVIEW` when the hard gate fires;
+  - otherwise `USE_RUNNER_PATH`. A brief hint is never evidence, so nothing past Q3 is decided at generation.
+
+  The team-manifest schema gains both optional fields. Without the switch, entries are unchanged.
+- **Register seeding.** When generation creates `references/mcp-needs.csv`, it adds those decisions as
+  `brief-hint`, `verified = no` rows (no orchestrator row). An existing register is never touched.
+- **Operator settings in the procedure.** Grants are reviewed at each pilot phase close-out, and each team
+  keeps its own register (no cross-repository collection).
 
 ### feat (write-policy P5c: gate exec in the operator-owned confined file)
 

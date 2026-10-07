@@ -17,7 +17,8 @@ rather than from the agent's own account. It runs parallel to the skill capabili
 | `MCP_NEEDS_CSV` | `mcp-needs.csv`: the need register in the team's `references/`. Only the orchestrator writes it. |
 | `MCP_NEEDS_HEADERS` | The register's columns. `verified` is `yes` only when `evidence` cites runner-ledger lines; an agent's gap note never counts as evidence by itself (C-4). |
 | `REFERENCE_PATH` | `references/mcp-need.reference.md`. |
-| `reference_doc() -> str` | The procedure: gap-note and ledger-evidence triggers; the ordered per-agent decision rule (security hard gate first, measured threshold, runner-path fixes, then a runner-hosted or passive-reader proposal with exact tool names); the gates; granting and retirement; the register. |
+| `seed_rows(manifest, today) -> list[dict]` | Phase N4: register rows for the brief's `mcp_hints`, one per agent (none for the orchestrator), from `mcp_candidates[].per_agent`. Every row is `source = brief-hint`, `verified = no`. Generation writes them only when it creates the register. |
+| `reference_doc() -> str` | The procedure: gap-note and ledger-evidence triggers; the ordered per-agent decision rule (Q0 orchestrator; Q1 writes or network reach, refused; Q2 the security hard gate; Q3 a measured threshold; Q4 runner-path fixes; then a runner-hosted or passive-reader proposal with exact tool names); the gates; granting and retirement, reviewed at each pilot phase close-out; the register, kept per team. |
 
 ## What it changes in a generated team (under the switch)
 
