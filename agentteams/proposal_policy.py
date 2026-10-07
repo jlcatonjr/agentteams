@@ -9,6 +9,8 @@ re-exports every name, so no import changed. Stdlib only; integrity-pinned.
 from __future__ import annotations
 
 import fnmatch
+import hashlib
+import json
 import os
 import posixpath
 import re
@@ -26,6 +28,25 @@ _SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 _GLOB_CHARS = "*?["
 #: P5c: the operator file's reserved key for gates' exec paths. The underscore can't collide with an agent slug.
 GATE_EXEC_KEY = "gate_exec"
+#: The operator file's record of each ``gate_exec`` gate's argv digest, written by ``--install-confined``: a gate
+#: whose brief argv changed since install no longer gets the file's exec (stale binding; P5c @security advisory).
+GATE_ARGV_KEY = "gate_argv_sha256"
+_RESERVED_KEYS = (GATE_EXEC_KEY, GATE_ARGV_KEY)
+
+
+def gate_argv_digest(argv: list[str]) -> str:
+    """The digest that binds an operator ``gate_exec`` entry to the gate's argv in the brief.
+
+    Args:
+        argv: The gate's ``argv`` from ``proposal_gates``.
+
+    Returns:
+        The sha256 of the argv as compact JSON.
+
+    Raises:
+        TypeError: When *argv* isn't JSON-serialisable.
+    """
+    return hashlib.sha256(json.dumps(list(argv), separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 class ProposalError(Exception):
@@ -103,8 +124,10 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
             parent/absolute paths, a gate templates ``{file}``/``{path}`` inside a larger argument or runs a
             shell, a write scope covers the brief or is an unsafe pattern, or both the brief and the operator
             file define ``confined_programs``. P5c: an agent is named ``gate_exec``; the brief's
-            ``confined_programs`` uses that reserved key; or the operator file's ``gate_exec`` is malformed, names
-            a gate the brief doesn't define, or sets a gate whose brief entry already sets ``exec``.
+            ``confined_programs`` uses that reserved key (``gate_argv_sha256`` likewise); or the operator file's
+            ``gate_exec`` is malformed, names a gate the brief doesn't define, sets a gate whose brief entry
+            already sets ``exec``, lacks its ``gate_argv_sha256`` binding, or is bound to an argv the brief has
+            since changed.
     """
     agents = brief.get("agent_policies") or {}
     gates = brief.get("proposal_gates") or {}
@@ -120,8 +143,9 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
         for arg in argv:
             if ("{file}" in arg or "{path}" in arg) and arg not in ("{file}", "{path}"):
                 raise ProposalError(f"proposal_gates.{name}: {{file}}/{{path}} must be whole arguments, not {arg!r}")
-    if GATE_EXEC_KEY in agents:
-        raise ProposalError(f"agent_policies.{GATE_EXEC_KEY}: that name is reserved for the operator file's gate exec")
+    for reserved in _RESERVED_KEYS:
+        if reserved in agents:
+            raise ProposalError(f"agent_policies.{reserved}: that name is reserved for the operator file")
     for name, pol in agents.items():
         if not isinstance(pol, dict):
             raise ProposalError(f"agent_policies.{name} must be an object")
@@ -162,16 +186,18 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
                 raise ProposalError(f"agent_policies.{name}: write scope {scope!r} {problem}")
         if brief_rel and _in_scope(brief_rel, scopes):
             raise ProposalError(f"agent_policies.{name}.write_scopes covers the brief ({brief_rel}); refused (C-3)")
-    if isinstance(brief.get("confined_programs"), dict) and GATE_EXEC_KEY in brief["confined_programs"]:
-        raise ProposalError(f"confined_programs.{GATE_EXEC_KEY} is reserved for the operator file; set a gate's exec "
-                            "in proposal_gates in the brief")
+    for reserved in _RESERVED_KEYS:
+        if isinstance(brief.get("confined_programs"), dict) and reserved in brief["confined_programs"]:
+            raise ProposalError(f"confined_programs.{reserved} is reserved for the operator file; set a gate's exec "
+                                "in proposal_gates in the brief")
     if confined_file is not None and brief.get("confined_programs"):
         raise ProposalError("confined_programs is set in both the brief and the operator file "
                             f"({_confinement.CONFINED_DIR}); keep one so it is clear which applies")
     raw_confined = confined_file[0] if confined_file is not None else brief.get("confined_programs") or {}
-    if confined_file is not None and isinstance(raw_confined, dict) and GATE_EXEC_KEY in raw_confined:
+    if confined_file is not None and isinstance(raw_confined, dict) and (
+            GATE_EXEC_KEY in raw_confined or GATE_ARGV_KEY in raw_confined):
         raw_confined = dict(raw_confined)
-        gates = _merge_gate_exec(gates, raw_confined.pop(GATE_EXEC_KEY))
+        gates = _merge_gate_exec(gates, raw_confined.pop(GATE_EXEC_KEY, {}), raw_confined.pop(GATE_ARGV_KEY, {}))
     try:
         confined = _confinement.load_confined(raw_confined, gates, control_plane_of)
     except _confinement.ConfinementError as exc:
@@ -181,22 +207,33 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
                   confined_file_sha=confined_file[1] if confined_file is not None else None)
 
 
-def _merge_gate_exec(gates: dict[str, Any], gate_exec: Any) -> dict[str, Any]:
+def _merge_gate_exec(gates: dict[str, Any], gate_exec: Any, argv_digests: Any) -> dict[str, Any]:
     """Merge the operator file's ``gate_exec`` (P5c) into a copy of the brief's gates as their ``exec``.
 
     Machine paths for a gate's interpreter then stay out of the committed brief, as P5b did for
-    ``confined_programs``. Path shapes are checked by ``load_confined`` like a brief-set ``exec``.
+    ``confined_programs``. Path shapes are checked by ``load_confined`` like a brief-set ``exec``. Each entry is
+    bound to the gate's argv by ``gate_argv_sha256`` (written by ``--install-confined``): a gate whose argv
+    changed since install is refused, so a reworked gate never silently keeps the old exec.
     """
     if not (isinstance(gate_exec, dict) and all(isinstance(v, list) and v and all(isinstance(p, str) for p in v)
                                                 for v in gate_exec.values())):
         raise ProposalError(f"{GATE_EXEC_KEY} must map gate names to non-empty lists of paths")
+    if not (isinstance(argv_digests, dict) and all(isinstance(v, str) for v in argv_digests.values())):
+        raise ProposalError(f"{GATE_ARGV_KEY} must map gate names to sha256 strings")
+    unknown = sorted(set(gate_exec) - set(gates))
+    if unknown:
+        raise ProposalError(f"{GATE_EXEC_KEY}.{unknown[0]}: no such gate in the brief's proposal_gates")
+    if set(argv_digests) != set(gate_exec):
+        raise ProposalError(f"{GATE_ARGV_KEY} must name exactly the gates in {GATE_EXEC_KEY}; reinstall the file "
+                            "with --install-confined, which records them")
     merged = dict(gates)
     for name, paths in gate_exec.items():
-        if name not in gates:
-            raise ProposalError(f"{GATE_EXEC_KEY}.{name}: no such gate in the brief's proposal_gates")
         if gates[name].get("exec"):
             raise ProposalError(f"{GATE_EXEC_KEY}.{name}: the brief already sets this gate's exec; keep one so it "
                                 "is clear which applies")
+        if argv_digests[name] != gate_argv_digest(gates[name]["argv"]):
+            raise ProposalError(f"{GATE_EXEC_KEY}.{name}: the gate's argv changed since the operator file was "
+                                "installed; review its exec and reinstall with --install-confined")
         merged[name] = {**gates[name], "exec": list(paths)}
     return merged
 

@@ -24,6 +24,7 @@ from pathlib import Path
 from agentteams import confinement as _confinement
 from agentteams import ingest
 from agentteams import proposal_runner as R
+from agentteams.proposal_policy import GATE_ARGV_KEY, GATE_EXEC_KEY, gate_argv_digest
 from agentteams.proposals import (
     Policy,
     ProposalError,
@@ -256,10 +257,17 @@ def run_install_confined(args: argparse.Namespace) -> int:
             raise ProposalError("the file must hold a JSON object of {agent: {exec, write}}")
         brief_path, root = Path(args.description).resolve(), _root(args)
         brief_rel = brief_path.relative_to(root).as_posix() if brief_path.is_relative_to(root) else None
+        brief = ingest.load(brief_path, scan_project=False)
+        gates = brief.get("proposal_gates") or {}
+        if GATE_EXEC_KEY in data and isinstance(gates, dict):  # a malformed proposal_gates: load_policy refuses it
+            # Bind each gate_exec entry to its gate's current argv; the operator reviews these digests with the rest.
+            # Malformed or unknown gates get no digest here; load_policy below refuses them with a clear message.
+            data = {**data, GATE_ARGV_KEY: {
+                name: gate_argv_digest(gates[name]["argv"]) for name in (data[GATE_EXEC_KEY] or {})
+                if isinstance(gates.get(name), dict) and isinstance(gates[name].get("argv"), list)}}
         # Static checks only: the runner repeats check_roots against the live tree before every command, and a
         # write root such as lean/.lake may not exist yet.
-        load_policy(ingest.load(brief_path, scan_project=False), brief_rel=brief_rel,
-                    confined_file=(data, "candidate"))
+        load_policy(brief, brief_rel=brief_rel, confined_file=(data, "candidate"))
         payload = _confinement.confined_bytes(data)
         digest = hashlib.sha256(payload).hexdigest()
         confirmed = (getattr(args, "confirm_review_sha256", None) or "").strip().lower()

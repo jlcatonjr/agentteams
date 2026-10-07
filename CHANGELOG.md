@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (write-policy: gate exec hardening)
+
+- `--install-confined` now binds each operator-file `gate_exec` entry to its gate's argv by recording
+  `gate_argv_sha256` in the reviewed JSON. A gate whose brief argv has changed since install is refused until
+  the file is reinstalled, so a reworked gate can't silently keep its old exec. An entry without a binding is
+  refused, so P5c files must be reinstalled once.
+- At run time a gate is refused if any of its exec paths lies inside an agent's confined write root, where a
+  command could plant a binary for the gate to run. Gates previously checked against no write roots at all.
+  (Both are @security advisories on P5b/P5c.)
+
 ### fix (codex: every shell-reading agent gets the secret-store line)
 
 - Codex agents that already run commands (`execute`, or `retrieval`'s CLI) now get a "Secrets on Codex" section

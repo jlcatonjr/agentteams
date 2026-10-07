@@ -30,6 +30,12 @@ runner starts inside an OS sandbox.
   interpreter's machine path out of the committed brief too. It is refused for a gate the brief doesn't define
   or whose brief entry already sets `exec`. In the operator file `gate_exec` is never read as an agent; no agent
   may take that name, and the brief's own `confined_programs` may not use it.
+  - `--install-confined` binds each `gate_exec` entry to its gate's argv, by recording
+    `gate_argv_sha256: {gate: sha256 of the argv}` in the reviewed JSON. A gate whose argv in the brief has changed
+    since install is refused until the file is reinstalled, so a reworked gate never silently keeps the old exec.
+    An entry without its binding is refused too. `gate_argv_sha256` is reserved like `gate_exec`.
+  - At run time a gate is refused if any of its exec paths lies inside any agent's confined write root, where a
+    command could plant a binary for the gate to run.
 - **Where it lives (P5b).** Prefer the operator-owned file `~/.config/agentteams/confined/<project>-<hash>.json`
   (`agentteams --confined-path`) over the brief, so machine paths stay out of the committed brief.
   - Install it with `agentteams --install-confined FILE --description BRIEF`. That validates it against the
