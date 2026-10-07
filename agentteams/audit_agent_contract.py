@@ -748,6 +748,21 @@ def _check_write_policy(
         )
         for rel_path in sorted(unreadable or [])
     ]
+    for rel_path in sorted(p for p in exempt if _agent_slug(p, agent_ext) == "orchestrator"):
+        # The exempt orchestrator must carry the duties that make it the only writer (P5a): a render or a hand
+        # edit that loses the "Applying Proposals" section leaves the team with a writer that has no workflow.
+        text = file_map.get(rel_path, "")
+        notes = re.search(r"^[ \t]*## Project-Specific Notes[ \t]*$", text, re.MULTILINE)
+        duties = re.search(r"^[ \t]*## Write Policy: Applying Proposals[ \t]*$", text, re.MULTILINE)
+        notes_at = notes.start() if notes else -1
+        duties_at = duties.start() if duties else -1
+        # Anchored: the heading itself, before any user notes (text a user typed in the notes can't count).
+        if duties_at == -1 or (notes_at != -1 and duties_at > notes_at):
+            findings.append(AuditFinding(
+                category="AGENT_REFACTOR", code="AR_WRITE_POLICY", severity="error", file=rel_path,
+                description=('write_policy "orchestrator-only": the orchestrator lacks its "Write Policy: '
+                             'Applying Proposals" section (its duties as the only writer). Re-render it.'),
+            ))
     for rel_path, content in agents:
         if rel_path in exempt:
             continue

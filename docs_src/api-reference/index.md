@@ -105,6 +105,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`confinement`](confinement.md) | Orchestrator-only-writes pilot (P4b): run the runner's commands and gates in a Seatbelt/bwrap sandbox built from `confined_programs` |
 | [`proposal_policy`](proposal-policy.md) | Orchestrator-only-writes pilot: the registered policy (brief validation and lint), re-exported by `proposals` |
 | [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
+| [`user_regions`](user-regions.md) | The user-editable Notes/Rules regions of generated files, carried across `--overwrite` (P5a) |
 | [`write_policy`](write-policy.md) | Orchestrator-only-writes pilot (P3): narrow generated non-orchestrator agents to read-only tools and add the proposal sections |
 | [`adopted_agents`](adopted-agents.md) | `--adopt-orphans` routing rows: adopted agents reach every orchestrator body (Claude included) |
 | [`orphan_advisory`](orphan-advisory.md) | `--update` orphan-agent-file advisory: orphaned / bespoke-keep / bridge-managed-keep buckets |

@@ -277,3 +277,8 @@ def test_cli_stays_in_queue_mode_after_the_runner_stops(project, key_file):
     env[P.KEY_ENV[0]] = "session-env-key"   # a key in the session must not be used directly
     out = _cli("--verify-proposal-ledger", "--project", str(root), cwd=root, env=env)
     assert out.returncode == 1 and "no runner" in out.stderr, out.stdout + out.stderr
+
+
+def test_results_carry_queue_wait_and_serve_time(runner):
+    result = _roundtrip(runner, {"kind": "verify-ledger"})
+    assert isinstance(result["queue_wait_ms"], int) and isinstance(result["serve_ms"], int)

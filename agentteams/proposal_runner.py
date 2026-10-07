@@ -187,6 +187,11 @@ class Runner:
         finally:
             os.close(claimed_fd)
         result: dict[str, Any] = {"id": request_id, "ok": False}
+        try:  # P5 measurement: how long the request waited in the queue, and how long serving it took
+            result["queue_wait_ms"] = int((time.time() - os.stat(claimed, follow_symlinks=False).st_mtime) * 1000)
+        except OSError:
+            result["queue_wait_ms"] = None
+        served_from = time.monotonic()
         try:
             try:
                 request = json.loads(_read_regular(claimed, REQUEST_MAX_BYTES))
@@ -204,6 +209,7 @@ class Runner:
             result.update(error=str(exc), exit=1)
         finally:
             claimed.unlink(missing_ok=True)
+        result["serve_ms"] = int((time.monotonic() - served_from) * 1000)
         _write_new(self.root / RESULTS_REL, name, json.dumps(result).encode())
 
     def _expire_results(self) -> None:

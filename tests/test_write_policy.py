@@ -42,7 +42,7 @@ def test_manifest_byte_identical_without_the_switch():  # noqa: D103
     default = analyze.build_manifest({**desc, "write_policy": "default"}, framework="claude")
     assert json.dumps(base, sort_keys=True) == json.dumps(default, sort_keys=True)
     assert "write_policy" not in base
-    assert analyze.build_manifest({**desc, "write_policy": "orchestrator-only"},
+    assert analyze.build_manifest({**desc, "write_policy": "orchestrator-only", "privilege_profile": "confined"},
                                   framework="claude")["write_policy"] == "orchestrator-only"
 
 
@@ -108,7 +108,8 @@ def test_markdown_agents(tools, framework, expected):
 
 
 def test_only_the_shallowest_orchestrator_is_exempt():
-    files = {"orchestrator.md": _md("tools: Edit, Write, Task"), "nested/orchestrator.md": _md("tools: Edit")}
+    files = {"orchestrator.md": _md("tools: Edit, Write, Task") + "## Write Policy: Applying Proposals\n",
+             "nested/orchestrator.md": _md("tools: Edit")}
     assert _codes(files, ".md", "claude") == [("nested/orchestrator.md", "error")]
     twins = {"a/orchestrator.md": _md("tools: Edit"), "b/orchestrator.md": _md("tools: Edit")}
     assert _codes(twins, ".md", "claude") == [("a/orchestrator.md", "error"), ("b/orchestrator.md", "error")]
@@ -171,7 +172,8 @@ def test_codex_agents(body, expected):
 def test_codex_references_dir_is_checked_and_exemption_needs_the_name():
     files = {"references/x.toml": 'name = "x"\n', "orchestrator.toml": 'name = "lean-prover"\n'}
     assert _codes(files, ".toml", "codex") == [("orchestrator.toml", "error"), ("references/x.toml", "error")]
-    assert _codes({"orchestrator.toml": 'name = "orchestrator"\n'}, ".toml", "codex") == []
+    ok = 'name = "orchestrator"\ndeveloper_instructions = """\n## Write Policy: Applying Proposals\n"""\n'
+    assert _codes({"orchestrator.toml": ok}, ".toml", "codex") == []
 
 
 def test_goose_summon_is_dispatch():
@@ -212,6 +214,7 @@ def generated_teams(tmp_path_factory):
     root = tmp_path_factory.mktemp("teams")
     brief = json.loads(BRIEF.read_text(encoding="utf-8"))
     brief["write_policy"] = "orchestrator-only"
+    brief["privilege_profile"] = "confined"
     brief_path = root / "brief.json"
     brief_path.write_text(json.dumps(brief), encoding="utf-8")
     procs = {
@@ -336,5 +339,39 @@ def test_capability_keys_reported_with_a_bad_tools_key():
 
 
 def test_orchestrator_keeps_its_capability_keys():
-    content = "---\nname: O\ndescription: d\ntools: Read, Edit\nmcpServers: []\n---\n# O\n"
+    content = ("---\nname: O\ndescription: d\ntools: Read, Edit\nmcpServers: []\n---\n# O\n"
+               "## Write Policy: Applying Proposals\n")
     assert _codes({"orchestrator.md": content}, ".md", "claude") == []
+
+
+# --- P5a: per-framework scope and the explicit profile ----------------------------------------------
+
+
+_DESC = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
+         "write_policy": "orchestrator-only", "privilege_profile": "confined",
+         "write_policy_frameworks": ["claude", "goose"]}
+
+
+@pytest.mark.parametrize("framework, on", [("claude", True), ("goose", True), ("copilot-vscode", False),
+                                           ("codex", False), ("agents-md", False)])
+def test_switch_scoped_to_listed_frameworks(framework, on):
+    manifest = analyze.build_manifest(dict(_DESC), framework=framework)
+    assert (manifest.get("write_policy") == "orchestrator-only") is on
+
+
+def test_unlisted_framework_renders_like_no_switch():
+    base = {k: v for k, v in _DESC.items() if k not in ("write_policy", "write_policy_frameworks")}
+    assert json.dumps(analyze.build_manifest(dict(_DESC), framework="codex"), sort_keys=True) == \
+        json.dumps(analyze.build_manifest(base, framework="codex"), sort_keys=True)
+
+
+@pytest.mark.parametrize("bad", [[], ["codex"], "claude"])
+def test_scope_list_validated(bad):
+    with pytest.raises(ValueError, match="write_policy_frameworks"):
+        analyze.build_manifest({**_DESC, "write_policy_frameworks": bad}, framework="claude")
+
+
+def test_switch_needs_an_explicit_profile():
+    desc = {k: v for k, v in _DESC.items() if k != "privilege_profile"}
+    with pytest.raises(ValueError, match="explicit privilege_profile"):
+        analyze.build_manifest(desc, framework="claude")

@@ -831,6 +831,12 @@ the dispatched agent's registered prefixes and every remaining argument matches 
 - A signed ledger row is appended.
 - `--dry-run` runs the checks and the stdin gates, but not the command.
 
+### `--discard-user-regions`
+
+With `--overwrite`: drop the user-editable `## Project-Specific Notes` / `## Project-Specific Rules` regions
+instead of carrying them into the new files. By default `--overwrite` carries each region and prints it,
+since carried text is instruction-bearing. See [`user_regions`](api-reference/user-regions.md).
+
 ### `--serve-requests`
 
 Orchestrator-only-writes pilot (P4a/P4b). Runs the out-of-session runner for `--project` under the brief's

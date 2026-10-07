@@ -7,6 +7,7 @@ team manifest dict conforming to schemas/team-manifest.schema.json.
 
 from __future__ import annotations
 
+import sys
 import re
 from pathlib import Path
 from typing import Any
@@ -277,6 +278,16 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Orchestrator-only-writes pilot (opt-in): only the non-default value reaches the manifest, so a team
     # without the switch keeps a byte-identical manifest. The audit's AR_WRITE_POLICY check keys on it.
     write_policy = description.get("write_policy")
+    # P5a: scope the switch to frameworks. A team brief that also emits copilot/codex lists the frameworks the
+    # pilot covers; every other framework renders as if the switch were off (outside the pilot's guarantee).
+    scoped = description.get("write_policy_frameworks")
+    if write_policy == "orchestrator-only" and scoped is not None:
+        if not (isinstance(scoped, list) and scoped and set(scoped) <= {"claude", "goose"}):
+            raise ValueError('write_policy_frameworks must be a non-empty list of "claude" and/or "goose"')
+        if framework not in scoped:
+            print(f"  \u2139  write_policy orchestrator-only is scoped to {', '.join(scoped)}; the {framework} "
+                  "team renders WITHOUT it (outside the pilot's guarantee).", file=sys.stderr)
+            write_policy = None
     if write_policy == "orchestrator-only":
         # Only grant-mode recipes derive their extensions from declared tools; a legacy recipe ships a full
         # `developer` whatever the agent declares, so the narrowed tools would never reach Goose.
@@ -292,6 +303,11 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         if description.get("privilege_profile") == "cooperative":
             raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '
                              '"cooperative" turns it off')
+        # The Claude gate hook goes fail-closed only for an EXPLICIT confined/exclusive profile (2026-W39: a
+        # defaulted profile must not flip a wired team's live gate). Under the pilot, require it explicitly.
+        if description.get("privilege_profile") not in ("confined", "exclusive"):
+            raise ValueError('write_policy "orchestrator-only" needs an explicit privilege_profile "confined" or '
+                             '"exclusive" (the default leaves the Claude gate hook fail-open)')
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted

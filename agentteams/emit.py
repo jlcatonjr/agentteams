@@ -30,6 +30,7 @@ from agentteams.atomicio import (  # noqa: F401 — re-exported for callers/test
     _resolve_path,
     _target_mode,
 )
+from agentteams.user_regions import overwrite_carry as _overwrite_carry
 
 from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-exported)
     _merge_front_matter,
@@ -259,6 +260,7 @@ def emit_all(
     auto_fence_legacy: bool = False,
     brief_derived_files: frozenset[str] = frozenset(),
     shrink_allow: frozenset[str] | None = None,
+    discard_user_regions: bool = False,
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -578,6 +580,9 @@ def emit_all(
             elif existing_text is not None and not overwrite:
                 entry.action = "SKIP"
             elif existing_text is not None and overwrite:
+                if not discard_user_regions:
+                    normalized_content, _ = _overwrite_carry(rel_path, existing_text, normalized_content,
+                                                             notices=result.dry_run_report.notices, dry_run=True)
                 if existing_text == normalized_content:
                     entry.action = "UNCHANGED"
                 else:
@@ -746,7 +751,14 @@ def emit_all(
 
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            if target.exists() and target.read_text(encoding="utf-8") == normalized_content:
+            existing = target.read_text(encoding="utf-8") if target.exists() else None
+            if existing is not None and not discard_user_regions:
+                # P5a: --overwrite keeps the user-editable regions (Notes / Rules); see user_regions.
+                normalized_content, problems = _overwrite_carry(rel_path, existing, normalized_content,
+                                                                notices=result.notices, errors=result.errors)
+                if problems:
+                    continue
+            if existing == normalized_content:
                 result.unchanged.append(str(target))
             else:
                 _atomic_write_text(target, normalized_content)

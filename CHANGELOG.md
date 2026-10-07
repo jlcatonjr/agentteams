@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (P5a: pilot prep — per-framework switch, overwrite keeps user regions, Goose notes)
+
+- **`--overwrite` keeps user-editable regions.** New module `agentteams/user_regions.py`.
+  - It carries `## Project-Specific Notes` (agents, Codex, and now Goose recipes) and
+    `## Project-Specific Rules` (`CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, `copilot-instructions.md`)
+    from disk into the new render.
+  - Every carried region is printed, and `--dry-run` reports "would carry".
+  - It refuses to overwrite a file whose region the new render can't hold.
+  - `--discard-user-regions` opts out.
+  - This fixes the loss mathAgents hit: an overwrite render dropped its orchestrator's duties and two
+    instruction-file rules.
+- **Goose recipes** gain a `## Project-Specific Notes` region at the end of `instructions: |`, kept on
+  merge and overwrite, so a Goose orchestrator's duties can be stated durably.
+- **`write_policy_frameworks`** scopes the pilot switch to `claude`/`goose` when one brief emits several
+  frameworks. The other frameworks render as without it.
+- **Explicit profile.** The pilot switch now needs an explicit `privilege_profile` (`confined`/`exclusive`),
+  because the defaulted profile deliberately leaves the Claude gate hook fail-open (2026-W39).
+- **Duties check.** `AR_WRITE_POLICY` flags an orchestrator missing its "Applying Proposals" section.
+- **Measurement.** A per-entry command `timeout` (1–7200s); `duration_ms` in run and gate ledger rows; and
+  `queue_wait_ms` / `serve_ms` in runner results, for the P5 measurement.
+
 ### fix (write-policy: capability keys, legacy grants, coordination allowlist, D3 wording)
 
 - **Capability keys.** Under the switch, `AR_WRITE_POLICY` now also errors on a non-orchestrator markdown agent

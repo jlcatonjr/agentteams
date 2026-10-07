@@ -143,7 +143,7 @@ Outcome of `prune_backups()`.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset(), shrink_allow=None)`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset(), shrink_allow=None, discard_user_regions=False)`
 
 > *Source: `agentteams/emit.py`*
 
@@ -169,6 +169,7 @@ Write rendered files to `output_dir`.
 - `auto_fence_legacy` (`bool`, keyword-only) — When `True`, a `--merge` run retrofits `AGENTTEAMS` fence markers into a legacy unfenced file instead of skipping it, so subsequent merges can update it. Off by default because retrofitting rewrites a file the operator has not opted in to having managed. Default: `False`.
 - `brief_derived_files` (`frozenset[str]`, keyword-only) — Basenames whose fences the brief owns for this run, so they are never preserved on shrink (see `fences._BRIEF_DERIVED_FILES`). The CLI passes the two retrieval references only when the brief *declares* `retrieval_integration`; an inferred contract leaves this empty. Default: `frozenset()`.
 - `shrink_allow` (`frozenset[str] | None`, keyword-only): reviewed `<rel path>:<fence id>@<digest>` shrink overrides, already resolved by the caller (`shrink_allow.resolve`, which reads the flags and the environment). An override releases one pinned section whose on-disk body matches the reviewed digest; the old body goes to a `.lost` sidecar. All overrides are refused when `backup_path` is None (unless `dry_run`). Default: `None` (no overrides). See [`shrink_allow`](shrink-allow.md).
+- `discard_user_regions` (`bool`, keyword-only): with `overwrite`, drop the user-editable `## Project-Specific Notes` / `## Project-Specific Rules` regions instead of carrying them (P5a, [`user_regions`](user-regions.md)). Default: `False` (carry, print, and refuse to overwrite a file whose region the new render can't hold).
 
 **Returns:** `EmitResult` — Results of all write operations.
 

@@ -557,3 +557,25 @@ def test_published_schemas_accept_the_artifacts_the_cli_accepts(project, schema,
 def test_empty_stdin_gates_refused():
     with pytest.raises(P.ProposalError, match="stdin_gates is empty"):
         P.load_policy({"agent_policies": {"a": {"commands": [{"prefix": ["x"], "args": [], "stdin_gates": []}]}}})
+
+
+# --- P5a: per-entry timeout and measurement ------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", [0, 7201, "600", 1.5])
+def test_entry_timeout_linted(bad):
+    with pytest.raises(P.ProposalError, match="timeout"):
+        P.load_policy({"agent_policies": {"a": {"commands": [{"prefix": ["x"], "args": [], "timeout": bad}]}}})
+
+
+def test_entry_timeout_applies_and_duration_is_recorded(project, monkeypatch):
+    root, _ = project
+    code = "import time; time.sleep(3)"
+    policy = P.load_policy({"agent_policies": {"x": {"commands": [{"prefix": [PY, "-c", code], "args": [],
+                                                                    "timeout": 1}]}}})
+    with pytest.raises(P.UndeclaredWritesError, match="timed out after 1s"):
+        P.run_request(_req(root, "x", [PY, "-c", code]), root=root, policy=policy)
+    fast = P.load_policy({"agent_policies": {"x": {"commands": [{"prefix": [PY, "-c", "pass"], "args": []}]}}})
+    result = P.run_request(_req(root, "x", [PY, "-c", "pass"]), root=root, policy=fast)
+    assert isinstance(result["duration_ms"], int)
+    assert '"duration_ms"' in (root / P.LEDGER_REL).read_text()
