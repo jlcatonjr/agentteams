@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (codex: every shell-reading agent gets the secret-store line)
+
+- Codex agents that already run commands (`execute`, or `retrieval`'s CLI) now get a "Secrets on Codex" section
+  with the same line read/search agents carry since #132: read only inside the workspace, and never
+  `~/.config/agentteams/`, `~/.ssh/`, `.env` or credential stores. Both sections share one constant
+  (@security residual on #132).
+
 ### docs (two meanings of `*` in a brief; Codex `--ephemeral`)
 
 - `proposals.md` and the `proposal_gates` schema description now say that `*` crosses `/` in gate,

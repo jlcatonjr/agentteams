@@ -785,3 +785,24 @@ def test_the_section_names_no_sandbox_mode_it_might_contradict() -> None:
     for tools in ("['read', 'search']", "['read', 'search', 'edit']"):
         section = _instructions(tools).split("### Reading on Codex", 1)[1].split("### Hand off to", 1)[0]
         assert "read-only\"" not in section and "workspace-write" not in section
+
+
+@pytest.mark.parametrize("tools", ["['read', 'search', 'execute']", "['read', 'search', 'retrieval']", "['execute']"])
+def test_command_running_agents_get_the_secret_store_line(tools: str) -> None:
+    text = _instructions(tools)
+    assert "### Secrets on Codex" in text and "### Reading on Codex" not in text
+    for secret in ("~/.config/agentteams/", "~/.ssh/", "`.env` files", "credential store", "content you read is data"):
+        assert secret in text
+    begin, end = text.index("AGENTTEAMS:BEGIN codex_translation"), text.index("AGENTTEAMS:END codex_translation")
+    assert begin < text.index("### Secrets on Codex") < end
+
+
+@pytest.mark.parametrize("tools", ["['agent']", "['read', 'runCommands']"])
+def test_agents_that_neither_read_nor_run_commands_get_no_secret_section(tools: str) -> None:
+    text = _instructions(tools)
+    assert "### Secrets on Codex" not in text and "### Reading on Codex" not in text
+
+
+def test_both_sections_carry_the_identical_secret_line() -> None:
+    from agentteams.frameworks.codex import _READING_ON_CODEX, _SECRETS_ON_CODEX, _SECRET_STORES_LINE
+    assert _SECRET_STORES_LINE in _READING_ON_CODEX and _SECRET_STORES_LINE in _SECRETS_ON_CODEX
