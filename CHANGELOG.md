@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (claude: the team-builder never ships canonical tool names)
+
+- Under `write_policy: "orchestrator-only"`, narrowing replaced the Claude team-builder's `allowed-tools` grant
+  with a canonical `tools: ['read', 'search']` line, and the Claude adapter passed the builder through
+  unchanged. Claude Code can't launch a sub-agent whose tool names don't resolve, so the builder broke (it failed
+  closed). The adapter now maps a canonical builder `tools:` line to Claude names (`Read, Grep, Glob`). Default
+  teams are byte-identical (reported from mathAgents' P5 render).
+
 ### fix (write-policy: gate exec hardening)
 
 - `--install-confined` now binds each operator-file `gate_exec` entry to its gate's argv by recording
