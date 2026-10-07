@@ -389,6 +389,34 @@ def install_confined_file(root: Path, data: dict[str, Any]) -> Path:
     return path
 
 
+def exec_inside_write_roots(root: Path, exec_paths: list[str], write_roots: list[str]) -> str | None:
+    """The first exec path overlapping one of *write_roots* (resolved, in either direction), or None.
+
+    A gate runs with no write roots of its own, so ``check_roots`` can't see an overlap with the agents' write
+    roots. An exec path inside a write root, or containing one (exec paths match as subpaths), would let a
+    confined command build a binary there and a later gate run it.
+
+    Args:
+        root: The project root.
+        exec_paths: A gate's exec allowlist.
+        write_roots: Every agent's project-relative write roots.
+
+    Returns:
+        The offending exec path, or None.
+
+    Raises:
+        Nothing.
+    """
+    fold = (lambda s: s.lower()) if sys.platform == "darwin" else (lambda s: s)  # APFS ignores case, like _inside
+    for rel in write_roots:
+        wreal = fold(os.path.realpath(root / rel))
+        for path in exec_paths:
+            real = fold(os.path.realpath(os.path.expanduser(path)))
+            if _within(real, wreal) or _within(wreal, real):
+                return path
+    return None
+
+
 def exec_allows(program: str, exec_paths: list[str]) -> bool:
     """Whether *program* (resolved) lies under one of *exec_paths*.
 
