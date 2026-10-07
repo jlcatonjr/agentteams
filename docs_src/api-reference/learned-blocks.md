@@ -20,7 +20,8 @@ filesystem.
 ## Public constants
 
 - `BEGIN_MARKER`, `END_MARKER`: the marker lines (without indent or newline).
-- `MARKDOWN`, `RECIPE`: host format ids.
+- `MARKDOWN`, `RECIPE`, `TOML`: host format ids. `TOML` is a Codex agent; the block lives inside its literal
+  `developer_instructions` string, before the `codex_translation` fence.
 
 ## Public classes
 
@@ -99,9 +100,19 @@ True only for `.github/agents/*.agent.md`, `.claude/agents/*.md` and `.goose/rec
 directly in the agents dir; never `references/`, `CLAUDE.md`, `AGENTS.md`, `README.md` or
 `SETUP-REQUIRED.md`.
 
+### `parse_toml(text)`
+
+Locate the block inside a Codex agent's literal `developer_instructions = '''` string. Markers are whole
+lines at column 0, and an insertion goes before the `codex_translation` fence.
+- **Refused:** the escaped `\"\"\"` fallback form, an unclosed string, or a second `developer_instructions`
+  line.
+- **On write:** `verify_composed` refuses block content containing `'''`, re-parses the TOML, and requires
+  every key other than `developer_instructions` to be unchanged.
+
 ### `host_kind(rel_path, text)`
 
-`MARKDOWN` for `.md`, `RECIPE` for a goose-recipe-shaped `.yaml`, else `None`.
+`MARKDOWN` for `.md`, `RECIPE` for a goose-recipe-shaped `.yaml`, `TOML` for a `.toml` with a literal
+`developer_instructions` string, else `None`.
 
 ### `carry_block_text(rel_path, source, dest)`
 

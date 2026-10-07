@@ -25,7 +25,8 @@ from agentteams import learned_blocks as lb
 ROOT = Path(__file__).resolve().parents[1]
 BRIEF = ROOT / "examples" / "research-project" / "brief.json"
 _KEY = "agent-doc-sync-e2e-waiver-key"
-DIRS = {"claude": ".claude/agents", "goose": ".goose/recipes", "copilot-vscode": ".github/agents"}
+DIRS = {"claude": ".claude/agents", "goose": ".goose/recipes", "copilot-vscode": ".github/agents",
+        "codex": ".codex/agents"}
 SLUG = "agent-updater"
 
 pytestmark = pytest.mark.skipif(sys.platform == "win32" or not BRIEF.is_file(),
@@ -78,6 +79,7 @@ def _paths(proj: Path) -> dict[str, tuple[Path, str]]:
         "github": (proj / ".github/agents" / f"{SLUG}.agent.md", lb.MARKDOWN),
         "claude": (proj / ".claude/agents" / f"{SLUG}.md", lb.MARKDOWN),
         "goose": (proj / ".goose/recipes" / f"{SLUG}.yaml", lb.RECIPE),
+        "codex": (proj / ".codex/agents" / f"{SLUG}.toml", lb.TOML),
     }
 
 
@@ -105,11 +107,11 @@ def test_block_survives_every_framework_update_merge_and_v2_propagates(proj: Pat
     gh.write_text(gh.read_text(encoding="utf-8") + "\n" + lb.render_block(V1, ""), encoding="utf-8")
     rep = ads.sync_agent_docs(proj, apply=True, include_claude=True)
     assert rep.exit_code == 0, rep.lines
-    assert _blocks(proj) == {"github": V1, "claude": V1, "goose": V1}
+    assert _blocks(proj) == {"github": V1, "claude": V1, "goose": V1, "codex": V1}
 
     for fw in DIRS:
         assert _gen(proj, fw, "--update", "--merge") == 0, fw
-        assert _blocks(proj) == {"github": V1, "claude": V1, "goose": V1}, fw
+        assert _blocks(proj) == {"github": V1, "claude": V1, "goose": V1, "codex": V1}, fw
     # Each file still holds exactly one block, and the regenerated recipes are valid.
     from agentteams.frameworks.goose_recipe_validate import _validate_recipe_yaml
 
@@ -123,7 +125,7 @@ def test_block_survives_every_framework_update_merge_and_v2_propagates(proj: Pat
     goose.write_text(lb.compose(text, lb.parse(text, lb.RECIPE), V2), encoding="utf-8")
     rep = ads.sync_agent_docs(proj, apply=True, include_claude=True)
     assert rep.exit_code == 0, rep.lines
-    assert _blocks(proj) == {"github": V2, "claude": V2, "goose": V2}
+    assert _blocks(proj) == {"github": V2, "claude": V2, "goose": V2, "codex": V2}
 
 
 def test_dry_run_update_previews_without_dropping(proj: Path) -> None:

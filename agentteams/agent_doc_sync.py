@@ -2,7 +2,8 @@
 
 ``agentteams --sync-agent-docs --project P`` keeps the learned-notes block
 (:mod:`agentteams.learned_blocks`) of one agent identical across ``.github/agents/<slug>.agent.md``,
-``.claude/agents/<slug>.md`` and ``.goose/recipes/<slug>.yaml``. It exists because an agent
+``.claude/agents/<slug>.md``, ``.goose/recipes/<slug>.yaml`` and ``.codex/agents/<slug>.toml`` (inside the
+literal ``developer_instructions`` string). It exists because an agent
 running inside a Claude Code sandbox cannot write ``.claude/agents`` (Claude Code itself
 read-only binds it), so cross-framework propagation of what agents learn has to run **outside
 every agent session** — from an operator-installed systemd user unit
@@ -19,8 +20,8 @@ That makes this module an unsandboxed writer of agent files, and every rule belo
   the baseline is the source; two copies that changed differently are a **conflict** (recorded,
   nothing written). A removed block is never propagated (no deletion); an emptied one is, after
   the overwritten text is backed up to the state dir.
-* **Default is ``--check``** (report, write nothing). ``--apply`` writes ``.github/agents`` and
-  ``.goose/recipes`` targets; ``.claude/agents`` targets are only *staged* (a pending report in the
+* **Default is ``--check``** (report, write nothing). ``--apply`` writes ``.github/agents``,
+  ``.goose/recipes`` and ``.codex/agents`` targets; ``.claude/agents`` targets are only *staged* (a pending report in the
   state dir) unless the operator adds ``--include-claude``, which prints the diff and writes.
 * **Content gates.** Every propagated block is scanned with :func:`agentteams.scan.scan_content`;
   any finding quarantines it (state dir) and nothing is written. Fence or learned marker tokens and
@@ -70,6 +71,7 @@ FRAMEWORK_DIRS: tuple[tuple[str, str, str, str], ...] = (
     ("github", ".github/agents", ".agent.md", lb.MARKDOWN),
     ("claude", ".claude/agents", ".md", lb.MARKDOWN),
     ("goose", ".goose/recipes", ".yaml", lb.RECIPE),
+    ("codex", ".codex/agents", ".toml", lb.TOML),
 )
 #: The framework whose targets are never written without ``--include-claude``.
 CLAUDE = "claude"
@@ -419,7 +421,16 @@ def _collect(project_real: str, report: SyncReport) -> tuple[dict[str, dict[str,
                 raw, st = _read_regular(dir_fd, name)
                 text = raw.decode("utf-8")
                 parsed = lb.parse(text, kind)
-            except (OSError, UnicodeDecodeError, lb.LearnedBlockError) as exc:
+            except lb.LearnedBlockError as exc:
+                if kind == lb.TOML and 'developer_instructions = """' in text and lb.BEGIN_MARKER not in text:
+                    # A Codex agent rendered with the escaped fallback string holds no block and can't safely
+                    # take one: skip it (noted), rather than flag every unattended run for attention.
+                    report.note(f"  SKIPPED {label}: escaped developer_instructions string (not a sync surface)")
+                    continue
+                report.refused.append(label)
+                report.note(f"  REFUSED {label}: {exc}")
+                continue
+            except (OSError, UnicodeDecodeError) as exc:
                 report.refused.append(label)
                 report.note(f"  REFUSED {label}: {exc}")
                 continue

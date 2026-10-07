@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (learned blocks reach the Codex surface)
+
+- **Sync.** `--sync-agent-docs --apply` now carries `AGENTTEAMS-LEARNED` blocks to and from
+  `.codex/agents/*.toml`, not only `.github`, `.claude` and `.goose`. The block lives inside the literal
+  `developer_instructions` string, before the `codex_translation` fence.
+- **Regeneration.** The same block is now carried across `--update --merge` and `--overwrite` for Codex agents,
+  through `learned_blocks.TOML`.
+- **Safety.**
+  - A block containing `'''` is refused, since it would close the string and let text become TOML keys.
+  - Every write must re-parse with every other key unchanged.
+  - An agent in the escaped `"""` fallback form is refused.
+- Reported by baseAgent (baseagent-aa).
+
 ### feat (P5a: pilot prep — per-framework switch, overwrite keeps user regions, Goose notes)
 
 - **`--overwrite` keeps user-editable regions.** New module `agentteams/user_regions.py`.

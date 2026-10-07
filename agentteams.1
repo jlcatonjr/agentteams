@@ -436,10 +436,10 @@ Override the change\-detection anchor (default: pin's last_synced_commit).
 Comma\-separated sync set for \-\-sync\-init (default: every registered framework). Required whenever the default set would collide — copilot\-vscode and copilot\-cli render to the same physical '.github/agents' directory and can genuinely disagree (handoffs), so \-\-sync\-init refuses that combination; list only one of the two.
 .TP
 .B \-\-sync\-agent\-docs
-Propagate each agent's <!\-\- AGENTTEAMS\-LEARNED \-\-> block between its copies in .github/agents, .claude/agents and .goose/recipes of \-\-project. Report\-only unless \-\-apply. Never touches front matter, template fences or recipe keys; reads no brief.
+Propagate each agent's <!\-\- AGENTTEAMS\-LEARNED \-\-> block between its copies in .github/agents, .claude/agents, .goose/recipes and .codex/agents of \-\-project. Report\-only unless \-\-apply. Never touches front matter, template fences or recipe keys; reads no brief.
 .TP
 .B \-\-apply
-With \-\-sync\-agent\-docs: write .github/agents and .goose/recipes targets (.claude/agents targets are staged for review unless \-\-include\-claude). With \-\-branch\-cleanup / \-\-branch\-post\-merge: execute instead of a dry run.
+With \-\-sync\-agent\-docs: write .github/agents, .goose/recipes and .codex/agents targets (.claude/agents targets are staged for review unless \-\-include\-claude). With \-\-branch\-cleanup / \-\-branch\-post\-merge: execute instead of a dry run.
 .TP
 .B \-\-include\-claude
 With \-\-sync\-agent\-docs \-\-apply: also write .claude/agents targets after showing each diff and asking y/N. Refused unless stdin/stdout are a terminal and CLAUDECODE is unset (operator review; the unattended unit never passes this).

@@ -2,7 +2,8 @@
 
 Propagates each agent's **learned block** (`<!-- AGENTTEAMS-LEARNED:BEGIN -->` …
 `<!-- AGENTTEAMS-LEARNED:END -->`) between the copies of that agent across frameworks:
-`.github/agents/<slug>.agent.md`, `.claude/agents/<slug>.md` and `.goose/recipes/<slug>.yaml`.
+`.github/agents/<slug>.agent.md`, `.claude/agents/<slug>.md`, `.goose/recipes/<slug>.yaml` and
+`.codex/agents/<slug>.toml` (inside the literal `developer_instructions` string).
 The CLI entry point is [`--sync-agent-docs`](../cli-reference.md#agent-doc-sync-learned-blocks).
 
 > *Source: `agentteams/agent_doc_sync.py`* (integrity-pinned: it writes agent files unsandboxed)
@@ -31,7 +32,7 @@ unit (`scripts/install-agent-doc-sync.sh`). The text-level parse/compose/verify 
   Regeneration itself now carries the block ([`learned_blocks.carry_learned_block`](learned-blocks.md),
   called from `emit` for every path), so this is the fallback.
 - **Modes.** Default is check (report only; writes nothing, not even state). `--apply` writes
-  `.github/agents` and `.goose/recipes` targets. `.claude/agents` targets are staged in
+  `.github/agents`, `.goose/recipes` and `.codex/agents` targets. `.claude/agents` targets are staged in
   `pending-claude.json` unless `--include-claude` is also given. That flag is refused unless stdin
   and stdout are a terminal and `CLAUDECODE` is unset (Claude Code sets it in agent shells); it
   prints each diff and asks y/N, and a "no" leaves the target staged.

@@ -2,7 +2,7 @@
   "modules": {
     ".claude/hooks/constitutional-gate.py": "79b80ca7b10804b3362ac3e888201f6f684cc21c721aa9cd1acb3830c660f6a5",
     ".github/hooks/constitutional-gate.py": "54e3b5f46286e5d27350f5499a9f4456dffb64917bdf1e35c29051207fcd1c42",
-    "agentteams/agent_doc_sync.py": "2c74222a906831e9a6bf61c54b795aca2e199143fea270561a84ea9e48466276",
+    "agentteams/agent_doc_sync.py": "5689b5f000ed02f477ed2c4991886fe8bc00af1f47be4e51a035db83999b234e",
     "agentteams/atomicio.py": "58cb17c9a425ad77dad064ee50b8534d124ba6e197071b06b2214ce0dddb48d9",
     "agentteams/branch_cleanup.py": "c479f18086b4a0766fb0f577731013a616e5cf802ec2f76161b46e1bf6f53350",
     "agentteams/branch_inventory.py": "5df2d88d8ba68ecea86b4cac410f6cdff5ad43c496c97801dce8d1bf7a46faef",
@@ -30,7 +30,7 @@
     "agentteams/front_matter_merge.py": "694abb5e256034177d58265744933a75e9f6c01022edd6d90ee1b6a3bc705749",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
     "agentteams/integrity.py": "448e01d19d9091bdf2007740e52a4cefa713a4abc4f3a40137909a3e34916143",
-    "agentteams/learned_blocks.py": "7053362b4005f1024febe89cabdd6d2a26c1a0d71d21cd28b6f1fd244bbb360f",
+    "agentteams/learned_blocks.py": "365a2b2bf20161ed1ae84403e53469fe21ef26fa6c2cad3d2dc85d3fb625a02a",
     "agentteams/proposal_policy.py": "3c1620807f70c30e8794c47f368653d0b25684bac85e369e6eb495a3c22ff4dd",
     "agentteams/proposal_runner.py": "6ed1bdfa86327663e92bf2d9f615f1f320318898574584fc20c91bfdf212cd83",
     "agentteams/proposals.py": "ecbea552348dd4cb5593e376053e3de24173183bda9eff4a154a3c14b6a31a9e",

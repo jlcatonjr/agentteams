@@ -29,7 +29,7 @@ def add_agent_doc_sync_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         help=(
             "Propagate each agent's <!-- AGENTTEAMS-LEARNED --> block between its copies in "
-            ".github/agents, .claude/agents and .goose/recipes of --project. Report-only unless "
+            ".github/agents, .claude/agents, .goose/recipes and .codex/agents of --project. Report-only unless "
             "--apply. Never touches front matter, template fences or recipe keys; reads no brief."
         ),
     )
@@ -38,7 +38,7 @@ def add_agent_doc_sync_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         dest="sync_apply",
         default=False,
-        help="With --sync-agent-docs: write .github/agents and .goose/recipes targets "
+        help="With --sync-agent-docs: write .github/agents, .goose/recipes and .codex/agents targets "
              "(.claude/agents targets are staged for review unless --include-claude). With "
              "--branch-cleanup / --branch-post-merge: execute instead of a dry run.",
     )
