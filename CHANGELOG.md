@@ -20,6 +20,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the operator-owned file when present. The `install_confined_file` docstring no longer mentions a script.
   `--version` documents the source it prints.
 
+### fix (Goose readfs launch integrity: package data, protected install, `-I -S`, runner hash check)
+
+- **Package data.** The read-only file server moved from `scripts/` into the package
+  (`agentteams/data/goose-readfs-mcp.py`, shipped via `package-data`). A pip install used to get a placeholder
+  server. Its sha256 is pinned in the integrity-pinned `goose_tool_scoping.READFS_SHA256`, and a test keeps
+  it current.
+- **Isolated launch.** Recipes start it as `python3 -I -S …`, so `PYTHON*` variables, user site-packages,
+  `.pth` files and `sitecustomize` can't change what runs. This applies to every grant-mode team, so
+  grant-mode recipes change by these two arguments.
+- **Protected install under the switch.** Under `write_policy: "orchestrator-only"`, generation installs it at
+  `.agentteams/bin/goose-readfs-mcp.py` (control plane, write-denied by session sandboxes) instead of
+  `scripts/`, and every recipe of the team points there. Generation refuses (fails closed) when the server in
+  the install doesn't match its pinned hash.
+- **Runner check.** `--serve-requests` checks that installed copy against `READFS_SHA256` at start and on
+  every poll, and refuses to serve on a mismatch, a symlink or a non-regular file.
+  - This **detects**; it doesn't stop Goose launching a swapped file, and a swap undone between polls goes
+    unseen.
+  - **Prevention** is the Goose session sandbox's write-deny on `.agentteams/`. Under the switch,
+    `--check-wiring` already fails on macOS when that sandbox isn't wired live.
+- **`--check-wiring` (Goose):**
+  - It flags a `python3` on PATH inside the project, judged on the unresolved path and on any project-local
+    `pyvenv.cfg`. A virtualenv's symlink and its config are agent-writable. It is an error under the switch
+    and a warning otherwise.
+  - Under the switch it also warns about a leftover, session-writable `scripts/goose-readfs-mcp.py`. Teams
+    that adopted the switch before this change must re-render; the switch audit flags their old recipes.
+  - Residue: Goose looks `python3` up on its own PATH at launch. Version managers that read project files
+    (`.python-version`, `mise.toml`) can redirect it.
+- **Claude Edit deny.** Under the switch, the emitted Claude settings deny `Edit(/.agentteams/**)`. Claude
+  Code's built-in Write and Edit tools ignore the sandbox's `denyWrite`, so without this rule the orchestrator
+  could rewrite the installed server or the ledger (@security).
+- **Deny list.** The server now refuses `.agentteams/` and `.agentteams-queue/`: the ledger, dispatch records,
+  queues holding raw nonces, and its own installed copy.
+- **Verified on Goose 1.37.0.** A stdio extension runs from the directory Goose starts in, so the relative
+  `.agentteams/bin/` path resolves, and `-I -S` take effect.
+
 ### fix (P5b follow-up: RSR1, no tmp/ path in the orchestrator's sandbox-change step)
 
 - #133's orchestrator "Applying proposals" step 5 put the candidate JSON under the gitignored scratch folder.

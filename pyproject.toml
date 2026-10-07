@@ -111,7 +111,7 @@ exclude = [
 ]
 
 [tool.setuptools.package-data]
-"agentteams" = ["templates/**", "schemas/**"]
+"agentteams" = ["templates/**", "schemas/**", "data/**"]
 
 [tool.setuptools.data-files]
 "share/man/man1" = ["agentteams.1"]

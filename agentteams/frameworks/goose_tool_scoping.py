@@ -57,6 +57,15 @@ DISABLED = "__none__"
 READFS_NAME = "agentteams_readfs"
 READFS_TOOLS: tuple[str, ...] = ("read_file", "list_dir", "find", "grep", "stat")
 READFS_SCRIPT = "scripts/goose-readfs-mcp.py"
+#: Under ``write_policy: "orchestrator-only"`` the server is installed here instead: inside the control plane,
+#: which every session sandbox write-denies, so no agent can swap the program the recipe launches.
+READFS_PROTECTED_PATH = ".agentteams/bin/goose-readfs-mcp.py"
+#: Python flags for the launch: ``-I`` ignores PYTHON* variables, user site-packages and the script's own
+#: directory on ``sys.path``; ``-S`` skips ``site`` (no ``.pth`` / ``sitecustomize`` code runs).
+READFS_PYTHON_FLAGS: tuple[str, ...] = ("-I", "-S")
+#: sha256 of the shipped server (``agentteams/data/goose-readfs-mcp.py``). This module is integrity-pinned, so
+#: the runner can check an installed copy against it; ``tests/test_readfs_launch_integrity.py`` keeps it current.
+READFS_SHA256 = "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58"
 
 #: Declared canonical tool -> ((extension, goose tool), ...).
 GOOSE_TOOL_MAP: dict[str, tuple[tuple[str, str], ...]] = {
@@ -117,11 +126,13 @@ def declared_tools(content: str) -> frozenset[str]:
     return frozenset(str(t).strip().lower() for t in tokens if isinstance(t, str))
 
 
-def grant_extensions(tools: frozenset[str]) -> tuple[list[str], dict[str, list[str]], list[dict[str, Any]]]:
+def grant_extensions(tools: frozenset[str], *, protected: bool = False,
+                     ) -> tuple[list[str], dict[str, list[str]], list[dict[str, Any]]]:
     """Map declared tools to a recipe's extensions.
 
     Args:
         tools: Declared canonical tool tokens (:func:`declared_tools`).
+        protected: Under ``write_policy: "orchestrator-only"``: launch readfs from :data:`READFS_PROTECTED_PATH`.
 
     Returns:
         ``(builtin_or_platform_names, available_tools, stdio_extensions)``:
@@ -147,14 +158,19 @@ def grant_extensions(tools: frozenset[str]) -> tuple[list[str], dict[str, list[s
     if "summon" in granted:
         names.append("summon")
         allow["summon"] = [t for t in _TOOL_ORDER["summon"] if t in granted["summon"]]
-    stdio = [readfs_extension()] if READFS_NAME in granted else []
+    stdio = [readfs_extension(protected=protected)] if READFS_NAME in granted else []
     return names, allow, stdio
 
 
-def readfs_extension() -> dict[str, Any]:
+def readfs_extension(*, protected: bool = False) -> dict[str, Any]:
     """Return the stdio extension entry for the shipped ``agentteams_readfs`` server.
 
-    The path is relative to the project root, the same convention as the coordination server.
+    The path is relative to the project root, the same convention as the coordination server; Goose runs a stdio
+    extension from the directory it was started in (verified on Goose 1.37.0). Python is started with
+    :data:`READFS_PYTHON_FLAGS`.
+
+    Args:
+        protected: Point at :data:`READFS_PROTECTED_PATH` (under the switch) instead of :data:`READFS_SCRIPT`.
 
     Returns:
         The extension mapping, including its ``available_tools`` allowlist.
@@ -164,7 +180,8 @@ def readfs_extension() -> dict[str, Any]:
     """
     return {
         "type": "stdio", "name": READFS_NAME, "cmd": "python3",
-        "args": [READFS_SCRIPT, "--root", "."], "env_keys": [], "timeout": _MCP_EXT_TIMEOUT,
+        "args": [*READFS_PYTHON_FLAGS, READFS_PROTECTED_PATH if protected else READFS_SCRIPT, "--root", "."],
+        "env_keys": [], "timeout": _MCP_EXT_TIMEOUT,
         "available_tools": list(READFS_TOOLS),
     }
 

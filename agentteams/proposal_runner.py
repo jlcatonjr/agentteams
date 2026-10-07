@@ -99,6 +99,41 @@ def _confined_hash(root: Path) -> str | None:
     return found[1] if found else None
 
 
+def check_installed_readfs(root: Path) -> None:
+    """Refuse to serve when the installed Goose read-only file server isn't the shipped one.
+
+    Under the switch the server is installed at ``goose_tool_scoping.READFS_PROTECTED_PATH`` (session
+    write-denied) and every recipe launches it. The runner is the trust anchor outside every session, so it
+    checks that copy's sha256 against the integrity-pinned ``READFS_SHA256``. A team with no installed copy
+    (no Goose readers) passes.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        None.
+
+    Raises:
+        RunnerError: The installed copy is a symlink, not a regular file, or doesn't match the pinned hash.
+    """
+    # Local import: keeps the frameworks package off the runner's start-up path for teams without Goose.
+    from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH, READFS_SHA256
+
+    path = root / READFS_PROTECTED_PATH
+    for parent in (path.parent.parent, path.parent):  # .agentteams and .agentteams/bin: a linked-in folder could
+        if parent.is_symlink():                       # point at agent-writable space, so refuse it outright
+            raise RunnerError(f"{parent.relative_to(root)} is a symlink; refusing to serve")
+    if not path.exists() and not path.is_symlink():
+        return
+    try:
+        data = _read_regular(path, 4 * 1024 * 1024)
+    except (OSError, RunnerError) as exc:
+        raise RunnerError(f"{READFS_PROTECTED_PATH} is not a regular file ({exc}); refusing to serve") from exc
+    if hashlib.sha256(data).hexdigest() != READFS_SHA256:
+        raise RunnerError(f"{READFS_PROTECTED_PATH} doesn't match the shipped read-only file server; refusing to "
+                          "serve. Re-render the team with this agentteams install to reinstall it")
+
+
 # --- the runner ---------------------------------------------------------------------------------
 
 
@@ -153,6 +188,11 @@ class Runner:
             (self.root / rel).mkdir(parents=True, exist_ok=True)  # session-writable by design
         for rel in (RESULTS_REL, CLAIMED_REL):
             (self.root / rel).mkdir(mode=0o700, parents=True, exist_ok=True)
+        try:
+            check_installed_readfs(self.root)
+        except RunnerError:
+            self.close()
+            raise
         self._heartbeat()
 
     def close(self) -> None:
@@ -249,6 +289,9 @@ class Runner:
             raise RunnerError("the brief changed since the runner started; restart it to load the new policy")
         if _confined_hash(self.root) != self.policy.confined_file_sha:
             raise RunnerError("the operator confined_programs file changed since the runner started; restart it")
+        # Re-checked every poll. This DETECTS a swapped server and stops serving; it doesn't stop Goose launching
+        # it. Prevention is the session sandbox's write-deny on .agentteams/ (--check-wiring requires it live).
+        check_installed_readfs(self.root)
         self._heartbeat()
         self._expire_results()
         served = 0

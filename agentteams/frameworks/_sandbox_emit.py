@@ -904,6 +904,11 @@ def _inject_sandbox_block(
     rules = permission_deny_rules("claude")
     if protect_prompt_roots:
         rules += prompt_root_edit_rules(project_root)
+    if protect_ledger:
+        # Under the switch the control plane (ledger, dispatch records, queue results, the installed read-only
+        # file server Goose launches) is the runner's alone. The sandbox's denyWrite doesn't bind the built-in
+        # Write/Edit tools, so they need this rule too; CLI and runner writes don't go through those tools.
+        rules.append(f"Edit(/{LEDGER_DIR_REL}/**)")
     for rule in rules:
         if rule not in deny:
             deny.append(rule)
