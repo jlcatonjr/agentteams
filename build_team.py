@@ -686,6 +686,7 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
 
     from agentteams import __version__ as _agentteams_version
     from agentteams import drift as _drift
+    from agentteams.source_provenance import source_provenance as _source_provenance
 
     # Convert absolute paths to project-relative paths for portability
     project_root = output_dir.parent.parent  # output_dir is .github/agents/
@@ -702,6 +703,10 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # generator version / WHEN a render was produced (framework_freshness.py).
         # Older logs omit these; consumers must treat them as optional.
         "agentteams_version": _agentteams_version,
+        # Which agentteams code produced the render: kind (checkout / vcs-pin / local-snapshot / package),
+        # commit, branch and a dirty flag. Optional; never an absolute path (CA-033: a stale, unrecorded
+        # snapshot silently dropped a consumer's adopted routing rows).
+        "agentteams_source": _source_provenance(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "project_name": manifest["project_name"],
         "framework": manifest["framework"],

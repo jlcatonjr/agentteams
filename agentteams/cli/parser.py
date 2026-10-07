@@ -10,6 +10,7 @@ namespace unchanged.
 from __future__ import annotations
 
 import argparse
+from typing import Any
 
 from agentteams import __version__
 from agentteams.capability_hints import AGENTTEAMS_GIT_SOURCE
@@ -22,6 +23,21 @@ from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
 from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS
+
+
+class _VersionAction(argparse.Action):
+    """``--version``: the package version plus where the code comes from, computed only when asked."""
+
+    def __init__(self, option_strings: list[str], dest: str = argparse.SUPPRESS, default: Any = argparse.SUPPRESS,
+                 help: str | None = None) -> None:
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: argparse.Namespace, values: Any,
+                 option_string: str | None = None) -> None:
+        from agentteams.source_provenance import describe
+
+        print(f"{parser.prog} {__version__} {describe()}")  # stdout, like argparse's own version action
+        parser.exit()
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -773,8 +789,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
+        action=_VersionAction,
+        help="Show the agentteams version and the source it runs from (commit, branch, dirty), then exit.",
     )
     parser.add_argument(
         "--no-backup",
