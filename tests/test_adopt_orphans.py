@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from agentteams import adopted_agents, analyze, render
 from agentteams.frameworks.copilot_vscode import _get_team_slugs
 
@@ -251,3 +253,84 @@ def test_export_marker_wins_over_bridge_key(tmp_path):
 def test_plain_adopted_file_has_edit_note(tmp_path):
     row = _note(tmp_path, "p", "---\nname: P\ndescription: d\n---\n")
     assert "edit it there, never via a template" in row and "bridge" not in row and "upstream" not in row
+
+
+# --- CA-033: --overwrite never silently drops an adopted routing row ---------------------------------
+
+
+def _overwrite_setup(tmp_path, *, keep_file=True):
+    import argparse
+
+    m = _manifest()
+    _write(tmp_path / "bespoke.md", "---\nname: Bespoke\ndescription: Stage 2: bespoke.\n---\n")
+    meta = {"bespoke": adopted_agents.read_adopted_agent_metadata(tmp_path / "bespoke.md")}
+    analyze.adopt_orphan_agents(m, ["bespoke"], meta, agent_dir="a", agent_ext=".md")
+    _write(tmp_path / "orchestrator.md", "---\nname: O\n---\n"
+           + m["auto_resolved_placeholders"]["ADOPTED_AGENT_ROUTING_ROWS"])
+    if not keep_file:
+        (tmp_path / "bespoke.md").unlink()
+    fresh = _manifest()
+
+    def args(**kw):
+        base = {"adopt_orphans": False, "update": False, "overwrite": True, "migrate": False, "dry_run": False}
+        return argparse.Namespace(**{**base, **kw})
+    return fresh, args
+
+
+def test_plain_overwrite_refuses_to_drop_adopted_rows(tmp_path, capsys):
+    from agentteams.cli.adopt_step import run_adopt_step
+
+    fresh, args = _overwrite_setup(tmp_path)
+    _, rc = run_adopt_step(args(), fresh, tmp_path, tmp_path, ".md")
+    assert rc == 1 and "would drop the adopted routing row(s) of bespoke" in capsys.readouterr().err
+
+
+def test_overwrite_with_adopt_orphans_keeps_the_rows(tmp_path):
+    from agentteams.cli.adopt_step import run_adopt_step
+
+    fresh, args = _overwrite_setup(tmp_path)
+    _, rc = run_adopt_step(args(adopt_orphans=True), fresh, tmp_path, tmp_path, ".md")
+    assert rc is None and "`@bespoke` *(adopted)*" in fresh["auto_resolved_placeholders"]["ADOPTED_AGENT_ROUTING_ROWS"]
+
+
+def test_overwrite_may_drop_the_row_of_a_removed_agent(tmp_path):
+    from agentteams.cli.adopt_step import run_adopt_step
+
+    fresh, args = _overwrite_setup(tmp_path, keep_file=False)
+    assert run_adopt_step(args(), fresh, tmp_path, tmp_path, ".md") == (None, None)
+
+
+def test_update_still_carries_the_rows(tmp_path):
+    from agentteams.cli.adopt_step import run_adopt_step
+
+    fresh, args = _overwrite_setup(tmp_path)
+    _, rc = run_adopt_step(args(update=True, overwrite=False), fresh, tmp_path, tmp_path, ".md")
+    assert rc is None and "@bespoke" in fresh["auto_resolved_placeholders"]["ADOPTED_AGENT_ROUTING_ROWS"]
+
+
+
+def test_excluded_slug_row_never_locks_overwrite(tmp_path):
+    from agentteams.cli.adopt_step import run_adopt_step
+
+    fresh, args = _overwrite_setup(tmp_path)
+    fresh["tool_agents"] = [{"slug": "bespoke"}]          # adoption would never re-adopt it
+    assert run_adopt_step(args(adopt_orphans=True), fresh, tmp_path, tmp_path, ".md")[1] is None
+
+
+def test_dry_run_previews_instead_of_refusing(tmp_path, capsys):
+    from agentteams.cli.adopt_step import run_adopt_step
+
+    fresh, args = _overwrite_setup(tmp_path)
+    assert run_adopt_step(args(dry_run=True), fresh, tmp_path, tmp_path, ".md")[1] is None
+    assert "[ADOPTED-ROWS] dry run" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("ext", [".yaml", ".toml"])
+def test_adopted_row_detected_in_goose_and_codex_orchestrators(tmp_path, ext):
+    row = "\n| Stage 2 | `@bespoke` *(adopted)* | note |"
+    body = ('version: "1.0.0"\ninstructions: |\n  # O\n  ' + row.strip() + "\n") if ext == ".yaml" else \
+        ('name = "orchestrator"\ndeveloper_instructions = ' + "\'" * 3 + "\n# O" + row + "\n" + "\'" * 3 + "\n")
+    _write(tmp_path / f"orchestrator{ext}", body)
+    _write(tmp_path / f"bespoke{ext}", ('version: "1.0.0"\ntitle: "B"\ninstructions: |\n  b\n') if ext == ".yaml"
+           else 'name = "bespoke"\ndescription = "d"\n')
+    assert adopted_agents.previously_adopted(tmp_path, ext) == ["bespoke"]

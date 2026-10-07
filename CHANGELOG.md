@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (--overwrite never silently drops adopted routing rows, CA-033)
+
+- **The bug.** A plain `--overwrite` without `--update` or `--adopt-orphans` rebuilt the orchestrator's routing
+  fence from the brief alone. That dropped every `*(adopted)*` row, in all four orchestrators of a team
+  (reported from baseAgent's mathagents v0.2.6 render).
+- **The fix.** It now refuses (`[ADOPTED-ROWS] blocked`) when an adopted agent whose file still exists would
+  lose its row, and names the fixes: `--adopt-orphans`, or `--update --merge`. A row whose agent file is gone,
+  or whose agent is now one of the brief's own, may drop.
+
 ### fix (learned blocks reach the Codex surface)
 
 - **Sync.** `--sync-agent-docs --apply` now carries `AGENTTEAMS-LEARNED` blocks to and from
