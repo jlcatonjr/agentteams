@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (build-log.json never records an absolute path, OI-21)
+
+- Claude build logs keyed skill files (`.claude/skills/<slug>/SKILL.md`) in `front_matter_baseline` by absolute
+  path, which leaked the operator's username and directory layout into every committed build log (mathAgents
+  request, 2026-09-30). Those keys are now relative to the agents dir (`../skills/<slug>/SKILL.md`), the form
+  emit uses for files outside it. A path that can't be made relative is omitted, never recorded absolute.
+  `files_written` gets the same treatment when `--output` isn't two levels below the project root.
+- **Behaviour change.** The new key is the path emit looks up, so skill files now get the same three-way
+  front-matter merge as agent files. Metadata keys a project left unedited follow the template (except the
+  drift-exempt `name` and `description`). Capability keys (`tools`, `allowed-tools`, `model`, ...) stay
+  proposal-only, as for agents. Before this, skills never matched a baseline, so nothing in their front matter
+  was auto-applied.
+- Existing logs clean up at the next render.
+
 ### feat (write-policy P5c: gate exec in the operator-owned confined file)
 
 - The operator file (`--install-confined`) can now hold gates' `exec` paths under a reserved top-level key,
