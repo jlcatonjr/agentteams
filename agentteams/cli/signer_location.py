@@ -31,6 +31,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentteams.git_exec import run_git
+
 
 @dataclass(frozen=True)
 class LocationFinding:
@@ -45,13 +47,7 @@ def _git_work_tree(path: Path) -> bool:
     """True when ``path`` is inside a git work tree (hardened: repo config cannot run code)."""
     probe = path if path.is_dir() else path.parent
     try:
-        res = subprocess.run(
-            ["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
-             "-c", "core.untrackedCache=false", "-C", str(probe), "rev-parse",
-             "--is-inside-work-tree"],
-            capture_output=True, text=True, timeout=10, check=False,
-            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"},
-        )
+        res = run_git(probe, "rev-parse", "--is-inside-work-tree", hardened=True, timeout=10)
     except (OSError, subprocess.SubprocessError):
         return False
     return res.returncode == 0 and res.stdout.strip() == "true"

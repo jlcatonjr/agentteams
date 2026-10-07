@@ -68,7 +68,6 @@ import os
 import re
 import secrets
 import shutil
-import stat
 import subprocess
 import tempfile
 import time
@@ -76,6 +75,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from agentteams.git_exec import run_git
 from agentteams import confinement as _confinement
 from agentteams.proposal_policy import (  # re-exported: the policy half of this module (CH-07 carve)
     DEFAULT_SIZE_CAP,  # noqa: F401  re-exported
@@ -85,7 +85,7 @@ from agentteams.proposal_policy import (  # re-exported: the policy half of this
     _in_scope,
     load_policy,  # noqa: F401  re-exported
 )
-from agentteams.atomicio import _atomic_write_text
+from agentteams.atomicio import _atomic_write_text, read_regular_nofollow
 from agentteams.frameworks._write_roots import control_plane_of
 
 GATE_TIMEOUT = 120
@@ -164,17 +164,17 @@ def use_key_file(path: str | None = None) -> Path:
     key_dir = Path(os.path.expanduser(KEY_DIR)).resolve()
     if not Path(os.path.abspath(target)).parent.resolve().is_relative_to(key_dir):
         raise ProposalError(f"ledger key file {target} must sit in {KEY_DIR}, which session sandboxes read-deny")
+    def _custody(st: os.stat_result) -> None:
+        if st.st_mode & 0o077 or st.st_uid != os.getuid():
+            raise ProposalError(f"ledger key file {target} must be a regular file you own, with mode 0600")
+
     try:
-        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+        data = read_regular_nofollow(target, 4096, check=_custody).strip()
     except OSError as exc:
         raise ProposalError(f"ledger key file {target} cannot be opened (missing or a symlink): {exc}") from exc
-    try:
-        st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o077 or st.st_uid != os.getuid():
-            raise ProposalError(f"ledger key file {target} must be a regular file you own, with mode 0600")
-        data = os.read(fd, 4096).strip()
-    finally:
-        os.close(fd)
+    except ValueError as exc:
+        raise ProposalError(f"ledger key file {target} must be a regular file you own, with mode 0600 "
+                            f"({exc})") from exc
     if not data:
         raise ProposalError(f"ledger key file {target} is empty")
     _FILE_KEY = data
@@ -660,8 +660,12 @@ _GIT_WATCHED = ("hooks", "config", "config.worktree", "info")
 
 def _git(root: Path, env: dict[str, str], *args: str) -> bytes | None:
     try:
-        proc = subprocess.run(["git", *args], cwd=root, env=env, stdin=subprocess.DEVNULL, capture_output=True,
-                              timeout=60)
+        # Hardened: the project is agent-writable, so its own git config must not run code here (CH-08). The hooks
+        # path is NOT overridden: the snapshot resolves `--git-path hooks` to watch for a planted hook. That is safe
+        # only because these commands run no hook: `rev-parse` never does, and `status` runs `post-index-change`
+        # only when it writes the index, which HARDENED_ENV's GIT_OPTIONAL_LOCKS=0 prevents. Keep that env var.
+        proc = run_git(None, *args, hardened=True, override_hooks=False, env=env, timeout=60, text=False,
+                       devnull_stdin=True, run_cwd=root)
     except (OSError, subprocess.SubprocessError):
         return None
     return proc.stdout if proc.returncode == 0 else None

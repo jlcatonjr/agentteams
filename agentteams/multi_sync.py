@@ -31,13 +31,13 @@ from __future__ import annotations
 import csv
 import json
 import shlex
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agentteams.git_exec import run_git
 from agentteams.canonical import load_canonical, materialize_canonical
 from agentteams.frameworks._sandbox_emit import (
     TEAM_MARKER_REL,
@@ -293,10 +293,7 @@ def _emit_privilege_artifacts(
 
 def _git(root: Path, *args: str) -> tuple[int, str]:
     """Run a git command under ``root``; return (exit_code, stdout)."""
-    proc = subprocess.run(
-        ["git", "-C", str(root), *args],
-        capture_output=True, text=True,
-    )
+    proc = run_git(root, *args)
     return proc.returncode, proc.stdout
 
 

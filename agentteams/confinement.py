@@ -33,6 +33,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+from agentteams.atomicio import read_regular_nofollow, write_new_atomic
+
 #: Project paths a confined command may never write, even inside a declared write root.
 PROTECTED_REL = (".agentteams", ".agentteams-queue", ".git", ".claude", ".goose", ".codex", ".github")
 #: Read-denied to every confined command: the ledger key and the operator signing keys (one source of truth).
@@ -332,18 +334,17 @@ def read_confined_file(root: Path) -> tuple[dict[str, Any], str] | None:
     before = _check_custody(path, directory=False)
     if _inside(path, root):
         raise ConfinementError(f"{path} lies inside the project; agents could write it")
-    # O_NONBLOCK: a FIFO swapped in after the lstat must not hang the runner. The fstat re-checks the file that
-    # was actually opened, so a swap between the checks and the open is refused rather than read.
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
-        opened = _custody_check(path, os.fstat(fd), directory=False)
+    # The shared custody read opens O_NOFOLLOW|O_NONBLOCK (a FIFO swapped in can't hang the runner) and re-checks
+    # the file it actually opened, so a swap between the lstat above and the open is refused rather than read.
+    def _same_file(opened: os.stat_result) -> None:
+        _custody_check(path, opened, directory=False)
         if (opened.st_ino, opened.st_dev) != (before.st_ino, before.st_dev):
             raise ConfinementError(f"{path} changed while it was being read; retry")
-        raw = os.read(fd, MAX_CONFINED_BYTES + 1)
-    finally:
-        os.close(fd)
-    if len(raw) > MAX_CONFINED_BYTES:
-        raise ConfinementError(f"{path} is larger than {MAX_CONFINED_BYTES} bytes")
+
+    try:
+        raw = read_regular_nofollow(path, MAX_CONFINED_BYTES, check=_same_file)
+    except ValueError as exc:
+        raise ConfinementError(f"{path} is {exc}") from exc
     try:
         data = json.loads(raw.decode("utf-8"))
     except ValueError as exc:
@@ -378,15 +379,7 @@ def install_confined_file(root: Path, data: dict[str, Any]) -> Path:
     _check_custody(path.parent, directory=True)
     if os.path.lexists(path):
         _check_custody(path, directory=False)
-    tmp = path.parent / f".{path.name}.{os.getpid()}.tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    try:
-        os.write(fd, confined_bytes(data))
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.replace(tmp, path)
-    return path
+    return write_new_atomic(path.parent, path.name, confined_bytes(data))
 
 
 def exec_inside_write_roots(root: Path, exec_paths: list[str], write_roots: list[str]) -> str | None:
