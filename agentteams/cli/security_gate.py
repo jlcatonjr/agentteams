@@ -151,7 +151,8 @@ def _assert_destructive_action_allowed(
                 _consume_security_waiver_use(output_dir, waiver, action=action)
             return
         raise RuntimeError(
-            "no matching PASS decision found in references/security-decisions.log.csv"
+            "no matching PASS decision found in references/security-decisions.log.csv (none matches this "
+            "action, or the newest one is already consumed: record a new clearance, an older one can't be replayed)"
         )
 
     verdict = decision.get("verdict", "").strip().upper()
@@ -617,7 +618,12 @@ def verify_waivers(output_dir: Path) -> list[dict[str, str]]:
 
 
 def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str] | None:
-    """Return the latest security decision row matching an action keyword."""
+    """Return the newest security decision row matching an action keyword, or None when it is consumed.
+
+    The newest matching row decides. A consumed one yields None: earlier rows for the same action are never
+    reached, so a superseded clearance can't be replayed once its successor is used. (Skipping consumed rows
+    used to promote an older, unconsumed PASS to "latest"; mathAgents' P5 render, 2026-10-07.)
+    """
     log_path = output_dir / "references" / "security-decisions.log.csv"
     if not log_path.exists():
         return None
@@ -637,8 +643,6 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
         return None
 
     for row in reversed(rows):
-        if row.get("consumed", "").strip().lower() in {"yes", "true", "1"}:
-            continue
         # A HALT-RETRACTION is a record that a block was lifted, not a clearance to act. It is
         # consumed by _assert_no_unretracted_halt; selecting it here would surface it as "the
         # latest decision" and refuse with 'unsupported verdict'.
@@ -651,6 +655,8 @@ def _latest_security_decision(output_dir: Path, *, action: str) -> dict[str, str
             row.get("decision") or "",
         ]
         if any(_action_matches(candidate, action) for candidate in reviewed_candidates):
+            if row.get("consumed", "").strip().lower() in {"yes", "true", "1"}:
+                return None  # the newest clearance is used up; an older one never stands in for it
             normalized_row = {k: (v or "") for k, v in row.items()}
             normalized_row["action_reviewed"] = normalized_row.get(action_field, normalized_row.get("action_reviewed", ""))
             normalized_row["verdict"] = normalized_row.get(verdict_field, normalized_row.get("verdict", ""))

@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security gate: a superseded clearance can't be replayed, C-5)
+
+- `_latest_security_decision` skipped consumed rows. Once the newest clearance for an action was consumed, an
+  older unconsumed PASS that it had superseded became "latest" and could be used again (reported from
+  mathAgents' first P5 render). The newest row matching the action now decides, and if it is consumed the gate
+  refuses. Recording several clearances in advance now yields one use, not several. The refusal message keeps
+  its `no matching PASS decision found` prefix.
+
 ### fix (build-log.json never records an absolute path, OI-21)
 
 - Claude build logs keyed skill files (`.claude/skills/<slug>/SKILL.md`) in `front_matter_baseline` by absolute
