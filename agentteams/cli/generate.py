@@ -20,6 +20,7 @@ from pathlib import Path
 from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
+from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
@@ -688,6 +689,7 @@ def _run_generate_inner(
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
             build_team._write_run_log(manifest, result, output_dir, template_hashes)
+            warn_unnarrowed_adopted(manifest, output_dir, [rel for rel, _ in final_rendered])
             # Receipt write AFTER build-log (R3 — "heal first, attest
             # second"). Same gate as the log: only on real, successful runs.
             try:
@@ -932,6 +934,7 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     if not args.dry_run and result.success:
         build_team._write_run_log(manifest, result, output_dir, template_hashes)
+        warn_unnarrowed_adopted(manifest, output_dir, [rel for rel, _ in final_rendered])
         # F2 increment 1b: emit the framework-neutral eval suite on the
         # generate path too (increment 1 was --update-only). Safe now that
         # RCC2 unified the render pipeline. Non-fatal, same contract as on
