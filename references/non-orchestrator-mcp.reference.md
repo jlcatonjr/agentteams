@@ -71,7 +71,16 @@ For each non-orchestrator agent file under the switch, by framework:
   `allowed-tools: Read, Edit, Write, Grep, Glob, Bash` beside its narrowed `tools:` line.
 
 **Goose (recipes):**
-- **Allowed:** `developer` and `analyze` (judged by the tools they grant), plus `agentteams_readfs`.
+- **Allowed:**
+  - `developer`, judged by the tools it grants;
+  - `analyze`, only when listed with `available_tools: [__none__]`. It reads outside the workspace, and
+    Goose adds it beside `developer` unless the recipe lists it, so it must be turned off explicitly;
+  - `agentteams_readfs`, matched by what it launches (the shipped entry's type, `cmd` and `args`, with no
+    other keys), not by its name. Residue: `python3` resolves via PATH and `scripts/` is editable, so this
+    pins the entry, not the program.
+
+  Built-in names count only with their real type: `developer` is builtin; `analyze` and `summon` are
+  platform.
 - **Error:** every other extension, including `agentteams_coordination`, `summon` and any operator MCP
   server.
 

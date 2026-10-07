@@ -239,9 +239,86 @@ DEVELOPER_TOOLS = frozenset({"write", "edit", "shell", "tree"})
 #: Stands in for a value the reader cannot interpret: treated as an unscoped ``developer`` (worst case).
 UNPARSED = "<unparsed>"
 _EXT_KEY_RE = re.compile(r"^extensions:(.*)$", re.MULTILINE)
-_ITEM_NAME_RE = re.compile(r"^\s*-?\s*name:\s*(.*)$", re.MULTILINE)
-_ITEM_ALLOW_RE = re.compile(r"^\s*available_tools:\s*(.*)$", re.MULTILINE)
-_ITEM_TYPE_RE = re.compile(r"^\s*-?\s*type:\s*(.*)$", re.MULTILINE)
+#: Item keys match spaces and tabs only (not ``\s``), so an empty value is not read from the following line.
+_ITEM_NAME_RE = re.compile(r"^[ \t]*-?[ \t]*name:[ \t]*(.*)$", re.MULTILINE)
+_ITEM_ALLOW_RE = re.compile(r"^[ \t]*available_tools:[ \t]*(.*)$", re.MULTILINE)
+_ITEM_TYPE_RE = re.compile(r"^[ \t]*-?[ \t]*type:[ \t]*(.*)$", re.MULTILINE)
+_ITEM_CMD_RE = re.compile(r"^[ \t]*-?[ \t]*cmd:[ \t]*(.*)$", re.MULTILINE)
+_ITEM_ARGS_RE = re.compile(r"^([ \t]*-?[ \t]*)args:[ \t]*(.*)$", re.MULTILINE)
+
+
+def _key_column(item: str) -> int:
+    """The column of an item's own keys: the first line's key, after its ``- `` marker."""
+    first = item.splitlines()[0] if item else ""
+    return len(first) - len(first.lstrip(" -"))
+
+
+def _own(pattern: re.Pattern[str], item: str) -> re.Match[str] | None:
+    """The match of *pattern* on one of the item's OWN keys (at its key column), or ``None``.
+
+    Text at any other indentation (a block scalar's content, a nested mapping) never stands in for the item's
+    key, and a key that appears twice is ambiguous (a YAML reader may take either), so both give ``None``.
+    """
+    col = _key_column(item)
+    own = [m for m in pattern.finditer(item) if len(m.group(0)) - len(m.group(0).lstrip(" -")) == col]
+    return own[0] if len(own) == 1 else None
+
+
+_ITEM_KEY_RE = re.compile(r"^[ \t]*-?[ \t]*([A-Za-z_][\w-]*)[ \t]*:", re.MULTILINE)
+
+
+#: Stands in for a line at the item's key column that isn't a plain ``key:`` (a quoted key, ``? key``, a merge
+#: key ``<<:``). YAML reads those as keys too, so a caller must treat this as an unknown key.
+UNREADABLE_KEY = "<unreadable-key>"
+
+
+def _own_keys(item: str) -> list[str]:
+    """Every key at the item's own key column, in order (duplicates kept).
+
+    A line at that column that isn't a plain ``key:`` gives :data:`UNREADABLE_KEY`, never silence.
+    """
+    col = _key_column(item)
+    keys: list[str] = []
+    for line in item.splitlines():
+        stripped = line.lstrip(" -")
+        if not stripped or stripped.startswith("#") or len(line) - len(stripped) != col:
+            continue
+        m = _ITEM_KEY_RE.match(line)
+        keys.append(m.group(1) if m else UNREADABLE_KEY)
+    return keys
+
+
+def _scalar(value: str) -> str:
+    """A plain or quoted YAML scalar, read the way YAML does: a comment starts only at ``#`` after whitespace."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return re.split(r"\s#", value, maxsplit=1)[0].strip()
+
+
+def _item_args(item: str) -> list[str] | None:
+    """An item's ``args`` as a list, flow (``[a, b]``) or block (``- a``) style; ``None`` if absent or unreadable."""
+    m = _own(_ITEM_ARGS_RE, item)
+    if not m:
+        return None
+    value = re.split(r"\s#", m.group(2), maxsplit=1)[0].strip()
+    if value.startswith("["):
+        # A quoted flow item may hold a comma that this split would misread: unreadable, so it never matches.
+        if not value.endswith("]") or any(q in value for q in "\"'"):
+            return None
+        return [a.strip() for a in value[1:-1].split(",") if a.strip()]
+    if value:
+        return None
+    key_indent = len(m.group(0)) - len(m.group(0).lstrip(" -"))
+    out: list[str] = []
+    for line in item[m.end():].splitlines()[1:]:
+        if not line.strip() or line.strip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent <= key_indent or not line.strip().startswith("- "):
+            break
+        out.append(_scalar(line.strip()[2:]))
+    return out
 
 
 def _uncomment(value: str) -> str:
@@ -263,9 +340,11 @@ def recipe_extension_grants(yaml_text: str) -> list[dict[str, Any]] | None:
         * ``None`` when the key is missing, bare or ``null``/``~``: Goose 1.37 then loads the user's
           configured extensions (fail-open).
         * ``[]`` for ``extensions: []`` (with or without a trailing comment).
-        * Otherwise one entry per list item, with its ``type`` (``""`` when absent) and
-          ``available_tools``. ``available_tools`` is ``None`` when the item has no
-          allowlist, an empty one (``[]`` is unrestricted) or one in a form this reader does not parse.
+        * Otherwise one entry per list item, with its ``type`` (``""`` when absent), ``cmd`` and ``args``
+          (``None`` when absent or unreadable), its own ``keys`` and ``available_tools``. Only keys at the
+          item's own indentation count, and a duplicated key reads as absent. ``available_tools`` is ``None`` when
+          the item has no allowlist, an empty one (``[]`` is unrestricted) or one in a form this reader does
+          not parse.
         * ``[{"name": UNPARSED, ...}]`` for a flow-style value, or for a second ``extensions:`` key
           (ambiguous: a reader may take either).
 
@@ -306,18 +385,19 @@ def recipe_extension_grants(yaml_text: str) -> list[dict[str, Any]] | None:
     parsed = []
     for item in items:
         # The item's own name is its shallowest `name:` line; nested content may carry others.
-        name_lines = sorted(_ITEM_NAME_RE.finditer(item), key=lambda m: len(m.group(0)) - len(m.group(0).lstrip(" -")))
-        name = name_lines[0] if name_lines else None
-        allow = _ITEM_ALLOW_RE.search(item)
+        name = _own(_ITEM_NAME_RE, item)
+        allow = _own(_ITEM_ALLOW_RE, item)
         tools = None
         if allow:
             raw = _uncomment(allow.group(1)) if "[" not in allow.group(1) else allow.group(1).split("]", 1)[0] + "]"
             if raw.startswith("[") and raw.endswith("]"):
                 tools = [_uncomment(t) for t in raw[1:-1].split(",") if _uncomment(t)] or None
-        type_lines = sorted(_ITEM_TYPE_RE.finditer(item), key=lambda m: len(m.group(0)) - len(m.group(0).lstrip(" -")))
-        ext_type = _uncomment(type_lines[0].group(1)) if type_lines else ""
-        parsed.append({"name": _uncomment(name.group(1)) if name else UNPARSED, "available_tools": tools,
-                       "type": ext_type})
+        type_line = _own(_ITEM_TYPE_RE, item)
+        ext_type = _scalar(type_line.group(1)) if type_line else ""
+        cmd = _own(_ITEM_CMD_RE, item)
+        parsed.append({"name": _scalar(name.group(1)) if name else UNPARSED, "available_tools": tools,
+                       "type": ext_type, "cmd": _scalar(cmd.group(1)) if cmd else None,
+                       "args": _item_args(item), "keys": _own_keys(item)})
     return parsed
 
 

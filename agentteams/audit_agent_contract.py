@@ -27,7 +27,9 @@ from agentteams.audit_types import AuditFinding, _agent_slug, _is_agent_file
 from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS
 from agentteams.frameworks.goose_recipe_read import developer_tools, recipe_extension_grants
 from agentteams.frameworks.goose_recipe_validate import _RECIPE_VERSION_RE
-from agentteams.frameworks.goose_tool_scoping import DISABLED, declared_from_marker, grant_extensions
+from agentteams.frameworks.goose_tool_scoping import (
+    DISABLED, READFS_NAME, declared_from_marker, grant_extensions, readfs_extension,
+)
 from agentteams.write_policy import ORCHESTRATOR_SLUGS as _ORCHESTRATOR_SLUGS
 from agentteams.write_policy import READ_ONLY_TOKENS as _READ_ONLY_TOKENS
 
@@ -519,6 +521,11 @@ _GOOSE_WRITER_SLUGS = _ORCHESTRATOR_SLUGS  # single source with the generator (w
 #: (``goose.py``, "restricted"), and the audit agrees. ``developer`` and ``analyze`` are judged by their
 #: tools; any other extension is refused.
 _GOOSE_READ_EXTENSIONS = frozenset({"agentteams_readfs"})
+#: The real type of each built-in name a non-orchestrator recipe may carry (Goose 1.37; as goose_recipe_emit
+#: renders them). A matching name with another type is a different extension.
+_GOOSE_BUILTIN_TYPES = {"developer": "builtin", "analyze": "platform", "summon": "platform"}
+#: The only keys the shipped readfs entry has (goose_tool_scoping.readfs_extension, as rendered).
+_READFS_KEYS = frozenset({"type", "name", "cmd", "args", "timeout", "available_tools"})
 #: ``tools:`` values YAML reads as null: the key is then effectively absent and the agent inherits every tool.
 _NULL_TOOLS = frozenset({"", "~", "null", "''", '""'})
 #: Capability front-matter keys a non-orchestrator markdown agent may carry under the switch. Every other key
@@ -639,6 +646,35 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
                         - _GOOSE_READ_EXTENSIONS - {"developer", "analyze", "summon"})
         if others:
             errors.append(f"recipe carries extension(s) this check can't classify as read-only: {', '.join(others)}")
+        # Built-in names are trusted only with their real type: an entry named `analyze` but of type `stdio` would
+        # make Goose start whatever `cmd` it names.
+        for ext in extensions:
+            want = _GOOSE_BUILTIN_TYPES.get(ext["name"])
+            if want and ext["type"] != want:
+                errors.append(f"recipe's `{ext['name']}` is type {ext['type'] or '(none)'!r}, not {want!r}; "
+                              "Goose would start a different extension under that name")
+        # The read server is allowed by what it runs, not by its name: a recipe could reuse the name for any
+        # program. It must match the shipped entry (type, cmd, args), carry no other keys (`env`, `envs`,
+        # `env_keys` or `cwd` could make the same script run other code) and grant only read tools.
+        shipped = readfs_extension()
+        for ext in (e for e in extensions if e["name"] == READFS_NAME):
+            extra = sorted(set(ext["keys"]) - _READFS_KEYS)
+            if (ext["type"], ext["cmd"], ext["args"]) != (shipped["type"], shipped["cmd"], shipped["args"]):
+                errors.append(f"recipe's {READFS_NAME} doesn't launch the shipped server "
+                              f"({shipped['cmd']} {' '.join(shipped['args'])}); another program could run under its name")
+            elif extra or len(ext["keys"]) != len(set(ext["keys"])):
+                errors.append(f"recipe's {READFS_NAME} carries keys the shipped entry doesn't "
+                              f"({', '.join(extra) or 'a duplicated key'}), which could change what it runs")
+            elif ext["available_tools"] and set(ext["available_tools"]) - set(shipped["available_tools"]):
+                errors.append(f"recipe's {READFS_NAME} lists tools the shipped server doesn't have")
+        # Goose adds `analyze` beside `developer` unless the recipe lists it, `[]` means unrestricted, and
+        # `analyze` reads outside the workspace (Goose 1.37 spike B1). Only a non-matching allowlist turns it
+        # off, and every `analyze` entry must do so (a reader may take either of two).
+        analyzes = [e for e in extensions if e["name"] == "analyze"]
+        if ("developer" in {e["name"] for e in extensions} or analyzes) and (
+                not analyzes or any(e["available_tools"] != [DISABLED] for e in analyzes)):
+            errors.append(f"recipe leaves `analyze` on (Goose adds it beside developer), which reads outside the "
+                          f"workspace; list it, once, with the flow-style available_tools: [{DISABLED}]")
         if "shell" in dev or "execute" in declared:
             warnings.append("recipe grants a shell, which is unconfined until the P4 sandbox profiles")
         return errors, warnings
@@ -687,7 +723,12 @@ def _check_write_policy(
       needs ``name`` to match.
     * **error (Goose):** missing ``extensions``; ``developer`` ``edit``/``write`` (or a marker declaring them);
       ``summon`` or ``sub_recipes`` (dispatch); any extension other than ``developer``, ``analyze``,
-      ``summon`` and ``agentteams_readfs`` (the coordination server writes files, so it is refused too).
+      ``summon`` and ``agentteams_readfs`` (the coordination server writes files, so it is refused too); a
+      built-in name with the wrong type (``developer`` builtin; ``analyze``/``summon`` platform); an
+      ``agentteams_readfs`` that doesn't launch the shipped server (type, ``cmd``, ``args``), carries other keys
+      (``env``, ``envs``, ``env_keys``, ``cwd`` ...) or lists tools it lacks; any ``analyze`` entry not listed
+      ``[__none__]``, or none at all beside ``developer``. Residue: ``python3`` resolves via PATH and
+      ``scripts/`` is editable, so the exact match pins the entry, not the program it runs.
     * **error (disk audit):** a symlink or an unreadable agent file in the team directory.
     * **warning:** a shell elsewhere (Claude ``Bash``, Goose ``shell``). Nothing confines it before P4, so
       no brief field silences this.
