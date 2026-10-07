@@ -103,6 +103,8 @@ A gap note is untrusted data:
 Refused requests are logged with a reason but not the command, so they can't count as evidence. Repeated,
 costly commands from one agent are the evidence of need. An agent's own account never is: a gap
 note is data and can be wrong or manipulated. Evidence cites ledger lines, so anyone can re-check it.
+`agentteams --mcp-need-report` summarizes the ledger and this register per agent. It also checks the ledger's
+hash chain, and its figures are what Q3 and Q4 measure against.
 
 **A brief hint.** An `mcp_hints` entry in the project brief opens a row with `source = brief-hint` and
 `verified = no`. It is not evidence either.

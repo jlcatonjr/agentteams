@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **216**
+- Modules mapped: **217**
 - Packages: **8**
-- Internal import edges: **554**
+- Internal import edges: **556**
 - Distinct external dependencies: **7**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 119 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
+| `agentteams` | 120 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.cli` | 40 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 1 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -77,7 +77,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.adopt_merge_gate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.security_gate` | `agentteams.cli.adopt_step` |
 | `agentteams.cli.adopt_step` | `agentteams.adopted_agents`, `agentteams.analyze`, `agentteams.cli.adopt_merge_gate`, `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.agent_doc_sync_switch` | `agentteams.agent_doc_sync` | `agentteams.cli.app`, `agentteams.cli.parser`, `agentteams.cli.parser_validate` |
-| `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.artifacts`, `agentteams.cli.branch_switch`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.json_mode`, `agentteams.cli.package_switch`, `agentteams.cli.parser`, `agentteams.cli.proposal_commands`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.cli.sync_switch`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.git_hooks`, `agentteams.host_features` | — |
+| `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.artifacts`, `agentteams.cli.branch_switch`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.json_mode`, `agentteams.cli.package_switch`, `agentteams.cli.parser`, `agentteams.cli.proposal_commands`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.cli.sync_switch`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.git_hooks`, `agentteams.host_features`, `agentteams.mcp_need_report` | — |
 | `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.schema_cache`, `agentteams.cli.write_root_policy`, `agentteams.codex_mcp_emit`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.framework_conformance`, `agentteams.frameworks.claude`, `agentteams.host_features`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.model_routing` | `agentteams.cli.app`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.git_hooks` |
 | `agentteams.cli.backup_switch` | `agentteams.emit` | `agentteams.cli.parser` |
 | `agentteams.cli.branch_switch` | `agentteams.branch_cleanup`, `agentteams.branch_inventory` | `agentteams.cli.app`, `agentteams.cli.parser`, `agentteams.cli.parser_validate` |
@@ -187,7 +187,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.manifest_format` | `agentteams.frameworks.registry` | `agentteams.analyze` |
 | `agentteams.mcp_detect` | — | `agentteams.analyze` |
 | `agentteams.mcp_emit` | `agentteams.atomicio` | `agentteams.analyze`, `agentteams.cli.artifacts`, `agentteams.codex_mcp_emit`, `agentteams.interop`, `agentteams.interop_helpers` |
-| `agentteams.mcp_need` | — | `agentteams.cli.render_pipeline`, `agentteams.liaison_logs` |
+| `agentteams.mcp_need` | — | `agentteams.cli.render_pipeline`, `agentteams.liaison_logs`, `agentteams.mcp_need_report` |
+| `agentteams.mcp_need_report` | `agentteams.mcp_need` | `agentteams.cli.app` |
 | `agentteams.memory_index` | — | `agentteams.cli.artifacts`, `agentteams.memory_index_incremental` |
 | `agentteams.memory_index_incremental` | `agentteams.memory_index` | `agentteams.cli.artifacts` |
 | `agentteams.model_routing` | — | `agentteams.cli.artifacts` |
@@ -731,7 +732,8 @@ digraph "agentteams architecture" {
         "agentteams.fleet",
         "agentteams.frameworks.goose",
         "agentteams.git_hooks",
-        "agentteams.host_features"
+        "agentteams.host_features",
+        "agentteams.mcp_need_report"
       ],
       "external": [],
       "repo_local": [
@@ -2060,6 +2062,16 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.mcp_need_report": {
+      "package": "agentteams",
+      "path": "agentteams/mcp_need_report.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.mcp_need"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.memory_index": {
       "package": "agentteams",
       "path": "agentteams/memory_index.py",
@@ -3240,6 +3252,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.app",
       "target": "agentteams.host_features"
+    },
+    {
+      "source": "agentteams.cli.app",
+      "target": "agentteams.mcp_need_report"
     },
     {
       "source": "agentteams.cli.artifacts",
@@ -4636,6 +4652,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.mcp_emit",
       "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.mcp_need_report",
+      "target": "agentteams.mcp_need"
     },
     {
       "source": "agentteams.memory_index_incremental",

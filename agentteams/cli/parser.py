@@ -97,7 +97,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="With --dry-run: emit the per-file action plan as a single JSON "
-             "document on stdout (no-op without --dry-run).",
+             "document on stdout. With --mcp-need-report: emit the report as JSON. "
+             "(No-op otherwise.)",
     )
     overwrite_group = parser.add_mutually_exclusive_group()
     overwrite_group.add_argument(
@@ -1080,6 +1081,21 @@ def _build_parser() -> argparse.ArgumentParser:
              "policy, print the exact JSON and its sha256, and install it as --project's operator-owned confined "
              "file (mode 0600) only when rerun with that --confirm-review-sha256. Run it outside every agent "
              "session; restart --serve-requests afterwards.",
+    )
+    parser.add_argument(
+        "--mcp-need-report",
+        action="store_true",
+        dest="mcp_need_report",
+        default=False,
+        help="Read-only: summarize the runner ledger (.agentteams/proposal-ledger.jsonl under --project, else CWD) "
+             "and the MCP need register per agent: repeated commands with times, proposal bytes, open register "
+             "rows. Figures are unverified; it never writes or decides (references/mcp-need.reference.md).",
+    )
+    parser.add_argument(
+        "--mcp-need-register",
+        metavar="PATH",
+        default=None,
+        help="With --mcp-need-report: the need register (mcp-needs.csv) to read, instead of auto-detecting it.",
     )
     parser.add_argument(
         "--verify-grants",

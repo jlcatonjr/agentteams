@@ -847,8 +847,8 @@ since carried text is instruction-bearing. See [`user_regions`](api-reference/us
 
 Orchestrator-only-writes pilot (P4a/P4b). Runs the out-of-session runner for `--project` under the brief's
 policy (`--description`).
-- **Confinement (P4b):** every command and gate it runs is confined in an OS sandbox from the brief's
-  `confined_programs`.
+- **Confinement (P4b):** every command and gate it runs is confined in an OS sandbox from `confined_programs`:
+  the operator-owned file (`--confined-path`, P5b) when present, otherwise the brief's block.
 - **No sandbox:** with no usable sandbox it refuses, unless `allow_unconfined_runs` is set (each such run is
   logged).
 - **Where:** start it outside every agent session.
@@ -866,6 +866,29 @@ for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` wai
 Read-only. Verifies the signatures, hash chain and signed head anchor of `.agentteams/proposal-ledger.jsonl`
 under `--project` (else the current directory). Exit 1 when a row was edited, removed or reordered, the
 ledger was truncated, or it was rewritten without the key.
+
+### `--mcp-need-report`
+
+Read-only (MCP-need protocol, phase N3). Summarizes the runner ledger (`.agentteams/proposal-ledger.jsonl` under
+`--project`, else the current directory) and the MCP need register (`mcp-needs.csv`) per agent:
+- repeated commands, grouped by their first three words, with count, total and median time, and failures;
+- proposal bytes the orchestrator carried;
+- refused requests (the ledger keeps a reason, not the command);
+- open register rows, with unverified ones (gap notes, brief hints) kept apart;
+- runs that started but never finished.
+
+For each repeated command it lists the runner-path fix first. It never writes and decides nothing; apply
+`references/mcp-need.reference.md`. The signatures need the runner's key, so they aren't checked here (use
+`--verify-proposal-ledger`). The keyless checks are made: the hash chain, the head anchor, rows without a signature,
+and a removed ledger. They catch careless or partial edits, not deliberate forgery (the chain is unkeyed).
+Their result is the first line, and an inconsistency exits 1. Untrusted text is escaped and capped.
+A symlinked path, or one outside the project, is refused (exit 1). Add `--json` for machine-readable output. A
+missing ledger is an empty report (exit 0).
+
+### `--mcp-need-register PATH`
+
+With `--mcp-need-report`: the register to read. It must be inside the project and not a symlink. Without it,
+the report looks for `references/mcp-needs.csv`, then under `.claude/agents/`, `.github/agents/` and `.goose/`.
 
 ### `--confined-path`
 
@@ -1182,7 +1205,8 @@ Validate generated Goose recipe YAML files in the `--output` directory (or `.goo
 
 ### `--version`
 
-Print the version and exit.
+Print the version and exit. It also names the source that is running: the kind (`checkout`, `vcs-pin`,
+`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known.
 
 ---
 

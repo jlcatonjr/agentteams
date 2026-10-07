@@ -19,7 +19,7 @@
     "agentteams/cli/signed_ledger.py": "3a265f280b6dab0aa41824661ff0108bc80cd5df85eec63b91c419eacaaef325",
     "agentteams/cli/signer_location.py": "a50b095180d2c836eb5805f46b0d483306dffe99a78d35ebe778508dbd5eb840",
     "agentteams/cli/write_root_policy.py": "2cb952f2ba69e73a2fa6e9e215c55abfd5f1b5f1d4496f8cc9987f1ffe70bafe",
-    "agentteams/confinement.py": "d0d52cddb125b0e356d762f0e9762dd2418ad1e1bb7b8651c6bd6f09496d5bff",
+    "agentteams/confinement.py": "13640e283e31b9f92cc224641a890f95d39997a9c053a2cd7b942b534043698e",
     "agentteams/data/goose-readfs-mcp.py": "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58",
     "agentteams/fences.py": "6700efaaa99670ab6f7c4a6ab6a00c47b726882e5faf4cadd334bbc590c44dee",
     "agentteams/frameworks/_goose_sandbox_emit.py": "083d37dc7c492feef687e05ede2bf76e370dbff8a05542787ed29f13ada52ddd",

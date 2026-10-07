@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (P5b close-out consistency)
+
+- The `--serve-requests` CLI reference and the proposals runner section now say `confined_programs` comes from
+  the operator-owned file when present. The `install_confined_file` docstring no longer mentions a script.
+  `--version` documents the source it prints.
+
 ### fix (Goose readfs launch integrity: package data, protected install, `-I -S`, runner hash check)
 
 - **Package data.** The read-only file server moved from `scripts/` into the package
@@ -46,6 +52,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - #133's orchestrator "Applying proposals" step 5 put the candidate JSON under the gitignored scratch folder.
   The RSR1 lint (`scripts/check-durable-tmp-refs.sh`) refuses such references in durable files. The step now
   uses `confined-programs.candidate.json` in the project root (never committed, deleted after install).
+
+### feat (`--mcp-need-report`: MCP-need protocol phase N3)
+
+- **New read-only command.** `agentteams --mcp-need-report` (module `agentteams/mcp_need_report.py`) summarizes
+  the runner ledger and the MCP need register per agent:
+  - repeated commands, grouped by their first three words, with count, total and median time, and failures;
+  - proposal bytes the orchestrator carried;
+  - refused requests;
+  - open register rows, with unverified gap notes and brief hints kept apart;
+  - runs left unfinished.
+- **Behaviour.** For each repeated command it lists the runner-path fix first. It never writes and decides
+  nothing. `--json` gives machine-readable output, and `--mcp-need-register PATH` picks the register.
+- **Integrity without the key.** The ledger's signatures need the runner's key, which no session holds, so
+  they aren't checked (`--verify-proposal-ledger` does that). The report does check what needs no key: each
+  row's `prev` hash chain, the head anchor's `count` and `last`, rows without a signature, and a ledger
+  removed while dispatch records remain. That catches careless or partial edits. It is not proof against
+  deliberate forgery, because the chain is unkeyed. The result is the report's first line, and an
+  inconsistency exits 1.
+- **Safety.** Untrusted text (`argv`, agent names, register text) is escaped and capped in text output, and
+  rows per agent are capped. Symlinked ledger or register paths, or ones outside the project, are refused.
+  Register rows are labelled "register says verified": that label is the register's own claim.
+- **Also reported:** runs that started but never finished, and undeclared writes or killed survivors, which
+  count as failures.
+- **Purpose.** It supplies the P5 pilot-design §12 bytes figures (item 1, and per-agent bytes in item 5) and
+  the per-agent command round trips. Orchestrator token, latency and copy-fidelity figures still come from
+  the host transcripts.
 
 ### feat (write-policy P5b: pattern write_scopes and an operator-owned confined_programs file)
 
