@@ -133,6 +133,8 @@ shapes:
 - **Accepted residue:** under the switch, a Goose recipe can't carry any operator MCP server, even a
   read-only one, because the check can't tell what it does. The Goose extensions it does allow are trusted by
   name.
+- **MCP servers:** what a non-orchestrator agent may use under the switch, what is planned and what is
+  held is summarized in `references/non-orchestrator-mcp.reference.md` in the repository.
 - **Not covered:** project-level skill directories (an agent's own `skills:` key is an error, above), and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex's
   `sandbox_mode` is a default, not a ceiling.
 
