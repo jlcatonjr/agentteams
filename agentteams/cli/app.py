@@ -222,6 +222,12 @@ def _main_dispatch(
     if getattr(args, "verify_proposal_ledger", False):
         from agentteams.cli.proposal_commands import run_verify_proposal_ledger
         return run_verify_proposal_ledger(args)
+    if getattr(args, "mcp_need_report", False):
+        from agentteams import mcp_need_report
+        register = getattr(args, "mcp_need_register", None)
+        return mcp_need_report.run(Path(getattr(args, "project", None) or os.getcwd()).resolve(),
+                                   register=Path(register).resolve() if register else None,
+                                   as_json=bool(getattr(args, "json", False)))
 
     # --verify-grants / --issue-grant: standalone cross-workspace capability-grant ops (P2).
     if getattr(args, "verify_grants", False):

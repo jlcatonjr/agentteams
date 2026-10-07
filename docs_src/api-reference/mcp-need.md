@@ -28,3 +28,5 @@ rather than from the agent's own account. It runs parallel to the skill capabili
   decides per the reference.
 
 Nothing here grants a capability. The per-agent MCP tool grant is added with the first approved server.
+
+The evidence comes from [`mcp_need_report`](mcp-need-report.md) (`agentteams --mcp-need-report`).
