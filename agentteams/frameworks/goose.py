@@ -30,6 +30,7 @@ intentionally avoids a YAML dependency and parses front matter with regex).
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -100,7 +101,9 @@ from agentteams.frameworks.goose_coordination import (
 # goose_tool_scoping "grant": recipe grants from declared tools (references/goose-tool-scoping-spike.md).
 from agentteams import write_policy as _write_policy
 from agentteams.frameworks.goose_tool_scoping import (
+    READFS_PROTECTED_PATH as _READFS_PROTECTED_PATH,
     READFS_SCRIPT as _READFS_SCRIPT,
+    READFS_SHA256 as _READFS_SHA256,
     declared_tools as _declared_tools,
     filter_operator_mcp as _filter_operator_mcp,
     grant_extensions as _grant_extensions,
@@ -256,7 +259,8 @@ class GooseAdapter(FrameworkAdapter):
         # with an available_tools allowlist, readers on the read-only agentteams_readfs server, and
         # summon (delegation / load handoffs) only for an agent that declares `agent`.
         if _grant_mode(manifest):
-            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content))
+            extensions, allowlists, scoped_stdio = _grant_extensions(
+                _declared_tools(content), protected=_write_policy.enabled(manifest))
             may_delegate = "summon" in extensions
         else:
             extensions, allowlists, scoped_stdio = _scoped_builtin_extensions(manifest), None, []
@@ -398,7 +402,7 @@ class GooseAdapter(FrameworkAdapter):
         if _write_policy.enabled(manifest):
             # Only the orchestrator writes: the builder gets the grant its (narrowed) declared tools give,
             # like every other agent, and returns proposals/command requests instead of writing.
-            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content))
+            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content), protected=True)
             recipe = _emit_recipe(
                 title=name or "Team Builder",
                 description=description,
@@ -621,9 +625,16 @@ class GooseAdapter(FrameworkAdapter):
             files.append(
                 ("../../scripts/goose-coordination-mcp.py", _coordination_mcp_content())
             )
-        # Grant-scoped recipes point readers at the read-only file server; ship it only in that mode.
+        # Grant-scoped recipes point readers at the read-only file server; ship it only in that mode. Under the
+        # switch it goes into the control plane (session-write-denied), where every recipe of the team points.
         if _grant_mode(manifest):
-            files.append((f"../../{_READFS_SCRIPT}", _readfs_mcp_content()))
+            protected = _write_policy.enabled(manifest)
+            readfs = _readfs_mcp_content()
+            if protected and hashlib.sha256(readfs.encode("utf-8")).hexdigest() != _READFS_SHA256:
+                # Fail closed: the runner refuses a mismatched copy, so never install a placeholder or an edit.
+                raise ValueError("the read-only file server in this agentteams install doesn't match its pinned "
+                                 "hash (READFS_SHA256); reinstall agentteams before rendering under the switch")
+            files.append((f"../../{_READFS_PROTECTED_PATH if protected else _READFS_SCRIPT}", readfs))
         files.extend(goose_sandbox_output_files(manifest))
         # Linux companion to the darwin Seatbelt path: a goose-specific confined-run example that
         # wraps the neutral bwrap launcher with the settings a confined goose needs (writable XDG,

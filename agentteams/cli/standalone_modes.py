@@ -19,6 +19,8 @@ pipeline, not an alternative to it.
 
 from __future__ import annotations
 
+import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,59 @@ from agentteams import emit, template_pins
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import _run_retrieval_utility_modes
 
+
+def python3_in_workspace_note(root: Path) -> str | None:
+    """A note when ``python3`` on PATH resolves inside *root*, else ``None``.
+
+    Goose recipes launch the read-only file server as ``python3 -I -S ...``, taking ``python3`` from PATH. A
+    project virtualenv puts that interpreter inside the workspace, which agents can write, so the program the
+    recipe runs could be swapped. ``--check-wiring`` fails on this under the switch and warns otherwise.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        The note, or ``None`` when ``python3`` is absent or outside *root*.
+
+    Raises:
+        Nothing.
+    """
+    py = shutil.which("python3")
+    if not py:
+        return None
+    roots = {Path(root).absolute(), Path(root).resolve()}
+    # Judge the path as found, NOT resolved: a virtualenv's python3 is a symlink to a system Python, but the
+    # link and the venv's pyvenv.cfg (which sets where the stdlib is loaded from) are in the workspace, so an
+    # agent can retarget either. A pyvenv.cfg in any parent directory inside the project counts too.
+    found = Path(os.path.abspath(py))
+    inside = any(found.is_relative_to(r) for r in roots) or any(
+        (parent / "pyvenv.cfg").is_file() and any(parent.is_relative_to(r) for r in roots)
+        for parent in found.parents)
+    if not inside:
+        return None
+    return (f"python3 on PATH is inside the project ({py}); Goose launches the read-only file server with it, so "
+            "an agent-writable interpreter or virtualenv could replace it. Deactivate the project virtualenv (or "
+            "put a system python3 first on PATH) before running Goose")
+
+
+def stale_readfs_copy_note(root: Path) -> str | None:
+    """Under the switch: a note when the old, session-writable ``scripts/`` copy of the read server remains.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        The note, or ``None`` when no stale copy exists.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH, READFS_SCRIPT
+
+    if not (Path(root) / READFS_SCRIPT).exists():
+        return None
+    return (f"{READFS_SCRIPT} is left from before the orchestrator-only switch; recipes now launch "
+            f"{READFS_PROTECTED_PATH}. The old copy is session-writable: delete it")
 
 def run_standalone_modes(
     args: Any,
@@ -167,6 +222,15 @@ def run_standalone_modes(
             from agentteams.frameworks._goose_sandbox_emit import verify_goose_sandbox_wiring
 
             ok, messages = verify_goose_sandbox_wiring(wiring_root, manifest)
+            from agentteams import write_policy as _wp
+
+            note = python3_in_workspace_note(wiring_root)
+            if note:
+                messages = [*messages, ("ERROR: " if _wp.enabled(manifest) else "warning: ") + note]
+                ok = ok and not _wp.enabled(manifest)
+            stale = stale_readfs_copy_note(wiring_root) if _wp.enabled(manifest) else None
+            if stale:
+                messages = [*messages, "warning: " + stale]
         elif framework == "claude":
             from agentteams.frameworks.claude import verify_sandbox_wiring
 

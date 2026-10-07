@@ -25,7 +25,8 @@ _RECIPE = 'version: "1.0.0"\ntitle: "t"\ninstructions: |\n  hi\n'
 
 
 _READFS = ("extensions:\n  - type: stdio\n    name: \"agentteams_readfs\"\n    cmd: \"python3\"\n    args:\n"
-           "      - \"scripts/goose-readfs-mcp.py\"\n      - \"--root\"\n      - \".\"\n    timeout: 300\n"
+           "      - \"-I\"\n      - \"-S\"\n"
+           "      - \".agentteams/bin/goose-readfs-mcp.py\"\n      - \"--root\"\n      - \".\"\n    timeout: 300\n"
            "    available_tools: [read_file, list_dir, find, grep, stat]\n")
 
 
@@ -153,8 +154,9 @@ def test_only_the_shallowest_orchestrator_is_exempt():
     ("extensions:\n  - type: platform\n    name: analyze\n    available_tools: [__none__]\n"
      "  - type: platform\n    name: analyze\n    available_tools: [list_files]\n", ["error"]),  # a second analyze
     (_READFS.replace('      - "."', '      - ".#x"'), ["error"]),                     # YAML keeps `.#x`; not a comment
-    (_READFS.replace('args:\n      - "scripts/goose-readfs-mcp.py"\n      - "--root"\n      - "."',
-                     'args: ["scripts/goose-readfs-mcp.py,--root,."]'), ["error"]),     # one quoted arg, not three
+    (_READFS.replace('args:\n      - "-I"\n      - "-S"\n      - ".agentteams/bin/goose-readfs-mcp.py"\n'
+                     '      - "--root"\n      - "."',
+                     'args: ["-I,-S,.agentteams/bin/goose-readfs-mcp.py,--root,."]'), ["error"]),     # one quoted arg, not three
     (_READFS.replace("    timeout: 300\n", "    timeout: 300\n    envs:\n      PYTHONPATH: /tmp/x\n"), ["error"]),
     (_READFS.replace("    timeout: 300\n", "    timeout: 300\n    env_keys: [PYTHONSTARTUP]\n"), ["error"]),
     # re-verification: keys YAML reads but a plain-key regex doesn't, and `#` without whitespace

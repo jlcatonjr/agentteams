@@ -76,8 +76,10 @@ For each non-orchestrator agent file under the switch, by framework:
   - `analyze`, only when listed with `available_tools: [__none__]`. It reads outside the workspace, and
     Goose adds it beside `developer` unless the recipe lists it, so it must be turned off explicitly;
   - `agentteams_readfs`, matched by what it launches (the shipped entry's type, `cmd` and `args`, with no
-    other keys), not by its name. Residue: `python3` resolves via PATH and `scripts/` is editable, so this
-    pins the entry, not the program.
+    other keys), not by its name. Under the switch the server is installed at `.agentteams/bin/goose-readfs-mcp.py`, which
+    every session sandbox write-denies, and launched with `python3 -I -S`. The runner refuses to serve when
+    that copy doesn't match the pinned hash. Residue: `python3` still comes from PATH; `--check-wiring`
+    flags one inside the project.
 
   Built-in names count only with their real type: `developer` is builtin; `analyze` and `summon` are
   platform.
