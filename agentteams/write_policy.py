@@ -261,6 +261,12 @@ applies or runs it with `agentteams`, which checks it against the team's policy 
 - **`argv`:** a list, never a shell string. It must match one of your registered command prefixes and
   argument patterns.
 - **`expected_writes`:** any other file the command writes fails the run.
+- **`cwd`** (optional): the project-relative working directory. It must equal the matching command entry's
+  pinned `cwd` (default `.`).
+- **`stdin_from_content`** (optional): `{"path": "<project-relative path>", "content": "<text>"}`, piped to the
+  command on standard input, e.g. a draft to `lake env lean --stdin`. Only a command entry that registers
+  `stdin_gates` accepts it; those gates run on the content first (`path` is context for them), and any finding
+  refuses the request. The content is never written to the project.
 
 ## The runner
 
