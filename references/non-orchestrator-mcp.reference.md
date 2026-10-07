@@ -1,6 +1,8 @@
 # MCP Servers for Non-Orchestrator Agents under `write_policy: "orchestrator-only"`
 
-**Status:** current as of agentteams `main` at `f113f5d` (PR #123 and the P5a PR #124), 2026-10-06.
+**Status:** current as of agentteams `main` after PRs #123, #124, #127 and the MCP-need protocol PR (§5a),
+including the @security verdict and the operator decisions of 2026-10-06 on Lean tools (§5). Updated
+2026-10-07.
 **Audience:** maintainers of agentteams and of teams that run the orchestrator-only-writes pilot
 (mathAgents, baseAgent).
 **Design of record:** `references/plans/orchestrator-only-writes-pilot.design.md` (§8–§12) and
@@ -20,7 +22,7 @@ first-party read-only file server, `agentteams_readfs`. Every other MCP route is
 | First-party read server | `agentteams_readfs` (Goose) | **Allowed.** It is the only one |
 | First-party record server | `agentteams_coordination` (Goose) | **Refused.** It writes request and log files. The generator withholds it, and since PR #123 the audit refuses it too |
 | First-party submit channel | `agentteams_proposals` (P4c) | **Designed, not built.** Waiting on @security and a P5 cost baseline (§4) |
-| Domain read/compute server | a Lean LSP server (goal states, diagnostics) | **Held.** The server runs outside the sandbox, and some tools execute code (§5) |
+| Domain read/compute server | a Lean LSP server (goal states, diagnostics) | **Held.** Refused inside the session; a runner-hosted design is cleared for exploration only (§5) |
 | Third-party write-capable server | GitHub, databases, filesystem | **Refused.** It would write past every check the pilot adds (§6) |
 | Operator MCP server of any kind | anything in the brief's `mcp_servers` | **Refused on non-orchestrator agents** (Goose: withheld by the generator, refused by the audit; Codex: `mcp_servers` refused) |
 
@@ -76,7 +78,10 @@ For each non-orchestrator agent file under the switch, by framework:
 **Codex:** the switch is refused at generation (P4a key custody: no session sandbox to protect the
 ledger key). The audit still refuses `mcp_servers`, because Codex's `sandbox_mode` doesn't confine them.
 
-**Copilot and agents-md:** the switch is refused at generation, for the same reason (decision E).
+**Copilot and agents-md:** the switch is refused at generation, for the same reason (decision E). So on a
+team whose main surface is Copilot (or Codex), "only the orchestrator writes" isn't mechanically enforced on
+that surface. It rests on the agents' declared tools and instructions alone, and a multi-surface brief
+renders those surfaces outside the pilot's guarantee (`write_policy_frameworks`).
 
 **Shells:** generated non-orchestrator agents are narrowed to `read`/`search`/`todo`, so they hold no
 shell. An adopted agent that still declares one (Claude `Bash`, Goose `shell`) gets a **warning**, not an
@@ -122,18 +127,35 @@ approves". The orchestrator approves from a receipt, not from the content.
 ## 5. Domain servers (held)
 
 A Lean LSP server such as lean-lsp-mcp would help a prover agent a great deal: goal states and diagnostics
-without a `lake build` round trip through the runner. It also exposes `lean_run_code`, and elaborating
-Lean can run arbitrary code. Its search tools reach the network.
+without a `lake build` round trip through the runner. But every LSP tool, `lean_goal` and
+`lean_diagnostic_messages` included, compiles the file, and compiling Lean can run arbitrary code. Its
+`lean_run_code` tool runs code outright, and its search tools reach the network.
 
-Every LSP tool, `lean_goal` and `lean_diagnostic_messages` included, elaborates the file, so even the
-"read" tools run code. Allowing one therefore depends first on @security deciding whether a
-session-launched server can run under the `confined_programs` sandbox profile (`sandbox-exec` can't
-nest). If it can, the grant would be:
-- exact-name read tools only (`lean_goal`, `lean_diagnostic_messages`, hover);
-- only on files already written through a gated apply.
+**Decided on 2026-10-06:**
+- **@security: HALT** for a server started inside the agent's session. The session can't sandbox it, and the
+  runner's current sandbox profile denies writes and unlisted programs but not reading or the network.
+- **@security: CONDITIONAL PASS, for exploring a runner-hosted design.** The runner would host the server
+  under a stricter profile: no network, no home-directory reads beyond the toolchain, `lean/` and the pinned
+  install, and no lasting writes. Tools would be granted by exact name, inputs confined to `lean/`, and
+  output size-capped. The server would be installed locally and hash-pinned, never fetched at launch (no
+  `uvx`).
+- **The operator** accepted the remaining risk: code run while compiling can read what the sandbox still
+  allows and put it into the diagnostics text. The pilot is macOS-only, and only the preparation step is
+  approved. Building waits for the P5 measurement of lean-prover's round trips.
 
 Until then, Lean checks go through `command-request`s (`lake build`, `lake env lean --stdin`) run confined by
 the runner.
+
+## 5a. Deciding which agent needs a server
+
+Teams under the switch ship `references/mcp-need.reference.md`, the agent MCP-need protocol, and a
+`references/mcp-needs.csv` register.
+- An agent that hits a capability gap attaches a gap note to its handoff.
+- The orchestrator records it as unverified.
+- Need is decided per agent from the runner's ledger: repeated, costly commands and proposal sizes, never
+  the agent's own account.
+- The rule applies the security hard gate first, then a measured threshold, then a runner-path fix (a
+  broader command entry or a gate), and only then a server, with exact tool names.
 
 ## 6. Giving an agent application-specific capability today
 

@@ -15,6 +15,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lose its row, and names the fixes: `--adopt-orphans`, or `--update --merge`. A row whose agent file is gone,
   or whose agent is now one of the brief's own, may drop.
 
+### feat (write-policy: the agent MCP-need protocol, phases N1/N2)
+
+- **The protocol.** Under `write_policy: "orchestrator-only"`, teams ship `references/mcp-need.reference.md`.
+  It decides whether a specific non-orchestrator agent needs an MCP server, and which one. It runs parallel
+  to the skill capability-gap protocol. New module `agentteams/mcp_need.py`.
+  - Need comes from the runner's ledger: repeated, costly commands and proposal sizes. An agent's own gap
+    note is recorded as unverified and never counts as evidence by itself (C-4).
+  - The rule applies the security hard gate first, then a measured threshold, then a runner-path fix, and
+    only then a runner-hosted or passive-reader server, with exact tool names.
+- **Need register.** `init_csv_stubs(..., mcp_needs=True)` adds `references/mcp-needs.csv`, only under the
+  switch. Only the orchestrator writes it.
+- **Agent sections.** Non-orchestrator agents attach a gap note instead of opening a plan. The orchestrator
+  opens every capability-gap plan, including the skill protocol's, which non-orchestrator agents can't write.
+  Under the switch, `references/skill-generation.reference.md` gains an override section saying so.
+- **Unchanged.** Teams without the switch are byte-identical. No capability is granted.
+- **Integrity.** `write_policy.py` is pinned. `references/enforcement-integrity.json` was regenerated for
+  that line only. The orchestrator section treats gap notes as untrusted data (@security condition).
+- **Docs.** The published `references/non-orchestrator-mcp.reference.md` now records the 2026-10-06
+  @security verdict and the operator decisions on Lean tools, and points to the protocol.
+
 ### fix (learned blocks reach the Codex surface)
 
 - **Sync.** `--sync-agent-docs --apply` now carries `AGENTTEAMS-LEARNED` blocks to and from
@@ -73,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ledger.** `apply-proposal` rows record `bytes`, for the P5 cost measurement.
 - `write_policy.py`, `proposals.py` and `front_matter_merge.py` are integrity-pinned.
   `references/enforcement-integrity.json` was regenerated for those three only. Stale local installed gate
-  hooks were not re-pinned.
+  hooks were not re-pinned here; PR #127 later re-pinned the installed Copilot hook to the current template.
 - Source: `references/plans/agent-scoped-mcp-write-access.report.md` §5 and §6.
 
 ### fix (write-policy P4 closeout)

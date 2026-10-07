@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams import analyze, write_policy
+from agentteams import analyze, liaison_logs, mcp_need, write_policy
 from agentteams.audit import run_post_audit
 
 REPO = Path(__file__).resolve().parent.parent
@@ -77,6 +77,40 @@ def test_orchestrator_keeps_its_tools_and_gets_the_workflow():
     assert "Write Policy: Applying Proposals" in out and "Workflow 13" in out
 
 
+def test_capability_gaps_route_through_the_orchestrator():
+    # Non-orchestrator agents can't write a plan, so they attach a gap note; the orchestrator opens plans.
+    agent = write_policy.apply(_agent("['read', 'edit']"), "primary-producer", ON)
+    assert "gap note" in agent and "references/mcp-need.reference.md" in agent
+    orch = write_policy.apply(_agent("['read', 'edit']"), "orchestrator", ON)
+    assert "you open every capability-gap plan" in orch and "references/mcp-needs.csv" in orch
+
+
+def test_mcp_need_reference_and_register_columns():
+    doc = mcp_need.reference_doc()
+    assert "Ask in order" in doc and "never needs an MCP server" in doc and "wildcard is never allowed" in doc
+    for column in mcp_need.MCP_NEEDS_HEADERS:
+        assert f"`{column}`" in doc, column
+
+
+def test_skill_override_fenced_only_when_the_body_already_is():
+    plain = mcp_need.apply_skill_override("# Skill Generation\nThe agent that hit the gap opens that plan.\n")
+    assert "AGENTTEAMS:BEGIN" not in plain and "The orchestrator opens every" in plain
+    fenced = mcp_need.apply_skill_override("<!-- AGENTTEAMS:BEGIN content v=1 -->\nx\n<!-- AGENTTEAMS:END content -->\n")
+    assert "<!-- AGENTTEAMS:BEGIN write_policy v=1 -->" in fenced and fenced.endswith("<!-- AGENTTEAMS:END write_policy -->\n")
+
+
+def test_unmeasured_need_never_proposes_a_server():
+    assert "A server is never proposed without a measurement over a set threshold" in mcp_need.reference_doc()
+
+
+def test_mcp_needs_stub_only_when_asked(tmp_path):
+    assert mcp_need.MCP_NEEDS_CSV not in liaison_logs.init_csv_stubs(tmp_path / "a")
+    assert not (tmp_path / "a" / mcp_need.MCP_NEEDS_CSV).exists()
+    assert mcp_need.MCP_NEEDS_CSV in liaison_logs.init_csv_stubs(tmp_path / "b", mcp_needs=True)
+    header = (tmp_path / "b" / mcp_need.MCP_NEEDS_CSV).read_text(encoding="utf-8").splitlines()[0]
+    assert header == ",".join(mcp_need.MCP_NEEDS_HEADERS)
+
+
 def test_section_fenced_only_when_the_body_already_is():
     plain = write_policy.apply(_agent("['read', 'edit']"), "primary-producer", ON)
     assert "AGENTTEAMS:BEGIN" not in plain and "Return Proposals" in plain   # wrapped later with the body
@@ -105,6 +139,10 @@ def test_switching_on_an_existing_team(tmp_path):
     base = ("--description", str(brief_path), "--project", str(tmp_path), "--framework", "claude",
             "--output", str(out), "--no-scan", "--yes")
     assert _cli(*base, cwd=tmp_path).returncode == 0
+    # The MCP-need procedure and register ship only under the switch.
+    assert not (out / "references" / "mcp-need.reference.md").exists()
+    assert not (out / "references" / "mcp-needs.csv").exists()
+    assert "orchestrator-only" not in (out / "references" / "skill-generation.reference.md").read_text(encoding="utf-8")
     brief.update(ON)
     brief_path.write_text(json.dumps(brief), encoding="utf-8")
     manifest = analyze.build_manifest(brief, framework="claude")
@@ -112,6 +150,10 @@ def test_switching_on_an_existing_team(tmp_path):
     proc = _cli(*base, "--update", "--merge", cwd=tmp_path)
     assert proc.returncode == 0, proc.stdout[-1500:] + proc.stderr[-1500:]
     assert "Return Proposals" in (out / "primary-producer.md").read_text(encoding="utf-8")
+    assert (out / "references" / "mcp-need.reference.md").exists()
+    assert (out / "references" / "mcp-needs.csv").read_text(encoding="utf-8").startswith("id,agent,capability,")
+    assert "The orchestrator opens every\ncapability-gap plan" in (
+        out / "references" / "skill-generation.reference.md").read_text(encoding="utf-8")
     still_wide = [f for f in run_post_audit(out, manifest, ai_audit=False).agent_refactor_findings
                   if f.code == "AR_WRITE_POLICY" and f.severity == "error"]
     assert still_wide, "front matter is not merged, so the audit must still flag the old tools"

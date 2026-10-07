@@ -172,6 +172,7 @@ def _build_final_rendered(
     content comparison only and does not write to disk.
     """
     from agentteams import graph as _graph
+    from agentteams import mcp_need as _mcp_need
     from agentteams import write_policy as _write_policy
 
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
@@ -204,11 +205,14 @@ def _build_final_rendered(
             # adapters with non-markdown agents (Goose) wrap it as a runnable recipe.
             content = adapter.render_builder_file(
                 _write_policy.apply(content, Path(rel_path).stem.replace(".agent", ""), manifest), manifest)
+        if rel_path.endswith(_mcp_need.SKILL_REFERENCE_PATH) and _write_policy.enabled(manifest):
+            content = _mcp_need.apply_skill_override(content)  # only the orchestrator opens gap plans
         final_path = adapter.finalize_output_path(rel_path, file_type)
         final.append((final_path, content))
 
     if _write_policy.enabled(manifest):
         final.append(("references/write-policy.reference.md", _write_policy.reference_doc()))
+        final.append((_mcp_need.REFERENCE_PATH, _mcp_need.reference_doc()))
 
     # Framework-specific sidecar files not derived from a template
     # (e.g. Goose's .goosehints integrator). Default is none.

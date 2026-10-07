@@ -59,7 +59,7 @@ Result of a `migrate_inline_logs()` operation.
 
 ## Functions
 
-### `init_csv_stubs(refs_dir)`
+### `init_csv_stubs(refs_dir, *, mcp_needs=False)`
 
 > *Source: `agentteams/liaison_logs.py`*
 
@@ -68,10 +68,12 @@ Initialize CSV stub files (header row only) if they do not already exist.
 **Args:**
 
 - `refs_dir` (`Path`) — Path to the `references/` directory in `.github/agents/`
+- `mcp_needs` (`bool`) — Also create the MCP need register `mcp-needs.csv` ([`mcp_need`](mcp-need.md)). Generation passes `True` only under `write_policy: "orchestrator-only"`.
 
 **Behavior:**
 
-- Creates four CSV files: changelog, coordination log, security decisions, remediation log
+- Creates five CSV files: changelog, coordination log, security decisions, remediation log and the
+  orchestrator escalation log. A sixth, the MCP need register, is added with `mcp_needs=True`.
 - Safe to call on every generation run (never overwrites existing data)
 - Creates only the header row; no data rows
 
