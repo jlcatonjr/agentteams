@@ -39,12 +39,14 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import tomllib
 import stat
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
 from agentteams.fences import _extract_fenced_regions
+from agentteams.frameworks.codex import _INSTRUCTIONS_OPEN, _TRANSLATION_FENCE_ID
 from agentteams.frameworks.goose_recipe_validate import _validate_recipe_yaml
 from agentteams.unfenced import _FENCE_BEGIN_RE, _FENCE_END_RE
 
@@ -56,6 +58,8 @@ END_MARKER = "<!-- AGENTTEAMS-LEARNED:END -->"
 #: Host formats this module understands.
 MARKDOWN = "markdown"
 RECIPE = "recipe"
+#: A Codex custom agent: the block lives inside the literal `developer_instructions` string.
+TOML = "toml"
 
 #: Any agentteams fence-family token (``AGENTTEAMS:``, ``AGENTTEAMS-LEARNED:``,
 #: ``AGENTTEAMS-BRIDGE:`` …). A learned block may contain none of them: a fence marker inside it
@@ -287,8 +291,49 @@ def parse_recipe(text: str) -> ParsedDoc:
                      offs[last + 1], indent, 0)
 
 
+_TOML_OPEN = _INSTRUCTIONS_OPEN.rstrip("\n")  # one source of truth with frameworks.codex
+_TRANSLATION_BEGIN = f"<!-- AGENTTEAMS:BEGIN {_TRANSLATION_FENCE_ID}"
+
+
+def parse_toml(text: str) -> ParsedDoc:
+    """Locate the learned block inside a Codex agent's literal ``developer_instructions`` string.
+
+    Only the literal form (``developer_instructions = '''``) is accepted; the escaped ``\"\"\"`` fallback
+    form some renders use is refused, since a block there would need escaping the sync can't verify.
+
+    Args:
+        text: The whole TOML file.
+
+    Returns:
+        The parsed document. Markers are whole lines at column 0; ``insert_at`` is the start of the
+        ``codex_translation`` fence inside the string, else the line that closes the string.
+
+    Raises:
+        LearnedBlockError: No (or more than one) literal ``developer_instructions`` string, an unclosed
+            string, or markers outside it or inside a template fence.
+    """
+    lines = _split_lines(text)
+    offs = _offsets(lines)
+    heads = [i for i, line in enumerate(lines) if line.startswith("developer_instructions")]
+    if len(heads) != 1 or lines[heads[0]].rstrip("\n") != _TOML_OPEN:
+        raise LearnedBlockError("expected exactly one literal `developer_instructions = '''` string")
+    first = heads[0] + 1
+    close = next((i for i in range(first, len(lines)) if lines[i].rstrip("\n") == "'''"), None)
+    if close is None:
+        raise LearnedBlockError("the developer_instructions string is not closed")
+    insert = next((i for i in range(first, close) if lines[i].startswith(_TRANSLATION_BEGIN)), close)
+    loc = _locate(lines, first, close)
+    if loc is None:
+        return ParsedDoc(TOML, None, offs[insert], "", 0)
+    b, e = loc
+    for idx in (b, e):
+        if lines[idx].rstrip("\n") not in (BEGIN_MARKER, END_MARKER):
+            raise LearnedBlockError("learned markers must be whole lines starting at column 0")
+    return ParsedDoc(TOML, LearnedBlock("".join(lines[b + 1:e]), offs[b], offs[e + 1]), offs[insert], "", 0)
+
+
 def parse(text: str, kind: str) -> ParsedDoc:
-    """Dispatch to :func:`parse_markdown` or :func:`parse_recipe`.
+    """Dispatch to :func:`parse_markdown`, :func:`parse_recipe` or :func:`parse_toml`.
 
     Args:
         text: The whole file.
@@ -304,6 +349,8 @@ def parse(text: str, kind: str) -> ParsedDoc:
         return parse_markdown(text)
     if kind == RECIPE:
         return parse_recipe(text)
+    if kind == TOML:
+        return parse_toml(text)
     raise LearnedBlockError(f"unknown host format {kind!r}")
 
 
@@ -368,6 +415,10 @@ _POLICY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("permission/tool widening", r"\btools\s*:"),
         ("permission/tool widening", r"\bhooks\s*:"),
         ("permission/tool widening", rf"\bmcp{_GAP}servers"),
+        # Codex capability settings (the block can't set them, but prose can coax a weaker sandbox).
+        ("permission/tool widening", rf"\bsandbox{_GAP}mode"),
+        ("permission/tool widening", rf"\bapproval{_GAP}policy"),
+        ("permission/tool widening", rf"\bdanger{_GAP}full{_GAP}access"),
     )
 )
 
@@ -475,6 +526,8 @@ def verify_composed(old: str, new: str, kind: str, content: str) -> list[str]:
         set is identical (and parseable); front matter is unchanged; for recipes the structural
         check result and every top-level key other than ``instructions`` are unchanged.
     """
+    if kind == TOML and "'''" in content:
+        return ["the block contains a TOML string delimiter ('''); it would close developer_instructions"]
     try:
         before = parse(old, kind)
         after = parse(new, kind)
@@ -504,7 +557,30 @@ def verify_composed(old: str, new: str, kind: str, content: str) -> list[str]:
         sn.pop("instructions", None)
         if so != sn:
             problems.append("a top-level recipe key other than instructions changed")
+    if kind == TOML:
+        problems += _toml_problems(old, new)
     return problems
+
+
+def _toml_problems(old: str, new: str) -> list[str]:
+    """Check a composed Codex agent still parses and only ``developer_instructions`` changed.
+
+    (Block content containing the string delimiter is refused earlier, in :func:`verify_composed`.)
+
+    Args:
+        old: The TOML before the write.
+        new: The composed TOML.
+
+    Returns:
+        Problems; empty when the write is safe.
+    """
+    try:
+        before, after = tomllib.loads(old), tomllib.loads(new)
+    except tomllib.TOMLDecodeError as exc:
+        return [f"the composed TOML does not parse ({exc})"]
+    before.pop("developer_instructions", None)
+    after.pop("developer_instructions", None)
+    return [] if before == after else ["a TOML key other than developer_instructions changed"]
 
 
 # ---------------------------------------------------------------------------
@@ -519,10 +595,13 @@ def host_kind(rel_path: str, text: str) -> str | None:
         text: The file content (a ``.yaml`` must look like a recipe).
 
     Returns:
-        :data:`MARKDOWN` for ``.md``, :data:`RECIPE` for a goose recipe, else None.
+        :data:`MARKDOWN` for ``.md``, :data:`RECIPE` for a goose recipe, :data:`TOML` for a Codex agent with
+        a literal ``developer_instructions`` string, else None.
     """
     if rel_path.endswith(".md"):
         return MARKDOWN
+    if rel_path.endswith(".toml") and re.search(rf"^{re.escape(_TOML_OPEN)}$", text, re.MULTILINE):
+        return TOML
     if rel_path.endswith(".yaml") and _RECIPE_SHAPE_RE.search(text) and re.search(
             r"^instructions:[ \t]*\|", text, re.MULTILINE):
         return RECIPE
@@ -552,6 +631,7 @@ _AGENT_FILE_HOMES: tuple[tuple[str, str, str], ...] = (
     (".github", "agents", ".agent.md"),
     (".claude", "agents", ".md"),
     (".goose", "recipes", ".yaml"),
+    (".codex", "agents", ".toml"),
 )
 
 
@@ -562,7 +642,8 @@ _NOT_AGENT_FILES = frozenset({"CLAUDE.md", "AGENTS.md", "README.md", "SETUP-REQU
 def is_agent_file(path: Path) -> bool:
     """Return True for an agent file a learned block lives in (and only those).
 
-    ``.github/agents/*.agent.md``, ``.claude/agents/*.md`` and ``.goose/recipes/*.yaml`` directly in
+    ``.github/agents/*.agent.md``, ``.claude/agents/*.md``, ``.goose/recipes/*.yaml`` and
+    ``.codex/agents/*.toml`` directly in
     the agents dir — never ``references/``, ``CLAUDE.md``, ``AGENTS.md`` or any other file.
 
     Args:

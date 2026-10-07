@@ -1271,8 +1271,11 @@ Override the change-detection anchor (default: the pin's recorded `last_synced_c
 
 Agents record what they learn in an explicit block of their own agent file —
 `<!-- AGENTTEAMS-LEARNED:BEGIN -->` … `<!-- AGENTTEAMS-LEARNED:END -->` (markdown body, or the end
-of a goose recipe's `instructions: |`). `--sync-agent-docs` moves **only that block** between the
-copies of one agent in `.github/agents`, `.claude/agents` and `.goose/recipes`. It runs outside
+of a goose recipe's `instructions: |`, or inside a Codex agent's literal `developer_instructions` string,
+before its `codex_translation` fence). `--sync-agent-docs` moves **only that block** between the copies of one
+agent in `.github/agents`, `.claude/agents`, `.goose/recipes` and `.codex/agents`. On Codex, a block containing
+`'''` is refused, since it would close the string, and every write must leave the TOML parseable with every
+other key unchanged. An agent rendered with the escaped `"""` fallback string is refused. It runs outside
 every agent session (an agent in a Claude Code sandbox cannot write `.claude/agents`); the
 operator can install a systemd user unit for it with `scripts/install-agent-doc-sync.sh`
 (dry-run by default). See [`agent_doc_sync`](api-reference/agent-doc-sync.md).
@@ -1303,7 +1306,8 @@ check mode nothing is written, not even the baseline. A no-op run writes nothing
 
 ### `--apply`
 
-With `--sync-agent-docs`: write `.github/agents` and `.goose/recipes` targets and the baseline.
+With `--sync-agent-docs`: write `.github/agents`, `.goose/recipes` and `.codex/agents` targets and the
+baseline.
 `.claude/agents` targets are only **staged** (listed, and recorded in `pending-claude.json` in the
 state dir), so an unattended run never writes Claude agent files.
 
