@@ -20,6 +20,7 @@ from typing import Any
 
 from agentteams import analyze, emit
 from agentteams.adopted_agents import (
+    _ADOPTED_ROW_RE,
     adoption_exclusions,
     agent_dir_label,
     discover_orphans,
@@ -63,6 +64,8 @@ def run_adopt_step(
             prev = previously_adopted(output_dir, agent_ext)
             meta = {s: read_adopted_agent_metadata(output_dir / f"{s}{agent_ext}") for s in prev}
             set_adopted_rows(manifest, prev, meta, agent_dir=agent_dir, agent_ext=agent_ext)
+        elif args.overwrite:
+            return None, _refuse_dropped_rows(manifest, output_dir, agent_ext, dry_run=args.dry_run)
         return None, None
     # Discovery reads only name/description, from files already in output_dir (C-4).
     slugs, meta = discover_orphans(output_dir, agent_ext, adoption_exclusions(manifest))
@@ -70,7 +73,8 @@ def run_adopt_step(
         adopted = analyze.adopt_orphan_agents(manifest, slugs, meta, agent_dir=agent_dir, agent_ext=agent_ext)
         print(f"  Adopted {len(adopted)} orphan agent(s) into roster: {', '.join(adopted)}"
               if adopted else "  --adopt-orphans: no orphan agent files to adopt.")
-        return None, None
+        return None, (_refuse_dropped_rows(manifest, output_dir, agent_ext, dry_run=args.dry_run)
+                      if args.overwrite else None)
     set_adopted_rows(manifest, slugs, meta, agent_dir=agent_dir, agent_ext=agent_ext)
     try:
         return adopt_merge_gate.run(
@@ -80,6 +84,36 @@ def run_adopt_step(
         print(f"[SEC-GATE/DESTRUCTIVE:{adopt_merge_gate.ACTION}] blocked: {exc}", file=sys.stderr)
         return None, 1
 
+
+
+def _refuse_dropped_rows(manifest: dict, output_dir: Path, agent_ext: str, *, dry_run: bool = False) -> int | None:
+    """Refuse an ``--overwrite`` that would drop an adopted agent's routing row (CA-033).
+
+    The on-disk orchestrator's ``*(adopted)*`` rows whose agent file still exists must all be in the fresh
+    render, unless the agent is now one of the brief's own agents. A plain ``--overwrite`` (no ``--update``)
+    used to rebuild the routing fence without them, silently, in every orchestrator.
+
+    Returns:
+        1 (refused, reported on stderr) when a row would be dropped, else ``None``.
+    """
+    rendered = set(_ADOPTED_ROW_RE.findall(
+        (manifest.get("auto_resolved_placeholders") or {}).get("ADOPTED_AGENT_ROUTING_ROWS", "")))
+    own = set(manifest.get("agent_slug_list") or []) - set(manifest.get("adopted_agents") or [])
+    # Slugs adoption never takes (emitted files, tool agents) can't be re-adopted, so their rows may drop;
+    # otherwise every --overwrite would refuse with no way through but deleting the file.
+    own |= set(adoption_exclusions(manifest))
+    dropped = [s for s in previously_adopted(output_dir, agent_ext) if s not in rendered and s not in own]
+    if not dropped:
+        return None
+    message = (f"--overwrite would drop the adopted routing row(s) of {', '.join(dropped)} from the "
+               "orchestrator (their agent files still exist). Re-run with --adopt-orphans so they are "
+               "re-adopted, or use --update --merge, which carries them. To drop a row on purpose, remove "
+               "the agent's file (or --prune it), or delete the row from the orchestrator by hand.")
+    if dry_run:
+        print(f"  [ADOPTED-ROWS] dry run: {message}", file=sys.stderr)
+        return None
+    print(f"[ADOPTED-ROWS] blocked: {message}", file=sys.stderr)
+    return 1
 
 
 def attach_dry_run_plan(merge_plan: adopt_merge_gate.AdoptMergePlan | None, result: emit.EmitResult) -> None:
