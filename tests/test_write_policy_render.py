@@ -42,6 +42,25 @@ def test_tools_key_of_another_shape_is_refused(tools):
         write_policy.narrow_tools(_agent(tools))
 
 
+def test_legacy_allowed_tools_is_removed():
+    # The Claude builder template declares only `allowed-tools`; narrowing must not leave that write grant.
+    out = write_policy.narrow_tools("---\nname: X\nallowed-tools: Read, Edit, Write, Bash\n---\nbody\n")
+    assert "allowed-tools" not in out and "tools: ['read', 'search']" in out and out.endswith("---\nbody\n")
+    out = write_policy.narrow_tools(_agent("['read', 'edit']").replace("tools:", "allowed-tools: Edit\ntools:", 1))
+    assert "allowed-tools" not in out and "tools: ['read']" in out
+
+
+@pytest.mark.parametrize("value", ["\n  - Read\n  - Edit", " [Read,\n  Write]", " Read,\n  Write"])
+def test_multiline_allowed_tools_is_refused(value):
+    with pytest.raises(ValueError, match="allowed-tools"):
+        write_policy.narrow_tools(f"---\nname: X\nallowed-tools:{value}\ndescription: d\n---\nbody\n")
+
+
+def test_quoted_allowed_tools_is_removed():
+    out = write_policy.narrow_tools("---\nname: X\n\"allowed-tools\": Read, Write\n---\nbody\n")
+    assert "allowed-tools" not in out
+
+
 def test_missing_tools_line_gets_read_only():
     assert "tools: ['read', 'search']" in write_policy.narrow_tools("---\nname: X\n---\nbody\n")
 

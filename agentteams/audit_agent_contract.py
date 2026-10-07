@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.audit_types import AuditFinding, _agent_slug, _is_agent_file
+from agentteams.front_matter_merge import CAPABILITY_FRONT_MATTER_KEYS
 from agentteams.frameworks.goose_recipe_read import developer_tools, recipe_extension_grants
 from agentteams.frameworks.goose_recipe_validate import _RECIPE_VERSION_RE
 from agentteams.frameworks.goose_tool_scoping import DISABLED, declared_from_marker, grant_extensions
@@ -363,7 +364,7 @@ _GOOSE_WRITE_TOOLS = frozenset({"write", "edit", "shell"})
 
 
 #: Extensions a grant recipe may carry besides those its declared tools grant: the first-party
-#: coordination server (wired by team configuration, record-only).
+#: coordination server (wired by team configuration; it reads and records, so it writes request/log files).
 _GOOSE_FIRST_PARTY_EXTRAS = frozenset({"agentteams_coordination"})
 #: Extension types an operator MCP server is emitted as (goose.py ``_goose_extension_for``).
 _GOOSE_OPERATOR_TYPES = frozenset({"stdio", "streamable_http"})
@@ -513,11 +514,55 @@ _SHELL_WARN_FRAMEWORKS = frozenset({"claude"})
 #: agent, and two equally shallow copies are both checked).
 _WRITER_SLUGS = frozenset({"orchestrator"})
 _GOOSE_WRITER_SLUGS = _ORCHESTRATOR_SLUGS  # single source with the generator (write_policy.ORCHESTRATOR_SLUGS)
-#: Goose extensions a non-orchestrator recipe may carry: the read-only file server and the record-only
-#: coordination server. ``developer`` and ``analyze`` are judged by their tools; any other extension is refused.
-_GOOSE_READ_EXTENSIONS = frozenset({"agentteams_readfs", "agentteams_coordination"})
+#: Goose extensions a non-orchestrator recipe may carry: only the read-only file server. The coordination
+#: server is not one: it writes request/log files, so the generator withholds it from these recipes
+#: (``goose.py``, "restricted"), and the audit agrees. ``developer`` and ``analyze`` are judged by their
+#: tools; any other extension is refused.
+_GOOSE_READ_EXTENSIONS = frozenset({"agentteams_readfs"})
 #: ``tools:`` values YAML reads as null: the key is then effectively absent and the agent inherits every tool.
 _NULL_TOOLS = frozenset({"", "~", "null", "''", '""'})
+#: Capability front-matter keys a non-orchestrator markdown agent may carry under the switch. Every other key
+#: in ``CAPABILITY_FRONT_MATTER_KEYS`` is an error, so a key added there later is refused by default.
+#: ``tools`` is judged on its own; ``model`` grants nothing; ``disallowedTools`` only narrows; ``agents`` is
+#: Copilot's subagent roster, inert without a dispatch tool (itself an error); ``permissionMode`` is judged
+#: on its value.
+_WRITE_POLICY_OK_KEYS = frozenset({"tools", "model", "disallowedTools", "agents", "permissionMode"})
+_WRITE_POLICY_BAD_KEYS = CAPABILITY_FRONT_MATTER_KEYS - _WRITE_POLICY_OK_KEYS
+#: Claude ``permissionMode`` values that relax nothing. Any other value (``acceptEdits``, ``bypassPermissions``,
+#: ``dontAsk``, anything unknown) is an error.
+_SAFE_PERMISSION_MODES = frozenset({"default", "plan"})
+_FM_KEY_RE = re.compile(r"""^["']?([A-Za-z][\w-]*)["']?[ \t]*:[ \t]*(.*)$""", re.MULTILINE)
+#: Top-level YAML a key regex can't read: an explicit key (``? k``), a merge key (``<<:``), an anchor, alias
+#: or tag before a key, or a quoted key with an escape (``"perm\u0069ssionMode"``). Any of them could hide a
+#: capability key, so each fails closed.
+_FM_OPAQUE_KEY_RE = re.compile(r"""^(?:[?&*!]|<<|["'][^"'\n]*\\)""", re.MULTILINE)
+
+
+def _capability_key_problems(content: str) -> list[str]:
+    """Capability-granting front-matter keys, other than ``tools:``, that defeat the read-only narrowing.
+
+    An inline ``mcpServers`` entry starts a process when the subagent starts, ``hooks`` run shell at tool
+    events, ``skills`` preload instructions and scripts, ``memory`` turns on Read/Write/Edit, ``allowed-tools``
+    is a legacy grant some hosts still read, and a relaxed ``permissionMode`` skips permission checks. None of
+    these is visible in ``tools:``. YAML key forms the key regex can't read fail closed.
+    """
+    fm = _FRONT_MATTER_RE.match(content)
+    if not fm:
+        return []
+    problems: list[str] = []
+    opaque = _FM_OPAQUE_KEY_RE.search(fm.group(1))
+    if opaque:
+        line = fm.group(1)[opaque.start():].split("\n", 1)[0][:40]
+        problems.append(f"has a front-matter key this check can't read ({line!r}: an explicit, merge, anchored, "
+                        "tagged or escaped key); write plain `key: value` lines")
+    for m in _FM_KEY_RE.finditer(fm.group(1)):
+        key, value = m.group(1), m.group(2).split(" #", 1)[0].strip().strip("'\"")
+        if key in _WRITE_POLICY_BAD_KEYS:
+            problems.append(f"declares `{key}:`, a capability-granting key the read-only narrowing doesn't cover")
+        elif key == "permissionMode" and value not in _SAFE_PERMISSION_MODES:
+            problems.append(f"declares `permissionMode: {value or '(empty)'}`; only "
+                            f"{' or '.join(sorted(_SAFE_PERMISSION_MODES))} is allowed under the switch")
+    return problems
 
 
 def _tools_key_problem(content: str) -> str | None:
@@ -597,9 +642,10 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
         if "shell" in dev or "execute" in declared:
             warnings.append("recipe grants a shell, which is unconfined until the P4 sandbox profiles")
         return errors, warnings
+    errors.extend(_capability_key_problems(content))
     problem = _tools_key_problem(content)
     if problem:
-        return [problem], warnings
+        return errors + [problem], warnings
     tokens = _declared_tool_tokens(content)
     writes, shell, dispatch = tokens & _WRITE_TOKENS, tokens & _SHELL_TOKENS, tokens & _DISPATCH_TOKENS
     unknown = tokens - _READ_ONLY_TOKENS - _WRITE_TOKENS - _SHELL_TOKENS - _DISPATCH_TOKENS
@@ -631,13 +677,17 @@ def _check_write_policy(
 
     * **error (markdown agents):** a write tool; dispatch (``Task``/``agent`` can start a subagent that
       writes); a tool not known to be read-only; a ``tools:`` key that is absent, null, empty, duplicated or
-      of any shape other than one line or a clean ``- item`` block list; a shell on any framework but claude.
+      of any shape other than one line or a clean ``- item`` block list; a shell on any framework but claude;
+      a capability key other than ``tools`` (``mcpServers``, ``hooks``, ``skills``, ``memory``,
+      ``allowed-tools``, ``capabilities``, or any later key in ``CAPABILITY_FRONT_MATTER_KEYS``) or a ``permissionMode`` other
+      than ``default``/``plan``; a front-matter key the check can't read (explicit, merge, anchored, tagged or
+      escaped).
     * **error (Codex):** ``sandbox_mode``, parsed as TOML, other than ``"read-only"`` (missing included); any
       ``mcp_servers``; invalid TOML. Every ``.toml`` is checked, ``references/`` included, and the exemption
       needs ``name`` to match.
     * **error (Goose):** missing ``extensions``; ``developer`` ``edit``/``write`` (or a marker declaring them);
       ``summon`` or ``sub_recipes`` (dispatch); any extension other than ``developer``, ``analyze``,
-      ``summon``, ``agentteams_readfs`` and ``agentteams_coordination``.
+      ``summon`` and ``agentteams_readfs`` (the coordination server writes files, so it is refused too).
     * **error (disk audit):** a symlink or an unreadable agent file in the team directory.
     * **warning:** a shell elsewhere (Claude ``Bash``, Goose ``shell``). Nothing confines it before P4, so
       no brief field silences this.

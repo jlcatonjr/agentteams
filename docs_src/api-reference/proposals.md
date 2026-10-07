@@ -103,8 +103,8 @@ time. The runtime boundary is the out-of-session runner and its OS sandbox ([`co
 
 | Framework | Error | Warning |
 |---|---|---|
-| claude | Any tool that isn't known to be read-only (see below); a `tools:` key that is absent, null, empty (`[]`), duplicated, or of any shape other than one line or a clean `- item` block list, since the agent may then inherit every tool | `Bash` |
-| goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`; any extension other than `developer` and `analyze` (judged by the tools they grant), `agentteams_readfs` and `agentteams_coordination`; missing `extensions` | A granted shell |
+| claude | Any tool that isn't known to be read-only (see below); a `tools:` key that is absent, null, empty (`[]`), duplicated, or of any shape other than one line or a clean `- item` block list, since the agent may then inherit every tool; any other capability key (`mcpServers`, `hooks`, `skills`, `memory`, `allowed-tools`, `capabilities`, or a later key in `CAPABILITY_FRONT_MATTER_KEYS`), since none of them shows in `tools:`; a `permissionMode` other than `default` or `plan`; a front-matter key the check can't read (explicit `?`, merge `<<`, anchored, tagged or escaped), since it could hide one of those keys | `Bash` |
+| goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`; any extension other than `developer` and `analyze` (judged by the tools they grant) and `agentteams_readfs`. The coordination server writes request and log files, so it is refused, as the generator already withholds it; missing `extensions` | A granted shell |
 
 Generation refuses the switch on copilot-vscode, copilot-cli, codex and agents-md (P4a key custody), so this
 table lists only the frameworks a team under the switch can use. The check itself also knows the other
@@ -133,7 +133,7 @@ shapes:
 - **Accepted residue:** under the switch, a Goose recipe can't carry any operator MCP server, even a
   read-only one, because the check can't tell what it does. The Goose extensions it does allow are trusted by
   name.
-- **Not covered:** skills, and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex's
+- **Not covered:** project-level skill directories (an agent's own `skills:` key is an error, above), and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex's
   `sandbox_mode` is a default, not a ceiling.
 
 ## Generated teams under the switch (P3)

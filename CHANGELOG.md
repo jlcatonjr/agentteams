@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (write-policy: capability keys, legacy grants, coordination allowlist, D3 wording)
+
+- **Capability keys.** Under the switch, `AR_WRITE_POLICY` now also errors on a non-orchestrator markdown agent
+  that declares `mcpServers`, `hooks`, `skills`, `memory`, `allowed-tools` or `capabilities`, or a
+  `permissionMode` other than `default`/`plan`. It also errors on YAML key forms it can't read (explicit `?`,
+  merge `<<`, anchored, tagged or escaped keys). Before, it read only `tools:`, so an inline MCP server (which starts a process when
+  the subagent starts), a hook or `bypassPermissions` passed. The key set comes from
+  `CAPABILITY_FRONT_MATTER_KEYS`, so a key added there later is refused by default.
+- **Legacy grant.** `narrow_tools` now removes a one-line Claude `allowed-tools:` and refuses a multi-line
+  one. Before, the generated Claude `team-builder.md` under the switch kept
+  `allowed-tools: Read, Edit, Write, Grep, Glob, Bash` beside the narrowed `tools: ['read', 'search']`. The
+  new check caught this.
+- **Goose.** The audit no longer allowlists `agentteams_coordination` on non-orchestrator recipes. The
+  generator already withholds it there, because it writes files.
+- **Orchestrator section.** It no longer says the orchestrator can avoid reading proposal content. The
+  content arrives with the agent's handoff, so it is in context either way. The section now says to save
+  the artifact exactly as it was returned, since nothing compares the copy with the original.
+- **`memory` is a capability key.** `CAPABILITY_FRONT_MATTER_KEYS` now includes Claude's `memory`, which
+  enables Read, Write and Edit whatever `tools:` says. `--update --merge` reports it as a capability
+  proposal.
+- **Ledger.** `apply-proposal` rows record `bytes`, for the P5 cost measurement.
+- `write_policy.py`, `proposals.py` and `front_matter_merge.py` are integrity-pinned.
+  `references/enforcement-integrity.json` was regenerated for those three only. Stale local installed gate
+  hooks were not re-pinned.
+- Source: `references/plans/agent-scoped-mcp-write-access.report.md` §5 and §6.
+
 ### fix (write-policy P4 closeout)
 
 - **Brief schema.** `proposal_gates` entries now accept `exec`; before, a standard JSON-Schema validator

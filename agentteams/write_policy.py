@@ -42,6 +42,8 @@ _ANY_FENCE_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN ")
 
 _FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
 _FLOW_TOOLS_RE = re.compile(r"^tools:[ \t]*\[([^\]\n]*)\][ \t]*$", re.MULTILINE)
+#: Claude's legacy subagent grant key. A host that still reads it would ignore the narrowed ``tools:``.
+_ALLOWED_TOOLS_LINE_RE = re.compile(r"""^["']?allowed-tools["']?[ \t]*:[ \t]*(.*)\n?""", re.MULTILINE)
 
 _PROPOSALS_SECTION = """
 ## Write Policy: Return Proposals, Never Write
@@ -78,7 +80,8 @@ agent with no entry gets no command runs.
 1. **Before dispatching** an agent, run `agentteams --issue-dispatch --agent <slug>` and pass the printed
    nonce to the agent as its `dispatch` value. It is single-purpose: one task, a limited number of uses,
    24 hours.
-2. **On return**, save each artifact to a file and run
+2. **On return**, save each artifact to a file exactly as the agent returned it (nothing compares your copy
+   with the agent's, so don't reformat or edit it), then run
    `agentteams --apply-proposal FILE.json --description <brief>` or
    `agentteams --run-request FILE.json --description <brief>`. Add `--dry-run` first when unsure.
 3. **On a refusal or undeclared writes**, do not apply the change by hand and do not retry with a widened
@@ -95,8 +98,11 @@ agent with no entry gets no command runs.
   dispatch nonce. Run that work yourself, or ask the operator. Workflow 12 then applies only to
   adjacent-repository orchestrators.
 
-Read a proposal's content yourself only when it is over the size cap or a gate warns. Full reference:
-`references/write-policy.reference.md`.
+Each artifact reaches you whole, inside the agent's handoff, so its content is in your context either way.
+The runner checks scope, protected paths and (for proposals) the base hash, and runs any gate registered for
+the path; nothing else checks the content. Read it closely when no gate covers its path, when it sits next to
+a protected path, or when the CLI refuses it (a proposal over the size cap is refused, not flagged). Full
+reference: `references/write-policy.reference.md`.
 """
 
 
@@ -120,7 +126,9 @@ def narrow_tools(content: str) -> str:
 
     Every generated template declares its tools that way. A file with no ``tools:`` key gets
     ``tools: ['read', 'search']`` rather than being left to inherit every tool. A ``tools:`` key of any other
-    shape is refused: inserting a second key would leave YAML keeping the last, wide one.
+    shape is refused: inserting a second key would leave YAML keeping the last, wide one. A one-line legacy
+    ``allowed-tools:`` grant (Claude) is removed, since a host that reads it would ignore ``tools:``; a
+    multi-line one is refused.
 
     Args:
         content: A rendered canonical agent file (front matter first).
@@ -129,12 +137,22 @@ def narrow_tools(content: str) -> str:
         The content with only read-only tools left; their original spelling and order are kept.
 
     Raises:
-        ValueError: When the file has no front matter, or a ``tools:`` key that isn't a one-line flow list.
-            Generated templates always have both.
+        ValueError: When the file has no front matter, a ``tools:`` key that isn't a one-line flow list, or
+            a multi-line ``allowed-tools:``. Generated templates always have front matter and one-line keys.
     """
     fm = _FRONT_MATTER_RE.match(content)
     if not fm:
         raise ValueError("agent file has no front matter; cannot narrow its tools")
+    inner = fm.group(1) + "\n"
+    legacy = list(_ALLOWED_TOOLS_LINE_RE.finditer(inner))
+    # One line only: an empty value (block list), or a next line that is indented or a list item, continues it.
+    if any(not g.group(1).split(" #", 1)[0].strip() or inner[g.end():g.end() + 1] in (" ", "\t", "-")
+           for g in legacy):
+        raise ValueError("agent file's `allowed-tools:` is not one line; cannot narrow it safely")
+    if legacy:
+        inner = _ALLOWED_TOOLS_LINE_RE.sub("", inner).rstrip("\n")
+        content = content[:fm.start(1)] + inner + content[fm.end(1):]
+        fm = _FRONT_MATTER_RE.match(content)
     m = _FLOW_TOOLS_RE.search(fm.group(1))
     if m is None and re.search(r"^tools\s*:", fm.group(1), re.MULTILINE):
         raise ValueError("agent file's `tools:` is not a one-line flow list; cannot narrow it safely")
