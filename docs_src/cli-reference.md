@@ -867,6 +867,23 @@ Read-only. Verifies the signatures, hash chain and signed head anchor of `.agent
 under `--project` (else the current directory). Exit 1 when a row was edited, removed or reordered, the
 ledger was truncated, or it was rewritten without the key.
 
+### `--confined-path`
+
+Read-only (P5b). Prints the operator-owned `confined_programs` file for `--project` (else the current
+directory), `~/.config/agentteams/confined/<project>-<hash>.json`, and whether it is present. The `--serve-requests`
+runner reads that file instead of the brief's `confined_programs` block, so machine paths stay out of the
+committed brief. It refuses when both are set.
+
+### `--install-confined FILE`
+
+Operator-only (P5b). Validates `FILE`, a JSON `confined_programs` object, against `--description`'s policy,
+then prints the exact JSON it would install and its sha256, and exits 1 without writing. Review it, then
+rerun with `--confirm-review-sha256 <sha256>`. That installs those bytes as `--project`'s operator-owned
+file: mode 0600, in a 0700 directory, written atomically. A hash that doesn't match is refused, and so is a
+brief that also defines `confined_programs`. Run it outside every agent session, then restart
+`--serve-requests`: the runner pins the file at start and stops if it changes. Under `write_policy` the
+orchestrator never edits this file or writes a script for it. It gives you this one command.
+
 ### `--verify-grants`
 
 Read-only: report the validity (signature scheme, signature, expiry, use-limit, approver roster) of every cross-workspace capability grant (P2) in `references/capability-grants.log.csv` under `--output`/`--project` (else CWD). The approver roster and the Ed25519 verify keys are read from the holder **team dir** — the directory `--update` with the same `--framework`/`--output` writes the team to — never from a project-root `references/security-approvers.txt` (a project-root roster is ignored for grants, with a warning). An HMAC-signed grant that permits `write` is reported as **refused**, with the migration step (re-sign it with `--sign-grant`). Never consumes a grant. Exits non-zero if any grant is invalid. HMAC rows need `AGENTTEAMS_GRANT_SIGNING_KEY`. See [Workspace Privilege Scoping](api-reference/workspace-privilege-scoping.md).

@@ -22,8 +22,12 @@ Stdlib only; integrity-pinned.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +37,11 @@ from typing import Any, Callable
 PROTECTED_REL = (".agentteams", ".agentteams-queue", ".git", ".claude", ".goose", ".codex", ".github")
 #: Read-denied to every confined command: the ledger key and the operator signing keys (one source of truth).
 from agentteams.frameworks._sandbox_emit import SIGNING_KEY_DIR as KEY_DIR  # noqa: E402
+
+#: P5b: operator-owned per-project ``confined_programs`` files (see :func:`confined_file_for`); one source of truth
+#: with the emitted ``Edit(...)`` deny rule.
+from agentteams.frameworks._sandbox_emit import CONFINED_PROGRAMS_DIR as CONFINED_DIR  # noqa: E402
+MAX_CONFINED_BYTES = 64 * 1024
 
 _DEV_WRITES = ("/dev/null", "/dev/zero", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/dtracehelper")
 _BAD_PATH_CHARS = ('"', "\n", "\r", "\\", "\0")
@@ -232,6 +241,10 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         for rel in write:
             if not isinstance(rel, str) or not rel or rel.startswith(("/", "~")) or ".." in rel.split("/"):
                 raise ConfinementError(f"confined_programs.{agent}.write entries must be project-relative paths")
+            if any(c in rel for c in "*?["):
+                # Literal only: the runner's brief- and protected-path containment checks treat these as paths.
+                raise ConfinementError(f"confined_programs.{agent}.write {rel!r} contains a wildcard; give a "
+                                       "literal directory")
             top = rel.strip("/").split("/")[0]
             if rel.strip("/") in (".", "") or top in PROTECTED_REL or control_plane_of(rel):
                 raise ConfinementError(f"confined_programs.{agent}.write {rel!r} covers the project root, the ledger, "
@@ -239,6 +252,141 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         # The exec-inside-a-write-root check needs the project root: see check_overlap (run time).
         confined[agent] = {"exec": exec_paths, "write": write}
     return confined
+
+
+def confined_file_for(root: Path) -> Path:
+    """The operator-owned ``confined_programs`` file for *root* (P5b).
+
+    Machine paths are per-machine facts, so they can live here instead of in the committed brief. The file sits
+    outside the project, where no session sandbox lets an agent write, and the emitted ``permissions.deny``
+    covers the built-in Edit/Write tools too. The name is the project directory's basename plus a hash of its
+    real path, so two checkouts with the same name never share a file.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        ``~/.config/agentteams/confined/<basename>-<sha256 of the real path, 12 hex>.json``, expanded.
+
+    Raises:
+        Nothing.
+    """
+    real = os.path.realpath(root)
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename(real)) or "root"
+    digest = hashlib.sha256(real.encode("utf-8", "surrogateescape")).hexdigest()[:12]
+    return Path(os.path.expanduser(CONFINED_DIR)) / f"{name}-{digest}.json"
+
+
+def _custody_check(path: Path, st: os.stat_result, *, directory: bool) -> os.stat_result:
+    if not (stat.S_ISDIR(st.st_mode) if directory else stat.S_ISREG(st.st_mode)):
+        raise ConfinementError(f"{path} must be a real {'directory' if directory else 'file'}, not a symlink")
+    if st.st_uid != os.getuid() or st.st_mode & 0o022:
+        raise ConfinementError(f"{path} must be owned by you and not group- or world-writable")
+    return st
+
+
+def _check_custody(path: Path, *, directory: bool) -> os.stat_result:
+    return _custody_check(path, os.lstat(path), directory=directory)
+
+
+def _inside(path: Path, root: Path) -> bool:
+    """Whether *path* resolves inside *root*; case-folded on macOS, whose default filesystem ignores case."""
+    a, b = os.path.realpath(path), os.path.realpath(root).rstrip(os.sep) + os.sep
+    if sys.platform == "darwin":
+        a, b = a.lower(), b.lower()
+    return a.startswith(b)
+
+
+def confined_bytes(data: dict[str, Any]) -> bytes:
+    """The exact bytes :func:`install_confined_file` writes for *data*: what the operator reviews and hashes.
+
+    Args:
+        data: The ``confined_programs`` object.
+
+    Returns:
+        Sorted, indented JSON with a trailing newline, UTF-8 encoded.
+
+    Raises:
+        TypeError: When *data* is not JSON-serialisable.
+    """
+    return (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def read_confined_file(root: Path) -> tuple[dict[str, Any], str] | None:
+    """Read the operator-owned ``confined_programs`` file for *root*, if there is one (P5b).
+
+    Args:
+        root: The project root.
+
+    Returns:
+        ``(confined_programs, sha256 of the file)``, or None when the file does not exist.
+
+    Raises:
+        ConfinementError: When the file or its directory is a symlink, is not owned by the current user, is
+            group- or world-writable, lies inside the project, is too large, or is not a JSON object.
+    """
+    path = confined_file_for(root)
+    if not os.path.lexists(path):
+        return None
+    _check_custody(path.parent, directory=True)
+    before = _check_custody(path, directory=False)
+    if _inside(path, root):
+        raise ConfinementError(f"{path} lies inside the project; agents could write it")
+    # O_NONBLOCK: a FIFO swapped in after the lstat must not hang the runner. The fstat re-checks the file that
+    # was actually opened, so a swap between the checks and the open is refused rather than read.
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        opened = _custody_check(path, os.fstat(fd), directory=False)
+        if (opened.st_ino, opened.st_dev) != (before.st_ino, before.st_dev):
+            raise ConfinementError(f"{path} changed while it was being read; retry")
+        raw = os.read(fd, MAX_CONFINED_BYTES + 1)
+    finally:
+        os.close(fd)
+    if len(raw) > MAX_CONFINED_BYTES:
+        raise ConfinementError(f"{path} is larger than {MAX_CONFINED_BYTES} bytes")
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except ValueError as exc:
+        raise ConfinementError(f"{path} is not valid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ConfinementError(f"{path} must hold a JSON object of {{agent: {{exec, write}}}}")
+    return data, hashlib.sha256(raw).hexdigest()
+
+
+def install_confined_file(root: Path, data: dict[str, Any]) -> Path:
+    """Write *data* as the operator-owned ``confined_programs`` file for *root* (mode 0600, atomic).
+
+    The caller validates *data* first (``--install-confined`` runs it through the brief's policy). An agent
+    never calls this: under the switch the orchestrator writes a script that runs ``--install-confined`` and the
+    user runs it outside every session.
+
+    Args:
+        root: The project root.
+        data: The ``confined_programs`` object.
+
+    Returns:
+        The path written.
+
+    Raises:
+        ConfinementError: When the directory fails the custody checks.
+        OSError: When the file can't be written.
+    """
+    path = confined_file_for(root)
+    if _inside(path, root):
+        raise ConfinementError(f"{path} would lie inside the project; agents could write it")
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _check_custody(path.parent, directory=True)
+    if os.path.lexists(path):
+        _check_custody(path, directory=False)
+    tmp = path.parent / f".{path.name}.{os.getpid()}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        os.write(fd, confined_bytes(data))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+    return path
 
 
 def exec_allows(program: str, exec_paths: list[str]) -> bool:

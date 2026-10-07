@@ -124,6 +124,9 @@ _SIGNING_KEY_COMMENT_LINES: list[str] = [
 #: this value by a test. Not the whole ``~/.config/agentteams``: ``goose_config`` reads
 #: ``goose-sources.json`` there and silently falls back to built-ins when it cannot.
 SIGNING_KEY_DIR = "~/.config/agentteams/keys"
+#: P5b: the proposal runner's operator-owned ``confined_programs`` files (``agentteams.confinement`` reads it
+#: from here, so both name one directory).
+CONFINED_PROGRAMS_DIR = "~/.config/agentteams/confined"
 #: The proposal ledger's directory; write-denied to every session under write_policy "orchestrator-only".
 LEDGER_DIR_REL = ".agentteams"
 
@@ -262,6 +265,10 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
         The rule strings, read rules first.
     """
     rules = [f"Read({SIGNING_KEY_DIR}/**)", f"Read({LEGACY_SIGNING_KEY_GLOB})"]
+    # P5b: the built-in Write/Edit tools ignore the sandbox's denyWrite, so the operator-only stores need Edit
+    # rules too. The key directory had only a Read rule, so the Write tool could create a file in it; the
+    # orchestrator-only-writes runner's confined_programs file must stay out of every agent's reach.
+    rules += [f"Edit({SIGNING_KEY_DIR}/**)", f"Edit({CONFINED_PROGRAMS_DIR})", f"Edit({CONFINED_PROGRAMS_DIR}/**)"]
     store = _verify_key_store_path(framework)
     for path in protected_write_paths(framework):
         if path == _GATE_HOOK_PATH:

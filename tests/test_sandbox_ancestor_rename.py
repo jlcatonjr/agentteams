@@ -78,6 +78,9 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
     assert permission_deny_rules("claude") == [
         "Read(~/.config/agentteams/keys/**)",
         "Read(~/.config/agentteams/*.pem)",
+        "Edit(~/.config/agentteams/keys/**)",
+        "Edit(~/.config/agentteams/confined)",
+        "Edit(~/.config/agentteams/confined/**)",
         "Edit(/.claude/agents/references/agent-privilege.json)",
         "Edit(/.claude/agents/references/authorized-verify-keys/**)",
         "Edit(/.claude/agents/references/security-approvers.txt)",
