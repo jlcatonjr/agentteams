@@ -14,6 +14,7 @@ import pytest
 from agentteams import confinement as C
 from agentteams import proposal_runner as R
 from agentteams import proposals as P
+from agentteams.proposal_policy import gate_argv_digest
 from agentteams.frameworks._sandbox_emit import permission_deny_rules
 from agentteams.write_policy import _ORCHESTRATOR_SECTION
 
@@ -316,8 +317,15 @@ _GATED = {"agent_policies": {}, "proposal_gates": {"scan": {"glob": "lean/*.lean
                                                             "argv": ["python3", "scripts/scan.py", "{file}"]}}}
 
 
+def _bound(gate_exec: dict) -> dict:
+    """An operator file's gate entries as --install-confined writes them: each bound to its gate's argv."""
+    digests = {n: gate_argv_digest(_GATED["proposal_gates"][n]["argv"])
+               for n in gate_exec if n in _GATED["proposal_gates"]}
+    return {"gate_exec": gate_exec, "gate_argv_sha256": digests}
+
+
 def test_gate_exec_from_the_operator_file_reaches_the_gate():
-    policy = P.load_policy(_GATED, confined_file=({**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}, "sha"))
+    policy = P.load_policy(_GATED, confined_file=({**JAIL, **_bound({"scan": ["/opt/anaconda3"]})}, "sha"))
     assert policy.gates["scan"]["exec"] == ["/opt/anaconda3"]
     assert C.gate_exec_paths(policy.gates["scan"], "/usr/bin/true") == ["/opt/anaconda3"]
     assert policy.confined == JAIL                       # the reserved key never becomes an agent
@@ -332,14 +340,14 @@ def test_gate_exec_from_the_operator_file_reaches_the_gate():
 ])
 def test_bad_gate_exec_is_refused(gate_exec, why):
     with pytest.raises(P.ProposalError, match=why):
-        P.load_policy(_GATED, confined_file=({**JAIL, "gate_exec": gate_exec}, "sha"))
+        P.load_policy(_GATED, confined_file=({**JAIL, **_bound(gate_exec)}, "sha"))
 
 
 def test_brief_and_file_both_setting_a_gates_exec_is_refused():
     brief = {"agent_policies": {}, "proposal_gates": {"scan": {**_GATED["proposal_gates"]["scan"],
                                                                 "exec": ["/usr/bin"]}}}
     with pytest.raises(P.ProposalError, match="already sets this gate's exec"):
-        P.load_policy(brief, confined_file=({"gate_exec": {"scan": ["/opt/anaconda3"]}}, "sha"))
+        P.load_policy(brief, confined_file=(_bound({"scan": ["/opt/anaconda3"]}), "sha"))
 
 
 def test_gate_exec_in_the_brief_still_works_without_a_file():
@@ -358,11 +366,12 @@ def test_cli_install_accepts_gate_exec(tmp_path, _home):
     brief = json.loads((root / "brief.json").read_text())
     brief["proposal_gates"] = _GATED["proposal_gates"]
     (root / "brief.json").write_text(json.dumps(brief))
-    data = {**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}
+    data = {**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}     # what the operator writes: no digests
     src = tmp_path / "c.json"
     src.write_text(json.dumps(data))
     args = ("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"))
-    digest = hashlib.sha256(C.confined_bytes(data)).hexdigest()
+    installed = {**JAIL, **_bound({"scan": ["/opt/anaconda3"]})}  # install adds the argv binding
+    digest = hashlib.sha256(C.confined_bytes(installed)).hexdigest()
     out = _cli(*args, "--confirm-review-sha256", digest, cwd=root, home=_home)
     assert out.returncode == 0, out.stderr
     assert C.read_confined_file(root)[0]["gate_exec"] == {"scan": ["/opt/anaconda3"]}
@@ -374,6 +383,94 @@ def test_the_reserved_key_is_refused_in_the_briefs_own_block():
 
 
 def test_the_operator_files_dict_is_not_mutated():
-    data = {**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}
+    data = {**JAIL, **_bound({"scan": ["/opt/anaconda3"]})}
     P.load_policy(_GATED, confined_file=(data, "sha"))
     assert "gate_exec" in data
+
+
+
+# --- gate_exec bound to the gate's argv; gate exec never inside a write root ---------------------------
+
+
+def test_a_gate_whose_argv_changed_since_install_is_refused():
+    changed = {"agent_policies": {}, "proposal_gates": {"scan": {"glob": "lean/*.lean",
+                                                                 "argv": ["python3", "scripts/other.py", "{file}"]}}}
+    with pytest.raises(P.ProposalError, match="argv changed since the operator file was installed"):
+        P.load_policy(changed, confined_file=({**JAIL, **_bound({"scan": ["/opt/anaconda3"]})}, "sha"))
+
+
+def test_gate_exec_without_its_argv_binding_is_refused():
+    with pytest.raises(P.ProposalError, match="reinstall the file"):
+        P.load_policy(_GATED, confined_file=({**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}, "sha"))
+
+
+def test_the_binding_key_is_reserved_too():
+    with pytest.raises(P.ProposalError, match="reserved"):
+        P.load_policy({"agent_policies": {"gate_argv_sha256": {}}})
+    with pytest.raises(P.ProposalError, match="reserved for the operator file"):
+        P.load_policy({"agent_policies": {}, "confined_programs": {"gate_argv_sha256": {}}})
+
+
+def test_a_gate_exec_inside_an_agents_write_root_is_detected(tmp_path):
+    (tmp_path / "lean" / ".lake").mkdir(parents=True)
+    planted = str(tmp_path / "lean" / ".lake" / "bin")
+    assert C.exec_inside_write_roots(tmp_path, [planted], ["lean/.lake"]) == planted
+    assert C.exec_inside_write_roots(tmp_path, ["/usr/bin"], ["lean/.lake"]) is None
+    assert C.exec_inside_write_roots(tmp_path, [str(tmp_path / "lean" / ".lakehouse")], ["lean/.lake"]) is None
+
+
+
+def test_a_gate_exec_containing_a_write_root_is_detected(tmp_path):
+    # Exec paths match as subpaths, so an exec root *above* a write root reaches binaries planted in it.
+    (tmp_path / "lean" / ".lake").mkdir(parents=True)
+    assert C.exec_inside_write_roots(tmp_path, [str(tmp_path / "lean")], ["lean/.lake"]) == str(tmp_path / "lean")
+
+
+def test_the_gate_runner_refuses_an_exec_inside_a_write_root(tmp_path, monkeypatch):
+    # The run-time wiring in proposals._run_gates, not only the helper: refused before anything runs.
+    (tmp_path / "lean" / ".lake" / "bin").mkdir(parents=True)
+    gate_bin = str(tmp_path / "lean" / ".lake" / "bin")
+    brief = {"agent_policies": {"a": {"write_scopes": ["lean/"]}},
+             "proposal_gates": {"scan": {"glob": "lean/*.lean", "argv": ["/usr/bin/true", "{file}"],
+                                         "exec": [gate_bin]}}}
+    policy = P.load_policy(brief, confined_file=({"a": {"exec": ["/usr/bin"], "write": ["lean/.lake"]}}, "sha"))
+    monkeypatch.setattr(P, "_sandbox_for", lambda pol: "seatbelt")
+    monkeypatch.setattr(C, "check_roots", lambda *a, **k: [])
+    ran = []
+    monkeypatch.setattr(P.subprocess, "run", lambda *a, **k: ran.append(a))
+    with pytest.raises(P.ProposalError, match="inside an agent's confined write root"):
+        P._run_gates(tmp_path, "lean/X.lean", "theorem x : True := trivial\n", ["scan"], policy, confine=True)
+    assert ran == []
+
+
+def test_install_refuses_a_malformed_gate_cleanly(tmp_path, _home):
+    root = _git_project(tmp_path)
+    brief = json.loads((root / "brief.json").read_text())
+    brief["proposal_gates"] = {"scan": {"glob": "lean/*.lean"}}          # no argv
+    (root / "brief.json").write_text(json.dumps(brief))
+    src = tmp_path / "c.json"
+    src.write_text(json.dumps({**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}))
+    out = _cli("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"),
+               cwd=root, home=_home)
+    assert out.returncode == 1 and "refused" in out.stderr and "Traceback" not in out.stderr
+
+
+
+def test_the_overlap_check_folds_case_on_macos(tmp_path, monkeypatch):
+    (tmp_path / "lean" / ".lake").mkdir(parents=True)
+    monkeypatch.setattr(C.sys, "platform", "darwin")
+    variant = str(tmp_path / "LEAN" / ".LAKE" / "bin")
+    assert C.exec_inside_write_roots(tmp_path, [variant], ["lean/.lake"]) == variant
+
+
+
+def test_install_refuses_a_list_shaped_proposal_gates_cleanly(tmp_path, _home):
+    root = _git_project(tmp_path)
+    brief = json.loads((root / "brief.json").read_text())
+    brief["proposal_gates"] = ["scan"]
+    (root / "brief.json").write_text(json.dumps(brief))
+    src = tmp_path / "c.json"
+    src.write_text(json.dumps({**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}))
+    out = _cli("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"),
+               cwd=root, home=_home)
+    assert out.returncode == 1 and "refused" in out.stderr and "Traceback" not in out.stderr

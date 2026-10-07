@@ -38,6 +38,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/enforcement-integrity.json`.
 - **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
 
+### fix (claude: the team-builder never ships canonical tool names)
+
+- Under `write_policy: "orchestrator-only"`, narrowing replaced the Claude team-builder's `allowed-tools` grant
+  with a canonical `tools: ['read', 'search']` line, and the Claude adapter passed the builder through
+  unchanged. Claude Code can't launch a sub-agent whose tool names don't resolve, so the builder broke (it failed
+  closed). The adapter now maps a canonical builder `tools:` line to Claude names (`Read, Grep, Glob`). Default
+  teams are byte-identical (reported from mathAgents' P5 render).
+
+### fix (write-policy: gate exec hardening)
+
+- `--install-confined` now binds each operator-file `gate_exec` entry to its gate's argv by recording
+  `gate_argv_sha256` in the reviewed JSON. A gate whose brief argv has changed since install is refused until
+  the file is reinstalled, so a reworked gate can't silently keep its old exec. An entry without a binding is
+  refused, so P5c files must be reinstalled once.
+- At run time a gate is refused if any of its exec paths lies inside an agent's confined write root, where a
+  command could plant a binary for the gate to run. Gates previously checked against no write roots at all.
+  (Both are @security advisories on P5b/P5c.)
+
 ### fix (codex: every shell-reading agent gets the secret-store line)
 
 - Codex agents that already run commands (`execute`, or `retrieval`'s CLI) now get a "Secrets on Codex" section

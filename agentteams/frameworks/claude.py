@@ -158,6 +158,32 @@ class ClaudeAdapter(FrameworkAdapter):
     def render_instructions_file(self, content: str, manifest: dict[str, Any]) -> str:
         return content
 
+    def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
+        """Keep the Claude-shaped team-builder as is, mapping a canonical ``tools: [...]`` line to Claude names.
+
+        The builder template is authored with Claude's ``tools``/``allowed-tools`` spelling, so it normally passes
+        through unchanged. Under ``write_policy: "orchestrator-only"``, narrowing replaces that grant with a
+        canonical flow list (``tools: ['read', 'search']``). Claude Code can't launch a sub-agent whose tool
+        names don't resolve, so the list is mapped like an agent file's (``Read, Grep, Glob``). Reported from
+        mathAgents' P5 render (2026-10-07).
+
+        Args:
+            content: The rendered builder file.
+            manifest: The team manifest (unused).
+
+        Returns:
+            The builder, with a canonical front-matter ``tools`` line mapped to Claude tool names.
+
+        Raises:
+            Nothing.
+        """
+        yaml_text, body = _parse_yaml_front_matter(content)
+        if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
+            return content
+        head = content[: len(content) - len(body)]  # the parser's own front-matter span: never touch the body
+        head = _YAML_TOOLS_RE.sub(f"{CLAUDE_CAPABILITY_KEY}: {_map_allowed_tools(content)}", head, count=1)
+        return head + body
+
     def render_skill_file(self, content: str, slug: str, manifest: dict[str, Any]) -> str:
         """Produce a Claude Code skill file from an operational tool-doc body.
 
