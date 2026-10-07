@@ -847,8 +847,8 @@ since carried text is instruction-bearing. See [`user_regions`](api-reference/us
 
 Orchestrator-only-writes pilot (P4a/P4b). Runs the out-of-session runner for `--project` under the brief's
 policy (`--description`).
-- **Confinement (P4b):** every command and gate it runs is confined in an OS sandbox from the brief's
-  `confined_programs`.
+- **Confinement (P4b):** every command and gate it runs is confined in an OS sandbox from `confined_programs`:
+  the operator-owned file (`--confined-path`, P5b) when present, otherwise the brief's block.
 - **No sandbox:** with no usable sandbox it refuses, unless `allow_unconfined_runs` is set (each such run is
   logged).
 - **Where:** start it outside every agent session.
@@ -1182,7 +1182,8 @@ Validate generated Goose recipe YAML files in the `--output` directory (or `.goo
 
 ### `--version`
 
-Print the version and exit.
+Print the version and exit. It also names the source that is running: the kind (`checkout`, `vcs-pin`,
+`local-snapshot`, `package` or `unknown`), with the commit, branch and dirty flag when known.
 
 ---
 

@@ -210,7 +210,7 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
     command could build a binary there and then run it.
 
     Args:
-        raw: The brief's ``confined_programs``.
+        raw: ``confined_programs``, from the operator-owned file (P5b) or else the brief.
         gates: The brief's ``proposal_gates`` (their optional ``exec`` lists are checked).
         control_plane_of: :func:`agentteams.frameworks._write_roots.control_plane_of`.
 
@@ -356,9 +356,9 @@ def read_confined_file(root: Path) -> tuple[dict[str, Any], str] | None:
 def install_confined_file(root: Path, data: dict[str, Any]) -> Path:
     """Write *data* as the operator-owned ``confined_programs`` file for *root* (mode 0600, atomic).
 
-    The caller validates *data* first (``--install-confined`` runs it through the brief's policy). An agent
-    never calls this: under the switch the orchestrator writes a script that runs ``--install-confined`` and the
-    user runs it outside every session.
+    The caller validates *data* first (``--install-confined`` runs it through the brief's policy and requires a
+    matching ``--confirm-review-sha256``). An agent never calls this: under the switch the orchestrator writes
+    only a candidate JSON and gives the user the one ``--install-confined`` command to run outside every session.
 
     Args:
         root: The project root.
