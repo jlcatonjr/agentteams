@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### fix (P5b follow-up: RSR1, no tmp/ path in the orchestrator's sandbox-change step)
 
-- #133 named `tmp/confined-programs.json` in the orchestrator's "Applying proposals" step 5, which the RSR1
-  lint (`scripts/check-durable-tmp-refs.sh`) refuses in durable files. The step now uses
-  `confined-programs.candidate.json` in the project root (never committed, deleted after install).
+- #133's orchestrator "Applying proposals" step 5 put the candidate JSON under the gitignored scratch folder.
+  The RSR1 lint (`scripts/check-durable-tmp-refs.sh`) refuses such references in durable files. The step now
+  uses `confined-programs.candidate.json` in the project root (never committed, deleted after install).
 
 ### feat (write-policy P5b: pattern write_scopes and an operator-owned confined_programs file)
 
