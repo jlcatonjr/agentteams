@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (build-log.json and --version record which agentteams code ran)
+
+- **Build log.** `references/build-log.json` gains `agentteams_source`: `{kind, commit, branch, dirty}`.
+  - `kind` is `checkout` (including editable installs), `vcs-pin`, `local-snapshot` or `package`.
+  - `dirty` counts untracked files too.
+  - No absolute path is recorded.
+- **`--version`.** It now prints the same, e.g. `agentteams 1.0.0rc8 (checkout 729a0add38f1 main, dirty)`.
+- **Why.** CA-033: a consumer render ran a stale, unrecorded snapshot (agentteams 5090eb0, from before #106)
+  and lost every adopted routing row, while its build log said only `1.0.0rc8`. This is recording only;
+  consumers decide whether to refuse.
+
 ### fix (--overwrite never silently drops adopted routing rows, CA-033)
 
 - **The bug.** A plain `--overwrite` without `--update` or `--adopt-orphans` rebuilt the orchestrator's routing
