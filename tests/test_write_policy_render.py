@@ -19,7 +19,7 @@ from agentteams.audit import run_post_audit
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
-ON = {"write_policy": "orchestrator-only"}
+ON = {"write_policy": "orchestrator-only", "privilege_profile": "confined"}
 
 
 def _agent(tools: str, body: str = "# X\nEdit the file.\n") -> str:

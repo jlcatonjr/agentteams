@@ -41,6 +41,10 @@ def _ensure_project_notes_section(rel_path: str, content: str) -> str:
     unchanged. Applied to merged output as well as fresh renders, so existing
     fleet files gain the section on ``--update --merge`` (migration path b).
     """
+    if rel_path.endswith(".yaml") and "references/" not in rel_path:
+        # A Goose recipe (P5a): the region goes at the end of its `instructions: |` block.
+        from agentteams.user_regions import ensure_recipe_notes
+        return ensure_recipe_notes(content, _PROJECT_NOTES_SECTION)
     if not _is_agent_doc(rel_path, content):
         return content
     if _PROJECT_NOTES_HEADING in content:

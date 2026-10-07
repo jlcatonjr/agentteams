@@ -202,6 +202,21 @@ every one.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and
   home-shaped arguments around common stems (`.*`, `[a-z].*`, `.+\\.lean`), but it is not a proof.
 
+## Pilot scope and timing (P5a)
+
+- **`write_policy_frameworks: ["claude", "goose"]`.** When one brief emits several frameworks, the switch
+  applies only to the listed ones. Every other framework renders exactly as without the switch, and is
+  outside the pilot's guarantee.
+- **Explicit profile.** The switch needs an explicit `privilege_profile` of `"confined"` or `"exclusive"`.
+  The default leaves the Claude gate hook fail-open, by the 2026-W39 design.
+- **Command timeouts.** A command entry may set `timeout` (seconds, 1–7200; default 600), for example for a
+  kernel audit that takes minutes. The runner serves one request at a time, so a long command delays the
+  queue.
+- **Measurement.** Run and gate ledger rows record `duration_ms`, and runner results record `queue_wait_ms`
+  and `serve_ms`, so P5 can measure per-attempt latency.
+- **The orchestrator's duties.** `AR_WRITE_POLICY` also flags an orchestrator that lacks its "Write Policy:
+  Applying Proposals" section.
+
 ## Out-of-session runner (P4a)
 
 Under the switch the orchestrator never holds the ledger key, and its `agentteams` commands don't act

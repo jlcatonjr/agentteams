@@ -71,6 +71,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -78,6 +79,7 @@ from typing import Any
 from agentteams import confinement as _confinement
 from agentteams.proposal_policy import (  # re-exported: the policy half of this module (CH-07 carve)
     DEFAULT_SIZE_CAP,  # noqa: F401  re-exported
+    MAX_COMMAND_TIMEOUT,
     Policy,
     ProposalError,
     _in_scope,
@@ -496,12 +498,13 @@ def _run_gates(root: Path, rel: str, content: str, names: list[str], policy: Pol
                     raise ProposalError(f"gate {name}: {exc}") from exc
                 argv = _confinement.wrap(argv, sandbox=sandbox, root=root, cwd=root, exec_paths=gate_exec,
                                          write_roots=[], tmp_dir=Path(tmp))
+            t0 = time.monotonic()
             try:
                 proc = subprocess.run(argv, cwd=root, env=env, stdin=subprocess.DEVNULL, capture_output=True,
                                       text=True, timeout=GATE_TIMEOUT, shell=False)
             except (OSError, subprocess.SubprocessError) as exc:
                 raise ProposalError(f"gate {name} could not run: {exc}") from exc
-            results.append({"gate": name, "exit": proc.returncode,
+            results.append({"gate": name, "exit": proc.returncode, "duration_ms": int((time.monotonic() - t0) * 1000),
                             **({"confined": sandbox or "unconfined-opt-out"} if confine else {})})
             if proc.returncode != 0:
                 tail = (proc.stdout + proc.stderr).strip()[-600:]
@@ -805,6 +808,9 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                       **({"confined": confined_as} if confined_as else {})})
         before = _snapshot(root, env)  # re-taken after the write-ahead row, so only the command's changes count
         timed_out, group_killed, survivors = False, False, False
+        # Per-entry timeout (P5a): a long check (e.g. a kernel audit) may set one, capped at MAX_COMMAND_TIMEOUT.
+        timeout = max(1, min(int(entry.get("timeout") or COMMAND_TIMEOUT), MAX_COMMAND_TIMEOUT))
+        started = time.monotonic()
         run_tmp = tempfile.mkdtemp(prefix="agentteams-run-") if jail is not None else None
         command = [program, *argv[1:]]
         if run_tmp is not None:
@@ -826,7 +832,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         except (OSError, subprocess.SubprocessError) as exc:
             raise ProposalError(f"command could not run: {exc}") from exc
         try:
-            out, err = child.communicate(stdin_bytes, timeout=COMMAND_TIMEOUT)
+            out, err = child.communicate(stdin_bytes, timeout=timeout)
             proc = subprocess.CompletedProcess(argv, child.returncode, out, err)
         except subprocess.TimeoutExpired:
             # The command ran (partly): its writes and any ledger tampering must still be checked.
@@ -866,16 +872,19 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f))
         if timed_out:
             record(root, {"action": "run-request-timeout", "agent": agent, "argv": argv,
+                          "duration_ms": int((time.monotonic() - started) * 1000),
                           "group_killed": group_killed, "undeclared_writes": undeclared, "purpose": purpose.strip()[:300]})
             raise UndeclaredWritesError(
-                f"command timed out after {COMMAND_TIMEOUT}s"
+                f"command timed out after {timeout}s"
                 + (f"; it wrote outside its declared writes: {', '.join(undeclared)}" if undeclared else ""),
                 {"agent": agent, "argv": argv, "exit": -9, "stdout": proc.stdout.decode("utf-8", "replace"),
                  "stderr": proc.stderr.decode("utf-8", "replace"), "undeclared_writes": undeclared, "ran": True})
+        duration_ms = int((time.monotonic() - started) * 1000)
         record(root, {"action": "run-request", "agent": agent, "argv": argv, "exit": proc.returncode,
+                      "duration_ms": duration_ms,
                       "undeclared_writes": undeclared, "purpose": purpose.strip()[:300],
                       **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {})})
-        result = {"agent": agent, "argv": argv, "exit": proc.returncode,
+        result = {"agent": agent, "argv": argv, "exit": proc.returncode, "duration_ms": duration_ms,
                   "stdout": proc.stdout.decode("utf-8", "replace"), "stderr": proc.stderr.decode("utf-8", "replace"),
                   "undeclared_writes": undeclared, "ran": True}
         if undeclared:

@@ -20,6 +20,8 @@ from agentteams.frameworks._write_roots import control_plane_of
 
 #: Proposal content above this many bytes is refused; the orchestrator must review and write it itself.
 DEFAULT_SIZE_CAP = 256 * 1024
+#: The longest per-entry command timeout (P5a); ``proposals`` re-exports it.
+MAX_COMMAND_TIMEOUT = 7200
 _SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 
 
@@ -128,6 +130,11 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None) -> Polic
                 problem = _writes_glob_problem(glob, brief_rel)
                 if problem:
                     raise ProposalError(f"agent_policies.{name}: writes glob {glob!r} {problem}")
+            t = entry.get("timeout")
+            if "timeout" in entry and (isinstance(t, bool) or not isinstance(t, int)
+                                       or not 1 <= t <= MAX_COMMAND_TIMEOUT):
+                raise ProposalError(f"agent_policies.{name}: timeout must be an integer number of seconds, "
+                                    f"1-{MAX_COMMAND_TIMEOUT}")
             if "stdin_gates" in entry and not entry["stdin_gates"]:
                 raise ProposalError(f"agent_policies.{name}: stdin_gates is empty; stdin content would run ungated")
             for gate in entry.get("stdin_gates") or []:
