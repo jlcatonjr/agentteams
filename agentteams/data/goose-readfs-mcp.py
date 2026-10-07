@@ -66,6 +66,9 @@ _DEFAULT_DENY: tuple[str, ...] = (
     "id_rsa*", "id_dsa*", "id_ecdsa*", "id_ed25519*", ".ssh", ".aws", ".gnupg", ".kube", ".docker",
     "credentials", "credentials*.json", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".htpasswd",
     "*.tfstate", "*.tfstate.*", "*.tfvars",
+    # agentteams' control plane: the runner's ledger and dispatch records, the request/result queues (which
+    # briefly hold raw dispatch nonces) and the installed copy of this server. A reader never needs them.
+    ".agentteams", ".agentteams-queue",
 )
 #: Template files that look like secrets but never hold them; readable despite ``.env.*``.
 _ALLOW: tuple[str, ...] = (".env.example", ".env.sample", ".env.template")

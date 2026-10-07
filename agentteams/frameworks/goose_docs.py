@@ -124,15 +124,22 @@ def _shipped_script(source: Path) -> str:
         )
 
 
-_READFS_MCP_SOURCE = Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-readfs-mcp.py"
+#: The read-only file server ships as package data, so a pip install has the real server (not a placeholder)
+#: and the runner has an anchor to check the installed copy against (``goose_tool_scoping.READFS_SHA256``).
+_READFS_MCP_SOURCE = Path(__file__).resolve().parent.parent / "data" / "goose-readfs-mcp.py"
 
 
 def _readfs_mcp_content() -> str:
-    """Return ``scripts/goose-readfs-mcp.py`` (the read-only file server), read from disk.
+    """Return the read-only file server (``agentteams/data/goose-readfs-mcp.py``), read from disk.
 
     Shipped only under ``goose_tool_scoping: "grant"`` (``goose_tool_scoping.py``).
     """
-    return _shipped_script(_READFS_MCP_SOURCE)
+    # Package data: a missing server is a broken install, never a placeholder to ship.
+    try:
+        return _READFS_MCP_SOURCE.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise FileNotFoundError(f"the read-only file server is missing from this agentteams install "
+                                f"({_READFS_MCP_SOURCE}); reinstall agentteams") from exc
 
 
 _RESILIENT_RUNNER_SOURCE = Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-run-resilient.py"

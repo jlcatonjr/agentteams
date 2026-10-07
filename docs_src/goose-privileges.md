@@ -143,7 +143,8 @@ extensions:
 
 `developer` cannot be both read-only and able to read file contents. A read-only agent should drop
 `developer` entirely and read through `agentteams_readfs`
-(`scripts/goose-readfs-mcp.py`, see the Goose runtime guide). It is a stdlib stdio server whose only
+(`scripts/goose-readfs-mcp.py`, or `.agentteams/bin/goose-readfs-mcp.py` under the orchestrator-only switch;
+see the Goose runtime guide). It is a stdlib stdio server whose only
 tools are `read_file`, `list_dir`, `find`, `grep` and `stat`. It has no write tool, is
 realpath-confined to the workspace, and refuses secrets inside it.
 
@@ -153,7 +154,7 @@ extensions:
   - type: stdio
     name: agentteams_readfs
     cmd: python3
-    args: ["scripts/goose-readfs-mcp.py", "--root", "."]
+    args: ["-I", "-S", "scripts/goose-readfs-mcp.py", "--root", "."]
     timeout: 300
     available_tools: [read_file, list_dir, find, grep, stat]
 ```

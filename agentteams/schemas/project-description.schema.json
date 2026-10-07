@@ -299,7 +299,7 @@
     "goose_tool_scoping": {
       "type": "string",
       "enum": ["legacy", "grant"],
-      "description": "How Goose recipes get their extensions. \"legacy\" (default): every recipe loads the whole developer builtin (shell + file writes). \"grant\": each recipe's extensions are derived from the agent's declared tools \u2014 read/search -> the read-only agentteams_readfs stdio server (scripts/goose-readfs-mcp.py, shipped only in this mode); edit -> developer [write, edit, tree]; execute -> developer [shell, tree]; agent -> summon [delegate, load]. Any recipe with developer turns off Goose's auto-added analyze extension. A read-only agent gets no developer at all. Merges keep a recipe's on-disk extensions, so switching an existing team to grant needs a full re-render (--update --overwrite)."
+      "description": "How Goose recipes get their extensions. \"legacy\" (default): every recipe loads the whole developer builtin (shell + file writes). \"grant\": each recipe's extensions are derived from the agent's declared tools \u2014 read/search -> the read-only agentteams_readfs stdio server (scripts/goose-readfs-mcp.py, or .agentteams/bin/goose-readfs-mcp.py under write_policy orchestrator-only; launched python3 -I -S; shipped only in this mode); edit -> developer [write, edit, tree]; execute -> developer [shell, tree]; agent -> summon [delegate, load]. Any recipe with developer turns off Goose's auto-added analyze extension. A read-only agent gets no developer at all. Merges keep a recipe's on-disk extensions, so switching an existing team to grant needs a full re-render (--update --overwrite)."
     },
     "coordination_write_roots": {
       "type": "array",

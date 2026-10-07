@@ -135,8 +135,12 @@ the `analyze` extension are read-only, but neither is confined to the workspace.
 `developer` also gets `analyze` added automatically, and `available_tools: []` means *unrestricted*.
 (Spike, Goose 1.37.0, 2026-10-05; `references/goose-tool-scoping-spike.md`.)
 
-`scripts/goose-readfs-mcp.py` is a stdlib-only stdio MCP server that gives a read-only agent real read
-access with no write capability:
+The read-only file server (shipped in the package as `agentteams/data/goose-readfs-mcp.py`) is a stdlib-only
+stdio MCP server that gives a read-only agent real read access with no write capability. Generated teams
+get it at `scripts/goose-readfs-mcp.py`. Under `write_policy: "orchestrator-only"` it goes to
+`.agentteams/bin/goose-readfs-mcp.py` instead: inside the control plane, which session sandboxes
+write-deny, and checked by the runner against a pinned hash. It is always launched as `python3 -I -S`, so
+`PYTHON*` variables, user site-packages and `.pth` files can't change what it runs:
 
 | Tool | Does |
 |---|---|
@@ -178,7 +182,7 @@ extensions:
   - type: stdio
     name: agentteams_readfs
     cmd: python3
-    args: ["scripts/goose-readfs-mcp.py", "--root", "."]
+    args: ["-I", "-S", "scripts/goose-readfs-mcp.py", "--root", "."]   # .agentteams/bin/... under the switch
     timeout: 60
     available_tools: [read_file, list_dir, find, grep, stat]
 ```

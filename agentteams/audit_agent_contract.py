@@ -656,7 +656,7 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
         # The read server is allowed by what it runs, not by its name: a recipe could reuse the name for any
         # program. It must match the shipped entry (type, cmd, args), carry no other keys (`env`, `envs`,
         # `env_keys` or `cwd` could make the same script run other code) and grant only read tools.
-        shipped = readfs_extension()
+        shipped = readfs_extension(protected=True)  # this check runs only under the switch
         for ext in (e for e in extensions if e["name"] == READFS_NAME):
             extra = sorted(set(ext["keys"]) - _READFS_KEYS)
             if (ext["type"], ext["cmd"], ext["args"]) != (shipped["type"], shipped["cmd"], shipped["args"]):

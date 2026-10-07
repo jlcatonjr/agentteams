@@ -117,12 +117,27 @@ def _compute_front_matter_baseline(
             continue
         keys = _read_front_matter_or_empty(path)
         if keys:
-            try:
-                rel = str(path.relative_to(output_dir))
-            except ValueError:
-                rel = str(path)
-            baseline[rel] = keys
+            rel = _baseline_key(path, output_dir)
+            if rel is not None:
+                baseline[rel] = keys
     return baseline
+
+
+def _baseline_key(path: Path, output_dir: Path) -> str | None:
+    """The build-log key for *path*: POSIX, relative to *output_dir*, never absolute (OI-21).
+
+    A file outside the agents dir (a Claude skill under ``.claude/skills/``) gets the ``../`` form emit already
+    uses for such files (``../skills/<slug>/SKILL.md``). Build logs are committed, and an absolute key leaked
+    the operator's username and directory layout. That key is also the ``rel_path`` emit looks up, so skills
+    now get the same three-way front-matter merge as agent files (capability keys stay proposal-only). A path
+    that can't be expressed relatively (another drive) is omitted, which fails safe: no baseline, nothing
+    auto-applied.
+    """
+    try:
+        rel = os.path.relpath(path, output_dir)
+    except ValueError:  # another drive (Windows): no relative form exists
+        return None
+    return None if os.path.isabs(rel) else Path(rel).as_posix()
 
 def _sanitized_output_dir(output_dir: Path) -> str:
     """Return a receipt-safe representation of *output_dir*.

@@ -1,4 +1,4 @@
-"""Offline tests for scripts/goose-readfs-mcp.py, the read-only filesystem MCP server for Goose.
+"""Offline tests for agentteams/data/goose-readfs-mcp.py (shipped to teams as scripts/ or .agentteams/bin/), the read-only filesystem MCP server for Goose.
 
 The server ships in ``scripts/`` (not an importable package), so it is loaded via importlib like
 ``tests/test_goose_coordination_mcp.py``. Every test is offline: the JSON-RPC handlers are driven
@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-_SERVER_PATH = Path(__file__).resolve().parent.parent / "scripts" / "goose-readfs-mcp.py"
+_SERVER_PATH = Path(__file__).resolve().parent.parent / "agentteams" / "data" / "goose-readfs-mcp.py"
 
 
 def _load():

@@ -48,8 +48,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/front_matter_reconcile.py",
     "agentteams/cli/adopt_merge_gate.py",  # C-3 + Rule 15: the one gated path that extends an
                                            # orchestrator's `agents:` grant under --merge
-    "scripts/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
-                                    # construction, so any change to it must be a reviewed re-record
+    "agentteams/data/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
+                                            # construction, so any change to it must be a reviewed re-record
     "agentteams/cli/proposal_commands.py",  # the CLI that hands artifacts to proposals.py
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
     "agentteams/confinement.py",  # orchestrator-only-writes pilot: the runner's OS sandbox (C-3/C-5 boundary)
