@@ -3,7 +3,7 @@
 The shared git core behind agentteams' private `_git` helpers (CH-08, 2026-10-07). The modules that kept their own
 helper, or a copy of the hardening, still have a wrapper with its own return shape, but each builds and runs the
 command here. Other one-off git calls (`git_hooks`, `shrink_allow`, `branch_inventory`, `output_target`,
-`session_scan`, `redteam`) are outside this consolidation.
+`session_scan`, `code_index_artifacts`, `redteam`) are outside this consolidation.
 
 ## Read-only hardening
 

@@ -438,7 +438,7 @@ def test_the_gate_runner_refuses_an_exec_inside_a_write_root(tmp_path, monkeypat
     monkeypatch.setattr(C, "check_roots", lambda *a, **k: [])
     ran = []
     monkeypatch.setattr(P.subprocess, "run", lambda *a, **k: ran.append(a))
-    with pytest.raises(P.ProposalError, match="inside an agent's confined write root"):
+    with pytest.raises(P.ProposalError, match="overlaps an agent's confined write root"):
         P._run_gates(tmp_path, "lean/X.lean", "theorem x : True := trivial\n", ["scan"], policy, confine=True)
     assert ran == []
 
