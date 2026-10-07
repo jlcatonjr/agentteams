@@ -24,6 +24,8 @@ DEFAULT_SIZE_CAP = 256 * 1024
 MAX_COMMAND_TIMEOUT = 7200
 _SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 _GLOB_CHARS = "*?["
+#: P5c: the operator file's reserved key for gates' exec paths. The underscore can't collide with an agent slug.
+GATE_EXEC_KEY = "gate_exec"
 
 
 class ProposalError(Exception):
@@ -100,7 +102,9 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
         ProposalError: A field has the wrong shape, a pattern does not compile or admits options or
             parent/absolute paths, a gate templates ``{file}``/``{path}`` inside a larger argument or runs a
             shell, a write scope covers the brief or is an unsafe pattern, or both the brief and the operator
-            file define ``confined_programs``.
+            file define ``confined_programs``. P5c: an agent is named ``gate_exec``; the brief's
+            ``confined_programs`` uses that reserved key; or the operator file's ``gate_exec`` is malformed, names
+            a gate the brief doesn't define, or sets a gate whose brief entry already sets ``exec``.
     """
     agents = brief.get("agent_policies") or {}
     gates = brief.get("proposal_gates") or {}
@@ -116,6 +120,8 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
         for arg in argv:
             if ("{file}" in arg or "{path}" in arg) and arg not in ("{file}", "{path}"):
                 raise ProposalError(f"proposal_gates.{name}: {{file}}/{{path}} must be whole arguments, not {arg!r}")
+    if GATE_EXEC_KEY in agents:
+        raise ProposalError(f"agent_policies.{GATE_EXEC_KEY}: that name is reserved for the operator file's gate exec")
     for name, pol in agents.items():
         if not isinstance(pol, dict):
             raise ProposalError(f"agent_policies.{name} must be an object")
@@ -156,10 +162,16 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
                 raise ProposalError(f"agent_policies.{name}: write scope {scope!r} {problem}")
         if brief_rel and _in_scope(brief_rel, scopes):
             raise ProposalError(f"agent_policies.{name}.write_scopes covers the brief ({brief_rel}); refused (C-3)")
+    if isinstance(brief.get("confined_programs"), dict) and GATE_EXEC_KEY in brief["confined_programs"]:
+        raise ProposalError(f"confined_programs.{GATE_EXEC_KEY} is reserved for the operator file; set a gate's exec "
+                            "in proposal_gates in the brief")
     if confined_file is not None and brief.get("confined_programs"):
         raise ProposalError("confined_programs is set in both the brief and the operator file "
                             f"({_confinement.CONFINED_DIR}); keep one so it is clear which applies")
     raw_confined = confined_file[0] if confined_file is not None else brief.get("confined_programs") or {}
+    if confined_file is not None and isinstance(raw_confined, dict) and GATE_EXEC_KEY in raw_confined:
+        raw_confined = dict(raw_confined)
+        gates = _merge_gate_exec(gates, raw_confined.pop(GATE_EXEC_KEY))
     try:
         confined = _confinement.load_confined(raw_confined, gates, control_plane_of)
     except _confinement.ConfinementError as exc:
@@ -167,6 +179,26 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
     return Policy(agents, gates, [str(p) for p in protected], brief_rel=brief_rel, confined=confined,
                   allow_unconfined=brief.get("allow_unconfined_runs") is True,
                   confined_file_sha=confined_file[1] if confined_file is not None else None)
+
+
+def _merge_gate_exec(gates: dict[str, Any], gate_exec: Any) -> dict[str, Any]:
+    """Merge the operator file's ``gate_exec`` (P5c) into a copy of the brief's gates as their ``exec``.
+
+    Machine paths for a gate's interpreter then stay out of the committed brief, as P5b did for
+    ``confined_programs``. Path shapes are checked by ``load_confined`` like a brief-set ``exec``.
+    """
+    if not (isinstance(gate_exec, dict) and all(isinstance(v, list) and v and all(isinstance(p, str) for p in v)
+                                                for v in gate_exec.values())):
+        raise ProposalError(f"{GATE_EXEC_KEY} must map gate names to non-empty lists of paths")
+    merged = dict(gates)
+    for name, paths in gate_exec.items():
+        if name not in gates:
+            raise ProposalError(f"{GATE_EXEC_KEY}.{name}: no such gate in the brief's proposal_gates")
+        if gates[name].get("exec"):
+            raise ProposalError(f"{GATE_EXEC_KEY}.{name}: the brief already sets this gate's exec; keep one so it "
+                                "is clear which applies")
+        merged[name] = {**gates[name], "exec": list(paths)}
+    return merged
 
 
 def _scope_pattern_problem(scope: str) -> str | None:
