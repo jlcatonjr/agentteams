@@ -51,6 +51,10 @@ a key, everything is refused.
   dot-directories included (`reports/*/` covers `reports/p2/.envrc`). The first segment must be
   literal, with no `**`, `..`, absolute or `~` paths, and no control-plane segment. Protected paths and the
   control plane still win over a matching scope.
+  - **One `*`, two meanings in one brief.** In `write_scopes`, `*` matches one path segment. In
+    `proposal_gates` globs (and `protected_paths`, and command `writes` globs) it is `fnmatch`'s `*`, which
+    crosses `/`: `lean/*.lean` gates `lean/MathAgents/X/CX.lean` too. A gate glob therefore over-gates, which
+    fails safe, while a scope pattern never widens past its segment.
 - Content is UTF-8 text within the size cap (256 KiB). A target that isn't UTF-8 is refused.
 - The base must not be stale.
 - Every requested gate, and every gate whose glob matches the path (case-insensitive), runs on a temporary
