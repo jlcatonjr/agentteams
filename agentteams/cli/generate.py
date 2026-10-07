@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
+from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
@@ -671,7 +672,7 @@ def _run_generate_inner(
                 return 1
 
         if not args.dry_run and result.success:
-            created = liaison_logs.init_csv_stubs(output_dir / "references")
+            created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest))
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
             build_team._write_run_log(manifest, result, output_dir, template_hashes)
@@ -909,7 +910,7 @@ def _run_generate_inner(
             return 1
 
     if not args.dry_run and result.success:
-        created = liaison_logs.init_csv_stubs(output_dir / "references")
+        created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest))
         if created:
             print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
 

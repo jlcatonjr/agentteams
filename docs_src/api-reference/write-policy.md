@@ -20,6 +20,9 @@ so that only the orchestrator can write.
 | `apply(content, slug, manifest) -> str` | Without the switch, returns the content unchanged. With it, the orchestrator gains the "Applying Proposals" section and every other agent is narrowed and gains the "Return Proposals" section. The section is fenced only when the body already is. |
 | `reference_doc() -> str` | The `references/write-policy.reference.md` shipped with a team under the switch. |
 
+Both sections also carry the capability-gap route: agents attach gap notes, and the orchestrator opens the
+plans and keeps the need register. See [`mcp_need`](mcp-need.md).
+
 A static narrowing of declared tools, not runtime enforcement. The runtime boundary is the proposal CLI
 (`agentteams --apply-proposal` / `--run-request`), served by the out-of-session runner in an OS sandbox
 ([`proposal_runner`](proposal-runner.md), [`confinement`](confinement.md)).

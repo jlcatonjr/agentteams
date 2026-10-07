@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.atomicio import atomic_rewrite_csv_rows
+from agentteams.mcp_need import MCP_NEEDS_CSV, MCP_NEEDS_HEADERS
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -178,16 +179,18 @@ _CSV_REF_RE = re.compile(r"adjacent-repos-(changelog|coordination-log)\.csv")
 # Public: init_csv_stubs
 # ---------------------------------------------------------------------------
 
-def init_csv_stubs(refs_dir: Path) -> list[str]:
+def init_csv_stubs(refs_dir: Path, *, mcp_needs: bool = False) -> list[str]:
     """Create CSV log stubs (header row only) if they do not already exist.
 
     Args:
         refs_dir: Absolute path to the ``references/`` directory inside the
                   agents output directory.
+        mcp_needs: Also create the MCP need register (``mcp-needs.csv``). Only teams under
+                   ``write_policy: "orchestrator-only"`` get it, so other teams stay unchanged.
 
     Returns:
         List of relative file names (within *refs_dir*) that were created.
-        Empty if both files already existed.
+        Empty if every file already existed.
     """
     created: list[str] = []
     refs_dir.mkdir(parents=True, exist_ok=True)
@@ -197,6 +200,7 @@ def init_csv_stubs(refs_dir: Path) -> list[str]:
         (SECURITY_DECISIONS_CSV, SECURITY_DECISIONS_HEADERS),
         (AGENTTEAMS_REMEDIATION_CSV, AGENTTEAMS_REMEDIATION_HEADERS),
         (ESCALATION_LOG_CSV, ESCALATION_LOG_HEADERS),
+        *(((MCP_NEEDS_CSV, MCP_NEEDS_HEADERS),) if mcp_needs else ()),
     ):
         target = refs_dir / fname
         if not target.exists():

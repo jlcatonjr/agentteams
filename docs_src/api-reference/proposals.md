@@ -156,8 +156,14 @@ Under `"write_policy": "orchestrator-only"`, generation makes the team pass the 
   - issue a dispatch nonce, apply or run artifacts, never retry by hand, verify the ledger at closeout;
   - Workflows 0A and 0B members return proposals;
   - Workflow 13 (child orchestrators) is disabled.
-- **The team ships** `references/write-policy.reference.md`, with the three artifact shapes and the exit
-  codes.
+- **Capability gaps.** Non-orchestrator agents attach a gap note to their handoff instead of opening a plan.
+  The orchestrator opens every capability-gap plan, the skill protocol's included. It records gap notes, as
+  untrusted data, in `references/mcp-needs.csv`, and decides MCP needs per the agent MCP-need protocol
+  ([`mcp_need`](mcp-need.md)).
+- **The team ships:**
+  - `references/write-policy.reference.md`, with the three artifact shapes and the exit codes;
+  - `references/mcp-need.reference.md`, the MCP-need procedure;
+  - the `references/mcp-needs.csv` register stub.
 - **Fences:** an unfenced body is wrapped whole, section included, so `--update --merge` refreshes both. A
   body that already has fences gets the section in its own `write_policy` fence.
 - **Shell (`execute`)** is dropped everywhere (operator decisions of 2026-10-06). Commands go through

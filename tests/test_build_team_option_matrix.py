@@ -87,7 +87,7 @@ def _stub_core_pipeline(monkeypatch: pytest.MonkeyPatch, framework: str, capture
 
     from agentteams import liaison_logs as _liaison_logs
     monkeypatch.setattr(_liaison_logs, "migrate_inline_logs", lambda *_a, **_k: type("R", (), {"rows_moved": 0, "changelog_rows_moved": 0, "coord_log_rows_moved": 0})())
-    monkeypatch.setattr(_liaison_logs, "init_csv_stubs", lambda _p: [])
+    monkeypatch.setattr(_liaison_logs, "init_csv_stubs", lambda _p, **_kw: [])
 
     def _fake_emit_all(rendered_files, **kwargs):
         captured["rendered_files"] = list(rendered_files)
