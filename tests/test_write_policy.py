@@ -130,6 +130,8 @@ def test_only_the_shallowest_orchestrator_is_exempt():
     ("extensions:\n  - type: stdio\n    name: some_mcp\n    cmd: x\n", ["error"]),       # unclassifiable extension
     ("extensions:\n  - type: builtin\n    name: summon\n", ["error"]),                  # dispatch
     ("extensions:\n  - type: stdio\n    name: agentteams_readfs\n    cmd: x\n", []),
+    # the coordination server writes request/log files; the generator withholds it, and so does the audit
+    ("extensions:\n  - type: stdio\n    name: agentteams_coordination\n    cmd: x\n", ["error"]),
 ])
 def test_goose_recipes(body, expected):
     assert [sev for _, sev in _codes({"a.yaml": _RECIPE + body}, ".yaml", "goose")] == expected
@@ -296,3 +298,43 @@ def test_default_loader_still_follows_links(tmp_path):
     real.write_text("---\nname: x\ntools: Edit\n---\n", encoding="utf-8")
     (team / "linked.md").symlink_to(real)
     assert "linked.md" in _load_files_from_disk(team, agent_ext=".md")
+
+
+# --- capability keys other than `tools:` (agent-scoped-mcp report §5.1) -----------------------------
+
+
+@pytest.mark.parametrize("extra, expected", [
+    ("mcpServers:\n  - x:\n      type: stdio\n      command: sh", ["error"]),  # starts a process at agent start
+    ("hooks:\n  PreToolUse: []", ["error"]),
+    ("skills: [deploy]", ["error"]),
+    ("allowed-tools: Read, Edit, Write", ["error"]),                           # legacy grant beside a narrow tools:
+    ("capabilities: {}", ["error"]),
+    ("permissionMode: bypassPermissions", ["error"]),
+    ("permissionMode: acceptEdits", ["error"]),
+    ("'permissionMode': \"dontAsk\"", ["error"]),                               # quoted key and value
+    ("permissionMode: plan", []),
+    ("permissionMode: default", []),
+    ("disallowedTools: Bash", []),                                             # narrows only
+    ("model: sonnet", []),
+    ("agents: ['conflict-auditor']", []),                                      # Copilot roster, inert without dispatch
+    ("memory: project", ["error"]),                                            # Claude enables Read/Write/Edit for it
+    # YAML key forms the key regex can't read fail closed (@security review)
+    ("? hooks\n: {PreToolUse: []}", ["error"]),                                  # explicit key
+    ("<<: {hooks: {PreToolUse: []}}", ["error"]),                               # merge key
+    ("&a hooks: {}", ["error"]),                                               # anchored key
+    ('"perm\\u0069ssionMode": bypassPermissions', ["error"]),                  # escaped quoted key
+])
+def test_capability_keys_beside_tools(extra, expected):
+    content = "---\nname: X\ndescription: d\ntools: ['read', 'search']\n" + extra + "\n---\n# X\n"
+    assert [sev for _, sev in _codes({"a.md": content}, ".md", "claude")] == expected
+
+
+def test_capability_keys_reported_with_a_bad_tools_key():
+    content = "---\nname: X\nmcpServers: []\n---\n# X\n"                     # no tools: and an MCP server
+    found = _check_write_policy({"a.md": content}, agent_ext=".md", framework="claude", enabled=True)
+    assert len(found) == 2 and {"mcpServers" in f.description for f in found} == {True, False}
+
+
+def test_orchestrator_keeps_its_capability_keys():
+    content = "---\nname: O\ndescription: d\ntools: Read, Edit\nmcpServers: []\n---\n# O\n"
+    assert _codes({"orchestrator.md": content}, ".md", "claude") == []

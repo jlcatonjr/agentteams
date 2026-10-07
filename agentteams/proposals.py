@@ -603,7 +603,8 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
             rel = _check_destination(root, rel, policy, agent)  # re-resolve after the gates ran
             target = _check_base(root, rel, artifact["base_sha256"])
             record(root, {"action": "apply-proposal", "agent": agent, "path": rel, "base": artifact["base_sha256"],
-                          "new": new_hash, "gates": gate_results, "rationale": rationale.strip()[:300]})  # write-ahead
+                          "new": new_hash, "bytes": size, "gates": gate_results,  # bytes: P5 cost measurement
+                          "rationale": rationale.strip()[:300]})  # write-ahead
             target.parent.mkdir(parents=True, exist_ok=True)
             _atomic_write_text(target, content)
         return {"agent": agent, "path": rel, "base_sha256": artifact["base_sha256"], "new_sha256": new_hash,

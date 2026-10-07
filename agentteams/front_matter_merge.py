@@ -176,6 +176,7 @@ CAPABILITY_FRONT_MATTER_KEYS: frozenset[str] = frozenset({
     "mcpServers",       # per-agent MCP servers: new tools/processes
     "permissionMode",   # e.g. bypassPermissions: disables every permission check
     "skills",           # preloaded skills: instructions + scripts
+    "memory",           # persistent memory: Claude Code enables Read, Write and Edit for it, whatever `tools` says
 })
 
 #: Back-compat alias for the private name this module used before the sets were unified.
