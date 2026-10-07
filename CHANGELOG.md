@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (codex: read/search agents can read again)
+
+- **The bug.** On Codex, an agent declaring only `read`/`search` could read nothing. Codex reads through the
+  shell, and the generated "Tool limit (self-imposed)" section forbade anything outside the declared list
+  (baseAgent's codex-cli 0.160.1 dry run: engine-advisor could not open a file).
+- **The fix.** Such agents now get a "Reading on Codex" section inside the `codex_translation` fence:
+  - It allows read-only shell commands: `cat`, `head`, `tail`, print-only `sed -n`, `ls`, `rg`, `grep`,
+    `find`, `wc`.
+  - It allows no shell operator except `|` between listed commands.
+  - It forbids the forms that write or run code: `sed -i`/`-I`/`-f`/`w`/`e`,
+    `rg --pre`/`--hostname-bin`/`-z`, `find -exec`/`-delete`/`-fprint*`, `tee`, and any other program.
+  - It limits reads to the workspace and never `~/.config/agentteams/`, `~/.ssh/`, `.env` or credential stores.
+  - Because `sandbox_mode` is a default and not a ceiling, the section says the list is the guard.
+  - Agents declaring `execute` or `retrieval` (which already run commands), and agents with bespoke or
+    undeclared tools, are unchanged.
+  - Teams pick this up at their next render or `--update --merge`.
+
 ### feat (build-log.json and --version record which agentteams code ran)
 
 - **Build log.** `references/build-log.json` gains `agentteams_source`: `{kind, commit, branch, dirty}`.

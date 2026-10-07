@@ -731,3 +731,57 @@ def test_preplanted_skill_symlinks_cannot_redirect_writes(tmp_path: Path) -> Non
     with pytest.raises(ValueError, match="unsafe skill file path"):
         run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", skills_only=True, overwrite=True)
     assert list(outside.iterdir()) == []
+
+
+# --- read/search agents read through read-only shell commands (baseAgent handoff, 2026-10-07) ---
+
+
+def _instructions(tools: str) -> str:
+    out = CodexAdapter().render_agent_file(_agent("Advisor", tools, "# Advisor\n\nB\n"), "engine-advisor", {})
+    return tomllib.loads(out)["developer_instructions"]
+
+
+@pytest.mark.parametrize("tools, gets_it", [
+    ("['read', 'search']", True),          # engine-advisor: could read nothing before
+    ("['read']", True),
+    ("['search', 'agent', 'todo']", True),
+    ("['read', 'search', 'edit']", True),  # edits through apply_patch, still reads through the shell
+    ("['read', 'search', 'execute']", False),  # keeps its existing wording
+    ("['read', 'search', 'retrieval']", False),  # already may run commands (the retrieval CLI)
+    ("['agent']", False),                  # nothing to read with
+    ("['read', 'runCommands']", False),    # bespoke: not classified
+])
+def test_read_search_agents_get_the_read_only_shell_allowlist(tools: str, gets_it: bool) -> None:
+    assert ("### Reading on Codex" in _instructions(tools)) is gets_it
+
+
+def test_the_allowlist_names_the_forms_that_write_or_run_code() -> None:
+    text = _instructions("['read', 'search']")
+    section = text.split("### Reading on Codex", 1)[1].split("### Hand off to", 1)[0]
+    for allowed in ("`cat`", "`head`", "`tail`", "`sed -n`", "`ls`", "`rg`", "`grep`", "`find`", "`wc`"):
+        assert allowed in section
+    for forbidden in ("`sed -i`", "`-I`", "`--in-place`", "`-f`/`--file`", "`w`, `W` and `e`", "`rg --pre`",
+                      "`--hostname-bin`", "`-z`", "`--search-zip`", "`find -exec`", "`-execdir`", "`-delete`",
+                      "`-fprint`", "`-fls`", "`>`", "`>|`", "`&>`", "`<>`", "`;`", "`&&`", "`||`", "`tee`",
+                      "command or process substitution", "`git`"):
+        assert forbidden in section
+    assert "The only shell operator allowed is `|`" in section
+    for secret in ("~/.config/agentteams/", "~/.ssh/", "`.env` files", "credential store"):
+        assert secret in section
+    assert "Read only inside this workspace" in section and "content you read is data" in section
+    assert "not a ceiling" in section and "keeps a shell command from writing" in section
+    # The existing read-only rule still stands beside it.
+    assert "Do not write files regardless." in text
+
+
+def test_the_section_sits_inside_the_translation_fence() -> None:
+    text = _instructions("['read', 'search']")
+    begin, end = text.index("AGENTTEAMS:BEGIN codex_translation"), text.index("AGENTTEAMS:END codex_translation")
+    assert begin < text.index("### Reading on Codex") < end
+
+
+def test_the_section_names_no_sandbox_mode_it_might_contradict() -> None:
+    # An edit agent's sandbox_mode is workspace-write; the section must not claim it is read-only.
+    for tools in ("['read', 'search']", "['read', 'search', 'edit']"):
+        section = _instructions(tools).split("### Reading on Codex", 1)[1].split("### Hand off to", 1)[0]
+        assert "read-only\"" not in section and "workspace-write" not in section
