@@ -38,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/enforcement-integrity.json`.
 - **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
 
+### fix (codex: every shell-reading agent gets the secret-store line)
+
+- Codex agents that already run commands (`execute`, or `retrieval`'s CLI) now get a "Secrets on Codex" section
+  with the same line read/search agents carry since #132: read only inside the workspace, and never
+  `~/.config/agentteams/`, `~/.ssh/`, `.env` or credential stores. Both sections share one constant
+  (@security residual on #132).
+
+### docs (two meanings of `*` in a brief; Codex `--ephemeral`)
+
+- `proposals.md` and the `proposal_gates` schema description now say that `*` crosses `/` in gate,
+  protected-path and `writes` globs (fnmatch) but matches one segment in a `write_scopes` pattern (raised in
+  mathAgents' P5 fragment review).
+- The Codex adapter notes say that `codex exec --ephemeral` breaks custom-agent spawning in codex-cli 0.160.1.
+
 ### fix (security gate: a superseded clearance can't be replayed, C-5)
 
 - `_latest_security_decision` skipped consumed rows. Once the newest clearance for an action was consumed, an
@@ -45,6 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mathAgents' first P5 render). The newest row matching the action now decides, and if it is consumed the gate
   refuses. Recording several clearances in advance now yields one use, not several. The refusal message keeps
   its `no matching PASS decision found` prefix.
+
+### fix (write-policy: readfs needs an explicit allowlist)
+
+- Under the switch, `AR_WRITE_POLICY` accepted an `agentteams_readfs` entry whose `available_tools` was `[]` or
+  missing, which Goose reads as unrestricted. It now requires a readable, non-empty list drawn from the shipped
+  tools. readfs exposes only its five read tools, so nothing extra was granted, but the per-agent MCP grant
+  work depends on exact allowlists (@security, grant-interface review).
 
 ### fix (build-log.json never records an absolute path, OI-21)
 

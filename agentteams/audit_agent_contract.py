@@ -665,7 +665,12 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
             elif extra or len(ext["keys"]) != len(set(ext["keys"])):
                 errors.append(f"recipe's {READFS_NAME} carries keys the shipped entry doesn't "
                               f"({', '.join(extra) or 'a duplicated key'}), which could change what it runs")
-            elif ext["available_tools"] and set(ext["available_tools"]) - set(shipped["available_tools"]):
+            elif not ext["available_tools"]:
+                # The reader gives None for a missing, empty or unreadable allowlist, and Goose reads [] (or a
+                # missing key) as unrestricted: an explicit, readable list is required.
+                errors.append(f"recipe's {READFS_NAME} has no readable available_tools list "
+                              "(empty or missing means unrestricted to Goose)")
+            elif set(ext["available_tools"]) - set(shipped["available_tools"]):
                 errors.append(f"recipe's {READFS_NAME} lists tools the shipped server doesn't have")
         # Goose adds `analyze` beside `developer` unless the recipe lists it, `[]` means unrestricted, and
         # `analyze` reads outside the workspace (Goose 1.37 spike B1). Only a non-matching allowlist turns it
