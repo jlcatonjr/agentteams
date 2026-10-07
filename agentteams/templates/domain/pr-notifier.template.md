@@ -52,7 +52,7 @@ change. You have no shell: `@pr-manager` runs the commands you return. Recipient
 - the exact `gh` commands to run;
 - recipients (logins);
 - recipients skipped, each with a reason (`opt_out`, `unknown_login`);
-- labels applied;
+- labels to apply;
 <!-- AGENTTEAMS:END output_contract -->
 
 ## Project-Specific Notes

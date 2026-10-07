@@ -15,7 +15,7 @@ handoffs:
     send: false
   - label: Notify Recipients
     agent: pr-notifier
-    prompt: "A PR has been opened or its recipients changed. Assign reviewers, post the @-mention comment and apply labels."
+    prompt: "A PR has been opened or its recipients changed. Return the exact gh commands that request reviewers, set assignees, apply labels and post the @-mention comment."
     send: false
   - label: Security Review
     agent: security

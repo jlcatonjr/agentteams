@@ -157,6 +157,17 @@ without a `lake build` round trip through the runner. But every LSP tool, `lean_
 Until then, Lean checks go through `command-request`s (`lake build`, `lake env lean --stdin`) run confined by
 the runner.
 
+## 5a. Deciding which agent needs a server
+
+Teams under the switch ship `references/mcp-need.reference.md`, the agent MCP-need protocol, and a
+`references/mcp-needs.csv` register.
+- An agent that hits a capability gap attaches a gap note to its handoff.
+- The orchestrator records it as unverified.
+- Need is decided per agent from the runner's ledger: repeated, costly commands and proposal sizes, never
+  the agent's own account.
+- The rule applies the security hard gate first, then a measured threshold, then a runner-path fix (a
+  broader command entry or a gate), and only then a server, with exact tool names.
+
 ## 5b. The catalogue of foundational servers
 
 Since 2026-10-07 agentteams ships a catalogue (`agentteams/templates/mcp/`, API page `mcp_catalog`):
@@ -180,17 +191,6 @@ Since 2026-10-07 agentteams ships a catalogue (`agentteams/templates/mcp/`, API 
 - **`gh pr merge` is routed to the operator** by the constitutional gate where hooks run. `pr-notifier` has no
   shell, and neither PR agent is in `github-write`'s scope.
 - **A GitHub opt-in (or `pr_management: true`) adds the `pr-manager` and `pr-notifier` agents.**
-
-## 5a. Deciding which agent needs a server
-
-Teams under the switch ship `references/mcp-need.reference.md`, the agent MCP-need protocol, and a
-`references/mcp-needs.csv` register.
-- An agent that hits a capability gap attaches a gap note to its handoff.
-- The orchestrator records it as unverified.
-- Need is decided per agent from the runner's ledger: repeated, costly commands and proposal sizes, never
-  the agent's own account.
-- The rule applies the security hard gate first, then a measured threshold, then a runner-path fix (a
-  broader command entry or a gate), and only then a server, with exact tool names.
 
 ## 6. Giving an agent application-specific capability today
 
