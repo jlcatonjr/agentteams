@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (two meanings of `*` in a brief; Codex `--ephemeral`)
+
+- `proposals.md` and the `proposal_gates` schema description now say that `*` crosses `/` in gate,
+  protected-path and `writes` globs (fnmatch) but matches one segment in a `write_scopes` pattern (raised in
+  mathAgents' P5 fragment review).
+- The Codex adapter notes say that `codex exec --ephemeral` breaks custom-agent spawning in codex-cli 0.160.1.
+
 ### fix (security gate: a superseded clearance can't be replayed, C-5)
 
 - `_latest_security_decision` skipped consumed rows. Once the newest clearance for an action was consumed, an
