@@ -17,6 +17,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and lost every adopted routing row, while its build log said only `1.0.0rc8`. This is recording only;
   consumers decide whether to refuse.
 
+### fix (write-policy: Goose `readfs` matched by what it runs; `analyze` must be off)
+
+- **`agentteams_readfs`.** Under the switch, `AR_WRITE_POLICY` accepted any Goose extension *named*
+  `agentteams_readfs`, whatever it launched. It now requires the shipped entry (stdio, `python3`, the same
+  `args`, as built by `goose_tool_scoping.readfs_extension()`), no other keys (`env`, `envs`, `env_keys` or
+  `cwd` could make the same script run other code) and no tools beyond the shipped ones. Residue: `python3`
+  still resolves via PATH and `scripts/` is editable.
+- **Built-in names.** `developer` (builtin), `analyze` and `summon` (platform) are trusted only with their real
+  type. A `stdio` entry named `analyze` would start its own `cmd`.
+- **Recipe reader.** `recipe_extension_grants` now returns each extension's `cmd`, `args` and own `keys`. It
+  reads keys only at the item's own indentation (text inside a block scalar no longer stands in for a key), a
+  duplicated key reads as absent, `name`/`type`/`cmd`/`args` follow YAML's comment rule (`#` only after
+  whitespace), and a quoted flow `args` list reads as unreadable. A line at the item's key column that isn't a
+  plain key (a quoted key, `? key`, a merge key) counts as an unknown key, so it can't hide `envs` or `cwd`
+  on `readfs`. All of these fail closed.
+- **`analyze`.** It reads outside the workspace, Goose adds it beside `developer` unless the recipe lists
+  it, and `available_tools: []` means unrestricted. Under the switch, a non-orchestrator recipe with
+  `developer` or `analyze` must list every `analyze` entry with `available_tools: [__none__]`. The audit
+  didn't look at it before (review F3 from mathAgents).
+- **Unchanged.** Generated non-orchestrator recipes carry only the shipped `agentteams_readfs`, so they pass
+  as before. Adopted recipes such as mathAgents' (restricted `developer` plus `analyze: [__none__]`) pass too.
+  Nothing outside the switch changes.
+
 ### fix (--overwrite never silently drops adopted routing rows, CA-033)
 
 - **The bug.** A plain `--overwrite` without `--update` or `--adopt-orphans` rebuilt the orchestrator's routing

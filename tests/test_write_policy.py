@@ -24,6 +24,11 @@ BRIEF = REPO / "examples" / "software-project" / "brief.json"
 _RECIPE = 'version: "1.0.0"\ntitle: "t"\ninstructions: |\n  hi\n'
 
 
+_READFS = ("extensions:\n  - type: stdio\n    name: \"agentteams_readfs\"\n    cmd: \"python3\"\n    args:\n"
+           "      - \"scripts/goose-readfs-mcp.py\"\n      - \"--root\"\n      - \".\"\n    timeout: 300\n"
+           "    available_tools: [read_file, list_dir, find, grep, stat]\n")
+
+
 def _md(tools_line: str | None) -> str:
     return "---\nname: X\ndescription: d\n" + (f"{tools_line}\n" if tools_line is not None else "") + "---\n# X\n"
 
@@ -123,14 +128,40 @@ def test_only_the_shallowest_orchestrator_is_exempt():
     ("# agentteams-declared-tools: read, edit\nextensions: []\n", ["error"]),
     ("# agentteams-declared-tools: read, execute\nextensions: []\n", ["warning"]),
     ("extensions: []\n", []),                                                           # unmarked, nothing granted
-    ("extensions:\n  - type: builtin\n    name: developer\n", ["error", "warning"]),     # unmarked, full developer
+    ("extensions:\n  - type: builtin\n    name: developer\n", ["error", "error", "warning"]),  # full developer; analyze on
     ("", ["error"]),                                                                    # fail-open extensions
     # the marker states its own authority: the real grant is judged too
     ("# agentteams-declared-tools: read\nextensions:\n  - type: builtin\n    name: developer\n"
-     "    available_tools: [write, tree]\n", ["error"]),
+     "    available_tools: [write, tree]\n", ["error", "error"]),                          # write; analyze left on
     ("extensions:\n  - type: stdio\n    name: some_mcp\n    cmd: x\n", ["error"]),       # unclassifiable extension
-    ("extensions:\n  - type: builtin\n    name: summon\n", ["error"]),                  # dispatch
-    ("extensions:\n  - type: stdio\n    name: agentteams_readfs\n    cmd: x\n", []),
+    ("extensions:\n  - type: platform\n    name: summon\n", ["error"]),                  # dispatch
+    # readfs is allowed by what it runs, not by its name (report §3; review F3 companion)
+    ("extensions:\n  - type: stdio\n    name: agentteams_readfs\n    cmd: x\n", ["error"]),
+    (_READFS, []),                                                                      # the shipped entry
+    (_READFS.replace("--root", "--rooot"), ["error"]),                                  # different args
+    (_READFS.replace("stat]", "stat, write_file]"), ["error"]),                         # a tool it doesn't have
+    # analyze reads outside the workspace and Goose adds it beside developer: it must be listed [__none__]
+    ("extensions:\n  - type: builtin\n    name: developer\n    available_tools: [tree]\n", ["error"]),
+    ("extensions:\n  - type: builtin\n    name: developer\n    available_tools: [tree]\n"
+     "  - type: platform\n    name: analyze\n    available_tools: [__none__]\n", []),    # mathAgents' shape
+    ("extensions:\n  - type: platform\n    name: analyze\n    available_tools: []\n", ["error"]),  # [] = unrestricted
+    # @adversarial review: shapes that tried to get past the two rules
+    ("extensions:\n  - type: platform\n    name: analyze\n    description: |\n      available_tools: [__none__]\n",
+     ["error"]),                                                                        # allowlist hidden in a block
+    ("extensions:\n  - type: stdio\n    name: analyze\n    cmd: sh\n    available_tools: [__none__]\n",
+     ["error"]),                                                                        # built-in name, wrong type
+    ("extensions:\n  - type: platform\n    name: analyze\n    available_tools: [__none__]\n"
+     "  - type: platform\n    name: analyze\n    available_tools: [list_files]\n", ["error"]),  # a second analyze
+    (_READFS.replace('      - "."', '      - ".#x"'), ["error"]),                     # YAML keeps `.#x`; not a comment
+    (_READFS.replace('args:\n      - "scripts/goose-readfs-mcp.py"\n      - "--root"\n      - "."',
+                     'args: ["scripts/goose-readfs-mcp.py,--root,."]'), ["error"]),     # one quoted arg, not three
+    (_READFS.replace("    timeout: 300\n", "    timeout: 300\n    envs:\n      PYTHONPATH: /tmp/x\n"), ["error"]),
+    (_READFS.replace("    timeout: 300\n", "    timeout: 300\n    env_keys: [PYTHONSTARTUP]\n"), ["error"]),
+    # re-verification: keys YAML reads but a plain-key regex doesn't, and `#` without whitespace
+    (_READFS.replace("    timeout: 300\n", '    timeout: 300\n    "envs": {PYTHONPATH: /tmp/x}\n'), ["error"]),
+    (_READFS.replace("    timeout: 300\n", "    timeout: 300\n    ? cwd\n    : /tmp\n"), ["error"]),
+    ("extensions:\n  - type: builtin\n    name: developer\n    available_tools: [tree]\n"
+     "  - type: platform\n    name: analyze#x\n    available_tools: [__none__]\n", ["error", "error"]),  # unknown ext; analyze still on
     # the coordination server writes request/log files; the generator withholds it, and so does the audit
     ("extensions:\n  - type: stdio\n    name: agentteams_coordination\n    cmd: x\n", ["error"]),
 ])
@@ -140,7 +171,8 @@ def test_goose_recipes(body, expected):
 
 def test_recipe_without_an_exact_version_line_is_still_checked():
     recipe = 'version: 1.0.0\ntitle: t\nextensions:\n  - type: builtin\n    name: developer\n'
-    assert [sev for _, sev in _codes({"a.yaml": recipe}, ".yaml", "goose")] == ["error", "warning"]
+    # full developer (write) and analyze left on beside it, plus the shell warning
+    assert [sev for _, sev in _codes({"a.yaml": recipe}, ".yaml", "goose")] == ["error", "error", "warning"]
 
 
 def test_bridge_orchestrator_exempt_only_on_goose():
