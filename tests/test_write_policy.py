@@ -141,6 +141,8 @@ def test_only_the_shallowest_orchestrator_is_exempt():
     (_READFS, []),                                                                      # the shipped entry
     (_READFS.replace("--root", "--rooot"), ["error"]),                                  # different args
     (_READFS.replace("stat]", "stat, write_file]"), ["error"]),                         # a tool it doesn't have
+    (_READFS.replace("[read_file, list_dir, find, grep, stat]", "[]"), ["error"]),     # [] = unrestricted
+    (_READFS.replace("    available_tools: [read_file, list_dir, find, grep, stat]\n", ""), ["error"]),  # missing
     # analyze reads outside the workspace and Goose adds it beside developer: it must be listed [__none__]
     ("extensions:\n  - type: builtin\n    name: developer\n    available_tools: [tree]\n", ["error"]),
     ("extensions:\n  - type: builtin\n    name: developer\n    available_tools: [tree]\n"
