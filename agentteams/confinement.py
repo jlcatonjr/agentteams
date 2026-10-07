@@ -249,7 +249,7 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
             if rel.strip("/") in (".", "") or top in PROTECTED_REL or control_plane_of(rel):
                 raise ConfinementError(f"confined_programs.{agent}.write {rel!r} covers the project root, the ledger, "
                                     "the queue, .git or the control plane; refused")
-        # The exec-inside-a-write-root check needs the project root: see check_overlap (run time).
+        # The exec-inside-a-write-root check needs the project root: see check_roots (run time).
         confined[agent] = {"exec": exec_paths, "write": write}
     return confined
 

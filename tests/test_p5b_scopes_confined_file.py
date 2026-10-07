@@ -308,3 +308,72 @@ def test_a_fifo_never_hangs_the_reader(proj):
     os.mkfifo(path, 0o600)
     with pytest.raises(C.ConfinementError, match="real file"):
         C.read_confined_file(proj)
+
+
+# --- P5c: gate exec in the operator file ------------------------------------------------------------
+
+_GATED = {"agent_policies": {}, "proposal_gates": {"scan": {"glob": "lean/*.lean",
+                                                            "argv": ["python3", "scripts/scan.py", "{file}"]}}}
+
+
+def test_gate_exec_from_the_operator_file_reaches_the_gate():
+    policy = P.load_policy(_GATED, confined_file=({**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}, "sha"))
+    assert policy.gates["scan"]["exec"] == ["/opt/anaconda3"]
+    assert C.gate_exec_paths(policy.gates["scan"], "/usr/bin/true") == ["/opt/anaconda3"]
+    assert policy.confined == JAIL                       # the reserved key never becomes an agent
+    assert "exec" not in _GATED["proposal_gates"]["scan"]  # the brief's dict is not mutated
+
+
+@pytest.mark.parametrize("gate_exec, why", [
+    ({"nope": ["/opt/x"]}, "no such gate"),
+    ({"scan": []}, "non-empty lists"),
+    ({"scan": "/opt/x"}, "non-empty lists"),
+    ({"scan": ["relative/bin"]}, "absolute or ~/"),
+])
+def test_bad_gate_exec_is_refused(gate_exec, why):
+    with pytest.raises(P.ProposalError, match=why):
+        P.load_policy(_GATED, confined_file=({**JAIL, "gate_exec": gate_exec}, "sha"))
+
+
+def test_brief_and_file_both_setting_a_gates_exec_is_refused():
+    brief = {"agent_policies": {}, "proposal_gates": {"scan": {**_GATED["proposal_gates"]["scan"],
+                                                                "exec": ["/usr/bin"]}}}
+    with pytest.raises(P.ProposalError, match="already sets this gate's exec"):
+        P.load_policy(brief, confined_file=({"gate_exec": {"scan": ["/opt/anaconda3"]}}, "sha"))
+
+
+def test_gate_exec_in_the_brief_still_works_without_a_file():
+    brief = {"agent_policies": {}, "proposal_gates": {"scan": {**_GATED["proposal_gates"]["scan"],
+                                                                "exec": ["/usr/bin"]}}}
+    assert P.load_policy(brief).gates["scan"]["exec"] == ["/usr/bin"]
+
+
+def test_the_reserved_name_cannot_be_an_agent():
+    with pytest.raises(P.ProposalError, match="reserved"):
+        P.load_policy({"agent_policies": {"gate_exec": {}}})
+
+
+def test_cli_install_accepts_gate_exec(tmp_path, _home):
+    root = _git_project(tmp_path)
+    brief = json.loads((root / "brief.json").read_text())
+    brief["proposal_gates"] = _GATED["proposal_gates"]
+    (root / "brief.json").write_text(json.dumps(brief))
+    data = {**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}
+    src = tmp_path / "c.json"
+    src.write_text(json.dumps(data))
+    args = ("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"))
+    digest = hashlib.sha256(C.confined_bytes(data)).hexdigest()
+    out = _cli(*args, "--confirm-review-sha256", digest, cwd=root, home=_home)
+    assert out.returncode == 0, out.stderr
+    assert C.read_confined_file(root)[0]["gate_exec"] == {"scan": ["/opt/anaconda3"]}
+
+
+def test_the_reserved_key_is_refused_in_the_briefs_own_block():
+    with pytest.raises(P.ProposalError, match="reserved for the operator file"):
+        P.load_policy({"agent_policies": {}, "confined_programs": {"gate_exec": {"scan": ["/opt/x"]}}})
+
+
+def test_the_operator_files_dict_is_not_mutated():
+    data = {**JAIL, "gate_exec": {"scan": ["/opt/anaconda3"]}}
+    P.load_policy(_GATED, confined_file=(data, "sha"))
+    assert "gate_exec" in data

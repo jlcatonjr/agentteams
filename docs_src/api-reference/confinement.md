@@ -25,7 +25,11 @@ runner starts inside an OS sandbox.
   - Never containing an `exec` path, or a command could build a binary there and then run it.
   - Changes inside a write root count as declared, so a build needn't list every output.
 - **Gates.** A gate may set `exec`. The default is its own program plus a shebang interpreter. Gates write
-  only their temp dir.
+  only their temp dir. P5c: the operator file may set it instead, under the reserved top-level key `gate_exec`:
+  `{"gate_exec": {"lean-draft-scan": ["/opt/anaconda3"]}, "lean-prover": {...}}`. That keeps a gate
+  interpreter's machine path out of the committed brief too. It is refused for a gate the brief doesn't define
+  or whose brief entry already sets `exec`. In the operator file `gate_exec` is never read as an agent; no agent
+  may take that name, and the brief's own `confined_programs` may not use it.
 - **Where it lives (P5b).** Prefer the operator-owned file `~/.config/agentteams/confined/<project>-<hash>.json`
   (`agentteams --confined-path`) over the brief, so machine paths stay out of the committed brief.
   - Install it with `agentteams --install-confined FILE --description BRIEF`. That validates it against the
