@@ -105,6 +105,11 @@ def _main_dispatch(
     *,
     migrate_exemption: bool = False,
 ) -> int:
+    # --serve-mcp: a stdio MCP server; dispatched first so nothing else writes to the protocol's stdout.
+    if getattr(args, "serve_mcp", None):
+        from agentteams.mcp_servers import run_server
+        return run_server(args.serve_mcp, Path(getattr(args, "project", None) or os.getcwd()).resolve())
+
     # --sync-agent-docs: standalone, dispatched before anything reads a brief/pin/config.
     if getattr(args, "sync_agent_docs", False):
         from agentteams.cli.agent_doc_sync_switch import run_agent_doc_sync_cli

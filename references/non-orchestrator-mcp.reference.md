@@ -157,6 +157,30 @@ without a `lake build` round trip through the runner. But every LSP tool, `lean_
 Until then, Lean checks go through `command-request`s (`lake build`, `lake env lean --stdin`) run confined by
 the runner.
 
+## 5b. The catalogue of foundational servers
+
+Since 2026-10-07 agentteams ships a catalogue (`agentteams/templates/mcp/`, API page `mcp_catalog`):
+- **On by default wherever an MCP host-feature token is set:** `agentteams-recall` (memory and code index
+  queries; never refreshes) and `agentteams-gitread` (read-only git in an isolated `git`). Both are first-party
+  and read-only, so Goose and Codex wire them; Claude gets them in the inert file. Codex withholds them unless
+  the brief lists them in `mcp_catalog`, because Codex ignores `scope`.
+- **Opt-in templates, emitted inert:** `github-read`, `github-write` (an exact tool allowlist, with no merge and
+  no deletion) and `fetch`. Each is pinned to a vetted upstream release. Activating one is an operator act after
+  @security vetting; making `github-write` live is Rule-15 constraint-relaxing. `fetch` must sit behind an
+  egress proxy that blocks private and link-local addresses, which upstream does not do.
+- **Under the switch nothing from the catalogue is emitted.** The GitHub servers wait for P5's signed grants.
+- **Before activating a catalogue server** (an operator act; @security, 2026-10-07):
+  - compare the pinned binary's `tools/list` with the entry's tool list; for `github-write`, with its exact
+    `--tools` allowlist (v2.0.1 consolidates issue writes into `issue_write`);
+  - fill `pin.digest` with the release's sha256 or the image digest; never activate a GitHub server without it;
+  - activate `fetch` only with `--proxy-url` pointing at a proxy that refuses private, loopback and link-local
+    addresses;
+  - `agentteams-recall` and `agentteams-gitread` run `agentteams` from PATH in the directory the client launches
+    them in; gitread refuses unless that is the work-tree root.
+- **`gh pr merge` is routed to the operator** by the constitutional gate where hooks run. `pr-notifier` has no
+  shell, and neither PR agent is in `github-write`'s scope.
+- **A GitHub opt-in (or `pr_management: true`) adds the `pr-manager` and `pr-notifier` agents.**
+
 ## 5a. Deciding which agent needs a server
 
 Teams under the switch ship `references/mcp-need.reference.md`, the agent MCP-need protocol, and a

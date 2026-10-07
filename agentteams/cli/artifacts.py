@@ -514,6 +514,8 @@ def finalize_privilege_wiring(
     Raises:
         PrivilegeConfinementError: Unenforceable confinement (P1-2).
         WriteRootPolicyError: A refused or unaccepted write root (follow-up #2).
+        ValueError: An unknown MCP catalogue id (the catalogue expansion also adds the selected catalogue
+            servers to ``manifest["mcp_servers"]``; see ``agentteams.mcp_catalog.expand``).
     """
     from agentteams.cli import write_root_policy
 
@@ -521,6 +523,11 @@ def finalize_privilege_wiring(
     resolve_host_features_and_advise(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
     )
+    # MCP catalogue: needs host_features (which MCP tokens are on) and the roster, so it runs here.
+    from agentteams.mcp_catalog import expand as _expand_mcp_catalog
+
+    for notice in _expand_mcp_catalog(manifest, framework_id):
+        print(f"  \u2139  MCP catalogue: {notice}")
     grant_roots = apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
     coordination_roots = apply_coordination_roots_to_write_roots(manifest)
     write_root_policy.enforce(

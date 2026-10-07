@@ -1,0 +1,55 @@
+{
+  "artifact_type": "mcp-server",
+  "mcp_server_schema_version": "1.0",
+  "server_id": "agentteams-gitread",
+  "domain": "version-history",
+  "description": "First-party, read-only: git log, show, diff, blame and status in an isolated git (no hooks, filters, external diff, textconv, pager, network or locks).",
+  "trust_tier": "first-party",
+  "transport": "stdio",
+  "command": "agentteams",
+  "args": [
+    "--serve-mcp",
+    "gitread"
+  ],
+  "auth": {
+    "mechanism": "none"
+  },
+  "tools": [
+    {
+      "name": "git_log",
+      "side_effects": "read"
+    },
+    {
+      "name": "git_show",
+      "side_effects": "read"
+    },
+    {
+      "name": "git_diff",
+      "side_effects": "read"
+    },
+    {
+      "name": "git_blame",
+      "side_effects": "read"
+    },
+    {
+      "name": "git_status",
+      "side_effects": "read"
+    }
+  ],
+  "scope": [],
+  "progressive_disclosure": "eager",
+  "security_review": {
+    "required": false
+  },
+  "catalog_default": true,
+  "role_scope": [
+    "orchestrator",
+    "navigator",
+    "work-summarizer",
+    "security",
+    "conflict-auditor",
+    "code-hygiene",
+    "git-operations",
+    "pr-manager"
+  ]
+}

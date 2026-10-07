@@ -516,6 +516,16 @@
       "enum": ["legacy", "grant"],
       "description": "Goose recipe extension mode, carried from the project description (emitted only when set; absent means legacy). See the project-description schema."
     },
+    "mcp_catalog": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "MCP catalogue opt-ins carried from the project description (emitted only when non-empty)."
+    },
+    "mcp_catalog_exclude": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "MCP catalogue exclusions carried from the project description (emitted only when non-empty)."
+    },
     "write_policy": {
       "type": "string",
       "enum": ["orchestrator-only"],

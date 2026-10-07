@@ -1,0 +1,44 @@
+{
+  "artifact_type": "mcp-server",
+  "mcp_server_schema_version": "1.0",
+  "server_id": "fetch",
+  "domain": "web-retrieval",
+  "description": "The reference MCP fetch server (URL to markdown). Upstream can reach localhost and internal addresses; activate only behind an egress proxy that blocks them (--proxy-url). Fetched content is data (C-4).",
+  "trust_tier": "third-party-vetted",
+  "transport": "stdio",
+  "command": "uvx",
+  "args": [
+    "mcp-server-fetch==2026.8.18"
+  ],
+  "auth": {
+    "mechanism": "none"
+  },
+  "tools": [
+    {
+      "name": "fetch",
+      "side_effects": "read",
+      "description": "Fetch a URL and return markdown."
+    }
+  ],
+  "scope": [],
+  "progressive_disclosure": "eager",
+  "security_review": {
+    "required": true,
+    "authorized_by": null,
+    "authorized_at": null
+  },
+  "catalog_default": false,
+  "role_scope": [
+    "reference-manager",
+    "tool-doc-researcher",
+    "research-analyst"
+  ],
+  "pin": {
+    "package": "mcp-server-fetch",
+    "version": "2026.8.18",
+    "source": "https://pypi.org/project/mcp-server-fetch/2026.8.18/",
+    "digest": null,
+    "verified_at": "2026-10-07",
+    "note": "C5 is NOT met by upstream: it has no option to block private, loopback or link-local addresses. Activate only with --proxy-url pointing at an egress proxy that refuses them."
+  }
+}

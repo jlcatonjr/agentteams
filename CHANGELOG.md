@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (MCP catalogue: foundational servers and the PR agents)
+
+- **A catalogue of foundational MCP servers** (`agentteams/templates/mcp/`, `agentteams/mcp_catalog.py`):
+  - `agentteams-recall` and `agentteams-gitread` are first-party and read-only. They are on by default wherever an
+    MCP host-feature token is set, scoped to the roles that use them and intersected with the roster.
+  - `github-read`, `github-write` and `fetch` are opt-in templates, emitted inert with pinned versions and their
+    security metadata.
+  - `github-write` is an exact `--tools` allowlist with no `merge_pull_request`, `delete_file`,
+    `delete_repository` or `fork_repository`.
+  - New brief fields: `mcp_catalog`, `mcp_catalog_exclude` and `pr_management`. An unknown id is an error.
+  - Under `write_policy: "orchestrator-only"` nothing from the catalogue is emitted; the GitHub servers wait for
+    P5.
+  - Codex withholds the defaults unless they are opted in, with a notice.
+  - A brief's own `mcp_servers` entry with the same id wins.
+- **`agentteams --serve-mcp {recall,gitread}`** runs the two first-party servers over stdio.
+  - `recall` never refreshes a stale index.
+  - `recall` validates without the CLI's `.vcache` sidecar (a write) and keeps every path inside the project.
+  - `gitread` runs git isolated from repository config that could run programs (fsmonitor, hooks, external diff,
+    textconv, pager, `filter.*` refused). It has no network (every transport denied by name) and no locks, and it
+    neutralises mailmap. Refs and paths are validated, there is a timeout, and it refuses to run anywhere except
+    the work-tree root.
+- **New opt-in agent templates `pr-manager` and `pr-notifier`.** Generalized from this repository's own agents,
+  they are added when a GitHub catalogue entry is opted into or `pr_management` is set.
+  - They never merge, and recipients come only from `CODEOWNERS` or the registry.
+  - `pr-manager` reads through `github-read` when it is live and writes PRs with `gh`. Neither agent is in
+    `github-write`'s scope. `pr-notifier` has no shell: it returns exact `gh` commands for `pr-manager` to run.
+    Under the switch `pr-manager` returns a proposal.
+- **The constitutional gate now routes `gh pr merge`** (and the REST merge endpoint) to the operator. The same
+  token through `gh` would otherwise get around the `github-write` allowlist. The template hook is re-pinned in
+  `references/enforcement-integrity.json`.
+- **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
+
 ### fix (security gate: a superseded clearance can't be replayed, C-5)
 
 - `_latest_security_decision` skipped consumed rows. Once the newest clearance for an action was consumed, an
