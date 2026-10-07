@@ -316,7 +316,7 @@ Read\-only: verify the signatures, hash chain and signed head of .agentteams/pro
 Read\-only (P5b): print the operator\-owned confined_programs file for \-\-project (else CWD), under ~/.config/agentteams/confined/. The runner reads it instead of the brief's block.
 .TP
 .B \-\-install\-confined FILE
-Operator\-only (P5b): validate FILE (a JSON confined_programs object) against \-\-description's policy, print the exact JSON and its sha256, and install it as \-\-project's operator\-owned confined file (mode 0600) only when rerun with that \-\-confirm\-review\-sha256. Run it outside every agent session; restart \-\-serve\-requests afterwards.
+Operator\-only (P5b): validate FILE (a JSON confined_programs object, optionally with gate_exec) against \-\-description's policy, print the exact JSON (gate_exec entries gain gate_argv_sha256 bindings) and its sha256, and install it as \-\-project's operator\-owned confined file (mode 0600) only when rerun with that \-\-confirm\-review\-sha256. Run it outside every agent session; restart \-\-serve\-requests afterwards.
 .TP
 .B \-\-mcp\-need\-report
 Read\-only: summarize the runner ledger (.agentteams/proposal\-ledger.jsonl under \-\-project, else CWD) and the MCP need register per agent: repeated commands with times, proposal bytes, open register rows. Figures are unverified; it never writes or decides (references/mcp\-need.reference.md).

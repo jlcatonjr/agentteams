@@ -1078,10 +1078,11 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         dest="install_confined",
         default=None,
-        help="Operator-only (P5b): validate FILE (a JSON confined_programs object) against --description's "
-             "policy, print the exact JSON and its sha256, and install it as --project's operator-owned confined "
-             "file (mode 0600) only when rerun with that --confirm-review-sha256. Run it outside every agent "
-             "session; restart --serve-requests afterwards.",
+        help="Operator-only (P5b): validate FILE (a JSON confined_programs object, optionally with gate_exec) "
+             "against --description's policy, print the exact JSON (gate_exec entries gain gate_argv_sha256 "
+             "bindings) and its sha256, and install it as --project's operator-owned confined file (mode 0600) "
+             "only when rerun with that --confirm-review-sha256. Run it outside every agent session; restart "
+             "--serve-requests afterwards.",
     )
     parser.add_argument(
         "--mcp-need-report",

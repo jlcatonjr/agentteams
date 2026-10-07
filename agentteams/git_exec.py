@@ -4,7 +4,7 @@ Six modules kept their own ``_git`` helper or a copy of the hardening below (mul
 operator_signing, signer_location, proposals; integrity's manifest check too). Each keeps its own return shape (a
 tuple, a ``CompletedProcess``, ``str | None``, ``bytes``), but they now build and run the command here, so the
 hardening is written once. Other one-off git calls (git_hooks, shrink_allow, branch_inventory, output_target,
-session_scan, redteam) are out of this consolidation's scope.
+session_scan, code_index_artifacts, redteam) are out of this consolidation's scope.
 
 **Read-only hardening.** A read-only git command run in a repository an agent can write should not let that
 repository's own config run code: ``core.fsmonitor`` is executed by ``status``/``ls-files``, and a hooks path can

@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/enforcement-integrity.json`.
 - **No change for a team that enables no MCP token and opts into nothing:** its output is byte-identical.
 
+### docs (close-out consistency after P5c / CH-08)
+
+- `--install-confined` docs and help cover `gate_exec` and its `gate_argv_sha256` binding, and
+  `--confirm-review-sha256` names `--install-confined`. The runner text in the generated reference says
+  `gate_exec` entries are argv-bound. The overlap check is described as running in both directions. The
+  `ClaudeAdapter.render_builder_file` override is documented. The confinement public-surface table and
+  `git_exec`'s out-of-scope list are completed (Rule 8 close-out).
+
 ### refactor (CH-08: one custody read, one atomic write, one git core)
 
 - `atomicio.read_regular_nofollow` is now the one custody read behind the ledger key file, the runner's queued
@@ -81,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `gate_argv_sha256` in the reviewed JSON. A gate whose brief argv has changed since install is refused until
   the file is reinstalled, so a reworked gate can't silently keep its old exec. An entry without a binding is
   refused, so P5c files must be reinstalled once.
-- At run time a gate is refused if any of its exec paths lies inside an agent's confined write root, where a
+- At run time a gate is refused if any of its exec paths overlaps an agent's confined write root (inside it, or
+  containing it, since exec paths match as subpaths), where a
   command could plant a binary for the gate to run. Gates previously checked against no write roots at all.
   (Both are @security advisories on P5b/P5c.)
 

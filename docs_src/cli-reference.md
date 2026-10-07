@@ -918,7 +918,9 @@ Operator-only (P5b). Validates `FILE`, a JSON `confined_programs` object, agains
 then prints the exact JSON it would install and its sha256, and exits 1 without writing. Review it, then
 rerun with `--confirm-review-sha256 <sha256>`. That installs those bytes as `--project`'s operator-owned
 file: mode 0600, in a 0700 directory, written atomically. A hash that doesn't match is refused, and so is a
-brief that also defines `confined_programs`. Run it outside every agent session, then restart
+brief that also defines `confined_programs`. The file may also carry `gate_exec: {gate: [paths]}` (P5c). For those
+gates the install adds `gate_argv_sha256` (each gate's argv digest) to the JSON you review, and a gate whose argv
+later changes is refused until you reinstall. Run it outside every agent session, then restart
 `--serve-requests`: the runner pins the file at start and stops if it changes. Under `write_policy` the
 orchestrator never edits this file or writes a script for it. It gives you this one command.
 
@@ -932,7 +934,8 @@ Mint an **HMAC-signed, non-widening** cross-workspace capability grant (P2) from
 
 ### `--confirm-review-sha256 HEX`
 
-Used with `--sign-decision` and `--sign-grant` when there is no terminal to confirm on.
+Used with `--sign-decision` and `--sign-grant` when there is no terminal to confirm on, and with
+`--install-confined`, where it is required: the sha256 of the JSON you reviewed.
 
 Both minters print the payload and its review digest before reading the key. The digest covers the
 kind, the spec, the team dir, the `key_id` and the ledger root. On a terminal they then ask

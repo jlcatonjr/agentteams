@@ -100,7 +100,7 @@ Adjust an output path's extension for this framework. **Default implementation:*
 
 #### `render_builder_file(content, manifest)`
 
-Post-process the rendered team-builder meta-agent. **Default implementation: identity** (returns `content` unchanged), so Copilot/Claude emit the builder as a Markdown agent file. Frameworks whose agent files are not Markdown override this — `GooseAdapter` wraps the builder as a runnable recipe so it is not a stray `.md` in the agents directory.
+Post-process the rendered team-builder meta-agent. **Default implementation: identity** (returns `content` unchanged), so the Copilot adapters emit the builder as a Markdown agent file. The others override it: `GooseAdapter` wraps the builder as a runnable recipe, so it is not a stray `.md` in the agents directory; `CodexAdapter` emits it as a Codex custom-agent TOML; `AgentsMdAdapter` emits it as a plain-Markdown `.agents` detail file through `render_agent_file`; and `ClaudeAdapter` overrides it to map a canonical `tools: [...]` front-matter line to Claude tool names (it appears only under `write_policy`, whose narrowing replaces the builder's Claude grant); a Claude-shaped builder passes through unchanged.
 
 **Args:**
 
@@ -259,6 +259,8 @@ Strips YAML front matter and inline handoff blocks to produce plain Markdown sys
 ## `ClaudeAdapter`
 
 > *Source: `agentteams/frameworks/claude.py`*
+
+- `render_builder_file` maps a canonical builder `tools:` line (written by `write_policy` narrowing) to Claude names, e.g. `Read, Grep, Glob`. Claude Code can't launch a sub-agent whose tool names don't resolve.
 
 Adapter for Claude Projects.
 

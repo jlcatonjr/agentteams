@@ -499,7 +499,7 @@ def _run_gates(root: Path, rel: str, content: str, names: list[str], policy: Pol
                 inside = _confinement.exec_inside_write_roots(
                     root, gate_exec, [w for jail in policy.confined.values() for w in jail["write"]])
                 if inside:
-                    raise ProposalError(f"gate {name}: exec path {inside} lies inside an agent's confined write root; "
+                    raise ProposalError(f"gate {name}: exec path {inside} overlaps an agent's confined write root; "
                                         "a command could plant a binary there")
                 argv = _confinement.wrap(argv, sandbox=sandbox, root=root, cwd=root, exec_paths=gate_exec,
                                          write_roots=[], tmp_dir=Path(tmp))

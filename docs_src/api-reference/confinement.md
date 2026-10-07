@@ -34,8 +34,9 @@ runner starts inside an OS sandbox.
     `gate_argv_sha256: {gate: sha256 of the argv}` in the reviewed JSON. A gate whose argv in the brief has changed
     since install is refused until the file is reinstalled, so a reworked gate never silently keeps the old exec.
     An entry without its binding is refused too. `gate_argv_sha256` is reserved like `gate_exec`.
-  - At run time a gate is refused if any of its exec paths lies inside any agent's confined write root, where a
-    command could plant a binary for the gate to run.
+  - At run time a gate is refused if any of its exec paths overlaps any agent's confined write root (inside it,
+    or containing it, since exec paths match as subpaths), where a command could plant a binary for the gate to
+    run. The check folds case on macOS.
 - **Where it lives (P5b).** Prefer the operator-owned file `~/.config/agentteams/confined/<project>-<hash>.json`
   (`agentteams --confined-path`) over the brief, so machine paths stay out of the committed brief.
   - Install it with `agentteams --install-confined FILE --description BRIEF`. That validates it against the
@@ -132,4 +133,6 @@ runner starts inside an OS sandbox.
 | `confined_bytes(data) -> bytes` | P5b: the exact bytes installed (sorted, indented JSON): what the operator reviews and hashes. |
 | `install_confined_file(root, data) -> Path` | P5b: write those bytes atomically, mode 0600. Callers validate and confirm the review hash first. |
 | `exec_allows(program, exec_paths)` / `gate_exec_paths(gate, program)` | Exec allowlist helpers. |
+| `check_roots(root, exec_paths, write_roots, tmp_dir=None) -> list[str]` | Run-time checks of one agent's confinement against the real project (real write roots, exec breadth, exec/write overlap). |
+| `exec_inside_write_roots(root, exec_paths, write_roots) -> str \| None` | A gate exec path overlapping any agent's write root, in either direction (case-folded on macOS). |
 | `ConfinementError` | An unsafe path, or a bad entry. |
