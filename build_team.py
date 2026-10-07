@@ -89,7 +89,7 @@ from agentteams.errors import (
 from agentteams.cli.artifacts import (
     DELIVERY_RECEIPT_REL_PATH, EVAL_SUITE_REL_PATH, MODEL_ROUTING_REL_PATH,
     MEMORY_INDEX_REL_PATH, MEMORY_INDEX_EXTRA_DOC_NAMES,
-    _require_jsonschema, _compute_file_hashes, _compute_front_matter_baseline,
+    _require_jsonschema, _compute_file_hashes, _compute_front_matter_baseline, _baseline_key,
     _write_delivery_receipt, _write_eval_suite, _write_model_routing,
     _memory_index_sources, _read_memory_index, _validate_memory_index_schema,
     _run_refresh_index, _run_query_index, _write_memory_index,
@@ -692,10 +692,11 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
     project_root = output_dir.parent.parent  # output_dir is .github/agents/
     files_written = []
     for f in result.written:
-        try:
-            files_written.append(str(Path(f).relative_to(project_root)))
-        except ValueError:
-            files_written.append(f)
+        # OI-21: never an absolute path in a committed build log. A file outside project_root (an --output that
+        # isn't two levels deep) is recorded relative to it (``../``), or omitted when no relative form exists.
+        rel = _baseline_key(Path(f), project_root)
+        if rel is not None:
+            files_written.append(rel)
 
     log = {
         "schema_version": "1.5",
