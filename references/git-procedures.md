@@ -455,3 +455,27 @@ GitHub's `delete_branch_on_merge` is **on** for this repository, so a merged PR'
 normally already gone; the local copy is what the sweep removes. A local `--no-ff` merge is
 followed by `agentteams --branch-post-merge <branch>` (`--apply` needs an operator `branch-delete`
 grant). Deletions are recorded in `references/branch-deletions.log.csv`.
+
+## F. Shared Checkout (operator rule, 2026-10-07)
+
+The repository's main local checkout is an **editable install**: other repositories' `agentteams` runs import
+it. Whatever branch and uncommitted edits it holds are what their renders execute. That is how CA-033 picked up
+unrecorded agentteams code.
+
+- **Keep the shared checkout on `main`.** Do branch work in your own worktree, then remove it:
+
+  ```bash
+  git fetch origin
+  git worktree add ../agentteams-wt-<topic> -b <branch> origin/main
+  # ... work, commit, push, open the PR, merge ...
+  git worktree remove ../agentteams-wt-<topic>
+  git branch -d <branch>
+  ```
+
+- **Never run `git reset --hard`, `git checkout -- .` or `git clean -fd` in the shared checkout.** They discard
+  other people's uncommitted or untracked work. To update it, use `git switch main` and `git pull --ff-only`,
+  which carry unrelated uncommitted changes across.
+- **Before you leave the shared checkout, run `git status`** and account for every untracked file. Untracked
+  files follow branch switches, and editable installs would render them. Local registers and logs belong in
+  `.gitignore`, not as stray files.
+- **Merging a PR doesn't need the shared checkout** (`gh pr merge`). Resolve a conflict in a fresh worktree.
