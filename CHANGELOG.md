@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (P5b follow-up: RSR1, no tmp/ path in the orchestrator's sandbox-change step)
+
+- #133's orchestrator "Applying proposals" step 5 put the candidate JSON under the gitignored scratch folder.
+  The RSR1 lint (`scripts/check-durable-tmp-refs.sh`) refuses such references in durable files. The step now
+  uses `confined-programs.candidate.json` in the project root (never committed, deleted after install).
+
 ### feat (`--mcp-need-report`: MCP-need protocol phase N3)
 
 - **New read-only command.** `agentteams --mcp-need-report` (module `agentteams/mcp_need_report.py`) summarizes
