@@ -519,6 +519,14 @@ def finalize_privilege_wiring(
     """
     from agentteams.cli import write_root_policy
 
+    # R6 review condition 3: the agentteams_runner server installs two levels above the agents dir, so with grants
+    # that dir must be the framework's canonical one; its grandparent is then the project root the runner checks.
+    canonical = {"claude": (".claude", "agents"), "goose": (".goose", "recipes")}.get(framework_id)
+    if (manifest.get("write_policy") == "orchestrator-only" and manifest.get("mcp_grants") and team_dir is not None
+            and canonical and Path(team_dir).resolve().parts[-2:] != canonical):
+        raise write_root_policy.WriteRootPolicyError(
+            f"mcp_grants need the agents directory to be the project's {'/'.join(canonical)}; this --output would "
+            "install the agentteams_runner server outside the project")
     brief_roots = write_root_policy.begin(manifest, project_root)
     resolve_host_features_and_advise(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced

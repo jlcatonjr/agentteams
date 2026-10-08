@@ -638,7 +638,13 @@ def _runner_block_problem(content: str, slug: str, grant: dict[str, Any]) -> tup
     if block is None:
         return content, ("declares an `mcpServers:` block that isn't the canonical agentteams_runner entry for its "
                          "grant (command, args or extra keys differ); re-render it")
-    stripped = inner[:starts[0]] + inner[starts[0] + len(block):]
+    rest = inner[starts[0] + len(block):]
+    if rest[:1] in (" ", "\t", "-"):
+        # Anything indented after the block belongs to it (an `env:`/`cwd:` key, another `- server:` entry); the
+        # key regex reads column 0 only, so it must be refused here (@security R6 review condition 1).
+        return content, ("declares extra lines inside or after its agentteams_runner `mcpServers:` block (another "
+                         "server, or keys such as env/cwd); only the canonical entry is allowed")
+    stripped = inner[:starts[0]] + rest
     return content[:fm.start(1)] + stripped.rstrip("\n") + content[fm.end(1):], None
 
 

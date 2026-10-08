@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the tool names. Any edit to them is an error, and so is any shell on a granted agent (@security C14, C15).
   `audit_agent_contract.py` is now integrity-pinned.
 - **Teams without `mcp_grants`,** and ungranted agents, render byte-identical.
+- **@security R6 review fixes:**
+  - nothing may follow the canonical block: an indented `env:`, `cwd:` or a second server is refused;
+  - writes into a `.agentteams`, `.agentteams-queue` or `.claude` directory are refused at any depth, not only at
+    the top;
+  - with grants, rendering refuses an `--output` that isn't the framework's canonical agents directory, so the
+    server always installs at the project root.
 
 ### feat (operator-signed direct-write grants, phase R5)
 
