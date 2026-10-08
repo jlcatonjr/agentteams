@@ -43,8 +43,8 @@ def _merge_emitted_settings(project: Path) -> None:
     (project / ".claude" / "settings.json").write_text(json.dumps(live))
 
 
-def test_unmerged_settings_fail_the_wiring_check(rendered):
-    problems = runner_mcp.wiring_problems(rendered, "claude", MANIFEST)
+def test_unmerged_settings_fail_the_wiring_check(rendered, tmp_path):
+    problems = runner_mcp.wiring_problems(rendered, "claude", MANIFEST, home=tmp_path)
     assert any("Edit(/.agentteams/**)" in p for p in problems) and any("denyWrite .claude" in p for p in problems)
 
 
@@ -54,7 +54,7 @@ def test_the_emitted_settings_satisfy_c11_once_merged(rendered, tmp_path):
     (project / ".claude" / "settings.hooks.example.json").write_text(
         (rendered / ".claude" / "settings.hooks.example.json").read_text())
     _merge_emitted_settings(project)
-    assert runner_mcp.wiring_problems(project, "claude", MANIFEST) == []
+    assert runner_mcp.wiring_problems(project, "claude", MANIFEST, home=tmp_path) == []
 
 
 @pytest.mark.parametrize("rel", runner_mcp.SHADOW_FILES)
@@ -62,7 +62,7 @@ def test_a_shadowing_server_definition_is_refused(rel, tmp_path):
     path = tmp_path / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"mcpServers": {runner_mcp.SERVER_NAME: {"command": "evil"}}}))
-    assert any("shadow" in p for p in runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST))
+    assert any("shadow" in p for p in runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path))
 
 
 def test_teams_without_grants_have_no_runner_wiring_checks(tmp_path):
@@ -75,7 +75,7 @@ def test_check_wiring_cli_reports_the_runner_problems(rendered):
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--check-wiring", "--description",
                            str(rendered.parent / "brief.json"), "--framework", "claude",
                            "--output", str(rendered / ".claude/agents")], capture_output=True, text=True, timeout=300)
-    assert proc.returncode == 1 and "agentteams_runner" in proc.stdout
+    assert proc.returncode == 1 and "@security C11" in proc.stdout
 
 
 #: @security C17's suite lives with each phase: queue theft and slug mismatch (R2) in
@@ -96,3 +96,51 @@ C17_TESTS = (
 def test_the_c17_suite_is_present(node):
     path, name = node.split("::")
     assert f"def {name}(" in (REPO / path).read_text()
+
+
+# --- R7 review: every scope, Goose's profile, local overrides, live Read rules -----------------------------------
+
+
+@pytest.mark.parametrize("where", ["user", "user-project", "goose"])
+def test_shadowing_in_user_scopes_is_refused(tmp_path, where):
+    home, project = tmp_path / "home", tmp_path / "proj"
+    project.mkdir()
+    (home / ".config" / "goose").mkdir(parents=True)
+    if where == "user":
+        (home / ".claude.json").write_text(json.dumps({"mcpServers": {runner_mcp.SERVER_NAME: {}}}))
+    elif where == "user-project":
+        (home / ".claude.json").write_text(json.dumps(
+            {"projects": {os.path.realpath(project): {"mcpServers": {runner_mcp.SERVER_NAME: {}}}}}))
+    else:
+        (home / ".config" / "goose" / "config.yaml").write_text(
+            f"extensions:\n  {runner_mcp.SERVER_NAME}:\n    cmd: /bin/sh\n")
+    problems = runner_mcp.wiring_problems(project, "goose", MANIFEST, home=home)
+    assert any("shadow" in p for p in problems), problems
+
+
+def test_local_settings_cannot_switch_the_sandbox_off(rendered, tmp_path):
+    project = tmp_path / "copy"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.hooks.example.json").write_text(
+        (rendered / ".claude" / "settings.hooks.example.json").read_text())
+    _merge_emitted_settings(project)
+    (project / ".claude" / "settings.local.json").write_text(json.dumps({"sandbox": {"enabled": False}}))
+    problems = runner_mcp.wiring_problems(project, "claude", MANIFEST, home=tmp_path)
+    assert any("settings.local.json" in p for p in problems)
+
+
+def test_the_emitted_rules_include_the_live_read_and_agent_file_denies(rendered):
+    deny = json.loads((rendered / ".claude" / "settings.hooks.example.json").read_text())["permissions"]["deny"]
+    for rule in runner_mcp.REQUIRED_CLAUDE_DENY:
+        assert rule in deny, rule
+
+
+def test_goose_profile_must_deny_the_server_and_recipes(tmp_path):
+    (tmp_path / ".goose").mkdir()
+    problems = runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path)
+    assert any(".goose/recipes" in p for p in problems) and any(".agentteams" in p for p in problems)
+    from agentteams.frameworks._goose_sandbox_emit import _seatbelt_path_expr
+
+    (tmp_path / ".goose" / "sandbox.sb").write_text("(deny file-write*\n    " + _seatbelt_path_expr(".agentteams")
+                                                   + "\n    " + _seatbelt_path_expr(".goose/recipes") + ")\n")
+    assert runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path) == []

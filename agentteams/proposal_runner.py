@@ -435,7 +435,7 @@ class Runner:
         expires = datetime.fromisoformat(str(row.get("expires")))
         if int(row.get("max_uses", P.DISPATCH_MAX_USES)) > G.DIRECT_MAX_USES or \
                 expires > datetime.now(UTC) + timedelta(hours=G.DIRECT_TTL_HOURS, minutes=1):
-            raise P.ProposalError("this nonce wasn't issued with the direct-write limits; re-dispatch the agent")
+            raise P.ProposalError(P._CHANNEL_REFUSAL)  # uniform: no liveness oracle (R7 review, C3 note)
 
     def _open_session_dir(self, rel: str) -> int:
         """Open a session-writable queue dir without following a symlink anywhere in its last component."""

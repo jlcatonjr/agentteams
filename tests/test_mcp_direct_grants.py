@@ -268,7 +268,7 @@ def test_a_nonce_with_default_limits_cannot_write_directly(project, operator_key
     try:
         wide = P.issue_dispatch(project, "producer")  # default 24 h / 25 uses
         result = _direct(runner, wide, "y\n", hashlib.sha256(b"x = 1\n").hexdigest())
-        assert not result["ok"] and "direct-write limits" in result["error"]
+        assert not result["ok"] and result["error"] == P._CHANNEL_REFUSAL  # uniform: no liveness oracle
     finally:
         runner.close()
 
