@@ -253,3 +253,41 @@ def test_server_rejects_unknown_tools_at_launch():
     proc = subprocess.run([sys.executable, str(SERVER), "--root", ".", "--agent", "a", "--tools", "shell"],
                           capture_output=True, text=True)
     assert proc.returncode != 0 and re.search("tools must be", proc.stderr)
+
+
+def test_in_project_links_to_denied_files_are_refused(served):
+    """@security R4 condition 1: the deny list applies to the resolved path, not only the requested one."""
+    root, _ = served
+    (root / "notes.txt").symlink_to(root / ".env")
+    (root / "q").symlink_to(root / ".agentteams-queue", target_is_directory=True)
+    (root / "app.env").write_text("K=1\n")
+    (root / "state.tfstate.backup").write_text("{}")
+    c = Client(root, ["read_file_hashed"])
+    try:
+        for bad in ("notes.txt", "q/mcp-requests", "app.env", "state.tfstate.backup"):
+            ok, _text = c.call("read_file_hashed", path=bad)
+            assert not ok, bad
+        ok, _out = c.call("read_file_hashed", path="src/a.py")
+        assert ok
+    finally:
+        c.close()
+
+
+def test_a_symlinked_queue_dir_is_refused(served, tmp_path):
+    """@security R4 condition 3: a linked-in queue directory can't redirect a request file."""
+    root, _ = served
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    queue = root / ".agentteams-queue" / "mcp-requests"
+    for entry in queue.iterdir():
+        entry.unlink()
+    queue.rmdir()
+    queue.symlink_to(elsewhere, target_is_directory=True)
+    c = Client(root, ["write_file"])
+    try:
+        ok, text = c.call("write_file", dispatch="0" * 32, path="src/a.py", content="y\n", base_sha256="absent",
+                          rationale="r")
+        assert not ok and "not a plain directory" in text
+        assert list(elsewhere.iterdir()) == []
+    finally:
+        c.close()

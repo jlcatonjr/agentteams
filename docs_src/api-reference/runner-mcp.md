@@ -14,7 +14,7 @@ agent's policy, and alone writes the project or runs commands.
 
 | Tool | Does | Runner kind |
 |---|---|---|
-| `read_file_hashed(path)` | Read a UTF-8 project file, up to 256 KiB, with its sha256: the `base_sha256` writes need. A missing file returns `"absent"`. Refuses VCS internals, the control plane, the queue and secrets. | none (local read) |
+| `read_file_hashed(path)` | Read a UTF-8 project file, up to 256 KiB, with its sha256: the `base_sha256` writes need. A missing file returns `"absent"`. Refuses VCS internals, the control plane, the queue and secrets. The deny list applies to both the requested and the resolved path, so an in-project link to `.env` is refused, and the opened file must be the one checked (device and inode). | none (local read) |
 | `write_file(dispatch, path, content, base_sha256, rationale, gates?)` | Write a whole file. Staged, or applied at once for a `direct` instance whose grant the runner has verified. | `stage-proposal` / `apply-direct` |
 | `delete_file(dispatch, path, base_sha256, rationale)` | Ask to delete. **Always staged**, even on a direct instance. | `stage-proposal` |
 | `run_command(dispatch, argv, purpose, cwd?, expected_writes?, stdin_path?, stdin_content?)` | Run an allowlisted command in the agent's sandbox. Stdin goes only through `stdin_from_content` and its gates. | `run-request` |
@@ -26,7 +26,8 @@ Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runn
 ## Safety model
 
 - **No key, no project writes.** The server's only writes are new files in `.agentteams-queue/mcp-requests/` and
-  acknowledgements in `.agentteams-queue/acks/`.
+  acknowledgements in `.agentteams-queue/acks/`. Both are created relative to directory descriptors opened one
+  component at a time without following links, so a linked-in queue directory can't redirect them.
 - **Not a trust boundary.** The runner re-validates everything: identity from the nonce, the agent's scopes and
   allowlist, gates and base hashes.
 - **Bound to one agent.** `--agent` is sent as `via_agent`. The runner refuses a nonce that belongs to another

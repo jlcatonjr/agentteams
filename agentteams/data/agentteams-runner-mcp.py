@@ -54,9 +54,16 @@ RESULT_MAX_BYTES = 4 * 1024 * 1024
 READ_MAX_BYTES = 256 * 1024
 #: Never read, whatever the root: VCS internals, the control plane and queue (raw nonces in transit), secrets.
 DENY_PARTS = (".git", ".hg", ".svn", ".agentteams", ".agentteams-queue", ".ssh", ".aws", ".gnupg", ".kube", ".docker")
-DENY_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".jks", ".keystore", ".kdbx", ".tfstate", ".tfvars")
+DENY_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".jks", ".keystore", ".kdbx", ".tfstate", ".tfvars", ".env")
 DENY_NAMES = (".env", ".envrc", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".htpasswd", ".git-credentials")
 DENY_PREFIXES = ("id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", ".env.", "credentials")
+#: Glob-like infixes: ``*.tfstate.*`` backups.
+DENY_INFIXES = (".tfstate.",)
+DENY_ALLOWED = (".env.example", ".env.sample", ".env.template")
+#: Requests this instance remembers for request_status; the oldest are forgotten past this.
+MAX_TRACKED = 256
+#: A result the runner expired unread (its TTL is 300 s) is reported as lost after this long.
+LOST_AFTER_SECONDS = 600
 
 _NONCE = {"type": "string", "description": "Your dispatch nonce, from your task."}
 SCHEMAS: dict[str, dict[str, Any]] = {
@@ -108,7 +115,7 @@ class Server:
         self.approval = approval
         self.tools = [t for t in TOOLS if t in tools]
         self.wait = wait
-        self.mine: set[str] = set()
+        self.mine: dict[str, float] = {}  # request id -> when queued (insertion-ordered)
 
     # -- queue client (mirrors agentteams.proposal_runner's, without importing it) --------------------------
 
@@ -118,24 +125,41 @@ class Server:
         except (OSError, ValueError):
             return False
 
+    def _open_dir(self, rel: str) -> int:
+        """Open ``root/rel`` one component at a time, never following a symlink (a linked-in queue dir can't
+        redirect a write). The caller closes the returned descriptor."""
+        fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in rel.split("/"):
+                nxt = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                os.close(fd)
+                fd = nxt
+        except OSError as exc:
+            os.close(fd)
+            raise ToolError(f"{rel} is missing or not a plain directory (errno {exc.errno})") from None
+        return fd
+
     def _enqueue(self, request: dict[str, Any]) -> str:
         if not self._alive():
             raise ToolError("no runner is serving this project; ask the orchestrator (the operator starts it)")
         data = json.dumps({**request, "via_agent": self.agent}).encode("utf-8")
         if len(data) > REQUEST_MAX_BYTES:
             raise ToolError(f"request is {len(data)} bytes, over the {REQUEST_MAX_BYTES}-byte limit")
-        directory = self.root / MCP_REQUESTS
-        if directory.is_symlink() or not directory.is_dir():
-            raise ToolError(f"{MCP_REQUESTS} is missing or not a plain directory")
         request_id = secrets.token_hex(16)
-        tmp = directory / f".{request_id}.tmp"
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        dir_fd = self._open_dir(MCP_REQUESTS)
         try:
-            os.write(fd, data)
+            tmp = f".{request_id}.tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd)
+            try:
+                os.write(fd, data)
+            finally:
+                os.close(fd)
+            os.rename(tmp, f"{request_id}.json", src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
         finally:
-            os.close(fd)
-        os.rename(tmp, directory / f"{request_id}.json")
-        self.mine.add(request_id)
+            os.close(dir_fd)
+        self.mine[request_id] = time.monotonic()
+        while len(self.mine) > MAX_TRACKED:
+            self.mine.pop(next(iter(self.mine)))
         return request_id
 
     def _poll(self, request_id: str) -> dict[str, Any] | None:
@@ -153,13 +177,21 @@ class Server:
             raise ToolError(f"cannot read the result: {exc}") from exc
         if len(data) > RESULT_MAX_BYTES:
             raise ToolError("the runner's result is too large to read")
-        result = json.loads(data)
-        ack = self.root / ACKS / request_id
         try:
-            os.close(os.open(ack, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600))
-        except OSError as exc:  # the runner expires unacknowledged results on its own; say so rather than hide it
-            result = {**result, "ack_error": str(exc)} if isinstance(result, dict) else result
-        self.mine.discard(request_id)
+            result = json.loads(data)
+        except ValueError:
+            raise ToolError("the runner's result is not valid JSON") from None
+        try:
+            dir_fd = self._open_dir(ACKS)
+            try:
+                os.close(os.open(request_id, os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd))
+            finally:
+                os.close(dir_fd)
+        except (OSError, ToolError) as exc:  # the runner expires unacknowledged results on its own; say so
+            errno = getattr(exc, "errno", None)
+            result = {**result, "ack_error": f"errno {errno}" if errno else "ack dir unusable"} \
+                if isinstance(result, dict) else result
+        self.mine.pop(request_id, None)
         return result
 
     def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -184,10 +216,16 @@ class Server:
             return self._read_hashed(args.get("path"))
         if name == "request_status":
             request_id = args.get("request_id")
-            if request_id not in self.mine:
+            if not isinstance(request_id, str) or request_id not in self.mine:
                 raise ToolError("unknown request_id for this server (only ids it queued, and not yet answered)")
-            result = self._poll(str(request_id))
-            return result if result is not None else {"request_id": request_id, "status": "queued"}
+            result = self._poll(request_id)
+            if result is not None:
+                return result
+            if time.monotonic() - self.mine[request_id] > LOST_AFTER_SECONDS:
+                self.mine.pop(request_id, None)
+                raise ToolError("no result arrived in time (the runner expires unread results); check the "
+                                "ledger with the orchestrator before retrying")
+            return {"request_id": request_id, "status": "queued"}
         nonce = args.get("dispatch")
         if name == "write_file":
             artifact = {"kind": "change-proposal", "dispatch": nonce, "path": args.get("path"),
@@ -208,34 +246,49 @@ class Server:
             artifact["stdin_from_content"] = {"path": args.get("stdin_path"), "content": args.get("stdin_content")}
         return self._submit({"kind": "run-request", "artifact": artifact})
 
+    @staticmethod
+    def _denied(rel: str) -> bool:
+        for part in Path(rel).parts:
+            low = part.lower()
+            if low in DENY_ALLOWED:
+                continue
+            if (low in DENY_PARTS or low in DENY_NAMES or low.endswith(DENY_SUFFIXES)
+                    or low.startswith(DENY_PREFIXES) or any(i in low for i in DENY_INFIXES)):
+                return True
+        return False
+
     def _read_hashed(self, rel: Any) -> dict[str, Any]:
         if not isinstance(rel, str) or not rel or "\0" in rel or rel.startswith(("/", "~")):
             raise ToolError("path must be a relative path inside the project")
-        parts = Path(rel).parts
-        for part in parts:
-            low = part.lower()
-            if (low in DENY_PARTS or low in DENY_NAMES or low.endswith(DENY_SUFFIXES)
-                    or low.startswith(DENY_PREFIXES)) and low not in (".env.example", ".env.sample", ".env.template"):
-                raise ToolError(f"{rel} is not readable through this server")
         real = os.path.realpath(self.root / rel)
         if not (real == str(self.root) or real.startswith(str(self.root) + os.sep)):
             raise ToolError("path resolves outside the project")
+        resolved = os.path.relpath(real, self.root)
+        # Checked on the requested path AND the resolved one: an in-project link (notes.txt -> .env) is refused.
+        if self._denied(rel) or self._denied(resolved):
+            raise ToolError(f"{rel} is not readable through this server")
         try:
-            fd = os.open(real, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            before = os.lstat(real)
         except FileNotFoundError:
             return {"path": rel, "exists": False, "base_sha256": "absent"}
+        if not stat_mod.S_ISREG(before.st_mode):
+            raise ToolError(f"{rel} is not a regular file")
+        try:
+            fd = os.open(real, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         except OSError as exc:
-            raise ToolError(f"cannot open {rel}: {exc}") from exc
+            raise ToolError(f"cannot open {rel} (errno {exc.errno})") from None
         with os.fdopen(fd, "rb") as fh:
-            if not stat_mod.S_ISREG(os.fstat(fh.fileno()).st_mode):
-                raise ToolError(f"{rel} is not a regular file")
+            opened = os.fstat(fh.fileno())
+            # The file opened must be the one checked: a parent swapped for a link in between is refused.
+            if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino) or not stat_mod.S_ISREG(opened.st_mode):
+                raise ToolError(f"{rel} changed while it was being read; retry")
             data = fh.read(READ_MAX_BYTES + 1)
         if len(data) > READ_MAX_BYTES:
             raise ToolError(f"{rel} is over {READ_MAX_BYTES} bytes; this server reads whole files only up to that")
         try:
             text = data.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ToolError(f"{rel} is not UTF-8 text") from exc
+        except UnicodeDecodeError:
+            raise ToolError(f"{rel} is not UTF-8 text") from None
         return {"path": rel, "exists": True, "content": text, "base_sha256": hashlib.sha256(data).hexdigest(),
                 "bytes": len(data)}
 
