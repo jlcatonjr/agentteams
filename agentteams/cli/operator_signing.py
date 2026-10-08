@@ -689,6 +689,54 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]], *,
     return 0
 
 
+def sign_mcp_direct_grant(record: dict, *, confirm_sha256: str | None = None,
+                          allow_checkout: bool = False) -> tuple[dict, bytes] | None:
+    """Sign an MCP direct-write grant record with the operator's Ed25519 key (R5), through the operator flow.
+
+    Same contract as :func:`sign_grant`: env and key-file presence, pre-sign integrity and install location are
+    checked with the key unread; the full record is displayed with its review digest and signed only on a confirmed
+    digest (a terminal y/N, else an exact ``--confirm-review-sha256``); then the key is read once, the record
+    signed, and the matching public key derived for the operator verify-key store.
+
+    Args:
+        record: The unsigned grant (every field ``mcp_direct_grants`` binds).
+        confirm_sha256: ``--confirm-review-sha256``; None prompts on a terminal.
+        allow_checkout: ``--allow-checkout-signing``.
+
+    Returns:
+        ``(signed record, public key PEM bytes)``, or None after printing why nothing was signed.
+    """
+    from agentteams import mcp_direct_grants as G
+
+    spoof = _spoofing_problem(record, "grant")
+    if spoof:
+        print(f"Error: refusing to sign: {spoof}. The key was not read.", file=sys.stderr)
+        return None
+    preflight = _signing_preflight([Path.cwd().resolve()], allow_checkout)
+    if preflight is None:
+        return None
+    keyfile, _ = preflight
+    print("About to sign an MCP direct-write grant (the agent's writes will land without the orchestrator's "
+          "approval, within these bounds):")
+    for name, value in record.items():
+        print(f"  {name:<16}: {value!r}")
+    digest = review_digest("mcp-direct-grant", record, Path.cwd(), str(record.get("key_id", "")))
+    if not _confirm(digest, confirm_sha256):
+        return None
+    private_pem = _read_operator_private_key(keyfile)
+    if private_pem is None:
+        return None
+    try:
+        from cryptography.hazmat.primitives import serialization  # agentteams[signing]
+
+        public = serialization.load_pem_private_key(private_pem.encode(), password=None).public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        return G.sign_record(record, private_pem), public
+    except (ImportError, RuntimeError, ValueError, TypeError) as exc:
+        print(f"Error: cannot sign with the operator key: {exc}", file=sys.stderr)
+        return None
+
+
 __all__ = [
     "GRANT_SPEC_REQUIRED",
     "KEYFILE_ENV",

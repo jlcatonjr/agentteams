@@ -864,7 +864,10 @@ for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` wai
 ### `--sign-mcp-direct-grant AGENT`
 
 Operator only (R5); run it outside every agent session. It signs a direct-write grant for `AGENT`, whose brief
-`mcp_grants` entry must ask for `approval: "direct"`. Use `--private-key PEM` and `--key-id ID`.
+`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
+with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
+confirmed: a terminal y/N, or `--confirm-review-sha256`.
 - **What it binds:** the brief's current tools, write scopes and gates, the installed server's hash, an expiry
   (`--grant-days`, 1–30, default 7) and a write cap (`--max-writes`, 1–500, default 50).
 - **Checks:** it refuses a grant with no gate and directory-wide scopes, and verifies the grant before saving it.
@@ -881,10 +884,9 @@ Read-only (R5). Lists the operator's grants for `--project` and whether each ver
 
 Operator only (R5). Removes `AGENT`'s grant. Restart the runner.
 
-### `--private-key PEM`, `--key-id ID`, `--grant-days N`, `--max-writes N`
+### `--key-id ID`, `--grant-days N`, `--max-writes N`
 
-With `--sign-mcp-direct-grant`: the operator's Ed25519 private key, its id, the grant's lifetime in days, and its
-write cap.
+With `--sign-mcp-direct-grant`: the operator key's id, the grant's lifetime in days, and its write cap.
 
 ### `--list-staged`
 

@@ -69,10 +69,28 @@ def operator_key(tmp_path):
     return path
 
 
+@pytest.fixture(autouse=True)
+def _operator_flow(monkeypatch):
+    """The operator signing flow, with its interactive and location gates stubbed (the digest review is the
+    operator's; these tests cover what is signed and checked)."""
+    from agentteams.cli import operator_signing as O
+
+    monkeypatch.setattr(O, "presign_integrity_check", lambda: True)
+    monkeypatch.setattr(O, "_location_gate", lambda roots, allow: False)
+    monkeypatch.setattr(O, "_confirm", lambda digest, confirm: True)
+
+
 def _sign(root, key, agent="producer", **extra):
-    args = argparse.Namespace(sign_mcp_direct_grant=agent, private_key=str(key), key_id="op1", grant_days=7,
-                              max_writes=3, description=str(root / "brief.json"), project=str(root), **extra)
-    return C.run_sign_mcp_direct_grant(args)
+    import os
+
+    os.environ["AGENTTEAMS_DECISION_ED25519_KEYFILE"] = str(key)
+    try:
+        args = argparse.Namespace(sign_mcp_direct_grant=agent, key_id="op1", grant_days=7, max_writes=3,
+                                  confirm_review_sha256=None, allow_checkout_signing=False,
+                                  description=str(root / "brief.json"), project=str(root), **extra)
+        return C.run_sign_mcp_direct_grant(args)
+    finally:
+        os.environ.pop("AGENTTEAMS_DECISION_ED25519_KEYFILE", None)
 
 
 def _policy(root):
@@ -261,3 +279,12 @@ def test_apply_direct_requires_a_grant(project):
 
     with pytest.raises(P.ProposalError, match="needs a verified grant"):
         S.apply_direct({"kind": "change-proposal"}, root=project, policy=_policy(project), grant=None)
+
+
+def test_signing_refuses_without_a_confirmed_digest(project, operator_key, monkeypatch):
+    """Through the operator flow: nothing is signed or saved unless the review digest is confirmed."""
+    from agentteams.cli import operator_signing as O
+
+    monkeypatch.setattr(O, "_confirm", lambda digest, confirm: False)
+    assert _sign(project, operator_key) == 1
+    assert not G.grants_file_for(project).exists()

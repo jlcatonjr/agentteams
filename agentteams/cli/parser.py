@@ -1070,16 +1070,16 @@ def _build_parser() -> argparse.ArgumentParser:
                             help=f"Orchestrator-only-writes (R3): {text}. Goes through the runner (--serve-requests).")
     parser.add_argument("--sign-mcp-direct-grant", metavar="AGENT", dest="sign_mcp_direct_grant", default=None,
                         help="Operator-only (R5): sign a direct-write grant for AGENT (whose mcp_grants entry asks for "
-                             "approval 'direct') with --private-key/--key-id, binding the brief's current tools, scopes "
-                             "and gates; saved outside the project. Run outside every agent session; restart the runner.")
+                             "approval 'direct') with the operator key (AGENTTEAMS_DECISION_ED25519_KEYFILE) and --key-id, "
+                             "binding the brief's current tools, scopes and gates; shown for review, signed on a confirmed "
+                             "digest (--confirm-review-sha256), saved outside the project. Run outside every agent "
+                             "session; restart the runner.")
     parser.add_argument("--list-mcp-direct-grants", action="store_true", dest="list_mcp_direct_grants",
                         default=False, help="Read-only (R5): the operator's direct-write grants and whether each verifies.")
     parser.add_argument("--revoke-mcp-direct-grant", metavar="AGENT", dest="revoke_mcp_direct_grant", default=None,
                         help="Operator-only (R5): remove AGENT's direct-write grant. Restart the runner.")
-    parser.add_argument("--private-key", metavar="PEM", dest="private_key", default=None,
-                        help="With --sign-mcp-direct-grant: the operator's Ed25519 private key file.")
     parser.add_argument("--key-id", metavar="ID", dest="key_id", default=None,
-                        help="With --sign-mcp-direct-grant: the key's id (its public half is installed under "
+                        help="With --sign-mcp-direct-grant: the operator key's id (its public half is installed under "
                              "~/.config/agentteams/verify-keys/).")
     parser.add_argument("--grant-days", metavar="N", dest="grant_days", type=int, default=None,
                         help="With --sign-mcp-direct-grant: days until the grant expires (1-30; default 7).")

@@ -99,7 +99,7 @@ def test_ungranted_agents_are_unchanged(renders, framework):
     granted_dir, ext = _agents(renders[(framework, True)], framework)
     plain_dir, _ = _agents(renders[(framework, False)], framework)
     def body(path: Path) -> str:  # generation timestamps (e.g. the threat-intel snapshot) differ between renders
-        return re.sub(r"Generated at: `[^`]*`", "", path.read_text())
+        return re.sub(r"(Generated at: `[^`]*`|\d+(?:\.\d+)? days old|age_hours=[\d.]+)", "", path.read_text())
 
     differ = sorted(p.name for p in granted_dir.glob(f"*{ext}")
                     if (plain_dir / p.name).exists() and body(p) != body(plain_dir / p.name))

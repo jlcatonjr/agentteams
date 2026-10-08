@@ -5,7 +5,7 @@
 
 - Modules mapped: **232**
 - Packages: **9**
-- Internal import edges: **617**
+- Internal import edges: **619**
 - Distinct external dependencies: **7**
 
 ---
@@ -99,8 +99,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.itest_tripwire` | — | `agentteams.cli.standalone_modes` |
 | `agentteams.cli.json_mode` | — | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.cli.management_directives` | `agentteams.atomicio`, `agentteams.cli.governance_targets`, `agentteams.cli.signed_ledger` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.effect_classifier`, `agentteams.cli.generate_helpers` |
-| `agentteams.cli.mcp_grant_commands` | `agentteams.atomicio`, `agentteams.ingest`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy` | `agentteams.cli.app` |
-| `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity` | `agentteams.cli.commands`, `agentteams.cli.grant_commands` |
+| `agentteams.cli.mcp_grant_commands` | `agentteams.atomicio`, `agentteams.cli.operator_signing`, `agentteams.ingest`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy` | `agentteams.cli.app` |
+| `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity`, `agentteams.mcp_direct_grants` | `agentteams.cli.commands`, `agentteams.cli.grant_commands`, `agentteams.cli.mcp_grant_commands` |
 | `agentteams.cli.output_target` | `agentteams.backup`, `agentteams.drift` | `agentteams.cli.generate` |
 | `agentteams.cli.package_switch` | `agentteams.cli.security_gate`, `agentteams.security_refs`, `agentteams.team_package` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.parser` | `agentteams`, `agentteams.capability_hints`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.backup_switch`, `agentteams.cli.branch_switch`, `agentteams.cli.fleet_switch`, `agentteams.cli.goose_switch`, `agentteams.cli.package_switch`, `agentteams.cli.parser_validate`, `agentteams.cli.sync_switch`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.mcp_servers`, `agentteams.source_provenance` | `agentteams.cli.app` |
@@ -194,7 +194,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.manifest_format` | `agentteams.frameworks.registry` | `agentteams.analyze` |
 | `agentteams.mcp_catalog` | `agentteams.codex_mcp_emit`, `agentteams.frameworks.goose`, `agentteams.mcp_emit` | `agentteams.analyze`, `agentteams.cli.artifacts` |
 | `agentteams.mcp_detect` | `agentteams.mcp_need`, `agentteams.write_policy` | `agentteams.analyze` |
-| `agentteams.mcp_direct_grants` | `agentteams.cli.signed_ledger`, `agentteams.confinement`, `agentteams.frameworks._sandbox_emit`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.mcp_grant_commands`, `agentteams.proposal_runner`, `agentteams.proposal_staging` |
+| `agentteams.mcp_direct_grants` | `agentteams.cli.signed_ledger`, `agentteams.confinement`, `agentteams.frameworks._sandbox_emit`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.operator_signing`, `agentteams.proposal_runner`, `agentteams.proposal_staging` |
 | `agentteams.mcp_emit` | `agentteams.atomicio` | `agentteams.analyze`, `agentteams.cli.artifacts`, `agentteams.codex_mcp_emit`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.mcp_catalog` |
 | `agentteams.mcp_need` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.liaison_logs`, `agentteams.mcp_detect`, `agentteams.mcp_need_report` |
 | `agentteams.mcp_need_report` | `agentteams.mcp_need` | `agentteams.cli.app` |
@@ -1083,13 +1083,12 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.atomicio",
+        "agentteams.cli.operator_signing",
         "agentteams.ingest",
         "agentteams.mcp_direct_grants",
         "agentteams.proposal_policy"
       ],
-      "external": [
-        "cryptography"
-      ],
+      "external": [],
       "repo_local": []
     },
     "agentteams.cli.operator_signing": {
@@ -1105,9 +1104,12 @@ digraph "agentteams architecture" {
         "agentteams.cli.signer_location",
         "agentteams.frameworks._sandbox_emit",
         "agentteams.git_exec",
-        "agentteams.integrity"
+        "agentteams.integrity",
+        "agentteams.mcp_direct_grants"
       ],
-      "external": [],
+      "external": [
+        "cryptography"
+      ],
       "repo_local": []
     },
     "agentteams.cli.output_target": {
@@ -4035,6 +4037,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.mcp_grant_commands",
+      "target": "agentteams.cli.operator_signing"
+    },
+    {
+      "source": "agentteams.cli.mcp_grant_commands",
       "target": "agentteams.ingest"
     },
     {
@@ -4080,6 +4086,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.operator_signing",
       "target": "agentteams.integrity"
+    },
+    {
+      "source": "agentteams.cli.operator_signing",
+      "target": "agentteams.mcp_direct_grants"
     },
     {
       "source": "agentteams.cli.output_target",
