@@ -73,6 +73,9 @@ class Policy:
     #: R2 (mcp-mediated-agent-writes): agents that write and execute only through the ``agentteams_runner`` MCP
     #: server. The runner refuses their artifacts on the orchestrator's queue. Populated from the brief's grants.
     mcp_agents: frozenset[str] = field(default_factory=frozenset)
+    #: R3/R5: agents whose ``direct`` grant is backed by a verified operator-signed record (populated by R5's
+    #: grant verification; empty until then, so ``apply-direct`` refuses everyone).
+    direct_agents: frozenset[str] = field(default_factory=frozenset)
 
 
 # --- policy -------------------------------------------------------------------------------------

@@ -861,6 +861,30 @@ policy (`--description`).
 Under the switch, `--issue-dispatch`, `--apply-proposal`, `--run-request` and `--verify-proposal-ledger` queue
 for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` waits again for one request.
 
+### `--list-staged`
+
+Orchestrator-only writes (R3). Lists the writes agents have staged through the `agentteams_runner` MCP server:
+id, agent, kind, path, size, gates and expiry. Metadata only. Goes through the runner.
+
+### `--show-staged SID`
+
+Prints one staged write in full, content included. Use it to read a write on cause, for example when no gate
+covers its path or it sits next to a protected path.
+
+### `--apply-staged SID`
+
+Approves a staged write. The runner re-runs every check and gate against the file as it is now, with identity
+taken from the staged record, then applies it and ledgers `apply-staged`. A stale base or a refusing gate leaves
+the record in place.
+
+### `--reject-staged SID`
+
+Rejects a staged write and ledgers `reject-staged`. Add `--reject-reason TEXT` to record why.
+
+### `--reject-reason TEXT`
+
+With `--reject-staged`: the reason recorded in the ledger.
+
 ### `--verify-proposal-ledger`
 
 Read-only. Verifies the signatures, hash chain and signed head anchor of `.agentteams/proposal-ledger.jsonl`

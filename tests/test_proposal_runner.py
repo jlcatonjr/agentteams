@@ -382,12 +382,11 @@ def test_mcp_request_must_come_from_the_nonces_own_agent(runner):
     nonce = P.issue_dispatch(runner.root, "producer")
     art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py",
            "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest(), "content": "x = 2\n", "rationale": "r"}
-    stolen = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": "reviewer"}, "mcp")
+    stolen = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "reviewer"}, "mcp")
     assert not stolen["ok"] and stolen["error"] == P._CHANNEL_REFUSAL
-    assert (runner.root / "src/a.py").read_text() == "x = 1\n"
-    own = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
-    assert own["ok"], own
-    assert (runner.root / "src/a.py").read_text() == "x = 2\n"
+    own = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert own["ok"] and own["result"]["staged"], own
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n"  # staged, not written
 
 
 def test_an_mcp_agent_cannot_act_on_the_orchestrators_queue(runner):
@@ -412,7 +411,7 @@ def test_the_mcp_channel_gives_no_nonce_oracle(runner):
     for nonce, via in (("0" * 32, "producer"), ("not-a-nonce", "producer"), (live, "reviewer")):
         art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "base_sha256": "absent",
                "content": "x\n", "rationale": "r"}
-        result = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": via}, "mcp")
+        result = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": via}, "mcp")
         answers.add(result["error"])
     assert answers == {P._CHANNEL_REFUSAL}
 
@@ -420,3 +419,153 @@ def test_the_mcp_channel_gives_no_nonce_oracle(runner):
 def test_mcp_requests_must_name_their_agent(runner):
     result = _roundtrip_on(runner, {"kind": "run-request", "artifact": {}}, "mcp")
     assert not result["ok"] and "via_agent" in result["error"]
+
+
+# --- R3 (mcp-mediated-agent-writes): staged and direct writes ------------------------------------------------
+
+
+def _stage_via_mcp(runner, content="x = 2\n", kind="change-proposal", agent="producer"):
+    nonce = P.issue_dispatch(runner.root, agent)
+    art = {"kind": kind, "dispatch": nonce, "path": "src/a.py", "rationale": "r",
+           "base_sha256": hashlib.sha256((runner.root / "src/a.py").read_bytes()).hexdigest()}
+    if kind == "change-proposal":
+        art["content"] = content
+    return _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": agent}, "mcp")
+
+
+def test_staged_write_lands_only_when_the_orchestrator_approves(runner):
+    receipt = _stage_via_mcp(runner)["result"]
+    sid = receipt["sid"]
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n"
+    listed = _roundtrip_on(runner, {"kind": "list-staged"}, "orchestrator")["result"]["staged"]
+    assert [e["sid"] for e in listed] == [sid] and "artifact" not in listed[0]
+    shown = _roundtrip_on(runner, {"kind": "show-staged", "sid": sid}, "orchestrator")["result"]
+    assert shown["artifact"]["content"] == "x = 2\n" and "dispatch" not in shown["artifact"]
+    applied = _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid}, "orchestrator")
+    assert applied["ok"] and applied["result"]["agent"] == "producer"
+    assert (runner.root / "src/a.py").read_text() == "x = 2\n"
+    ledger = (runner.root / P.LEDGER_REL).read_text()
+    assert "stage-proposal" in ledger and "apply-staged" in ledger and P.verify_ledger(runner.root) == []
+
+
+def test_approval_rechecks_the_base(runner):
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    (runner.root / "src/a.py").write_text("x = 99\n")  # changed after staging
+    applied = _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid}, "orchestrator")
+    assert not applied["ok"] and "stale base" in applied["error"]
+    assert (runner.root / "src/a.py").read_text() == "x = 99\n"
+
+
+def test_reject_drops_the_record(runner):
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    rejected = _roundtrip_on(runner, {"kind": "reject-staged", "sid": sid, "reason": "no"}, "orchestrator")
+    assert rejected["ok"] and rejected["result"]["rejected"]
+    again = _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid}, "orchestrator")
+    assert not again["ok"] and "no staged proposal" in again["error"]
+
+
+def test_a_staged_deletion_waits_for_approval(runner):
+    sid = _stage_via_mcp(runner, kind="delete-proposal")["result"]["sid"]
+    assert (runner.root / "src/a.py").exists()
+    assert _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid}, "orchestrator")["ok"]
+    assert not (runner.root / "src/a.py").exists()
+
+
+def test_approvals_are_the_orchestrators_alone(runner):
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    for kind in ("apply-staged", "reject-staged", "list-staged", "show-staged"):
+        result = _roundtrip_on(runner, {"kind": kind, "sid": sid, "via_agent": "producer"}, "mcp")
+        assert not result["ok"] and "MCP channel can't queue" in result["error"]
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n"
+
+
+def test_stage_and_direct_come_only_from_the_mcp_channel(runner):
+    nonce = P.issue_dispatch(runner.root, "producer")
+    art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": "y\n",
+           "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest()}
+    for kind in ("stage-proposal", "apply-direct"):
+        result = _roundtrip_on(runner, {"kind": kind, "artifact": art}, "orchestrator")
+        assert not result["ok"] and "agentteams_runner server" in result["error"]
+
+
+def test_direct_needs_a_verified_grant_and_never_deletes(runner):
+    nonce = P.issue_dispatch(runner.root, "producer")
+    base = hashlib.sha256(b"x = 1\n").hexdigest()
+    art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": "y\n",
+           "base_sha256": base}
+    refused = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert not refused["ok"] and "no verified direct-write grant" in refused["error"]
+    runner.policy.direct_agents = frozenset({"producer"})
+    done = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert done["ok"] and (runner.root / "src/a.py").read_text() == "y\n"
+    delete = {"kind": "delete-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r",
+              "base_sha256": hashlib.sha256(b"y\n").hexdigest()}
+    refused = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": delete, "via_agent": "producer"}, "mcp")
+    assert not refused["ok"] and "never applied directly" in refused["error"]
+    assert (runner.root / "src/a.py").exists()
+
+
+def test_staging_spends_the_use_and_approval_does_not(runner, monkeypatch):
+    nonce = P.issue_dispatch(runner.root, "producer", max_uses=1)
+    art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": "y\n",
+           "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest()}
+    sid = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert sid["ok"]
+    again = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert not again["ok"]  # the one use went to staging
+    assert _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid["result"]["sid"]}, "orchestrator")["ok"]
+
+
+def test_staged_cli_queues_the_right_requests(monkeypatch, capsys):
+    from agentteams.cli import proposal_commands as PC
+    from agentteams.cli.app import _build_parser
+
+    sent = []
+
+    def fake(args, label, request):
+        sent.append(request)
+        return 0, ({"staged": []} if request["kind"] == "list-staged" else {"path": "src/a.py", "agent": "producer"})
+
+    monkeypatch.setattr(PC, "_queued", fake)
+    sid = "a" * 32
+    for argv in (["--list-staged"], ["--show-staged", sid], ["--apply-staged", sid],
+                 ["--reject-staged", sid, "--reject-reason", "nope"]):
+        assert PC.run_staged(_build_parser().parse_args(argv)) == 0
+    assert [r["kind"] for r in sent] == ["list-staged", "show-staged", "apply-staged", "reject-staged"]
+    assert sent[3]["reason"] == "nope" and all(r.get("sid") in (None, sid) for r in sent)
+
+
+@pytest.mark.parametrize("tamper", ["content", "agent", "path", "unsigned", "expiry"])
+def test_a_tampered_staged_record_is_refused(runner, tamper):
+    """R3 review: the record is signed with the runner's key; any swap between staging and approval is refused."""
+    from agentteams import proposal_staging as S
+
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    path = runner.root / S.STAGED_REL / f"{sid}.json"
+    record = json.loads(path.read_text())
+    if tamper == "content":
+        record["artifact"]["content"] = "evil\n"
+    elif tamper == "agent":
+        record["agent"] = "reviewer"
+    elif tamper == "path":
+        record["path"] = record["artifact"]["path"] = "src/b.py"
+    elif tamper == "unsigned":
+        record.pop("mac")
+    else:
+        record["expires"] = "not-a-date"
+    path.write_text(json.dumps(record))
+    result = _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid}, "orchestrator")
+    assert not result["ok"], tamper
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n" and not (runner.root / "src/b.py").exists()
+
+
+def test_expired_records_are_purged_on_listing(runner):
+    from agentteams import proposal_staging as S
+
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    path = runner.root / S.STAGED_REL / f"{sid}.json"
+    record = json.loads(path.read_text())
+    record["expires"] = "2000-01-01T00:00:00+00:00"
+    path.write_text(json.dumps(record))
+    assert _roundtrip_on(runner, {"kind": "list-staged"}, "orchestrator")["result"]["staged"] == []
+    assert not path.exists() and "expire-staged" in (runner.root / P.LEDGER_REL).read_text()

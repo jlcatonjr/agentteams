@@ -49,9 +49,13 @@ LOCK_REL = ".agentteams/runner.lock"
 HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 
 #: Request kinds the runner serves. Commands and gates run confined (P4b).
-KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger")
-#: The kinds the MCP channel may queue. Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
-MCP_KINDS = ("apply-proposal", "run-request")
+KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger",
+         "stage-proposal", "apply-direct", "apply-staged", "reject-staged", "list-staged", "show-staged")
+#: The kinds the MCP channel may queue: a write is staged (or direct, with a verified signed grant), a command runs.
+#: Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
+MCP_KINDS = ("stage-proposal", "apply-direct", "run-request")
+#: Kinds only the MCP channel may queue (the orchestrator applies its own writes with apply-proposal).
+MCP_ONLY_KINDS = ("stage-proposal", "apply-direct")
 #: Request directory -> channel.
 CHANNELS = {REQUESTS_REL: "orchestrator", MCP_REQUESTS_REL: "mcp"}
 REQUEST_MAX_BYTES = 2 * 1024 * 1024
@@ -283,6 +287,8 @@ class Runner:
             if not (isinstance(via, str) and via):
                 raise RunnerError("an MCP-channel request must name its server instance's agent (via_agent)")
             return {"expect_agent": via}
+        if request.get("kind") in MCP_ONLY_KINDS:
+            raise RunnerError(f"{request.get('kind')!r} comes only from an agent's agentteams_runner server")
         return {"refuse_agents": self.policy.mcp_agents}
 
     def _handle(self, request: dict[str, Any], channel: str = "orchestrator") -> dict[str, Any]:
@@ -299,7 +305,26 @@ class Runner:
                                  dry_run=bool(request.get("dry_run")), confine=True, timeout_cap=cap, **ident)
         if kind == "verify-ledger":
             return {"problems": P.verify_ledger(self.root)}
+        if kind in ("stage-proposal", "apply-direct", "apply-staged", "reject-staged", "list-staged", "show-staged"):
+            return self._handle_staging(request, kind, ident)
         raise RunnerError("unknown request kind")
+
+    def _handle_staging(self, request: dict[str, Any], kind: str, ident: dict[str, Any]) -> Any:
+        from agentteams import proposal_staging as S
+
+        if kind == "stage-proposal":
+            return S.stage_proposal(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
+                                    expect_agent=ident.get("expect_agent"))
+        if kind == "apply-direct":
+            return S.apply_direct(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
+                                  expect_agent=ident.get("expect_agent"))
+        if kind == "apply-staged":
+            return S.apply_staged(request.get("sid"), root=self.root, policy=self.policy, confine=True)
+        if kind == "reject-staged":
+            return S.reject_staged(request.get("sid"), root=self.root, reason=str(request.get("reason") or ""))
+        if kind == "list-staged":
+            return {"staged": S.list_staged(self.root)}
+        return S.show_staged(request.get("sid"), root=self.root)
 
     def _open_session_dir(self, rel: str) -> int:
         """Open a session-writable queue dir without following a symlink anywhere in its last component."""

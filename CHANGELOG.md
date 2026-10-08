@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (staged and direct agent writes through the runner, phase R3)
+
+- **New `agentteams/proposal_staging.py`** (integrity-pinned). An agent writing through the coming
+  `agentteams_runner` MCP server **stages** each write by default. The runner runs every check and gate, counts a
+  nonce use, and stores the write, without its nonce, under `.agentteams/staged/`. The orchestrator approves with
+  `--apply-staged SID`, which re-runs every check against the file as it is now with identity from the record, or
+  rejects with `--reject-staged SID`. `--list-staged` and `--show-staged` let it read a write on cause.
+- **Staged records are signed with the runner's ledger key.** Approval refuses a record whose signature, binding,
+  content hash or expiry doesn't hold, so a same-user process can't swap a write between staging and approval
+  (@security R3 review).
+- **`apply-direct`** applies at once, only for agents in `policy.direct_agents`, which R5's signed-grant
+  verification will populate (empty until then). A deletion is never direct (C-5).
+- **One shared body.** `proposals.apply_proposal` and every staging mode run through `proposals._apply`, so the
+  checks can't diverge.
+- **The MCP channel's kinds are now `stage-proposal`, `apply-direct` and `run-request`.** Approvals are the
+  orchestrator's alone.
+
 ### feat (runner channels and identity binding for MCP-mediated writes, phase R2)
 
 - **The runner serves two queue directories**, and reads each request's channel from the one it arrived in:
