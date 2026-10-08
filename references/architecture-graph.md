@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **233**
+- Modules mapped: **235**
 - Packages: **9**
-- Internal import edges: **621**
+- Internal import edges: **628**
 - Distinct external dependencies: **7**
 
 ---
@@ -24,10 +24,10 @@ Inter-package import dependencies (module-level detail in the tables below).
 | --- | --- | --- |
 | `agentteams` | 129 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 42 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
-| `agentteams.data` | 2 | — |
+| `agentteams.data` | 3 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
-| `agentteams.frameworks` | 24 | `agentteams` |
+| `agentteams.frameworks` | 25 | `agentteams` |
 | `agentteams.mcp_servers` | 3 | `agentteams`, `agentteams.cli` |
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 9 | — |
@@ -124,6 +124,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.control_plane_io` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync`, `agentteams.projection_marker` |
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry` | `agentteams.cli.commands` |
 | `agentteams.data.agentteams-runner-mcp` | — | — |
+| `agentteams.data.codex-role-gate` | — | — |
 | `agentteams.data.goose-readfs-mcp` | — | — |
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.frameworks.structural_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
@@ -149,7 +150,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.framework_research` | `agentteams.frameworks.format_spec` | `agentteams.cli.generate`, `agentteams.framework_conformance` |
 | `agentteams.frameworks` | — | — |
 | `agentteams.frameworks._agents_md_rules` | `agentteams.render` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.structural_merge` |
-| `agentteams.frameworks._codex_sandbox_emit` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots` | `agentteams.frameworks.codex` |
+| `agentteams.frameworks._codex_role_gate_emit` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.write_policy` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.codex` |
+| `agentteams.frameworks._codex_sandbox_emit` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.codex` |
 | `agentteams.frameworks._goose_sandbox_emit` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.host_features` | `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.goose` |
 | `agentteams.frameworks._linux_sandbox_emit` | — | `agentteams.cli.generate_helpers`, `agentteams.control_plane_io`, `agentteams.frameworks.base`, `agentteams.frameworks.codex` |
 | `agentteams.frameworks._prompt_root_protect` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude` |
@@ -158,18 +160,18 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.output_plan` |
 | `agentteams.frameworks.claude` | `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.base`, `agentteams.runner_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.registry` |
-| `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.fence_inject`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.learned_blocks` |
+| `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.fence_inject`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.learned_blocks` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.format_spec` | — | `agentteams.audit`, `agentteams.framework_research`, `agentteams.frameworks.copilot_vscode`, `agentteams.output_plan` |
 | `agentteams.frameworks.goose` | `agentteams.bridge_subagents_goose`, `agentteams.capability_map`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.runner_mcp`, `agentteams.write_policy` | `agentteams.audit`, `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry`, `agentteams.mcp_catalog` |
 | `agentteams.frameworks.goose_coordination` | `agentteams.frameworks.goose` | `agentteams.frameworks.goose` |
-| `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks.goose` |
+| `agentteams.frameworks.goose_docs` | `agentteams.capability_hints` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_recipe_emit` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_tool_scoping` |
 | `agentteams.frameworks.goose_recipe_merge` | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.structural_merge` |
 | `agentteams.frameworks.goose_recipe_read` | — | `agentteams.audit_agent_contract`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping` |
 | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` |
-| `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.goose`, `agentteams.proposal_runner` |
+| `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.goose`, `agentteams.proposal_runner` |
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose` | `agentteams.audit_types`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.grant_commands`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.interop`, `agentteams.manifest_format`, `agentteams.multi_sync`, `agentteams.output_plan`, `agentteams.redteam.instantiate`, `agentteams.redteam.sweep`, `agentteams.render`, `agentteams.stale_detector` |
 | `agentteams.frameworks.structural_merge` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` | `agentteams.emit` |
 | `agentteams.front_matter_merge` | — | `agentteams.audit_agent_contract`, `agentteams.fences`, `agentteams.front_matter_reconcile`, `agentteams.sync_classifier`, `agentteams.unfenced` |
@@ -277,7 +279,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.update_report` | — | `agentteams.cli.generate` |
 | `agentteams.user_regions` | — | `agentteams.emit`, `agentteams.project_notes` |
 | `agentteams.vscode_tasks` | — | `agentteams.cli.render_pipeline` |
-| `agentteams.write_policy` | — | `agentteams.analyze`, `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.mcp_detect` |
+| `agentteams.write_policy` | — | `agentteams.analyze`, `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.mcp_detect` |
 | `agentteams.yaml_frontmatter` | — | `agentteams.adopted_agents`, `agentteams.bridge_sources`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.front_matter_reconcile`, `agentteams.graph_inputs`, `agentteams.interop`, `agentteams.interop_helpers` |
 
 ---
@@ -1402,6 +1404,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.data.codex-role-gate": {
+      "package": "agentteams.data",
+      "path": "agentteams/data/codex-role-gate.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.data.goose-readfs-mcp": {
       "package": "agentteams.data",
       "path": "agentteams/data/goose-readfs-mcp.py",
@@ -1665,13 +1675,28 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.frameworks._codex_role_gate_emit": {
+      "package": "agentteams.frameworks",
+      "path": "agentteams/frameworks/_codex_role_gate_emit.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.frameworks._codex_sandbox_emit",
+        "agentteams.frameworks.goose_docs",
+        "agentteams.frameworks.goose_tool_scoping",
+        "agentteams.write_policy"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.frameworks._codex_sandbox_emit": {
       "package": "agentteams.frameworks",
       "path": "agentteams/frameworks/_codex_sandbox_emit.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.frameworks._codex_role_gate_emit",
         "agentteams.frameworks._goose_sandbox_emit",
-        "agentteams.frameworks._write_roots"
+        "agentteams.frameworks._write_roots",
+        "agentteams.frameworks.goose_tool_scoping"
       ],
       "external": [],
       "repo_local": []
@@ -1771,6 +1796,7 @@ digraph "agentteams architecture" {
         "agentteams.capability_map",
         "agentteams.fences",
         "agentteams.frameworks._agents_md_rules",
+        "agentteams.frameworks._codex_role_gate_emit",
         "agentteams.frameworks._codex_sandbox_emit",
         "agentteams.frameworks._linux_sandbox_emit",
         "agentteams.frameworks.agents_md",
@@ -4608,12 +4634,36 @@ digraph "agentteams architecture" {
       "target": "agentteams.render"
     },
     {
+      "source": "agentteams.frameworks._codex_role_gate_emit",
+      "target": "agentteams.frameworks._codex_sandbox_emit"
+    },
+    {
+      "source": "agentteams.frameworks._codex_role_gate_emit",
+      "target": "agentteams.frameworks.goose_docs"
+    },
+    {
+      "source": "agentteams.frameworks._codex_role_gate_emit",
+      "target": "agentteams.frameworks.goose_tool_scoping"
+    },
+    {
+      "source": "agentteams.frameworks._codex_role_gate_emit",
+      "target": "agentteams.write_policy"
+    },
+    {
+      "source": "agentteams.frameworks._codex_sandbox_emit",
+      "target": "agentteams.frameworks._codex_role_gate_emit"
+    },
+    {
       "source": "agentteams.frameworks._codex_sandbox_emit",
       "target": "agentteams.frameworks._goose_sandbox_emit"
     },
     {
       "source": "agentteams.frameworks._codex_sandbox_emit",
       "target": "agentteams.frameworks._write_roots"
+    },
+    {
+      "source": "agentteams.frameworks._codex_sandbox_emit",
+      "target": "agentteams.frameworks.goose_tool_scoping"
     },
     {
       "source": "agentteams.frameworks._goose_sandbox_emit",
@@ -4698,6 +4748,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks.codex",
       "target": "agentteams.frameworks._agents_md_rules"
+    },
+    {
+      "source": "agentteams.frameworks.codex",
+      "target": "agentteams.frameworks._codex_role_gate_emit"
     },
     {
       "source": "agentteams.frameworks.codex",

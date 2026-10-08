@@ -68,7 +68,12 @@ subagents and build-skills twins together.
   session's sandbox, or agentteams' launcher when Codex runs through
   `.codex/confined-run.example.sh`, governs every agent. Codex does not enforce
   Copilot/Claude tool grants, so declared tools can only be stated as a self-imposed
-  limit: per-role limits on Codex are instruction-level only.
+  limit: per-role limits on Codex are instruction-level only. Exception (2026-10-08, Phase 1b):
+  a PreToolUse hook receives `agent_type`/`agent_id` for a spawned agent's calls (none for the
+  top-level session), filled in by the runtime, so under `write_policy: "orchestrator-only"`
+  the generated role gate limits spawned agents to read-only tools. Project hooks run only when
+  trusted (`[hooks.state]` trusted_hash) or with `--dangerously-bypass-hook-trust`; a hook exit
+  of 2 blocks, exit 1 lets the call through.
 - **Reported, not re-verified here** (baseAgent research, 2026-09-29, citing
   `codex-rs/core/src/agents_md.rs`): untrusted projects skip project instruction
   files, and `project_root_markers` sets the walk root.

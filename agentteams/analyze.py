@@ -318,8 +318,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
             if not (sys.platform.startswith("linux") or sys.platform.startswith("darwin")):
                 raise ValueError('write_policy "orchestrator-only" on codex needs agentteams\' launcher, which is '
                                  f'emitted only on Linux and macOS (this host: {sys.platform})')
-            print("  \u2139  write_policy on codex: KEY CUSTODY ONLY, and only via .codex/confined-run.example.sh (not "
-                  "verifiable here); every role can write the project; per-role limits are instruction-level.",
+            print("  \u2139  write_policy on codex holds only via .codex/confined-run.example.sh (not verifiable here): "
+                  "the launcher masks the key; a generated role gate limits spawned agents to read-only tools.",
                   file=sys.stderr)
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
