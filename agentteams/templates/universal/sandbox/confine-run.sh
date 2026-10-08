@@ -44,7 +44,7 @@
 #   not something to auto-create). Existence is verified in the OS-independent block BEFORE OS
 #   dispatch, so a missing target is a clean exit-2, never a bwrap sandbox-init crash (D-3).
 #
-# CONTROL PLANE (F-4, 2026-09-30; Linux/bwrap branch only): inside every writable root (--scratch,
+# CONTROL PLANE (F-4, 2026-09-30 Linux/bwrap; macOS Seatbelt 2026-10-07): inside every writable root (--scratch,
 #   --writable, --coord-root) each EXISTING agentteams control-plane path (CONTROL_PLANE_REL below:
 #   the enforce_decision_signing switch, the gate hook, the verify-key store, the approver/manager
 #   rosters and management config (PR-D), the goose profile, and each team's build-log marker) is
@@ -63,9 +63,11 @@
 #   protect-if-present. Only .github/agents/* maps to a team: .github/workflows is never protected,
 #   and its self-bound ancestor .github stays writable. --protect PATH (repeatable) ro-binds an extra path,
 #   e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
-#   Status: mechanism-verified (raw bwrap probes), product-unverified. The macOS branch is unchanged.
+#   Status: mechanism-verified (raw bwrap probes), product-unverified. macOS (2026-10-07): the same set is
+#   collected and written into the Seatbelt profile AFTER the allows: (deny file-write* (subpath P)) for each
+#   protected path and (deny file-write* (literal A)) for each ancestor below a writable root (rename lock).
 #
-# --protect-prompt-roots (OPT-IN, follow-up #8 phase 2, 2026-10-01; Linux/bwrap branch only): also
+# --protect-prompt-roots (OPT-IN, follow-up #8 phase 2, 2026-10-01; Linux/bwrap, and macOS since 2026-10-07): also
 #   ro-bind each EXISTING prompt root (PROMPT_ROOTS_REL below: the files other harnesses read as
 #   instructions) under every writable root, with the same ancestor self-binds and symlink refusal
 #   (cp_real). Protect-if-present: an absent root is skipped, never required, never a die. A
@@ -144,7 +146,7 @@ PROTECT_PROMPT_ROOTS=0; PR_RO=()
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
 TEAM_MARKER_REL=references/build-log.json
 TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents )
-CP_ANC=(); CP_RO=()
+CP_ANC=(); CP_RO=(); CP_ROOTS=()
 # DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
 # launcher's environment by default: only these benign vars (when set) plus any --env-allow name and
 # any explicit --setenv VAR=VAL are passed. Everything else - crucially an operator signing-key path
@@ -233,11 +235,42 @@ OS="$(uname -s)"
 
 # ============================================================================================
 # F-4 control plane -> CP_ANC[] (ancestor self-binds) + CP_RO[] (read-only binds), appended to BW[].
+# GNU realpath (-e/-s/-m) on Linux; macOS's BSD realpath has none of those, so the macOS branch (bash 3.2
+# compatible) resolves with `cd -P` and checks the leaf for a symlink itself (2026-10-07).
+if realpath -e -- / >/dev/null 2>&1; then HAVE_GNU_REALPATH=1; else HAVE_GNU_REALPATH=0; fi
+phys_dir(){   # existing directory -> its physical absolute path (every symlink resolved); nonzero when missing
+  if [ "$HAVE_GNU_REALPATH" -eq 1 ]; then realpath -e -- "$1" 2>/dev/null; return; fi
+  ( cd -P -- "$1" 2>/dev/null && pwd -P )
+}
 cp_real(){   # realpath of an existing path; die (in the $(...) subshell - callers then exit 2) when it
   # is missing, or is (or passes through) a symlink. Never creates anything.
-  local r; r="$(realpath -e -- "$1" 2>/dev/null)" || die "control-plane path '$1' does not exist or does not resolve (fail-closed; never created)"
-  [ "$r" = "$(realpath -s -m -- "$1")" ] || die "control-plane path '$1' is or passes through a symlink (resolves to '$r'); refusing (fail-closed)"
+  local r d n in="$1"
+  while [ "${in%/}" != "$in" ] && [ "$in" != "/" ]; do in="${in%/}"; done   # a trailing / makes [ -L ] follow the link
+  set -- "$in"
+  if [ "$HAVE_GNU_REALPATH" -eq 1 ]; then
+    r="$(realpath -e -- "$1" 2>/dev/null)" || die "control-plane path '$1' does not exist or does not resolve (fail-closed; never created)"
+    [ "$r" = "$(realpath -s -m -- "$1")" ] || die "control-plane path '$1' is or passes through a symlink (resolves to '$r'); refusing (fail-closed)"
+  else
+    # Callers pass "<physical root>/<rel>", so the input is already its own logical form: any symlink on the
+    # way (the leaf, or a directory under the root) makes the physical path differ from it.
+    cp_present "$1" || die "control-plane path '$1' does not exist or does not resolve (fail-closed; never created)"
+    [ -L "$1" ] && die "control-plane path '$1' is or passes through a symlink; refusing (fail-closed)"
+    d="$(phys_dir "$(dirname -- "$1")")" || die "control-plane path '$1' does not exist or does not resolve (fail-closed; never created)"
+    r="$d/$(basename -- "$1")"
+    [ "$r" = "${1%/}" ] || die "control-plane path '$1' is or passes through a symlink (resolves to '$r'); refusing (fail-closed)"
+  fi
   case "$r" in *$'\n'*) die "control-plane path contains a newline: $1" ;; esac
+  # A protected regular file with a second hard link can be written through the alias, which no path-based
+  # rule (Seatbelt) or bind of the original path (bwrap) covers. Refuse; the operator removes the extra link.
+  if [ -f "$r" ]; then
+    n="$(ls -ld -- "$r" 2>/dev/null | awk '{print $2}')"
+    case "$n" in ''|*[!0-9]*) die "control-plane path '$r': cannot read its link count (fail-closed)" ;; esac
+    [ "$n" -le 1 ] || die "control-plane path '$r' has $n hard links; an alias elsewhere could write it. Remove the extra link(s) from OUTSIDE the sandbox, then retry (fail-closed)"
+  fi
+  if [ -d "$r" ]; then   # the same for every file inside a protected directory (verify keys, .claude, ...)
+    n="$(find "$r" -type f -links +1 -print 2>/dev/null | head -1)"
+    [ -z "$n" ] || die "control-plane file '$n' (inside '$r') has more than one hard link; an alias elsewhere could write it. Remove the extra link(s) from OUTSIDE the sandbox, then retry (fail-closed)"
+  fi
   printf '%s\n' "$r"
 }
 cp_present(){ [ -e "$1" ] || [ -L "$1" ]; }
@@ -309,10 +342,10 @@ codex_config_warn(){
     echo "confine-run: WARNING $(printf %q "$f") sets security-relevant Codex keys (${keys[*]}). It is read-only in this sandbox, but Codex run OUTSIDE this launcher honours it: review it, and confirm you (not a confined process) wrote it." >&2
   done
 }
-control_plane_binds() {
+control_plane_collect() {   # -> CP_RO[] (protected paths) + CP_ANC[] (their ancestors below a root); both OSes
   local roots=() prot=() anc=() r rel p a under t team
   for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"} ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do
-    [ -n "$r" ] && roots+=( "$(realpath -e -- "$r")" )
+    [ -n "$r" ] && { p="$(phys_dir "$r")" || die "writable root '$r' does not resolve"; roots+=( "$p" ); }
   done
   for r in "${roots[@]}"; do
     for t in "${TEAM_DIRS_REL[@]}"; do   # the marker itself: deleting it must not disable the check
@@ -353,6 +386,7 @@ control_plane_binds() {
     a="$(cp_real "$p")" || exit 2   # a missing --protect path is a die, never a mkdir
     prot+=( "$a" )
   done
+  CP_ROOTS=( ${roots[@]+"${roots[@]}"} )
   [ "${#prot[@]}" -gt 0 ] || return 0
   for p in "${prot[@]}"; do   # every ancestor strictly below a writable root
     a="$(dirname -- "$p")"
@@ -362,11 +396,19 @@ control_plane_binds() {
       anc+=( "$a" ); a="$(dirname -- "$a")"
     done
   done
-  # a parent sorts before its children (a prefix sorts first), so the self-binds go top-down
-  [ "${#anc[@]}" -gt 0 ] && mapfile -t CP_ANC < <(printf '%s\n' "${anc[@]}" | LC_ALL=C sort -u)
-  mapfile -t CP_RO < <(printf '%s\n' "${prot[@]}" | LC_ALL=C sort -u)
+  # a parent sorts before its children (a prefix sorts first), so the self-binds go top-down.
+  # `while read` rather than mapfile: the macOS branch must run under /bin/bash 3.2.
+  CP_ANC=(); CP_RO=()
+  if [ "${#anc[@]}" -gt 0 ]; then
+    while IFS= read -r a; do CP_ANC+=( "$a" ); done < <(printf '%s\n' "${anc[@]}" | LC_ALL=C sort -u)
+  fi
+  while IFS= read -r p; do CP_RO+=( "$p" ); done < <(printf '%s\n' "${prot[@]}" | LC_ALL=C sort -u)
+}
+control_plane_binds() {   # Linux: rename-lock ancestors with self-binds, then read-only binds
+  control_plane_collect
+  local a p
   for a in ${CP_ANC[@]+"${CP_ANC[@]}"}; do BW+=( --bind "$a" "$a" ); done
-  for p in "${CP_RO[@]}"; do BW+=( --ro-bind "$p" "$p" ); done
+  for p in ${CP_RO[@]+"${CP_RO[@]}"}; do BW+=( --ro-bind "$p" "$p" ); done
 }
 
 # ============================================================================================
@@ -444,6 +486,9 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
   local w; for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && reject_sbpl_meta "$(cd "$w" && pwd)"; done
   local c; for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do reject_sbpl_meta "$c"; done
   local m; for m in ${MASKED[@]+"${MASKED[@]}"}; do reject_sbpl_meta "$m"; done
+  # F-4 on macOS (2026-10-07): the same control-plane set the Linux branch ro-binds, from the same collector.
+  control_plane_collect
+  local cp; for cp in ${CP_RO[@]+"${CP_RO[@]}"} ${CP_ANC[@]+"${CP_ANC[@]}"} ${CP_ROOTS[@]+"${CP_ROOTS[@]}"}; do reject_sbpl_meta "$cp"; done
   {
     echo '(version 1)'
     echo '(allow default)'
@@ -452,6 +497,19 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
     echo '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr"))'
     for w in ${WRITABLES[@]+"${WRITABLES[@]}"}; do [ -n "$w" ] && echo "(allow file-write* (subpath \"$(cd "$w" && pwd)\"))"; done
     for c in ${COORD_RESOLVED[@]+"${COORD_RESOLVED[@]}"}; do echo "(allow file-write* (subpath \"$c\"))"; done
+    # Control plane, AFTER the allows (in SBPL the last matching rule wins): each protected path is
+    # write-denied as a subpath, and each ancestor below a writable root is write-denied as a literal, so it
+    # can't be renamed or removed to move the protected path away, while files can still be created in it.
+    for cp in ${CP_RO[@]+"${CP_RO[@]}"}; do echo "(deny file-write* (subpath \"$cp\"))"; done
+    for cp in ${CP_ANC[@]+"${CP_ANC[@]}"}; do echo "(deny file-write* (literal \"$cp\"))"; done
+    # Rename-lock every writable root and all its ancestors too: under an allowed subpath (/private/tmp,
+    # /private/var/folders) a root could otherwise be renamed away, its control plane written at the new
+    # path, and renamed back (a path-based deny follows the path, not the file). bwrap roots are mount points.
+    if [ "${#CP_RO[@]}" -gt 0 ]; then
+      for cp in ${CP_ROOTS[@]+"${CP_ROOTS[@]}"}; do
+        while [ -n "$cp" ] && [ "$cp" != "/" ]; do echo "(deny file-write* (literal \"$cp\"))"; cp="$(dirname -- "$cp")"; done
+      done
+    fi
     for m in ${MASKED[@]+"${MASKED[@]}"}; do echo "(deny file-read* (subpath \"$m\"))"; done
     # -- (i) SBPL setuid/setgid-exec restriction (compensating hardening, NOT a no-new-privs guarantee) --
     # SBPL cannot express the setuid BIT itself, so this is a BEST-EFFORT, NOT-EXHAUSTIVE denylist of

@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (launcher: control-plane protection on macOS, F-4 parity with Linux)
+
+- `sandbox/confine-run.sh` protected agentteams' control plane (the decision-signing switch, gate hook,
+  verify-key store, rosters, team marker, `--protect` and `--protect-prompt-roots` paths) only on Linux. On
+  macOS, a process run through the launcher could rewrite them inside a writable root. The macOS Seatbelt
+  profile now write-denies each of them after the allows. It rename-locks their ancestors, and also every
+  writable root and the root's own ancestors, so a root under `/private/tmp` can't be renamed away to reach its
+  control plane. It uses the same collector as Linux, ported to run under macOS's `/bin/bash` 3.2 and BSD
+  `realpath`.
+- Both platforms: a protected file with a second hard link, or any such file inside a protected directory, is
+  refused (an alias could write it), and a trailing
+  `/` no longer hides a symlinked `--protect` path.
+- Behaviour change on macOS: a team missing a required control-plane entry is refused (exit 2, "run agentteams
+  --update"), as on Linux.
+- Verified live on macOS: `mac-escape-tests.sh` Gate 8 (positive control included) and
+  `tests/test_launcher_macos_control_plane.py`.
+
 ### docs (templates: Rule 11 lessons from 2026-10-07)
 
 - The read-only auditor templates (adversarial, security, conflict-auditor, code-hygiene, technical-validator,
