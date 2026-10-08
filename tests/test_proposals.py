@@ -665,3 +665,29 @@ def test_a_grandchild_holding_the_pipes_cannot_hang_the_runner(project, monkeypa
     with pytest.raises(P.UndeclaredWritesError, match="timed out"):
         P.run_request(_req(root, "x", [PY, "-c", code]), root=root, policy=policy, timeout_cap=1)
     assert time.monotonic() - started < 30
+
+
+# --- R2: mcp_grants in the policy loader -------------------------------------------------------------------
+
+
+def test_mcp_grants_populate_mcp_agents():
+    policy = P.load_policy({"agent_policies": {"a": {}}, "mcp_grants": {
+        "a": {"tools": ["write_file", "run_command"], "approval": "staged"}}})
+    assert policy.mcp_agents == frozenset({"a"})
+    assert P.load_policy({"agent_policies": {}}).mcp_agents == frozenset()
+
+
+@pytest.mark.parametrize("grants, needle", [
+    ({"orchestrator": {"tools": ["write_file"]}}, "orchestrator"),
+    ({"a": {"tools": []}}, "never empty"),
+    ({"a": {"tools": ["write_file", "write_file"]}}, "distinct"),
+    ({"a": {"tools": ["*"]}}, "exact names"),
+    ({"a": {"tools": ["shell"]}}, "exact names"),
+    ({"a": {"tools": ["write_file"], "approval": "auto"}}, "staged' or 'direct"),
+    ({"a": {"tools": ["write_file"], "env": {}}}, "only 'tools' and 'approval'"),
+    ({"Bad Slug": {"tools": ["write_file"]}}, "malformed"),
+    (["a"], "object"),
+])
+def test_mcp_grants_fail_closed(grants, needle):
+    with pytest.raises(P.ProposalError, match=needle):
+        P.load_policy({"agent_policies": {}, "mcp_grants": grants})

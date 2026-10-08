@@ -11,6 +11,7 @@ The runner, started outside every session, alone holds the key and serves the or
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -304,11 +305,20 @@ def test_heartbeat_thread_keeps_the_runner_alive_while_it_is_busy(project, key_f
     assert not (root / R.HEARTBEAT_REL).exists(), "the heartbeat thread outlived close()"
 
 
+def _roundtrip_on(runner, request, channel):
+    request_id = R.enqueue(runner.root, request, channel=channel)
+    runner.serve_once()
+    return R.wait_result(runner.root, request_id, timeout=5)
+
+
 def test_mcp_channel_requests_get_the_shorter_command_cap(runner, monkeypatch):
+    """R2: the channel comes from the queue directory; a sender-written field is ignored."""
     seen = []
     monkeypatch.setattr(P, "run_request", lambda artifact, **kw: seen.append(kw.get("timeout_cap")) or {"ran": False})
-    _roundtrip(runner, {"kind": "run-request", "artifact": {}, "channel": "mcp"})
-    _roundtrip(runner, {"kind": "run-request", "artifact": {}})
+    nonce = P.issue_dispatch(runner.root, "producer")
+    art = {"dispatch": nonce}
+    assert _roundtrip_on(runner, {"kind": "run-request", "artifact": art, "via_agent": "producer"}, "mcp")["ok"]
+    assert _roundtrip_on(runner, {"kind": "run-request", "artifact": art, "channel": "mcp"}, "orchestrator")["ok"]
     assert seen == [R.MCP_COMMAND_TIMEOUT, None]
 
 
@@ -356,3 +366,57 @@ def test_a_stalled_serve_loop_stops_the_heartbeat(project, key_file, monkeypatch
         assert not R.runner_alive(root) and "no progress" in (r.heartbeat_error or "")
     finally:
         r.close()
+
+
+# --- R2 (mcp-mediated-agent-writes): channel routing and identity binding ------------------------------------
+
+
+def test_mcp_channel_refuses_orchestrator_kinds(runner):
+    for kind in ("issue-dispatch", "verify-ledger"):
+        result = _roundtrip_on(runner, {"kind": kind, "agent": "producer"}, "mcp")
+        assert not result["ok"] and "MCP channel can't queue" in result["error"]
+
+
+def test_mcp_request_must_come_from_the_nonces_own_agent(runner):
+    """A nonce read off the queue and replayed through another agent's server instance is refused."""
+    nonce = P.issue_dispatch(runner.root, "producer")
+    art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py",
+           "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest(), "content": "x = 2\n", "rationale": "r"}
+    stolen = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": "reviewer"}, "mcp")
+    assert not stolen["ok"] and stolen["error"] == P._CHANNEL_REFUSAL
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n"
+    own = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert own["ok"], own
+    assert (runner.root / "src/a.py").read_text() == "x = 2\n"
+
+
+def test_an_mcp_agent_cannot_act_on_the_orchestrators_queue(runner):
+    runner.policy.mcp_agents = frozenset({"producer"})
+    nonce = P.issue_dispatch(runner.root, "producer")
+    art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py",
+           "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest(), "content": "x = 2\n", "rationale": "r"}
+    result = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art}, "orchestrator")
+    assert not result["ok"] and "only through the agentteams_runner" in result["error"]
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n"
+
+
+def test_unknown_channel_is_refused(runner):
+    with pytest.raises(R.RunnerError, match="unknown channel"):
+        R.enqueue(runner.root, {"kind": "verify-ledger"}, channel="side-door")
+
+
+def test_the_mcp_channel_gives_no_nonce_oracle(runner):
+    """@security R2 condition 2: unknown, expired or foreign nonces all get the same answer on the MCP channel."""
+    live = P.issue_dispatch(runner.root, "producer")
+    answers = set()
+    for nonce, via in (("0" * 32, "producer"), ("not-a-nonce", "producer"), (live, "reviewer")):
+        art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "base_sha256": "absent",
+               "content": "x\n", "rationale": "r"}
+        result = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": via}, "mcp")
+        answers.add(result["error"])
+    assert answers == {P._CHANNEL_REFUSAL}
+
+
+def test_mcp_requests_must_name_their_agent(runner):
+    result = _roundtrip_on(runner, {"kind": "run-request", "artifact": {}}, "mcp")
+    assert not result["ok"] and "via_agent" in result["error"]

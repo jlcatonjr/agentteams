@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (runner channels and identity binding for MCP-mediated writes, phase R2)
+
+- **The runner serves two queue directories**, and reads each request's channel from the one it arrived in:
+  `.agentteams-queue/requests/` for the orchestrator's CLI, and `.agentteams-queue/mcp-requests/` for the coming
+  `agentteams_runner` MCP server. A sender-written `channel` field is ignored, so the MCP command cap from R1 no
+  longer depends on what the sender wrote.
+- **The MCP channel may queue only writes and commands,** never dispatches, ledger checks or approvals. Each
+  request must name its server instance's agent (`via_agent`), which must match the agent its nonce was issued
+  to. The check runs inside the engine's attempt-counted identity lookup, and every nonce problem on this channel
+  gets one uniform refusal, so the channel can't be used to test whether a nonce is live or whose it is
+  (@security C5, R2 review). `via_agent` is written by the sender: it stops an honest server replaying another
+  agent's nonce, not a tampered server. Against that, the defence is that no agent can read the queue.
+- **New brief field `mcp_grants`** (`{agent: {tools: [...], approval: staged|direct}}`, exact tool names, fails
+  closed) puts those agents in the policy's `mcp_agents`. The runner refuses their artifacts on the orchestrator's
+  queue, so a nonce taken from them can't be replayed through the CLI path (adversarial item 2; @security C16).
+  `direct` takes effect only with an operator-signed grant (R5); until then it acts as `staged`.
+- **`run_request` moved to `agentteams/proposal_run.py`,** carved out to stay under the 1,000-line module ceiling
+  (CH-07). `proposals.run_request` is unchanged as the entry point, and the new module is integrity-pinned.
+
 ### feat (runner hardening for MCP-mediated agent writes, phase R1)
 
 First phase of `references/plans/mcp-mediated-agent-writes.plan.md`: under the switch, non-orchestrator agents will
