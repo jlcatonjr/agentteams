@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Runner:** at start it enforces an aggregate cap of three (more fails closed), pins the file and ledgers the
     active grants. On every direct write it re-checks the expiry and counts its own signed rows against the cap.
     A direct agent's nonces live 4 h, with 10 uses (@security C1, C2, C6).
-- **Operator commands:** `--sign-mcp-direct-grant AGENT` (with `--private-key`, `--key-id`, `--grant-days` and
-  `--max-writes`), `--list-mcp-direct-grants` and `--revoke-mcp-direct-grant`.
+- **Operator commands:** `--sign-mcp-direct-grant AGENT` (`--key-id`, `--grant-days`, `--max-writes`), which goes
+  through the operator signing flow (key from `AGENTTEAMS_DECISION_ED25519_KEYFILE`, integrity and location checks,
+  a confirmed review digest), plus `--list-mcp-direct-grants` and `--revoke-mcp-direct-grant`.
 
 ### feat (the agentteams_runner MCP server, phase R4)
 

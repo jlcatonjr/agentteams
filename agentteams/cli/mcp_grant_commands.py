@@ -41,11 +41,16 @@ def _save(root: Path, records: list[dict[str, Any]]) -> Path:
 
 
 def run_sign_mcp_direct_grant(args: argparse.Namespace) -> int:
-    """Sign and install a direct-write grant for ``--agent``.
+    """Sign and install a direct-write grant for ``--sign-mcp-direct-grant AGENT``.
+
+    The record is built from the live brief (so it binds exactly what the runner checks), then signed through the
+    operator flow in :func:`agentteams.cli.operator_signing.sign_mcp_direct_grant` (key from
+    ``AGENTTEAMS_DECISION_ED25519_KEYFILE``, integrity and location checks, a confirmed review digest). It is
+    verified before it is saved.
 
     Args:
-        args: Parsed CLI arguments; reads ``sign_mcp_direct_grant`` (the agent), ``private_key``, ``key_id``,
-            ``grant_days``, ``max_writes``, ``description`` and ``project``.
+        args: Parsed CLI arguments; reads ``sign_mcp_direct_grant`` (the agent), ``key_id``, ``grant_days``,
+            ``max_writes``, ``confirm_review_sha256``, ``allow_checkout_signing``, ``description`` and ``project``.
 
     Returns:
         0 when the grant was saved; 1 when refused.
@@ -53,6 +58,8 @@ def run_sign_mcp_direct_grant(args: argparse.Namespace) -> int:
     Raises:
         Nothing: refusals are printed.
     """
+    from agentteams.cli.operator_signing import sign_mcp_direct_grant
+
     try:
         root, brief, policy = _context(args, "--sign-mcp-direct-grant")
         agent = args.sign_mcp_direct_grant
@@ -62,18 +69,26 @@ def run_sign_mcp_direct_grant(args: argparse.Namespace) -> int:
         if not 1 <= days <= G.MAX_DAYS:
             raise ProposalError(f"--grant-days must be 1-{G.MAX_DAYS}")
         max_writes = int(getattr(args, "max_writes", None) or 50)
+        if not (G._KEY_ID_RE.match(getattr(args, "key_id", None) or "")):
+            raise ProposalError("--key-id must name the operator key (letters, digits, . _ -)")
         now = datetime.now(UTC).replace(microsecond=0)
         record = {"grant_id": secrets.token_hex(8), "agent": agent, **binding, "issued": now.isoformat(),
                   "expires": (now + timedelta(days=days)).isoformat(), "max_writes": max_writes,
                   "key_id": args.key_id}
-        private_pem = Path(args.private_key).expanduser().read_text(encoding="utf-8")
-        signed = G.sign_record(record, private_pem)
-        _install_public_key(args.key_id, private_pem)
-        G.verify(signed, policy, brief)  # verify before saving: a record that can't verify never lands
+    except (ProposalError, OSError, ValueError, KeyError) as exc:
+        print(f"[sign-mcp-direct-grant] refused: {exc}", file=sys.stderr)
+        return 1
+    signed = sign_mcp_direct_grant(record, confirm_sha256=getattr(args, "confirm_review_sha256", None),
+                                   allow_checkout=bool(getattr(args, "allow_checkout_signing", False)))
+    if signed is None:
+        return 1
+    record, public_pem = signed
+    try:
+        _install_public_key(args.key_id, public_pem)
+        G.verify(record, policy, brief)  # verify before saving: a record that can't verify never lands
         records, _sha = G.read_grants(root)
-        records = [r for r in records if r.get("agent") != agent] + [signed]
-        path = _save(root, records)
-    except (ProposalError, OSError, RuntimeError, ValueError, KeyError) as exc:
+        path = _save(root, [r for r in records if r.get("agent") != agent] + [record])
+    except (ProposalError, OSError, ValueError) as exc:
         print(f"[sign-mcp-direct-grant] refused: {exc}", file=sys.stderr)
         return 1
     print(f"[sign-mcp-direct-grant] {agent}: grant {record['grant_id']} (direct writes, {max_writes} max, until "
@@ -81,13 +96,7 @@ def run_sign_mcp_direct_grant(args: argparse.Namespace) -> int:
     return 0
 
 
-def _install_public_key(key_id: str, private_pem: str) -> None:
-    from cryptography.hazmat.primitives import serialization  # agentteams[signing]
-
-    if not G._KEY_ID_RE.match(key_id or ""):
-        raise ProposalError(f"malformed --key-id {key_id!r}")
-    public = serialization.load_pem_private_key(private_pem.encode(), password=None).public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+def _install_public_key(key_id: str, public: bytes) -> None:
     directory = Path(os.path.expanduser(G.VERIFY_KEYS_DIR))
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = directory / f"{key_id}.pub.pem"
