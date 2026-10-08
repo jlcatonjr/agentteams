@@ -6,6 +6,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Codex under agentteams' launcher, Phase 1a)
+
+- `codex:sandbox` is a valid host feature, and a `confined`/`exclusive` `privilege_profile` on codex now expands
+  to it (it was `claude:sandbox`, which no codex emitter read). With it, `CodexAdapter.extra_output_files` adds
+  the operator-run `.codex/confined-run.example.sh` on Linux and macOS.
+- Codex's own sandbox cannot nest inside `sandbox/confine-run.sh`, so the runner starts
+  `codex --sandbox danger-full-access` inside the launcher, which is the boundary. Writes reach only the
+  project's write roots and a per-project `CODEX_HOME` outside the repo. `.agentteams/` and the prompt roots
+  are read-only. Egress is `host`, because Codex needs its API.
+- The default `CODEX_HOME` is `~/.config/agentteams/codex-home/<project>-<hash>`. Any override must be strictly
+  under `codex-home/` or outside `~/.config/agentteams`, and never `/` (or a path containing `//`), `$HOME`,
+  an ancestor of it, inside the project, or an ancestor of the project. It is validated before anything is
+  created, and again with symlinks resolved.
+- Before launch, `CODEX_HOME`'s `config.toml`, `hooks.json`, `AGENTS.md` and `AGENTS.override.md` (and its
+  `rules/`, `prompts/` and `skills/` dirs) are created empty if absent, then made read-only. A confined agent
+  therefore can't plant config, hooks or instructions that Codex would honour on its next run. The runner
+  also warns when that config sets security-relevant keys.
+- An `exclusive` team's `protected_read_paths` are passed through as `--exclude` (a `~/` path spelled
+  `"$HOME"/…`), and its `workspace_write_roots` (validated and quoted) as `--writable`.
+- The runner is listed in `OPERATOR_EXAMPLE_PATHS` and in the launcher's control plane, so agents can't edit
+  it.
+- Honest label: Codex ignores a spawned agent's `sandbox_mode`, and every agent command shares the writable
+  project and `CODEX_HOME`. Per-role limits on Codex are therefore instruction-level only. The agent TOML
+  header and runtime notes no longer call `sandbox_mode` "a default, not a ceiling". It is still emitted,
+  labelled as a declaration Codex does not enforce, because the `AR_WRITE_POLICY` audit reads it.
+- `write_policy: "orchestrator-only"` and `write_policy_frameworks` accept `codex` with an explicit
+  `confined`/`exclusive` profile on Linux or macOS (elsewhere no runner is emitted, so it is refused). On
+  Codex the switch gives key custody only: the ledger key and `.agentteams` stay out of reach, but every role
+  can write the project. It holds only when Codex is launched through the runner. Generation can't verify
+  that, and says so. Cooperative, a missing explicit profile, and copilot/agents-md are still refused.
+- `AGENTS.override.md` is a prompt root: Codex reads it ahead of `AGENTS.md`. It joins `PROMPT_ROOT_FILES`
+  and the launcher's `PROMPT_ROOTS_REL`, so `protect_prompt_roots` and `--protect-prompt-roots` cover it.
+- The launcher no longer warns that `--protect-prompt-roots` is Linux-only. Since #158 the macOS profile
+  protects prompt roots through the shared collector (verified live: a write to `AGENTS.md` is refused).
+
 ### feat (governance logs: a malformed row is caught, and appends are validated)
 
 - **New `agentteams/governance_logs.py`.**

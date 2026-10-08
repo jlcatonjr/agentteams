@@ -57,10 +57,13 @@ def test_sandbox_token_rejected_for_non_sandbox_namespaces():
     # P1-1 (2026-08-27): goose gained a real `sandbox` feature — the macOS Seatbelt
     # confinement emitter (frameworks/_goose_sandbox_emit.py) — so `goose:sandbox` now
     # VALIDATES (the token records the confinement request on every platform; only
-    # ENFORCEMENT is macOS-gated). codex/copilot still have no sandbox emitter, so their
-    # `:sandbox` token must still fail loudly rather than validate and confine nothing.
+    # ENFORCEMENT is macOS-gated). Phase 1a (2026-10-08): codex gained `codex:sandbox`, which
+    # gates the operator-run `.codex/confined-run.example.sh` (Codex inside the neutral
+    # launcher). copilot still has no sandbox emitter, so its `:sandbox` token must still fail
+    # loudly rather than validate and confine nothing.
     validate("goose:sandbox")  # now valid — macOS-enforced goose confinement
-    for ns in ("codex", "copilot-vscode", "copilot-cli"):
+    validate("codex:sandbox")  # valid — Codex run through the neutral launcher
+    for ns in ("copilot-vscode", "copilot-cli"):
         with pytest.raises(HostFeatureError):
             validate(f"{ns}:sandbox")
 
@@ -75,12 +78,15 @@ def test_expand_privilege_profile():
     # Unknown profile must never silently grant confinement.
     assert expand_privilege_profile("bogus") == []
     # P1-1: the expansion is framework-aware. goose unions its OWN sandbox token; every
-    # other framework (and a missing framework) keeps the historical claude:sandbox.
+    # other framework (and a missing framework) keeps the historical claude:sandbox; codex
+    # (Phase 1a) unions codex:sandbox.
     # This is a platform-independent REQUEST — enforceability is a separate decision
     # (see is_sandbox_capable), so the token is the same on macOS and Linux.
     assert expand_privilege_profile("confined", "goose") == ["goose:sandbox"]
     assert expand_privilege_profile("exclusive", "goose") == ["goose:sandbox"]
-    assert expand_privilege_profile("confined", "codex") == ["claude:sandbox"]
+    assert expand_privilege_profile("confined", "codex") == ["codex:sandbox"]
+    assert expand_privilege_profile("exclusive", "codex") == ["codex:sandbox"]
+    assert expand_privilege_profile("confined", "copilot-vscode") == ["claude:sandbox"]
     assert expand_privilege_profile("confined", "claude") == ["claude:sandbox"]
 
 
@@ -157,6 +163,7 @@ def test_p1_2_fail_closed_raises_on_unenforceable_host(monkeypatch):
     assert not gm.get("advisories")
     cm = {"privilege_profile": "confined"}
     resolve_host_features_and_advise(cm, [], "codex", allow_unenforced=False)  # must NOT raise now
+    assert cm["host_features"] == ["codex:sandbox"]  # Phase 1a: codex's own token
     assert [a["code"] for a in cm.get("advisories", [])] == [
         "privilege-profile-macos-launcher-manual-wire"
     ]
@@ -927,12 +934,20 @@ def test_advisory_fires_for_direct_token_on_non_sandbox_host():
     adv = privilege_profile_advisory("cooperative", "goose", ["goose:sandbox"], platform="win32")
     assert adv is not None
     assert adv["code"] == "privilege-profile-unenforced-host"
-    # codex: manual-wire on Linux; unenforced-host on Windows.
+    # codex: manual-wire on Linux; unenforced-host on Windows. Its own codex:sandbox token counts
+    # as a request, and the advisory names the Codex wrapper and the instruction-level label.
     clin = privilege_profile_advisory(
-        "cooperative", "codex", ["claude:sandbox"], platform="linux", mechanism_available=True
+        "cooperative", "codex", ["codex:sandbox"], platform="linux", mechanism_available=True
     )
     assert clin is not None and clin["code"] == "privilege-profile-linux-launcher-manual-wire"
-    adv2 = privilege_profile_advisory("cooperative", "codex", ["claude:sandbox"], platform="win32")
+    assert ".codex/confined-run.example.sh" in clin["message"]
+    assert "instruction-level" in clin["message"]
+    cmac = privilege_profile_advisory(
+        "cooperative", "codex", ["codex:sandbox"], platform="darwin", mechanism_available=True
+    )
+    assert cmac is not None and cmac["code"] == "privilege-profile-macos-launcher-manual-wire"
+    assert ".codex/confined-run.example.sh" in cmac["message"]
+    adv2 = privilege_profile_advisory("cooperative", "codex", ["codex:sandbox"], platform="win32")
     assert adv2 is not None
     assert adv2["code"] == "privilege-profile-unenforced-host"
     # ...and a claude:sandbox token on the claude framework is fine on any platform (native sandbox).

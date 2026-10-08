@@ -131,7 +131,8 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .codex/agents/references/agent-privilege.json .codex/agents/references/authorized-verify-keys
                     .codex/agents/references/security-approvers.txt .codex/agents/references/authorized-managers.txt
                     .codex/agents/references/management-authority.json .codex/config.toml
-                    .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh )
+                    .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh
+                    .codex/confined-run.example.sh )
 # Whole directories read-only wherever they exist under a writable root (follow-up #2, 2026-09-30):
 # .claude holds the live settings.json whose allowWrite is the operator-accepted write baseline and
 # the settings/hooks the next Claude session trusts. Mirrors Claude's own `.claude` denyWrite, so a
@@ -140,7 +141,7 @@ CONTROL_PLANE_DIRS_REL=( .claude )
 # Prompt roots (follow-up #8 phase 2), read-only only with --protect-prompt-roots, protect-if-present.
 # Locked by a test to agentteams' _prompt_root_protect PROMPT_ROOT_FILES + PROMPT_ROOT_DIRS +
 # PROMPT_ROOT_PRESENT_ONLY_DIRS. Never .github/workflows.
-PROMPT_ROOTS_REL=( .github/copilot-instructions.md AGENTS.md .goosehints CLAUDE.md CLAUDE.local.md .mcp.json
+PROMPT_ROOTS_REL=( .github/copilot-instructions.md AGENTS.md AGENTS.override.md .goosehints CLAUDE.md CLAUDE.local.md .mcp.json
                    .github/instructions .github/prompts .github/agents .codex .goose/recipes .agentteams )
 PROTECT_PROMPT_ROOTS=0; PR_RO=()
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
@@ -280,6 +281,7 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
     .goose/sandbox.sb) return 0 ;;   # macOS-only artifact
     .codex/config.toml) return 0 ;;  # Codex's own config: protect-if-present (never stubbed)
     .goose/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
+    .codex/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
     .github/agents/*) team="$r/.github/agents" ;;   # never .github/* (workflows stay unprotected)
@@ -581,7 +583,6 @@ socat forward) OR use the OOB dedicated-uid + PF-per-tenant path. FAIL CLOSED." 
     echo "confine-run:    A hard memory cap requires a VM / container / Linux host (Layer B). Proceeding UNCAPPED." >&2
   fi
   [ "$EGRESS" = host ] && echo "confine-run: WARNING --egress host - network NOT confined (fs/read still apply)." >&2
-  [ "$PROTECT_PROMPT_ROOTS" -eq 1 ] && echo "confine-run: WARNING --protect-prompt-roots is Linux-only; prompt roots are NOT protected on macOS (deferred)." >&2
   echo "confine-run: WARNING macOS Seatbelt path is ENFORCEMENT-UNVERIFIED until an on-mac deny test passes." >&2
 }
 

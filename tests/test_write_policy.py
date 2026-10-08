@@ -224,19 +224,44 @@ def test_agents_md_cannot_be_enforced():
 # --- end to end: a generated team, audited from disk --------------------------------------------
 
 
-#: Frameworks the switch is allowed on (P4a key custody: their session sandbox denies the key directory).
-_FRAMEWORKS = [("claude", ".md"), ("goose", ".yaml")]
+#: Frameworks the switch is allowed on (P4a key custody: their session sandbox denies the key directory). Codex
+#: (Phase 1a) relies on agentteams' launcher via .codex/confined-run.example.sh, which generation can't verify.
+_FRAMEWORKS = [("claude", ".md"), ("goose", ".yaml"), ("codex", ".toml")]
+#: Where each framework's agents land under ``--output <root>/<fw>/agents`` (codex appends ``.codex/agents``).
+_AGENTS_SUBDIR = {"codex": Path(".codex") / "agents"}
 
 
-@pytest.mark.parametrize("framework", ["copilot-vscode", "copilot-cli", "codex", "agents-md"])
+@pytest.mark.parametrize("framework", ["copilot-vscode", "copilot-cli", "agents-md"])
 def test_switch_refused_where_no_session_sandbox_guards_the_key(framework):
     desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
             "write_policy": "orchestrator-only"}
-    with pytest.raises(ValueError, match="claude and goose only"):
+    with pytest.raises(ValueError, match="supported on claude and goose") as exc:
         analyze.build_manifest(desc, framework=framework)
+    assert ".codex/confined-run.example.sh" in str(exc.value)
 
 
-@pytest.mark.parametrize("framework", ["claude", "goose"])
+@pytest.mark.parametrize("profile", ["confined", "exclusive"])
+def test_switch_allowed_on_codex_with_its_sandbox_token_and_says_it_cannot_verify_the_launch(profile, capsys):
+    # Phase 1a: an explicit confined/exclusive profile expands to codex:sandbox; the key directory is masked
+    # by agentteams' launcher when Codex runs through .codex/confined-run.example.sh (unverifiable here).
+    from agentteams import host_features
+
+    assert "codex:sandbox" in host_features.expand_privilege_profile(profile, "codex")
+    desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
+            "write_policy": "orchestrator-only", "privilege_profile": profile}
+    assert analyze.build_manifest(desc, framework="codex")["write_policy"] == "orchestrator-only"
+    err = capsys.readouterr().err
+    assert ".codex/confined-run.example.sh" in err and "not verifiable here" in err and "KEY CUSTODY ONLY" in err
+
+
+def test_switch_on_codex_needs_an_explicit_profile():
+    desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
+            "write_policy": "orchestrator-only"}
+    with pytest.raises(ValueError, match="explicit privilege_profile"):
+        analyze.build_manifest(desc, framework="codex")
+
+
+@pytest.mark.parametrize("framework", ["claude", "goose", "codex"])
 def test_switch_refused_with_a_cooperative_profile(framework):
     desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
             "write_policy": "orchestrator-only", "privilege_profile": "cooperative"}
@@ -275,7 +300,7 @@ def generated_teams(tmp_path_factory):
 @pytest.mark.parametrize("framework, ext", _FRAMEWORKS)
 def test_generated_team_under_the_switch_passes(generated_teams, framework, ext):
     root, brief = generated_teams
-    out = root / framework / "agents"
+    out = root / framework / "agents" / _AGENTS_SUBDIR.get(framework, Path())
     agents = [p for p in out.rglob("*") if p.name.endswith(ext) and p.is_file()
               and "references" not in p.parts and p.name != "SETUP-REQUIRED.md"]
     assert agents, f"no {ext} agent files generated"
@@ -395,13 +420,19 @@ def test_switch_scoped_to_listed_frameworks(framework, on):
     assert (manifest.get("write_policy") == "orchestrator-only") is on
 
 
+@pytest.mark.parametrize("framework, on", [("codex", True), ("claude", False), ("copilot-vscode", False)])
+def test_codex_may_be_listed_in_the_scope(framework, on):
+    manifest = analyze.build_manifest({**_DESC, "write_policy_frameworks": ["codex"]}, framework=framework)
+    assert (manifest.get("write_policy") == "orchestrator-only") is on
+
+
 def test_unlisted_framework_renders_like_no_switch():
     base = {k: v for k, v in _DESC.items() if k not in ("write_policy", "write_policy_frameworks")}
     assert json.dumps(analyze.build_manifest(dict(_DESC), framework="codex"), sort_keys=True) == \
         json.dumps(analyze.build_manifest(base, framework="codex"), sort_keys=True)
 
 
-@pytest.mark.parametrize("bad", [[], ["codex"], "claude"])
+@pytest.mark.parametrize("bad", [[], ["copilot-vscode"], ["agents-md"], "claude"])
 def test_scope_list_validated(bad):
     with pytest.raises(ValueError, match="write_policy_frameworks"):
         analyze.build_manifest({**_DESC, "write_policy_frameworks": bad}, framework="claude")

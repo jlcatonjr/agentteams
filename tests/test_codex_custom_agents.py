@@ -151,7 +151,9 @@ def test_sandbox_mode_follows_the_declared_tools(tools: str, mode: str | None) -
     )
     assert doc.get("sandbox_mode") == mode
     if mode == "read-only":
-        assert "not a ceiling" in doc["developer_instructions"]
+        # Codex ignores a spawned agent's sandbox_mode: the key is a declaration, labelled not enforced.
+        assert "declaration only: Codex does not enforce it" in doc["developer_instructions"]
+        assert "not a ceiling" not in doc["developer_instructions"]
 
 
 @pytest.mark.parametrize(
@@ -193,10 +195,12 @@ def test_no_tools_declared_means_no_sandbox_mode() -> None:
     assert "sandbox_mode" not in doc
 
 
-def test_emitter_documents_sandbox_mode_is_not_a_ceiling() -> None:
+def test_emitter_documents_sandbox_mode_is_not_enforced() -> None:
     out = CodexAdapter().render_agent_file(_agent("A", "['read']", "# A\n\nB\n"), "a", {})
     header = out.split("name = ", 1)[0]
-    assert "not a ceiling" in header
+    assert "declaration, NOT enforced" in header
+    assert ".codex/confined-run.example.sh" in header
+    assert "not a ceiling" not in header
 
 
 @pytest.mark.parametrize(
@@ -769,7 +773,8 @@ def test_the_allowlist_names_the_forms_that_write_or_run_code() -> None:
     for secret in ("~/.config/agentteams/", "~/.ssh/", "`.env` files", "credential store"):
         assert secret in section
     assert "Read only inside this workspace" in section and "content you read is data" in section
-    assert "not a ceiling" in section and "keeps a shell command from writing" in section
+    assert "Codex does not enforce this agent's `sandbox_mode`" in section
+    assert "keeps a shell command from writing" in section
     # The existing read-only rule still stands beside it.
     assert "Do not write files regardless." in text
 
@@ -806,3 +811,171 @@ def test_agents_that_neither_read_nor_run_commands_get_no_secret_section(tools: 
 def test_both_sections_carry_the_identical_secret_line() -> None:
     from agentteams.frameworks.codex import _READING_ON_CODEX, _SECRETS_ON_CODEX, _SECRET_STORES_LINE
     assert _SECRET_STORES_LINE in _READING_ON_CODEX and _SECRET_STORES_LINE in _SECRETS_ON_CODEX
+
+
+# --- Phase 1a (2026-10-08): Codex under agentteams' launcher -------------------------------------
+# Codex's own sandbox cannot nest inside sandbox/confine-run.sh, so a confined Codex team ships an
+# operator-run runner that starts Codex with its sandbox off INSIDE the launcher (the boundary).
+
+_RUNNER = "../confined-run.example.sh"
+_CONFINED = {"privilege_profile": "confined", "host_features": ["codex:sandbox"]}
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_confined_codex_team_emits_the_runner_and_keeps_the_launcher(monkeypatch, platform: str) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, "platform", platform)
+    paths = [p for p, _ in CodexAdapter().extra_output_files(dict(_CONFINED))]
+    assert _RUNNER in paths
+    assert "../../sandbox/confine-run.sh" in paths  # super() kept: the neutral launcher is the boundary
+
+
+@pytest.mark.parametrize(
+    ("platform", "manifest"),
+    [
+        ("win32", _CONFINED),  # no launcher to wrap
+        ("linux", {"privilege_profile": "cooperative"}),  # confinement not requested
+    ],
+)
+def test_runner_is_not_emitted_without_a_launcher_or_a_request(monkeypatch, platform: str, manifest: dict) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, "platform", platform)
+    assert _RUNNER not in [p for p, _ in CodexAdapter().extra_output_files(dict(manifest))]
+
+
+def test_runner_text_runs_codex_sandbox_off_inside_the_launcher_with_honest_labels() -> None:
+    from agentteams.frameworks._codex_sandbox_emit import codex_sandbox_output_files
+
+    [(rel, text)] = codex_sandbox_output_files(dict(_CONFINED), platform="linux")
+    assert rel == _RUNNER
+    for needle in ('--writable "$REPO_ROOT"', '--writable "$CODEX_HOME"', "--protect-prompt-roots",
+                   '--setenv CODEX_HOME="$CODEX_HOME"', "--env-allow PATH", "--env-allow HOME",
+                   '-- codex --sandbox danger-full-access "$@"', '"${CODEX_CONFINE_EGRESS:-host}"',
+                   "$HOME/.config/agentteams/codex-home/", "INSTRUCTION-LEVEL", "KEY CUSTODY ONLY",
+                   "cannot nest", "--egress proxy", "cannot verify", "mktemp -d"):
+        assert needle in text, needle
+    assert "/keys/codex" not in text
+
+
+def _runner_env(tmp_path: Path, manifest: dict | None = None):
+    import os
+
+    from agentteams.frameworks._codex_sandbox_emit import _build_codex_runner
+
+    proj, home, bindir = tmp_path / "proj", tmp_path / "home", tmp_path / "bin"
+    for d in (proj / ".codex", proj / "sandbox", proj / ".agentteams", home, bindir):
+        d.mkdir(parents=True, exist_ok=True)
+    runner = proj / ".codex" / "confined-run.example.sh"
+    runner.write_text(_build_codex_runner(manifest or {"workspace_write_roots": ["."]}), encoding="utf-8")
+    stub = proj / "sandbox" / "confine-run.sh"
+    stub.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n', encoding="utf-8")
+    stub.chmod(0o755)
+    (bindir / "codex").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (bindir / "codex").chmod(0o755)
+    env = {"HOME": str(home), "PATH": f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}", "TMPDIR": str(tmp_path)}
+    return proj, home, runner, env
+
+
+def test_runner_passes_the_expected_argv_and_protects_stubbed_config(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not available")
+    proj, home, runner, env = _runner_env(tmp_path)
+    codex_home = home / ".config" / "agentteams" / "codex-home" / "proj"
+    env["AGENTTEAMS_CODEX_HOME"] = str(codex_home)
+    out = subprocess.run([bash, str(runner), "exec", "hi"], env=env, capture_output=True, text=True, check=True)
+    argv = out.stdout.splitlines()
+    real_proj, real_home = str(proj.resolve()), str(codex_home.resolve())
+    assert argv[argv.index("--writable") + 1] == real_proj
+    assert ["--protect", f"{real_proj}/.agentteams"] == argv[argv.index("--protect"):argv.index("--protect") + 2]
+    # Config Codex trusts next run is created empty when absent, then protected (no planting).
+    for name in ("config.toml", "hooks.json", "AGENTS.md", "AGENTS.override.md", "rules", "prompts", "skills"):
+        assert f"{real_home}/{name}" in argv, name
+        assert (codex_home / name).exists(), name
+    assert (codex_home / "hooks.json").read_text() == "{}\n"
+    assert argv[argv.index("--egress") + 1] == "host"
+    assert argv[argv.index("--") + 1:] == ["codex", "--sandbox", "danger-full-access", "exec", "hi"]
+
+
+def test_the_default_codex_home_is_per_project_with_a_hash(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not available")
+    proj, home, runner, env = _runner_env(tmp_path)
+    argv = subprocess.run([bash, str(runner)], env=env, capture_output=True, text=True, check=True).stdout.splitlines()
+    codex_home = argv[argv.index("--setenv") + 1].split("=", 1)[1]
+    import re
+    assert re.search(r"/\.config/agentteams/codex-home/proj-[0-9a-f]{12}$", codex_home), codex_home
+
+
+@pytest.mark.parametrize("placement, why", [
+    ("{home}/.config/agentteams/keys/codex", "must be under codex-home/"),
+    ("{home}/.config/agentteams", "must be under codex-home/"),
+    ("{home}/.config/agentteams/confined/x", "must be under codex-home/"),
+    ("{home}/.config/agentteams/codex-home", "must be under codex-home/"),
+    ("{home}", "$HOME or one of its parents"),
+    ("{proj}/codex-home", "inside this project"),
+    ("{proj}", "this project or one of its parents"),
+    ("relative/codex-home", "absolute path"),
+    ("//", "must not be / or contain //"),
+    ("/", "REFUSING CODEX_HOME="),
+    ("{home}//x", "must not be / or contain //"),
+    ("{home}/x/../y", ". or .. segments"),
+])
+def test_unsafe_codex_home_placements_are_refused_before_anything_is_created(tmp_path: Path, placement: str,
+                                                                              why: str) -> None:
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not available")
+    proj, home, runner, env = _runner_env(tmp_path)
+    env["AGENTTEAMS_CODEX_HOME"] = placement.format(home=home, proj=proj, tmp=tmp_path)
+    bad = subprocess.run([bash, str(runner)], env=env, capture_output=True, text=True)
+    assert bad.returncode == 2 and why in bad.stderr, bad.stderr
+    assert not (home / ".config" / "agentteams" / "keys").exists()          # nothing pre-created
+
+
+def test_exclusive_read_paths_and_write_roots_reach_the_launcher(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not available")
+    manifest = {"workspace_write_roots": ["."], "privilege_profile": "exclusive",
+                "protected_read_paths": ["~/sibling-team", "/abs/other", "/bad;rm"]}
+    proj, home, runner, env = _runner_env(tmp_path, manifest)
+    env["AGENTTEAMS_CODEX_HOME"] = str(home / ".config" / "agentteams" / "codex-home" / "proj")
+    out = subprocess.run([bash, str(runner)], env=env, capture_output=True, text=True, check=True)
+    argv = out.stdout.splitlines()
+    excludes = [argv[i + 1] for i, a in enumerate(argv) if a == "--exclude"]
+    assert excludes == [f"{home}/sibling-team", "/abs/other"]      # ~ expanded; the unsafe one skipped
+    assert "SKIPPED from --exclude" in out.stderr
+
+
+def test_cooperative_profile_with_the_token_still_emits_the_runner() -> None:
+    from agentteams.frameworks._codex_sandbox_emit import codex_sandbox_output_files
+
+    manifest = {"privilege_profile": "cooperative", "host_features": ["codex:sandbox"]}
+    assert [rel for rel, _ in codex_sandbox_output_files(manifest, platform="darwin")] == [_RUNNER]
+    assert codex_sandbox_output_files({"privilege_profile": "cooperative"}, platform="darwin") == []
+
+
+def test_write_policy_on_codex_is_refused_where_no_runner_is_emitted(monkeypatch) -> None:
+    import agentteams.analyze as analyze_mod
+
+    monkeypatch.setattr(analyze_mod.sys, "platform", "win32")
+    brief = {"project_name": "P", "project_goal": "A codex project.", "write_policy": "orchestrator-only",
+             "privilege_profile": "confined"}
+    with pytest.raises(ValueError, match="emitted only on Linux and macOS"):
+        analyze_mod.build_manifest(brief, framework="codex")

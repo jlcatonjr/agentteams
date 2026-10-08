@@ -279,7 +279,7 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     rules += [f"Edit(/{p})" for p in (*governed_roster_paths(framework), GRANT_ROSTER_PROJECT_REL)]
     rules += [f"Edit(/{p})" for p in _CLAUDE_SETTINGS_PATHS]
     # Follow-up #2 (2026-09-30): the operator-merged/-run EXAMPLES. An edited settings example or
-    # goose runner is what the operator next merges or executes unsandboxed. Product-UNVERIFIED.
+    # goose/codex runner is what the operator next merges or executes unsandboxed. Product-UNVERIFIED.
     rules += [f"Edit(/{p})" for p in OPERATOR_EXAMPLE_PATHS]
     rules.append(f"Edit(/{_GATE_HOOK_PATH.rsplit('/', 1)[0]}/**)")
     if framework == "claude":
@@ -572,9 +572,11 @@ TEAM_MARKER_REL = "references/build-log.json"
 #: Claude Code settings files the NEXT session trusts (hook wiring, permissions).
 _CLAUDE_SETTINGS_PATHS: tuple[str, ...] = (".claude/settings.json", ".claude/settings.local.json")
 
-#: Operator-merged / operator-run examples an agent must not edit (follow-up #2, 2026-09-30).
+#: Operator-merged / operator-run examples an agent must not edit (follow-up #2, 2026-09-30; the
+#: Codex runner added in Phase 1a, 2026-10-08).
 OPERATOR_EXAMPLE_PATHS: tuple[str, ...] = (
     ".claude/settings.hooks.example.json", ".goose/confined-run.example.sh",
+    ".codex/confined-run.example.sh",
 )
 
 #: FROZEN comment-only stub texts, written write-if-absent (never overwritten) for a sandboxed team
