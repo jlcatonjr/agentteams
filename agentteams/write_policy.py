@@ -77,8 +77,9 @@ Their commands run through the runner directly, on their allowlist. An agent wit
 without staging; deletions are always staged.
 """
 
-#: R6: for an agent granted the ``agentteams_runner`` MCP server (``mcp_grants``). The heading is the same as
-#: :data:`_PROPOSALS_SECTION`'s, so the audit's section anchors and a re-render treat both alike.
+#: R6: for an agent granted the ``agentteams_runner`` MCP server (``mcp_grants``). The heading is deliberately the same
+#: as :data:`_PROPOSALS_SECTION`'s ("Return Proposals, Never Write"), so the audit's section anchors and a re-render
+#: treat both alike; the body says the agent writes through the server, whose writes are staged proposals.
 _RUNNER_SECTION = """
 ## Write Policy: Return Proposals, Never Write
 

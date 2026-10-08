@@ -2,8 +2,8 @@
 
 Operator-signed direct-write grants (phase R5 of `references/plans/mcp-mediated-agent-writes.plan.md`). An agent
 writing through the `agentteams_runner` MCP server is **staged** by default: the orchestrator approves each write. A
-brief `mcp_grants` entry with `approval: "direct"` lets the agent's writes land at once. That removes the
-orchestrator's look at each write, a constraint-relaxing change (Rule 15), so the runner honours it **only** with a
+brief `mcp_grants` entry with `approval: "direct"` only *asks* for the agent's writes to land at once. That would
+remove the orchestrator's look at each write, a constraint-relaxing change (Rule 15), so the runner does it **only** with a
 verified operator-signed grant.
 
 > Source: `agentteams/mcp_direct_grants.py` (integrity-pinned). Operator commands are in
@@ -52,7 +52,7 @@ back. A direct grant also needs a gate, or write scopes that name single files.
 - **Counts from a verified ledger:** at start, if any grant is active, it verifies the whole ledger and counts each
   grant's `apply-direct` rows. A ledger that doesn't verify turns direct writes off. After that the count lives in
   memory, so deleting rows can't reset a grant's cap.
-- **On every direct write:** it re-checks the expiry against `max_writes`, using the in-memory count. The ledger
+- **On every direct write:** it re-checks the expiry, and checks the in-memory count against `max_writes`. The ledger
   row records the grant id.
 - **Visible keys:** `direct-grants-loaded` records the sha256 of each trusted operator verify key, so the operator
   can see which keys are trusted.

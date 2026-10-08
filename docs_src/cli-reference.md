@@ -877,11 +877,18 @@ confirmed: a terminal y/N, or `--confirm-review-sha256`.
 
 ### MCP-mediated writes and `--check-wiring`
 
-For a team with `mcp_grants`, `--check-wiring` also fails on two things:
-- a project `.mcp.json` or Claude settings file that defines a server named `agentteams_runner`, which could
-  shadow the canonical inline one;
-- on Claude, live settings that don't deny `Edit(/.agentteams/**)`, or don't `denyWrite` both `.agentteams` and
-  `.claude`.
+For a team with `mcp_grants`, `--check-wiring` also fails on any of these:
+- **A server named `agentteams_runner` in any config scope,** which could shadow the canonical inline one: the
+  project's `.mcp.json` and Claude settings, `~/.claude.json` (top level, or this project's local entry),
+  machine-managed MCP config, or Goose's user config.
+- **On Claude:** live settings missing any of the following:
+  - the sandbox enabled;
+  - denies for `Edit(/.agentteams/**)`, `Edit(/.claude/agents/**)`, `Read(/.agentteams/**)` and
+    `Read(/.agentteams-queue/**)`;
+  - sandbox `denyWrite` for `.agentteams` and `.claude`.
+
+  A `settings.local.json` that switches the sandbox off or allows unsandboxed commands also fails.
+- **On Goose:** a `.goose/sandbox.sb` profile that doesn't deny writes to `.agentteams` and `.goose/recipes`.
 
 Merge the emitted sandbox block and permissions to pass.
 

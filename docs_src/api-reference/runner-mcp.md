@@ -27,8 +27,8 @@ Under `write_policy: "orchestrator-only"`, an agent named in `mcp_grants` is ren
 | Tool | Does | Runner kind |
 |---|---|---|
 | `read_file_hashed(path)` | Read a UTF-8 project file, up to 256 KiB, with its sha256: the `base_sha256` writes need. A missing file returns `"absent"`. Refuses VCS internals, the control plane, the queue and secrets. The deny list applies to both the requested and the resolved path, so an in-project link to `.env` is refused, and the opened file must be the one checked (device and inode). | none (local read) |
-| `write_file(dispatch, path, content, base_sha256, rationale, gates?)` | Write a whole file. Staged, or applied at once for a `direct` instance whose grant the runner has verified. | `stage-proposal` / `apply-direct` |
-| `delete_file(dispatch, path, base_sha256, rationale)` | Ask to delete. **Always staged**, even on a direct instance. | `stage-proposal` |
+| `write_file(dispatch, path, content, base_sha256, rationale, gates?)` | Write a whole file. Always submitted for staging. The runner applies it at once only when the agent's operator-signed grant verified; otherwise it waits for the orchestrator. | `stage-proposal` |
+| `delete_file(dispatch, path, base_sha256, rationale)` | Ask to delete. **Always staged**, even for an agent with a direct grant. | `stage-proposal` |
 | `run_command(dispatch, argv, purpose, cwd?, expected_writes?, stdin_path?, stdin_content?)` | Run an allowlisted command in the agent's sandbox. Stdin goes only through `stdin_from_content` and its gates. | `run-request` |
 | `request_status(request_id)` | A result this instance queued earlier, or `queued`. | none |
 
@@ -61,5 +61,5 @@ Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runn
 | `tool_names(tools) -> list[str]` | Claude's exact names, `mcp__agentteams_runner__<tool>`. |
 | `claude_block(agent, tools, approval, python) -> str` | The canonical inline `mcpServers:` block for a granted Claude agent. |
 | `goose_extension(agent, tools, approval, python) -> dict` | The canonical Goose stdio extension, with an exact `available_tools` list. |
-| `SHADOW_FILES`, `wiring_problems(root, framework, manifest) -> list[str]` | Live-wiring checks run by `--check-wiring` when a team has grants (R7). They refuse any project `.mcp.json` or Claude settings file that defines a server named `agentteams_runner`, which could shadow the canonical inline one (@security C13). On Claude they require the live settings to deny `Edit(/.agentteams/**)` and to `denyWrite` both `.agentteams` and `.claude` (@security C11). |
+| `SHADOW_FILES`, `MANAGED_MCP_FILES`, `REQUIRED_CLAUDE_DENY`, `wiring_problems(root, framework, manifest, *, home=None) -> list[str]` | Live-wiring checks run by `--check-wiring` for a team with grants (R7). See the CLI reference for the full list. |
 | `install_files(manifest) -> list` | The server install (`../../.agentteams/bin/...`) when the switch is on and `mcp_grants` names someone. It refuses a packaged copy whose hash doesn't match. |

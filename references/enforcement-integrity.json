@@ -36,7 +36,7 @@
     "agentteams/integrity.py": "fad1c1495e4aed0e54e50a62ccb707c4b3355c675b7eabd78a906fe898760f9d",
     "agentteams/learned_blocks.py": "365a2b2bf20161ed1ae84403e53469fe21ef26fa6c2cad3d2dc85d3fb625a02a",
     "agentteams/mcp_direct_grants.py": "99fc3804eeed4b92214242c63a8463a9f99ab681e038bc82bb90db0bdf89a895",
-    "agentteams/proposal_policy.py": "f43890d2d4af2133c1b3135fe64d58565d76dc4afef719c53964d39eb4d7f520",
+    "agentteams/proposal_policy.py": "98eef191f080ac2e557e13ab896e9fe5437125fc2f8f4e5f8ebfdd6517307263",
     "agentteams/proposal_run.py": "3d4fb0a3e74a0f007463c26409530c19ebce852967db2ba82a0f4961d277f316",
     "agentteams/proposal_runner.py": "2c8499d4b7481dbcc6fe1fbc937af62a7789a963d16ee5307967fdda1c61106e",
     "agentteams/proposal_staging.py": "c2c5e41e0d47579e4086fc191e6f88f11f015f3aa02c9cf758246bb6924cdde3",
@@ -53,7 +53,7 @@
     "agentteams/templates/universal/sandbox/confine-run.sh": "6779fa05d24b3befa2e3bee9c79aab32866c21e4e00a2405ed8fca6578f725a7",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
-    "agentteams/write_policy.py": "93184d2524297aaef9c2d8d1729289433178ca0a0055efcdae007453ae5fbec7"
+    "agentteams/write_policy.py": "06d417b0f59697c1a2c443985d023edb73d8e1e5becd39e7243b162aba46d274"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1
