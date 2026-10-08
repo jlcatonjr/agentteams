@@ -142,6 +142,31 @@ def _readfs_mcp_content() -> str:
                                 f"({_READFS_MCP_SOURCE}); reinstall agentteams") from exc
 
 
+def pinned_readfs_mcp_content() -> str:
+    """Return the read-only file server only when it matches its pin (``goose_tool_scoping.READFS_SHA256``).
+
+    Used wherever the server is installed under ``write_policy: "orchestrator-only"`` (the Goose recipes and the
+    Codex role gate), where a runner later refuses a mismatched copy, so a placeholder or an edited copy is never
+    installed. Fails closed.
+
+    Returns:
+        The server source.
+
+    Raises:
+        FileNotFoundError: When the server is missing from the install.
+        ValueError: When it doesn't match its pinned hash.
+    """
+    import hashlib
+
+    from agentteams.frameworks.goose_tool_scoping import READFS_SHA256
+
+    readfs = _readfs_mcp_content()
+    if hashlib.sha256(readfs.encode("utf-8")).hexdigest() != READFS_SHA256:
+        raise ValueError("the read-only file server in this agentteams install doesn't match its pinned hash "
+                         "(READFS_SHA256); reinstall agentteams before rendering under write_policy orchestrator-only")
+    return readfs
+
+
 _RESILIENT_RUNNER_SOURCE = Path(__file__).resolve().parent.parent.parent / "scripts" / "goose-run-resilient.py"
 
 

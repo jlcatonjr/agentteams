@@ -295,3 +295,50 @@ def test_self_probe_checks_the_key_dir_first(tmp_path: Path) -> None:
     (keys / "ledger.key").write_text("k", encoding="utf-8")
     bad = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True, text=True)
     assert bad.returncode == 3 and "signing-key dir is readable" in bad.stderr
+
+
+def test_runner_refuses_nested_codex_config_or_hooks(tmp_path: Path) -> None:
+    proj, env = _project(tmp_path, dict(_POLICY), _ARGV_LAUNCHER)
+    nested = proj / "vendor" / "lib" / ".codex"
+    nested.mkdir(parents=True)
+    (nested / "hooks.json").write_text("{}", encoding="utf-8")
+    bad = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True, text=True)
+    assert bad.returncode == 2 and "nested Codex config or hooks" in bad.stderr and "vendor/lib/.codex" in bad.stderr
+    (nested / "hooks.json").unlink()
+    for variant in ("upper", "link"):                     # case variants and symlinked .codex dirs are caught too
+        where = proj / variant
+        where.mkdir()
+        if variant == "upper":
+            (where / ".CODEX").mkdir()
+            (where / ".CODEX" / "HOOKS.JSON").write_text("{}", encoding="utf-8")
+        else:
+            (where / ".codex").symlink_to(nested)
+        bad = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True,
+                             text=True)
+        assert bad.returncode == 2 and "nested Codex config or hooks" in bad.stderr, variant
+        shutil.rmtree(where)
+    locked = proj / "locked"
+    locked.mkdir()
+    locked.chmod(0)                                       # an unreadable dir must not kill the runner (pipefail)
+    try:
+        ok = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True,
+                            text=True)
+        assert ok.returncode == 0, ok.stderr
+    finally:
+        locked.chmod(0o755)
+
+
+def test_plugins_dir_is_stubbed_protected_and_plugin_keys_warn(tmp_path: Path) -> None:
+    proj, env = _project(tmp_path, {"privilege_profile": "confined"}, _ARGV_LAUNCHER)
+    home = Path(env["AGENTTEAMS_CODEX_HOME"])
+    out = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True,
+                         text=True, check=True)
+    argv = out.stdout.splitlines()
+    assert (home / "plugins").is_dir()
+    assert ["--protect", str(home.resolve() / "plugins")] in [argv[i:i + 2] for i in range(len(argv) - 1)]
+    assert "security-relevant keys" not in out.stderr
+    for key in ('[plugins."x"]\nenabled = true\n', 'plugins.x.enabled = true\n'):
+        (home / "config.toml").write_text(key, encoding="utf-8")
+        warned = subprocess.run([_bash(), str(proj / emit.CODEX_RUNNER_PROJECT_PATH)], env=env, capture_output=True,
+                                text=True, check=True)
+        assert "security-relevant keys" in warned.stderr, key

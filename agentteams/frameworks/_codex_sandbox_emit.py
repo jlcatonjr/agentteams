@@ -26,7 +26,6 @@ Integrity-pinned: it emits a boundary (the runner) and pins the gate's hash.
 from __future__ import annotations
 
 import hashlib
-import shlex
 import sys
 from typing import Any
 
@@ -165,6 +164,15 @@ def _runner_gate_block() -> str:
         '  echo "REFUSING: python3 at $PY is inside a path agents can write (or unquotable); set AGENTTEAMS_CODEX_PYTHON to an interpreter outside the project." >&2; exit 2 ;; esac\n'
         'if grep -qs agentteams_readfs "$ROOT/.codex/config.toml"; then   # any form: table, dotted key, inline\n'
         '  echo "REFUSING: $ROOT/.codex/config.toml mentions agentteams_readfs; only the runner may define that server." >&2; exit 2; fi\n'
+        '# Nested Codex config or hooks (subdir/.codex/) would apply to a session started below the root; refuse them.\n'
+        '# (|| true: an unreadable dir or head closing the pipe must not kill the runner under pipefail.)\n'
+        '# Case-insensitive (APFS resolves .CODEX to .codex); files or symlinks, and a symlinked .codex dir itself.\n'
+        'NESTED="$( { find "$ROOT" \\( -path "$ROOT/.git" -o -path "$ROOT/.codex" \\) -prune -o \\\n'
+        '  \\( \\( -type f -o -type l \\) \\( -ipath "*/.codex/hooks.json" -o -ipath "*/.codex/config.toml" \\) \\) -print -o \\\n'
+        '  \\( -type l -iname .codex \\) -print 2>/dev/null || true; } | head -n 5)"\n'
+        'if [ -n "$NESTED" ]; then\n'
+        '  echo "REFUSING: nested Codex config or hooks found; under write_policy orchestrator-only only $ROOT/.codex/ may hold them:" >&2\n'
+        '  printf \'%s\\n\' "$NESTED" >&2; exit 2; fi\n'
         'READFS_TOML="[mcp_servers.agentteams_readfs]\n'
         'command = \\"$PY\\"\n'
         f'args = [\\"-I\\", \\"-S\\", \\"$ROOT/{READFS_PROTECTED_PATH}\\", \\"--root\\", \\"$ROOT\\"]"\n'
@@ -192,21 +200,11 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         The bash script text.
     """
     from agentteams.frameworks._goose_sandbox_emit import _runner_root_expr
-    from agentteams.frameworks._write_roots import path_char_problem, validate_write_roots
+    from agentteams.frameworks._write_roots import runner_exclude_flags, validate_write_roots
 
     roots = validate_write_roots(manifest.get("workspace_write_roots") or ["."], manifest)
     writable_flags = " ".join(f"--writable {_runner_root_expr(r)}" for r in roots)
-    exclude_flags, skipped_note = "", ""
-    if manifest.get("privilege_profile") == "exclusive":
-        raw = [p for p in (manifest.get("protected_read_paths") or []) if p]
-        safe = [p for p in raw if path_char_problem(p) is None]
-        # The launcher takes --exclude literally (no ~ expansion), so a ~/ path is spelled "$HOME"/'rest'.
-        exclude_flags = "".join(
-            f' --exclude "$HOME"/{shlex.quote(p[2:])}' if p.startswith("~/") else f" --exclude {shlex.quote(p)}"
-            for p in safe)
-        if len(raw) != len(safe):
-            skipped_note = (f'echo "NOTE: {len(raw) - len(safe)} protected_read_path(s) SKIPPED from --exclude '
-                            '(unsafe chars); their read-exclusion is NOT enforced - sanitize the brief." >&2\n')
+    exclude_flags, skipped_note = runner_exclude_flags(manifest)
     gate = codex_role_gate_enabled(manifest)
     gate_block = _runner_gate_block() if gate else ""
     bypass = " --dangerously-bypass-hook-trust" if gate else ""
@@ -271,20 +269,21 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         '[ -d "$CFG_P" ] && CFG_P="$(cd "$CFG_P" && pwd -P)"\n'
         'check_home "$CODEX_HOME" "$HOME_P" "$CFG_P" "$ROOT"   # again with symlinks resolved\n'
         '# Config Codex trusts on its next run: create empty if absent, then protect, so it cannot be planted.\n'
-        'for d in rules prompts skills; do mkdir -p "$CODEX_HOME/$d"; done\n'
+        'for d in rules prompts skills plugins; do mkdir -p "$CODEX_HOME/$d"; done\n'
         '[ -e "$CODEX_HOME/config.toml" ] || : > "$CODEX_HOME/config.toml"\n'
         'for f in AGENTS.md AGENTS.override.md; do [ -e "$CODEX_HOME/$f" ] || : > "$CODEX_HOME/$f"; done\n'
         '[ -e "$CODEX_HOME/hooks.json" ] || printf \'{}\\n\' > "$CODEX_HOME/hooks.json"\n'
         + gate_block +
         f'if awk -v gate={int(gate)} \'gate && $0 == "[mcp_servers.agentteams_readfs]" {{ next }}\n'
-        '    /^[[:space:]]*(approval_policy|sandbox_mode|notify)[[:space:]]*=/ || /^[[:space:]]*\\[(mcp_servers|sandbox_workspace_write|hooks)/ { f = 1 }\n'
+        '    /^[[:space:]]*(approval_policy|sandbox_mode|notify)[[:space:]]*=/ || /^[[:space:]]*\\[(mcp_servers|sandbox_workspace_write|hooks|plugins)/ || /^[[:space:]]*plugins\\./ { f = 1 }\n'
         '    END { exit !f }\' "$CODEX_HOME/config.toml"; then\n'
         '  echo "WARNING: $CODEX_HOME/config.toml sets security-relevant keys; review it (it is read-only in the sandbox, but Codex honours it)." >&2\n'
         'fi\n'
         'SCRATCH="${CODEX_CONFINE_SCRATCH:-$(mktemp -d "${TMPDIR:-/tmp}/codex-confined.XXXXXX")}"\n'
         'PROTECT=()\n'
         'if [ -e "$ROOT/.agentteams" ]; then PROTECT+=( --protect "$ROOT/.agentteams" ); fi\n'
-        'for f in config.toml hooks.json AGENTS.md AGENTS.override.md rules prompts skills; do PROTECT+=( --protect "$CODEX_HOME/$f" ); done\n'
+        'for f in config.toml hooks.json AGENTS.md AGENTS.override.md rules prompts skills plugins; do\n'
+        '  PROTECT+=( --protect "$CODEX_HOME/$f" ); done\n'
         'EGRESS="${CODEX_CONFINE_EGRESS:-host}"\n'
         + skipped_note +
         '# Self-probe facts are read OUTSIDE the launcher (inside, a denied path can look absent).\n'

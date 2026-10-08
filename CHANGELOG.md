@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (runner follow-ups: Goose `~` excludes, shared read-only server pin, nested Codex config)
+
+- **Goose runner `~/` excludes now work.** An `exclusive` Goose team's `~/…` `protected_read_paths` were passed
+  to the launcher as `--exclude '~/…'`, a literal path that excluded nothing. Both runners now build their
+  `--exclude` flags with one helper, `_write_roots.runner_exclude_flags`, which spells them
+  `"$HOME"/'…'`. A bare `~` or a `~user/…` path is skipped, with the runtime note that also covers unsafe
+  paths.
+- **One render-time pin check for the read-only file server.** `goose_docs.pinned_readfs_mcp_content()`
+  returns the server only when it matches `READFS_SHA256`. The Goose recipes under the switch and the Codex
+  role gate both use it (CH-08). The runner's serve-time check of the installed copy is unchanged.
+- **Codex role gate.**
+  - The runner now refuses nested `subdir/.codex/hooks.json` or `config.toml`. The match is case-insensitive,
+    for APFS, and covers files and symlinks, including a symlinked `.codex` dir.
+  - Every confined Codex launch also protects `CODEX_HOME/plugins/`, where Codex keeps installed plugin
+    code. Without that, an agent could edit an enabled plugin that runs next session. `plugins` keys join
+    the advisory `config.toml` warning.
+  - `AGENTS.override.md` was NOT added to `prompt_roots.py` change detection. That list tracks only files
+    agentteams emits, and it never emits this one; the launcher's prompt-root protection covers writes.
+
 ### feat (live wiring checks for MCP-mediated agent writes, phase R7)
 
 - **`--check-wiring` covers teams with `mcp_grants`.**

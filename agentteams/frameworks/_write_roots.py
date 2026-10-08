@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import os
 import posixpath
+import shlex
 import sys
 from pathlib import Path
 from typing import Any, Iterable
@@ -296,3 +297,34 @@ def provenance_of(manifest: dict[str, Any] | None) -> dict[str, str]:
     if not isinstance(value, tuple):
         return {}
     return {r: s for r, s in value if isinstance(r, str) and isinstance(s, str)}
+
+
+def runner_exclude_flags(manifest: dict[str, Any]) -> tuple[str, str]:
+    """Return an ``exclusive`` team's ``protected_read_paths`` as launcher ``--exclude`` flags, plus a note.
+
+    Shared by the Goose and Codex runners. A manifest path is DATA (C-4): one with shell/quote-breaking or
+    control characters is skipped (its read-exclusion is NOT enforced) and the returned note says so at run
+    time. The launcher takes ``--exclude`` literally, with no ``~`` expansion, so a ``~/`` path is spelled
+    ``"$HOME"/'rest'`` and expands in the operator's shell; a bare ``~`` or ``~user/...`` can't be spelled
+    that way and is skipped, counted in the same note.
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        ``(flags, note)``: the flags (each with a leading space), and an ``echo`` line, or ``""`` for both.
+    """
+    if manifest.get("privilege_profile") != "exclusive":
+        return "", ""
+    raw = [p for p in (manifest.get("protected_read_paths") or []) if p]
+    # ``~`` alone and ``~user/...`` would reach the launcher literally and be dropped, so they are skipped
+    # (and counted in the note) rather than passed through as an exclusion that never applies.
+    safe = [p for p in raw if path_char_problem(p) is None and (not p.startswith("~") or p.startswith("~/"))]
+    flags = "".join(
+        f' --exclude "$HOME"/{shlex.quote(p[2:])}' if p.startswith("~/") else f" --exclude {shlex.quote(p)}"
+        for p in safe)
+    note = ""
+    if len(raw) != len(safe):
+        note = (f'echo "NOTE: {len(raw) - len(safe)} protected_read_path(s) SKIPPED from --exclude '
+                '(unsafe chars, or a ~ form other than ~/); their read-exclusion is NOT enforced - fix the manifest." >&2\n')
+    return flags, note

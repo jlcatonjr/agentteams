@@ -30,7 +30,6 @@ intentionally avoids a YAML dependency and parses front matter with regex).
 
 from __future__ import annotations
 
-import hashlib
 import re
 import sys
 from pathlib import Path
@@ -61,6 +60,7 @@ from agentteams.frameworks.goose_docs import (
     _coordination_mcp_content,
     _readfs_mcp_content,
     _goose_capabilities_content,
+    pinned_readfs_mcp_content as _pinned_readfs_mcp_content,
     _goosehints_content,
     _resilient_runner_content,
     _route_proxy_content,
@@ -103,7 +103,6 @@ from agentteams import write_policy as _write_policy
 from agentteams.frameworks.goose_tool_scoping import (
     READFS_PROTECTED_PATH as _READFS_PROTECTED_PATH,
     READFS_SCRIPT as _READFS_SCRIPT,
-    READFS_SHA256 as _READFS_SHA256,
     declared_tools as _declared_tools,
     filter_operator_mcp as _filter_operator_mcp,
     grant_extensions as _grant_extensions,
@@ -636,11 +635,8 @@ class GooseAdapter(FrameworkAdapter):
         # switch it goes into the control plane (session-write-denied), where every recipe of the team points.
         if _grant_mode(manifest):
             protected = _write_policy.enabled(manifest)
-            readfs = _readfs_mcp_content()
-            if protected and hashlib.sha256(readfs.encode("utf-8")).hexdigest() != _READFS_SHA256:
-                # Fail closed: the runner refuses a mismatched copy, so never install a placeholder or an edit.
-                raise ValueError("the read-only file server in this agentteams install doesn't match its pinned "
-                                 "hash (READFS_SHA256); reinstall agentteams before rendering under the switch")
+            # Under the switch, fail closed: the runner refuses a mismatched copy, so never install an edit.
+            readfs = _pinned_readfs_mcp_content() if protected else _readfs_mcp_content()
             files.append((f"../../{_READFS_PROTECTED_PATH if protected else _READFS_SCRIPT}", readfs))
             from agentteams import runner_mcp  # R6: granted agents launch the installed agentteams_runner server
 
