@@ -7,8 +7,9 @@ One malformed row (an unclosed quote, an unescaped comma) makes every later read
 rewrite that trusts the parse truncates it: 2026-10-07, ``security-decisions.log.csv`` lost 13 records that way
 and was rebuilt from session transcripts.
 
-* :func:`check_log` / :func:`check_logs` report rows whose field count differs from the header's. They are read
-  by ``--verify-integrity``.
+* :func:`check_log` / :func:`check_logs` report a malformed log: a field count that differs from the header's, a
+  quote left open at end of file, or a field that has swallowed later dated rows. ``--verify-integrity`` reads
+  them.
 * :func:`append_row` is the validated way for code to add a row: it refuses a malformed log, renders the row in
   memory, confirms it round-trips, and appends under a lock in one write. It never opens the file for rewriting.
   (A rewrite goes through :func:`agentteams.atomicio.atomic_rewrite_csv_rows`.) Rows written by hand bypass it;
@@ -135,8 +136,9 @@ def append_row(path: Path, row: dict[str, str] | list[str]) -> None:
         None.
 
     Raises:
-        ValueError: The log is malformed or headerless, a dict has unknown keys, a value is not a ``str``, or the
-            rendered row does not round-trip to the header's field count. The file is untouched in every case.
+        ValueError: The log is malformed or headerless, a dict has unknown keys, a value is not a ``str``, a value
+            holds a line that starts a dated record, or the rendered row does not round-trip to the header's field
+            count. The file is untouched in every case.
         OSError: The file cannot be read or appended to.
     """
     fd = os.open(path, os.O_RDWR | os.O_APPEND)

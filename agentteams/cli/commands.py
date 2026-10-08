@@ -219,8 +219,9 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     battery, leaving no CLI path to heed the man page's "review the diff" guidance
     (remediation log, 2026-08-13). An enforcement-module mismatch exits 1.
 
-    Also checks the governance CSV logs (:mod:`agentteams.governance_logs`): a log whose rows don't all have the
-    header's field count exits 1.
+    Also checks the governance CSV logs (:mod:`agentteams.governance_logs`): a malformed log (a field count off the
+    header's, a quote open at end of file, or a field that swallowed later dated rows) exits 1, with or without a
+    build-log baseline.
     """
     from collections import Counter
 

@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     findings, MCP needs and the conflict log, in a project root or a team dir. Three signs are checked: a field
     count that differs from the header's; a quote left open at end of file, which a last-column unclosed quote
     causes without changing any count; and a field that has swallowed later dated rows.
-  - `append_row` is the validated way for code to add a row. It holds a lock, re-checks, validates in memory, and
-    appends in one `O_APPEND` write. It never rewrites the file.
+  - `append_row` is the validated way for code to add a row. It holds an exclusive `flock` (POSIX only; Windows
+    appends are unlocked), re-checks, validates in memory, and appends in one `O_APPEND` write. It never rewrites
+    the file.
 - **`--verify-integrity` checks those logs too** and exits non-zero on a malformed one. On 2026-10-07 another
   session's unclosed quote made `security-decisions.log.csv` mis-parse, and a later in-place rewrite truncated
   13 records. They were recovered from session transcripts.
