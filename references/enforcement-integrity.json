@@ -1,7 +1,7 @@
 {
   "modules": {
-    ".claude/hooks/constitutional-gate.py": "79b80ca7b10804b3362ac3e888201f6f684cc21c721aa9cd1acb3830c660f6a5",
-    ".github/hooks/constitutional-gate.py": "79b80ca7b10804b3362ac3e888201f6f684cc21c721aa9cd1acb3830c660f6a5",
+    ".claude/hooks/constitutional-gate.py": "ef11d43e7a865c295e9b855ed2ceea1332779519c2465adacaff646432ca81d3",
+    ".github/hooks/constitutional-gate.py": "ef11d43e7a865c295e9b855ed2ceea1332779519c2465adacaff646432ca81d3",
     "agentteams/agent_doc_sync.py": "5689b5f000ed02f477ed2c4991886fe8bc00af1f47be4e51a035db83999b234e",
     "agentteams/atomicio.py": "f46a347095799d84845d52cc5f1e800cb7f43fcdf737c83a99f501add14f7214",
     "agentteams/branch_cleanup.py": "c479f18086b4a0766fb0f577731013a616e5cf802ec2f76161b46e1bf6f53350",
