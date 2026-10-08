@@ -13,6 +13,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/code-index/` turned an index read into a read of any file. Such a partition is now refused with
   `CodeIndexError`. The MCP `recall` server gets the matching refusal in the MCP-catalogue verification fixes.
 
+### fix (MCP catalogue: independent-verification findings)
+
+- **gitread** refuses a `.git` file or symlink, a `commondir`, or object alternates that point git at a repository
+  outside the project. Without this, it would serve that other repository's history. Both `--absolute-git-dir`
+  and `--git-common-dir` must resolve inside the project. A registered linked worktree is still allowed: its
+  admin dir must be `<common>/worktrees/<name>`, and its `gitdir` back-link must name this project's `.git`.
+- **recall** confines a code-index partition path before checking that it exists. A missing file outside the
+  project is now refused, not skipped, so the refuse/skip difference no longer reveals which outside files exist.
+- **The constitutional gate's merge trigger** now matches `gh [flags] pr [flags] merge` (so `gh pr -R o/r merge`
+  is caught), GraphQL `mergePullRequest` / `enablePullRequestAutoMerge`, and commands split by a
+  backslash-newline. Line continuations are joined before every pattern. A "merge" inside a PR body, or a later
+  `git merge`, no longer prompts. The template is re-pinned, and so are this repo's deployed hook copies, which
+  are gitignored: after this merges, copy the template into `.claude/hooks/` and `.github/hooks/`, or
+  `--verify-integrity` reports them as modified.
+- **Remaining limit, unchanged by this fix:** `github-write` keeps `push_files` / `create_or_update_file`. Where
+  the default branch has no protection, those can write to it directly. Branch protection is part of the
+  activation checklist.
+
+### fix (launcher: control-plane protection on macOS, F-4 parity with Linux)
+
+- `sandbox/confine-run.sh` protected agentteams' control plane (the decision-signing switch, gate hook,
+  verify-key store, rosters, team marker, `--protect` and `--protect-prompt-roots` paths) only on Linux. On
+  macOS, a process run through the launcher could rewrite them inside a writable root. The macOS Seatbelt
+  profile now write-denies each of them after the allows. It rename-locks their ancestors, and also every
+  writable root and the root's own ancestors, so a root under `/private/tmp` can't be renamed away to reach its
+  control plane. It uses the same collector as Linux, ported to run under macOS's `/bin/bash` 3.2 and BSD
+  `realpath`.
+- Both platforms: a protected file with a second hard link, or any such file inside a protected directory, is
+  refused (an alias could write it), and a trailing
+  `/` no longer hides a symlinked `--protect` path.
+- Behaviour change on macOS: a team missing a required control-plane entry is refused (exit 2, "run agentteams
+  --update"), as on Linux.
+- Verified live on macOS: `mac-escape-tests.sh` Gate 8 (positive control included) and
+  `tests/test_launcher_macos_control_plane.py`.
+
+### docs (templates: Rule 11 lessons from 2026-10-07)
+
+- The read-only auditor templates (adversarial, security, conflict-auditor, code-hygiene, technical-validator,
+  quality-auditor) now say: never change git state, meaning nothing that writes the working tree, index, refs or
+  `.git/`. To see old code, ask the caller for `git show` output. A mutation check is the caller's job, in a
+  scratch copy extracted outside the repository. Twice that day a read-only reviewer had run `git stash` in the
+  orchestrator's worktree.
+- The orchestrator and copilot-instructions templates' plan rule now says a batch of operator-scheduled
+  follow-ups gets its plan and steps CSV before the first item, and a plan written afterwards says
+  `(retroactive)` in its title.
+
 ### feat (MCP catalogue: foundational servers and the PR agents)
 
 - **A catalogue of foundational MCP servers** (`agentteams/templates/mcp/`, `agentteams/mcp_catalog.py`):
