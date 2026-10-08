@@ -1007,10 +1007,11 @@ Classify every generated output file against the build-log `file_hashes` baselin
 
 **Enforcement manifest:** when `references/enforcement-integrity.json` exists at the resolved root, `--verify-integrity` also re-checks every enforcement module against it and exits non-zero on any mismatch — the CLI counterpart to [`--write-integrity-manifest`](#--write-integrity-manifest)'s "review the diff before regenerating" contract. (Before 2026-08-13 the only check of that manifest lived inside the red-team battery.) A **missing** manifest is itself a finding (exit non-zero) when the repository tracks it in git or the imported scanner sits inside the project (e.g. an in-project `.venv`); an ordinary consumer project without one is unaffected.
 
-**Governance logs:** it also checks the append-only CSV logs present at the resolved root:
-`references/security-decisions.log.csv`, `agentteams-remediation-log.csv`, `redteam-findings.log.csv`,
-`mcp-needs.csv` and `.github/agents/references/conflict-log.csv`. Any row whose field count differs from the
-header's, such as an unclosed quote or an unescaped comma, exits non-zero. A malformed row breaks every later
+**Governance logs:** it also checks the append-only CSV logs (`security-decisions.log.csv`,
+`agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) found under
+the resolved root's `references/`, `.github/agents/references/` or `.claude/agents/references/`. It exits
+non-zero on a malformed one: a row whose field count differs from the header's, a quote left open at end of file,
+or a field that has swallowed later dated rows. A malformed row breaks every later
 reader, and a rewrite that trusts the parse truncates the file. Repair the row before anything appends to or
 rewrites the log. See [`governance_logs`](api-reference/governance-logs.md).
 

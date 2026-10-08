@@ -76,6 +76,45 @@ def test_check_logs_covers_the_known_paths(tmp_path):
     assert len(problems) == 1 and "conflict-log.csv" in problems[0]
 
 
+def test_a_team_dir_layout_is_found_too(tmp_path):
+    """In a generated team the logs sit in <team>/references/, conflict-log included."""
+    _log(tmp_path, "a,b\n1,2,3\n", "references/conflict-log.csv")
+    assert [p.name for p in gl.log_paths(tmp_path)] == ["conflict-log.csv"]
+    assert gl.check_logs(tmp_path)
+
+
+def test_unclosed_quote_in_the_last_column_is_reported(tmp_path):
+    """The review's case: the field count stays right, but strict parsing hits end of data."""
+    problems = gl.check_log(_log(tmp_path, 'a,b,c\n1,2,"oops\n4,5,6\n'))
+    assert any("strict parse" in p for p in problems)
+
+
+def test_swallowed_dated_rows_are_reported_even_when_a_later_quote_closes(tmp_path):
+    text = 'date,x,ev\n2026-10-07,a,"oops\n2026-10-07,b,c\n2026-10-08,d,"x"\n'
+    problems = gl.check_log(_log(tmp_path, text))
+    assert any("swallowed" in p for p in problems)
+
+
+def test_append_row_refuses_a_value_that_would_look_like_a_swallowed_row(tmp_path):
+    path = _log(tmp_path, "date,x,ev\n2026-10-07,a,b\n")
+    with pytest.raises(ValueError, match="dated record"):
+        gl.append_row(path, ["2026-10-08", "x", "note\n2026-10-09,looks,like a row"])
+
+
+def test_concurrent_appends_neither_interleave_nor_tear(tmp_path):
+    import threading
+    path = _log(tmp_path, "a,b\n")
+    big = "x" * 20000  # larger than the 8 KiB write buffer the review worried about
+    threads = [threading.Thread(target=gl.append_row, args=(path, [str(i), big])) for i in range(12)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    rows = list(csv.reader(path.open(newline="")))[1:]
+    assert sorted(int(r[0]) for r in rows) == list(range(12)) and all(r[1] == big for r in rows)
+    assert gl.check_log(path) == []
+
+
 def test_verify_integrity_exits_1_on_a_malformed_log(tmp_path):
     _log(tmp_path, 'a,b,c\n1,"oops,3\n4,5,6\n')
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--verify-integrity", "--output", str(tmp_path)],

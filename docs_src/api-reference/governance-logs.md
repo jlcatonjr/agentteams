@@ -14,7 +14,8 @@ and was rebuilt from session transcripts.
 
 | Name | Purpose |
 |---|---|
-| `LOG_PATHS` | The logs checked when present, relative to a project or team root: `references/security-decisions.log.csv`, `references/agentteams-remediation-log.csv`, `references/redteam-findings.log.csv`, `references/mcp-needs.csv`, `.github/agents/references/conflict-log.csv`. |
-| `check_log(path) -> list[str]` | One problem per record whose field count differs from the header's (or for an unreadable or headerless file). Empty when well-formed. |
-| `check_logs(root) -> list[str]` | `check_log` over every `LOG_PATHS` entry present under `root`. |
-| `append_row(path, row)` | The safe way to add a row. It refuses a malformed log, takes a list in header order or a dict of header names, requires `str` values, renders the row in memory, and checks it round-trips to one record of the header's width. Only then does it append, keeping the file's line endings. It never opens the file for rewriting. Raises `ValueError` and leaves the file untouched otherwise. |
+| `LOG_NAMES`, `LOG_DIRS` | The logs (`security-decisions.log.csv`, `agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) are looked for in `references/`, `.github/agents/references/` and `.claude/agents/references/`. So a project root and a team dir both work. |
+| `log_paths(root) -> list[Path]` | Every log present under `root`, each resolved file once. |
+| `check_log(path) -> list[str]` | Problems in one log. It checks three signs, because an unclosed quote in the last column swallows the rest of the file into that field without changing any field count: a record whose field count differs from the header's; a strict-parse error (a quote still open at end of file); and a field holding a line that starts a dated record. Empty when well-formed. |
+| `check_logs(root) -> list[str]` | `check_log` over `log_paths(root)`. |
+| `append_row(path, row)` | The validated way for code to add a row. It takes a list in header order or a dict of header names, and only `str` values. Under an exclusive `flock` (POSIX), it re-checks the log, renders the row in memory, refuses a value holding a dated-record line, and checks the row round-trips to one record of the header's width. Then it appends with one `os.write` on an `O_APPEND` descriptor, keeping line endings, so concurrent callers neither interleave nor tear. It never rewrites. Raises `ValueError` and leaves the file untouched otherwise. Rows written by hand bypass it; `check_logs` is what catches those. |

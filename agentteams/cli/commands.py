@@ -248,7 +248,7 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
 
     # Governance CSV logs (2026-10-08): a malformed row breaks every later reader, and a rewrite trusting the
     # parse truncates the file (security-decisions.log.csv lost 13 records that way on 2026-10-07).
-    from agentteams.governance_logs import LOG_PATHS, check_logs
+    from agentteams.governance_logs import check_logs, log_paths
 
     log_problems = check_logs(output_dir)
     if log_problems:
@@ -259,7 +259,7 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
         print("  Repair the row by hand (or from history) before any tool appends to or rewrites the log.",
               file=sys.stderr)
     else:
-        present = [rel for rel in LOG_PATHS if (output_dir / rel).is_file()]
+        present = log_paths(output_dir)
         if present:
             print(f"Governance logs: OK ({len(present)} well-formed)")
 
