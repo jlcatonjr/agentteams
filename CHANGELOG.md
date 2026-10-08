@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (MCP catalogue: independent-verification findings)
+
+- **gitread** refuses a `.git` file or symlink, a `commondir`, or object alternates that point git at a repository
+  outside the project. Without this, it would serve that other repository's history. Both `--absolute-git-dir`
+  and `--git-common-dir` must resolve inside the project. A registered linked worktree is still allowed: its
+  admin dir must be `<common>/worktrees/<name>`, and its `gitdir` back-link must name this project's `.git`.
+- **recall** confines a code-index partition path before checking that it exists. A missing file outside the
+  project is now refused, not skipped, so the refuse/skip difference no longer reveals which outside files exist.
+- **The constitutional gate's merge trigger** now matches `gh [flags] pr [flags] merge` (so `gh pr -R o/r merge`
+  is caught), GraphQL `mergePullRequest` / `enablePullRequestAutoMerge`, and commands split by a
+  backslash-newline. Line continuations are joined before every pattern. A "merge" inside a PR body, or a later
+  `git merge`, no longer prompts. The template is re-pinned, and so are this repo's deployed hook copies, which
+  are gitignored: after this merges, copy the template into `.claude/hooks/` and `.github/hooks/`, or
+  `--verify-integrity` reports them as modified.
+- **Remaining limit, unchanged by this fix:** `github-write` keeps `push_files` / `create_or_update_file`. Where
+  the default branch has no protection, those can write to it directly. Branch protection is part of the
+  activation checklist.
+
 ### fix (launcher: control-plane protection on macOS, F-4 parity with Linux)
 
 - `sandbox/confine-run.sh` protected agentteams' control plane (the decision-signing switch, gate hook,
