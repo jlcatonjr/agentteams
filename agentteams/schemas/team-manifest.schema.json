@@ -526,6 +526,10 @@
       "items": {"type": "string"},
       "description": "MCP catalogue exclusions carried from the project description (emitted only when non-empty)."
     },
+    "mcp_grants": {
+      "type": "object",
+      "description": "agentteams_runner MCP grants carried from the project description, only under write_policy orchestrator-only and only when set (R6)."
+    },
     "write_policy": {
       "type": "string",
       "enum": ["orchestrator-only"],

@@ -612,10 +612,58 @@ def _tools_key_problem(content: str) -> str | None:
     return None
 
 
-def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tuple[list[str], list[str]]:
-    """Return ``(errors, warnings)`` for one non-orchestrator agent file under the switch."""
+def _runner_block_problem(content: str, slug: str, grant: dict[str, Any]) -> tuple[str, str | None]:
+    """Strip a granted agent's canonical ``mcpServers`` block from its front matter (R6), or say why it isn't one.
+
+    Exactly one top-level ``mcpServers:`` key, whose block equals :func:`runner_mcp.claude_block` for this agent's
+    grant with one of the system interpreters, character for character. Returns the content without that block (so
+    the capability-key check doesn't flag it) and a problem, if any.
+    """
+    from agentteams import runner_mcp
+
+    fm = _FRONT_MATTER_RE.match(content)
+    if not fm:
+        return content, None
+    inner = fm.group(1) + "\n"
+    starts = [m.start() for m in re.finditer(r"^mcpServers[ \t]*:", inner, re.MULTILINE)]
+    if len(starts) != 1:
+        return content, ("declares no agentteams_runner block, or more than one `mcpServers:` key"
+                         if starts else None)
+    try:
+        expected = [runner_mcp.claude_block(slug, list(grant.get("tools") or []), str(grant.get("approval", "staged")),
+                                            py) for py in runner_mcp.SYSTEM_PYTHONS]
+    except ValueError as exc:
+        return content, f"has an mcp_grants entry the audit can't render ({exc})"
+    block = next((e for e in expected if inner[starts[0]:].startswith(e)), None)
+    if block is None:
+        return content, ("declares an `mcpServers:` block that isn't the canonical agentteams_runner entry for its "
+                         "grant (command, args or extra keys differ); re-render it")
+    rest = inner[starts[0] + len(block):]
+    if rest[:1] in (" ", "\t", "-"):
+        # Anything indented after the block belongs to it (an `env:`/`cwd:` key, another `- server:` entry); the
+        # key regex reads column 0 only, so it must be refused here (@security R6 review condition 1).
+        return content, ("declares extra lines inside or after its agentteams_runner `mcpServers:` block (another "
+                         "server, or keys such as env/cwd); only the canonical entry is allowed")
+    stripped = inner[:starts[0]] + rest
+    return content[:fm.start(1)] + stripped.rstrip("\n") + content[fm.end(1):], None
+
+
+def _write_policy_problems(content: str, agent_ext: str, framework: str, slug: str = "",
+                           grant: dict[str, Any] | None = None) -> tuple[list[str], list[str]]:
+    """Return ``(errors, warnings)`` for one non-orchestrator agent file under the switch.
+
+    ``grant`` (R6) is the agent's ``mcp_grants`` entry: its canonical ``agentteams_runner`` block (Claude) or
+    extension (Goose) and exact tool names are then allowed, and any shell becomes an error (the agent executes
+    only through the runner).
+    """
     errors: list[str] = []
     warnings: list[str] = []
+    granted_names: set[str] = set()
+    if grant:
+        from agentteams import runner_mcp
+
+        granted_names = {n.lower() for n in runner_mcp.tool_names(
+            [t for t in grant.get("tools") or [] if t in runner_mcp.TOOLS])}
     if agent_ext == ".toml":
         try:
             data = tomllib.loads(content)
@@ -642,8 +690,23 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
             errors.append("recipe grants summon (dispatch), which can start a sub-recipe that writes")
         if re.search(r"^[\"']?sub_recipes[\"']?\s*:", content, re.MULTILINE):
             errors.append("recipe declares sub_recipes (dispatch), which can run a sub-recipe that writes")
+        runner_ok: set[str] = set()
+        if grant:
+            from agentteams import runner_mcp
+
+            for ext in (e for e in extensions if e["name"] == runner_mcp.SERVER_NAME):
+                want = [runner_mcp.goose_extension(slug, list(grant.get("tools") or []),
+                                                   str(grant.get("approval", "staged")), py)
+                        for py in runner_mcp.SYSTEM_PYTHONS]
+                if any((ext["type"], ext["cmd"], ext["args"], ext["available_tools"])
+                       == (w["type"], w["cmd"], w["args"], w["available_tools"]) for w in want) \
+                        and not (set(ext["keys"]) - _READFS_KEYS) and len(ext["keys"]) == len(set(ext["keys"])):
+                    runner_ok.add(ext["name"])
+                else:
+                    errors.append("recipe's agentteams_runner isn't the canonical entry for its grant (cmd, args, "
+                                  "available_tools or extra keys differ); re-render it")
         others = sorted({e["name"] for e in extensions}
-                        - _GOOSE_READ_EXTENSIONS - {"developer", "analyze", "summon"})
+                        - _GOOSE_READ_EXTENSIONS - {"developer", "analyze", "summon"} - runner_ok)
         if others:
             errors.append(f"recipe carries extension(s) this check can't classify as read-only: {', '.join(others)}")
         # Built-in names are trusted only with their real type: an entry named `analyze` but of type `stdio` would
@@ -681,13 +744,20 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
             errors.append(f"recipe leaves `analyze` on (Goose adds it beside developer), which reads outside the "
                           f"workspace; list it, once, with the flow-style available_tools: [{DISABLED}]")
         if "shell" in dev or "execute" in declared:
-            warnings.append("recipe grants a shell, which is unconfined until the P4 sandbox profiles")
+            if grant:  # @security C15: a granted agent executes only through the runner
+                errors.append("recipe grants a shell, but this agent executes only through agentteams_runner")
+            else:
+                warnings.append("recipe grants a shell, which is unconfined until the P4 sandbox profiles")
         return errors, warnings
+    if grant:
+        content, block_problem = _runner_block_problem(content, slug, grant)
+        if block_problem:
+            errors.append(block_problem)
     errors.extend(_capability_key_problems(content))
     problem = _tools_key_problem(content)
     if problem:
         return errors + [problem], warnings
-    tokens = _declared_tool_tokens(content)
+    tokens = _declared_tool_tokens(content) - granted_names
     writes, shell, dispatch = tokens & _WRITE_TOKENS, tokens & _SHELL_TOKENS, tokens & _DISPATCH_TOKENS
     unknown = tokens - _READ_ONLY_TOKENS - _WRITE_TOKENS - _SHELL_TOKENS - _DISPATCH_TOKENS
     if writes:
@@ -696,7 +766,9 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str) -> tupl
         errors.append(f"declares dispatch ({', '.join(sorted(dispatch))}), which can start a subagent that writes")
     if unknown:
         errors.append(f"declares tool(s) this check can't classify as read-only: {', '.join(sorted(unknown))}")
-    if shell and framework not in _SHELL_WARN_FRAMEWORKS:
+    if shell and grant:  # @security C15: a granted agent executes only through the runner
+        errors.append(f"declares {', '.join(sorted(shell))}, but this agent executes only through agentteams_runner")
+    elif shell and framework not in _SHELL_WARN_FRAMEWORKS:
         errors.append(f"declares {', '.join(sorted(shell))}, and {framework} has no per-agent sandbox")
     elif shell:
         warnings.append(f"declares {', '.join(sorted(shell))}, which is unconfined until the P4 sandbox profiles")
@@ -710,6 +782,7 @@ def _check_write_policy(
     framework: str,
     enabled: bool,
     unreadable: list[str] | None = None,
+    mcp_grants: dict[str, Any] | None = None,
 ) -> list[AuditFinding]:
     """Under ``write_policy: "orchestrator-only"``, check that only the orchestrator can write.
 
@@ -749,6 +822,8 @@ def _check_write_policy(
         enabled: Whether the manifest carries ``write_policy: "orchestrator-only"``.
         unreadable: Team paths the disk loader could not read (symlinks, non-UTF-8). A host may still load
             them as agents, so each is an error rather than a silent skip.
+        mcp_grants: The manifest's ``mcp_grants`` (R6). A granted agent may carry exactly the canonical
+            ``agentteams_runner`` block or extension and its exact tool names; a shell on it is an error.
 
     Returns:
         The findings (none when the switch is off).
@@ -812,7 +887,10 @@ def _check_write_policy(
     for rel_path, content in agents:
         if rel_path in exempt:
             continue
-        errors, warnings = _write_policy_problems(content, agent_ext, framework)
+        slug = _agent_slug(rel_path, agent_ext)
+        grant = (mcp_grants or {}).get(slug)
+        errors, warnings = _write_policy_problems(content, agent_ext, framework, slug,
+                                                  grant if isinstance(grant, dict) and grant.get("tools") else None)
         for severity, problems in (("error", errors), ("warning", warnings)):
             for problem in problems:
                 findings.append(AuditFinding(

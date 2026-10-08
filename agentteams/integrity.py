@@ -53,6 +53,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                             # construction, so any change to it must be a reviewed re-record
     "agentteams/cli/proposal_commands.py",  # the CLI that hands artifacts to proposals.py
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
+    "agentteams/audit_agent_contract.py",  # R6: AR_WRITE_POLICY decides which agentteams_runner grants are canonical
     "agentteams/confinement.py",  # orchestrator-only-writes pilot: the runner's OS sandbox (C-3/C-5 boundary)
     "agentteams/proposal_runner.py",  # orchestrator-only-writes pilot: sole holder of the ledger key
     "agentteams/proposal_policy.py",  # orchestrator-only-writes pilot: the policy half of proposals.py

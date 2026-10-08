@@ -143,6 +143,16 @@ class ClaudeAdapter(FrameworkAdapter):
         name, description = _extract_name_description(content, agent_slug, manifest)
         # Map the per-agent tool scope BEFORE the VS Code front matter is stripped.
         allowed_tools = _map_allowed_tools(content)
+        mcp_block = None
+        grant = _runner_grant(agent_slug, manifest)
+        if grant is not None:
+            # R6: a granted agent writes and executes only through agentteams_runner: its exact tool names join
+            # the narrowed read tools, and the server is defined inline, scoped to this subagent alone.
+            from agentteams import runner_mcp
+
+            allowed_tools = ", ".join([allowed_tools, *runner_mcp.tool_names(grant["tools"])])
+            mcp_block = runner_mcp.claude_block(agent_slug, grant["tools"], grant.get("approval", "staged"),
+                                                runner_mcp.interpreter())
         # A.5: Extract optional Claude-specific keys before stripping front matter.
         model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)
         content = self._strip_yaml_front_matter(content)
@@ -152,6 +162,7 @@ class ClaudeAdapter(FrameworkAdapter):
             model=model,
             disallowed_tools=disallowed_tools,
             permission_mode=permission_mode,
+            mcp_block=mcp_block,
         )
         return content.strip() + "\n"
 
@@ -273,6 +284,9 @@ class ClaudeAdapter(FrameworkAdapter):
         if not hook:
             return files
         files.append(("../hooks/constitutional-gate.py", _apply_fail_closed_policy(hook, manifest)))
+        from agentteams import runner_mcp  # R6: granted agents launch the installed agentteams_runner server
+
+        files.extend(runner_mcp.install_files(manifest))
         if example:
             if _sandbox_feature_enabled(manifest):
                 example = _inject_sandbox_block(
@@ -568,6 +582,16 @@ def _extract_name_description(
     return name, description
 
 
+def _runner_grant(agent_slug: str, manifest: dict[str, Any]) -> dict[str, Any] | None:
+    """The agent's ``agentteams_runner`` grant under the switch (R6), else None. The orchestrator never has one."""
+    from agentteams import write_policy as _wp
+
+    if not _wp.enabled(manifest) or agent_slug in _wp.ORCHESTRATOR_SLUGS:
+        return None
+    grant = (manifest.get("mcp_grants") or {}).get(agent_slug)
+    return grant if isinstance(grant, dict) and grant.get("tools") else None
+
+
 def _inject_claude_front_matter(
     content: str,
     name: str,
@@ -577,6 +601,7 @@ def _inject_claude_front_matter(
     model: str | None = None,
     disallowed_tools: str | None = None,
     permission_mode: str | None = None,
+    mcp_block: str | None = None,
 ) -> str:
     """Prepend a Claude Code-compatible YAML front matter block to content.
 
@@ -601,6 +626,8 @@ def _inject_claude_front_matter(
         lines.append(f"disallowedTools: {disallowed_tools}")
     if permission_mode:
         lines.append(f"permissionMode: {permission_mode}")
+    if mcp_block:  # R6: the canonical agentteams_runner block, last, exactly as runner_mcp renders it
+        lines.append(mcp_block.rstrip("\n"))
     lines.append("---")
     lines.append("")
     return "\n".join(lines) + content

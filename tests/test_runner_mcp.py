@@ -35,8 +35,7 @@ def test_tool_list_matches_the_policy_loader():
 
 def test_launch_args_are_canonical_and_validated():
     assert M.launch_args("a", ["run_command", "write_file"]) == [
-        "-I", "-S", M.PROTECTED_PATH, "--root", ".", "--agent", "a", "--approval", "staged",
-        "--tools", "write_file,run_command"]
+        "-I", "-S", M.PROTECTED_PATH, "--agent", "a", "--approval", "staged", "--tools", "write_file,run_command"]
     for bad in ([], ["shell"], ["*"]):
         with pytest.raises(ValueError):
             M.launch_args("a", bad)

@@ -278,6 +278,13 @@ class GooseAdapter(FrameworkAdapter):
             mcp_exts, clash_notes = _filter_operator_mcp(list(mcp_exts))
             mcp_notes = list(mcp_notes) + clash_notes
         mcp_exts = list(scoped_stdio) + list(mcp_exts)
+        grant = (manifest.get("mcp_grants") or {}).get(agent_slug) if restricted else None
+        if isinstance(grant, dict) and grant.get("tools"):
+            # R6: a granted agent writes and executes only through the installed agentteams_runner server.
+            from agentteams import runner_mcp
+
+            mcp_exts = list(mcp_exts) + [runner_mcp.goose_extension(
+                agent_slug, grant["tools"], grant.get("approval", "staged"), runner_mcp.interpreter())]
         # Phase 2: wire the first-party stdio coordination server into coordinator/liaison
         # recipes when the team declares coordination (file-based; only reads/records).
         if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS and not restricted:
@@ -635,6 +642,9 @@ class GooseAdapter(FrameworkAdapter):
                 raise ValueError("the read-only file server in this agentteams install doesn't match its pinned "
                                  "hash (READFS_SHA256); reinstall agentteams before rendering under the switch")
             files.append((f"../../{_READFS_PROTECTED_PATH if protected else _READFS_SCRIPT}", readfs))
+            from agentteams import runner_mcp  # R6: granted agents launch the installed agentteams_runner server
+
+            files.extend(runner_mcp.install_files(manifest))
         files.extend(goose_sandbox_output_files(manifest))
         # Linux companion to the darwin Seatbelt path: a goose-specific confined-run example that
         # wraps the neutral bwrap launcher with the settings a confined goose needs (writable XDG,

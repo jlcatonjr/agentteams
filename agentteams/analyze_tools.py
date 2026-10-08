@@ -192,3 +192,15 @@ def detect_reference_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
             **_version_source_field(tool),
         })
     return refs
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    """Return values in first-seen order with duplicates removed."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
