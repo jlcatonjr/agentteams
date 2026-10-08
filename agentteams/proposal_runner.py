@@ -30,6 +30,7 @@ import re
 import secrets
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -49,9 +50,13 @@ LOCK_REL = ".agentteams/runner.lock"
 HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 
 #: Request kinds the runner serves. Commands and gates run confined (P4b).
-KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger")
-#: The kinds the MCP channel may queue. Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
-MCP_KINDS = ("apply-proposal", "run-request")
+KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger",
+         "stage-proposal", "apply-direct", "apply-staged", "reject-staged", "list-staged", "show-staged")
+#: The kinds the MCP channel may queue: a write is staged (or direct, with a verified signed grant), a command runs.
+#: Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
+MCP_KINDS = ("stage-proposal", "apply-direct", "run-request")
+#: Kinds only the MCP channel may queue (the orchestrator applies its own writes with apply-proposal).
+MCP_ONLY_KINDS = ("stage-proposal", "apply-direct")
 #: Request directory -> channel.
 CHANNELS = {REQUESTS_REL: "orchestrator", MCP_REQUESTS_REL: "mcp"}
 REQUEST_MAX_BYTES = 2 * 1024 * 1024
@@ -135,6 +140,16 @@ def _confined_hash(root: Path) -> str | None:
     return found[1] if found else None
 
 
+def _grants_hash(root: Path) -> str | None:
+    """The operator direct-grants file's hash now (None when absent); a custody failure counts as a change."""
+    from agentteams import mcp_direct_grants as G
+
+    try:
+        return G.read_grants(root)[1]
+    except P.ProposalError:
+        return "unreadable"
+
+
 def check_installed_readfs(root: Path) -> None:
     """Refuse to serve when the installed Goose read-only file server isn't the shipped one.
 
@@ -170,6 +185,55 @@ def check_installed_readfs(root: Path) -> None:
                           "serve. Re-render the team with this agentteams install to reinstall it")
 
 
+def check_installed_runner_mcp(root: Path) -> None:
+    """Refuse to serve when the installed ``agentteams_runner`` MCP server isn't the shipped one (R4).
+
+    Same model as :func:`check_installed_readfs`: the copy every granted agent launches lives in the control plane,
+    and the runner, the trust anchor outside every session, checks it against the integrity-pinned
+    ``runner_mcp.SHA256``. A team with no installed copy (no grants) passes.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        None.
+
+    Raises:
+        RunnerError: The installed copy is a symlink, not a regular file, or doesn't match the pinned hash.
+    """
+    from agentteams.runner_mcp import PROTECTED_PATH, SHA256
+
+    path = root / PROTECTED_PATH
+    for parent in (path.parent.parent, path.parent):
+        if parent.is_symlink():
+            raise RunnerError(f"{parent.relative_to(root)} is a symlink; refusing to serve")
+    if not path.exists() and not path.is_symlink():
+        return
+    try:
+        data = _read_regular(path, 4 * 1024 * 1024)
+    except (OSError, RunnerError) as exc:
+        raise RunnerError(f"{PROTECTED_PATH} is not a regular file ({exc}); refusing to serve") from exc
+    if hashlib.sha256(data).hexdigest() != SHA256:
+        raise RunnerError(f"{PROTECTED_PATH} doesn't match the shipped agentteams_runner server; refusing to serve. "
+                          "Re-render the team with this agentteams install to reinstall it")
+
+
+def check_installed_servers(root: Path) -> None:
+    """Both control-plane MCP servers: Goose's read-only file server and ``agentteams_runner``.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        None.
+
+    Raises:
+        RunnerError: Either installed copy is not the shipped one.
+    """
+    check_installed_readfs(root)
+    check_installed_runner_mcp(root)
+
+
 # --- the runner ---------------------------------------------------------------------------------
 
 
@@ -199,6 +263,7 @@ class Runner:
         except (OSError, ValueError, AttributeError) as exc:
             raise RunnerError(f"cannot read the brief: {exc}") from exc
         self.brief_sha = hashlib.sha256(raw).hexdigest()
+        self._brief = json.loads(raw)
         if switch != "orchestrator-only":
             # Without the switch, session sandboxes don't write-deny .agentteams/, so results could be forged.
             raise RunnerError('the brief does not set write_policy "orchestrator-only"; the runner serves only '
@@ -213,6 +278,21 @@ class Runner:
             raise RunnerError(f"unset {', '.join(leaked)} before starting the runner; it reads the key from its "
                               "key file only, and a confined child could read this process's environment")
         P.use_key_file(key_file)
+        # R5: verified operator-signed direct-write grants. Only these agents may write directly; the file is pinned.
+        from agentteams import mcp_direct_grants as G
+
+        try:
+            self.direct_grants, self.grant_problems, self.grants_sha = G.active_grants(self.root, policy, self._brief)
+        except P.ProposalError as exc:
+            raise RunnerError(f"direct-write grants: {exc}") from exc
+        self.direct_counts: dict[str, int] = {}
+        if self.direct_grants:
+            try:  # counted once, from a verified ledger, then kept in memory (R5 condition 3)
+                self.direct_counts = G.count_direct_writes(self.root)
+            except P.ProposalError as exc:
+                self.grant_problems.append(f"no direct grant is used: {exc}")
+                self.direct_grants = {}
+        policy.direct_agents = frozenset(self.direct_grants)
         (self.root / ".agentteams").mkdir(mode=0o700, exist_ok=True)
         self._lock_fd = os.open(self.root / LOCK_REL, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
@@ -230,11 +310,17 @@ class Runner:
         self.heartbeat_error: str | None = None
         self._heartbeat_thread: threading.Thread | None = None
         try:
-            check_installed_readfs(self.root)
+            check_installed_servers(self.root)
         except RunnerError:
             self.close()
             raise
         self._heartbeat()
+        if self.direct_grants or self.grant_problems:
+            P.record(self.root, {"action": "direct-grants-loaded",
+                                 "active": sorted(g["grant_id"] for g in self.direct_grants.values()),
+                                 "key_fingerprints": sorted({G.key_fingerprint(str(g["key_id"]))
+                                                             for g in self.direct_grants.values()}),
+                                 "problems": [p[:200] for p in self.grant_problems][:10]})
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, name="agentteams-runner-heartbeat",
                                                   daemon=True)
         self._heartbeat_thread.start()
@@ -283,13 +369,21 @@ class Runner:
             if not (isinstance(via, str) and via):
                 raise RunnerError("an MCP-channel request must name its server instance's agent (via_agent)")
             return {"expect_agent": via}
+        if request.get("kind") in MCP_ONLY_KINDS:
+            raise RunnerError(f"{request.get('kind')!r} comes only from an agent's agentteams_runner server")
         return {"refuse_agents": self.policy.mcp_agents}
 
     def _handle(self, request: dict[str, Any], channel: str = "orchestrator") -> dict[str, Any]:
         ident = self._identity_args(request, channel)
         kind = request.get("kind")
         if kind == "issue-dispatch":
-            return {"nonce": P.issue_dispatch(self.root, str(request.get("agent") or ""))}
+            agent = str(request.get("agent") or "")
+            if agent in self.policy.direct_agents:  # @security C6: a direct agent's nonce is shorter-lived and narrower
+                from agentteams import mcp_direct_grants as G
+
+                return {"nonce": P.issue_dispatch(self.root, agent, ttl_hours=G.DIRECT_TTL_HOURS,
+                                                  max_uses=G.DIRECT_MAX_USES)}
+            return {"nonce": P.issue_dispatch(self.root, agent)}
         if kind == "apply-proposal":
             return P.apply_proposal(request.get("artifact"), root=self.root, policy=self.policy,
                                     dry_run=bool(request.get("dry_run")), confine=True, **ident)
@@ -299,7 +393,49 @@ class Runner:
                                  dry_run=bool(request.get("dry_run")), confine=True, timeout_cap=cap, **ident)
         if kind == "verify-ledger":
             return {"problems": P.verify_ledger(self.root)}
+        if kind in ("stage-proposal", "apply-direct", "apply-staged", "reject-staged", "list-staged", "show-staged"):
+            return self._handle_staging(request, kind, ident)
         raise RunnerError("unknown request kind")
+
+    def _handle_staging(self, request: dict[str, Any], kind: str, ident: dict[str, Any]) -> Any:
+        from agentteams import proposal_staging as S
+
+        if kind == "stage-proposal":
+            return S.stage_proposal(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
+                                    expect_agent=ident.get("expect_agent"))
+        if kind == "apply-direct":
+            agent = ident.get("expect_agent")
+            grant = self.direct_grants.get(str(agent))
+            if grant is None:  # never on policy membership alone: the grant carries the caps
+                raise P.ProposalError(f"{agent} holds no verified direct-write grant; stage the proposal instead")
+            artifact = request.get("artifact")
+            self._require_direct_nonce(artifact)
+            result = S.apply_direct(artifact, root=self.root, policy=self.policy, grant=grant,
+                                    used=self.direct_counts.get(grant["grant_id"], 0), confine=True,
+                                    expect_agent=agent)
+            self.direct_counts[grant["grant_id"]] = self.direct_counts.get(grant["grant_id"], 0) + 1
+            return result
+        if kind == "apply-staged":
+            return S.apply_staged(request.get("sid"), root=self.root, policy=self.policy, confine=True)
+        if kind == "reject-staged":
+            return S.reject_staged(request.get("sid"), root=self.root, reason=str(request.get("reason") or ""))
+        if kind == "list-staged":
+            return {"staged": S.list_staged(self.root)}
+        return S.show_staged(request.get("sid"), root=self.root)
+
+    def _require_direct_nonce(self, artifact: Any) -> None:
+        """A direct write's nonce must carry the narrow direct limits (R5 condition 4): one issued with the default
+        limits (before the grant loaded, or outside the runner) is refused."""
+        from agentteams import mcp_direct_grants as G
+
+        nonce = artifact.get("dispatch") if isinstance(artifact, dict) else None
+        row = P.dispatch_record(self.root, nonce)
+        if row is None:
+            raise P.ProposalError(P._CHANNEL_REFUSAL)
+        expires = datetime.fromisoformat(str(row.get("expires")))
+        if int(row.get("max_uses", P.DISPATCH_MAX_USES)) > G.DIRECT_MAX_USES or \
+                expires > datetime.now(UTC) + timedelta(hours=G.DIRECT_TTL_HOURS, minutes=1):
+            raise P.ProposalError("this nonce wasn't issued with the direct-write limits; re-dispatch the agent")
 
     def _open_session_dir(self, rel: str) -> int:
         """Open a session-writable queue dir without following a symlink anywhere in its last component."""
@@ -369,9 +505,11 @@ class Runner:
             raise RunnerError("the brief changed since the runner started; restart it to load the new policy")
         if _confined_hash(self.root) != self.policy.confined_file_sha:
             raise RunnerError("the operator confined_programs file changed since the runner started; restart it")
+        if _grants_hash(self.root) != self.grants_sha:
+            raise RunnerError("the operator direct-grants file changed since the runner started; restart it")
         # Re-checked every poll. This DETECTS a swapped server and stops serving; it doesn't stop Goose launching
         # it. Prevention is the session sandbox's write-deny on .agentteams/ (--check-wiring requires it live).
-        check_installed_readfs(self.root)
+        check_installed_servers(self.root)
         self._progress = time.monotonic()
         self._heartbeat()
         self._expire_results()

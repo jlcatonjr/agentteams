@@ -212,6 +212,7 @@ def run_post_audit(
     result.agent_refactor_findings.extend(_check_write_policy(
         file_map, agent_ext=agent_ext, framework=str(manifest.get("framework", "")),
         enabled=manifest.get("write_policy") == "orchestrator-only", unreadable=unreadable,
+        mcp_grants=manifest.get("mcp_grants"),
     ))
     result.agent_refactor_findings.extend(_check_instruction_authority_reachable(file_map, agent_ext=agent_ext))
     result.agent_refactor_findings.extend(_check_dangling_agent_slugs(file_map, output_dir, agent_ext=agent_ext))

@@ -861,6 +861,57 @@ policy (`--description`).
 Under the switch, `--issue-dispatch`, `--apply-proposal`, `--run-request` and `--verify-proposal-ledger` queue
 for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` waits again for one request.
 
+### `--sign-mcp-direct-grant AGENT`
+
+Operator only (R5); run it outside every agent session. It signs a direct-write grant for `AGENT`, whose brief
+`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
+with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
+confirmed: a terminal y/N, or `--confirm-review-sha256`.
+- **What it binds:** the brief's current tools, write scopes and gates, the installed server's hash, an expiry
+  (`--grant-days`, 1–30, default 7) and a write cap (`--max-writes`, 1–500, default 50).
+- **Checks:** it refuses a grant with no gate and directory-wide scopes, and verifies the grant before saving it.
+- **Where it saves:** the grant goes to `~/.config/agentteams/mcp-grants/`, and the public key to
+  `~/.config/agentteams/verify-keys/`.
+- **Restart the runner** to load it.
+
+### `--list-mcp-direct-grants`
+
+Read-only (R5). Lists the operator's grants for `--project` and whether each verifies now against
+`--description`.
+
+### `--revoke-mcp-direct-grant AGENT`
+
+Operator only (R5). Removes `AGENT`'s grant. Restart the runner.
+
+### `--key-id ID`, `--grant-days N`, `--max-writes N`
+
+With `--sign-mcp-direct-grant`: the operator key's id, the grant's lifetime in days, and its write cap.
+
+### `--list-staged`
+
+Orchestrator-only writes (R3). Lists the writes agents have staged through the `agentteams_runner` MCP server:
+id, agent, kind, path, size, gates and expiry. Metadata only. Goes through the runner.
+
+### `--show-staged SID`
+
+Prints one staged write in full, content included. Use it to read a write on cause, for example when no gate
+covers its path or it sits next to a protected path.
+
+### `--apply-staged SID`
+
+Approves a staged write. The runner re-runs every check and gate against the file as it is now, with identity
+taken from the staged record, then applies it and ledgers `apply-staged`. A stale base or a refusing gate leaves
+the record in place.
+
+### `--reject-staged SID`
+
+Rejects a staged write and ledgers `reject-staged`. Add `--reject-reason TEXT` to record why.
+
+### `--reject-reason TEXT`
+
+With `--reject-staged`: the reason recorded in the ledger.
+
 ### `--verify-proposal-ledger`
 
 Read-only. Verifies the signatures, hash chain and signed head anchor of `.agentteams/proposal-ledger.jsonl`

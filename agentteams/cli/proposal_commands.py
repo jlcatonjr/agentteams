@@ -347,3 +347,53 @@ def run_wait_result(args: argparse.Namespace) -> int:
         return 1
     print(json.dumps(result, indent=2))
     return 0 if result.get("ok") else int(result.get("exit") or 1)
+
+
+def run_staged(args: argparse.Namespace) -> int:
+    """``--list-staged`` / ``--show-staged SID`` / ``--apply-staged SID`` / ``--reject-staged SID`` (R3).
+
+    The orchestrator's side of MCP-mediated agent writes: agents granted the ``agentteams_runner`` server stage
+    their writes; the orchestrator lists them, reads one in full on cause, and approves or rejects by id. Staged
+    records live in the runner's control plane, so every operation goes through the runner.
+
+    Args:
+        args: Parsed CLI arguments; reads ``list_staged``, ``show_staged``, ``apply_staged``, ``reject_staged``,
+            ``reject_reason``, ``project`` and ``wait_timeout``.
+
+    Returns:
+        0 on success; 1 when refused (no runner, unknown or expired id, a re-run check refusing).
+
+    Raises:
+        Nothing: refusals are printed.
+    """
+    if getattr(args, "list_staged", False):
+        code, result = _queued(args, "list-staged", {"kind": "list-staged"})
+        if result is None:
+            return code
+        staged = result.get("staged") or []
+        if not staged:
+            print("No staged proposals.")
+        for entry in staged:
+            if entry.get("malformed"):
+                print(f"  {entry['sid']}  (malformed record)")
+                continue
+            gates = ",".join(str(g.get("name", g)) if isinstance(g, dict) else str(g) for g in entry.get("gates") or [])
+            print(f"  {entry['sid']}  {entry.get('agent')}  {entry.get('kind')}  {entry.get('path')}  "
+                  f"{entry.get('bytes')} B  gates[{gates or 'none'}]  expires {entry.get('expires')}")
+        return 0
+    if getattr(args, "show_staged", None):
+        code, result = _queued(args, "show-staged", {"kind": "show-staged", "sid": args.show_staged})
+        if result is not None:
+            print(json.dumps(result, indent=2))
+        return code
+    if getattr(args, "apply_staged", None):
+        code, result = _queued(args, "apply-staged", {"kind": "apply-staged", "sid": args.apply_staged})
+        if result is not None:
+            print(f"[apply-staged] applied {result.get('path')} for {result.get('agent')} "
+                  f"(sha256 {result.get('new_sha256') or 'deleted'})")
+        return code
+    code, result = _queued(args, "reject-staged", {"kind": "reject-staged", "sid": args.reject_staged,
+                                                    "reason": getattr(args, "reject_reason", None) or ""})
+    if result is not None:
+        print(f"[reject-staged] rejected {result.get('path')} from {result.get('agent')}")
+    return code

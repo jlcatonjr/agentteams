@@ -17,6 +17,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.template` placeholders and deletions (`git rm --cached`) pass. It restores the prior hook body's exit status.
 - Templates: security Rule S-1 gains the env-file bullets and two escalation-table rows; git-operations
   Invariant Core gains rule 9 (never commit a `.env` file).
+
+### docs (`proposal_run` api-reference page)
+
+- New `docs_src/api-reference/proposal-run.md` for the R2 carve-out of `proposals.run_request`, linked from the
+  api-reference index and the mkdocs nav. Restores `test_module_doc_ratchet` on `main`.
+- `test_config_dir_deny_does_not_touch_permissions_deny` now expects R5's four `Edit` deny rules for the
+  `mcp-grants` and `verify-keys` directories (the code added them in #166; the test was not updated).
+
+### feat (generation and audit for MCP-mediated agent writes, phase R6)
+
+- **Granted agents are rendered with the server.** Under `write_policy: "orchestrator-only"`, an agent named in
+  the brief's `mcp_grants` gets:
+  - **Claude:** its narrowed read tools, the exact `mcp__agentteams_runner__<tool>` names, and the canonical
+    inline `mcpServers` block;
+  - **Goose:** the canonical stdio extension, with an exact `available_tools` list;
+  - **instructions** to write and execute only through those tools.
+
+  The server is installed into `.agentteams/bin/`. The orchestrator's section gains `--list-staged`,
+  `--show-staged`, `--apply-staged` and `--reject-staged`, only when the team has grants.
+- **The server finds its project root from its install location,** and agents launch it with an absolute
+  system `python3`. No machine path or home directory is written into the team (@security R4 condition 5).
+- **`AR_WRITE_POLICY` allows exactly the canonical rendering for a granted agent:** the block, the extension and
+  the tool names. Any edit to them is an error, and so is any shell on a granted agent (@security C14, C15).
+  `audit_agent_contract.py` is now integrity-pinned.
+- **Teams without `mcp_grants`,** and ungranted agents, render byte-identical.
+- **@security R6 review fixes:**
+  - nothing may follow the canonical block: an indented `env:`, `cwd:` or a second server is refused;
+  - writes into a `.agentteams`, `.agentteams-queue` or `.claude` directory are refused at any depth, not only at
+    the top;
+  - with grants, rendering refuses an `--output` that isn't the framework's canonical agents directory, so the
+    server always installs at the project root.
+
+### feat (operator-signed direct-write grants, phase R5)
+
+- **New `agentteams/mcp_direct_grants.py`** (integrity-pinned). The runner honours an agent's `approval: direct`
+  only with a verified **operator Ed25519 grant**, signed under its own purpose tag.
+  - **Binding:** the grant binds the agent, tools, write scopes, gates, the installed server's hash, an expiry
+    (30 days at most) and a write cap. Drift from the live brief refuses it.
+  - **Storage:** grants live outside the project, in `~/.config/agentteams/mcp-grants/`, under the same custody
+    checks as `confined_programs`. Claude's built-in Edit and Write tools are denied that directory and the
+    operator verify-key store.
+  - **Runner:** at start it enforces an aggregate cap of three (more fails closed), pins the file and ledgers the
+    active grants. On every direct write it re-checks the expiry and counts its own signed rows against the cap.
+    A direct agent's nonces live 4 h, with 10 uses (@security C1, C2, C6).
+- **Operator commands:** `--sign-mcp-direct-grant AGENT` (`--key-id`, `--grant-days`, `--max-writes`), which goes
+  through the operator signing flow (key from `AGENTTEAMS_DECISION_ED25519_KEYFILE`, integrity and location checks,
+  a confirmed review digest), plus `--list-mcp-direct-grants` and `--revoke-mcp-direct-grant`.
+
+### feat (the agentteams_runner MCP server, phase R4)
+
+- **New first-party MCP server, `agentteams_runner`** (`agentteams/data/agentteams-runner-mcp.py`, stdlib only).
+  Under the switch it is how a granted non-orchestrator agent writes and executes:
+  - `write_file` is staged, or direct with a verified grant;
+  - `delete_file` is always staged;
+  - `run_command` takes allowlisted commands only, run sandboxed;
+  - `read_file_hashed` returns the `base_sha256` that writes need;
+  - `request_status` answers for this instance's own requests.
+
+  Every call queues for the runner, which alone writes or runs. The server holds no key. Each instance is bound to
+  one agent and exposes only its granted tools.
+- **New `agentteams/runner_mcp.py`** holds the install path (`.agentteams/bin/`), the launch flags
+  (`python3 -I -S`), the pinned hash and canonical launch arguments. The runner checks the installed copy on every
+  poll and refuses to serve on a mismatch. Both files are integrity-pinned. Generation wiring comes in R6.
+
+### feat (staged and direct agent writes through the runner, phase R3)
+
+- **New `agentteams/proposal_staging.py`** (integrity-pinned). An agent writing through the coming
+  `agentteams_runner` MCP server **stages** each write by default. The runner runs every check and gate, counts a
+  nonce use, and stores the write, without its nonce, under `.agentteams/staged/`. The orchestrator approves with
+  `--apply-staged SID`, which re-runs every check against the file as it is now with identity from the record, or
+  rejects with `--reject-staged SID`. `--list-staged` and `--show-staged` let it read a write on cause.
+- **Staged records are signed with the runner's ledger key.** Approval refuses a record whose signature, binding,
+  content hash or expiry doesn't hold, so a same-user process can't swap a write between staging and approval
+  (@security R3 review).
+- **`apply-direct`** applies at once, only for agents in `policy.direct_agents`, which R5's signed-grant
+  verification will populate (empty until then). A deletion is never direct (C-5).
+- **One shared body.** `proposals.apply_proposal` and every staging mode run through `proposals._apply`, so the
+  checks can't diverge.
+- **The MCP channel's kinds are now `stage-proposal`, `apply-direct` and `run-request`.** Approvals are the
+  orchestrator's alone.
+
 ### feat (runner channels and identity binding for MCP-mediated writes, phase R2)
 
 - **The runner serves two queue directories**, and reads each request's channel from the one it arrived in:

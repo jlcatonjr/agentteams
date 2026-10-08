@@ -43,7 +43,7 @@ def unnarrowed_adopted_agents(manifest: dict[str, Any], output_dir: Path, render
         return []
     ours = {Path(rel).as_posix() for rel in rendered}
     findings = _check_write_policy(file_map, agent_ext=agent_ext, framework=str(manifest.get("framework", "")),
-                                   enabled=True, unreadable=unreadable)
+                                   enabled=True, unreadable=unreadable, mcp_grants=manifest.get("mcp_grants"))
     return sorted({f.file for f in findings if f.severity == "error" and f.file not in ours})
 
 

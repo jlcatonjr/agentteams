@@ -73,6 +73,9 @@ class Policy:
     #: R2 (mcp-mediated-agent-writes): agents that write and execute only through the ``agentteams_runner`` MCP
     #: server. The runner refuses their artifacts on the orchestrator's queue. Populated from the brief's grants.
     mcp_agents: frozenset[str] = field(default_factory=frozenset)
+    #: R3/R5: agents whose ``direct`` grant is backed by a verified operator-signed record (populated by R5's
+    #: grant verification; empty until then, so ``apply-direct`` refuses everyone).
+    direct_agents: frozenset[str] = field(default_factory=frozenset)
 
 
 # --- policy -------------------------------------------------------------------------------------
@@ -104,7 +107,8 @@ def _writes_glob_problem(glob: str, brief_rel: str | None) -> str | None:
     first = g.split("/", 1)[0]
     if not first or any(c in first for c in "*?[") or g.startswith(("/", "~", "..")):
         return "must start with a literal project directory"
-    if control_plane_of(first, platform="darwin"):
+    if control_plane_of(first, platform="darwin") or any(
+            seg.lower() in (".agentteams", ".agentteams-queue", ".claude") for seg in g.split("/")):
         return "is inside the project control plane"
     if brief_rel and fnmatch.fnmatch(brief_rel.lower(), g.lower()):
         return "covers the brief"
