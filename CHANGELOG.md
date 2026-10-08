@@ -6,13 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (runner channels and identity binding for MCP-mediated writes, phase R2)
+
+- **The runner serves two queue directories**, and reads each request's channel from the one it arrived in:
+  `.agentteams-queue/requests/` for the orchestrator's CLI, and `.agentteams-queue/mcp-requests/` for the coming
+  `agentteams_runner` MCP server. A sender-written `channel` field is ignored, so the MCP command cap from R1 no
+  longer depends on what the sender wrote.
+- **The MCP channel may queue only writes and commands,** never dispatches, ledger checks or approvals. Each
+  request must name its server instance's agent (`via_agent`), which must match the agent its nonce was issued
+  to. A nonce read off the queue and replayed through another agent's server is refused (@security C5).
+- **An agent listed in the new policy field `mcp_agents`** is refused on the orchestrator's queue. It writes and
+  executes only through its server, so a nonce taken from it can't be replayed through the CLI path (adversarial
+  item 2; @security C16). R5 will populate the field from the brief's grants.
+
 ### feat (runner hardening for MCP-mediated agent writes, phase R1)
 
 First phase of `references/plans/mcp-mediated-agent-writes.plan.md`: under the switch, non-orchestrator agents will
 write and execute only through a keyless MCP server that queues for the runner.
 - **Nonce uses are counted when an artifact acts, not when it arrives.** That means after every check passes,
   right before the write, the deletion or the command. Refusals no longer spend an agent's uses, and the cap is
-  re-checked under the dispatch lock at that moment.
+  re-checked under the dispatch lock at that moment. A separate attempt budget (`DISPATCH_MAX_ATTEMPTS`, four
+  times the use cap) still bounds the gate runs and refusals one nonce can cause.
+- **A timed-out command's pipes are drained for at most 10 s** after the kill. A grandchild that left the process
+  group can no longer hang the runner. The heartbeat also stops if the serve loop makes no progress, and results
+  are cut to fit the read-back limit.
 - **The runner's heartbeat runs on its own thread.** A long command no longer makes the runner look dead, so
   agents queued behind it wait instead of failing with "no runner".
 - **Commands arriving through the MCP channel** (`"channel": "mcp"`) are capped at 120 s
@@ -22,6 +39,41 @@ write and execute only through a keyless MCP server that queues for the runner.
 - **Under the switch, Claude's built-in Read, Grep and Glob are denied** `.agentteams/**` and
   `.agentteams-queue/**`. Both hold raw dispatch nonces in transit (@security C4).
 - **Restart the runner** after updating, to load this.
+
+### feat (Codex under agentteams' launcher, Phase 1a)
+
+- `codex:sandbox` is a valid host feature, and a `confined`/`exclusive` `privilege_profile` on codex now expands
+  to it (it was `claude:sandbox`, which no codex emitter read). With it, `CodexAdapter.extra_output_files` adds
+  the operator-run `.codex/confined-run.example.sh` on Linux and macOS.
+- Codex's own sandbox cannot nest inside `sandbox/confine-run.sh`, so the runner starts
+  `codex --sandbox danger-full-access` inside the launcher, which is the boundary. Writes reach only the
+  project's write roots and a per-project `CODEX_HOME` outside the repo. `.agentteams/` and the prompt roots
+  are read-only. Egress is `host`, because Codex needs its API.
+- The default `CODEX_HOME` is `~/.config/agentteams/codex-home/<project>-<hash>`. Any override must be strictly
+  under `codex-home/` or outside `~/.config/agentteams`, and never `/` (or a path containing `//`), `$HOME`,
+  an ancestor of it, inside the project, or an ancestor of the project. It is validated before anything is
+  created, and again with symlinks resolved.
+- Before launch, `CODEX_HOME`'s `config.toml`, `hooks.json`, `AGENTS.md` and `AGENTS.override.md` (and its
+  `rules/`, `prompts/` and `skills/` dirs) are created empty if absent, then made read-only. A confined agent
+  therefore can't plant config, hooks or instructions that Codex would honour on its next run. The runner
+  also warns when that config sets security-relevant keys.
+- An `exclusive` team's `protected_read_paths` are passed through as `--exclude` (a `~/` path spelled
+  `"$HOME"/…`), and its `workspace_write_roots` (validated and quoted) as `--writable`.
+- The runner is listed in `OPERATOR_EXAMPLE_PATHS` and in the launcher's control plane, so agents can't edit
+  it.
+- Honest label: Codex ignores a spawned agent's `sandbox_mode`, and every agent command shares the writable
+  project and `CODEX_HOME`. Per-role limits on Codex are therefore instruction-level only. The agent TOML
+  header and runtime notes no longer call `sandbox_mode` "a default, not a ceiling". It is still emitted,
+  labelled as a declaration Codex does not enforce, because the `AR_WRITE_POLICY` audit reads it.
+- `write_policy: "orchestrator-only"` and `write_policy_frameworks` accept `codex` with an explicit
+  `confined`/`exclusive` profile on Linux or macOS (elsewhere no runner is emitted, so it is refused). On
+  Codex the switch gives key custody only: the ledger key and `.agentteams` stay out of reach, but every role
+  can write the project. It holds only when Codex is launched through the runner. Generation can't verify
+  that, and says so. Cooperative, a missing explicit profile, and copilot/agents-md are still refused.
+- `AGENTS.override.md` is a prompt root: Codex reads it ahead of `AGENTS.md`. It joins `PROMPT_ROOT_FILES`
+  and the launcher's `PROMPT_ROOTS_REL`, so `protect_prompt_roots` and `--protect-prompt-roots` cover it.
+- The launcher no longer warns that `--protect-prompt-roots` is Linux-only. Since #158 the macOS profile
+  protects prompt roots through the shared collector (verified live: a write to `AGENTS.md` is refused).
 
 ### feat (governance logs: a malformed row is caught, and appends are validated)
 

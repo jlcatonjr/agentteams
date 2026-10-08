@@ -115,8 +115,9 @@ time. The runtime boundary is the out-of-session runner and its OS sandbox ([`co
 | claude | Any tool that isn't known to be read-only (see below); a `tools:` key that is absent, null, empty (`[]`), duplicated, or of any shape other than one line or a clean `- item` block list, since the agent may then inherit every tool; any other capability key (`mcpServers`, `hooks`, `skills`, `memory`, `allowed-tools`, `capabilities`, or a later key in `CAPABILITY_FRONT_MATTER_KEYS`), since none of them shows in `tools:`; a `permissionMode` other than `default` or `plan`; a front-matter key the check can't read (explicit `?`, merge `<<`, anchored, tagged or escaped), since it could hide one of those keys | `Bash` |
 | goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`; any extension other than `developer` (judged by the tools it grants), `analyze` (allowed only when listed off) and `agentteams_readfs`. The coordination server writes request and log files, so it is refused, as the generator already withholds it; an `agentteams_readfs` entry that doesn't launch the shipped server (type, `cmd`, `args`) or lists tools it lacks; `analyze` left on wherever `developer` or `analyze` appears (it reads outside the workspace, and Goose adds it beside `developer`), unless listed `available_tools: [__none__]`; missing `extensions` | A granted shell |
 
-Generation refuses the switch on copilot-vscode, copilot-cli, codex and agents-md (P4a key custody), so this
-table lists only the frameworks a team under the switch can use. The check itself also knows the other
+Generation refuses the switch on copilot-vscode, copilot-cli and agents-md (P4a key custody), and on codex
+off Linux and macOS, where no launcher runner is emitted; on codex the switch gives key custody only (see
+below). This table lists only the frameworks a team under the switch can use. The check itself also knows the other
 shapes:
 - **Copilot:** any non-read-only tool, plus `execute`.
 - **Codex:** `sandbox_mode` other than `"read-only"`, and any `mcp_servers`.
@@ -144,8 +145,9 @@ shapes:
   name.
 - **MCP servers:** what a non-orchestrator agent may use under the switch, what is planned and what is
   held is summarized in `references/non-orchestrator-mcp.reference.md` in the repository.
-- **Not covered:** project-level skill directories (an agent's own `skills:` key is an error, above), and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex's
-  `sandbox_mode` is a default, not a ceiling.
+- **Not covered:** project-level skill directories (an agent's own `skills:` key is an error, above), and a project-level `.codex/config.toml` that overrides `sandbox_mode`. Codex
+  ignores a spawned agent's `sandbox_mode`; the session's sandbox (or agentteams' launcher, through
+  `.codex/confined-run.example.sh`) governs every agent.
 
 ## Generated teams under the switch (P3)
 
@@ -219,8 +221,13 @@ every one.
 - **Gates can run without spending a use.** Dry runs execute gates, and since R1 a use is counted only when an
   artifact acts: after every check passes, right before the write, the deletion or the command. So refused
   artifacts don't count either, and one nonce can trigger unlimited gate runs. This is deliberate, so an agent
-  iterating on rejected attempts isn't locked out. Gates are registered by the operator, but they still run code
-  on agent-supplied content. Refusals are logged in the ledger.
+  iterating on rejected attempts isn't locked out. A separate attempt budget bounds it:
+  `DISPATCH_MAX_ATTEMPTS`, four times the use cap, counts every validated arrival, dry runs and refusals
+  included. Gates are registered by the operator, but they still run code on agent-supplied content. Refusals are
+  logged in the ledger.
+- **The Read deny rules bind only the built-in tools.** Under the switch, Claude's Read, Grep and Glob are denied
+  `.agentteams/**` and `.agentteams-queue/**`, which hold raw nonces in transit. A Bash command isn't bound by
+  them. Under the switch only the orchestrator keeps Bash.
 - **Writes outside the project** (e.g. `~/.gitconfig`, shell rc files) are not detected by this check. Under
   the runner, the sandbox refuses them.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and
@@ -255,7 +262,12 @@ agentteams --serve-requests --project <root> --description <brief>
 - **Session sandboxes.** They read-deny that directory, and under the switch they write-deny `.agentteams/`,
   so only the runner writes the ledger.
 - **Frameworks.** The switch is allowed only where such a session sandbox exists: claude and goose, with
-  `privilege_profile` not `"cooperative"`. Generation refuses it elsewhere.
+  `privilege_profile` not `"cooperative"`. On codex it is allowed when `codex:sandbox` is in effect (an
+  explicit `confined`/`exclusive` profile) and holds only when Codex is launched through
+  `.codex/confined-run.example.sh`, whose launcher masks the key directory. Generation can't verify that
+  launch. On Codex the switch gives **key custody only**: the ledger key and `.agentteams` stay out of
+  reach, but every role can write the project, and per-role limits are instruction-level. It is refused on
+  codex off Linux/macOS (no runner is emitted there). Generation refuses it elsewhere.
 - **Confined execution (P4b).** The runner runs every command and gate in an OS sandbox from
   `confined_programs`: the operator-owned file (P5b) when present, otherwise the brief's block. See
   [`confinement`](confinement.md).

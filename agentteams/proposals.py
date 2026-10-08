@@ -90,11 +90,17 @@ from agentteams.frameworks._write_roots import control_plane_of
 
 GATE_TIMEOUT = 120
 COMMAND_TIMEOUT = 600
+#: Seconds to drain a timed-out command's pipes after killing its group, before abandoning them (R1 condition 2).
+POST_KILL_DRAIN_SECONDS = 10
 #: Bytes of stdout and of stderr a command result carries; the rest is dropped and ``truncated`` is set (R1, C8).
 MAX_OUTPUT_BYTES = 256 * 1024
 DISPATCH_TTL_HOURS = 24
 #: Artifacts one dispatch may submit (proposals + requests) before the agent must be re-dispatched.
 DISPATCH_MAX_USES = 25
+#: Validated arrivals one dispatch may make, acting or not (refusals and dry runs included). Uses are counted only
+#: when an artifact acts (R1), so this separate, wider budget bounds how many gate runs and refusal rows one nonce
+#: can cause (@security R1 condition 1).
+DISPATCH_MAX_ATTEMPTS = 4 * DISPATCH_MAX_USES
 LEDGER_REL = ".agentteams/proposal-ledger.jsonl"
 HEAD_REL = ".agentteams/proposal-ledger.head"
 DISPATCH_REL = ".agentteams/dispatches.jsonl"
@@ -341,7 +347,8 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
             live_ids = {r["id"] for _l, r in rows
                         if r and "expires" in r and datetime.fromisoformat(r["expires"]) >= now}
             # Keep unexpired dispatches and the use rows that count against them; drop the rest.
-            live = [line for line, r in rows if r and (r.get("id") in live_ids or r.get("use") in live_ids)]
+            live = [line for line, r in rows if r and (r.get("id") in live_ids or r.get("use") in live_ids
+                                                         or r.get("attempt") in live_ids)]
             live.append(_signed(key, {"id": _nonce_id(key, nonce), "agent": agent, "max_uses": max_uses,
                                       "expires": (now + timedelta(hours=ttl_hours)).isoformat(timespec="seconds")}))
             _atomic_write_text(path, "\n".join(live) + "\n")
@@ -351,13 +358,15 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
     return nonce
 
 
-def agent_for(root: Path, nonce: Any, *, consume: bool = True) -> str:
+def agent_for(root: Path, nonce: Any, *, consume: bool = True, attempt: bool = False) -> str:
     """Return the agent a dispatch nonce was issued to, counting one use against it.
 
     Args:
         root: The project root.
         nonce: The nonce the artifact carries.
         consume: Record a use (``False`` for dry runs).
+        attempt: Record an attempt instead (every validated arrival, acting or not), refusing once
+            :data:`DISPATCH_MAX_ATTEMPTS` is reached.
 
     Returns:
         The agent slug from the signed dispatch record.
@@ -382,6 +391,11 @@ def agent_for(root: Path, nonce: Any, *, consume: bool = True) -> str:
             used = sum(1 for r in rows if r.get("use") == ident)
             if used >= int(dispatch.get("max_uses", DISPATCH_MAX_USES)):
                 raise ProposalError(f"dispatch nonce used {used} times (its limit); re-dispatch the agent")
+            if attempt:
+                tries = sum(1 for r in rows if r.get("attempt") == ident)
+                if tries >= DISPATCH_MAX_ATTEMPTS:
+                    raise ProposalError(f"dispatch nonce made {tries} attempts (its limit); re-dispatch the agent")
+                _locked_append(root / DISPATCH_REL, _signed(key, {"attempt": ident}))
             if consume:
                 _locked_append(root / DISPATCH_REL, _signed(key, {"use": ident}))
         finally:
@@ -534,7 +548,7 @@ def _check_shape(artifact: Any, kind: str) -> None:
 def _identity(root: Path, artifact: dict[str, Any], *, dry_run: bool = False) -> str:
     """Resolve the agent from the artifact's nonce, without counting a use (see :func:`_consume`)."""
     del dry_run  # a use is counted only once every check has passed, dry run or not (R1)
-    agent = agent_for(root, artifact.get("dispatch"), consume=False)
+    agent = agent_for(root, artifact.get("dispatch"), consume=False, attempt=True)
     claimed = artifact.get("agent")
     if claimed is not None and claimed != agent:
         raise ProposalError(f"artifact claims agent {claimed!r} but was dispatched to {agent!r}; refused")
@@ -879,7 +893,13 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 group_killed = True
             except ProcessLookupError:
                 group_killed = False  # the group had already exited; recorded on the timeout row
-            out, err = child.communicate()
+            try:  # bounded: a grandchild that left the group (setsid) may still hold the pipes open
+                out, err = child.communicate(timeout=POST_KILL_DRAIN_SECONDS)
+            except subprocess.TimeoutExpired:
+                for stream in (child.stdout, child.stderr):
+                    if stream is not None:
+                        stream.close()
+                out, err = b"", b"[output abandoned: a process outside the killed group kept the pipes open]"
             proc = subprocess.CompletedProcess(argv, -9, out or b"", err or b"")
         if jail is not None:
             # Anything the command left running could write after the snapshot: kill the group, fail the run.
