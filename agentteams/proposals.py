@@ -632,11 +632,44 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
     Raises:
         ProposalError: Any check or gate refuses; nothing changes. The refusal is recorded in the ledger.
     """
+    return _apply(artifact, root=root, policy=policy, dry_run=dry_run, allow_gates=allow_gates, confine=confine,
+                  expect_agent=expect_agent, refuse_agents=refuse_agents)
+
+
+_ACTIONS = {"apply": "apply-proposal", "stage": "stage-proposal", "staged": "apply-staged", "direct": "apply-direct"}
+
+
+def _apply(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False, allow_gates: bool = True,
+           confine: bool = False, expect_agent: str | None = None, refuse_agents: frozenset[str] = frozenset(),
+           mode: str = "apply", as_agent: str | None = None) -> dict[str, Any]:
+    """The one validate-gate-act body behind :func:`apply_proposal` and :mod:`agentteams.proposal_staging` (R3).
+
+    Modes:
+        ``apply``: today's path (identity from the nonce; a use is counted when it acts).
+        ``stage``: every check and gate runs and a use is counted; instead of writing, the artifact (without its
+            nonce) is stored for the orchestrator to approve.
+        ``staged``: the orchestrator's approval of a stored record. Identity is the record's agent (*as_agent*);
+            no use is counted (staging counted it); every check and gate re-runs against the file as it is now.
+        ``direct``: the agent's own write, applied at once. A deletion is refused before identity is resolved
+            (C-5: deletes are always staged), and the agent must be in ``policy.direct_agents``.
+    """
+    action = _ACTIONS[mode]
     kind = artifact.get("kind") if isinstance(artifact, dict) else None
     agent = "?"
     try:
-        _check_shape(artifact, kind if kind in ("change-proposal", "delete-proposal") else "change-proposal")
-        agent = _identity(root, artifact, dry_run=dry_run, expect_agent=expect_agent, refuse_agents=refuse_agents)
+        # A staged record is stored without its nonce (identity is the record's agent), so it is shape-checked
+        # as if one were present.
+        _check_shape({**artifact, "dispatch": ""} if mode == "staged" and isinstance(artifact, dict) else artifact,
+                     kind if kind in ("change-proposal", "delete-proposal") else "change-proposal")
+        if mode == "direct" and kind == "delete-proposal":
+            raise ProposalError("a deletion is never applied directly; stage it for the orchestrator (C-5)")
+        if mode == "staged":
+            agent = str(as_agent)
+        else:
+            agent = _identity(root, artifact, dry_run=dry_run, expect_agent=expect_agent,
+                              refuse_agents=refuse_agents)
+        if mode == "direct" and agent not in policy.direct_agents:
+            raise ProposalError(f"{agent} holds no verified direct-write grant; stage the proposal instead")
         rationale = artifact.get("rationale")
         if not isinstance(rationale, str) or not rationale.strip():
             raise ProposalError("a non-empty rationale is required")
@@ -648,9 +681,13 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
             if not dry_run:
                 _check_destination(root, rel, policy, agent)  # re-resolve immediately before acting
                 _check_base(root, rel, artifact["base_sha256"])
-                _consume(root, artifact, agent)
-                record(root, {"action": "delete-proposal", "agent": agent, "path": rel,  # write-ahead
-                              "base": artifact["base_sha256"], "rationale": rationale.strip()[:300]})
+                if mode != "staged":
+                    _consume(root, artifact, agent)
+                if mode == "stage":
+                    return _staging().stage(root, artifact, agent, rel, gates=[], size=0, new_hash=None)
+                record(root, {"action": "delete-proposal" if mode == "apply" else action, "agent": agent,
+                              "path": rel, "base": artifact["base_sha256"],
+                              "rationale": rationale.strip()[:300]})  # write-ahead
                 target.unlink()
             return {"agent": agent, "path": rel, "base_sha256": artifact["base_sha256"], "new_sha256": None,
                     "gates": [], "written": not dry_run}
@@ -670,8 +707,11 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
         if not dry_run:
             rel = _check_destination(root, rel, policy, agent)  # re-resolve after the gates ran
             target = _check_base(root, rel, artifact["base_sha256"])
-            _consume(root, artifact, agent)
-            record(root, {"action": "apply-proposal", "agent": agent, "path": rel, "base": artifact["base_sha256"],
+            if mode != "staged":
+                _consume(root, artifact, agent)
+            if mode == "stage":
+                return _staging().stage(root, artifact, agent, rel, gates=gate_results, size=size, new_hash=new_hash)
+            record(root, {"action": action, "agent": agent, "path": rel, "base": artifact["base_sha256"],
                           "new": new_hash, "bytes": size, "gates": gate_results,  # bytes: P5 cost measurement
                           "rationale": rationale.strip()[:300]})  # write-ahead
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -680,8 +720,14 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
                 "gates": gate_results, "written": not dry_run}
     except ProposalError as exc:
         if not dry_run:
-            _record_refusal(root, "apply-proposal", agent, str(exc))
+            _record_refusal(root, action, agent, str(exc))
         raise
+
+
+def _staging() -> Any:
+    from agentteams import proposal_staging  # carved out (CH-07); imports this module back
+
+    return proposal_staging
 
 
 def _record_refusal(root: Path, action: str, agent: str, reason: str) -> None:

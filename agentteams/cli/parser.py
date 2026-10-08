@@ -1057,6 +1057,24 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="The agent being dispatched, for --issue-dispatch.",
     )
+    for flag, dest, meta, text in (
+        ("--list-staged", "list_staged", None, "list the writes agents have staged through the agentteams_runner "
+                                               "MCP server (metadata only)"),
+        ("--show-staged", "show_staged", "SID", "print one staged write in full, to read on cause"),
+        ("--apply-staged", "apply_staged", "SID", "approve a staged write: the runner re-runs every check "
+                                                  "against the file as it is now, then applies it as its agent"),
+        ("--reject-staged", "reject_staged", "SID", "reject a staged write (ledgered); --reject-reason says why"),
+    ):
+        parser.add_argument(flag, dest=dest, default=None if meta else False,
+                            **({"metavar": meta} if meta else {"action": "store_true"}),
+                            help=f"Orchestrator-only-writes (R3): {text}. Goes through the runner (--serve-requests).")
+    parser.add_argument(
+        "--reject-reason",
+        metavar="TEXT",
+        dest="reject_reason",
+        default=None,
+        help="With --reject-staged: why the write was rejected (recorded in the ledger).",
+    )
     parser.add_argument(
         "--verify-proposal-ledger",
         action="store_true",

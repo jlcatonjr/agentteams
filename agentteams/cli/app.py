@@ -224,6 +224,10 @@ def _main_dispatch(
     if getattr(args, "install_confined", None):
         from agentteams.cli.proposal_commands import run_install_confined
         return run_install_confined(args)
+    if (getattr(args, "list_staged", False) or getattr(args, "show_staged", None)
+            or getattr(args, "apply_staged", None) or getattr(args, "reject_staged", None)):
+        from agentteams.cli.proposal_commands import run_staged
+        return run_staged(args)
     if getattr(args, "verify_proposal_ledger", False):
         from agentteams.cli.proposal_commands import run_verify_proposal_ledger
         return run_verify_proposal_ledger(args)
