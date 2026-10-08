@@ -241,6 +241,7 @@ nav:
       - proposal_runner: api-reference/proposal-runner.md
       - proposal_staging: api-reference/proposal-staging.md
       - runner_mcp: api-reference/runner-mcp.md
+      - mcp_direct_grants: api-reference/mcp-direct-grants.md
       - git_exec: api-reference/git-exec.md
       - source_provenance: api-reference/source-provenance.md
       - user_regions: api-reference/user-regions.md
