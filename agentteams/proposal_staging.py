@@ -15,6 +15,7 @@ integrity-pinned.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import secrets
@@ -63,6 +64,9 @@ def stage(root: Path, artifact: dict[str, Any], agent: str, rel: str, *, gates: 
     expires = (datetime.now(UTC) + timedelta(hours=STAGED_TTL_HOURS)).isoformat(timespec="seconds")
     record = {"sid": sid, "agent": agent, "path": rel, "kind": artifact["kind"], "artifact": stored, "gates": gates,
               "bytes": size, "content_sha256": new_hash, "expires": expires}
+    # Signed with the ledger key, which only the runner holds: approval refuses a record swapped or edited in between
+    # (any same-user process can write .agentteams/, so its permissions alone don't protect it; R3 review).
+    record["mac"] = P._mac(P._key(), record)
     directory = root / STAGED_REL
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     P.record(root, {"action": "stage-proposal", "agent": agent, "path": rel, "sid": sid, "kind": artifact["kind"],
@@ -127,6 +131,28 @@ def _load(root: Path, sid: Any) -> tuple[Path, dict[str, Any]]:
     return path, record
 
 
+def _verified(sid: str, record: dict[str, Any]) -> dict[str, Any]:
+    """Refuse a record whose signature, binding or content hash doesn't hold (R3 review, conditions 1 and 3)."""
+    body = {k: v for k, v in record.items() if k != "mac"}
+    mac = record.get("mac")
+    if not (isinstance(mac, str) and P.hmac.compare_digest(mac, P._mac(P._key(), body))):
+        raise ProposalError(f"staged record {sid} is not signed by this runner's key; refused (reject it)")
+    artifact = record["artifact"]
+    if artifact.get("path") != record.get("path") or artifact.get("kind") != record.get("kind"):
+        raise ProposalError(f"staged record {sid} doesn't match its own binding; refused")
+    content = artifact.get("content")
+    actual = hashlib.sha256(content.encode("utf-8")).hexdigest() if isinstance(content, str) else None
+    if actual != record.get("content_sha256"):
+        raise ProposalError(f"staged record {sid}: content doesn't match its sha256; refused")
+    try:
+        expires = datetime.fromisoformat(str(record.get("expires")))
+    except (TypeError, ValueError) as exc:
+        raise ProposalError(f"staged record {sid} has a malformed expiry") from exc
+    if expires < datetime.now(UTC):
+        raise ProposalError(f"staged proposal {sid} expired; reject it and have the agent re-stage")
+    return record
+
+
 def apply_staged(sid: str, *, root: Path, policy: Policy, confine: bool = False) -> dict[str, Any]:
     """The orchestrator's approval: apply a staged proposal as its agent, re-running every check.
 
@@ -144,8 +170,7 @@ def apply_staged(sid: str, *, root: Path, policy: Policy, confine: bool = False)
             the orchestrator can reject it or the agent can re-stage against the current file).
     """
     path, record = _load(root, sid)
-    if datetime.fromisoformat(str(record.get("expires"))) < datetime.now(UTC):
-        raise ProposalError(f"staged proposal {sid} expired; reject it and have the agent re-stage")
+    record = _verified(sid, record)
     result = P._apply(dict(record["artifact"]), root=root, policy=policy, confine=confine, mode="staged",
                       as_agent=str(record["agent"]))
     path.unlink(missing_ok=True)
@@ -183,17 +208,27 @@ def list_staged(root: Path) -> list[dict[str, Any]]:
         ``[{sid, agent, kind, path, bytes, content_sha256, gates, expires}]``.
 
     Raises:
-        Nothing: malformed records are listed by id with ``malformed: True``.
+        Nothing: malformed records are listed by id with ``malformed: True``; expired ones are purged (ledgered).
     """
     directory = root / STAGED_REL
     if not directory.is_dir():
         return []
     out: list[dict[str, Any]] = []
+    now = datetime.now(UTC)
     for path in sorted(directory.glob("*.json"), key=lambda p: p.stat().st_mtime):
         try:
             _p, record = _load(root, path.stem)
         except ProposalError:
             out.append({"sid": path.stem, "malformed": True})
+            continue
+        try:
+            expired = datetime.fromisoformat(str(record.get("expires"))) < now
+        except (TypeError, ValueError):
+            expired = False  # listed (and refused on approval); the orchestrator rejects it
+        if expired:  # purge: an expired record can never be applied
+            P.record(root, {"action": "expire-staged", "agent": record.get("agent"), "path": record.get("path"),
+                            "sid": record.get("sid")})
+            path.unlink(missing_ok=True)
             continue
         out.append({k: record.get(k) for k in ("sid", "agent", "kind", "path", "bytes", "content_sha256", "gates",
                                                "expires")})

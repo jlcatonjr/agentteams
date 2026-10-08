@@ -533,3 +533,39 @@ def test_staged_cli_queues_the_right_requests(monkeypatch, capsys):
         assert PC.run_staged(_build_parser().parse_args(argv)) == 0
     assert [r["kind"] for r in sent] == ["list-staged", "show-staged", "apply-staged", "reject-staged"]
     assert sent[3]["reason"] == "nope" and all(r.get("sid") in (None, sid) for r in sent)
+
+
+@pytest.mark.parametrize("tamper", ["content", "agent", "path", "unsigned", "expiry"])
+def test_a_tampered_staged_record_is_refused(runner, tamper):
+    """R3 review: the record is signed with the runner's key; any swap between staging and approval is refused."""
+    from agentteams import proposal_staging as S
+
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    path = runner.root / S.STAGED_REL / f"{sid}.json"
+    record = json.loads(path.read_text())
+    if tamper == "content":
+        record["artifact"]["content"] = "evil\n"
+    elif tamper == "agent":
+        record["agent"] = "reviewer"
+    elif tamper == "path":
+        record["path"] = record["artifact"]["path"] = "src/b.py"
+    elif tamper == "unsigned":
+        record.pop("mac")
+    else:
+        record["expires"] = "not-a-date"
+    path.write_text(json.dumps(record))
+    result = _roundtrip_on(runner, {"kind": "apply-staged", "sid": sid}, "orchestrator")
+    assert not result["ok"], tamper
+    assert (runner.root / "src/a.py").read_text() == "x = 1\n" and not (runner.root / "src/b.py").exists()
+
+
+def test_expired_records_are_purged_on_listing(runner):
+    from agentteams import proposal_staging as S
+
+    sid = _stage_via_mcp(runner)["result"]["sid"]
+    path = runner.root / S.STAGED_REL / f"{sid}.json"
+    record = json.loads(path.read_text())
+    record["expires"] = "2000-01-01T00:00:00+00:00"
+    path.write_text(json.dumps(record))
+    assert _roundtrip_on(runner, {"kind": "list-staged"}, "orchestrator")["result"]["staged"] == []
+    assert not path.exists() and "expire-staged" in (runner.root / P.LEDGER_REL).read_text()

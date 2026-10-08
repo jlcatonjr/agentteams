@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nonce use, and stores the write, without its nonce, under `.agentteams/staged/`. The orchestrator approves with
   `--apply-staged SID`, which re-runs every check against the file as it is now with identity from the record, or
   rejects with `--reject-staged SID`. `--list-staged` and `--show-staged` let it read a write on cause.
+- **Staged records are signed with the runner's ledger key.** Approval refuses a record whose signature, binding,
+  content hash or expiry doesn't hold, so a same-user process can't swap a write between staging and approval
+  (@security R3 review).
 - **`apply-direct`** applies at once, only for agents in `policy.direct_agents`, which R5's signed-grant
   verification will populate (empty until then). A deletion is never direct (C-5).
 - **One shared body.** `proposals.apply_proposal` and every staging mode run through `proposals._apply`, so the
