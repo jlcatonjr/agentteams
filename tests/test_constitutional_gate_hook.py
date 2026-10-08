@@ -222,7 +222,9 @@ def test_delete_commands_require_authorization(command: str) -> None:
 
 @pytest.mark.parametrize(
     "command",
-    ["ls -la", "git status", "git push origin main:main", "grep -rn foo ."],
+    ["ls -la", "git status", "git push origin main:main", "grep -rn foo .",
+     'gh pr create --title t --body "fix the merge order"', "gh pr checkout 1 && git merge x",
+     "gh pr view 5 --json mergeable", "gh pr list --search is:merged"],
 )
 def test_benign_commands_are_not_gated(command: str) -> None:
     code, decision = _run_template(command)

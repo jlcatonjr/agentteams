@@ -74,8 +74,11 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      "GitHub resource deletion via gh (repo/release/etc.) — irreversible"),
     # A merge is outside every PR agent's remit and outside the github-write MCP allowlist; the same token
     # through gh would otherwise get around both (MCP catalogue, @security implementation review cond. 6).
-    # Flags may sit between `pr` and `merge` (`gh pr -R o/r merge`); GraphQL merges count too.
-    (r"\bgh\b[^\n]*\bpr\b[^\n]*\smerge\b|\bgh\s+api\b[^\n]*/pulls/[^\s/]+/merge\b|"
+    # `gh [flags] pr [flags] merge` only (flags may sit on either side of `pr`: `gh pr -R o/r merge`), so a
+    # "merge" in a PR body or a later `git merge` doesn't prompt. GraphQL merges count too.
+    (r"\bgh(?:\s+(?:-R|--repo)\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+pr"
+     r"(?:\s+(?:-R|--repo)\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+merge\b|"
+     r"\bgh\s+api\b[^\n]*/pulls/[^\s/]+/merge\b|"
      r"\bgh\s+api\s+graphql\b[^\n]*\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
     (r"\bgit\b[^\n]*\bpush\b[^\n]*(?:--delete|--mirror|--prune)|\bgit\b[^\n]*\bpush\b[^\n]*\s:\S",

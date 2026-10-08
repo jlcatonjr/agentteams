@@ -189,7 +189,8 @@ Since 2026-10-07 agentteams ships a catalogue (`agentteams/templates/mcp/`, API 
   - activate `fetch` only with `--proxy-url` pointing at a proxy that refuses private, loopback and link-local
     addresses;
   - `agentteams-recall` and `agentteams-gitread` run `agentteams` from PATH in the directory the client launches
-    them in; gitread refuses unless that is the work-tree root.
+    them in; gitread refuses unless that is the work-tree root, and refuses a `.git`, `commondir` or object alternates that
+    reach a repository outside the project.
 - **`gh pr merge` is routed to the operator** by the constitutional gate where hooks run. `pr-notifier` has no
   shell, and neither PR agent is in `github-write`'s scope.
 - **A GitHub opt-in (or `pr_management: true`) adds the `pr-manager` and `pr-notifier` agents.**

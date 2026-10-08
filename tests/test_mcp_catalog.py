@@ -480,3 +480,38 @@ def test_recall_refuses_rather_than_skips_an_outside_partition(tmp_path):
             r._code_partitions(tmp_path, tmp_path)
     finally:
         r._load = real_load
+
+
+def test_gitread_refuses_a_commondir_redirect(repo, tmp_path):
+    """The audit's bypass: a git dir inside the project whose commondir names another repository."""
+    proj = tmp_path / "proj3"
+    fake = proj / "fake"
+    fake.mkdir(parents=True)
+    (fake / "commondir").write_text(str(repo / ".git") + "\n")
+    (fake / "HEAD").write_text("ref: refs/heads/master\n")
+    (proj / ".git").write_text("gitdir: fake\n")
+    with pytest.raises(ToolError):
+        out = gitread.call("git_log", {}, proj)
+        assert "second" not in out["output"]  # if git ever accepts it, it must not serve repo's history
+
+
+def test_gitread_refuses_object_alternates(repo, tmp_path):
+    info = repo / ".git" / "objects" / "info"
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "alternates").write_text(str(tmp_path) + "\n")
+    with pytest.raises(ToolError, match="alternates"):
+        gitread.call("git_log", {}, repo)
+
+
+def test_gitread_refuses_a_forged_worktree_registration(repo, tmp_path):
+    """An admin dir outside both the project and the common dir, holding a back-link, is not a registration."""
+    proj = tmp_path / "proj4"
+    proj.mkdir()
+    admin = tmp_path / "elsewhere" / "worktrees" / "n"
+    admin.mkdir(parents=True)
+    (admin / "commondir").write_text(str(repo / ".git") + "\n")
+    (admin / "HEAD").write_text("ref: refs/heads/master\n")
+    (admin / "gitdir").write_text(str(proj / ".git") + "\n")
+    (proj / ".git").write_text(f"gitdir: {admin}\n")
+    with pytest.raises(ToolError, match="outside the project"):
+        gitread.call("git_log", {}, proj)

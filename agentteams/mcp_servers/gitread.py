@@ -17,8 +17,9 @@ repository-local configuration can make even read commands run programs or reach
 * **Also per transport:** ``protocol.<name>.allow=never`` for file, git, ssh, http, https and ext (a repository's
   own per-protocol setting outranks ``protocol.allow``), and ``log.mailmap=false``, ``mailmap.file=``,
   ``mailmap.blob=`` (mailmap can name any file).
-* **Refused outright:** a launch directory that is not a work-tree root, a ``.git`` that redirects to a repository
-  outside the project (a registered linked worktree is allowed), and any ``filter.*`` in the repository's config (clean/process filters run on worktree
+* **Refused outright:** a launch directory that is not a work-tree root; a ``.git``, ``commondir`` or object
+  alternates that reach a repository outside the project (a registered linked worktree is allowed); and any
+  ``filter.*`` in the repository's config (clean/process filters run on worktree
   reads). Blame and diff take explicit revisions, never the worktree.
 * **Arguments:** refs match a strict pattern and can't start with ``-``; paths must be relative and inside the
   project; refs and paths go after ``--end-of-options`` (blame, which mis-parses it, relies on the
@@ -99,11 +100,16 @@ def _run(root: Path, args: list[str]) -> str:
 
 
 def _check_repository(root: Path) -> None:
-    """Refuse unless ``root`` is a work-tree root whose git dir is the project's own.
+    """Refuse unless ``root`` is a work-tree root whose history is the project's own.
 
-    A ``.git`` file (``gitdir: …``) or symlink can point git at another repository, whose history would then be
-    served. Allowed: a git dir inside the project, or a registered linked worktree, whose
-    ``<common>/worktrees/<name>/gitdir`` back-link names this project's ``.git`` file.
+    A ``.git`` file (``gitdir: …``), a symlink, a ``commondir`` file, or object alternates can all point git at
+    another repository's history. Required:
+
+    * the common dir (``--git-common-dir``, where objects and refs live) and the git dir are both inside the
+      project; or, for a registered linked worktree, the git dir is ``<common>/worktrees/<name>`` and its
+      ``gitdir`` back-link names this project's ``.git`` file (a worktree of a repository elsewhere serves that
+      repository's history by design, so only its own registration is accepted);
+    * the common dir borrows no objects (``objects/info/alternates`` / ``http-alternates``).
     """
     dot = root / ".git"
     if not dot.exists():
@@ -111,16 +117,21 @@ def _check_repository(root: Path) -> None:
     project = root.resolve()
     try:
         gitdir = Path(_run(root, ["rev-parse", "--absolute-git-dir"]).strip()).resolve()
+        common = Path(_run(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"]).strip()).resolve()
     except ToolError as exc:
         raise ToolError(f"cannot resolve the git dir: {exc}") from exc
-    if gitdir.is_relative_to(project):
+    info = common / "objects" / "info"
+    if (info / "alternates").exists() or (info / "http-alternates").exists():
+        raise ToolError("the repository borrows objects from elsewhere (alternates); refusing")
+    if gitdir.is_relative_to(project) and common.is_relative_to(project):
         return
     backlink = gitdir / "gitdir"
     try:
         linked = backlink.is_file() and Path(backlink.read_text(encoding="utf-8").strip()).resolve() == dot.resolve()
     except OSError:
         linked = False
-    if not (dot.is_file() and not dot.is_symlink() and gitdir.parent.name == "worktrees" and linked):
+    registered = gitdir.parent.name == "worktrees" and gitdir.parent.parent == common
+    if not (dot.is_file() and not dot.is_symlink() and registered and linked):
         raise ToolError("the project's .git points at a repository outside the project; refusing")
 
 
