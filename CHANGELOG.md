@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (the agentteams_runner MCP server, phase R4)
+
+- **New first-party MCP server, `agentteams_runner`** (`agentteams/data/agentteams-runner-mcp.py`, stdlib only).
+  Under the switch it is how a granted non-orchestrator agent writes and executes:
+  - `write_file` is staged, or direct with a verified grant;
+  - `delete_file` is always staged;
+  - `run_command` takes allowlisted commands only, run sandboxed;
+  - `read_file_hashed` returns the `base_sha256` that writes need;
+  - `request_status` answers for this instance's own requests.
+
+  Every call queues for the runner, which alone writes or runs. The server holds no key. Each instance is bound to
+  one agent and exposes only its granted tools.
+- **New `agentteams/runner_mcp.py`** holds the install path (`.agentteams/bin/`), the launch flags
+  (`python3 -I -S`), the pinned hash and canonical launch arguments. The runner checks the installed copy on every
+  poll and refuses to serve on a mismatch. Both files are integrity-pinned. Generation wiring comes in R6.
+
 ### feat (staged and direct agent writes through the runner, phase R3)
 
 - **New `agentteams/proposal_staging.py`** (integrity-pinned). An agent writing through the coming

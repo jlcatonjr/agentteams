@@ -109,6 +109,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`proposals`](proposals.md) | Orchestrator-only-writes pilot (P1): apply typed change proposals and run typed command requests under per-agent policy; hash-chained ledger |
 | [`confinement`](confinement.md) | Orchestrator-only-writes pilot (P4b): run the runner's commands and gates in a Seatbelt/bwrap sandbox built from `confined_programs` |
 | [`proposal_policy`](proposal-policy.md) | Orchestrator-only-writes pilot: the registered policy (brief validation and lint), re-exported by `proposals` |
+| [`runner_mcp`](runner-mcp.md) | The `agentteams_runner` MCP server: how granted agents write and execute through the runner (R4) |
 | [`proposal_staging`](proposal-staging.md) | Staged and direct agent writes through the runner, and the orchestrator's approvals (R3) |
 | [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |

@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **228**
+- Modules mapped: **230**
 - Packages: **9**
-- Internal import edges: **598**
+- Internal import edges: **599**
 - Distinct external dependencies: **7**
 
 ---
@@ -22,9 +22,9 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 126 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams` | 127 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 41 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
-| `agentteams.data` | 1 | — |
+| `agentteams.data` | 2 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 24 | `agentteams` |
@@ -122,6 +122,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.confinement` | `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` |
 | `agentteams.control_plane_io` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync`, `agentteams.projection_marker` |
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry` | `agentteams.cli.commands` |
+| `agentteams.data.agentteams-runner-mcp` | — | — |
 | `agentteams.data.goose-readfs-mcp` | — | — |
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.frameworks.structural_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
@@ -214,7 +215,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.cli.generate_helpers` |
 | `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.proposal_commands`, `agentteams.proposal_run`, `agentteams.proposal_staging`, `agentteams.proposals` |
 | `agentteams.proposal_run` | `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposals` |
-| `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.proposal_staging`, `agentteams.proposals` | `agentteams.cli.proposal_commands` |
+| `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.proposal_commands` |
 | `agentteams.proposal_staging` | `agentteams.atomicio`, `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposal_runner`, `agentteams.proposals` |
 | `agentteams.proposals` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks._write_roots`, `agentteams.git_exec`, `agentteams.proposal_policy`, `agentteams.proposal_run`, `agentteams.proposal_staging` | `agentteams.cli.proposal_commands`, `agentteams.proposal_run`, `agentteams.proposal_runner`, `agentteams.proposal_staging` |
 | `agentteams.provenance` | — | — |
@@ -249,6 +250,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.research.scholarly` | `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__` |
 | `agentteams.research.search` | `agentteams.research.backends`, `agentteams.research.cache` | `agentteams.redteam.freshness`, `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
+| `agentteams.runner_mcp` | — | `agentteams.proposal_runner` |
 | `agentteams.scan` | `agentteams.backup` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.learned_blocks`, `agentteams.redteam.corpus` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
@@ -1369,6 +1371,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.data.agentteams-runner-mcp": {
+      "package": "agentteams.data",
+      "path": "agentteams/data/agentteams-runner-mcp.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.data.goose-readfs-mcp": {
       "package": "agentteams.data",
       "path": "agentteams/data/goose-readfs-mcp.py",
@@ -2373,7 +2383,8 @@ digraph "agentteams architecture" {
         "agentteams.confinement",
         "agentteams.frameworks.goose_tool_scoping",
         "agentteams.proposal_staging",
-        "agentteams.proposals"
+        "agentteams.proposals",
+        "agentteams.runner_mcp"
       ],
       "external": [],
       "repo_local": []
@@ -2735,6 +2746,14 @@ digraph "agentteams architecture" {
     "agentteams.research.verify": {
       "package": "agentteams.research",
       "path": "agentteams/research/verify.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.runner_mcp": {
+      "package": "agentteams",
+      "path": "agentteams/runner_mcp.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -5093,6 +5112,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.proposal_runner",
       "target": "agentteams.proposals"
+    },
+    {
+      "source": "agentteams.proposal_runner",
+      "target": "agentteams.runner_mcp"
     },
     {
       "source": "agentteams.proposal_staging",
