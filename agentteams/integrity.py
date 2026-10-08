@@ -51,6 +51,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                            # orchestrator's `agents:` grant under --merge
     "agentteams/data/goose-readfs-mcp.py",  # C-3 on Goose: the read-only file server; read-only by
                                             # construction, so any change to it must be a reviewed re-record
+    "agentteams/data/codex-role-gate.py",  # C-3 on Codex: the PreToolUse role gate (write_policy orchestrator-only);
+                                           # a silent widening lets every spawned agent write
     "agentteams/cli/proposal_commands.py",  # the CLI that hands artifacts to proposals.py
     "agentteams/write_policy.py",  # orchestrator-only-writes pilot: narrows generated agents' tools (C-3)
     "agentteams/audit_agent_contract.py",  # R6: AR_WRITE_POLICY decides which agentteams_runner grants are canonical
@@ -92,6 +94,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # one sibling emitter left unpinned, so a silent edit dropping a control-plane entry weakened
     # every emitted goose/macOS boundary without tripping --verify-integrity or E4.
     "agentteams/frameworks/_goose_sandbox_emit.py",
+    # The Codex runner emitter (Phase 1a/1b, 2026-10-08): builds .codex/confined-run.example.sh (the launcher
+    # flags, CODEX_HOME placement, the in-launcher self-probe) and pins the role gate's hash. A silent edit
+    # dropping a --protect, the self-probe or the gate's pin check weakens every emitted Codex boundary.
+    "agentteams/frameworks/_codex_sandbox_emit.py",
+    "agentteams/frameworks/_codex_role_gate_emit.py",  # the gate's pin and its hook wiring (.codex/hooks.json)
     # Opt-in prompt-root protection (follow-up #8 phase 2, 2026-10-01): the Edit rules and
     # present-only denyWrite set _sandbox_emit.py emits, and the RELAXATION-notice rule set.
     "agentteams/frameworks/_prompt_root_protect.py",

@@ -6,6 +6,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (Codex role gate and runner self-probe, Phase 1b)
+
+- **Codex tells a hook which agent is calling.** Live probes on codex-cli 0.160.1 showed that a PreToolUse
+  hook receives `agent_type` and `agent_id` for a spawned agent's calls, and neither for the top-level
+  session. The runtime fills them in, not transcripts, which overturns 1a's "forgeable, so instruction-level"
+  premise. Probe results: `references/plans/codex-enforced-sandbox.design.md` (local).
+- **Role gate under `write_policy: "orchestrator-only"`.** Codex teams also get:
+  - `.agentteams/bin/codex-role-gate.py`: new pinned package data, `agentteams/data/codex-role-gate.py`.
+  - Goose's read-only file server at `.agentteams/bin/goose-readfs-mcp.py`.
+  - `.codex/hooks.json`, which runs the gate before every tool call.
+
+  A call tagged with an `agent_type` may use only the `agentteams_readfs` read tools. The top-level session
+  (the orchestrator) is unrestricted. Without the runner's `AGENTTEAMS_CODEX_CONFINED=1`, every call is
+  denied. Codex lets a call through on hook exit 1, so every
+  deny and error exits 2, and the hook command ends in `|| exit 2`. Verified live: a spawned `primary-producer`
+  had `ls` blocked by the gate and read files through `read_file`. Probes also showed every subagent tool
+  reaches the hook tagged with its role: `apply_patch`, web search, spawn and a generic subagent (tagged
+  `default`). The gate also denies any call carrying an `agent_id` and any event other than PreToolUse. This
+  is harness-level, like Claude's tool grants. Residual: Codex lets a call through when a hook times out, so
+  the gate stays fast and the hook states a 60-second `timeout`.
+- **The runner enforces the gate's preconditions.** It refuses to start unless the gate, the server and
+  `.codex/hooks.json` match their pinned sha256. It runs both under an absolute `python3` it resolves
+  outside the launcher (refused inside the project or `CODEX_HOME`; override `AGENTTEAMS_CODEX_PYTHON`).
+  It writes the server's entry into an empty `CODEX_HOME/config.toml`, or requires it in the operator's own
+  config exactly once, as one block. A project `.codex/config.toml` that redefines the server is refused.
+  It also passes
+  `--dangerously-bypass-hook-trust`, because Codex skips untrusted project hooks and the runner keeps
+  `config.toml`, where trust is recorded, read-only.
+- **Self-probe, every confined Codex launch.** Codex starts as `bash -c "$SELF_PROBE" … codex …` inside the
+  launcher. Before `exec codex`, the probe checks from the inside that:
+  - the key dir lists empty or is unreadable;
+  - a legacy `*.pem` key is unreadable;
+  - `.agentteams/`, `.codex/` and `CODEX_HOME`'s `config.toml`/`hooks.json` are unwritable, and so are
+    `.codex/hooks.json` and the gate under the gate.
+
+  On any failure it exits 3. Which paths exist is read outside the launcher, so a denied path can't pass as
+  absent. Verified live with the real launcher (passes) and an unconfined fake (refused).
+- `guard_rendered_files` never overwrites an operator's own `.codex/hooks.json`; it prints a notice instead.
+  `convert` now applies the same guard to sidecars, even with `--overwrite`.
+  Under the gate, non-orchestrator agents get a "Reading on Codex (role gate)" section instead of the shell
+  allowlist.
+- `agentteams/data/codex-role-gate.py`, `agentteams/frameworks/_codex_sandbox_emit.py` and the new
+  `agentteams/frameworks/_codex_role_gate_emit.py` are integrity-pinned. The CH-24 broad-except baseline goes
+  18→19 for the gate's fail-closed catch.
+  Labels in the analyze notice, host-features advisory, schema and docs were updated.
+
 ### feat (security: `.env` files are always gitignored)
 
 - New `agentteams.env_hygiene` (`python -m agentteams.env_hygiene REPO … [--fix [--execute]]`) reports an env

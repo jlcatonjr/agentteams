@@ -116,9 +116,9 @@ time. The runtime boundary is the out-of-session runner and its OS sandbox ([`co
 | goose | A recipe whose real extensions or marker grant `edit`/`write`, `summon` or `sub_recipes`; any extension other than `developer` (judged by the tools it grants), `analyze` (allowed only when listed off) and `agentteams_readfs`. The coordination server writes request and log files, so it is refused, as the generator already withholds it; an `agentteams_readfs` entry that doesn't launch the shipped server (type, `cmd`, `args`) or lists tools it lacks; `analyze` left on wherever `developer` or `analyze` appears (it reads outside the workspace, and Goose adds it beside `developer`), unless listed `available_tools: [__none__]`; missing `extensions` | A granted shell |
 
 Generation refuses the switch on copilot-vscode, copilot-cli and agents-md (P4a key custody), and on codex
-off Linux and macOS, where no launcher runner is emitted; on codex the switch gives key custody only (see
-below). This table lists only the frameworks a team under the switch can use. The check itself also knows the other
-shapes:
+off Linux and macOS, where no launcher runner is emitted; on codex the launcher keeps the key out of reach and
+a generated role gate limits spawned agents to read-only tools (see below). This table lists only the
+frameworks a team under the switch can use. The check itself also knows the other shapes:
 - **Copilot:** any non-read-only tool, plus `execute`.
 - **Codex:** `sandbox_mode` other than `"read-only"`, and any `mcp_servers`.
 - **agents-md:** always flagged.
@@ -265,9 +265,11 @@ agentteams --serve-requests --project <root> --description <brief>
   `privilege_profile` not `"cooperative"`. On codex it is allowed when `codex:sandbox` is in effect (an
   explicit `confined`/`exclusive` profile) and holds only when Codex is launched through
   `.codex/confined-run.example.sh`, whose launcher masks the key directory. Generation can't verify that
-  launch. On Codex the switch gives **key custody only**: the ledger key and `.agentteams` stay out of
-  reach, but every role can write the project, and per-role limits are instruction-level. It is refused on
-  codex off Linux/macOS (no runner is emitted there). Generation refuses it elsewhere.
+  launch. On Codex the launcher keeps the ledger key and `.agentteams` out of reach, and the runner turns
+  on a generated PreToolUse role gate (`.agentteams/bin/codex-role-gate.py`, wired by `.codex/hooks.json`):
+  any call Codex tags with a spawned agent's `agent_type` may use only the read-only `agentteams_readfs`
+  tools. That is harness-level, like Claude's tool grants. It is refused on codex off Linux/macOS (no runner
+  is emitted there). Generation refuses it elsewhere.
 - **Confined execution (P4b).** The runner runs every command and gate in an OS sandbox from
   `confined_programs`: the operator-owned file (P5b) when present, otherwise the brief's block. See
   [`confinement`](confinement.md).

@@ -74,7 +74,12 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # enforcement-registered module; deferred as a larger blast-radius refactor.
     "agentteams/fences.py",
 })
-BROAD_EXCEPT_BASELINE = 18      # 16→18: the SAME fail-closed process-boundary handler,
+BROAD_EXCEPT_BASELINE = 19      # 18→19: the Codex role gate (agentteams/data/codex-role-gate.py,
+                                # Phase 1b). Same CH-24-exempt boundary pattern as the
+                                # constitutional gate below: Codex lets a call through on hook exit 1,
+                                # which an uncaught exception produces, so the catch exits 2 (deny)
+                                # and reports. It ACTS; it is not a swallow.
+                                # 16→18: the SAME fail-closed process-boundary handler,
                                 # now present in the two INSTALLED gate hooks synced from the
                                 # template (.claude/hooks/ + .github/hooks/constitutional-gate.py,
                                 # commit bee155e). Identical CH-24-exempt pattern as the 15→16

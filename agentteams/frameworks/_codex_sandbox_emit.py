@@ -12,15 +12,32 @@ is emitted on Linux AND macOS.
 
 Honest label: Codex ignores a custom agent's ``sandbox_mode`` (spawned agents inherit the
 session's sandbox) and every agent command shares the launcher's write access (the project plus
-``CODEX_HOME``), so per-role limits on Codex are INSTRUCTION-LEVEL only. Generation cannot
-verify that Codex is actually launched through this script.
+``CODEX_HOME``), so per-role limits on Codex are INSTRUCTION-LEVEL only, except under
+``write_policy: "orchestrator-only"`` (Phase 1b, 2026-10-08). There the runner also turns on a
+generated PreToolUse role gate (``agentteams/data/codex-role-gate.py``): Codex tags a spawned agent's
+calls with ``agent_type``, and the gate limits those to the read-only ``agentteams_readfs`` tools. That
+is harness-level (it holds while Codex runs the hook), like Claude's tool grants. Every launch also runs
+a self-probe inside the launcher that refuses to start Codex when the boundary doesn't hold. Generation
+cannot verify that Codex is actually launched through this script.
+
+Integrity-pinned: it emits a boundary (the runner) and pins the gate's hash.
 """
 
 from __future__ import annotations
 
+import hashlib
 import shlex
 import sys
 from typing import Any
+
+from agentteams.frameworks._codex_role_gate_emit import (
+    CODEX_HOOKS_PROJECT_PATH,
+    CODEX_ROLE_GATE_PROJECT_PATH,
+    CODEX_ROLE_GATE_SHA256,
+    codex_hooks_json,
+    codex_role_gate_enabled,
+    role_gate_output_files,
+)
 
 __all__ = [
     "CODEX_RUNNER_PROJECT_PATH",
@@ -36,7 +53,6 @@ CODEX_RUNNER_REL = "../confined-run.example.sh"
 #: The project-relative location the runner lands at (listed in
 #: ``_sandbox_emit.OPERATOR_EXAMPLE_PATHS`` so agents cannot edit what the operator runs next).
 CODEX_RUNNER_PROJECT_PATH = ".codex/confined-run.example.sh"
-
 
 def codex_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is REQUESTED on this Codex manifest.
@@ -56,6 +72,108 @@ def codex_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     if "codex:sandbox" in (manifest.get("host_features") or []):
         return True
     return manifest.get("privilege_profile") in {"confined", "exclusive"}
+
+
+#: Runs INSIDE the launcher as ``bash -c "$SELF_PROBE" codex-confined <codex args>`` and then becomes Codex
+#: (``exec``), so the probe and Codex run under the same profile. It checks that the boundary the runner asked
+#: for actually holds, from the inside, and refuses to start Codex otherwise (exit 3). Whether a key, a legacy
+#: key file or ``.agentteams`` exists is read OUTSIDE (``AGENTTEAMS_PROBE_*``), because inside, a path the
+#: profile denies can look absent and a probe would pass trivially. ``: >>`` opens for append and writes
+#: nothing, so a probe that unexpectedly succeeds changes no file.
+_RUNNER_SELF_PROBE = (
+    "SELF_PROBE='set -u\n"
+    'fail(){ echo "SELF-PROBE FAILED: $1. This launch is NOT confined as expected; refusing to start Codex." >&2; exit 3; }\n'
+    'unwritable(){ if ( : >> "$1" ) 2>/dev/null; then fail "$1 is writable"; fi; }\n'
+    'if [ "$AGENTTEAMS_PROBE_KEYS" = 1 ] && [ -n "$(ls -A "$HOME/.config/agentteams/keys" 2>/dev/null)" ]; then\n'
+    '  fail "the signing-key dir is readable"; fi\n'
+    'if [ -n "$AGENTTEAMS_PROBE_PEM" ] && head -c 1 "$AGENTTEAMS_PROBE_PEM" >/dev/null 2>&1; then\n'
+    '  fail "a legacy signing-key file is readable"; fi\n'
+    'if [ "$AGENTTEAMS_PROBE_AT" = 1 ]; then\n'
+    '  d="$AGENTTEAMS_ROOT/.agentteams/.self-probe.$$"\n'
+    '  if mkdir "$d" 2>/dev/null; then rmdir "$d"; fail "$AGENTTEAMS_ROOT/.agentteams is writable"; fi; fi\n'
+    'if [ "$AGENTTEAMS_PROBE_CODEX" = 1 ]; then\n'
+    '  d="$AGENTTEAMS_ROOT/.codex/.self-probe.$$"\n'
+    '  if mkdir "$d" 2>/dev/null; then rmdir "$d"; fail "$AGENTTEAMS_ROOT/.codex is writable"; fi; fi\n'
+    'unwritable "$CODEX_HOME/config.toml"; unwritable "$CODEX_HOME/hooks.json"\n'
+    'if [ "$AGENTTEAMS_PROBE_GATE" = 1 ]; then\n'
+    '  unwritable "$AGENTTEAMS_ROOT/.codex/hooks.json"; unwritable "$AGENTTEAMS_ROOT/.agentteams/bin/codex-role-gate.py"; fi\n'
+    "exec codex \"$@\"'\n"
+)
+
+
+def _runner_label(gate: bool) -> str:
+    """Return the runner header's honest label, which depends on whether the role gate is emitted.
+
+    Args:
+        gate: Whether :func:`codex_role_gate_enabled` holds for this team.
+
+    Returns:
+        Comment lines.
+    """
+    if gate:
+        return (
+            "# PER-ROLE LIMITS (write_policy \"orchestrator-only\"): Codex ignores a custom agent's sandbox_mode,\n"
+            "# so this runner turns on the generated role gate instead: .codex/hooks.json runs\n"
+            "# .agentteams/bin/codex-role-gate.py before every tool call, and a spawned agent (any call Codex\n"
+            "# tags with agent_type) may use only the read-only agentteams_readfs tools. That is HARNESS-LEVEL,\n"
+            "# like Claude's tool grants: it holds only while Codex runs the hook, which this script arranges\n"
+            "# with --dangerously-bypass-hook-trust (the hook files are pinned and read-only in the launcher).\n"
+            "# Residual: Codex lets a call through when a hook TIMES OUT; the gate is kept fast for that reason.\n"
+            "# The launcher (OS level) keeps the ledger key and .agentteams out of reach for every role.\n"
+            "# agentteams cannot verify that Codex is actually launched through this script.\n"
+        )
+    return (
+        "# HONEST LABEL: per-role limits are INSTRUCTION-LEVEL on Codex. Codex ignores a custom agent's\n"
+        "# sandbox_mode (spawned agents inherit the session's sandbox), and every agent command shares the\n"
+        "# same write access. A checking command's generated outputs are writable for every agent.\n"
+        "# agentteams cannot verify that Codex is actually launched through this script.\n"
+    )
+
+
+def _runner_gate_block() -> str:
+    """Return the runner lines that enforce the role gate's preconditions before launch.
+
+    Checks the gate, the read-only server and ``.codex/hooks.json`` against their pins (refusing a missing,
+    symlinked or changed copy), then puts the read-only server's entry in ``CODEX_HOME/config.toml``:
+    written when the file is empty, required verbatim when the operator has their own config.
+
+    Returns:
+        Bash lines.
+    """
+    from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH, READFS_SHA256
+
+    hooks_sha = hashlib.sha256(codex_hooks_json().encode("utf-8")).hexdigest()
+    return (
+        "# write_policy orchestrator-only: the role gate's files must be exactly what agentteams shipped.\n"
+        'sha(){ { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d" " -f1; }\n'
+        'pin(){ if [ ! -f "$1" ] || [ -L "$1" ] || [ "$(sha "$1")" != "$2" ]; then\n'
+        '  echo "REFUSING: $1 is missing, a symlink, or not the pinned copy; regenerate the team with agentteams." >&2; exit 2; fi; }\n'
+        f'pin "$ROOT/{CODEX_ROLE_GATE_PROJECT_PATH}" {CODEX_ROLE_GATE_SHA256}\n'
+        f'pin "$ROOT/{READFS_PROTECTED_PATH}" {READFS_SHA256}\n'
+        f'pin "$ROOT/{CODEX_HOOKS_PROJECT_PATH}" {hooks_sha}\n'
+        'case "$ROOT" in *[\\"\\\\]*|*[[:cntrl:]]*)\n'
+        '  echo "REFUSING: the project path has a quote, backslash or control character; config.toml cannot name it safely." >&2; exit 2 ;; esac\n'
+        '# The gate and the server run under an ABSOLUTE interpreter resolved here, outside the launcher, so no\n'
+        '# writable PATH entry (a project venv, say) can stand in for python3. Override: AGENTTEAMS_CODEX_PYTHON.\n'
+        'PY="${AGENTTEAMS_CODEX_PYTHON:-$(command -v python3 || true)}"\n'
+        'case "$PY" in /*) ;; *) echo "REFUSING: no absolute python3 (set AGENTTEAMS_CODEX_PYTHON)." >&2; exit 2 ;; esac\n'
+        '# Follow a symlinked interpreter to its target, so a link outside the project into it is caught.\n'
+        'n=0; while [ -L "$PY" ] && [ "$n" -lt 40 ]; do\n'
+        '  t="$(readlink "$PY")"; case "$t" in /*) PY="$t" ;; *) PY="$(dirname "$PY")/$t" ;; esac; n=$((n + 1)); done\n'
+        'PY="$(cd "$(dirname "$PY")" && pwd -P)/$(basename "$PY")"\n'
+        'case "$PY/" in "$ROOT"/*|"$CODEX_HOME"/*|*[\\"\\\\]*|*[[:cntrl:]]*)\n'
+        '  echo "REFUSING: python3 at $PY is inside a path agents can write (or unquotable); set AGENTTEAMS_CODEX_PYTHON to an interpreter outside the project." >&2; exit 2 ;; esac\n'
+        'if grep -qs agentteams_readfs "$ROOT/.codex/config.toml"; then   # any form: table, dotted key, inline\n'
+        '  echo "REFUSING: $ROOT/.codex/config.toml mentions agentteams_readfs; only the runner may define that server." >&2; exit 2; fi\n'
+        'READFS_TOML="[mcp_servers.agentteams_readfs]\n'
+        'command = \\"$PY\\"\n'
+        f'args = [\\"-I\\", \\"-S\\", \\"$ROOT/{READFS_PROTECTED_PATH}\\", \\"--root\\", \\"$ROOT\\"]"\n'
+        'if [ ! -s "$CODEX_HOME/config.toml" ]; then printf \'%s\\n\' "$READFS_TOML" > "$CODEX_HOME/config.toml"\n'
+        'elif [ "$(grep -xF -A2 -- "[mcp_servers.agentteams_readfs]" "$CODEX_HOME/config.toml")" != "$READFS_TOML" ]; then\n'
+        '  echo "REFUSING: $CODEX_HOME/config.toml lacks the read-only server agents need under write_policy" >&2\n'
+        '  echo "orchestrator-only (exactly once, as one block). Add these lines to it (outside the launcher), then rerun:" >&2\n'
+        '  printf \'%s\\n\' "$READFS_TOML" >&2; exit 2; fi\n'
+    )
 
 
 def _build_codex_runner(manifest: dict[str, Any]) -> str:
@@ -89,6 +207,10 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         if len(raw) != len(safe):
             skipped_note = (f'echo "NOTE: {len(raw) - len(safe)} protected_read_path(s) SKIPPED from --exclude '
                             '(unsafe chars); their read-exclusion is NOT enforced - sanitize the brief." >&2\n')
+    gate = codex_role_gate_enabled(manifest)
+    gate_block = _runner_gate_block() if gate else ""
+    bypass = " --dangerously-bypass-hook-trust" if gate else ""
+    py_setenv = ' --setenv AGENTTEAMS_PYTHON="$PY"' if gate else ""
     return (
         "#!/usr/bin/env bash\n"
         "# .codex/confined-run.example.sh - EXAMPLE: run Codex inside agentteams' launcher (Linux + macOS).\n"
@@ -103,12 +225,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         "# credential dirs (including ~/.config/agentteams/keys) are masked. Run Codex this way or not at\n"
         "# all: outside the launcher, danger-full-access confines nothing.\n"
         "#\n"
-        "# HONEST LABEL: per-role limits are INSTRUCTION-LEVEL on Codex. Codex ignores a custom agent's\n"
-        "# sandbox_mode (spawned agents inherit the session's sandbox), and every agent command shares the\n"
-        "# same write access. Under write_policy \"orchestrator-only\" that means KEY CUSTODY ONLY: the\n"
-        "# ledger key and .agentteams stay out of reach, but every role can write the project directly.\n"
-        "# A checking command's generated outputs are writable for every agent. agentteams cannot verify\n"
-        "# that Codex is actually launched through this script.\n"
+        + _runner_label(gate) +
         "#\n"
         "# CODEX_HOME: Codex must write its home (sessions, logs, auth), so it is writable for every agent\n"
         "# command. Default: $HOME/.config/agentteams/codex-home/<project>-<hash>; override with\n"
@@ -158,7 +275,10 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         '[ -e "$CODEX_HOME/config.toml" ] || : > "$CODEX_HOME/config.toml"\n'
         'for f in AGENTS.md AGENTS.override.md; do [ -e "$CODEX_HOME/$f" ] || : > "$CODEX_HOME/$f"; done\n'
         '[ -e "$CODEX_HOME/hooks.json" ] || printf \'{}\\n\' > "$CODEX_HOME/hooks.json"\n'
-        'if grep -Eq \'^[[:space:]]*(approval_policy|sandbox_mode|notify)[[:space:]]*=|^[[:space:]]*\\[(mcp_servers|sandbox_workspace_write|hooks)\' "$CODEX_HOME/config.toml"; then\n'
+        + gate_block +
+        f'if awk -v gate={int(gate)} \'gate && $0 == "[mcp_servers.agentteams_readfs]" {{ next }}\n'
+        '    /^[[:space:]]*(approval_policy|sandbox_mode|notify)[[:space:]]*=/ || /^[[:space:]]*\\[(mcp_servers|sandbox_workspace_write|hooks)/ { f = 1 }\n'
+        '    END { exit !f }\' "$CODEX_HOME/config.toml"; then\n'
         '  echo "WARNING: $CODEX_HOME/config.toml sets security-relevant keys; review it (it is read-only in the sandbox, but Codex honours it)." >&2\n'
         'fi\n'
         'SCRATCH="${CODEX_CONFINE_SCRATCH:-$(mktemp -d "${TMPDIR:-/tmp}/codex-confined.XXXXXX")}"\n'
@@ -167,10 +287,18 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         'for f in config.toml hooks.json AGENTS.md AGENTS.override.md rules prompts skills; do PROTECT+=( --protect "$CODEX_HOME/$f" ); done\n'
         'EGRESS="${CODEX_CONFINE_EGRESS:-host}"\n'
         + skipped_note +
+        '# Self-probe facts are read OUTSIDE the launcher (inside, a denied path can look absent).\n'
+        'PK=0; [ -n "$(ls -A "$HOME/.config/agentteams/keys" 2>/dev/null)" ] && PK=1\n'
+        'PA=0; [ -e "$ROOT/.agentteams" ] && PA=1\n'
+        'PC=0; [ -d "$ROOT/.codex" ] && PC=1\n'
+        'PEM=""; for p in "$HOME"/.config/agentteams/*.pem; do [ -f "$p" ] && { PEM="$p"; break; }; done\n'
+        + _RUNNER_SELF_PROBE +
         f'exec "$LAUNCHER" --scratch "$SCRATCH" {writable_flags} --writable "$CODEX_HOME" \\\n'
         f'  ${{PROTECT[@]+"${{PROTECT[@]}}"}} --protect-prompt-roots{exclude_flags} --egress "$EGRESS" \\\n'
-        '  --setenv CODEX_HOME="$CODEX_HOME" --env-allow PATH --env-allow HOME \\\n'
-        '  -- codex --sandbox danger-full-access "$@"\n'
+        f'  --setenv CODEX_HOME="$CODEX_HOME" --setenv AGENTTEAMS_ROOT="$ROOT" --setenv AGENTTEAMS_CODEX_CONFINED=1 \\\n'
+        f'  --setenv AGENTTEAMS_PROBE_KEYS="$PK" --setenv AGENTTEAMS_PROBE_AT="$PA" --setenv AGENTTEAMS_PROBE_GATE={int(gate)} \\\n'
+        f'  --setenv AGENTTEAMS_PROBE_PEM="$PEM" --setenv AGENTTEAMS_PROBE_CODEX="$PC"{py_setenv} --env-allow PATH --env-allow HOME \\\n'
+        f'  -- bash -c "$SELF_PROBE" codex-confined --sandbox danger-full-access{bypass} "$@"\n'
     )
 
 
@@ -190,12 +318,23 @@ def codex_sandbox_output_files(
         platform: Override for the platform string (defaults to live ``sys.platform``); lets
             tests exercise each branch deterministically.
 
+    Under ``write_policy: "orchestrator-only"`` (:func:`codex_role_gate_enabled`) it also emits the role
+    gate (``.agentteams/bin/codex-role-gate.py``), the read-only file server Goose uses under the policy
+    (``.agentteams/bin/goose-readfs-mcp.py``) and ``.codex/hooks.json``, each checked against its pin.
+
     Returns:
-        A one-item list with the runner, or ``[]``.
+        The runner (plus the role-gate files under the policy), or ``[]``.
+
+    Raises:
+        FileNotFoundError: When the role gate or read-only server is missing from the install.
+        ValueError: When either doesn't match its pinned hash.
     """
     if not codex_sandbox_feature_enabled(manifest):
         return []
     plat = sys.platform if platform is None else platform
     if not (plat.startswith("linux") or plat.startswith("darwin")):
         return []
-    return [(CODEX_RUNNER_REL, _build_codex_runner(manifest))]
+    files = [(CODEX_RUNNER_REL, _build_codex_runner(manifest))]
+    if codex_role_gate_enabled(manifest):
+        files += role_gate_output_files()
+    return files

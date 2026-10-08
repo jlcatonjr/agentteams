@@ -63,7 +63,9 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # so that example runs Codex with `--sandbox danger-full-access` INSIDE the launcher,
     # and the launcher is the boundary. Codex ignores a custom agent's `sandbox_mode`
     # (spawned agents inherit the session's sandbox) and needs a writable CODEX_HOME that
-    # every agent command shares, so per-role limits on Codex stay INSTRUCTION-LEVEL only.
+    # every agent command shares, so per-role limits on Codex stay INSTRUCTION-LEVEL only, except
+    # under write_policy "orchestrator-only", where the runner turns on a generated PreToolUse role
+    # gate that limits spawned agents to read-only tools (harness-level, Phase 1b).
     # Like goose:sandbox, the token records the REQUEST; generation cannot verify that
     # Codex is actually launched through the example.
     "codex": frozenset({"mcp", "sandbox"}),
@@ -506,7 +508,8 @@ def privilege_profile_advisory(
     codex_note = (
         " For Codex, run it through '.codex/confined-run.example.sh' (Codex's own sandbox off "
         "inside the launcher, which is the boundary); per-role limits on Codex stay "
-        "instruction-level only, and agentteams cannot verify how Codex is launched."
+        "instruction-level only, except under write_policy orchestrator-only, where a generated role gate "
+        "limits spawned agents to read-only tools; agentteams cannot verify how Codex is launched."
         if framework_id == "codex" else ""
     )
 
