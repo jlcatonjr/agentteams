@@ -165,5 +165,71 @@ def install_files(manifest: dict) -> list[tuple[str, str]]:
     return [(f"../../{PROTECTED_PATH}", source)]
 
 
+#: Project files where an ``mcpServers`` entry would sit beside (and could shadow) the inline agentteams_runner.
+SHADOW_FILES: tuple[str, ...] = (".mcp.json", ".claude/settings.json", ".claude/settings.local.json")
+
+
+def wiring_problems(root, framework: str, manifest: dict) -> list[str]:
+    """Live-wiring problems for a team with ``mcp_grants`` (R7; @security C11, C13). Empty when none apply.
+
+    * **C13:** no project ``.mcp.json`` or Claude settings file may define a server named ``agentteams_runner``:
+      Claude Code could resolve the name to that entry instead of the canonical inline one.
+    * **C11 (Claude):** the live ``.claude/settings.json`` must keep every session from writing the installed server
+      and the agent files: ``permissions.deny`` holds ``Edit(/.agentteams/**)``, and the merged sandbox's
+      ``filesystem.denyWrite`` holds ``.agentteams`` and ``.claude``. (Goose's Seatbelt profile is verified by its own
+      wiring check.)
+
+    Args:
+        root: The project root.
+        framework: ``claude`` or ``goose``.
+        manifest: The team manifest.
+
+    Returns:
+        One message per problem.
+
+    Raises:
+        Nothing: an unreadable file is a problem.
+    """
+    import json
+    from pathlib import Path
+
+    if manifest.get("write_policy") != "orchestrator-only" or not manifest.get("mcp_grants"):
+        return []
+    root = Path(root)
+    problems: list[str] = []
+    for rel in SHADOW_FILES:
+        path = root / rel
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            problems.append(f"{rel} is unreadable ({exc}); can't rule out a shadowing {SERVER_NAME}")
+            continue
+        servers = data.get("mcpServers") if isinstance(data, dict) else None
+        if isinstance(servers, dict) and SERVER_NAME in servers:
+            problems.append(f"{rel} defines an MCP server named {SERVER_NAME}, which could shadow the canonical inline "
+                            "entry granted agents launch; remove it (@security C13)")
+    if framework == "claude":
+        settings = root / ".claude" / "settings.json"
+        try:
+            data = json.loads(settings.read_text(encoding="utf-8")) if settings.exists() else {}
+        except (OSError, ValueError):
+            data = {}
+        deny = ((data.get("permissions") or {}).get("deny") or []) if isinstance(data, dict) else []
+        fs = (((data.get("sandbox") or {}).get("filesystem") or {}) if isinstance(data, dict) else {})
+        deny_write = fs.get("denyWrite") or []
+        if "Edit(/.agentteams/**)" not in deny:
+            problems.append("live .claude/settings.json doesn't deny Edit(/.agentteams/**): a session's Write/Edit "
+                            "could replace the installed agentteams_runner server (@security C11)")
+        for rel in (".agentteams", ".claude"):
+            if rel not in deny_write:
+                problems.append(f"live .claude/settings.json's sandbox doesn't denyWrite {rel}: a session's shell "
+                                f"could change {'the installed server' if rel == '.agentteams' else 'agent files'} "
+                                "(@security C11); merge the emitted sandbox block")
+    return problems
+
+
 __all__ = ["PROTECTED_PATH", "PYTHON_FLAGS", "SERVER_NAME", "SHA256", "SYSTEM_PYTHONS", "TOOLS", "claude_block",
-           "goose_extension", "install_files", "interpreter", "launch_args", "server_content", "tool_names"]
+           "goose_extension", "install_files", "interpreter", "launch_args", "server_content", "tool_names",
+           "SHADOW_FILES", "wiring_problems"]
