@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (generation and audit for MCP-mediated agent writes, phase R6)
+
+- **Granted agents are rendered with the server.** Under `write_policy: "orchestrator-only"`, an agent named in
+  the brief's `mcp_grants` gets:
+  - **Claude:** its narrowed read tools, the exact `mcp__agentteams_runner__<tool>` names, and the canonical
+    inline `mcpServers` block;
+  - **Goose:** the canonical stdio extension, with an exact `available_tools` list;
+  - **instructions** to write and execute only through those tools.
+
+  The server is installed into `.agentteams/bin/`. The orchestrator's section gains `--list-staged`,
+  `--show-staged`, `--apply-staged` and `--reject-staged`, only when the team has grants.
+- **The server finds its project root from its install location,** and agents launch it with an absolute
+  system `python3`. No machine path or home directory is written into the team (@security R4 condition 5).
+- **`AR_WRITE_POLICY` allows exactly the canonical rendering for a granted agent:** the block, the extension and
+  the tool names. Any edit to them is an error, and so is any shell on a granted agent (@security C14, C15).
+  `audit_agent_contract.py` is now integrity-pinned.
+- **Teams without `mcp_grants`,** and ungranted agents, render byte-identical.
+- **@security R6 review fixes:**
+  - nothing may follow the canonical block: an indented `env:`, `cwd:` or a second server is refused;
+  - writes into a `.agentteams`, `.agentteams-queue` or `.claude` directory are refused at any depth, not only at
+    the top;
+  - with grants, rendering refuses an `--output` that isn't the framework's canonical agents directory, so the
+    server always installs at the project root.
+
 ### feat (operator-signed direct-write grants, phase R5)
 
 - **New `agentteams/mcp_direct_grants.py`** (integrity-pinned). The runner honours an agent's `approval: direct`

@@ -14,6 +14,7 @@ from typing import Any
 
 # _plan_output_files extracted to agentteams/output_plan.py (CH-07);
 # re-exported so analyze._plan_output_files resolves unchanged.
+from agentteams.write_policy import manifest_fields as _wp_manifest_fields
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
@@ -24,7 +25,7 @@ from agentteams.analyze_tools import (  # CH-07 carve; re-exported
     _classify_without_override,
     _merge_known_tool_metadata,
     detect_tool_agents,
-    detect_reference_tools,
+    detect_reference_tools, _dedupe_preserve_order,
     _SPECIALIST_CATEGORIES,
     _SPECIALIST_TOOLS,
     _REFERENCE_CATEGORIES,
@@ -596,7 +597,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         **({"goose_egress_proxy": goose_egress_proxy} if goose_egress_proxy else {}),
         **({"coordination_write_roots": list(coordination_write_roots)} if coordination_write_roots else {}),
         **({"goose_tool_scoping": goose_tool_scoping} if goose_tool_scoping else {}),
-        **({"write_policy": write_policy} if write_policy == "orchestrator-only" else {}),
+        **_wp_manifest_fields(description, write_policy),  # write_policy (and R6 mcp_grants) under the switch
         **({"mcp_catalog": mcp_catalog_opt_ins} if mcp_catalog_opt_ins else {}),
         **({"mcp_catalog_exclude": mcp_catalog_excludes} if mcp_catalog_excludes else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
@@ -900,18 +901,6 @@ def _infer_component_sources(
 def _normalize_match_key(text: str) -> str:
     """Normalize text for loose path/name matching."""
     return re.sub(r"[^a-z0-9]+", "", text.lower())
-
-
-def _dedupe_preserve_order(values: list[str]) -> list[str]:
-    """Return values in first-seen order with duplicates removed."""
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for value in values:
-        if not value or value in seen:
-            continue
-        seen.add(value)
-        ordered.append(value)
-    return ordered
 
 
 def _resolve_project_name(description: dict[str, Any]) -> str:
