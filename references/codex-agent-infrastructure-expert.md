@@ -62,10 +62,13 @@ subagents and build-skills twins together.
 - **Discovery.** `codex-rs/agent-roles/src/discovery.rs` walks the agents dir
   recursively and loads only `*.toml` files, so Markdown under
   `.codex/agents/references/` is ignored. No other `.toml` file may live there.
-- **POLA.** Subagents inherit the parent's sandbox policy, and CLI permission
-  overrides are re-applied to spawned children. A custom agent's `sandbox_mode` is
-  therefore a default, **not a ceiling**. Codex does not enforce Copilot/Claude tool
-  grants, so declared tools can only be stated as a self-imposed limit.
+- **POLA.** Codex ignores a custom agent's `sandbox_mode`: `role.rs` drops it when the
+  role loads, so spawned agents inherit the session's sandbox (verified live on
+  codex-cli 0.160.1, 2026-10-08). The key is a declaration, **not enforced**; the
+  session's sandbox, or agentteams' launcher when Codex runs through
+  `.codex/confined-run.example.sh`, governs every agent. Codex does not enforce
+  Copilot/Claude tool grants, so declared tools can only be stated as a self-imposed
+  limit: per-role limits on Codex are instruction-level only.
 - **Reported, not re-verified here** (baseAgent research, 2026-09-29, citing
   `codex-rs/core/src/agents_md.rs`): untrusted projects skip project instruction
   files, and `project_root_markers` sets the walk root.

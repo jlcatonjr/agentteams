@@ -420,8 +420,8 @@ def resolve_host_features_and_advise(
 
     Unions the explicit ``--target-host-features`` tokens with the ``privilege_profile``
     expansion (confined/exclusive → the target framework's sandbox token: ``claude:sandbox``,
-    or ``goose:sandbox`` for goose; cooperative adds nothing and never strips an explicit
-    token), prints the active feature list, and — when a confinement request cannot be
+    ``goose:sandbox`` for goose, or ``codex:sandbox`` for codex; cooperative adds nothing and
+    never strips an explicit token), prints the active feature list, and — when a confinement request cannot be
     OS-enforced on this framework/platform — records the gap.
 
     Fail-closed posture (P1-2): when ``allow_unenforced`` is ``False`` and confinement is
@@ -628,7 +628,7 @@ def _confinement_active(manifest: dict) -> bool:
     """Return True iff any OS confinement is requested for this team.
 
     True when ``privilege_profile`` is ``confined``/``exclusive`` or any ``host_features``
-    token ends in ``:sandbox`` (claude:sandbox / goose:sandbox). Used to gate write-root
+    token ends in ``:sandbox`` (claude:sandbox / goose:sandbox / codex:sandbox). Used to gate write-root
     widening: when nothing is confined, ``workspace_write_roots`` is inert (no sandbox
     consumes it), so we leave the manifest byte-identical to baseline.
     """

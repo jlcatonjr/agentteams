@@ -92,6 +92,7 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         # follow-up #2: the operator-merged / operator-run examples
         "Edit(/.claude/settings.hooks.example.json)",
         "Edit(/.goose/confined-run.example.sh)",
+        "Edit(/.codex/confined-run.example.sh)",
         "Edit(/.claude/hooks/**)",
         # 2026-09-30: the sibling teams' trust-root files (never a whole agents dir).
         *_sibling_rules(".github/agents"),

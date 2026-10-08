@@ -619,7 +619,7 @@ includes an in-sandbox `agentteams --update`. Regenerate from outside the sandbo
 
 **The roots:**
 - `.github/copilot-instructions.md`, `.github/instructions/`, `.github/prompts/` and `.github/agents/`;
-- `AGENTS.md` and `.goosehints`;
+- `AGENTS.md`, `AGENTS.override.md` (Codex reads it ahead of `AGENTS.md`) and `.goosehints`;
 - `.codex/` and `.goose/recipes/`;
 - `CLAUDE.md`, `CLAUDE.local.md` and `.mcp.json`;
 - `.agentteams/`, only when present.
