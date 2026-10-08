@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (templates: Rule 11 lessons from 2026-10-07)
+
+- The read-only auditor templates (adversarial, security, conflict-auditor, code-hygiene, technical-validator,
+  quality-auditor) now say: never change git state, meaning nothing that writes the working tree, index, refs or
+  `.git/`. To see old code, ask the caller for `git show` output. A mutation check is the caller's job, in a
+  scratch copy extracted outside the repository. Twice that day a read-only reviewer had run `git stash` in the
+  orchestrator's worktree.
+- The orchestrator and copilot-instructions templates' plan rule now says a batch of operator-scheduled
+  follow-ups gets its plan and steps CSV before the first item, and a plan written afterwards says
+  `(retroactive)` in its title.
+
 ### feat (MCP catalogue: foundational servers and the PR agents)
 
 - **A catalogue of foundational MCP servers** (`agentteams/templates/mcp/`, `agentteams/mcp_catalog.py`):
