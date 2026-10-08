@@ -688,7 +688,7 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
     convention). The one requirement the launcher cannot self-satisfy is documented: run it as the
     workspace-owning user (bwrap ``--unshare-user`` as root loses DAC over your files).
     """
-    from agentteams.frameworks._write_roots import path_char_problem, validate_write_roots
+    from agentteams.frameworks._write_roots import validate_write_roots
 
     # Follow-up #2 (2026-09-30): roots used to be pasted RAW into this operator-run bash script, so a
     # brief root like `x$(cmd)` executed in the operator's unsandboxed shell. Now validated (hard
@@ -698,21 +698,9 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
     writable_flags += " --protect-prompt-roots" if manifest.get("protect_prompt_roots") is True else ""
     # exclusive read-exclusion parity with the macOS Seatbelt path: carry operator sibling read-denies
     # as --exclude (the launcher already tmpfs-masks the built-in credential dirs, so only extras here).
-    exclude_flags = ""
-    skipped_note = ""
-    if manifest.get("privilege_profile") == "exclusive":
-        raw = [p for p in (manifest.get("protected_read_paths") or []) if p]
-        # A manifest path is DATA (C-4): reject shell/quote-breaking + control chars so it cannot
-        # break or inject into the emitted script — parity with the Seatbelt path's fail-closed
-        # validation. Unsafe paths are skipped (read-exclusion NOT enforced) with a visible note.
-        safe = [p for p in raw if path_char_problem(p) is None]
-        exclude_flags = "".join(f" --exclude {shlex.quote(p)}" for p in safe)
-        n_bad = len(raw) - len(safe)
-        if n_bad:
-            skipped_note = (
-                f'echo "NOTE: {n_bad} protected_read_path(s) SKIPPED from --exclude (unsafe chars); '
-                'their read-exclusion is NOT enforced — sanitize the manifest." >&2\n'
-            )
+    from agentteams.frameworks._write_roots import runner_exclude_flags
+
+    exclude_flags, skipped_note = runner_exclude_flags(manifest)
     return (
         "#!/usr/bin/env bash\n"
         "# .goose/confined-run.example.sh — EXAMPLE: run goose CONFINED on Linux. INERT / operator-run.\n"

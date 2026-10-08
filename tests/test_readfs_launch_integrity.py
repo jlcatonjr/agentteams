@@ -56,7 +56,11 @@ def test_install_location_follows_the_switch():
 
 
 def test_render_fails_closed_on_a_mismatched_server(monkeypatch):
-    monkeypatch.setattr(goose_mod, "_readfs_mcp_content", lambda: "# not the shipped server\n")
+    from agentteams.frameworks import goose_docs
+
+    tampered = lambda: "# not the shipped server\n"  # noqa: E731
+    monkeypatch.setattr(goose_mod, "_readfs_mcp_content", tampered)
+    monkeypatch.setattr(goose_docs, "_readfs_mcp_content", tampered)   # the pinned helper reads through goose_docs
     with pytest.raises(ValueError, match="pinned hash"):
         GooseAdapter().extra_output_files(_manifest(switch=True))
     GooseAdapter().extra_output_files(_manifest(switch=False))          # without the switch: unchanged behaviour

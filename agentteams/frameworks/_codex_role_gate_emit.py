@@ -132,13 +132,10 @@ def role_gate_output_files() -> list[tuple[str, str]]:
         FileNotFoundError: When the gate or the server is missing from the install.
         ValueError: When either doesn't match its pinned hash.
     """
-    from agentteams.frameworks.goose_docs import _readfs_mcp_content
-    from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH, READFS_SHA256
+    from agentteams.frameworks.goose_docs import pinned_readfs_mcp_content
+    from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH
 
-    readfs = _readfs_mcp_content()
-    if hashlib.sha256(readfs.encode("utf-8")).hexdigest() != READFS_SHA256:
-        raise ValueError("the installed read-only file server does not match its pinned hash (READFS_SHA256); "
-                         "reinstall agentteams before rendering under write_policy orchestrator-only")
+    readfs = pinned_readfs_mcp_content()
     return [(f"../../{CODEX_ROLE_GATE_PROJECT_PATH}", _role_gate_content()),
             (f"../../{READFS_PROTECTED_PATH}", readfs),
             ("../hooks.json", codex_hooks_json())]
