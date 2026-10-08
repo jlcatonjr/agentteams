@@ -81,6 +81,11 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(~/.config/agentteams/keys/**)",
         "Edit(~/.config/agentteams/confined)",
         "Edit(~/.config/agentteams/confined/**)",
+        # R5 (mcp-mediated-agent-writes): the operator's direct-write grants and the keys that verify them
+        "Edit(~/.config/agentteams/mcp-grants)",
+        "Edit(~/.config/agentteams/verify-keys)",
+        "Edit(~/.config/agentteams/mcp-grants/**)",
+        "Edit(~/.config/agentteams/verify-keys/**)",
         "Edit(/.claude/agents/references/agent-privilege.json)",
         "Edit(/.claude/agents/references/authorized-verify-keys/**)",
         "Edit(/.claude/agents/references/security-approvers.txt)",

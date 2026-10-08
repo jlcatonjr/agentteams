@@ -238,6 +238,7 @@ nav:
       - confinement: api-reference/confinement.md
       - proposal_policy: api-reference/proposal-policy.md
       - proposal_runner: api-reference/proposal-runner.md
+      - proposal_run: api-reference/proposal-run.md
       - proposal_staging: api-reference/proposal-staging.md
       - runner_mcp: api-reference/runner-mcp.md
       - mcp_direct_grants: api-reference/mcp-direct-grants.md
