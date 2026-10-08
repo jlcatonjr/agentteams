@@ -691,3 +691,12 @@ def test_mcp_grants_populate_mcp_agents():
 def test_mcp_grants_fail_closed(grants, needle):
     with pytest.raises(P.ProposalError, match=needle):
         P.load_policy({"agent_policies": {}, "mcp_grants": grants})
+
+
+@pytest.mark.parametrize("path", ["lean/MathAgentsWIP/.agentteams/bin/agentteams-runner-mcp.py",
+                                  "lean/MathAgentsWIP/.claude/agents/x.md", "lean/MathAgentsWIP/.AgentTeams-Queue/r"])
+def test_nested_control_plane_paths_are_refused(project, path):
+    """@security R6 condition 2: a control-plane directory name at any depth is refused, not only at the top."""
+    root, policy = project
+    with pytest.raises(P.ProposalError, match="control plane"):
+        P.apply_proposal(_prop(root, "lean-prover", path, "absent"), root=root, policy=policy)

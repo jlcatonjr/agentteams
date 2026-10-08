@@ -449,9 +449,29 @@ def _protected(rel: str, patterns: list[str]) -> str | None:
     return None
 
 
+#: Control-plane directory names refused at ANY depth (R6 review condition 2): a copy planted under a subdirectory
+#: (``sub/.agentteams/bin/...``) would be what a session started in ``sub/`` launches.
+_NESTED_CONTROL_PLANE = frozenset({".agentteams", ".agentteams-queue", ".claude"})
+
+
+def nested_control_plane(rel: str) -> str | None:
+    """The control-plane directory name a project-relative path passes through at any depth, else None.
+
+    Args:
+        rel: A project-relative POSIX path.
+
+    Returns:
+        The matching segment, case-folded.
+
+    Raises:
+        Nothing.
+    """
+    return next((p for p in (s.lower() for s in rel.split("/")) if p in _NESTED_CONTROL_PLANE), None)
+
+
 def _check_destination(root: Path, path: Any, policy: Policy, agent: str) -> str:
     rel = _rel_inside(root, path)
-    plane = control_plane_of(rel, platform="darwin")  # case-folded everywhere: refuse on any filesystem
+    plane = control_plane_of(rel, platform="darwin") or nested_control_plane(rel)  # case-folded everywhere
     if plane:
         raise ProposalError(f"{rel} is inside the project control plane ({plane}); refused")
     if policy.brief_rel and rel.lower() == policy.brief_rel.lower():

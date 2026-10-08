@@ -44,7 +44,7 @@ def _render(tmp_path: Path, framework: str, *, grants: bool) -> Path:
     project.mkdir()
     out = project / ".claude" / "agents" if framework == "claude" else project
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(_brief(tmp_path, grants=grants)),
-                           "--framework", framework, "--output", str(out), "--yes"],
+                           "--framework", framework, "--output", str(out), "--project", str(project), "--yes"],
                           capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
     return project
@@ -101,9 +101,16 @@ def test_ungranted_agents_are_unchanged(renders, framework):
     def body(path: Path) -> str:  # generation timestamps (e.g. the threat-intel snapshot) differ between renders
         return re.sub(r"(Generated at: `[^`]*`|\d+(?:\.\d+)? days old|age_hours=[\d.]+)", "", path.read_text())
 
+    # The security agent embeds live threat intelligence (CVE feeds fetched at render time), so two renders minutes
+    # apart differ there for reasons unrelated to grants.
     differ = sorted(p.name for p in granted_dir.glob(f"*{ext}")
-                    if (plain_dir / p.name).exists() and body(p) != body(plain_dir / p.name))
-    assert set(differ) <= {f"{GRANTED}{ext}", f"orchestrator{ext}"}, differ
+                    if (plain_dir / p.name).exists() and p.stem != "security" and body(p) != body(plain_dir / p.name))
+    import difflib
+
+    detail = {n: [l for l in difflib.unified_diff(body(plain_dir / n).splitlines(), body(granted_dir / n).splitlines(),
+                                                lineterm="") if l.startswith(("+", "-"))][:6]
+              for n in differ if n not in (f"{GRANTED}{ext}", f"orchestrator{ext}")}
+    assert set(differ) <= {f"{GRANTED}{ext}", f"orchestrator{ext}"}, detail
 
 
 def test_no_machine_path_is_written_into_the_team(renders):
@@ -127,3 +134,30 @@ def test_the_installed_server_finds_its_own_root(renders, tmp_path):
     stray = subprocess.run([runner_mcp.interpreter(), "-I", "-S", str(copy), "--agent", "a", "--tools", "write_file"],
                            capture_output=True, text=True, timeout=30, input="")
     assert stray.returncode != 0 and "not installed under" in stray.stderr
+
+
+@pytest.mark.parametrize("extra", ["      env: {DYLD_INSERT_LIBRARIES: /tmp/x.dylib}\n", "      cwd: /tmp\n",
+                                   "  - other_server:\n      type: stdio\n      command: /bin/sh\n"])
+def test_nothing_may_follow_the_canonical_block(renders, extra):
+    """@security R6 condition 1: indented leftovers after the block (env, cwd, another server) are refused."""
+    directory, ext = _agents(renders[("claude", True)], "claude")
+    files = {p.name: p.read_text() for p in directory.glob("*.md")}
+    text = files[f"{GRANTED}.md"]
+    block = runner_mcp.claude_block(GRANTED, GRANT["tools"], "staged", runner_mcp.interpreter())
+    files[f"{GRANTED}.md"] = text.replace(block, block + extra)
+    findings = _check_write_policy(files, agent_ext=".md", framework="claude", enabled=True,
+                                   mcp_grants={GRANTED: GRANT})
+    assert any(f.file == f"{GRANTED}.md" and f.severity == "error" and "extra lines" in f.description
+               for f in findings)
+
+
+def test_rendering_refuses_an_install_outside_the_project(tmp_path):
+    """@security R6 condition 3: with grants, the agents dir must sit two levels below the project root."""
+    project = tmp_path / "proj"
+    out = project / "agents-here"
+    out.mkdir(parents=True)
+    proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(_brief(tmp_path, grants=True)),
+                           "--framework", "claude", "--output", str(out), "--project", str(project), "--yes"],
+                          capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 1 and "outside the project" in proc.stderr
+    assert not (tmp_path / runner_mcp.PROTECTED_PATH).exists()

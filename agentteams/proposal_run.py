@@ -49,7 +49,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             allowed = entry.get("writes") or []
             if not any(fnmatch.fnmatch(rel.lower(), str(g).lower()) for g in allowed):
                 P._check_destination(root, rel, policy, agent)  # else it must be an ordinary scoped write
-            elif P.control_plane_of(rel, platform="darwin"):
+            elif P.control_plane_of(rel, platform="darwin") or P.nested_control_plane(rel):
                 raise P.ProposalError(f"{rel} is inside the control plane; no command may declare it")
             elif policy.brief_rel and rel.lower() == policy.brief_rel.lower():
                 raise P.ProposalError(f"{rel} is the brief that defines this policy; refused (C-3)")
