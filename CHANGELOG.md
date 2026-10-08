@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The emitted settings satisfy both once merged, which a test checks.
 - **@security C17's tests,** spread across R1–R5 (queue theft, slug mismatch, output and result caps, grant
   revocation partway through a session), are kept present by a roll-up test.
+- **@security R7 review fixes:**
+  - the shadowing check also covers `~/.claude.json` (top level and this project's local entry), machine-managed
+    MCP config and Goose's user config;
+  - the Goose profile now denies writes to `.goose/recipes` under the switch, and the check verifies both its
+    denies;
+  - Claude gets `Edit(/.claude/agents/**)`, and the live Read rules for `.agentteams` and the queue are required
+    (C4);
+  - `settings.local.json` may not switch the sandbox off;
+  - a direct-write nonce refusal now gives the MCP channel's uniform message.
 
 ### feat (generation and audit for MCP-mediated agent writes, phase R6)
 
