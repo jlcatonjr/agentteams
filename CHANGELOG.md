@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - New `docs_src/api-reference/proposal-run.md` for the R2 carve-out of `proposals.run_request`, linked from the
   api-reference index and the mkdocs nav. Restores `test_module_doc_ratchet` on `main`.
+- `test_config_dir_deny_does_not_touch_permissions_deny` now expects R5's four `Edit` deny rules for the
+  `mcp-grants` and `verify-keys` directories (the code added them in #166; the test was not updated).
 
 ### feat (operator-signed direct-write grants, phase R5)
 
