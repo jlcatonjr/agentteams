@@ -438,3 +438,45 @@ def test_gitread_refuses_a_launch_directory_that_is_not_the_work_tree_root(repo)
     (repo / "sub").mkdir()
     with pytest.raises(ToolError, match="not the root"):
         gitread.call("git_status", {}, repo / "sub")
+
+
+# --- independent-verification findings (2026-10-07) -------------------------------------------------------------
+
+def test_gitread_refuses_a_gitdir_redirect_out_of_the_project(repo, tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / ".git").write_text(f"gitdir: {repo / '.git'}\n")
+    with pytest.raises(ToolError, match="outside the project"):
+        gitread.call("git_log", {}, proj)
+
+
+def test_gitread_refuses_a_symlinked_git_dir(repo, tmp_path):
+    proj = tmp_path / "proj2"
+    proj.mkdir()
+    (proj / ".git").symlink_to(repo / ".git", target_is_directory=True)
+    with pytest.raises(ToolError, match="outside the project"):
+        gitread.call("git_log", {}, proj)
+
+
+def test_gitread_serves_a_registered_linked_worktree(repo, tmp_path):
+    wt = tmp_path / "wt"
+    _git(repo, "worktree", "add", "-q", str(wt))
+    assert "second" in gitread.call("git_log", {}, wt)["output"]
+
+
+def test_recall_refuses_rather_than_skips_an_outside_partition(tmp_path):
+    """No existence oracle: a missing file outside the project is refused, not silently skipped."""
+    cache = tmp_path / "references" / "code-index"
+    cache.mkdir(parents=True)
+    (cache / "manifest.json").write_text("{}")
+    import agentteams.mcp_servers.recall as r
+
+    real_load = r._load
+    r._load = lambda root, path, schema, label: (
+        {"partitions": {"x": {"file": "../../../definitely-not-here.json"}}} if path.name == "manifest.json"
+        else real_load(root, path, schema, label))
+    try:
+        with pytest.raises(ToolError, match="outside the project"):
+            r._code_partitions(tmp_path, tmp_path)
+    finally:
+        r._load = real_load

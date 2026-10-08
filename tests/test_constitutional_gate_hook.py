@@ -277,6 +277,10 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "gh pr merge 12 --squash",                   # PR merge (MCP catalogue: outside every allowlist)
         "gh -R o/r pr merge 12",
         "gh api -X PUT /repos/o/r/pulls/12/merge",
+        "gh pr -R o/r merge 12",                     # flags between pr and merge
+        "gh pr \\\nmerge 12",                        # line continuation
+        "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+        "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'",
         "kubectl -n prod delete pod x",              # flags before the verb
         "docker container rm c1",                    # subcommand form
         "docker image rm img",

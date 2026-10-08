@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (MCP catalogue: independent-verification findings)
+
+- **gitread** refuses a `.git` file or symlink that points git at a repository outside the project. Without this,
+  it would serve that other repository's history. A registered linked worktree is still allowed: its
+  `worktrees/<name>/gitdir` back-link must name this project's `.git`.
+- **recall** confines a code-index partition path before checking that it exists. A missing file outside the
+  project is now refused, not skipped, so the refuse/skip difference no longer reveals which outside files exist.
+- **The constitutional gate's merge trigger** now also catches flags between `pr` and `merge` (`gh pr -R o/r
+  merge`), GraphQL `mergePullRequest` / `enablePullRequestAutoMerge`, and commands split by a backslash-newline.
+  Line continuations are joined before every pattern. The template and this repo's deployed hook copies are
+  re-pinned.
+- **Remaining limit, unchanged by this fix:** `github-write` keeps `push_files` / `create_or_update_file`. Where
+  the default branch has no protection, those can write to it directly. Branch protection is part of the
+  activation checklist.
+
 ### feat (MCP catalogue: foundational servers and the PR agents)
 
 - **A catalogue of foundational MCP servers** (`agentteams/templates/mcp/`, `agentteams/mcp_catalog.py`):

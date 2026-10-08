@@ -183,6 +183,8 @@ Since 2026-10-07 agentteams ships a catalogue (`agentteams/templates/mcp/`, API 
 - **Before activating a catalogue server** (an operator act; @security, 2026-10-07):
   - compare the pinned binary's `tools/list` with the entry's tool list; for `github-write`, with its exact
     `--tools` allowlist (v2.0.1 consolidates issue writes into `issue_write`);
+  - for `github-write`, protect the default branch first: its `push_files` / `create_or_update_file` can write
+    to an unprotected default branch directly, which amounts to a merge without review;
   - fill `pin.digest` with the release's sha256 or the image digest; never activate a GitHub server without it;
   - activate `fetch` only with `--proxy-url` pointing at a proxy that refuses private, loopback and link-local
     addresses;

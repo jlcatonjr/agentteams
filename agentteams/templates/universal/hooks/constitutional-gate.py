@@ -74,7 +74,9 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      "GitHub resource deletion via gh (repo/release/etc.) — irreversible"),
     # A merge is outside every PR agent's remit and outside the github-write MCP allowlist; the same token
     # through gh would otherwise get around both (MCP catalogue, @security implementation review cond. 6).
-    (r"\bgh\b[^\n]*\bpr\s+merge\b|\bgh\s+api\b[^\n]*/pulls/[^\s/]+/merge\b",
+    # Flags may sit between `pr` and `merge` (`gh pr -R o/r merge`); GraphQL merges count too.
+    (r"\bgh\b[^\n]*\bpr\b[^\n]*\smerge\b|\bgh\s+api\b[^\n]*/pulls/[^\s/]+/merge\b|"
+     r"\bgh\s+api\s+graphql\b[^\n]*\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
     (r"\bgit\b[^\n]*\bpush\b[^\n]*(?:--delete|--mirror|--prune)|\bgit\b[^\n]*\bpush\b[^\n]*\s:\S",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),
@@ -148,7 +150,8 @@ def main() -> int:
         return 0
 
     if tool_name == "Bash":
-        command = str(tool_input.get("command", ""))
+        # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
+        command = re.sub(r"\\\r?\n", " ", str(tool_input.get("command", "")))
         for pattern, why in _BASH_REVIEW_TRIGGERS:
             if re.search(pattern, command, re.IGNORECASE):
                 _decide(

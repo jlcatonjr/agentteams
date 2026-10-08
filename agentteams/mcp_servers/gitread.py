@@ -17,7 +17,8 @@ repository-local configuration can make even read commands run programs or reach
 * **Also per transport:** ``protocol.<name>.allow=never`` for file, git, ssh, http, https and ext (a repository's
   own per-protocol setting outranks ``protocol.allow``), and ``log.mailmap=false``, ``mailmap.file=``,
   ``mailmap.blob=`` (mailmap can name any file).
-* **Refused outright:** a launch directory that is not a work-tree root, and any ``filter.*`` in the repository's config (clean/process filters run on worktree
+* **Refused outright:** a launch directory that is not a work-tree root, a ``.git`` that redirects to a repository
+  outside the project (a registered linked worktree is allowed), and any ``filter.*`` in the repository's config (clean/process filters run on worktree
   reads). Blame and diff take explicit revisions, never the worktree.
 * **Arguments:** refs match a strict pattern and can't start with ``-``; paths must be relative and inside the
   project; refs and paths go after ``--end-of-options`` (blame, which mis-parses it, relies on the
@@ -97,6 +98,32 @@ def _run(root: Path, args: list[str]) -> str:
     return out + ("\n…[truncated]" if len(proc.stdout) > MAX_OUTPUT else "")
 
 
+def _check_repository(root: Path) -> None:
+    """Refuse unless ``root`` is a work-tree root whose git dir is the project's own.
+
+    A ``.git`` file (``gitdir: …``) or symlink can point git at another repository, whose history would then be
+    served. Allowed: a git dir inside the project, or a registered linked worktree, whose
+    ``<common>/worktrees/<name>/gitdir`` back-link names this project's ``.git`` file.
+    """
+    dot = root / ".git"
+    if not dot.exists():
+        raise ToolError(f"{root} is not the root of a git work tree; the MCP client must launch this server there")
+    project = root.resolve()
+    try:
+        gitdir = Path(_run(root, ["rev-parse", "--absolute-git-dir"]).strip()).resolve()
+    except ToolError as exc:
+        raise ToolError(f"cannot resolve the git dir: {exc}") from exc
+    if gitdir.is_relative_to(project):
+        return
+    backlink = gitdir / "gitdir"
+    try:
+        linked = backlink.is_file() and Path(backlink.read_text(encoding="utf-8").strip()).resolve() == dot.resolve()
+    except OSError:
+        linked = False
+    if not (dot.is_file() and not dot.is_symlink() and gitdir.parent.name == "worktrees" and linked):
+        raise ToolError("the project's .git points at a repository outside the project; refusing")
+
+
 def _refuse_filters(root: Path) -> None:
     """Refuse when the repository config defines any filter (clean/process filters run on worktree reads)."""
     try:
@@ -138,8 +165,7 @@ def call(name: str, arguments: dict[str, Any], root: Path) -> Any:
     Raises:
         ToolError: Bad arguments, a configured filter, a timeout, or a git failure.
     """
-    if not (root / ".git").exists():
-        raise ToolError(f"{root} is not the root of a git work tree; the MCP client must launch this server there")
+    _check_repository(root)
     _refuse_filters(root)
     path = arguments.get("path")
     tail = ["--", _path(root, path)] if path is not None else []
