@@ -218,6 +218,10 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     root — previously the ONLY check of that manifest lived inside the red-team
     battery, leaving no CLI path to heed the man page's "review the diff" guidance
     (remediation log, 2026-08-13). An enforcement-module mismatch exits 1.
+
+    Also checks the governance CSV logs (:mod:`agentteams.governance_logs`): a malformed log (a field count off the
+    header's, a quote open at end of file, or a field that swallowed later dated rows) exits 1, with or without a
+    build-log baseline.
     """
     from collections import Counter
 
@@ -242,6 +246,23 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
         else:
             covered = len(integrity.compute_digests(output_dir))
             print(f"Enforcement manifest: OK ({covered} modules match)")
+
+    # Governance CSV logs (2026-10-08): a malformed row breaks every later reader, and a rewrite trusting the
+    # parse truncates the file (security-decisions.log.csv lost 13 records that way on 2026-10-07).
+    from agentteams.governance_logs import check_logs, log_paths
+
+    log_problems = check_logs(output_dir)
+    if log_problems:
+        enforcement_rc = 1
+        print("Governance logs: MALFORMED", file=sys.stderr)
+        for problem in log_problems:
+            print(f"  [LOG] {problem}", file=sys.stderr)
+        print("  Repair the row by hand (or from history) before any tool appends to or rewrites the log.",
+              file=sys.stderr)
+    else:
+        present = log_paths(output_dir)
+        if present:
+            print(f"Governance logs: OK ({len(present)} well-formed)")
 
     results = drift.verify_output_integrity(output_dir)
     if not results:

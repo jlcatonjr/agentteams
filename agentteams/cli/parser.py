@@ -1400,7 +1400,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "MODIFIED (a legitimate edit or drift) is advisory. Unlike --update, "
             "this exit code IS the integrity gate. Also checks the enforcement-integrity "
             "manifest (references/enforcement-integrity.json); a MISSING manifest is a "
-            "finding (exit 1) when the repository tracks one or the scanner runs from inside it."
+            "finding (exit 1) when the repository tracks one or the scanner runs from inside it. Also checks the "
+            "governance CSV logs (security decisions, remediation, red-team findings, MCP needs, conflict log) and "
+            "exits 1 on a malformed one."
         ),
     )
     parser.add_argument(
