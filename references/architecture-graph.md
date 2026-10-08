@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **227**
+- Modules mapped: **228**
 - Packages: **9**
-- Internal import edges: **592**
+- Internal import edges: **595**
 - Distinct external dependencies: **7**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 125 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams` | 126 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 41 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 1 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -213,9 +213,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.project_notes` | `agentteams.fences`, `agentteams.user_regions` | `agentteams.emit` |
 | `agentteams.projection_marker` | `agentteams`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit` | `agentteams.bridge`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync` |
 | `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.cli.generate_helpers` |
-| `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.proposal_commands`, `agentteams.proposals` |
+| `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.proposal_commands`, `agentteams.proposal_run`, `agentteams.proposals` |
+| `agentteams.proposal_run` | `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposals` |
 | `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.proposals` | `agentteams.cli.proposal_commands` |
-| `agentteams.proposals` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks._write_roots`, `agentteams.git_exec`, `agentteams.proposal_policy` | `agentteams.cli.proposal_commands`, `agentteams.proposal_runner` |
+| `agentteams.proposals` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks._write_roots`, `agentteams.git_exec`, `agentteams.proposal_policy`, `agentteams.proposal_run` | `agentteams.cli.proposal_commands`, `agentteams.proposal_run`, `agentteams.proposal_runner` |
 | `agentteams.provenance` | — | — |
 | `agentteams.rank_conformance` | `agentteams.analyze`, `agentteams.audit_types`, `agentteams.capability_map` | `agentteams.cli.standalone_modes` |
 | `agentteams.recipe_fields` | — | `agentteams.analyze` |
@@ -2363,6 +2364,17 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.proposal_run": {
+      "package": "agentteams",
+      "path": "agentteams/proposal_run.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.proposal_policy",
+        "agentteams.proposals"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.proposal_runner": {
       "package": "agentteams",
       "path": "agentteams/proposal_runner.py",
@@ -2385,7 +2397,8 @@ digraph "agentteams architecture" {
         "agentteams.confinement",
         "agentteams.frameworks._write_roots",
         "agentteams.git_exec",
-        "agentteams.proposal_policy"
+        "agentteams.proposal_policy",
+        "agentteams.proposal_run"
       ],
       "external": [],
       "repo_local": []
@@ -5059,6 +5072,14 @@ digraph "agentteams architecture" {
       "target": "agentteams.frameworks._write_roots"
     },
     {
+      "source": "agentteams.proposal_run",
+      "target": "agentteams.proposal_policy"
+    },
+    {
+      "source": "agentteams.proposal_run",
+      "target": "agentteams.proposals"
+    },
+    {
       "source": "agentteams.proposal_runner",
       "target": "agentteams.atomicio"
     },
@@ -5093,6 +5114,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.proposals",
       "target": "agentteams.proposal_policy"
+    },
+    {
+      "source": "agentteams.proposals",
+      "target": "agentteams.proposal_run"
     },
     {
       "source": "agentteams.rank_conformance",

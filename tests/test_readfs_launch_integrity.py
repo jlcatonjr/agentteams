@@ -135,3 +135,16 @@ def test_server_denies_the_control_plane(tmp_path):
                 ".agentteams/proposal-ledger.jsonl", ".agentteams/bin/goose-readfs-mcp.py"):
         assert ws.denied(rel), rel
     assert not ws.denied("src/app.py")
+
+
+def test_claude_read_tools_are_denied_the_queue_and_control_plane_under_the_switch():
+    """R1 (@security C4): the queue and results briefly hold raw dispatch nonces."""
+    import json
+
+    from agentteams.frameworks import _sandbox_emit as se
+
+    example = json.dumps({"hooks": {}, "_comment": []})
+    on = json.loads(se._inject_sandbox_block(example, ["."], protect_ledger=True))["permissions"]["deny"]
+    off = json.loads(se._inject_sandbox_block(example, ["."], protect_ledger=False))["permissions"]["deny"]
+    for rule in ("Read(/.agentteams/**)", "Read(/.agentteams-queue/**)"):
+        assert rule in on and rule not in off
