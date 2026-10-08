@@ -72,6 +72,10 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     # security.template.md.
     (r"\bgh\b[^\n]*\s\w+\s+delete\b|\bgh\s+api\b[^\n]*(?:-X\s*DELETE|--method\s+DELETE)",
      "GitHub resource deletion via gh (repo/release/etc.) — irreversible"),
+    # A merge is outside every PR agent's remit and outside the github-write MCP allowlist; the same token
+    # through gh would otherwise get around both (MCP catalogue, @security implementation review cond. 6).
+    (r"\bgh\b[^\n]*\bpr\s+merge\b|\bgh\s+api\b[^\n]*/pulls/[^\s/]+/merge\b",
+     "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
     (r"\bgit\b[^\n]*\bpush\b[^\n]*(?:--delete|--mirror|--prune)|\bgit\b[^\n]*\bpush\b[^\n]*\s:\S",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),
     (r"\bgit\b[^\n]*\b(?:branch|tag)\s+(?:-[a-zA-Z]*[dD]\b|--delete\b)|"

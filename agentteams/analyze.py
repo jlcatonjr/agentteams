@@ -364,6 +364,15 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     ):
         archetypes = list(archetypes) + ["agentteams-updater"]
 
+    # MCP catalogue (2026-10-07): validate the brief's opt-ins/exclusions up front (an unknown id is an error
+    # here, not a silent skip at emission), and bring in the PR agents when the brief opts into a GitHub server
+    # or sets pr_management. Explicit opt-in only, force-appended like the two above.
+    from agentteams import mcp_catalog
+
+    mcp_catalog_opt_ins, mcp_catalog_excludes = mcp_catalog.selection(description)
+    if mcp_catalog.wants_pr_agents(description):
+        archetypes = list(archetypes) + [a for a in ("pr-manager", "pr-notifier") if a not in archetypes]
+
     # A research-type project with no research capability declared is the single most common way
     # this framework ships a literature-review team that cannot look anything up: measured
     # 2026-07-30, neither of the two downstream research teams had the flag set, so the
@@ -576,6 +585,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         **({"coordination_write_roots": list(coordination_write_roots)} if coordination_write_roots else {}),
         **({"goose_tool_scoping": goose_tool_scoping} if goose_tool_scoping else {}),
         **({"write_policy": write_policy} if write_policy == "orchestrator-only" else {}),
+        **({"mcp_catalog": mcp_catalog_opt_ins} if mcp_catalog_opt_ins else {}),
+        **({"mcp_catalog_exclude": mcp_catalog_excludes} if mcp_catalog_excludes else {}),
         **({"protected_read_paths": list(description["protected_read_paths"])} if description.get("protected_read_paths") else {}),
         # P3-3 opt-in: emit only when true (keeps the default block byte-identical); resolves
         # denyRead `~/` paths to abspaths in the emitter so enforcement does not depend on `~`.

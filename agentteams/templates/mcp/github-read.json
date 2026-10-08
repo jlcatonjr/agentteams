@@ -1,0 +1,99 @@
+{
+  "artifact_type": "mcp-server",
+  "mcp_server_schema_version": "1.0",
+  "server_id": "github-read",
+  "domain": "github",
+  "description": "GitHub's official MCP server in read-only mode (repos, issues, pull requests), launched locally. Inert until the operator activates it.",
+  "trust_tier": "third-party-vetted",
+  "transport": "stdio",
+  "command": "github-mcp-server",
+  "args": [
+    "stdio",
+    "--read-only",
+    "--toolsets",
+    "repos,issues,pull_requests"
+  ],
+  "auth": {
+    "mechanism": "env",
+    "credential_ref": "GITHUB_PERSONAL_ACCESS_TOKEN"
+  },
+  "tools": [
+    {
+      "name": "get_me",
+      "side_effects": "read"
+    },
+    {
+      "name": "get_file_contents",
+      "side_effects": "read"
+    },
+    {
+      "name": "get_repository",
+      "side_effects": "read"
+    },
+    {
+      "name": "get_repository_tree",
+      "side_effects": "read"
+    },
+    {
+      "name": "list_branches",
+      "side_effects": "read"
+    },
+    {
+      "name": "list_commits",
+      "side_effects": "read"
+    },
+    {
+      "name": "get_commit",
+      "side_effects": "read"
+    },
+    {
+      "name": "list_issues",
+      "side_effects": "read"
+    },
+    {
+      "name": "search_issues",
+      "side_effects": "read"
+    },
+    {
+      "name": "issue_read",
+      "side_effects": "read"
+    },
+    {
+      "name": "list_pull_requests",
+      "side_effects": "read"
+    },
+    {
+      "name": "search_pull_requests",
+      "side_effects": "read"
+    },
+    {
+      "name": "pull_request_read",
+      "side_effects": "read"
+    }
+  ],
+  "scope": [],
+  "progressive_disclosure": "lazy",
+  "security_review": {
+    "required": true,
+    "authorized_by": null,
+    "authorized_at": null
+  },
+  "catalog_default": false,
+  "role_scope": [
+    "orchestrator",
+    "navigator",
+    "security",
+    "conflict-auditor",
+    "repo-liaison",
+    "pr-manager",
+    "pr-notifier"
+  ],
+  "pin": {
+    "package": "github-mcp-server",
+    "version": "v2.0.1",
+    "source": "https://github.com/github/github-mcp-server/releases/tag/v2.0.1",
+    "digest": null,
+    "verified_at": "2026-10-07",
+    "note": "Install this exact release; record its sha256 (or the ghcr.io image digest) in security_review at vetting (S-10, C4). Tool names are v2.0.1's; recheck them on any upgrade."
+  }
+}

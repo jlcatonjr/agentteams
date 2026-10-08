@@ -84,6 +84,8 @@ This reference defines the **supported public API surface** (documented modules 
 | [`plan_steps_todo`](plan-steps-todo.md) | TodoWrite projection of plan `.steps.csv` (CSV is canonical; TodoWrite is the projection) |
 | [`liaison_logs`](liaison-logs.md) | Cross-repository coordination logs and artifacts |
 | [`mcp_need`](mcp-need.md) | Agent MCP-need protocol under the orchestrator-only switch: the procedure reference and the need register |
+| [`mcp_catalog`](mcp-catalog.md) | The catalogue of foundational MCP servers (`agentteams/templates/mcp/`) and its expansion into `mcp_servers` |
+| [`mcp_servers`](mcp-servers.md) | `--serve-mcp`: the first-party read-only servers `recall` and `gitread` |
 | [`mcp_need_report`](mcp-need-report.md) | `--mcp-need-report`: read-only per-agent summary of the runner ledger and the need register (protocol phase N3) |
 | [`control_plane_io`](control-plane-io.md) | Write-if-absent sandbox roster stubs and the in-sandbox write preflight |
 | [`projection_marker`](projection-marker.md) | The `origin: "interop"` team marker an interop / multi_sync projection writes, control plane first |

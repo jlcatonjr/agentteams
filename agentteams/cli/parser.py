@@ -19,6 +19,7 @@ from agentteams.cli.fleet_switch import add_fleet_arguments
 from agentteams.cli.goose_switch import add_goose_arguments
 from agentteams.cli.package_switch import add_package_arguments
 from agentteams.cli.sync_switch import add_sync_arguments
+from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
@@ -1091,6 +1092,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Read-only: summarize the runner ledger (.agentteams/proposal-ledger.jsonl under --project, else CWD) "
              "and the MCP need register per agent: repeated commands with times, proposal bytes, open register "
              "rows. Figures are unverified; it never writes or decides (references/mcp-need.reference.md).",
+    )
+    parser.add_argument(
+        "--serve-mcp",
+        metavar="NAME",
+        dest="serve_mcp",
+        choices=tuple(_MCP_SERVERS),
+        default=None,
+        help="Run a first-party read-only MCP server over stdio for --project (else CWD): 'recall' (query the "
+             "memory and code indexes; never refreshes them) or 'gitread' (isolated read-only git history). "
+             "Launched by an MCP client from the team's catalogue entries, not by hand.",
     )
     parser.add_argument(
         "--mcp-need-register",

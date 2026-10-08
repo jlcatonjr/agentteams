@@ -148,6 +148,10 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # Orchestrator-only-writes pilot (P2): emitted only for "orchestrator-only"; build_manifest
         # omits it otherwise so a team without the switch stays byte-identical.
         "write_policy",
+        # MCP catalogue: carried from the brief only when non-empty, so a team that opts into nothing
+        # stays byte-identical.
+        "mcp_catalog",
+        "mcp_catalog_exclude",
         # Emitted only when an exclusive project supplies extra P3a read-exclusion
         # paths; build_manifest omits it otherwise.
         "protected_read_paths",

@@ -1,0 +1,42 @@
+{
+  "artifact_type": "mcp-server",
+  "mcp_server_schema_version": "1.0",
+  "server_id": "agentteams-recall",
+  "domain": "team-memory",
+  "description": "First-party, read-only: query the team's memory index and code index. Never refreshes a stale index; results carry the build time.",
+  "trust_tier": "first-party",
+  "transport": "stdio",
+  "command": "agentteams",
+  "args": [
+    "--serve-mcp",
+    "recall"
+  ],
+  "auth": {
+    "mechanism": "none"
+  },
+  "tools": [
+    {
+      "name": "query_index",
+      "side_effects": "read",
+      "description": "Query the memory index (documents)."
+    },
+    {
+      "name": "query_code",
+      "side_effects": "read",
+      "description": "Query the code and API index."
+    }
+  ],
+  "scope": [],
+  "progressive_disclosure": "eager",
+  "security_review": {
+    "required": false
+  },
+  "catalog_default": true,
+  "role_scope": [
+    "orchestrator",
+    "navigator",
+    "tool-doc-researcher",
+    "research-analyst",
+    "retrieval-integrator"
+  ]
+}

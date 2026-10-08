@@ -867,6 +867,21 @@ Read-only. Verifies the signatures, hash chain and signed head anchor of `.agent
 under `--project` (else the current directory). Exit 1 when a row was edited, removed or reordered, the
 ledger was truncated, or it was rewritten without the key.
 
+### `--serve-mcp`
+
+`--serve-mcp {recall,gitread}` runs one of agentteams' first-party, read-only MCP servers over stdio for
+`--project` (else the current directory). An MCP client launches it from the team's catalogue entry
+(`agentteams-recall`, `agentteams-gitread`); you do not run it by hand.
+- **`recall`:** `query_index` and `query_code` over the existing memory and code indexes. It never refreshes a
+  stale index (the CLI's `--query-index` would); results carry the index's build time.
+- **`gitread`:** `git_log`, `git_show`, `git_diff`, `git_blame`, `git_status` in an isolated git. Repository
+  config cannot run a program (fsmonitor, hooks, external diff, textconv and the pager are overridden; any
+  `filter.*` is refused). There is no network (no lazy fetch) and no lock. Refs and paths are validated; time and
+  output are bounded.
+
+Both hold no key, write nothing and open no network connection. See `references/non-orchestrator-mcp.reference.md`
+(the catalogue).
+
 ### `--mcp-need-report`
 
 Read-only (MCP-need protocol, phase N3). Summarizes the runner ledger (`.agentteams/proposal-ledger.jsonl` under

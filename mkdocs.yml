@@ -218,6 +218,8 @@ nav:
       - liaison-logs: api-reference/liaison-logs.md
       - mcp_need: api-reference/mcp-need.md
       - mcp_need_report: api-reference/mcp-need-report.md
+      - mcp_catalog: api-reference/mcp-catalog.md
+      - mcp_servers: api-reference/mcp-servers.md
       - control-plane-io: api-reference/control-plane-io.md
       - projection-marker: api-reference/projection-marker.md
       - team-dir-advisories: api-reference/team-dir-advisories.md

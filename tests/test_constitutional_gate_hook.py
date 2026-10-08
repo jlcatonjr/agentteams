@@ -274,6 +274,9 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "git -C /tmp branch -D feature",            # -C prefix must not bypass
         "git branch --delete feature",              # long-form flag
         "gh api --method DELETE /repos/o/r",         # long-form method
+        "gh pr merge 12 --squash",                   # PR merge (MCP catalogue: outside every allowlist)
+        "gh -R o/r pr merge 12",
+        "gh api -X PUT /repos/o/r/pulls/12/merge",
         "kubectl -n prod delete pod x",              # flags before the verb
         "docker container rm c1",                    # subcommand form
         "docker image rm img",
