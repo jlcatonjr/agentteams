@@ -171,3 +171,26 @@ def test_stale_sidecar_does_not_mask_invalid_partition(tmp_path):
     )
     with pytest.raises(artifacts.CodeIndexError):  # mismatch → miss → validate → reject
         artifacts._read_code_index(out)
+
+
+@pytest.mark.parametrize("escape", ["absolute", "dotdot", "symlink"])
+def test_read_refuses_a_partition_outside_the_cache(tmp_path, escape):
+    """A partition ``file`` from the index on disk must not turn an index read into a read of any file."""
+    out = _build_index(tmp_path)
+    secret = tmp_path / "secret.json"
+    secret.write_text("{}")
+    cache_dir = out / CODE_INDEX_REL
+    man_path = cache_dir / "manifest.json"
+    man = json.loads(man_path.read_bytes())
+    name = next(iter(man["partitions"]))
+    if escape == "absolute":
+        man["partitions"][name]["file"] = str(secret)
+    elif escape == "dotdot":
+        man["partitions"][name]["file"] = "../../../secret.json"
+    else:
+        link = cache_dir / "link.json"
+        link.symlink_to(secret)
+        man["partitions"][name]["file"] = "link.json"
+    man_path.write_text(json.dumps(man))
+    with pytest.raises(artifacts.CodeIndexError, match="outside"):
+        artifacts._read_code_index(out)

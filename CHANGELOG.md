@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (code index: a partition path can't leave the cache)
+
+- `_read_code_index` (used by `--query-code`, `--refresh-code-index` and the update path) joined each partition's
+  `file` from the on-disk manifest without checking it. An absolute path, `..`, or a symlink out of
+  `references/code-index/` turned an index read into a read of any file. Such a partition is now refused with
+  `CodeIndexError`. The MCP `recall` server gets the matching refusal in the MCP-catalogue verification fixes.
+
 ### fix (MCP catalogue: independent-verification findings)
 
 - **gitread** refuses a `.git` file or symlink, a `commondir`, or object alternates that point git at a repository

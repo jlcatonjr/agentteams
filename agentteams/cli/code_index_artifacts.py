@@ -294,8 +294,13 @@ def _read_code_index(output_dir: Path) -> dict[str, Any]:
     # folds the bytes in a STABLE (sorted-name) order so it is independent of it.
     partitions: dict[str, dict] = {}
     part_bytes_by_name: dict[str, bytes] = {}
+    cache_root = cache_dir.resolve()
     for name, meta in cache_manifest.get("partitions", {}).items():
         part_path = cache_dir / meta.get("file", f"{name}.json")
+        # A partition's ``file`` comes from the index on disk: an absolute path, ``..`` or a symlink out of the
+        # cache would make a read of the index a read of any file. Refuse it (the MCP recall server does too).
+        if not part_path.resolve().is_relative_to(cache_root):
+            raise CodeIndexError(f"code index partition {name!r} points outside {cache_dir}; refusing")
         if not part_path.exists():
             continue
         try:
