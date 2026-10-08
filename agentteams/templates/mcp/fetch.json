@@ -36,6 +36,7 @@
   "pin": {
     "package": "mcp-server-fetch",
     "version": "2026.8.18",
+    "tools_verified_version": "2026.8.18",
     "source": "https://pypi.org/project/mcp-server-fetch/2026.8.18/",
     "digest": null,
     "verified_at": "2026-10-07",

@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (governance logs: a malformed row is caught, and appends are validated)
+
+- **New `agentteams/governance_logs.py`.**
+  - `check_log` / `check_logs` report any row whose field count differs from the header's, in the append-only
+    CSV logs: security decisions, remediation, red-team findings, MCP needs and the conflict log.
+  - `append_row` is the safe way to add a row. It refuses a malformed log, validates the new row in memory, then
+    appends, and it never rewrites the file.
+- **`--verify-integrity` checks those logs too** and exits non-zero on a malformed one. On 2026-10-07 another
+  session's unclosed quote made `security-decisions.log.csv` mis-parse, and a later in-place rewrite truncated
+  13 records. They were recovered from session transcripts.
+- **Third-party MCP catalogue pins record `tools_verified_version`.** A test fails when `pin.version` moves
+  without the tool list being re-checked against the new release. Tool names are version-specific:
+  github-mcp-server v2.0.1 consolidated issue writes and added `delete_repository`.
+
 ### feat (MCP catalogue: workstream experts can get recall and gitread)
 
 - `role_scope` accepts the group token `@workstream-experts`, which resolves to the team's workstream experts in

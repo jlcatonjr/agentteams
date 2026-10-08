@@ -91,6 +91,7 @@
   "pin": {
     "package": "github-mcp-server",
     "version": "v2.0.1",
+    "tools_verified_version": "v2.0.1",
     "source": "https://github.com/github/github-mcp-server/releases/tag/v2.0.1",
     "digest": null,
     "verified_at": "2026-10-07",

@@ -539,3 +539,16 @@ def test_gitread_refuses_a_forged_worktree_registration(repo, tmp_path):
     (proj / ".git").write_text(f"gitdir: {admin}\n")
     with pytest.raises(ToolError, match="outside the project"):
         gitread.call("git_log", {}, proj)
+
+
+def test_a_pin_bump_needs_its_tool_list_reverified():
+    """Tool names are upstream-version-specific (github-mcp-server v2.0.1 consolidated issue writes into
+    issue_write and added delete_repository to repos). Bumping ``pin.version`` without re-checking the tool list
+    against the new release, then setting ``tools_verified_version`` to match, must fail here."""
+    for sid, entry in mcp_catalog.load_catalog().items():
+        pin = entry.get("pin")
+        if pin is None:
+            continue
+        assert pin.get("tools_verified_version") == pin["version"], (
+            f"{sid}: pin.version {pin['version']} but tools verified for {pin.get('tools_verified_version')}; "
+            "compare the release's tools/list with the entry's tools (and github-write's --tools) first")
