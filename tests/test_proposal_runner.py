@@ -483,9 +483,8 @@ def test_stage_and_direct_come_only_from_the_mcp_channel(runner):
     nonce = P.issue_dispatch(runner.root, "producer")
     art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": "y\n",
            "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest()}
-    for kind in ("stage-proposal", "apply-direct"):
-        result = _roundtrip_on(runner, {"kind": kind, "artifact": art}, "orchestrator")
-        assert not result["ok"] and "agentteams_runner server" in result["error"]
+    result = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art}, "orchestrator")
+    assert not result["ok"] and "agentteams_runner server" in result["error"]
 
 
 def test_direct_needs_a_verified_grant_and_never_deletes(runner):
@@ -493,19 +492,21 @@ def test_direct_needs_a_verified_grant_and_never_deletes(runner):
     base = hashlib.sha256(b"x = 1\n").hexdigest()
     art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": "y\n",
            "base_sha256": base}
-    refused = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, "mcp")
-    assert not refused["ok"] and "no verified direct-write grant" in refused["error"]
+    staged = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert staged["ok"] and staged["result"]["staged"]  # no grant: it stays staged
     runner.policy.direct_agents = frozenset({"producer"})
     runner.direct_grants = {"producer": {"grant_id": "g1", "expires": "2999-01-01T00:00:00+00:00", "max_writes": 5}}
     nonce = P.issue_dispatch(runner.root, "producer", ttl_hours=4, max_uses=10)  # direct limits (R5 condition 4)
     art = {**art, "dispatch": nonce}
-    done = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, "mcp")
+    done = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
     assert done["ok"] and (runner.root / "src/a.py").read_text() == "y\n"
     delete = {"kind": "delete-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r",
               "base_sha256": hashlib.sha256(b"y\n").hexdigest()}
-    refused = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": delete, "via_agent": "producer"}, "mcp")
-    assert not refused["ok"] and "never applied directly" in refused["error"]
+    staged = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": delete, "via_agent": "producer"}, "mcp")
+    assert staged["ok"] and staged["result"]["staged"]  # a deletion never upgrades
     assert (runner.root / "src/a.py").exists()
+    hand = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, "mcp")
+    assert not hand["ok"] and "unknown request kind" in hand["error"]  # not a request kind at all
 
 
 def test_staging_spends_the_use_and_approval_does_not(runner, monkeypatch):

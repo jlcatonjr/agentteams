@@ -151,7 +151,7 @@ class ClaudeAdapter(FrameworkAdapter):
             from agentteams import runner_mcp
 
             allowed_tools = ", ".join([allowed_tools, *runner_mcp.tool_names(grant["tools"])])
-            mcp_block = runner_mcp.claude_block(agent_slug, grant["tools"], grant.get("approval", "staged"),
+            mcp_block = runner_mcp.claude_block(agent_slug, grant["tools"], "staged",
                                                 runner_mcp.interpreter())
         # A.5: Extract optional Claude-specific keys before stripping front matter.
         model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)

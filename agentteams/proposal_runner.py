@@ -51,12 +51,14 @@ HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 
 #: Request kinds the runner serves. Commands and gates run confined (P4b).
 KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger",
-         "stage-proposal", "apply-direct", "apply-staged", "reject-staged", "list-staged", "show-staged")
+         "stage-proposal", "apply-staged", "reject-staged", "list-staged", "show-staged")
+#: ``apply-direct`` is not a request kind: it exists only as the runner's own upgrade of a staged write from an agent
+#: with a verified grant (the single decision point, @security C1).
 #: The kinds the MCP channel may queue: a write is staged (or direct, with a verified signed grant), a command runs.
 #: Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
-MCP_KINDS = ("stage-proposal", "apply-direct", "run-request")
+MCP_KINDS = ("stage-proposal", "run-request")
 #: Kinds only the MCP channel may queue (the orchestrator applies its own writes with apply-proposal).
-MCP_ONLY_KINDS = ("stage-proposal", "apply-direct")
+MCP_ONLY_KINDS = ("stage-proposal",)
 #: Request directory -> channel.
 CHANNELS = {REQUESTS_REL: "orchestrator", MCP_REQUESTS_REL: "mcp"}
 REQUEST_MAX_BYTES = 2 * 1024 * 1024
@@ -400,8 +402,15 @@ class Runner:
     def _handle_staging(self, request: dict[str, Any], kind: str, ident: dict[str, Any]) -> Any:
         from agentteams import proposal_staging as S
 
+        artifact = request.get("artifact")
+        if (kind == "stage-proposal" and isinstance(artifact, dict) and artifact.get("kind") == "change-proposal"
+                and str(ident.get("expect_agent")) in self.direct_grants):
+            # The single decision point for direct writes (@security C1): generated agents always submit staged
+            # writes; the runner applies one directly only when that agent's operator-signed grant verified at start.
+            # Deletions never upgrade (C-5).
+            kind = "apply-direct"
         if kind == "stage-proposal":
-            return S.stage_proposal(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
+            return S.stage_proposal(artifact, root=self.root, policy=self.policy, confine=True,
                                     expect_agent=ident.get("expect_agent"))
         if kind == "apply-direct":
             agent = ident.get("expect_agent")
@@ -435,7 +444,7 @@ class Runner:
         expires = datetime.fromisoformat(str(row.get("expires")))
         if int(row.get("max_uses", P.DISPATCH_MAX_USES)) > G.DIRECT_MAX_USES or \
                 expires > datetime.now(UTC) + timedelta(hours=G.DIRECT_TTL_HOURS, minutes=1):
-            raise P.ProposalError("this nonce wasn't issued with the direct-write limits; re-dispatch the agent")
+            raise P.ProposalError(P._CHANNEL_REFUSAL)  # uniform: no liveness oracle (R7 review, C3 note)
 
     def _open_session_dir(self, rel: str) -> int:
         """Open a session-writable queue dir without following a symlink anywhere in its last component."""

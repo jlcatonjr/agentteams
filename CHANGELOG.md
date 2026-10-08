@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (live wiring checks for MCP-mediated agent writes, phase R7)
+
+- **`--check-wiring` covers teams with `mcp_grants`.**
+  - It refuses a project `.mcp.json` or Claude settings file that defines a server named `agentteams_runner`,
+    which could shadow the canonical inline entry granted agents launch (@security C13).
+  - On Claude it requires the live settings to deny `Edit(/.agentteams/**)` and to `denyWrite` both `.agentteams`
+    and `.claude`, so no session can replace the installed server or the agent files (@security C11).
+  - The emitted settings satisfy both once merged, which a test checks.
+- **@security C17's tests,** spread across R1–R5 (queue theft, slug mismatch, output and result caps, grant
+  revocation partway through a session), are kept present by a roll-up test.
+- **@security R7 review fixes:**
+  - the shadowing check also covers `~/.claude.json` (top level and this project's local entry), machine-managed
+    MCP config and Goose's user config;
+  - the Goose profile now denies writes to `.goose/recipes` under the switch, and the check verifies both its
+    denies;
+  - Claude gets `Edit(/.claude/agents/**)`, and the live Read rules for `.agentteams` and the queue are required
+    (C4);
+  - `settings.local.json` may not switch the sandbox off;
+  - a direct-write nonce refusal now gives the MCP channel's uniform message.
+- **One decision point for direct writes (@security C1).**
+  - Generated agents always submit writes for staging. The runner applies one directly only when that agent's
+    operator-signed grant verified at start, and a deletion never upgrades.
+  - Generation can't produce a direct path, and an unsigned `approval: direct` simply stays staged.
+  - Grants also bind `runner_mcp.MAP_VERSION`, so a change to the grantable surface voids them.
+  - `apply-direct` is no longer a request kind at all, only the runner's internal upgrade.
+- **Verification follow-ups:**
+  - in a team with grants, a shell on any non-orchestrator agent is an audit error (C4 relies on it);
+  - `--check-wiring` requires `sandbox.enabled` itself.
+
 ### feat (Codex role gate and runner self-probe, Phase 1b)
 
 - **Codex tells a hook which agent is calling.** Live probes on codex-cli 0.160.1 showed that a PreToolUse

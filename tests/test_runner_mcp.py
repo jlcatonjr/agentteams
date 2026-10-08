@@ -181,14 +181,15 @@ def test_delete_is_always_staged_even_for_a_direct_instance(served):
         c.close()
 
 
-def test_a_direct_instance_without_a_verified_grant_is_refused(served):
+def test_without_a_verified_grant_writes_are_staged_whatever_the_instance_says(served):
+    """@security C1: the runner is the single decision point; an instance launched 'direct' still stages."""
     root, _ = served
     nonce = P.issue_dispatch(root, "producer")
     c = Client(root, ["write_file"], approval="direct")
     try:
         ok, receipt = c.call("write_file", dispatch=nonce, path="src/a.py", content="y\n",
                              base_sha256=hashlib.sha256(b"x = 1\n").hexdigest(), rationale="r")
-        assert ok and not receipt["ok"] and "no verified direct-write grant" in receipt["error"]
+        assert ok and receipt["ok"] and receipt["result"]["staged"], receipt
         assert (root / "src/a.py").read_text() == "x = 1\n"
     finally:
         c.close()

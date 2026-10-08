@@ -921,6 +921,9 @@ def _inject_sandbox_block(
         # agent's built-in Read/Grep/Glob may open them (the orchestrator's CLI reads results as a subprocess,
         # which these tool rules don't bind). Goose's read-only file server already refuses both trees.
         rules += [f"Read(/{LEDGER_DIR_REL}/**)", "Read(/.agentteams-queue/**)"]
+        # R7 (@security C11): the agent files carry each granted agent's agentteams_runner block; the sandbox's
+        # denyWrite .claude binds only the shell, so the built-in Edit/Write tools need their own rule.
+        rules.append("Edit(/.claude/agents/**)")
     for rule in rules:
         if rule not in deny:
             deny.append(rule)

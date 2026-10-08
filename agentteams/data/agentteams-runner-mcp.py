@@ -74,8 +74,8 @@ SCHEMAS: dict[str, dict[str, Any]] = {
                         "properties": {"path": {"type": "string"}}}},
     "write_file": {
         "description": "Write a whole file through the runner. base_sha256 is the hash read_file_hashed returned, or "
-                       "\"absent\" for a new file. Staged for the orchestrator's approval unless you hold a direct "
-                       "grant. Returns the runner's receipt, or a request_id to poll.",
+                       "\"absent\" for a new file. Staged for the orchestrator's approval, unless the operator has "
+                       "signed you a direct-write grant. Returns the runner's receipt, or a request_id to poll.",
         "inputSchema": {"type": "object", "required": ["dispatch", "path", "content", "base_sha256", "rationale"],
                         "additionalProperties": False,
                         "properties": {"dispatch": _NONCE, "path": {"type": "string"}, "content": {"type": "string"},
@@ -231,8 +231,9 @@ class Server:
             artifact = {"kind": "change-proposal", "dispatch": nonce, "path": args.get("path"),
                         "content": args.get("content"), "base_sha256": args.get("base_sha256"),
                         "rationale": args.get("rationale"), **({"gates": args["gates"]} if "gates" in args else {})}
-            kind = "apply-direct" if self.approval == "direct" else "stage-proposal"
-            return self._submit({"kind": kind, "artifact": artifact})
+            # Always submitted for staging: the runner alone decides to apply it directly, from a verified
+            # operator-signed grant (one decision point, @security C1).
+            return self._submit({"kind": "stage-proposal", "artifact": artifact})
         if name == "delete_file":
             artifact = {"kind": "delete-proposal", "dispatch": nonce, "path": args.get("path"),
                         "base_sha256": args.get("base_sha256"), "rationale": args.get("rationale")}

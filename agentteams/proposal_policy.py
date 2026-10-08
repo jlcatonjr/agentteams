@@ -74,7 +74,7 @@ class Policy:
     #: server. The runner refuses their artifacts on the orchestrator's queue. Populated from the brief's grants.
     mcp_agents: frozenset[str] = field(default_factory=frozenset)
     #: R3/R5: agents whose ``direct`` grant is backed by a verified operator-signed record (populated by R5's
-    #: grant verification; empty until then, so ``apply-direct`` refuses everyone).
+    #: grant verification at runner start; only these agents' staged writes are upgraded to direct).
     direct_agents: frozenset[str] = field(default_factory=frozenset)
 
 

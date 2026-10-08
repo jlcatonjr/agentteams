@@ -1,0 +1,167 @@
+"""R7: live wiring for MCP-mediated agent writes (@security C11, C13), plus the C17 roll-up pointers."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from agentteams import runner_mcp
+
+REPO = Path(__file__).resolve().parents[1]
+MANIFEST = {"write_policy": "orchestrator-only", "mcp_grants": {"primary-producer": {"tools": ["write_file"]}}}
+
+pytestmark = pytest.mark.skipif(not any(os.path.isfile(p) for p in runner_mcp.SYSTEM_PYTHONS),
+                                reason="no system python3 to launch the server with")
+
+
+@pytest.fixture(scope="module")
+def rendered(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("r7")
+    brief = json.loads((REPO / "examples/software-project/brief.json").read_text())
+    brief.update({"write_policy": "orchestrator-only", "privilege_profile": "confined",
+                  "agent_policies": {"primary-producer": {"write_scopes": ["src/"]}},
+                  "mcp_grants": MANIFEST["mcp_grants"]})
+    (tmp / "brief.json").write_text(json.dumps(brief))
+    project = tmp / "proj"
+    (project / ".claude" / "agents").mkdir(parents=True)
+    proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(tmp / "brief.json"),
+                           "--framework", "claude", "--output", str(project / ".claude/agents"), "--yes"],
+                          capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    return project
+
+
+def _merge_emitted_settings(project: Path) -> None:
+    """What the operator does: merge the emitted sandbox block and permissions into the live settings."""
+    example = json.loads((project / ".claude" / "settings.hooks.example.json").read_text())
+    live = {"permissions": example.get("permissions", {}), "sandbox": example.get("sandbox", {})}
+    (project / ".claude" / "settings.json").write_text(json.dumps(live))
+
+
+def test_unmerged_settings_fail_the_wiring_check(rendered, tmp_path):
+    problems = runner_mcp.wiring_problems(rendered, "claude", MANIFEST, home=tmp_path)
+    assert any("Edit(/.agentteams/**)" in p for p in problems) and any("denyWrite .claude" in p for p in problems)
+
+
+def test_the_emitted_settings_satisfy_c11_once_merged(rendered, tmp_path):
+    project = tmp_path / "copy"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.hooks.example.json").write_text(
+        (rendered / ".claude" / "settings.hooks.example.json").read_text())
+    _merge_emitted_settings(project)
+    assert runner_mcp.wiring_problems(project, "claude", MANIFEST, home=tmp_path) == []
+
+
+@pytest.mark.parametrize("rel", runner_mcp.SHADOW_FILES)
+def test_a_shadowing_server_definition_is_refused(rel, tmp_path):
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"mcpServers": {runner_mcp.SERVER_NAME: {"command": "evil"}}}))
+    assert any("shadow" in p for p in runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path))
+
+
+def test_teams_without_grants_have_no_runner_wiring_checks(tmp_path):
+    (tmp_path / ".mcp.json").write_text(json.dumps({"mcpServers": {runner_mcp.SERVER_NAME: {}}}))
+    assert runner_mcp.wiring_problems(tmp_path, "claude", {"write_policy": "orchestrator-only"}) == []
+    assert runner_mcp.wiring_problems(tmp_path, "claude", {"mcp_grants": {"a": {}}}) == []
+
+
+def test_check_wiring_cli_reports_the_runner_problems(rendered):
+    proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--check-wiring", "--description",
+                           str(rendered.parent / "brief.json"), "--framework", "claude",
+                           "--output", str(rendered / ".claude/agents")], capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 1 and "@security C11" in proc.stdout
+
+
+#: @security C17's suite lives with each phase: queue theft and slug mismatch (R2) in
+#: test_proposal_runner.py::test_mcp_request_must_come_from_the_nonces_own_agent and ::test_the_mcp_channel_gives_no_nonce_oracle;
+#: caps in test_proposals.py::test_command_output_is_capped_and_flagged and test_proposal_runner.py::test_results_always_fit_the_read_back_limit;
+#: revocation mid-session in test_mcp_direct_grants.py::test_changing_the_grants_file_needs_a_restart.
+C17_TESTS = (
+    "tests/test_proposal_runner.py::test_mcp_request_must_come_from_the_nonces_own_agent",
+    "tests/test_proposal_runner.py::test_the_mcp_channel_gives_no_nonce_oracle",
+    "tests/test_proposals.py::test_command_output_is_capped_and_flagged",
+    "tests/test_proposal_runner.py::test_results_always_fit_the_read_back_limit",
+    "tests/test_mcp_direct_grants.py::test_changing_the_grants_file_needs_a_restart",
+    "tests/test_mcp_direct_grants.py::test_revocation_removes_the_grant",
+)
+
+
+@pytest.mark.parametrize("node", C17_TESTS)
+def test_the_c17_suite_is_present(node):
+    path, name = node.split("::")
+    assert f"def {name}(" in (REPO / path).read_text()
+
+
+# --- R7 review: every scope, Goose's profile, local overrides, live Read rules -----------------------------------
+
+
+@pytest.mark.parametrize("where", ["user", "user-project", "goose"])
+def test_shadowing_in_user_scopes_is_refused(tmp_path, where):
+    home, project = tmp_path / "home", tmp_path / "proj"
+    project.mkdir()
+    (home / ".config" / "goose").mkdir(parents=True)
+    if where == "user":
+        (home / ".claude.json").write_text(json.dumps({"mcpServers": {runner_mcp.SERVER_NAME: {}}}))
+    elif where == "user-project":
+        (home / ".claude.json").write_text(json.dumps(
+            {"projects": {os.path.realpath(project): {"mcpServers": {runner_mcp.SERVER_NAME: {}}}}}))
+    else:
+        (home / ".config" / "goose" / "config.yaml").write_text(
+            f"extensions:\n  {runner_mcp.SERVER_NAME}:\n    cmd: /bin/sh\n")
+    problems = runner_mcp.wiring_problems(project, "goose", MANIFEST, home=home)
+    assert any("shadow" in p for p in problems), problems
+
+
+def test_local_settings_cannot_switch_the_sandbox_off(rendered, tmp_path):
+    project = tmp_path / "copy"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.hooks.example.json").write_text(
+        (rendered / ".claude" / "settings.hooks.example.json").read_text())
+    _merge_emitted_settings(project)
+    (project / ".claude" / "settings.local.json").write_text(json.dumps({"sandbox": {"enabled": False}}))
+    problems = runner_mcp.wiring_problems(project, "claude", MANIFEST, home=tmp_path)
+    assert any("settings.local.json" in p for p in problems)
+
+
+def test_the_emitted_rules_include_the_live_read_and_agent_file_denies(rendered):
+    deny = json.loads((rendered / ".claude" / "settings.hooks.example.json").read_text())["permissions"]["deny"]
+    for rule in runner_mcp.REQUIRED_CLAUDE_DENY:
+        assert rule in deny, rule
+
+
+def test_goose_profile_must_deny_the_server_and_recipes(tmp_path):
+    (tmp_path / ".goose").mkdir()
+    problems = runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path)
+    assert any(".goose/recipes" in p for p in problems) and any(".agentteams" in p for p in problems)
+    from agentteams.frameworks._goose_sandbox_emit import _seatbelt_path_expr
+
+    (tmp_path / ".goose" / "sandbox.sb").write_text("(deny file-write*\n    " + _seatbelt_path_expr(".agentteams")
+                                                   + "\n    " + _seatbelt_path_expr(".goose/recipes") + ")\n")
+    assert runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path) == []
+
+
+def test_a_team_with_grants_refuses_a_shell_on_any_non_orchestrator_agent():
+    """Verification condition 1: C4 relies on no non-orchestrator agent holding a shell."""
+    from agentteams.audit_agent_contract import _check_write_policy
+
+    agent = "---\nname: X\ndescription: \"x\"\ntools: Read, Grep, Bash\n---\nbody\n"
+    plain = _check_write_policy({"helper.md": agent}, agent_ext=".md", framework="claude", enabled=True)
+    granted = _check_write_policy({"helper.md": agent}, agent_ext=".md", framework="claude", enabled=True,
+                                  mcp_grants={"someone-else": {"tools": ["write_file"]}})
+    assert not [f for f in plain if f.severity == "error"]
+    assert [f for f in granted if f.severity == "error" and "queue a shell could read" in f.description]
+
+
+def test_the_sandbox_must_be_enabled_in_live_settings(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps({"permissions": {"deny": list(
+        runner_mcp.REQUIRED_CLAUDE_DENY)}, "sandbox": {"filesystem": {"denyWrite": [".agentteams", ".claude"]}}}))
+    problems = runner_mcp.wiring_problems(tmp_path, "claude", MANIFEST, home=tmp_path)
+    assert problems == ["live .claude/settings.json doesn't enable the sandbox (sandbox.enabled true); merge the "
+                        "emitted sandbox block (@security C4/C11)"]

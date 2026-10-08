@@ -630,7 +630,7 @@ def _runner_block_problem(content: str, slug: str, grant: dict[str, Any]) -> tup
         return content, ("declares no agentteams_runner block, or more than one `mcpServers:` key"
                          if starts else None)
     try:
-        expected = [runner_mcp.claude_block(slug, list(grant.get("tools") or []), str(grant.get("approval", "staged")),
+        expected = [runner_mcp.claude_block(slug, list(grant.get("tools") or []), "staged",
                                             py) for py in runner_mcp.SYSTEM_PYTHONS]
     except ValueError as exc:
         return content, f"has an mcp_grants entry the audit can't render ({exc})"
@@ -696,7 +696,7 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str, slug: s
 
             for ext in (e for e in extensions if e["name"] == runner_mcp.SERVER_NAME):
                 want = [runner_mcp.goose_extension(slug, list(grant.get("tools") or []),
-                                                   str(grant.get("approval", "staged")), py)
+                                                   "staged", py)
                         for py in runner_mcp.SYSTEM_PYTHONS]
                 if any((ext["type"], ext["cmd"], ext["args"], ext["available_tools"])
                        == (w["type"], w["cmd"], w["args"], w["available_tools"]) for w in want) \
@@ -891,6 +891,14 @@ def _check_write_policy(
         grant = (mcp_grants or {}).get(slug)
         errors, warnings = _write_policy_problems(content, agent_ext, framework, slug,
                                                   grant if isinstance(grant, dict) and grant.get("tools") else None)
+        if mcp_grants:
+            # A team with grants relies on no non-orchestrator agent holding a shell: only the built-in read tools
+            # are denied the queue, which briefly holds raw nonces (@security C4, verification condition 1).
+            shell = [w for w in warnings if "shell" in w or "unconfined until" in w]
+            warnings = [w for w in warnings if w not in shell]
+            errors = errors + [w.replace("which is unconfined until the P4 sandbox profiles",
+                                         "but this team grants agentteams_runner, whose queue a shell could read")
+                               for w in shell]
         for severity, problems in (("error", errors), ("warning", warnings)):
             for problem in problems:
                 findings.append(AuditFinding(

@@ -252,6 +252,11 @@ def run_standalone_modes(
                 "nothing to verify. Confine such targets from OUTSIDE the process (container "
                 "+ seccomp-bpf + Landlock on Linux, plus egress filtering)."
             ]
+        from agentteams import runner_mcp  # R7: MCP-mediated agent writes need the server and agent files protected
+
+        runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)
+        if runner_problems:
+            ok, messages = False, [*messages, *(f"ERROR: {p}" for p in runner_problems)]
         print(f"Sandbox wiring check ({framework}): {output_dir}")
         for msg in messages:
             print(f"  {msg}")

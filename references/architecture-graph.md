@@ -5,7 +5,7 @@
 
 - Modules mapped: **235**
 - Packages: **9**
-- Internal import edges: **628**
+- Internal import edges: **629**
 - Distinct external dependencies: **7**
 
 ---
@@ -113,7 +113,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.security_gate` | `agentteams.atomicio`, `agentteams.cli.decision_log` | `agentteams.branch_cleanup`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch`, `agentteams.cli.standalone_modes`, `agentteams.security_refs` |
 | `agentteams.cli.signed_ledger` | `agentteams.capability_hints` | `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.operator_signing`, `agentteams.mcp_direct_grants` |
 | `agentteams.cli.signer_location` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.operator_signing` |
-| `agentteams.cli.standalone_modes` | `agentteams.audit_types`, `agentteams.budget`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.itest_tripwire`, `agentteams.cli.security_gate`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.rank_conformance`, `agentteams.scan`, `agentteams.template_pins`, `agentteams.write_policy` | `agentteams.cli.generate` |
+| `agentteams.cli.standalone_modes` | `agentteams.audit_types`, `agentteams.budget`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.itest_tripwire`, `agentteams.cli.security_gate`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.rank_conformance`, `agentteams.runner_mcp`, `agentteams.scan`, `agentteams.template_pins`, `agentteams.write_policy` | `agentteams.cli.generate` |
 | `agentteams.cli.sync_switch` | `agentteams.multi_sync` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.write_policy_warning` | `agentteams.audit`, `agentteams.audit_agent_contract`, `agentteams.audit_types` | `agentteams.cli.generate` |
 | `agentteams.cli.write_root_policy` | `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots` | `agentteams.cli.artifacts`, `agentteams.cli.generate`, `agentteams.multi_sync` |
@@ -255,7 +255,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.research.scholarly` | `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__` |
 | `agentteams.research.search` | `agentteams.research.backends`, `agentteams.research.cache` | `agentteams.redteam.freshness`, `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
-| `agentteams.runner_mcp` | — | `agentteams.audit_agent_contract`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner` |
+| `agentteams.runner_mcp` | — | `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner` |
 | `agentteams.scan` | `agentteams.backup` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.learned_blocks`, `agentteams.redteam.corpus` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
@@ -1292,6 +1292,7 @@ digraph "agentteams architecture" {
         "agentteams.frameworks.claude",
         "agentteams.frameworks.goose_tool_scoping",
         "agentteams.rank_conformance",
+        "agentteams.runner_mcp",
         "agentteams.scan",
         "agentteams.template_pins",
         "agentteams.write_policy"
@@ -4368,6 +4369,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.standalone_modes",
       "target": "agentteams.rank_conformance"
+    },
+    {
+      "source": "agentteams.cli.standalone_modes",
+      "target": "agentteams.runner_mcp"
     },
     {
       "source": "agentteams.cli.standalone_modes",
