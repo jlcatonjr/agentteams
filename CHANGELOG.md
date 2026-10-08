@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (C4);
   - `settings.local.json` may not switch the sandbox off;
   - a direct-write nonce refusal now gives the MCP channel's uniform message.
+- **One decision point for direct writes (@security C1).**
+  - Generated agents always submit writes for staging. The runner applies one directly only when that agent's
+    operator-signed grant verified at start, and a deletion never upgrades.
+  - Generation can't produce a direct path, and an unsigned `approval: direct` simply stays staged.
+  - Grants also bind `runner_mcp.MAP_VERSION`, so a change to the grantable surface voids them.
 
 ### feat (generation and audit for MCP-mediated agent writes, phase R6)
 

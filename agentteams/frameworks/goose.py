@@ -284,7 +284,7 @@ class GooseAdapter(FrameworkAdapter):
             from agentteams import runner_mcp
 
             mcp_exts = list(mcp_exts) + [runner_mcp.goose_extension(
-                agent_slug, grant["tools"], grant.get("approval", "staged"), runner_mcp.interpreter())]
+                agent_slug, grant["tools"], "staged", runner_mcp.interpreter())]
         # Phase 2: wire the first-party stdio coordination server into coordinator/liaison
         # recipes when the team declares coordination (file-based; only reads/records).
         if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS and not restricted:

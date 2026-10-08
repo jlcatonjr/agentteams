@@ -30,7 +30,7 @@ the operator to check.
 Every field is Ed25519-signed, as one canonical JSON encoding, under its own purpose tag,
 `agentteams-mcp-direct-grant-v1`. So distinct records never share a payload, and the signature can't be replayed as
 any other artifact:
-- grant id, agent, server and the exact tools;
+- grant id, agent, server, the grant-map version (`runner_mcp.MAP_VERSION`) and the exact tools;
 - `approval: direct`;
 - the agent's write scopes, and each team gate by a hash of its whole definition (a gate edited to always pass
   voids the grant);
@@ -42,6 +42,10 @@ Any drift between the grant and the live brief or installed server refuses it, a
 back. A direct grant also needs a gate, or write scopes that name single files.
 
 ## Runner enforcement
+
+- **One decision point:** generated agents always submit writes for staging. The runner applies a change
+  directly only when the agent's grant verified at start. Generation can't produce a direct path, and deletions
+  never upgrade.
 
 - **At start:** it verifies every grant, enforces the aggregate cap (`MAX_ACTIVE` = 3; more fails closed), sets
   `policy.direct_agents`, ledgers `direct-grants-loaded`, and pins the file. A changed file needs a restart.

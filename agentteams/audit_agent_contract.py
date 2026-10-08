@@ -630,7 +630,7 @@ def _runner_block_problem(content: str, slug: str, grant: dict[str, Any]) -> tup
         return content, ("declares no agentteams_runner block, or more than one `mcpServers:` key"
                          if starts else None)
     try:
-        expected = [runner_mcp.claude_block(slug, list(grant.get("tools") or []), str(grant.get("approval", "staged")),
+        expected = [runner_mcp.claude_block(slug, list(grant.get("tools") or []), "staged",
                                             py) for py in runner_mcp.SYSTEM_PYTHONS]
     except ValueError as exc:
         return content, f"has an mcp_grants entry the audit can't render ({exc})"
@@ -696,7 +696,7 @@ def _write_policy_problems(content: str, agent_ext: str, framework: str, slug: s
 
             for ext in (e for e in extensions if e["name"] == runner_mcp.SERVER_NAME):
                 want = [runner_mcp.goose_extension(slug, list(grant.get("tools") or []),
-                                                   str(grant.get("approval", "staged")), py)
+                                                   "staged", py)
                         for py in runner_mcp.SYSTEM_PYTHONS]
                 if any((ext["type"], ext["cmd"], ext["args"], ext["available_tools"])
                        == (w["type"], w["cmd"], w["args"], w["available_tools"]) for w in want) \

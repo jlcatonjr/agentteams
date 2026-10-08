@@ -400,8 +400,15 @@ class Runner:
     def _handle_staging(self, request: dict[str, Any], kind: str, ident: dict[str, Any]) -> Any:
         from agentteams import proposal_staging as S
 
+        artifact = request.get("artifact")
+        if (kind == "stage-proposal" and isinstance(artifact, dict) and artifact.get("kind") == "change-proposal"
+                and str(ident.get("expect_agent")) in self.direct_grants):
+            # The single decision point for direct writes (@security C1): generated agents always submit staged
+            # writes; the runner applies one directly only when that agent's operator-signed grant verified at start.
+            # Deletions never upgrade (C-5).
+            kind = "apply-direct"
         if kind == "stage-proposal":
-            return S.stage_proposal(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
+            return S.stage_proposal(artifact, root=self.root, policy=self.policy, confine=True,
                                     expect_agent=ident.get("expect_agent"))
         if kind == "apply-direct":
             agent = ident.get("expect_agent")

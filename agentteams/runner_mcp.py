@@ -14,6 +14,9 @@ from importlib import resources
 
 #: The MCP server name agents see (``mcp__agentteams_runner__<tool>``).
 SERVER_NAME = "agentteams_runner"
+#: Version of what a grant may grant (the server's tool set and its semantics). Direct-write grants bind it, so a
+#: change to the grantable surface voids existing grants (@security C1). Bump it with any change to TOOLS.
+MAP_VERSION = "1"
 #: The tools a grant may name (same list as ``proposal_policy.MCP_RUNNER_TOOLS``; a test keeps them equal).
 TOOLS: tuple[str, ...] = ("write_file", "delete_file", "run_command", "request_status", "read_file_hashed")
 #: Where generation installs the server: inside the control plane every session sandbox write-denies.
@@ -21,7 +24,7 @@ PROTECTED_PATH = ".agentteams/bin/agentteams-runner-mcp.py"
 #: Python flags for the launch: no PYTHON* variables, user site-packages, script-dir imports or site hooks.
 PYTHON_FLAGS: tuple[str, ...] = ("-I", "-S")
 #: sha256 of the shipped server; ``tests/test_runner_mcp.py`` keeps it current.
-SHA256 = "6bbde08ce2e9673a3c4edb06672a55a82e65516d2d1ea84870f3d28e0bb4c259"
+SHA256 = "7335eeeaf69e3021d73c6ebc75a5af00c065f8962aeee126974c9e8bde301532"
 
 
 def server_content() -> str:

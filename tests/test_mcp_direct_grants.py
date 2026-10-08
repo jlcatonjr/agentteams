@@ -288,3 +288,37 @@ def test_signing_refuses_without_a_confirmed_digest(project, operator_key, monke
     monkeypatch.setattr(O, "_confirm", lambda digest, confirm: False)
     assert _sign(project, operator_key) == 1
     assert not G.grants_file_for(project).exists()
+
+
+def test_a_verified_grant_turns_a_staged_write_into_a_direct_one(project, operator_key):
+    """@security C1: generated agents always submit staged writes; the runner upgrades only on a verified grant,
+    and never a deletion."""
+    _sign(project, operator_key)
+    runner = _runner(project)
+    try:
+        nonce = P.issue_dispatch(project, "producer", ttl_hours=G.DIRECT_TTL_HOURS, max_uses=G.DIRECT_MAX_USES)
+        base = hashlib.sha256(b"x = 1\n").hexdigest()
+        art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": "y\n",
+               "base_sha256": base}
+        rid = R.enqueue(project, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, channel="mcp")
+        runner.serve_once()
+        result = R.wait_result(project, rid, timeout=5)
+        assert result["ok"] and result["result"]["written"] and (project / "src/a.py").read_text() == "y\n"
+        delete = {"kind": "delete-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r",
+                  "base_sha256": hashlib.sha256(b"y\n").hexdigest()}
+        rid = R.enqueue(project, {"kind": "stage-proposal", "artifact": delete, "via_agent": "producer"},
+                        channel="mcp")
+        runner.serve_once()
+        staged = R.wait_result(project, rid, timeout=5)
+        assert staged["ok"] and staged["result"]["staged"] and (project / "src/a.py").exists()
+    finally:
+        runner.close()
+
+
+def test_grants_bind_the_map_version(project, operator_key, monkeypatch):
+    from agentteams import runner_mcp
+
+    _sign(project, operator_key)
+    monkeypatch.setattr(runner_mcp, "MAP_VERSION", "2")
+    grants, problems, _ = G.active_grants(project, _policy(project), json.loads((project / "brief.json").read_text()))
+    assert grants == {} and any("map_version" in p for p in problems)

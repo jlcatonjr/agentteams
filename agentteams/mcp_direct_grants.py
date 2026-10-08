@@ -47,7 +47,8 @@ MAX_WRITES = 500
 DIRECT_TTL_HOURS = 4
 DIRECT_MAX_USES = 10
 MAX_FILE_BYTES = 256 * 1024
-_FIELDS = ("grant_id", "agent", "server", "tools", "approval", "write_scopes", "gates", "server_sha256", "issued",
+_FIELDS = ("grant_id", "agent", "server", "map_version", "tools", "approval", "write_scopes", "gates", "server_sha256",
+           "issued",
            "expires", "max_writes", "key_id")
 _KEY_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
@@ -111,7 +112,7 @@ def expected_binding(agent: str, policy: Policy, brief: dict[str, Any]) -> dict[
     gates = {name: hashlib.sha256(json.dumps(policy.gates[name], sort_keys=True).encode()).hexdigest()
              for name in sorted(policy.gates)}
     return {"server": runner_mcp.SERVER_NAME, "tools": tools, "approval": "direct", "write_scopes": scopes,
-            "gates": gates, "server_sha256": runner_mcp.SHA256}
+            "gates": gates, "server_sha256": runner_mcp.SHA256, "map_version": runner_mcp.MAP_VERSION}
 
 
 def _require_bounded(binding: dict[str, Any]) -> None:
