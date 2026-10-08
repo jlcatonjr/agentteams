@@ -251,7 +251,7 @@ def test_switch_allowed_on_codex_with_its_sandbox_token_and_says_it_cannot_verif
             "write_policy": "orchestrator-only", "privilege_profile": profile}
     assert analyze.build_manifest(desc, framework="codex")["write_policy"] == "orchestrator-only"
     err = capsys.readouterr().err
-    assert ".codex/confined-run.example.sh" in err and "not verifiable here" in err and "KEY CUSTODY ONLY" in err
+    assert ".codex/confined-run.example.sh" in err and "not verifiable here" in err and "role gate" in err
 
 
 def test_switch_on_codex_needs_an_explicit_profile():

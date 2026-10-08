@@ -180,7 +180,11 @@ def convert_team(
 
     # F3 — emit framework sidecars not derived from a source file (goose's repo-root
     # ``.goosehints`` integrator). Paths are relative to the agents dir, like emit.py.
-    for rel_path, content in adapter.extra_output_files(manifest):
+    # The adapter's guard drops sidecars it must never write over, even with --overwrite (codex: a foreign
+    # repo-root AGENTS.md or an operator's own .codex/hooks.json); its notices go to skipped.
+    extras, guard_notices = adapter.guard_rendered_files(list(adapter.extra_output_files(manifest)), target_dir)
+    result.skipped.extend(guard_notices)
+    for rel_path, content in extras:
         dest = (target_dir / rel_path).resolve()
         if dest.exists() and not overwrite:
             result.skipped.append(str(dest))

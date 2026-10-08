@@ -852,8 +852,9 @@ def test_runner_text_runs_codex_sandbox_off_inside_the_launcher_with_honest_labe
     assert rel == _RUNNER
     for needle in ('--writable "$REPO_ROOT"', '--writable "$CODEX_HOME"', "--protect-prompt-roots",
                    '--setenv CODEX_HOME="$CODEX_HOME"', "--env-allow PATH", "--env-allow HOME",
-                   '-- codex --sandbox danger-full-access "$@"', '"${CODEX_CONFINE_EGRESS:-host}"',
-                   "$HOME/.config/agentteams/codex-home/", "INSTRUCTION-LEVEL", "KEY CUSTODY ONLY",
+                   '-- bash -c "$SELF_PROBE" codex-confined --sandbox danger-full-access "$@"',
+                   '"${CODEX_CONFINE_EGRESS:-host}"', "$HOME/.config/agentteams/codex-home/", "INSTRUCTION-LEVEL",
+                   "SELF-PROBE FAILED", "exec codex",
                    "cannot nest", "--egress proxy", "cannot verify", "mktemp -d"):
         assert needle in text, needle
     assert "/keys/codex" not in text
@@ -899,7 +900,9 @@ def test_runner_passes_the_expected_argv_and_protects_stubbed_config(tmp_path: P
         assert (codex_home / name).exists(), name
     assert (codex_home / "hooks.json").read_text() == "{}\n"
     assert argv[argv.index("--egress") + 1] == "host"
-    assert argv[argv.index("--") + 1:] == ["codex", "--sandbox", "danger-full-access", "exec", "hi"]
+    # Codex starts behind the in-launcher self-probe (multi-line, so located by its $0 name).
+    assert argv[argv.index("--") + 1:argv.index("--") + 3] == ["bash", "-c"]
+    assert argv[argv.index("codex-confined"):] == ["codex-confined", "--sandbox", "danger-full-access", "exec", "hi"]
 
 
 def test_the_default_codex_home_is_per_project_with_a_hash(tmp_path: Path) -> None:

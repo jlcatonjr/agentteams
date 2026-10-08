@@ -35,7 +35,9 @@ spawned agent's ``sandbox_mode`` (codex-cli 0.160.1 drops it when it loads the r
 session's sandbox — or agentteams' launcher, when Codex is run through
 ``.codex/confined-run.example.sh`` — governs every agent. The key is still emitted because the
 ``AR_WRITE_POLICY`` audit reads it. Tool grants are likewise not enforced by Codex; the declared
-list is stated as a self-imposed limit, so per-role limits on Codex are instruction-level only.
+list is stated as a self-imposed limit, so per-role limits on Codex are instruction-level only, except
+under ``write_policy: "orchestrator-only"``: there the runner turns on a generated PreToolUse role gate
+(``_codex_sandbox_emit``) that limits spawned agents to read-only tools.
 
 Confinement (Phase 1a, 2026-10-08): when the ``codex:sandbox`` host feature is requested
 (``privilege_profile`` confined/exclusive expands to it), :meth:`CodexAdapter.extra_output_files`
@@ -432,6 +434,20 @@ _READING_ON_CODEX = [
 ]
 
 
+#: Under ``write_policy: "orchestrator-only"`` the runner turns on the role gate (``_codex_sandbox_emit``): a spawned
+#: agent's shell is blocked, so the shell allowlist above would only produce denied calls. This replaces it.
+_READING_UNDER_ROLE_GATE = [
+    "### Reading on Codex (role gate)",
+    "",
+    "This team runs `write_policy: \"orchestrator-only\"`, and its Codex runner turns on agentteams' role "
+    "gate. As a spawned agent you can use only the read-only `agentteams_readfs` tools: `read_file`, "
+    "`list_dir`, `find`, `grep` and `stat`. Shell commands, patches, spawning agents and every other tool "
+    "are blocked. Read and search with those tools, and return a proposal to the orchestrator for any change.",
+    "",
+    _SECRET_STORES_LINE,
+]
+
+
 def _reads_through_shell(tools: list[str] | None) -> bool:
     """True when the canonical *tools* grant ``read`` or ``search`` and no command-running token: on Codex
     such an agent can read only through the shell, so it needs the read-only allowlist. ``execute`` and
@@ -447,7 +463,7 @@ def _runs_commands(tools: list[str] | None) -> bool:
 
 
 def _translation_block(
-    display_name: str, tools: list[str] | None, handoffs: list[dict[str, Any]]
+    display_name: str, tools: list[str] | None, handoffs: list[dict[str, Any]], role_gate: bool = False
 ) -> str:
     parts = [
         f"<!-- AGENTTEAMS:BEGIN {_TRANSLATION_FENCE_ID} v=1 -->",
@@ -481,7 +497,7 @@ def _translation_block(
             "grants; stay within what this role's instructions require."
         )
     if _reads_through_shell(tools):
-        parts += ["", *_READING_ON_CODEX]
+        parts += ["", *(_READING_UNDER_ROLE_GATE if role_gate else _READING_ON_CODEX)]
     elif _runs_commands(tools):
         parts += ["", *_SECRETS_ON_CODEX]
     parts += ["", "### Hand off to", ""]
@@ -628,7 +644,10 @@ class CodexAdapter(AgentsMdAdapter):
         body = _ensure_single_leading_h1(body, name)
         if not manifest.get("interop_source_framework"):  # an interop import stays verbatim
             body = _fence_native_body(body)
-        instructions = body.rstrip() + "\n\n" + _translation_block(name, tools, handoffs) + "\n"
+        from agentteams.frameworks._codex_role_gate_emit import codex_role_gate_enabled
+
+        block = _translation_block(name, tools, handoffs, role_gate=codex_role_gate_enabled(manifest))
+        instructions = body.rstrip() + "\n\n" + block + "\n"
         return render_codex_agent_toml(
             name=agent_slug,
             description=description or name,
@@ -709,7 +728,7 @@ class CodexAdapter(AgentsMdAdapter):
     def guard_rendered_files(
         self, rendered_files: list[tuple[str, str]], output_dir: Path
     ) -> tuple[list[tuple[str, str]], list[str]]:
-        """Skip the repo-root AGENTS.md when an existing one was not generated for Codex.
+        """Skip the repo-root AGENTS.md, or ``.codex/hooks.json``, when an existing one isn't agentteams'.
 
         The name is tested on the UNRESOLVED path, and a symlinked AGENTS.md is always
         refused, so a link cannot redirect the write to another file.
@@ -721,6 +740,8 @@ class CodexAdapter(AgentsMdAdapter):
         Returns:
             ``(kept_files, notices)``.
         """
+        from agentteams.frameworks._codex_role_gate_emit import codex_hooks_json_is_ours
+
         kept: list[tuple[str, str]] = []
         notices: list[str] = []
         legacy = output_dir.parent.parent / ".agents"
@@ -740,6 +761,15 @@ class CodexAdapter(AgentsMdAdapter):
                 notices.append(
                     f"{target}: existing AGENTS.md was not generated for Codex; left untouched "
                     "(codex never overwrites a shared or project-owned AGENTS.md)."
+                )
+                continue
+            if (target.name == "hooks.json" and target.parent.name == ".codex"
+                    and not codex_hooks_json_is_ours(target)):
+                notices.append(
+                    f"{target}: existing .codex/hooks.json was not generated by agentteams; left untouched, "
+                    "so the write_policy role gate is NOT wired and .codex/confined-run.example.sh will refuse "
+                    "to start. Move your hooks into CODEX_HOME/hooks.json (outside the launcher), remove this "
+                    "file, and re-run --update."
                 )
                 continue
             kept.append((rel_path, content))
@@ -816,7 +846,8 @@ class CodexAdapter(AgentsMdAdapter):
         sidecars) and the verify-key-store sentinel are preserved, then adds
         ``.codex/confined-run.example.sh`` when confinement is requested (``codex:sandbox``, or a
         confined/exclusive ``privilege_profile``) on Linux or macOS. The runner is an inert
-        operator-run example; per-role limits on Codex stay instruction-level only.
+        operator-run example. Under ``write_policy: "orchestrator-only"`` it also adds the role gate,
+        the read-only file server and ``.codex/hooks.json``.
 
         Args:
             manifest: The team manifest.
