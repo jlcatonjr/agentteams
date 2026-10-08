@@ -875,6 +875,16 @@ confirmed: a terminal y/N, or `--confirm-review-sha256`.
   `~/.config/agentteams/verify-keys/`.
 - **Restart the runner** to load it.
 
+### MCP-mediated writes and `--check-wiring`
+
+For a team with `mcp_grants`, `--check-wiring` also fails on two things:
+- a project `.mcp.json` or Claude settings file that defines a server named `agentteams_runner`, which could
+  shadow the canonical inline one;
+- on Claude, live settings that don't deny `Edit(/.agentteams/**)`, or don't `denyWrite` both `.agentteams` and
+  `.claude`.
+
+Merge the emitted sandbox block and permissions to pass.
+
 ### `--list-mcp-direct-grants`
 
 Read-only (R5). Lists the operator's grants for `--project` and whether each verifies now against

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (live wiring checks for MCP-mediated agent writes, phase R7)
+
+- **`--check-wiring` covers teams with `mcp_grants`.**
+  - It refuses a project `.mcp.json` or Claude settings file that defines a server named `agentteams_runner`,
+    which could shadow the canonical inline entry granted agents launch (@security C13).
+  - On Claude it requires the live settings to deny `Edit(/.agentteams/**)` and to `denyWrite` both `.agentteams`
+    and `.claude`, so no session can replace the installed server or the agent files (@security C11).
+  - The emitted settings satisfy both once merged, which a test checks.
+- **@security C17's tests,** spread across R1–R5 (queue theft, slug mismatch, output and result caps, grant
+  revocation partway through a session), are kept present by a roll-up test.
+
 ### feat (generation and audit for MCP-mediated agent writes, phase R6)
 
 - **Granted agents are rendered with the server.** Under `write_policy: "orchestrator-only"`, an agent named in

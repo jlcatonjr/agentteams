@@ -61,4 +61,5 @@ Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runn
 | `tool_names(tools) -> list[str]` | Claude's exact names, `mcp__agentteams_runner__<tool>`. |
 | `claude_block(agent, tools, approval, python) -> str` | The canonical inline `mcpServers:` block for a granted Claude agent. |
 | `goose_extension(agent, tools, approval, python) -> dict` | The canonical Goose stdio extension, with an exact `available_tools` list. |
+| `SHADOW_FILES`, `wiring_problems(root, framework, manifest) -> list[str]` | Live-wiring checks run by `--check-wiring` when a team has grants (R7). They refuse any project `.mcp.json` or Claude settings file that defines a server named `agentteams_runner`, which could shadow the canonical inline one (@security C13). On Claude they require the live settings to deny `Edit(/.agentteams/**)` and to `denyWrite` both `.agentteams` and `.claude` (@security C11). |
 | `install_files(manifest) -> list` | The server install (`../../.agentteams/bin/...`) when the switch is on and `mcp_grants` names someone. It refuses a packaged copy whose hash doesn't match. |
