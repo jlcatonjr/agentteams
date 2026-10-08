@@ -463,3 +463,79 @@ def test_workstream_experts_group_never_reaches_a_non_expert():
     mcp_catalog.expand(m, "claude")
     recall_scope = {s["server_id"]: s["scope"] for s in m["mcp_servers"]}["agentteams-recall"]
     assert "security" not in recall_scope and "pr-notifier" not in recall_scope
+
+# --- independent-verification findings (2026-10-07) -------------------------------------------------------------
+
+def test_gitread_refuses_a_gitdir_redirect_out_of_the_project(repo, tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / ".git").write_text(f"gitdir: {repo / '.git'}\n")
+    with pytest.raises(ToolError, match="outside the project"):
+        gitread.call("git_log", {}, proj)
+
+
+def test_gitread_refuses_a_symlinked_git_dir(repo, tmp_path):
+    proj = tmp_path / "proj2"
+    proj.mkdir()
+    (proj / ".git").symlink_to(repo / ".git", target_is_directory=True)
+    with pytest.raises(ToolError, match="outside the project"):
+        gitread.call("git_log", {}, proj)
+
+
+def test_gitread_serves_a_registered_linked_worktree(repo, tmp_path):
+    wt = tmp_path / "wt"
+    _git(repo, "worktree", "add", "-q", str(wt))
+    assert "second" in gitread.call("git_log", {}, wt)["output"]
+
+
+def test_recall_refuses_rather_than_skips_an_outside_partition(tmp_path):
+    """No existence oracle: a missing file outside the project is refused, not silently skipped."""
+    cache = tmp_path / "references" / "code-index"
+    cache.mkdir(parents=True)
+    (cache / "manifest.json").write_text("{}")
+    import agentteams.mcp_servers.recall as r
+
+    real_load = r._load
+    r._load = lambda root, path, schema, label: (
+        {"partitions": {"x": {"file": "../../../definitely-not-here.json"}}} if path.name == "manifest.json"
+        else real_load(root, path, schema, label))
+    try:
+        with pytest.raises(ToolError, match="outside the project"):
+            r._code_partitions(tmp_path, tmp_path)
+    finally:
+        r._load = real_load
+
+
+def test_gitread_refuses_a_commondir_redirect(repo, tmp_path):
+    """The audit's bypass: a git dir inside the project whose commondir names another repository."""
+    proj = tmp_path / "proj3"
+    fake = proj / "fake"
+    fake.mkdir(parents=True)
+    (fake / "commondir").write_text(str(repo / ".git") + "\n")
+    (fake / "HEAD").write_text("ref: refs/heads/master\n")
+    (proj / ".git").write_text("gitdir: fake\n")
+    with pytest.raises(ToolError):
+        out = gitread.call("git_log", {}, proj)
+        assert "second" not in out["output"]  # if git ever accepts it, it must not serve repo's history
+
+
+def test_gitread_refuses_object_alternates(repo, tmp_path):
+    info = repo / ".git" / "objects" / "info"
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "alternates").write_text(str(tmp_path) + "\n")
+    with pytest.raises(ToolError, match="alternates"):
+        gitread.call("git_log", {}, repo)
+
+
+def test_gitread_refuses_a_forged_worktree_registration(repo, tmp_path):
+    """An admin dir outside both the project and the common dir, holding a back-link, is not a registration."""
+    proj = tmp_path / "proj4"
+    proj.mkdir()
+    admin = tmp_path / "elsewhere" / "worktrees" / "n"
+    admin.mkdir(parents=True)
+    (admin / "commondir").write_text(str(repo / ".git") + "\n")
+    (admin / "HEAD").write_text("ref: refs/heads/master\n")
+    (admin / "gitdir").write_text(str(proj / ".git") + "\n")
+    (proj / ".git").write_text(f"gitdir: {admin}\n")
+    with pytest.raises(ToolError, match="outside the project"):
+        gitread.call("git_log", {}, proj)

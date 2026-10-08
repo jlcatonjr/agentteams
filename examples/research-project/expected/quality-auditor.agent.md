@@ -109,6 +109,7 @@ Findings ranked by severity — HIGH first.
 ## Boundary Rules
 
 - **Read-only.** Do not edit any deliverable file.
+- **Never change git state.** Nothing that writes the working tree, the index, refs or `.git/` (e.g. `git stash`, `checkout`, `switch`, `restore`, `reset`, `clean`, `add`, `commit`, `apply`, `merge`, `rebase`, `pull`, `worktree`), and no file edits; to inspect old code, ask the caller for `git show <ref>:<path>` output (you run no commands). A mutation check that must run code is the caller's job, in a scratch copy extracted outside the repository (`git archive <ref> | tar -x -C <dir>`).
 - **Route, don't fix.** Every finding must route to the correct correction agent.
 - **No aesthetic judgments.** Raise structural, logical, or pattern defects only. Style deviations route to `@style-guardian`.
 <!-- AGENTTEAMS:END boundary_rules -->

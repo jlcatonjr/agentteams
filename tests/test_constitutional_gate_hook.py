@@ -222,7 +222,9 @@ def test_delete_commands_require_authorization(command: str) -> None:
 
 @pytest.mark.parametrize(
     "command",
-    ["ls -la", "git status", "git push origin main:main", "grep -rn foo ."],
+    ["ls -la", "git status", "git push origin main:main", "grep -rn foo .",
+     'gh pr create --title t --body "fix the merge order"', "gh pr checkout 1 && git merge x",
+     "gh pr view 5 --json mergeable", "gh pr list --search is:merged"],
 )
 def test_benign_commands_are_not_gated(command: str) -> None:
     code, decision = _run_template(command)
@@ -277,6 +279,10 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "gh pr merge 12 --squash",                   # PR merge (MCP catalogue: outside every allowlist)
         "gh -R o/r pr merge 12",
         "gh api -X PUT /repos/o/r/pulls/12/merge",
+        "gh pr -R o/r merge 12",                     # flags between pr and merge
+        "gh pr \\\nmerge 12",                        # line continuation
+        "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+        "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'",
         "kubectl -n prod delete pod x",              # flags before the verb
         "docker container rm c1",                    # subcommand form
         "docker image rm img",

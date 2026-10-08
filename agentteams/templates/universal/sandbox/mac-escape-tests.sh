@@ -184,6 +184,52 @@ if printf '%s' "$memwarn" | grep -qi 'MEMORY UNCAPPED'; then
   skip "memory cap" "EXPECTED-UNCAPPED - wrapper loudly declares memory is NOT enforced on macOS (interface-only, fail-honest); hard cap needs VM/container/Linux. HONEST N/A, not a FAIL"
 else no "wrapper did NOT loudly declare memory UNCAPPED (fail-honest contract broken)"; fi
 
+# ---- Gate 8: control plane (F-4 parity with Linux, 2026-10-07) ---------------------------------
+# Baseline: a plain write inside the writable root succeeds. Confined: the decision-signing switch, the
+# verify-key store and the team marker can't be written, and the ancestor holding them can't be renamed.
+echo "[8] control-plane write protection (switch, verify keys, marker, ancestor rename)"
+if [ "$NESTED" = 1 ]; then
+  unt "control plane" "outer sandbox forces UNTRUSTED; guest cannot start"
+else
+  CPR="$SCR/.claude/agents/references"; mkdir -p "$CPR/authorized-verify-keys" "$SCR/.claude/hooks"
+  echo '{"enforce_decision_signing": true}' > "$CPR/agent-privilege.json"; echo '{}' > "$CPR/build-log.json"
+  for f in security-approvers.txt authorized-managers.txt management-authority.json; do echo x > "$CPR/$f"; done
+  printf -- '---\nname: o\n---\n' > "$SCR/.claude/agents/orchestrator.md"; echo '#' > "$SCR/.claude/hooks/constitutional-gate.py"
+  base="$(runwrap --scratch "$SCR" --egress deny -- /bin/bash -c 'echo x > "'"$SCR"'/cp-baseline" 2>/dev/null && echo WROTE || echo failed')"
+  conf="$(runwrap --scratch "$SCR" --egress deny -- /bin/bash -c '
+    r=""
+    (echo pwn > "'"$CPR"'/agent-privilege.json") 2>/dev/null && r="$r switch"
+    (touch "'"$CPR"'/authorized-verify-keys/planted.pub.pem") 2>/dev/null && r="$r verify-key"
+    (rm "'"$CPR"'/build-log.json") 2>/dev/null && r="$r marker"
+    (mv "'"$CPR"'" "'"$SCR"'/.claude/agents/moved") 2>/dev/null && r="$r rename"
+    [ -z "$r" ] && echo denied || echo "ESCAPED:$r"')"
+  if [ "$base" = OUTERWALL ] || [ "$conf" = OUTERWALL ]; then unt "control plane" "outer sandbox_apply wall"
+  elif [ "$base" != WROTE ]; then ind "control plane" "baseline write inside the root did NOT succeed (base=$base)"
+  elif [ "$conf" = denied ] && grep -q true "$CPR/agent-privilege.json"; then ok "baseline write OK; switch, verify-key plant, marker delete and ancestor rename all DENIED"
+  else no "control plane writable (confined=$conf)"; fi
+fi
+
+# ---- Gate 8b: a root under /private/tmp can't be renamed away to reach its control plane ---------
+echo "[8b] root rename-away under /private/tmp (writable subpath) is denied"
+if [ "$NESTED" = 1 ]; then
+  unt "root rename-away" "outer sandbox forces UNTRUSTED"
+else
+  TB="$(mktemp -d /private/tmp/agentteams-gate8b.XXXXXX)"; TP="$TB/proj"; TR="$TP/.claude/agents/references"
+  mkdir -p "$TR/authorized-verify-keys" "$TP/.claude/hooks" "$TB/scr"
+  echo '{"enforce_decision_signing": true}' > "$TR/agent-privilege.json"; echo '{}' > "$TR/build-log.json"
+  for f in security-approvers.txt authorized-managers.txt management-authority.json; do echo x > "$TR/$f"; done
+  printf -- '---\nname: o\n---\n' > "$TP/.claude/agents/orchestrator.md"; echo '#' > "$TP/.claude/hooks/constitutional-gate.py"
+  conf="$(runwrap --scratch "$TB/scr" --writable "$TP" --egress deny -- /bin/bash -c '
+    echo x > "'"$TP"'/cp-baseline" 2>/dev/null || { echo NOBASE; exit 0; }
+    (mv "'"$TP"'" "'"$TB"'/moved") 2>/dev/null && { echo pwn > "'"$TB"'/moved/.claude/agents/references/agent-privilege.json"; mv "'"$TB"'/moved" "'"$TP"'"; echo RENAMED; exit 0; }
+    echo denied')"
+  if [ "$conf" = OUTERWALL ]; then unt "root rename-away" "outer sandbox_apply wall"
+  elif [ "$conf" = NOBASE ]; then ind "root rename-away" "baseline write inside the root did NOT succeed"
+  elif [ "$conf" = denied ] && grep -q true "$TR/agent-privilege.json"; then ok "root under /private/tmp can't be renamed away; switch intact"
+  else no "root renamed away and control plane written (confined=$conf)"; fi
+  rm -rf "$TB"
+fi
+
 rm -rf "$SCR" "$SIB" "$OUT_OF_SCRATCH"
 echo
 echo "SUMMARY: $pass pass, $fail fail, $na n/a, $untrusted untrusted, $indet indeterminate"

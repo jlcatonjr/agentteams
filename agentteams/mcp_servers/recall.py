@@ -84,9 +84,8 @@ def _code_partitions(root: Path, team: Path) -> dict[str, Any]:
     manifest = _load(root, cache / "manifest.json", "code-index.schema.json", "code index")
     parts: dict[str, Any] = {}
     for name, meta in (manifest.get("partitions") or {}).items():
-        rel = str((meta or {}).get("file", f"{name}.json"))
-        path = cache / rel
-        if Path(rel).is_absolute() or not path.exists():
+        path = _inside(root, cache / str((meta or {}).get("file", f"{name}.json")))  # confine before exists():
+        if not path.exists():  # otherwise the refused/skipped split reveals which outside files exist
             continue
         parts[name] = _load(root, path, "code-index.schema.json", "code index")
     return parts

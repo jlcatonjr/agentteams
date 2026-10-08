@@ -34,8 +34,10 @@ Repository-local git config can make even read commands run programs or reach th
   explicit `--work-tree`;
 - passes `--no-ext-diff --no-textconv --no-color --ignore-submodules=all` where they apply, and uses no `%G`
   format;
-- refuses a launch directory that is not a work-tree root, and any repository whose config defines `filter.*`
-  (includes followed);
+- refuses a launch directory that is not a work-tree root; a `.git` file or symlink, a `commondir`, or object
+  alternates that reach a repository outside the project (a registered linked worktree, whose admin dir sits
+  under its common dir with a matching back-link, is allowed); and any repository whose config defines
+  `filter.*` (includes followed);
 - requires revisions for blame and diff (no worktree reads);
 - validates refs (`[A-Za-z0-9._/@{}~^-]`, never a leading `-`) and keeps paths relative, inside the project
   and out of `.git`;

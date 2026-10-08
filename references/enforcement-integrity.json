@@ -1,7 +1,7 @@
 {
   "modules": {
-    ".claude/hooks/constitutional-gate.py": "ef11d43e7a865c295e9b855ed2ceea1332779519c2465adacaff646432ca81d3",
-    ".github/hooks/constitutional-gate.py": "ef11d43e7a865c295e9b855ed2ceea1332779519c2465adacaff646432ca81d3",
+    ".claude/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
+    ".github/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
     "agentteams/agent_doc_sync.py": "5689b5f000ed02f477ed2c4991886fe8bc00af1f47be4e51a035db83999b234e",
     "agentteams/atomicio.py": "f46a347095799d84845d52cc5f1e800cb7f43fcdf737c83a99f501add14f7214",
     "agentteams/branch_cleanup.py": "c479f18086b4a0766fb0f577731013a616e5cf802ec2f76161b46e1bf6f53350",
@@ -42,10 +42,10 @@
     "agentteams/redteam/registry.py": "72e3916101ff0686e53bec5eba4eeea6103963a0d00e3e24febca88a22db0046",
     "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/shrink_allow.py": "2bd045b95e660362f082d803fd468eb564d7cc4354ccc43acfc6d2b52603d07a",
-    "agentteams/templates/universal/hooks/constitutional-gate.py": "ef11d43e7a865c295e9b855ed2ceea1332779519c2465adacaff646432ca81d3",
+    "agentteams/templates/universal/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
-    "agentteams/templates/universal/sandbox/confine-run.sh": "064d47060768ecfe629c000ce8d1cbf2bec533fa0b8fb1f665ab4df8f439dea5",
-    "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "c485df0b39dd0847bcb08fc583c4f0fad9c377f4ae3702a62e2c57576c84f69c",
+    "agentteams/templates/universal/sandbox/confine-run.sh": "187bb211020edca1db7f9912703e7b8368d846dc7acd1d3214a4c3ebc1e6cd07",
+    "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
     "agentteams/write_policy.py": "f77299b19ba107d3a8e1b6458412a8b10f8b896d2b5b07abf2b9796e95ca0c96"
   },
