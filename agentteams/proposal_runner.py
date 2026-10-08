@@ -30,6 +30,7 @@ import re
 import secrets
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -284,6 +285,13 @@ class Runner:
             self.direct_grants, self.grant_problems, self.grants_sha = G.active_grants(self.root, policy, self._brief)
         except P.ProposalError as exc:
             raise RunnerError(f"direct-write grants: {exc}") from exc
+        self.direct_counts: dict[str, int] = {}
+        if self.direct_grants:
+            try:  # counted once, from a verified ledger, then kept in memory (R5 condition 3)
+                self.direct_counts = G.count_direct_writes(self.root)
+            except P.ProposalError as exc:
+                self.grant_problems.append(f"no direct grant is used: {exc}")
+                self.direct_grants = {}
         policy.direct_agents = frozenset(self.direct_grants)
         (self.root / ".agentteams").mkdir(mode=0o700, exist_ok=True)
         self._lock_fd = os.open(self.root / LOCK_REL, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -310,6 +318,8 @@ class Runner:
         if self.direct_grants or self.grant_problems:
             P.record(self.root, {"action": "direct-grants-loaded",
                                  "active": sorted(g["grant_id"] for g in self.direct_grants.values()),
+                                 "key_fingerprints": sorted({G.key_fingerprint(str(g["key_id"]))
+                                                             for g in self.direct_grants.values()}),
                                  "problems": [p[:200] for p in self.grant_problems][:10]})
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, name="agentteams-runner-heartbeat",
                                                   daemon=True)
@@ -395,10 +405,16 @@ class Runner:
                                     expect_agent=ident.get("expect_agent"))
         if kind == "apply-direct":
             agent = ident.get("expect_agent")
-            if str(agent) not in self.direct_grants:  # never on policy membership alone: the grant carries the caps
+            grant = self.direct_grants.get(str(agent))
+            if grant is None:  # never on policy membership alone: the grant carries the caps
                 raise P.ProposalError(f"{agent} holds no verified direct-write grant; stage the proposal instead")
-            return S.apply_direct(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
-                                  expect_agent=agent, grant=self.direct_grants.get(str(agent)))
+            artifact = request.get("artifact")
+            self._require_direct_nonce(artifact)
+            result = S.apply_direct(artifact, root=self.root, policy=self.policy, grant=grant,
+                                    used=self.direct_counts.get(grant["grant_id"], 0), confine=True,
+                                    expect_agent=agent)
+            self.direct_counts[grant["grant_id"]] = self.direct_counts.get(grant["grant_id"], 0) + 1
+            return result
         if kind == "apply-staged":
             return S.apply_staged(request.get("sid"), root=self.root, policy=self.policy, confine=True)
         if kind == "reject-staged":
@@ -406,6 +422,20 @@ class Runner:
         if kind == "list-staged":
             return {"staged": S.list_staged(self.root)}
         return S.show_staged(request.get("sid"), root=self.root)
+
+    def _require_direct_nonce(self, artifact: Any) -> None:
+        """A direct write's nonce must carry the narrow direct limits (R5 condition 4): one issued with the default
+        limits (before the grant loaded, or outside the runner) is refused."""
+        from agentteams import mcp_direct_grants as G
+
+        nonce = artifact.get("dispatch") if isinstance(artifact, dict) else None
+        row = P.dispatch_record(self.root, nonce)
+        if row is None:
+            raise P.ProposalError(P._CHANNEL_REFUSAL)
+        expires = datetime.fromisoformat(str(row.get("expires")))
+        if int(row.get("max_uses", P.DISPATCH_MAX_USES)) > G.DIRECT_MAX_USES or \
+                expires > datetime.now(UTC) + timedelta(hours=G.DIRECT_TTL_HOURS, minutes=1):
+            raise P.ProposalError("this nonce wasn't issued with the direct-write limits; re-dispatch the agent")
 
     def _open_session_dir(self, rel: str) -> int:
         """Open a session-writable queue dir without following a symlink anywhere in its last component."""

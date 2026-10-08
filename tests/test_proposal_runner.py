@@ -497,6 +497,8 @@ def test_direct_needs_a_verified_grant_and_never_deletes(runner):
     assert not refused["ok"] and "no verified direct-write grant" in refused["error"]
     runner.policy.direct_agents = frozenset({"producer"})
     runner.direct_grants = {"producer": {"grant_id": "g1", "expires": "2999-01-01T00:00:00+00:00", "max_writes": 5}}
+    nonce = P.issue_dispatch(runner.root, "producer", ttl_hours=4, max_uses=10)  # direct limits (R5 condition 4)
+    art = {**art, "dispatch": nonce}
     done = _roundtrip_on(runner, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, "mcp")
     assert done["ok"] and (runner.root / "src/a.py").read_text() == "y\n"
     delete = {"kind": "delete-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r",

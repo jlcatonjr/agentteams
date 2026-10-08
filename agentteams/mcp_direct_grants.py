@@ -79,11 +79,10 @@ def signed_values(record: dict[str, Any]) -> list[str]:
     Raises:
         KeyError: A bound field is missing.
     """
-    out = [PURPOSE_TAG]
-    for name in _FIELDS:
-        value = record[name]
-        out.append(",".join(value) if isinstance(value, list) else str(value))
-    return out
+    # One canonical JSON field (sorted keys, lists kept as arrays, no whitespace): no ',' / '|' / trimming
+    # ambiguity between distinct records (R5 review condition 1).
+    body = {name: record[name] for name in _FIELDS}
+    return [PURPOSE_TAG, json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)]
 
 
 def expected_binding(agent: str, policy: Policy, brief: dict[str, Any]) -> dict[str, Any]:
@@ -107,8 +106,12 @@ def expected_binding(agent: str, policy: Policy, brief: dict[str, Any]) -> dict[
         raise ProposalError(f"the brief's mcp_grants.{agent} doesn't ask for approval 'direct'")
     tools = [t for t in runner_mcp.TOOLS if t in (grant.get("tools") or [])]
     scopes = sorted(str(s) for s in (policy.agent_policies.get(agent) or {}).get("write_scopes") or [])
+    # Each gate bound by a hash of its whole definition, not just its name: a gate edited to always pass
+    # breaks the grant (R5 review condition 1).
+    gates = {name: hashlib.sha256(json.dumps(policy.gates[name], sort_keys=True).encode()).hexdigest()
+             for name in sorted(policy.gates)}
     return {"server": runner_mcp.SERVER_NAME, "tools": tools, "approval": "direct", "write_scopes": scopes,
-            "gates": sorted(policy.gates), "server_sha256": runner_mcp.SHA256}
+            "gates": gates, "server_sha256": runner_mcp.SHA256}
 
 
 def _require_bounded(binding: dict[str, Any]) -> None:
@@ -255,35 +258,76 @@ def active_grants(root: Path, policy: Policy, brief: dict[str, Any]) -> tuple[di
     return grants, problems, sha
 
 
-def check_write_allowed(root: Path, grant: dict[str, Any], *, now: datetime | None = None) -> None:
-    """Per write: the grant hasn't expired and its write cap isn't spent (@security C2).
+def count_direct_writes(root: Path) -> dict[str, int]:
+    """Direct writes per grant id in the ledger, counted only after the whole ledger verifies (R5 condition 3).
+
+    The runner calls this once at start and keeps the counts in memory, so deleting ledger rows or the ledger itself
+    can't reset a grant's write cap: a broken chain refuses here, and a missing ledger starts the runner afresh only
+    with the operator's restart.
 
     Args:
         root: The project root.
+
+    Returns:
+        ``grant id -> apply-direct rows``.
+
+    Raises:
+        ProposalError: The ledger doesn't verify (chain, head or signatures).
+    """
+    from agentteams import proposals as P
+
+    problems = P.verify_ledger(root) if (root / P.LEDGER_REL).exists() else []
+    if problems:
+        raise ProposalError("the proposal ledger doesn't verify, so direct-write counts can't be trusted: "
+                            + "; ".join(problems[:3]))
+    counts: dict[str, int] = {}
+    key = P._key()
+    ledger = root / P.LEDGER_REL
+    for line in (ledger.read_text(encoding="utf-8").splitlines() if ledger.exists() else []):
+        row = P._verified(key, line)
+        if row and row.get("action") == "apply-direct" and row.get("grant"):
+            counts[str(row["grant"])] = counts.get(str(row["grant"]), 0) + 1
+    return counts
+
+
+def check_write_allowed(grant: dict[str, Any], used: int, *, now: datetime | None = None) -> None:
+    """Per write: the grant hasn't expired and its write cap isn't spent (@security C2).
+
+    Args:
         grant: The verified grant.
+        used: Direct writes already made under it (the runner's in-memory count).
         now: The time to check against (tests).
 
     Returns:
         None.
 
     Raises:
-        ProposalError: The grant expired, or ``max_writes`` direct writes under it are already in the ledger.
+        ProposalError: The grant expired, or its ``max_writes`` are spent.
     """
-    from agentteams import proposals as P
-
     now = now or datetime.now(UTC)
     if datetime.fromisoformat(str(grant["expires"])) <= now:
         raise ProposalError(f"direct grant {grant['grant_id']!r} expired; stage the write instead")
-    used = 0
-    ledger = root / P.LEDGER_REL
-    key = P._key()
-    for line in (ledger.read_text(encoding="utf-8").splitlines() if ledger.exists() else []):
-        row = P._verified(key, line)  # only the runner's own signed rows count
-        if row and row.get("action") == "apply-direct" and row.get("grant") == grant["grant_id"]:
-            used += 1
     if used >= int(grant["max_writes"]):
         raise ProposalError(f"direct grant {grant['grant_id']!r} has used its {grant['max_writes']} writes; "
                             "stage further writes")
+
+
+def key_fingerprint(key_id: str) -> str:
+    """The sha256 of the operator verify key a grant names, for the runner's start-up ledger row (condition 2).
+
+    Args:
+        key_id: The key's id.
+
+    Returns:
+        A hex digest, or ``"unreadable"``.
+
+    Raises:
+        Nothing.
+    """
+    try:
+        return hashlib.sha256(_public_key(key_id).encode()).hexdigest()
+    except ProposalError:
+        return "unreadable"
 
 
 def sign_record(record: dict[str, Any], private_pem: str, *, password: bytes | None = None) -> dict[str, Any]:
@@ -306,5 +350,5 @@ def sign_record(record: dict[str, Any], private_pem: str, *, password: bytes | N
 
 
 __all__ = ["DIRECT_MAX_USES", "DIRECT_TTL_HOURS", "GRANTS_DIR", "MAX_ACTIVE", "MAX_DAYS", "MAX_WRITES", "PURPOSE_TAG",
-           "VERIFY_KEYS_DIR", "active_grants", "check_write_allowed", "expected_binding", "grants_file_for",
-           "read_grants", "sign_record", "signed_values", "verify"]
+           "VERIFY_KEYS_DIR", "active_grants", "check_write_allowed", "count_direct_writes", "expected_binding",
+           "grants_file_for", "key_fingerprint", "read_grants", "sign_record", "signed_values", "verify"]

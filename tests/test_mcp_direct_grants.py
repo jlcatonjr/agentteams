@@ -207,3 +207,57 @@ def test_claude_edit_tools_are_denied_the_operator_grant_stores():
     rules = se.permission_deny_rules("claude")
     for d in (se.MCP_GRANTS_DIR, se.OPERATOR_VERIFY_KEYS_DIR):
         assert f"Edit({d})" in rules and f"Edit({d}/**)" in rules
+
+
+# --- R5 review conditions -----------------------------------------------------------------------------------
+
+
+def test_the_signed_payload_keeps_lists_distinct():
+    """Condition 1: ["a,b"] and ["a", "b"] no longer sign the same bytes."""
+    base = {f: "x" for f in G._FIELDS}
+    one = G.signed_values({**base, "write_scopes": ["a,b"]})
+    two = G.signed_values({**base, "write_scopes": ["a", "b"]})
+    assert one != two and one[0] == G.PURPOSE_TAG
+
+
+def test_editing_a_gates_definition_breaks_the_grant(project, operator_key):
+    """Condition 1: gates are bound by definition, so a gate edited to always pass voids the grant."""
+    _sign(project, operator_key)
+    weakened = _brief(proposal_gates={"pyflakes": {"glob": "src/**.py", "argv": ["/usr/bin/true", "--always"]}})
+    (project / "brief.json").write_text(json.dumps(weakened))
+    grants, problems, _ = G.active_grants(project, _policy(project), weakened)
+    assert grants == {} and any("gates no longer matches" in p for p in problems)
+
+
+def test_a_broken_ledger_disables_direct_writes(project, operator_key):
+    """Condition 3: counts come from a verified ledger; a tampered one turns direct off rather than reset it."""
+    _sign(project, operator_key)
+    runner = _runner(project)
+    runner.close()
+    ledger = project / P.LEDGER_REL
+    ledger.write_text(ledger.read_text() + '{"action": "forged"}\n')
+    runner = _runner(project)
+    try:
+        assert runner.direct_grants == {} and any("doesn't verify" in p for p in runner.grant_problems)
+    finally:
+        runner.close()
+
+
+def test_a_nonce_with_default_limits_cannot_write_directly(project, operator_key):
+    """Condition 4: a nonce issued with the wider default limits is refused for direct writes."""
+    _sign(project, operator_key)
+    runner = _runner(project)
+    try:
+        wide = P.issue_dispatch(project, "producer")  # default 24 h / 25 uses
+        result = _direct(runner, wide, "y\n", hashlib.sha256(b"x = 1\n").hexdigest())
+        assert not result["ok"] and "direct-write limits" in result["error"]
+    finally:
+        runner.close()
+
+
+def test_apply_direct_requires_a_grant(project):
+    """Condition 5."""
+    from agentteams import proposal_staging as S
+
+    with pytest.raises(P.ProposalError, match="needs a verified grant"):
+        S.apply_direct({"kind": "change-proposal"}, root=project, policy=_policy(project), grant=None)

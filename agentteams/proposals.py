@@ -358,6 +358,26 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
     return nonce
 
 
+def dispatch_record(root: Path, nonce: Any) -> dict[str, Any] | None:
+    """The signed dispatch record for *nonce* (agent, limits, expiry), or None; counts nothing (R5).
+
+    Args:
+        root: The project root.
+        nonce: A dispatch nonce.
+
+    Returns:
+        The record, or None for a malformed or unknown nonce.
+
+    Raises:
+        ProposalError: No ledger key is configured.
+    """
+    if not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32}", nonce):
+        return None
+    key = _key()
+    ident = _nonce_id(key, nonce)
+    return next((r for r in _dispatch_rows(key, root) if r.get("id") == ident and "agent" in r), None)
+
+
 def agent_for(root: Path, nonce: Any, *, consume: bool = True, attempt: bool = False) -> str:
     """Return the agent a dispatch nonce was issued to, counting one use against it.
 
