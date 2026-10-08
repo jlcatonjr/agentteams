@@ -8,6 +8,18 @@ agent's policy, and alone writes the project or runs commands.
 > Source: `agentteams/runner_mcp.py` (install and launch facts) and `agentteams/data/agentteams-runner-mcp.py`
 > (the server: stdlib only, no `agentteams` import). Both are integrity-pinned. Granted in the brief's `mcp_grants`.
 
+## Generation (R6)
+
+Under `write_policy: "orchestrator-only"`, an agent named in `mcp_grants` is rendered as follows:
+- **Claude:** its narrowed read tools, plus the exact `mcp__agentteams_runner__<tool>` names, plus the canonical
+  inline `mcpServers` block, scoped to that subagent alone.
+- **Goose:** the canonical stdio extension with an exact `available_tools` list.
+- **Its write-policy section** tells it to write and execute through these tools.
+- **The orchestrator's section** gains the staged-approval commands.
+- **The server** is installed into `.agentteams/bin/`.
+- **The audit (`AR_WRITE_POLICY`)** allows exactly that rendering and nothing else. Any shell on a granted agent is
+  an error (@security C15). Agents without a grant, and teams without `mcp_grants`, render unchanged.
+
 ---
 
 ## Tools
@@ -44,4 +56,9 @@ Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runn
 | `SERVER_NAME`, `TOOLS` | `agentteams_runner`, and the five tool names; they match `proposal_policy.MCP_RUNNER_TOOLS`. |
 | `PROTECTED_PATH`, `PYTHON_FLAGS`, `SHA256` | Install path, launch flags and the pinned hash. |
 | `server_content() -> str` | The shipped server's source. |
-| `launch_args(agent, tools, approval="staged") -> list[str]` | The canonical arguments for one agent's instance. |
+| `launch_args(agent, tools, approval="staged") -> list[str]` | The canonical arguments for one agent's instance. There is no `--root`: the server derives the project root from its install location (`<root>/.agentteams/bin/`), so a launch from anywhere else fails to start and no machine path is written into the team. |
+| `SYSTEM_PYTHONS`, `interpreter() -> str` | The absolute, system-wide `python3` agents launch the server with (`/usr/bin/python3` first). Never one under a home directory or found via `PATH`. |
+| `tool_names(tools) -> list[str]` | Claude's exact names, `mcp__agentteams_runner__<tool>`. |
+| `claude_block(agent, tools, approval, python) -> str` | The canonical inline `mcpServers:` block for a granted Claude agent. |
+| `goose_extension(agent, tools, approval, python) -> dict` | The canonical Goose stdio extension, with an exact `available_tools` list. |
+| `install_files(manifest) -> list` | The server install (`../../.agentteams/bin/...`) when the switch is on and `mcp_grants` names someone. It refuses a packaged copy whose hash doesn't match. |

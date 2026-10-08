@@ -338,7 +338,8 @@ def serve(server: Server) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog=SERVER_NAME)
-    parser.add_argument("--root", required=True)
+    parser.add_argument("--root", default=None, help="the project root (default: derived from this file's install "
+                        "location, <root>/.agentteams/bin/; a copy launched from anywhere else must be given one)")
     parser.add_argument("--agent", required=True)
     parser.add_argument("--approval", choices=("staged", "direct"), default="staged")
     parser.add_argument("--tools", required=True, help="comma-separated granted tools")
@@ -348,7 +349,21 @@ def main(argv: list[str] | None = None) -> int:
     unknown = [t for t in tools if t not in TOOLS]
     if unknown or not tools:
         parser.error(f"--tools must be a non-empty list from {', '.join(TOOLS)}")
-    return serve(Server(Path(args.root), args.agent, args.approval, tools, max(0.0, min(args.wait, 120.0))))
+    root = Path(args.root) if args.root else _installed_root()
+    return serve(Server(root, args.agent, args.approval, tools, max(0.0, min(args.wait, 120.0))))
+
+
+def _installed_root() -> Path:
+    """The project root this copy is installed in (``<root>/.agentteams/bin/<this file>``), or exit.
+
+    Deriving the root from the install location, rather than from the launcher's working directory or an absolute
+    path baked into committed agent files, means a launch from the wrong directory fails to start instead of serving
+    the wrong project, and no machine path is written into the team.
+    """
+    here = Path(os.path.realpath(__file__))
+    if here.parent.name != "bin" or here.parent.parent.name != ".agentteams":
+        sys.exit("agentteams_runner: not installed under <project>/.agentteams/bin/; pass --root")
+    return here.parent.parent.parent
 
 
 if __name__ == "__main__":

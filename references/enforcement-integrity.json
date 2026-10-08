@@ -4,6 +4,7 @@
     ".github/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
     "agentteams/agent_doc_sync.py": "5689b5f000ed02f477ed2c4991886fe8bc00af1f47be4e51a035db83999b234e",
     "agentteams/atomicio.py": "f46a347095799d84845d52cc5f1e800cb7f43fcdf737c83a99f501add14f7214",
+    "agentteams/audit_agent_contract.py": "388612aa2ac99969c8d50583cd4d830be46746d179df016bf9a4bf54ba6ed2b5",
     "agentteams/branch_cleanup.py": "c479f18086b4a0766fb0f577731013a616e5cf802ec2f76161b46e1bf6f53350",
     "agentteams/branch_inventory.py": "5df2d88d8ba68ecea86b4cac410f6cdff5ad43c496c97801dce8d1bf7a46faef",
     "agentteams/cli/adopt_merge_gate.py": "573cf2e71d22d74d0b70dc7903f594927d25966beec74d123178d4d8bcb6b378",
@@ -20,7 +21,7 @@
     "agentteams/cli/signer_location.py": "2a2fe57dcc492cc9c7cce4c684cd92cf4b3010ff17861f75db91b81dc886cf29",
     "agentteams/cli/write_root_policy.py": "2cb952f2ba69e73a2fa6e9e215c55abfd5f1b5f1d4496f8cc9987f1ffe70bafe",
     "agentteams/confinement.py": "8ff28d776af577d0781d5509032faace56301fcdcef33df58e8362585b875591",
-    "agentteams/data/agentteams-runner-mcp.py": "48a40d0f09c7aa906b48edcf791a76153db89b07d338dbc76245069823d7fa34",
+    "agentteams/data/agentteams-runner-mcp.py": "6bbde08ce2e9673a3c4edb06672a55a82e65516d2d1ea84870f3d28e0bb4c259",
     "agentteams/data/goose-readfs-mcp.py": "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58",
     "agentteams/fences.py": "6700efaaa99670ab6f7c4a6ab6a00c47b726882e5faf4cadd334bbc590c44dee",
     "agentteams/frameworks/_goose_sandbox_emit.py": "083d37dc7c492feef687e05ede2bf76e370dbff8a05542787ed29f13ada52ddd",
@@ -32,7 +33,7 @@
     "agentteams/front_matter_merge.py": "694abb5e256034177d58265744933a75e9f6c01022edd6d90ee1b6a3bc705749",
     "agentteams/front_matter_reconcile.py": "3395885ee5045e729010f62ebe159653413e869bea8c7c44988addb3f1ad14d8",
     "agentteams/git_exec.py": "4ddf3486c7d54369907f2af17ad630d858fd6ab3dd2e6f8b0eeb402a965f7742",
-    "agentteams/integrity.py": "71a9deee06297d5e67ea893b916a470d3a0e2746b43d7868eb5f868d00b4f75a",
+    "agentteams/integrity.py": "fad1c1495e4aed0e54e50a62ccb707c4b3355c675b7eabd78a906fe898760f9d",
     "agentteams/learned_blocks.py": "365a2b2bf20161ed1ae84403e53469fe21ef26fa6c2cad3d2dc85d3fb625a02a",
     "agentteams/mcp_direct_grants.py": "c30c2dd8f32d222f6dea42ceb7caa082ae855b8f1e71a6ddd509def39db1d4ec",
     "agentteams/proposal_policy.py": "38abeed0499c06d61a6e53f36c7a72afea4a104cf9b9dba128c7af6c4bb1f461",
@@ -44,7 +45,7 @@
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
     "agentteams/redteam/registry.py": "72e3916101ff0686e53bec5eba4eeea6103963a0d00e3e24febca88a22db0046",
-    "agentteams/runner_mcp.py": "f6725f50469b63ae9ac6bac912871a76f3342caec1db4aafe48b0e0ef9217d1d",
+    "agentteams/runner_mcp.py": "205f02c4d4b073ea95dc196cc9aba7385faf3c6de38e78f12e7dc32aa00bc1b8",
     "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/shrink_allow.py": "2bd045b95e660362f082d803fd468eb564d7cc4354ccc43acfc6d2b52603d07a",
     "agentteams/templates/universal/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
@@ -52,7 +53,7 @@
     "agentteams/templates/universal/sandbox/confine-run.sh": "6779fa05d24b3befa2e3bee9c79aab32866c21e4e00a2405ed8fca6578f725a7",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
-    "agentteams/write_policy.py": "f77299b19ba107d3a8e1b6458412a8b10f8b896d2b5b07abf2b9796e95ca0c96"
+    "agentteams/write_policy.py": "93184d2524297aaef9c2d8d1729289433178ca0a0055efcdae007453ae5fbec7"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1

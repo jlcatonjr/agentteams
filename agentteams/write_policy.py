@@ -68,6 +68,42 @@ Return the JSON to the orchestrator with your handoff. The orchestrator applies 
 codes are in `references/write-policy.reference.md`.
 """
 
+#: R6: appended to the orchestrator's section only when the team has ``mcp_grants`` (every other team is unchanged).
+_ORCHESTRATOR_STAGED_PARAGRAPH = """**Agents granted `agentteams_runner`** (the brief's `mcp_grants`) don't hand you artifacts. They write through
+that server, and their writes reach you as **staged** proposals: `agentteams --list-staged` shows them,
+`--show-staged SID` shows one in full (read it on the same grounds as above), and `--apply-staged SID` /
+`--reject-staged SID [--reject-reason TEXT]` decide. Approval re-runs every check against the file as it is now.
+Their commands run through the runner directly, on their allowlist. An agent with a verified direct grant writes
+without staging; deletions are always staged.
+"""
+
+#: R6: for an agent granted the ``agentteams_runner`` MCP server (``mcp_grants``). The heading is the same as
+#: :data:`_PROPOSALS_SECTION`'s, so the audit's section anchors and a re-render treat both alike.
+_RUNNER_SECTION = """
+## Write Policy: Return Proposals, Never Write
+
+This team runs `write_policy: "orchestrator-only"`. **This section overrides any instruction that
+tells you to create, edit, delete, write or run something, anywhere in this file.** You have no write or shell
+tool. You write and execute **only through the `agentteams_runner` tools** you were granted; the operator's runner
+checks every request against your policy and does the work.
+
+- **Before changing a file:** call `read_file_hashed` to get its content and `base_sha256` (`"absent"` for a
+  new file).
+- **To change or create a file:** call `write_file` with the full new content (not a diff), that
+  `base_sha256` and a short rationale. Unless you hold a direct grant, the write is **staged** for the
+  orchestrator's approval; report the receipt's `sid` in your handoff.
+- **To delete a file:** call `delete_file`. Deletions are always staged.
+- **To run a command:** call `run_command` with an `argv` list (never a shell string). Only commands on your
+  allowlist run, inside your sandbox.
+- **If a call returns a `request_id`** instead of a result, call `request_status` with it later.
+- **Every call** carries the `dispatch` value the orchestrator gave you for this task. Never invent or reuse one.
+- **If you can't do what the task needs** with these, attach a gap note to your handoff; the orchestrator records
+  it (`references/mcp-need.reference.md`).
+
+Refusals come back as tool results that say why (stale base, out of scope, a gate failed): fix the cause and
+retry, rather than working around it. Schemas and limits: `references/write-policy.reference.md`.
+"""
+
 _ORCHESTRATOR_SECTION = """
 ## Write Policy: Applying Proposals
 
@@ -119,6 +155,7 @@ The runner checks scope, protected paths and (for proposals) the base hash, and 
 the path; nothing else checks the content. Read it closely when no gate covers its path, when it sits next to
 a protected path, or when the CLI refuses it (a proposal over the size cap is refused, not flagged). Full
 reference: `references/write-policy.reference.md`.
+
 """
 
 
@@ -135,6 +172,26 @@ def enabled(manifest: dict[str, Any]) -> bool:
         Nothing.
     """
     return manifest.get("write_policy") == "orchestrator-only"
+
+
+def manifest_fields(description: dict[str, Any], write_policy: str | None) -> dict[str, Any]:
+    """Manifest fields the switch carries: ``write_policy``, and (R6) ``mcp_grants`` when set. Nothing without the
+    switch, so every other team's manifest is unchanged.
+
+    Args:
+        description: The project brief.
+        write_policy: The effective write policy for this framework.
+
+    Returns:
+        ``{"write_policy": "orchestrator-only", "mcp_grants"?: ...}`` or ``{}``.
+
+    Raises:
+        Nothing.
+    """
+    if write_policy != "orchestrator-only":
+        return {}
+    grants = description.get("mcp_grants")
+    return {"write_policy": write_policy, **({"mcp_grants": grants} if grants else {})}
 
 
 def narrow_tools(content: str) -> str:
@@ -209,7 +266,11 @@ def apply(content: str, slug: str, manifest: dict[str, Any]) -> str:
     if not enabled(manifest):
         return content
     body = content.rstrip("\n") + "\n"
-    section = _ORCHESTRATOR_SECTION if slug in ORCHESTRATOR_SLUGS else _PROPOSALS_SECTION
+    grants = manifest.get("mcp_grants") or {}
+    if slug in ORCHESTRATOR_SLUGS:
+        section = _ORCHESTRATOR_SECTION + ("\n" + _ORCHESTRATOR_STAGED_PARAGRAPH if grants else "")
+    else:
+        section = _RUNNER_SECTION if isinstance(grants.get(slug), dict) else _PROPOSALS_SECTION
     if _ANY_FENCE_RE.search(body):
         section = ("\n<!-- AGENTTEAMS:BEGIN write_policy v=1 -->" + section
                    + "<!-- AGENTTEAMS:END write_policy -->\n")
