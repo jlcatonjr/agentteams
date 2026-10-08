@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (`proposal_run` api-reference page)
+
+- New `docs_src/api-reference/proposal-run.md` for the R2 carve-out of `proposals.run_request`, linked from the
+  api-reference index and the mkdocs nav. Restores `test_module_doc_ratchet` on `main`.
+- `test_config_dir_deny_does_not_touch_permissions_deny` now expects R5's four `Edit` deny rules for the
+  `mcp-grants` and `verify-keys` directories (the code added them in #166; the test was not updated).
+
 ### feat (generation and audit for MCP-mediated agent writes, phase R6)
 
 - **Granted agents are rendered with the server.** Under `write_policy: "orchestrator-only"`, an agent named in
