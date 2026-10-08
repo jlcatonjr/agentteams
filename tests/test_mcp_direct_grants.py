@@ -170,7 +170,7 @@ def _runner(project):
 def _direct(runner, nonce, content, base):
     art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "rationale": "r", "content": content,
            "base_sha256": base}
-    rid = R.enqueue(runner.root, {"kind": "apply-direct", "artifact": art, "via_agent": "producer"}, channel="mcp")
+    rid = R.enqueue(runner.root, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, channel="mcp")
     runner.serve_once()
     return R.wait_result(runner.root, rid, timeout=5)
 
@@ -204,7 +204,8 @@ def test_without_a_grant_direct_is_refused(project):
     try:
         nonce = P.issue_dispatch(project, "producer")
         result = _direct(runner, nonce, "y\n", hashlib.sha256(b"x = 1\n").hexdigest())
-        assert not result["ok"] and "no verified direct-write grant" in result["error"]
+        assert result["ok"] and result["result"]["staged"]  # no grant: the write stays staged
+        assert (project / "src/a.py").read_text() == "x = 1\n"
     finally:
         runner.close()
 

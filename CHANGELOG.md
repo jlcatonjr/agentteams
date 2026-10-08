@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     operator-signed grant verified at start, and a deletion never upgrades.
   - Generation can't produce a direct path, and an unsigned `approval: direct` simply stays staged.
   - Grants also bind `runner_mcp.MAP_VERSION`, so a change to the grantable surface voids them.
+  - `apply-direct` is no longer a request kind at all, only the runner's internal upgrade.
+- **Verification follow-ups:**
+  - in a team with grants, a shell on any non-orchestrator agent is an audit error (C4 relies on it);
+  - `--check-wiring` requires `sandbox.enabled` itself.
 
 ### feat (generation and audit for MCP-mediated agent writes, phase R6)
 

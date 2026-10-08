@@ -144,3 +144,24 @@ def test_goose_profile_must_deny_the_server_and_recipes(tmp_path):
     (tmp_path / ".goose" / "sandbox.sb").write_text("(deny file-write*\n    " + _seatbelt_path_expr(".agentteams")
                                                    + "\n    " + _seatbelt_path_expr(".goose/recipes") + ")\n")
     assert runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path) == []
+
+
+def test_a_team_with_grants_refuses_a_shell_on_any_non_orchestrator_agent():
+    """Verification condition 1: C4 relies on no non-orchestrator agent holding a shell."""
+    from agentteams.audit_agent_contract import _check_write_policy
+
+    agent = "---\nname: X\ndescription: \"x\"\ntools: Read, Grep, Bash\n---\nbody\n"
+    plain = _check_write_policy({"helper.md": agent}, agent_ext=".md", framework="claude", enabled=True)
+    granted = _check_write_policy({"helper.md": agent}, agent_ext=".md", framework="claude", enabled=True,
+                                  mcp_grants={"someone-else": {"tools": ["write_file"]}})
+    assert not [f for f in plain if f.severity == "error"]
+    assert [f for f in granted if f.severity == "error" and "queue a shell could read" in f.description]
+
+
+def test_the_sandbox_must_be_enabled_in_live_settings(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps({"permissions": {"deny": list(
+        runner_mcp.REQUIRED_CLAUDE_DENY)}, "sandbox": {"filesystem": {"denyWrite": [".agentteams", ".claude"]}}}))
+    problems = runner_mcp.wiring_problems(tmp_path, "claude", MANIFEST, home=tmp_path)
+    assert problems == ["live .claude/settings.json doesn't enable the sandbox (sandbox.enabled true); merge the "
+                        "emitted sandbox block (@security C4/C11)"]

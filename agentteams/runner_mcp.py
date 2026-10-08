@@ -273,7 +273,11 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
             if rule not in deny:
                 problems.append(f"live .claude/settings.json doesn't deny {rule} (@security C4/C11); merge the "
                                 "emitted permissions")
-        fs = ((data.get("sandbox") or {}).get("filesystem") or {}) if isinstance(data, dict) else {}
+        sandbox = (data.get("sandbox") or {}) if isinstance(data, dict) else {}
+        if sandbox.get("enabled") is not True:
+            problems.append("live .claude/settings.json doesn't enable the sandbox (sandbox.enabled true); merge the "
+                            "emitted sandbox block (@security C4/C11)")
+        fs = (sandbox.get("filesystem") or {})
         for rel in (".agentteams", ".claude"):
             if rel not in (fs.get("denyWrite") or []):
                 problems.append(f"live .claude/settings.json's sandbox doesn't denyWrite {rel} (@security C11); "

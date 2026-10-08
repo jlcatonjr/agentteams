@@ -51,12 +51,14 @@ HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 
 #: Request kinds the runner serves. Commands and gates run confined (P4b).
 KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger",
-         "stage-proposal", "apply-direct", "apply-staged", "reject-staged", "list-staged", "show-staged")
+         "stage-proposal", "apply-staged", "reject-staged", "list-staged", "show-staged")
+#: ``apply-direct`` is not a request kind: it exists only as the runner's own upgrade of a staged write from an agent
+#: with a verified grant (the single decision point, @security C1).
 #: The kinds the MCP channel may queue: a write is staged (or direct, with a verified signed grant), a command runs.
 #: Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
-MCP_KINDS = ("stage-proposal", "apply-direct", "run-request")
+MCP_KINDS = ("stage-proposal", "run-request")
 #: Kinds only the MCP channel may queue (the orchestrator applies its own writes with apply-proposal).
-MCP_ONLY_KINDS = ("stage-proposal", "apply-direct")
+MCP_ONLY_KINDS = ("stage-proposal",)
 #: Request directory -> channel.
 CHANNELS = {REQUESTS_REL: "orchestrator", MCP_REQUESTS_REL: "mcp"}
 REQUEST_MAX_BYTES = 2 * 1024 * 1024

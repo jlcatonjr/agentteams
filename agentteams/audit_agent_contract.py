@@ -891,6 +891,14 @@ def _check_write_policy(
         grant = (mcp_grants or {}).get(slug)
         errors, warnings = _write_policy_problems(content, agent_ext, framework, slug,
                                                   grant if isinstance(grant, dict) and grant.get("tools") else None)
+        if mcp_grants:
+            # A team with grants relies on no non-orchestrator agent holding a shell: only the built-in read tools
+            # are denied the queue, which briefly holds raw nonces (@security C4, verification condition 1).
+            shell = [w for w in warnings if "shell" in w or "unconfined until" in w]
+            warnings = [w for w in warnings if w not in shell]
+            errors = errors + [w.replace("which is unconfined until the P4 sandbox profiles",
+                                         "but this team grants agentteams_runner, whose queue a shell could read")
+                               for w in shell]
         for severity, problems in (("error", errors), ("warning", warnings)):
             for problem in problems:
                 findings.append(AuditFinding(
