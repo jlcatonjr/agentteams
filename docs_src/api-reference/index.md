@@ -112,7 +112,6 @@ This reference defines the **supported public API surface** (documented modules 
 | [`proposal_policy`](proposal-policy.md) | Orchestrator-only-writes pilot: the registered policy (brief validation and lint), re-exported by `proposals` |
 | [`mcp_direct_grants`](mcp-direct-grants.md) | Operator-signed direct-write grants: the only way an agent's MCP writes skip the orchestrator's approval (R5) |
 | [`runner_mcp`](runner-mcp.md) | The `agentteams_runner` MCP server: how granted agents write and execute through the runner (R4) |
-| [`proposal_run`](proposal-run.md) | The command-request half of the orchestrator-only-writes engine (carved out of `proposals`, R2) |
 | [`proposal_staging`](proposal-staging.md) | Staged and direct agent writes through the runner, and the orchestrator's approvals (R3) |
 | [`proposal_run`](proposal-run.md) | The command-request half of `proposals`: validates, runs and checks one allowlisted, agent-requested command (carved out at R2) |
 | [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
