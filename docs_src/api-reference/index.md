@@ -39,6 +39,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
+| [`env_hygiene`](env-hygiene.md) | `.env` files are gitignored and kept out of Docker build contexts (audit + append-only `--fix`) |
 | [`redteam`](redteam.md) | The `agentteams/redteam/` package — audit internals + corpus coverage/density (F2). The model-scoring + attack-generation *scripts* are in the [Red-Team Model Scoring & Attack Generation](../redteam-model-scoring-guide.md) guide |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
@@ -68,7 +69,7 @@ This reference defines the **supported public API surface** (documented modules 
 |--------|------|
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`architecture`](architecture.md) | Module-dependency map of a repository's own Python package, built from its imports |
-| [`git-hooks`](git-hooks.md) | Commit-triggered refresh of the topology and architecture maps (`--install-git-hooks`) |
+| [`git-hooks`](git-hooks.md) | Commit-triggered refresh of the topology and architecture maps (`--install-git-hooks`); blocking env-file guard |
 | [`model-routing`](model-routing.md) | Framework-neutral model-routing contracts for cost/capability tiering |
 | [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
 | [`eval-adapters`](eval-adapters.md) | Convert neutral eval-suite contracts into Inspect AI and OpenAI Evals artifacts |
