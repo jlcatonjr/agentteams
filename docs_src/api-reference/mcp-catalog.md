@@ -28,6 +28,7 @@ Credentials are referenced by name only (`GITHUB_PERSONAL_ACCESS_TOKEN`), never 
 |---|---|
 | `CATALOG_DIR` | `agentteams/templates/mcp/`. |
 | `CATALOG_KEYS` | `catalog_default`, `role_scope`, `pin`: stripped before an entry reaches the manifest. |
+| `ROLE_GROUPS` | Group tokens a `role_scope` may use: `@workstream-experts` stands for the manifest's `workstream_expert_slugs`. recall and gitread use it. |
 | `GITHUB_IDS` | `github-read`, `github-write`: the ids that bring in the PR agents and are withheld under the switch. |
 | `load_catalog() -> dict` | Every entry by `server_id`. Raises `ValueError` for an unreadable file or a `server_id` that does not match the file name. |
 | `selection(description) -> (opt_ins, excludes)` | Validates the brief's `mcp_catalog` and `mcp_catalog_exclude`. Raises `ValueError` for a non-list or an unknown id. |
@@ -42,7 +43,8 @@ Credentials are referenced by name only (`GITHUB_PERSONAL_ACCESS_TOKEN`), never 
    listed in `mcp_catalog`, with a notice.
 3. **Under `write_policy: "orchestrator-only"`** nothing from the catalogue is emitted. The defaults are not
    needed (the orchestrator uses the CLI and git directly) and the GitHub servers wait for P5's signed grants.
-4. Each server's `scope` is its `role_scope` intersected with the roster; with no match it is dropped.
+4. Each server's `scope` is its `role_scope` intersected with the roster, with `@workstream-experts` expanded to the
+   team's workstream experts. With no match, the server is dropped.
 5. A brief's own `mcp_servers` entry with the same `server_id` wins.
 
 With no MCP token and no opt-in, the manifest is untouched.

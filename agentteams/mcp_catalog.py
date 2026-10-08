@@ -6,7 +6,8 @@ plus catalogue-only keys (:data:`CATALOG_KEYS`) that are removed before the entr
 * ``catalog_default`` — ``True`` for the first-party read-only servers (``agentteams-recall``,
   ``agentteams-gitread``), which are on wherever MCP is enabled for the framework; ``False`` for opt-in templates
   (``github-read``, ``github-write``, ``fetch``);
-* ``role_scope`` — the agent slugs the server suits, intersected with the team's roster;
+* ``role_scope`` — the agent slugs the server suits, intersected with the team's roster; a group token from
+  :data:`ROLE_GROUPS` (``@workstream-experts``) stands for every agent in that manifest list;
 * ``pin`` — the vetted upstream release (C4), for third-party servers.
 
 :func:`expand` runs after ``manifest["host_features"]`` is set. It adds the selected servers to
@@ -35,6 +36,8 @@ CATALOG_DIR = Path(__file__).resolve().parent / "templates" / "mcp"
 CATALOG_KEYS = ("catalog_default", "role_scope", "pin")
 #: Catalogue ids that bring the PR agents (``pr-manager``, ``pr-notifier``) into the roster.
 GITHUB_IDS = frozenset({"github-read", "github-write"})
+#: ``role_scope`` group tokens, resolved against the manifest (a token is never itself an agent slug).
+ROLE_GROUPS = {"@workstream-experts": "workstream_expert_slugs"}
 #: Withheld under the switch until P5 (signed per-agent grants) lands.
 _WITHHELD_UNDER_SWITCH = GITHUB_IDS
 
@@ -114,6 +117,15 @@ def _mcp_on(features: list[str], framework_id: str) -> bool:
     return mcp_enabled(features)
 
 
+def _scope(role_scope: list[str], manifest: dict[str, Any], roster: set[str]) -> list[str]:
+    """``role_scope`` resolved to agent slugs in the roster: group tokens expand, order kept, no duplicates."""
+    out: list[str] = []
+    for item in role_scope:
+        members = (manifest.get(ROLE_GROUPS[item]) or []) if item in ROLE_GROUPS else [item]
+        out.extend(m for m in members if m in roster and m not in out)
+    return out
+
+
 def expand(manifest: dict[str, Any], framework_id: str) -> list[str]:
     """Add the selected catalogue servers to ``manifest["mcp_servers"]`` (mutated in place).
 
@@ -166,7 +178,7 @@ def expand(manifest: dict[str, Any], framework_id: str) -> list[str]:
                    else "not emitted (the orchestrator uses the CLI and git directly)")
             notices.append(f"{sid}: write_policy orchestrator-only — {why}.")
             continue
-        scope = [s for s in entry.get("role_scope") or [] if s in roster]
+        scope = _scope(entry.get("role_scope") or [], manifest, roster)
         if not scope:
             notices.append(f"{sid}: no agent in this team's roster matches its role scope; not emitted.")
             continue
@@ -178,4 +190,4 @@ def expand(manifest: dict[str, Any], framework_id: str) -> list[str]:
     return notices
 
 
-__all__ = ["CATALOG_DIR", "CATALOG_KEYS", "GITHUB_IDS", "expand", "load_catalog", "selection", "wants_pr_agents"]
+__all__ = ["CATALOG_DIR", "CATALOG_KEYS", "GITHUB_IDS", "ROLE_GROUPS", "expand", "load_catalog", "selection", "wants_pr_agents"]
