@@ -99,7 +99,7 @@ def stage_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, conf
 
 
 def apply_direct(artifact: dict[str, Any], *, root: Path, policy: Policy, confine: bool = False,
-                 expect_agent: str | None = None) -> dict[str, Any]:
+                 expect_agent: str | None = None, grant: dict[str, Any] | None = None) -> dict[str, Any]:
     """Apply an agent's change proposal at once, for an agent with a verified direct-write grant.
 
     Args:
@@ -108,14 +108,22 @@ def apply_direct(artifact: dict[str, Any], *, root: Path, policy: Policy, confin
         policy: The team's policy; the agent must be in ``policy.direct_agents``.
         confine: Run gates in the OS sandbox (the runner does).
         expect_agent: The MCP channel's server-instance agent (R2).
+        grant: The agent's verified grant (R5). Its expiry and write cap are checked first, and its id goes into
+            the ledger row, which is what the cap counts.
 
     Returns:
         As :func:`agentteams.proposals.apply_proposal`.
 
     Raises:
-        ProposalError: A deletion, an agent without a verified grant, or any check or gate refusing (logged).
+        ProposalError: A deletion, an agent without a verified grant, an expired or spent grant, or any check or
+            gate refusing (logged).
     """
-    return P._apply(artifact, root=root, policy=policy, confine=confine, expect_agent=expect_agent, mode="direct")
+    if grant:
+        from agentteams.mcp_direct_grants import check_write_allowed
+
+        check_write_allowed(root, grant)
+    return P._apply(artifact, root=root, policy=policy, confine=confine, expect_agent=expect_agent, mode="direct",
+                    ledger_extra={"grant": grant["grant_id"]} if grant else None)
 
 
 def _load(root: Path, sid: Any) -> tuple[Path, dict[str, Any]]:

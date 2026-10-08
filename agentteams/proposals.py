@@ -641,7 +641,8 @@ _ACTIONS = {"apply": "apply-proposal", "stage": "stage-proposal", "staged": "app
 
 def _apply(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False, allow_gates: bool = True,
            confine: bool = False, expect_agent: str | None = None, refuse_agents: frozenset[str] = frozenset(),
-           mode: str = "apply", as_agent: str | None = None) -> dict[str, Any]:
+           mode: str = "apply", as_agent: str | None = None,
+           ledger_extra: dict[str, Any] | None = None) -> dict[str, Any]:
     """The one validate-gate-act body behind :func:`apply_proposal` and :mod:`agentteams.proposal_staging` (R3).
 
     Modes:
@@ -713,7 +714,7 @@ def _apply(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: boo
                 return _staging().stage(root, artifact, agent, rel, gates=gate_results, size=size, new_hash=new_hash)
             record(root, {"action": action, "agent": agent, "path": rel, "base": artifact["base_sha256"],
                           "new": new_hash, "bytes": size, "gates": gate_results,  # bytes: P5 cost measurement
-                          "rationale": rationale.strip()[:300]})  # write-ahead
+                          "rationale": rationale.strip()[:300], **(ledger_extra or {})})  # write-ahead
             target.parent.mkdir(parents=True, exist_ok=True)
             _atomic_write_text(target, content)
         return {"agent": agent, "path": rel, "base_sha256": artifact["base_sha256"], "new_sha256": new_hash,

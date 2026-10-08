@@ -139,6 +139,16 @@ def _confined_hash(root: Path) -> str | None:
     return found[1] if found else None
 
 
+def _grants_hash(root: Path) -> str | None:
+    """The operator direct-grants file's hash now (None when absent); a custody failure counts as a change."""
+    from agentteams import mcp_direct_grants as G
+
+    try:
+        return G.read_grants(root)[1]
+    except P.ProposalError:
+        return "unreadable"
+
+
 def check_installed_readfs(root: Path) -> None:
     """Refuse to serve when the installed Goose read-only file server isn't the shipped one.
 
@@ -252,6 +262,7 @@ class Runner:
         except (OSError, ValueError, AttributeError) as exc:
             raise RunnerError(f"cannot read the brief: {exc}") from exc
         self.brief_sha = hashlib.sha256(raw).hexdigest()
+        self._brief = json.loads(raw)
         if switch != "orchestrator-only":
             # Without the switch, session sandboxes don't write-deny .agentteams/, so results could be forged.
             raise RunnerError('the brief does not set write_policy "orchestrator-only"; the runner serves only '
@@ -266,6 +277,14 @@ class Runner:
             raise RunnerError(f"unset {', '.join(leaked)} before starting the runner; it reads the key from its "
                               "key file only, and a confined child could read this process's environment")
         P.use_key_file(key_file)
+        # R5: verified operator-signed direct-write grants. Only these agents may write directly; the file is pinned.
+        from agentteams import mcp_direct_grants as G
+
+        try:
+            self.direct_grants, self.grant_problems, self.grants_sha = G.active_grants(self.root, policy, self._brief)
+        except P.ProposalError as exc:
+            raise RunnerError(f"direct-write grants: {exc}") from exc
+        policy.direct_agents = frozenset(self.direct_grants)
         (self.root / ".agentteams").mkdir(mode=0o700, exist_ok=True)
         self._lock_fd = os.open(self.root / LOCK_REL, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
@@ -288,6 +307,10 @@ class Runner:
             self.close()
             raise
         self._heartbeat()
+        if self.direct_grants or self.grant_problems:
+            P.record(self.root, {"action": "direct-grants-loaded",
+                                 "active": sorted(g["grant_id"] for g in self.direct_grants.values()),
+                                 "problems": [p[:200] for p in self.grant_problems][:10]})
         self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, name="agentteams-runner-heartbeat",
                                                   daemon=True)
         self._heartbeat_thread.start()
@@ -344,7 +367,13 @@ class Runner:
         ident = self._identity_args(request, channel)
         kind = request.get("kind")
         if kind == "issue-dispatch":
-            return {"nonce": P.issue_dispatch(self.root, str(request.get("agent") or ""))}
+            agent = str(request.get("agent") or "")
+            if agent in self.policy.direct_agents:  # @security C6: a direct agent's nonce is shorter-lived and narrower
+                from agentteams import mcp_direct_grants as G
+
+                return {"nonce": P.issue_dispatch(self.root, agent, ttl_hours=G.DIRECT_TTL_HOURS,
+                                                  max_uses=G.DIRECT_MAX_USES)}
+            return {"nonce": P.issue_dispatch(self.root, agent)}
         if kind == "apply-proposal":
             return P.apply_proposal(request.get("artifact"), root=self.root, policy=self.policy,
                                     dry_run=bool(request.get("dry_run")), confine=True, **ident)
@@ -365,8 +394,11 @@ class Runner:
             return S.stage_proposal(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
                                     expect_agent=ident.get("expect_agent"))
         if kind == "apply-direct":
+            agent = ident.get("expect_agent")
+            if str(agent) not in self.direct_grants:  # never on policy membership alone: the grant carries the caps
+                raise P.ProposalError(f"{agent} holds no verified direct-write grant; stage the proposal instead")
             return S.apply_direct(request.get("artifact"), root=self.root, policy=self.policy, confine=True,
-                                  expect_agent=ident.get("expect_agent"))
+                                  expect_agent=agent, grant=self.direct_grants.get(str(agent)))
         if kind == "apply-staged":
             return S.apply_staged(request.get("sid"), root=self.root, policy=self.policy, confine=True)
         if kind == "reject-staged":
@@ -443,6 +475,8 @@ class Runner:
             raise RunnerError("the brief changed since the runner started; restart it to load the new policy")
         if _confined_hash(self.root) != self.policy.confined_file_sha:
             raise RunnerError("the operator confined_programs file changed since the runner started; restart it")
+        if _grants_hash(self.root) != self.grants_sha:
+            raise RunnerError("the operator direct-grants file changed since the runner started; restart it")
         # Re-checked every poll. This DETECTS a swapped server and stops serving; it doesn't stop Goose launching
         # it. Prevention is the session sandbox's write-deny on .agentteams/ (--check-wiring requires it live).
         check_installed_servers(self.root)

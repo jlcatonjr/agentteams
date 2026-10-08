@@ -62,6 +62,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/proposal_staging.py",  # R3: staged/direct agent writes and the orchestrator's approvals
     "agentteams/runner_mcp.py",  # R4: the agentteams_runner server's install path and pinned hash
     "agentteams/data/agentteams-runner-mcp.py",  # R4: the server granted agents launch to write and execute
+    "agentteams/mcp_direct_grants.py",  # R5: the only way an agent's writes skip the orchestrator's approval
     "agentteams/frameworks/goose_tool_scoping.py",  # C-3 on Goose: declared tools -> recipe grants;
                                                      # a silent widening here re-arms every recipe
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a

@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (operator-signed direct-write grants, phase R5)
+
+- **New `agentteams/mcp_direct_grants.py`** (integrity-pinned). The runner honours an agent's `approval: direct`
+  only with a verified **operator Ed25519 grant**, signed under its own purpose tag.
+  - **Binding:** the grant binds the agent, tools, write scopes, gates, the installed server's hash, an expiry
+    (30 days at most) and a write cap. Drift from the live brief refuses it.
+  - **Storage:** grants live outside the project, in `~/.config/agentteams/mcp-grants/`, under the same custody
+    checks as `confined_programs`. Claude's built-in Edit and Write tools are denied that directory and the
+    operator verify-key store.
+  - **Runner:** at start it enforces an aggregate cap of three (more fails closed), pins the file and ledgers the
+    active grants. On every direct write it re-checks the expiry and counts its own signed rows against the cap.
+    A direct agent's nonces live 4 h, with 10 uses (@security C1, C2, C6).
+- **Operator commands:** `--sign-mcp-direct-grant AGENT` (with `--private-key`, `--key-id`, `--grant-days` and
+  `--max-writes`), `--list-mcp-direct-grants` and `--revoke-mcp-direct-grant`.
+
 ### feat (the agentteams_runner MCP server, phase R4)
 
 - **New first-party MCP server, `agentteams_runner`** (`agentteams/data/agentteams-runner-mcp.py`, stdlib only).
