@@ -18,6 +18,9 @@ Two public capabilities, exposed on the CLI as ``--refresh-graph`` and
   is what the installed hook invokes via ``python -m agentteams.git_hooks``.
 - :func:`install_pre_commit_hook` — write (or sentinel-merge) the refresh block
   into the repo's ``pre-commit`` hook, preserving any pre-existing hook body.
+  The same install adds the **blocking** env-file guard, which refuses a commit that
+  adds or modifies a ``.env`` file. It is a separate block placed before the
+  non-blocking refresh block. See :func:`_render_env_guard_block`.
 
 Determinism note
 ----------------
@@ -57,6 +60,10 @@ _AGENT_DIRS = (".github/agents", ".claude/agents")
 # hook. A pre-existing hook body outside these markers is preserved verbatim.
 _HOOK_BEGIN = "# >>> AGENTTEAMS:pipeline-graph-refresh >>>"
 _HOOK_END = "# <<< AGENTTEAMS:pipeline-graph-refresh <<<"
+# The blocking env-file guard is its own block so the refresh block stays non-blocking.
+_ENV_GUARD_BEGIN = "# >>> AGENTTEAMS:env-file-guard >>>"
+_ENV_GUARD_END = "# <<< AGENTTEAMS:env-file-guard <<<"
+_BLOCK_SENTINELS = ((_ENV_GUARD_BEGIN, _ENV_GUARD_END), (_HOOK_BEGIN, _HOOK_END))
 
 # Recovers the project name the pipeline last wrote, so the refresh preserves it
 # rather than re-inferring (which could differ and cause churn).
@@ -446,6 +453,49 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False) -
     )
 
 
+def _render_env_guard_block() -> str:
+    """Render the sentinel-delimited, **blocking** env-file guard for a pre-commit hook.
+
+    Refuses a commit that adds, copies, modifies or renames an env file (basename ``.env``,
+    ``.env.<suffix>`` or ``<name>.env``). Exempt: placeholder templates (any
+    ``example``/``sample``/``template`` name component), the same rule as
+    :func:`agentteams.env_hygiene.is_env_file`. Deletions are allowed (``--diff-filter=ACMR``), so
+    the ``git rm --cached`` commit that untracks an env file passes.
+
+    It captures ``$?`` on entry and restores it on exit, so a failing status from an earlier hook
+    body still reaches the refresh block's ``exit $_at_rc``. Bypass: ``git commit --no-verify``, or
+    a clone that never ran ``--install-git-hooks``. The server-side check is
+    ``python -m agentteams.env_hygiene``.
+
+    Returns:
+        The block text.
+
+    Raises:
+        Nothing.
+    """
+    return (
+        f"{_ENV_GUARD_BEGIN}\n"
+        "_at_env_rc=$?\n"
+        "# Auto-installed by `agentteams --install-git-hooks`. BLOCKING: refuses to commit\n"
+        "# an env file (.env, .env.*, *.env; .example/.sample/.template placeholders exempt).\n"
+        "# Deletions pass, so `git rm --cached .env.x` works. Bypass: git commit --no-verify.\n"
+        "if command -v git >/dev/null 2>&1; then\n"
+        "    _at_env_bad=\"$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR 2>/dev/null | awk -F/ '\n"
+        "        { n = $NF; l = tolower(n) }\n"
+        "        (n == \".env\" || n ~ /^\\.env\\./ || (n ~ /\\.env$/ && length(n) > 4)) &&\n"
+        "        l !~ /(^|\\.)(example|sample|template)(\\.|$)/ { print }')\"\n"
+        "    if [ -n \"$_at_env_bad\" ]; then\n"
+        "        echo \"agentteams: refusing to commit env file(s); .env files must stay gitignored:\" >&2\n"
+        "        printf '%s\\n' \"$_at_env_bad\" | sed 's/^/    /' >&2\n"
+        "        echo \"  unstage: git restore --staged <file>; then add it to .gitignore\" >&2\n"
+        "        exit 1\n"
+        "    fi\n"
+        "fi\n"
+        "(exit $_at_env_rc)\n"
+        f"{_ENV_GUARD_END}\n"
+    )
+
+
 def _strip_all_blocks(text: str) -> str:
     """Remove every agentteams sentinel block from ``text``, self-repairing.
 
@@ -455,17 +505,20 @@ def _strip_all_blocks(text: str) -> str:
     Duplicate blocks are all removed, so only one is ever re-appended.
     """
     out = text
-    while True:
-        begin = out.find(_HOOK_BEGIN)
-        if begin == -1:
-            return out
-        end = out.find(_HOOK_END, begin + len(_HOOK_BEGIN))
-        if end == -1:
-            return out[:begin]
-        after = end + len(_HOOK_END)
-        if after < len(out) and out[after] == "\n":
-            after += 1
-        out = out[:begin] + out[after:]
+    for begin_s, end_s in _BLOCK_SENTINELS:
+        while True:
+            begin = out.find(begin_s)
+            if begin == -1:
+                break
+            end = out.find(end_s, begin + len(begin_s))
+            if end == -1:
+                out = out[:begin]
+                break
+            after = end + len(end_s)
+            if after < len(out) and out[after] == "\n":
+                after += 1
+            out = out[:begin] + out[after:]
+    return out
 
 
 def _merge_hook_content(existing: str | None, block: str) -> str:
@@ -520,7 +573,7 @@ def install_pre_commit_hook(
     target_dir = hooks_dir if hooks_dir is not None else _resolve_hooks_dir(repo_root)
     hook_path = target_dir / "pre-commit"
 
-    block = _render_hook_block(at_path, code_index_hook=code_index_hook)
+    block = _render_env_guard_block() + _render_hook_block(at_path, code_index_hook=code_index_hook)
     existing = hook_path.read_text(encoding="utf-8") if hook_path.is_file() else None
     merged = _merge_hook_content(existing, block)
 

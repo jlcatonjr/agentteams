@@ -39,6 +39,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
+| [`env_hygiene`](env-hygiene.md) | `.env` files are gitignored and kept out of Docker build contexts (audit + append-only `--fix`) |
 | [`redteam`](redteam.md) | The `agentteams/redteam/` package — audit internals + corpus coverage/density (F2). The model-scoring + attack-generation *scripts* are in the [Red-Team Model Scoring & Attack Generation](../redteam-model-scoring-guide.md) guide |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
 | [`audit`](audit.md) | Post-generation static and AI-powered audit |
@@ -68,7 +69,7 @@ This reference defines the **supported public API surface** (documented modules 
 |--------|------|
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`architecture`](architecture.md) | Module-dependency map of a repository's own Python package, built from its imports |
-| [`git-hooks`](git-hooks.md) | Commit-triggered refresh of the topology and architecture maps (`--install-git-hooks`) |
+| [`git-hooks`](git-hooks.md) | Commit-triggered refresh of the topology and architecture maps (`--install-git-hooks`); blocking env-file guard |
 | [`model-routing`](model-routing.md) | Framework-neutral model-routing contracts for cost/capability tiering |
 | [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
 | [`eval-adapters`](eval-adapters.md) | Convert neutral eval-suite contracts into Inspect AI and OpenAI Evals artifacts |
@@ -113,6 +114,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`runner_mcp`](runner-mcp.md) | The `agentteams_runner` MCP server: how granted agents write and execute through the runner (R4) |
 | [`proposal_run`](proposal-run.md) | The command-request half of the orchestrator-only-writes engine (carved out of `proposals`, R2) |
 | [`proposal_staging`](proposal-staging.md) | Staged and direct agent writes through the runner, and the orchestrator's approvals (R3) |
+| [`proposal_run`](proposal-run.md) | The command-request half of `proposals`: validates, runs and checks one allowlisted, agent-requested command (carved out at R2) |
 | [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |
 | [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty), recorded in build-log.json and printed by `--version` |

@@ -35,6 +35,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - in a team with grants, a shell on any non-orchestrator agent is an audit error (C4 relies on it);
   - `--check-wiring` requires `sandbox.enabled` itself.
 
+### feat (security: `.env` files are always gitignored)
+
+- New `agentteams.env_hygiene` (`python -m agentteams.env_hygiene REPO … [--fix [--execute]]`) reports an env
+  file that is tracked or not ignored (high → HALT), and a Dockerfile that copies its whole build context without
+  a `.dockerignore` excluding `.env` (medium). `--fix` appends the missing ignore lines. It is a dry run by
+  default, refuses files with uncommitted changes, and never untracks.
+- `--install-git-hooks` now also installs a **blocking** `env-file-guard` pre-commit block, placed before the
+  non-blocking refresh block. It refuses to commit `.env` / `.env.*` / `*.env` files; `.example` / `.sample` /
+  `.template` placeholders and deletions (`git rm --cached`) pass. It restores the prior hook body's exit status.
+- Templates: security Rule S-1 gains the env-file bullets and two escalation-table rows; git-operations
+  Invariant Core gains rule 9 (never commit a `.env` file).
+
+### docs (`proposal_run` api-reference page)
+
+- New `docs_src/api-reference/proposal-run.md` for the R2 carve-out of `proposals.run_request`, linked from the
+  api-reference index and the mkdocs nav. Restores `test_module_doc_ratchet` on `main`.
+- `test_config_dir_deny_does_not_touch_permissions_deny` now expects R5's four `Edit` deny rules for the
+  `mcp-grants` and `verify-keys` directories (the code added them in #166; the test was not updated).
+
 ### feat (generation and audit for MCP-mediated agent writes, phase R6)
 
 - **Granted agents are rendered with the server.** Under `write_policy: "orchestrator-only"`, an agent named in

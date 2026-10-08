@@ -169,7 +169,13 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # whole in the retrofitted `content` fence at emit, and the deletion guards are enforced by the
     # integrity-pinned branch_cleanup.py. The new branch-lifecycle.reference.template.md carries its
     # own explicit fence, so it adds no file to the count. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 174), (
+    # 174 -> 175 (2026-10-08, env-file hygiene): +1 constraint line, git-operations.template.md
+    # Invariant rule 9 (never commit a `.env` file); per-file baseline raised 3 -> 4 in
+    # test_unfenced_constraint_ratchet.py. Same reasoning as rule 8: the template is wrapped whole
+    # in the `content` fence at emit, and the rule is enforced by the blocking env-file-guard hook
+    # (git_hooks) and `python -m agentteams.env_hygiene`. A named fence was tried and rejected: it
+    # unwraps the rest of the body. The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 175), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
         "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
     )
