@@ -807,7 +807,12 @@ The project-root roster is protect-if-present only. `--protect PATH` (repeatable
 path — `--protect "$PWD/.claude"` makes the whole config dir read-only, the Claude-block
 equivalent — and a missing `--protect` path is an exit-2 refusal, never a `mkdir`. `--check`
 prints the result on a `control-plane (ro)` line. Mechanism-verified (the launcher run end to
-end under bwrap), product-unverified; the macOS branch is unchanged.
+end under bwrap), product-unverified. **macOS (2026-10-07):** the same set (required-entry refusals,
+`--protect`, `--protect-prompt-roots`) is written into the Seatbelt profile after the allows, as
+`(deny file-write* (subpath P))` per protected path and `(deny file-write* (literal A))` per ancestor below a
+writable root (a rename lock). This is verified live on macOS by `mac-escape-tests.sh` Gate 8 and
+`tests/test_launcher_macos_control_plane.py`. A team missing a required entry is now refused on macOS too
+(run `agentteams --update`).
 
 **4. Dry-run / inspect before trusting it** — `--check` prints the effective sandbox and runs
 nothing:
