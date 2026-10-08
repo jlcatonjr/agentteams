@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (`proposal_run` api-reference page)
+
+- New `docs_src/api-reference/proposal-run.md` for the R2 carve-out of `proposals.run_request`, linked from the
+  api-reference index and the mkdocs nav. Restores `test_module_doc_ratchet` on `main`.
+
 ### feat (the agentteams_runner MCP server, phase R4)
 
 - **New first-party MCP server, `agentteams_runner`** (`agentteams/data/agentteams-runner-mcp.py`, stdlib only).
