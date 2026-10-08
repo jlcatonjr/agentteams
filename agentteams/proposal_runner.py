@@ -39,6 +39,9 @@ from agentteams.atomicio import FileTooLargeError, read_regular_nofollow, write_
 
 QUEUE_DIR_REL = ".agentteams-queue"
 REQUESTS_REL = ".agentteams-queue/requests"
+#: R2: the ``agentteams_runner`` MCP server's own queue. The runner derives a request's channel from the directory
+#: it arrived in, never from a field the sender writes.
+MCP_REQUESTS_REL = ".agentteams-queue/mcp-requests"
 ACKS_REL = ".agentteams-queue/acks"
 RESULTS_REL = ".agentteams/queue-results"
 CLAIMED_REL = ".agentteams/queue-claimed"
@@ -47,6 +50,10 @@ HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 
 #: Request kinds the runner serves. Commands and gates run confined (P4b).
 KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger")
+#: The kinds the MCP channel may queue. Everything else (dispatch, ledger checks, approvals) is the orchestrator's.
+MCP_KINDS = ("apply-proposal", "run-request")
+#: Request directory -> channel.
+CHANNELS = {REQUESTS_REL: "orchestrator", MCP_REQUESTS_REL: "mcp"}
 REQUEST_MAX_BYTES = 2 * 1024 * 1024
 HEARTBEAT_STALE_SECONDS = 15
 #: How often the heartbeat thread refreshes the heartbeat, independent of serving (R1): a long command no longer
@@ -163,7 +170,7 @@ class Runner:
             # Without the switch, session sandboxes don't write-deny .agentteams/, so results could be forged.
             raise RunnerError('the brief does not set write_policy "orchestrator-only"; the runner serves only '
                               "teams under the switch")
-        for rel in (".agentteams", QUEUE_DIR_REL, REQUESTS_REL, ACKS_REL, RESULTS_REL, CLAIMED_REL):
+        for rel in (".agentteams", QUEUE_DIR_REL, REQUESTS_REL, MCP_REQUESTS_REL, ACKS_REL, RESULTS_REL, CLAIMED_REL):
             if (self.root / rel).is_symlink():
                 raise RunnerError(f"{rel} is a symlink; refusing to serve")
         leaked = [name for name in P.KEY_ENV if os.environ.get(name)]
@@ -180,7 +187,7 @@ class Runner:
         except BlockingIOError as exc:
             os.close(self._lock_fd)
             raise RunnerError("another runner is already serving this project") from exc
-        for rel in (REQUESTS_REL, ACKS_REL):
+        for rel in (REQUESTS_REL, MCP_REQUESTS_REL, ACKS_REL):
             (self.root / rel).mkdir(parents=True, exist_ok=True)  # session-writable by design
         for rel in (RESULTS_REL, CLAIMED_REL):
             (self.root / rel).mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -221,7 +228,33 @@ class Runner:
     def _heartbeat(self) -> None:
         _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, str(time.time()).encode())
 
-    def _handle(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _route(self, request: dict[str, Any], channel: str) -> None:
+        """Refuse a request its channel may not carry (R2).
+
+        * MCP channel: only :data:`MCP_KINDS`, and the request's ``via_agent`` (the server instance's slug, fixed
+          in the agent's canonical front matter) must be the agent its nonce was issued to. A nonce read off the
+          queue by another agent's server then refuses, because that server names its own agent.
+        * Orchestrator channel: an agent in ``policy.mcp_agents`` may not act here at all. It writes and executes
+          only through its server, so a nonce taken from it can't be replayed through the CLI path.
+        """
+        kind = request.get("kind")
+        if kind not in ("apply-proposal", "run-request"):
+            if channel == "mcp":
+                raise RunnerError(f"the MCP channel can't queue {kind!r}")
+            return
+        artifact = request.get("artifact")
+        nonce = artifact.get("dispatch") if isinstance(artifact, dict) else None
+        agent = P.agent_for(self.root, nonce, consume=False)
+        if channel == "mcp":
+            if request.get("via_agent") != agent:
+                raise RunnerError("this server instance belongs to a different agent than the dispatch nonce; "
+                                  "refused")
+        elif agent in self.policy.mcp_agents:
+            raise RunnerError(f"{agent} writes and executes only through the agentteams_runner MCP server; refused "
+                              "on the orchestrator's queue")
+
+    def _handle(self, request: dict[str, Any], channel: str = "orchestrator") -> dict[str, Any]:
+        self._route(request, channel)
         kind = request.get("kind")
         if kind == "issue-dispatch":
             return {"nonce": P.issue_dispatch(self.root, str(request.get("agent") or ""))}
@@ -229,7 +262,7 @@ class Runner:
             return P.apply_proposal(request.get("artifact"), root=self.root, policy=self.policy,
                                     dry_run=bool(request.get("dry_run")), confine=True)
         if kind == "run-request":
-            cap = MCP_COMMAND_TIMEOUT if request.get("channel") == "mcp" else None
+            cap = MCP_COMMAND_TIMEOUT if channel == "mcp" else None
             return P.run_request(request.get("artifact"), root=self.root, policy=self.policy,
                                  dry_run=bool(request.get("dry_run")), confine=True, timeout_cap=cap)
         if kind == "verify-ledger":
@@ -243,7 +276,7 @@ class Runner:
         except OSError as exc:
             raise RunnerError(f"{rel} is not a plain directory (a symlink?); refusing to serve") from exc
 
-    def _serve_request(self, requests_fd: int, name: str) -> None:
+    def _serve_request(self, requests_fd: int, name: str, channel: str = "orchestrator") -> None:
         request_id = name[: -len(".json")]
         claimed = self.root / CLAIMED_REL / name
         claimed_fd = os.open(self.root / CLAIMED_REL, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -266,7 +299,7 @@ class Runner:
             if not isinstance(request, dict) or request.get("kind") not in KINDS:
                 raise RunnerError("unknown request kind")
             result["kind"] = request["kind"]
-            result["result"] = self._handle(request)
+            result["result"] = self._handle(request, channel)
             result["ok"] = True
         except P.UndeclaredWritesError as exc:
             result.update(error=str(exc), exit=3, result=exc.result)
@@ -310,18 +343,19 @@ class Runner:
         self._heartbeat()
         self._expire_results()
         served = 0
-        requests_fd = self._open_session_dir(REQUESTS_REL)
-        try:
-            for entry in sorted(os.scandir(requests_fd), key=lambda e: e.name):
-                if not (entry.name.endswith(".json") and _ID_RE.match(entry.name[: -len(".json")])):
-                    continue  # temp files, stray names: ignored, never opened
-                if not entry.is_file(follow_symlinks=False):
-                    os.unlink(entry.name, dir_fd=requests_fd)
-                    continue
-                self._serve_request(requests_fd, entry.name)
-                served += 1
-        finally:
-            os.close(requests_fd)
+        for rel, channel in CHANNELS.items():
+            requests_fd = self._open_session_dir(rel)
+            try:
+                for entry in sorted(os.scandir(requests_fd), key=lambda e: e.name):
+                    if not (entry.name.endswith(".json") and _ID_RE.match(entry.name[: -len(".json")])):
+                        continue  # temp files, stray names: ignored, never opened
+                    if not entry.is_file(follow_symlinks=False):
+                        os.unlink(entry.name, dir_fd=requests_fd)
+                        continue
+                    self._serve_request(requests_fd, entry.name, channel)
+                    served += 1
+            finally:
+                os.close(requests_fd)
         return served
 
     def serve_forever(self, *, poll_seconds: float = 0.3, should_stop: Callable[[], bool] = lambda: False) -> None:
@@ -363,12 +397,14 @@ def runner_alive(root: Path) -> bool:
         return False
 
 
-def enqueue(root: Path, request: dict[str, Any]) -> str:
+def enqueue(root: Path, request: dict[str, Any], *, channel: str = "orchestrator") -> str:
     """Queue *request* for the runner and return its id.
 
     Args:
         root: The project root.
         request: ``{"kind": ..., ...}``. It never carries a root, brief or policy: the runner pins those.
+        channel: ``"orchestrator"`` (the CLI) or ``"mcp"`` (the ``agentteams_runner`` server), which picks the
+            queue directory; the runner reads the channel from the directory.
 
     Returns:
         The request id.
@@ -380,8 +416,11 @@ def enqueue(root: Path, request: dict[str, Any]) -> str:
         raise RunnerError(f"no runner is serving this project (no fresh {HEARTBEAT_REL}); the operator starts one "
                           "outside any agent session: agentteams --serve-requests --project <root> "
                           "--description <brief>")
+    rel = {v: k for k, v in CHANNELS.items()}.get(channel)
+    if rel is None:
+        raise RunnerError(f"unknown channel {channel!r}")
     request_id = secrets.token_hex(16)
-    _write_new(root / REQUESTS_REL, f"{request_id}.json", json.dumps(request).encode())
+    _write_new(root / rel, f"{request_id}.json", json.dumps(request).encode())
     return request_id
 
 

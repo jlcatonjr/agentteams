@@ -68,6 +68,9 @@ class Policy:
     allow_unconfined: bool = False
     #: P5b: the sha256 of the operator-owned confined_programs file the policy came from (None: from the brief).
     confined_file_sha: str | None = None
+    #: R2 (mcp-mediated-agent-writes): agents that write and execute only through the ``agentteams_runner`` MCP
+    #: server. The runner refuses their artifacts on the orchestrator's queue. Populated from the brief's grants.
+    mcp_agents: frozenset[str] = field(default_factory=frozenset)
 
 
 # --- policy -------------------------------------------------------------------------------------
