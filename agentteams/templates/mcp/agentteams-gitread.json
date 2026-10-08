@@ -50,6 +50,7 @@
     "conflict-auditor",
     "code-hygiene",
     "git-operations",
-    "pr-manager"
+    "pr-manager",
+    "@workstream-experts"
   ]
 }

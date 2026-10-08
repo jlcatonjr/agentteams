@@ -440,6 +440,30 @@ def test_gitread_refuses_a_launch_directory_that_is_not_the_work_tree_root(repo)
         gitread.call("git_status", {}, repo / "sub")
 
 
+def test_workstream_experts_group_resolves_against_the_manifest():
+    m = _manifest(host_features=["claude:mcp"], workstream_expert_slugs=["parser-expert", "ghost-expert"])
+    m["agent_slug_list"].append("parser-expert")
+    mcp_catalog.expand(m, "claude")
+    by_id = {s["server_id"]: s for s in m["mcp_servers"]}
+    for sid in ("agentteams-recall", "agentteams-gitread"):
+        assert "parser-expert" in by_id[sid]["scope"]
+        assert "ghost-expert" not in by_id[sid]["scope"]  # not in the roster
+        assert "@workstream-experts" not in by_id[sid]["scope"]  # a token is never emitted as a slug
+
+
+def test_role_groups_are_not_valid_agent_slugs():
+    import re
+    for token in mcp_catalog.ROLE_GROUPS:
+        assert not re.fullmatch(r"[a-z0-9][a-z0-9-]*", token)
+
+
+def test_workstream_experts_group_never_reaches_a_non_expert():
+    """@security (C-3 review of #157): the group must not widen to governance/domain agents."""
+    m = _manifest(host_features=["claude:mcp"], workstream_expert_slugs=["security", "pr-notifier"])
+    mcp_catalog.expand(m, "claude")
+    recall_scope = {s["server_id"]: s["scope"] for s in m["mcp_servers"]}["agentteams-recall"]
+    assert "security" not in recall_scope and "pr-notifier" not in recall_scope
+
 # --- independent-verification findings (2026-10-07) -------------------------------------------------------------
 
 def test_gitread_refuses_a_gitdir_redirect_out_of_the_project(repo, tmp_path):

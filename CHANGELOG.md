@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (MCP catalogue: workstream experts can get recall and gitread)
+
+- `role_scope` accepts the group token `@workstream-experts`, which resolves to the team's workstream experts in
+  the roster. A token is never emitted as a slug. `agentteams-recall` and `agentteams-gitread` now include it, so a
+  team rendered with an MCP token gives its experts both servers. Before this, fixed slugs never matched an expert.
+  (Under `write_policy: "orchestrator-only"` nothing from the catalogue is emitted, as before.)
+
 ### fix (code index: a partition path can't leave the cache)
 
 - `_read_code_index` (used by `--query-code`, `--refresh-code-index` and the update path) joined each partition's
