@@ -490,3 +490,94 @@ def test_cli_refresh_graph_and_install(tmp_path):
     rc = build_team.main(["--refresh-graph", "--output", str(repo)])
     assert rc == 0
     assert (repo / ".github" / "agents" / "references" / "pipeline-graph.md").is_file()
+
+
+# ---------------------------------------------------------------------------
+# Env-file guard (blocking, separate block before the non-blocking refresh)
+# ---------------------------------------------------------------------------
+
+def _guarded_repo(tmp_path: Path, body: str | None = None) -> tuple[Path, Path]:
+    repo = tmp_path / "envrepo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@t.co")
+    _git(repo, "config", "user.name", "t")
+    hooks = repo / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    if body is not None:
+        (hooks / "pre-commit").write_text(body)
+    gh.install_pre_commit_hook(repo, agentteams_path=str(Path(gh.__file__).parent.parent), hooks_dir=hooks)
+    return repo, hooks / "pre-commit"
+
+
+def _commit(repo: Path, name: str, text: str = "x\n") -> subprocess.CompletedProcess:
+    (repo / name).parent.mkdir(parents=True, exist_ok=True)
+    (repo / name).write_text(text)
+    _git(repo, "add", "-f", name)
+    return _git(repo, "commit", "-q", "-m", f"add {name}")
+
+
+def test_env_guard_block_has_sentinels_and_restores_status():
+    block = gh._render_env_guard_block()
+    assert block.startswith(gh._ENV_GUARD_BEGIN + "\n_at_env_rc=$?\n")
+    assert block.rstrip().endswith(gh._ENV_GUARD_END)
+    assert "(exit $_at_env_rc)" in block
+    assert "--diff-filter=ACMR" in block       # deletions (git rm --cached) pass
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_install_puts_guard_before_refresh_block_which_stays_last(tmp_path):
+    _, hook = _guarded_repo(tmp_path, "#!/bin/sh\necho user-body\n")
+    text = hook.read_text()
+    assert text.index("user-body") < text.index(gh._ENV_GUARD_BEGIN) < text.index(gh._HOOK_BEGIN)
+    assert text.rstrip().endswith(gh._HOOK_END)
+    # re-install is idempotent and never duplicates either block
+    gh.install_pre_commit_hook(hook.parent.parent.parent, agentteams_path=str(Path(gh.__file__).parent.parent),
+                               hooks_dir=hook.parent)
+    again = hook.read_text()
+    assert again.count(gh._ENV_GUARD_BEGIN) == 1 and again.count(gh._HOOK_BEGIN) == 1
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+@pytest.mark.parametrize("name", [".env", ".env.production", "frontend/.env.local", "deploy/app.env"])
+def test_env_guard_refuses_env_files(tmp_path, name):
+    repo, _ = _guarded_repo(tmp_path)
+    result = _commit(repo, name)
+    assert result.returncode != 0
+    assert "refusing to commit env file" in result.stderr and name in result.stderr
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+@pytest.mark.parametrize("name", [".env.example", ".env.sample", "deploy/app.env.template", "dev.example.env",
+                                  ".envrc", "environment.yml", "README.md"])
+def test_env_guard_allows_placeholders_and_non_env_files(tmp_path, name):
+    repo, _ = _guarded_repo(tmp_path)
+    assert _commit(repo, name).returncode == 0
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_env_guard_allows_untracking_commit(tmp_path):
+    repo, hook = _guarded_repo(tmp_path)
+    hook.chmod(0o644)                       # seed a tracked .env with the hook disabled
+    assert _commit(repo, ".env.production").returncode == 0
+    hook.chmod(0o755)
+    _git(repo, "rm", "-q", "--cached", ".env.production")
+    assert _git(repo, "commit", "-q", "-m", "untrack").returncode == 0
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_env_guard_does_not_mask_prior_failing_body(tmp_path):
+    # A pre-existing body that ends in a failing command must still fail the hook.
+    repo, hook = _guarded_repo(tmp_path, "#!/bin/sh\nfalse\n")
+    proc = subprocess.run(["sh", str(hook)], cwd=repo, capture_output=True, text=True)
+    assert proc.returncode != 0
+
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+def test_env_guard_catches_non_ascii_path(tmp_path):
+    # core.quotePath would print "caf\303\251/.env", which the basename match would miss.
+    repo, _ = _guarded_repo(tmp_path)
+    _git(repo, "config", "core.quotePath", "true")
+    result = _commit(repo, "café/.env")
+    assert result.returncode != 0 and "refusing to commit env file" in result.stderr

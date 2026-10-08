@@ -183,6 +183,7 @@ nav:
       - drift: api-reference/drift.md
       - behavioral-drift: api-reference/behavioral-drift.md
       - scan: api-reference/scan.md
+      - env_hygiene: api-reference/env-hygiene.md
       - redteam: api-reference/redteam.md
       - session_scan: api-reference/session_scan.md
       - audit: api-reference/audit.md

@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (security: `.env` files are always gitignored)
+
+- New `agentteams.env_hygiene` (`python -m agentteams.env_hygiene REPO … [--fix [--execute]]`) reports an env
+  file that is tracked or not ignored (high → HALT), and a Dockerfile that copies its whole build context without
+  a `.dockerignore` excluding `.env` (medium). `--fix` appends the missing ignore lines. It is a dry run by
+  default, refuses files with uncommitted changes, and never untracks.
+- `--install-git-hooks` now also installs a **blocking** `env-file-guard` pre-commit block, placed before the
+  non-blocking refresh block. It refuses to commit `.env` / `.env.*` / `*.env` files; `.example` / `.sample` /
+  `.template` placeholders and deletions (`git rm --cached`) pass. It restores the prior hook body's exit status.
+- Templates: security Rule S-1 gains the env-file bullets and two escalation-table rows; git-operations
+  Invariant Core gains rule 9 (never commit a `.env` file).
+
 ### docs (`proposal_run` api-reference page)
 
 - New `docs_src/api-reference/proposal-run.md` for the R2 carve-out of `proposals.run_request`, linked from the

@@ -99,3 +99,13 @@ agentteams --update --code-index-hook              # opt IN to the code-index ca
 The installed hook calls `python -m agentteams.git_hooks --refresh` /
 `--refresh-architecture` / `--refresh-code-index` (the last only when the
 `--code-index-hook` guard was installed).
+
+## Env-file guard (blocking)
+
+The same install also writes an `AGENTTEAMS:env-file-guard` block **before** the refresh block, which stays last
+and non-blocking. The guard refuses a commit that adds, copies, modifies or renames an env file: a basename
+`.env`, `.env.<suffix>` or `<name>.env`. Placeholders (`.example` / `.sample` / `.template`) are exempt, and so are
+deletions, so a `git rm --cached` untracking commit passes. It saves `$?` on entry and restores it on exit, so a
+failing earlier hook body still fails the hook. The guard can be skipped with `git commit --no-verify`, and a clone
+that never ran `--install-git-hooks` doesn't have it. For a repository-wide check, use
+[`env_hygiene`](env-hygiene.md).
