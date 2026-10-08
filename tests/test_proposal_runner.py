@@ -383,7 +383,7 @@ def test_mcp_request_must_come_from_the_nonces_own_agent(runner):
     art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py",
            "base_sha256": hashlib.sha256(b"x = 1\n").hexdigest(), "content": "x = 2\n", "rationale": "r"}
     stolen = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": "reviewer"}, "mcp")
-    assert not stolen["ok"] and "different agent" in stolen["error"]
+    assert not stolen["ok"] and stolen["error"] == P._CHANNEL_REFUSAL
     assert (runner.root / "src/a.py").read_text() == "x = 1\n"
     own = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
     assert own["ok"], own
@@ -403,3 +403,20 @@ def test_an_mcp_agent_cannot_act_on_the_orchestrators_queue(runner):
 def test_unknown_channel_is_refused(runner):
     with pytest.raises(R.RunnerError, match="unknown channel"):
         R.enqueue(runner.root, {"kind": "verify-ledger"}, channel="side-door")
+
+
+def test_the_mcp_channel_gives_no_nonce_oracle(runner):
+    """@security R2 condition 2: unknown, expired or foreign nonces all get the same answer on the MCP channel."""
+    live = P.issue_dispatch(runner.root, "producer")
+    answers = set()
+    for nonce, via in (("0" * 32, "producer"), ("not-a-nonce", "producer"), (live, "reviewer")):
+        art = {"kind": "change-proposal", "dispatch": nonce, "path": "src/a.py", "base_sha256": "absent",
+               "content": "x\n", "rationale": "r"}
+        result = _roundtrip_on(runner, {"kind": "apply-proposal", "artifact": art, "via_agent": via}, "mcp")
+        answers.add(result["error"])
+    assert answers == {P._CHANNEL_REFUSAL}
+
+
+def test_mcp_requests_must_name_their_agent(runner):
+    result = _roundtrip_on(runner, {"kind": "run-request", "artifact": {}}, "mcp")
+    assert not result["ok"] and "via_agent" in result["error"]

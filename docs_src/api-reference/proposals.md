@@ -289,7 +289,7 @@ without the key.
 - `issue_dispatch(root, agent)` → nonce; `agent_for(root, nonce)` → agent
 - `load_policy(brief, *, brief_rel=None)` → `Policy`
 - `apply_proposal(artifact, *, root, policy, dry_run=False)` → `{agent, path, base_sha256, new_sha256, gates, written}`
-- `run_request(artifact, *, root, policy, dry_run=False, confine=False, timeout_cap=None)` → `{agent, argv, exit, stdout, stderr, truncated, undeclared_writes, ran}`. Each output stream is capped at `MAX_OUTPUT_BYTES` (256 KiB), and `truncated` says whether any was dropped. `timeout_cap` bounds the entry's timeout; the runner sets it for MCP-channel requests.
+- `run_request(artifact, *, root, policy, dry_run=False, confine=False, timeout_cap=None, expect_agent=None, refuse_agents=frozenset())` (implemented in `agentteams/proposal_run.py`, carved out under CH-07) → `{agent, argv, exit, stdout, stderr, truncated, undeclared_writes, ran}`. Each output stream is capped at `MAX_OUTPUT_BYTES` (256 KiB), and `truncated` says whether any was dropped. `timeout_cap` bounds the entry's timeout; the runner sets it for MCP-channel requests.
 - `record(root, entry)`, `verify_ledger(root)`
 - `ProposalError` (every refusal) and `UndeclaredWritesError` (the command ran; `.result` holds its output)
 

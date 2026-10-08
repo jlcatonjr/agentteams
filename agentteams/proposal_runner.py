@@ -265,43 +265,38 @@ class Runner:
     def _heartbeat(self) -> None:
         _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, str(time.time()).encode())
 
-    def _route(self, request: dict[str, Any], channel: str) -> None:
-        """Refuse a request its channel may not carry (R2).
+    def _identity_args(self, request: dict[str, Any], channel: str) -> dict[str, Any]:
+        """Channel rules for the proposal engine's identity check (R2).
 
-        * MCP channel: only :data:`MCP_KINDS`, and the request's ``via_agent`` (the server instance's slug, fixed
-          in the agent's canonical front matter) must be the agent its nonce was issued to. A nonce read off the
-          queue by another agent's server then refuses, because that server names its own agent.
-        * Orchestrator channel: an agent in ``policy.mcp_agents`` may not act here at all. It writes and executes
-          only through its server, so a nonce taken from it can't be replayed through the CLI path.
+        MCP channel: only :data:`MCP_KINDS`, and the nonce must resolve to the request's ``via_agent`` (the server
+        instance's slug, fixed in the agent's canonical front matter). The check runs inside the engine's own
+        attempt-counted lookup, and every nonce problem gives one uniform refusal, so the channel can't be used to
+        test whether a nonce is live or whose it is. Orchestrator channel: agents in ``policy.mcp_agents`` are
+        refused. ``via_agent`` is written by the sender: it stops an honest server replaying another agent's nonce,
+        not a tampered server or a hand-written request file. Against those the defence is that no agent can read
+        the queue (R1 Read denies, Goose readfs) and the server's launch integrity (R4).
         """
-        kind = request.get("kind")
-        if kind not in ("apply-proposal", "run-request"):
-            if channel == "mcp":
-                raise RunnerError(f"the MCP channel can't queue {kind!r}")
-            return
-        artifact = request.get("artifact")
-        nonce = artifact.get("dispatch") if isinstance(artifact, dict) else None
-        agent = P.agent_for(self.root, nonce, consume=False)
         if channel == "mcp":
-            if request.get("via_agent") != agent:
-                raise RunnerError("this server instance belongs to a different agent than the dispatch nonce; "
-                                  "refused")
-        elif agent in self.policy.mcp_agents:
-            raise RunnerError(f"{agent} writes and executes only through the agentteams_runner MCP server; refused "
-                              "on the orchestrator's queue")
+            if request.get("kind") not in MCP_KINDS:
+                raise RunnerError(f"the MCP channel can't queue {request.get('kind')!r}")
+            via = request.get("via_agent")
+            if not (isinstance(via, str) and via):
+                raise RunnerError("an MCP-channel request must name its server instance's agent (via_agent)")
+            return {"expect_agent": via}
+        return {"refuse_agents": self.policy.mcp_agents}
 
     def _handle(self, request: dict[str, Any], channel: str = "orchestrator") -> dict[str, Any]:
-        self._route(request, channel)
+        ident = self._identity_args(request, channel)
         kind = request.get("kind")
         if kind == "issue-dispatch":
             return {"nonce": P.issue_dispatch(self.root, str(request.get("agent") or ""))}
         if kind == "apply-proposal":
             return P.apply_proposal(request.get("artifact"), root=self.root, policy=self.policy,
-                                    dry_run=bool(request.get("dry_run")), confine=True)
+                                    dry_run=bool(request.get("dry_run")), confine=True, **ident)
         if kind == "run-request":
             cap = MCP_COMMAND_TIMEOUT if channel == "mcp" else None
             return P.run_request(request.get("artifact"), root=self.root, policy=self.policy,
-                                 dry_run=bool(request.get("dry_run")), confine=True, timeout_cap=cap)
+                                 dry_run=bool(request.get("dry_run")), confine=True, timeout_cap=cap, **ident)
         if kind == "verify-ledger":
             return {"problems": P.verify_ledger(self.root)}
         raise RunnerError("unknown request kind")

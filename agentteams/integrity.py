@@ -58,6 +58,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/proposal_policy.py",  # orchestrator-only-writes pilot: the policy half of proposals.py
     "agentteams/proposals.py",  # orchestrator-only-writes pilot: the one path that applies agents'
                                 # proposals and runs their commands; a silent widening defeats the policy
+    "agentteams/proposal_run.py",  # R2 carve: the command-request half of proposals.py (runs agents' commands)
     "agentteams/frameworks/goose_tool_scoping.py",  # C-3 on Goose: declared tools -> recipe grants;
                                                      # a silent widening here re-arms every recipe
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a

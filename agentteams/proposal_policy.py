@@ -24,6 +24,8 @@ from agentteams.frameworks._write_roots import control_plane_of
 DEFAULT_SIZE_CAP = 256 * 1024
 #: The longest per-entry command timeout (P5a); ``proposals`` re-exports it.
 MAX_COMMAND_TIMEOUT = 7200
+#: The ``agentteams_runner`` MCP server's tools, the only names an ``mcp_grants`` entry may grant (R2).
+MCP_RUNNER_TOOLS = ("write_file", "delete_file", "run_command", "request_status", "read_file_hashed")
 _SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "fish", "csh", "tcsh"})
 _GLOB_CHARS = "*?["
 #: P5c: the operator file's reserved key for gates' exec paths. The underscore can't collide with an agent slug.
@@ -207,7 +209,36 @@ def load_policy(brief: dict[str, Any], *, brief_rel: str | None = None,
         raise ProposalError(str(exc)) from exc
     return Policy(agents, gates, [str(p) for p in protected], brief_rel=brief_rel, confined=confined,
                   allow_unconfined=brief.get("allow_unconfined_runs") is True,
-                  confined_file_sha=confined_file[1] if confined_file is not None else None)
+                  confined_file_sha=confined_file[1] if confined_file is not None else None,
+                  mcp_agents=_mcp_agents(brief.get("mcp_grants")))
+
+
+def _mcp_agents(grants: Any) -> frozenset[str]:
+    """Validate the brief's ``mcp_grants`` (fail closed) and return the granted agents (R2).
+
+    Exact tool names from :data:`MCP_RUNNER_TOOLS` only, at least one, no duplicates; ``approval`` is ``staged``
+    or ``direct``; the orchestrator can't be named. Whether a ``direct`` grant is honoured is decided separately,
+    from an operator-signed grant record (R5): an unsigned one acts as ``staged``.
+    """
+    if grants is None:
+        return frozenset()
+    if not isinstance(grants, dict):
+        raise ProposalError("mcp_grants must be an object of agent -> grant")
+    for agent, grant in grants.items():
+        if not (isinstance(agent, str) and re.fullmatch(r"[a-z0-9][a-z0-9-]*", agent)):
+            raise ProposalError(f"mcp_grants: malformed agent slug {agent!r}")
+        if agent == "orchestrator":
+            raise ProposalError("mcp_grants: the orchestrator uses the CLI, not the agentteams_runner server")
+        if not isinstance(grant, dict) or set(grant) - {"tools", "approval"}:
+            raise ProposalError(f"mcp_grants.{agent}: only 'tools' and 'approval' are allowed")
+        tools = grant.get("tools")
+        if (not isinstance(tools, list) or not tools or len(set(tools)) != len(tools)
+                or any(t not in MCP_RUNNER_TOOLS for t in tools)):
+            raise ProposalError(f"mcp_grants.{agent}.tools must be distinct exact names from "
+                                f"{', '.join(MCP_RUNNER_TOOLS)} (no wildcard, never empty)")
+        if grant.get("approval", "staged") not in ("staged", "direct"):
+            raise ProposalError(f"mcp_grants.{agent}.approval must be 'staged' or 'direct'")
+    return frozenset(grants)
 
 
 def _merge_gate_exec(gates: dict[str, Any], gate_exec: Any, argv_digests: Any) -> dict[str, Any]:

@@ -545,10 +545,31 @@ def _check_shape(artifact: Any, kind: str) -> None:
         raise ProposalError(f"{kind}: missing {sorted(missing)}, unknown {sorted(extra)}")
 
 
-def _identity(root: Path, artifact: dict[str, Any], *, dry_run: bool = False) -> str:
-    """Resolve the agent from the artifact's nonce, without counting a use (see :func:`_consume`)."""
+#: The one refusal the MCP channel gives for any nonce problem (R2): no oracle for whether a nonce is live or whose.
+_CHANNEL_REFUSAL = "dispatch nonce refused on this channel"
+
+
+def _identity(root: Path, artifact: dict[str, Any], *, dry_run: bool = False, expect_agent: str | None = None,
+              refuse_agents: frozenset[str] = frozenset()) -> str:
+    """Resolve the agent from the artifact's nonce, counting an attempt but not a use (see :func:`_consume`).
+
+    ``expect_agent`` (the MCP channel's server-instance slug) must equal the resolved agent; every nonce problem
+    then yields one uniform message. ``refuse_agents`` (on the orchestrator's channel, the agents that act only
+    through their server) are refused after resolution.
+    """
     del dry_run  # a use is counted only once every check has passed, dry run or not (R1)
-    agent = agent_for(root, artifact.get("dispatch"), consume=False, attempt=True)
+    if expect_agent is not None:
+        try:
+            agent = agent_for(root, artifact.get("dispatch"), consume=False, attempt=True)
+        except ProposalError as exc:
+            raise ProposalError(_CHANNEL_REFUSAL) from exc
+        if agent != expect_agent:
+            raise ProposalError(_CHANNEL_REFUSAL)
+    else:
+        agent = agent_for(root, artifact.get("dispatch"), consume=False, attempt=True)
+    if agent in refuse_agents:
+        raise ProposalError(f"{agent} writes and executes only through the agentteams_runner MCP server; refused "
+                            "on the orchestrator's queue")
     claimed = artifact.get("agent")
     if claimed is not None and claimed != agent:
         raise ProposalError(f"artifact claims agent {claimed!r} but was dispatched to {agent!r}; refused")
@@ -587,7 +608,8 @@ def _check_base(root: Path, rel: str, base: Any) -> Path:
 
 
 def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
-                   allow_gates: bool = True, confine: bool = False) -> dict[str, Any]:
+                   allow_gates: bool = True, confine: bool = False, expect_agent: str | None = None,
+                   refuse_agents: frozenset[str] = frozenset()) -> dict[str, Any]:
     """Validate, gate and (unless ``dry_run``) apply one change or deletion proposal.
 
     Args:
@@ -600,6 +622,9 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
             of the key holder and can load session-writable code.
         confine: Run gates in the OS sandbox (the runner does). Refuses when none is usable, unless the
             brief's logged ``allow_unconfined_runs`` opt-out is set.
+        expect_agent: The MCP channel's server-instance agent; the nonce must resolve to it (R2).
+        refuse_agents: Agents refused on this channel (the runner passes ``policy.mcp_agents`` on the
+            orchestrator's queue, R2).
 
     Returns:
         ``{agent, path, base_sha256, new_sha256, gates, written}`` (``new_sha256`` is ``None`` for a deletion).
@@ -611,7 +636,7 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
     agent = "?"
     try:
         _check_shape(artifact, kind if kind in ("change-proposal", "delete-proposal") else "change-proposal")
-        agent = _identity(root, artifact, dry_run=dry_run)
+        agent = _identity(root, artifact, dry_run=dry_run, expect_agent=expect_agent, refuse_agents=refuse_agents)
         rationale = artifact.get("rationale")
         if not isinstance(rationale, str) or not rationale.strip():
             raise ProposalError("a non-empty rationale is required")
@@ -756,7 +781,8 @@ def _snapshot(root: Path, env: dict[str, str]) -> dict[str, Any] | None:
 
 
 def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
-                confine: bool = False, timeout_cap: int | None = None) -> dict[str, Any]:
+                confine: bool = False, timeout_cap: int | None = None, expect_agent: str | None = None,
+                refuse_agents: frozenset[str] = frozenset()) -> dict[str, Any]:
     """Validate and (unless ``dry_run``) run one command request.
 
     Args:
@@ -771,6 +797,8 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             before the write check, and the run fails.
         timeout_cap: An upper bound on the entry's timeout, in seconds (the runner sets one for requests that
             arrive through the MCP channel, so one long command can't hold the serial queue for minutes).
+        expect_agent: As in :func:`apply_proposal`.
+        refuse_agents: As in :func:`apply_proposal`.
 
     Returns:
         ``{agent, argv, exit, stdout, stderr, truncated, undeclared_writes, ran}``. Each output stream is capped
@@ -781,181 +809,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         ProposalError: The request is malformed or not allowed (nothing runs), or the command wrote outside its
             declared writes (it ran; the run fails). Refusals and failures are recorded in the ledger.
     """
-    agent = "?"
-    try:
-        _check_shape(artifact, "command-request")
-        agent = _identity(root, artifact, dry_run=dry_run)
-        argv, purpose = artifact.get("argv"), artifact.get("purpose")
-        if not (isinstance(argv, list) and argv and all(isinstance(a, str) for a in argv)):
-            raise ProposalError("argv must be a non-empty list of strings (never a shell string)")
-        if not isinstance(purpose, str) or not purpose.strip():
-            raise ProposalError("a non-empty purpose is required")
-        entry = _matching_entry(argv, agent, policy)
-        if entry is None:
-            raise ProposalError(f"{argv!r} is not on {agent}'s command allowlist; refused")
-        cwd_rel = artifact.get("cwd") or "."
-        if not isinstance(cwd_rel, str) or cwd_rel != (entry.get("cwd") or "."):
-            raise ProposalError(f"cwd must be the entry's pinned cwd {entry.get('cwd') or '.'!r}")
-        cwd = root if cwd_rel == "." else root / _rel_inside(root, cwd_rel)
-        expected = artifact.get("expected_writes") or []
-        if not (isinstance(expected, list) and all(isinstance(p, str) for p in expected)):
-            raise ProposalError("expected_writes must be a list of paths")
-        expected_rel = set()
-        for path in expected:
-            rel = _rel_inside(root, path)
-            allowed = entry.get("writes") or []
-            if not any(fnmatch.fnmatch(rel.lower(), str(g).lower()) for g in allowed):
-                _check_destination(root, rel, policy, agent)  # else it must be an ordinary scoped write
-            elif control_plane_of(rel, platform="darwin"):
-                raise ProposalError(f"{rel} is inside the control plane; no command may declare it")
-            elif policy.brief_rel and rel.lower() == policy.brief_rel.lower():
-                raise ProposalError(f"{rel} is the brief that defines this policy; refused (C-3)")
-            expected_rel.add(rel)
-        env = _scrubbed_env()
-        program = _resolve_program(root, argv[0], env)
-        jail = None
-        if confine:
-            jail = policy.confined.get(agent)
-            if jail is None:
-                raise ProposalError(f"{agent} has no confined_programs entry; the runner runs nothing unconfined")
-            if not _confinement.exec_allows(program, jail["exec"]):
-                raise ProposalError(f"{program} is outside {agent}'s confined exec paths; refused")
-            for rel in jail["write"]:
-                prefix = rel.strip("/").lower() + "/"
-                hit = _protected(prefix + "x", policy.protected_paths) or any(
-                    str(p).replace("\\", "/").lower().startswith(prefix) for p in policy.protected_paths) or (
-                    policy.brief_rel and _in_scope(policy.brief_rel, [prefix]))
-                if hit:
-                    raise ProposalError(f"confined_programs.{agent}.write {rel!r} covers a protected path or the "
-                                        "brief; changes there would count as declared")
-            try:  # before any snapshot or ledger row: a swapped root must refuse, not trip the write check
-                _confinement.check_roots(root, jail["exec"], jail["write"])
-            except _confinement.ConfinementError as exc:
-                raise ProposalError(f"confined_programs.{agent}: {exc}") from exc
-        stdin_bytes = None
-        spec = artifact.get("stdin_from_content")
-        if spec is not None:
-            if not (isinstance(spec, dict) and set(spec) == {"path", "content"} and isinstance(spec["path"], str)
-                    and isinstance(spec["content"], str)):
-                raise ProposalError("stdin_from_content must be exactly {path, content}")
-            if "stdin_gates" not in entry:
-                raise ProposalError("this command entry accepts no stdin content (no stdin_gates registered)")
-            _run_gates(root, _rel_inside(root, spec["path"]), spec["content"], list(entry["stdin_gates"]), policy,
-                       confine=confine)
-            stdin_bytes = spec["content"].encode("utf-8")
-        if dry_run:
-            return {"agent": agent, "argv": argv, "exit": None, "stdout": "", "stderr": "", "truncated": False,
-                    "undeclared_writes": [], "ran": False}
-        before = _snapshot(root, env)
-        if before is None:
-            raise ProposalError("the project is not a git worktree, or git's own paths could not be resolved; "
-                                "refusing to run unchecked (fail-closed)")
-        sandbox = _sandbox_for(policy) if jail is not None else None
-        confined_as = sandbox or ("unconfined-opt-out" if jail is not None else None)
-        _consume(root, artifact, agent)
-        record(root, {"action": "run-request-start", "agent": agent, "argv": argv, "purpose": purpose.strip()[:300],
-                      **({"confined": confined_as} if confined_as else {})})
-        before = _snapshot(root, env)  # re-taken after the write-ahead row, so only the command's changes count
-        timed_out, group_killed, survivors = False, False, False
-        # Per-entry timeout (P5a): a long check (e.g. a kernel audit) may set one, capped at MAX_COMMAND_TIMEOUT.
-        timeout = max(1, min(int(entry.get("timeout") or COMMAND_TIMEOUT), MAX_COMMAND_TIMEOUT))
-        if timeout_cap is not None:
-            timeout = max(1, min(timeout, int(timeout_cap)))
-        started = time.monotonic()
-        run_tmp = tempfile.mkdtemp(prefix="agentteams-run-") if jail is not None else None
-        command = [program, *argv[1:]]
-        if run_tmp is not None:
-            env = {**env, "TMPDIR": run_tmp}
-            try:
-                checked_roots = _confinement.check_roots(root, jail["exec"], jail["write"], Path(run_tmp))
-            except _confinement.ConfinementError as exc:
-                shutil.rmtree(run_tmp, ignore_errors=True)
-                raise ProposalError(f"confined_programs.{agent}: {exc}") from exc
-            if sandbox:
-                command = _confinement.wrap(command, sandbox=sandbox, root=root, cwd=cwd, exec_paths=jail["exec"],
-                                            write_roots=checked_roots, tmp_dir=Path(run_tmp))
-        try:
-            # Own process group, so a timeout kills everything the command started before the final check.
-            child = subprocess.Popen(command, cwd=cwd, env=env,
-                                     stdin=subprocess.PIPE if stdin_bytes is not None else subprocess.DEVNULL,
-                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False,
-                                     start_new_session=True)
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise ProposalError(f"command could not run: {exc}") from exc
-        try:
-            out, err = child.communicate(stdin_bytes, timeout=timeout)
-            proc = subprocess.CompletedProcess(argv, child.returncode, out, err)
-        except subprocess.TimeoutExpired:
-            # The command ran (partly): its writes and any ledger tampering must still be checked.
-            timed_out = True
-            try:
-                os.killpg(child.pid, 9)
-                group_killed = True
-            except ProcessLookupError:
-                group_killed = False  # the group had already exited; recorded on the timeout row
-            try:  # bounded: a grandchild that left the group (setsid) may still hold the pipes open
-                out, err = child.communicate(timeout=POST_KILL_DRAIN_SECONDS)
-            except subprocess.TimeoutExpired:
-                for stream in (child.stdout, child.stderr):
-                    if stream is not None:
-                        stream.close()
-                out, err = b"", b"[output abandoned: a process outside the killed group kept the pipes open]"
-            proc = subprocess.CompletedProcess(argv, -9, out or b"", err or b"")
-        if jail is not None:
-            # Anything the command left running could write after the snapshot: kill the group, fail the run.
-            try:
-                os.killpg(child.pid, 9)
-                survivors = True
-            except ProcessLookupError:
-                survivors = False  # the group is empty: nothing outlived the command
-            if run_tmp:
-                shutil.rmtree(run_tmp, ignore_errors=True)
-        after = _snapshot(root, env)
-        if after is None:
-            raise LedgerTamperedError("the git worktree vanished during the command; nothing more is recorded")
-        changed = {f for f, h in after.items() if before.get(f, "∅") != h} | (set(before) - set(after))
-        tampered = sorted(f for f in changed if f in (LEDGER_REL, HEAD_REL, DISPATCH_REL))
-        if tampered:
-            # Never chain onto a ledger the command altered: stop and leave it for the operator.
-            raise LedgerTamperedError(f"the command changed {', '.join(tampered)}; nothing more is recorded")
-        # Under confinement, the operator-declared write roots (build dirs) bound what the kernel let the command
-        # write, so changes inside them count as declared; anything else changed is still undeclared.
-        # Only when a sandbox actually ran: under the unconfined opt-out nothing at the OS level bounded them.
-        roots = [w.strip("/") + "/" for w in jail["write"]] if jail is not None and sandbox else []
-        def exempt(f: str) -> bool:  # inside a root, and never a protected file or the brief (any glob shape)
-            return bool(roots) and f.startswith(tuple(roots)) and not _protected(f, policy.protected_paths) \
-                and not (policy.brief_rel and f.lower() == policy.brief_rel.lower())
+    from agentteams.proposal_run import run_request as _run  # carved out (CH-07); imports this module back
 
-        undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f))
-        if timed_out:
-            record(root, {"action": "run-request-timeout", "agent": agent, "argv": argv,
-                          "duration_ms": int((time.monotonic() - started) * 1000),
-                          "group_killed": group_killed, "undeclared_writes": undeclared, "purpose": purpose.strip()[:300]})
-            raise UndeclaredWritesError(
-                f"command timed out after {timeout}s"
-                + (f"; it wrote outside its declared writes: {', '.join(undeclared)}" if undeclared else ""),
-                {"agent": agent, "argv": argv, "exit": -9, "stdout": _cap_output(proc.stdout)[0],
-                 "stderr": _cap_output(proc.stderr)[0],
-                 "truncated": _cap_output(proc.stdout)[1] or _cap_output(proc.stderr)[1],
-                 "undeclared_writes": undeclared, "ran": True})
-        duration_ms = int((time.monotonic() - started) * 1000)
-        record(root, {"action": "run-request", "agent": agent, "argv": argv, "exit": proc.returncode,
-                      "duration_ms": duration_ms,
-                      "undeclared_writes": undeclared, "purpose": purpose.strip()[:300],
-                      **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {})})
-        (stdout, cut_out), (stderr, cut_err) = _cap_output(proc.stdout), _cap_output(proc.stderr)
-        result = {"agent": agent, "argv": argv, "exit": proc.returncode, "duration_ms": duration_ms,
-                  "stdout": stdout, "stderr": stderr, "truncated": cut_out or cut_err,
-                  "undeclared_writes": undeclared, "ran": True}
-        if undeclared:
-            raise UndeclaredWritesError(f"command wrote outside its declared writes: {', '.join(undeclared)}", result)
-        if survivors:
-            raise UndeclaredWritesError("command left processes running after it exited; they were killed and "
-                                        "the run fails", result)
-        return result
-    except (UndeclaredWritesError, LedgerTamperedError):
-        raise  # recorded in the run-request row, or deliberately not recorded (tampered ledger)
-    except ProposalError as exc:
-        if not dry_run:
-            _record_refusal(root, "run-request", agent, str(exc))
-        raise
+    return _run(artifact, root=root, policy=policy, dry_run=dry_run, confine=confine, timeout_cap=timeout_cap,
+                expect_agent=expect_agent, refuse_agents=refuse_agents)
