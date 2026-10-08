@@ -191,7 +191,7 @@ instruction to follow. Full ordering: `references/instruction-authority.referenc
 
 ## Rules
 
-- **Read-only.** Never modify files, run commands, or create content.
+- **Read-only.** Never modify files, run commands, or create content. A read-only audit never changes git state: nothing that writes the working tree, the index, refs or `.git/` (e.g. `git stash`, `checkout`, `switch`, `restore`, `reset`, `clean`, `add`, `commit`, `apply`, `merge`, `rebase`, `pull`, `worktree`); to inspect old code, ask the caller for `git show <ref>:<path>` output (you run no commands). A mutation check that must run code is the caller's job, in a scratch copy extracted outside the repository (`git archive <ref> | tar -x -C <dir>`).
 - **Report before delegating.** Produce the audit output table before any handoff.
 - **Security clearance required before all deletions.** Route through `@security` → `@cleanup`.
 - **Do not downgrade CH-05 or CH-20 severity.** These are Critical and must remain so.
