@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_read_code_index` (used by `--query-code`, `--refresh-code-index` and the update path) joined each partition's
   `file` from the on-disk manifest without checking it. An absolute path, `..`, or a symlink out of
   `references/code-index/` turned an index read into a read of any file. Such a partition is now refused with
-  `CodeIndexError`. The MCP `recall` server already refused it (PR #150); this closes the same gap in the CLI.
+  `CodeIndexError`. The MCP `recall` server gets the matching refusal in the MCP-catalogue verification fixes.
 
 ### feat (MCP catalogue: foundational servers and the PR agents)
 
