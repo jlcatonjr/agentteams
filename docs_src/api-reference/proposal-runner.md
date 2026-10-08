@@ -41,6 +41,8 @@ and stops serving if the brief changes.
 | `Runner.serve_once()` / `serve_forever()` / `close()` | Serve the queue. Kinds: `issue-dispatch`, `apply-proposal`, `run-request`, `verify-ledger`. Every command and gate runs confined (P4b, [`confinement`](confinement.md)). An unconfined child of the key holder could load session-writable code and read the key. |
 | `enqueue(root, request) -> str` | Queue a request (CLI side). Refuses when no runner is alive. |
 | `wait_result(root, request_id, *, timeout=120.0) -> dict` | Wait for and acknowledge a result. |
+| `poll_result(root, request_id) -> dict \| None` | The result if ready (acknowledged), else `None`. Never blocks. Raises when the runner stopped answering. |
+| `MCP_COMMAND_TIMEOUT` | 120 s: the command cap for requests marked `"channel": "mcp"`. The queue is served one request at a time, because each command's write check diffs the worktree before and after it runs, so this bounds how long one agent's command holds the others. |
 | `runner_alive(root) -> bool` | Whether a heartbeat is fresh. |
 | `RunnerError` | A `ProposalError`: no runner, a second runner, a changed brief, a bad request. |
 
@@ -55,8 +57,10 @@ The runner refuses to start when:
 
 ## Crash recovery
 
-- **The heartbeat.** After a crash it goes stale, and the CLI refuses with "no runner is serving this
-  project". Restart the runner.
+- **The heartbeat.** Since R1 a background thread refreshes it every `HEARTBEAT_INTERVAL_SECONDS` (3 s),
+  independent of serving, so a long command no longer makes the runner look dead to agents queued behind it.
+  After a crash it goes stale, and the CLI refuses with "no runner is serving this project". Restart the
+  runner.
 - **The lock.** `.agentteams/runner.lock` is never deleted, on purpose. Its presence keeps the CLI in queue
   mode, so a later session can't fall back to signing with an environment key.
 - **Interrupted requests.** A request interrupted mid-claim stays in `.agentteams/queue-claimed/`, never

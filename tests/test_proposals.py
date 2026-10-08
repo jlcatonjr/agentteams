@@ -579,3 +579,62 @@ def test_entry_timeout_applies_and_duration_is_recorded(project, monkeypatch):
     result = P.run_request(_req(root, "x", [PY, "-c", "pass"]), root=root, policy=fast)
     assert isinstance(result["duration_ms"], int)
     assert '"duration_ms"' in (root / P.LEDGER_REL).read_text()
+
+
+# --- R1 (mcp-mediated-agent-writes): uses counted after validation, output caps, MCP timeout cap -------------
+
+
+def test_refused_artifacts_do_not_spend_nonce_uses(project):
+    """An agent iterating on a rejected write isn't locked out: only artifacts that act count a use."""
+    root, policy = project
+    nonce = P.issue_dispatch(root, "lean-prover", max_uses=2)
+    target = root / "lean/MathAgentsWIP/Foo.lean"
+    bad = {"kind": "change-proposal", "dispatch": nonce, "path": "lean/MathAgentsWIP/Foo.lean",
+           "base_sha256": "0" * 64, "content": "x\n", "rationale": "stale base on purpose"}
+    for _ in range(5):
+        with pytest.raises(P.ProposalError, match="stale base"):
+            P.apply_proposal(bad, root=root, policy=policy)
+    good = {**bad, "base_sha256": _sha(target), "content": "theorem foo : True := by trivial\n"}
+    assert P.apply_proposal(good, root=root, policy=policy)["written"]
+    good2 = {**good, "base_sha256": _sha(target), "content": "theorem foo : True := trivial\n"}
+    assert P.apply_proposal(good2, root=root, policy=policy)["written"]
+    with pytest.raises(P.ProposalError, match="used 2 times"):
+        P.apply_proposal({**good2, "base_sha256": _sha(target)}, root=root, policy=policy)
+
+
+def test_last_use_cannot_be_spent_twice(project):
+    """Validation no longer consumes, so the cap is re-checked at the moment of acting."""
+    root, policy = project
+    nonce = P.issue_dispatch(root, "lean-prover", max_uses=1)
+    target = root / "lean/MathAgentsWIP/Foo.lean"
+    art = {"kind": "change-proposal", "dispatch": nonce, "path": "lean/MathAgentsWIP/Foo.lean",
+           "base_sha256": _sha(target), "content": "theorem foo : True := by trivial\n", "rationale": "r"}
+    assert P.apply_proposal(art, root=root, policy=policy)["written"]
+    with pytest.raises(P.ProposalError, match="used 1 times"):
+        P.apply_proposal({**art, "base_sha256": _sha(target)}, root=root, policy=policy)
+
+
+def test_command_output_is_capped_and_flagged(project, monkeypatch):
+    root, _ = project
+    code = "import sys; sys.stdout.write('y' * 5000)"
+    policy = P.load_policy({"agent_policies": {"x": {"commands": [{"prefix": [PY, "-c", code], "args": []}]}}})
+    monkeypatch.setattr(P, "MAX_OUTPUT_BYTES", 1000)
+    result = P.run_request(_req(root, "x", [PY, "-c", code]), root=root, policy=policy)
+    assert len(result["stdout"]) == 1000 and result["truncated"] is True
+
+
+def test_short_output_is_not_flagged(project):
+    root, policy = project
+    argv = [PY, "-c", "import os; print(os.environ.get('AGENTTEAMS_DECISION_SIGNING_KEY'))"]
+    assert P.run_request(_req(root, "lean-prover", argv), root=root, policy=policy)["truncated"] is False
+
+
+def test_timeout_cap_bounds_the_entrys_timeout(project):
+    root, _ = project
+    code = "import time; time.sleep(30)"
+    policy = P.load_policy({"agent_policies": {"x": {"commands": [{"prefix": [PY, "-c", code], "args": [],
+                                                                    "timeout": 600}]}}})
+    started = time.monotonic()
+    with pytest.raises(P.UndeclaredWritesError, match="timed out after 2s"):
+        P.run_request(_req(root, "x", [PY, "-c", code]), root=root, policy=policy, timeout_cap=2)
+    assert time.monotonic() - started < 20

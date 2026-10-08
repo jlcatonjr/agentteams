@@ -909,6 +909,10 @@ def _inject_sandbox_block(
         # file server Goose launches) is the runner's alone. The sandbox's denyWrite doesn't bind the built-in
         # Write/Edit tools, so they need this rule too; CLI and runner writes don't go through those tools.
         rules.append(f"Edit(/{LEDGER_DIR_REL}/**)")
+        # R1 (@security C4): the request queue and the runner's results briefly hold raw dispatch nonces, so no
+        # agent's built-in Read/Grep/Glob may open them (the orchestrator's CLI reads results as a subprocess,
+        # which these tool rules don't bind). Goose's read-only file server already refuses both trees.
+        rules += [f"Read(/{LEDGER_DIR_REL}/**)", "Read(/.agentteams-queue/**)"]
     for rule in rules:
         if rule not in deny:
             deny.append(rule)
