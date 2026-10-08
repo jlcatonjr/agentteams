@@ -455,3 +455,11 @@ def test_role_groups_are_not_valid_agent_slugs():
     import re
     for token in mcp_catalog.ROLE_GROUPS:
         assert not re.fullmatch(r"[a-z0-9][a-z0-9-]*", token)
+
+
+def test_workstream_experts_group_never_reaches_a_non_expert():
+    """@security (C-3 review of #157): the group must not widen to governance/domain agents."""
+    m = _manifest(host_features=["claude:mcp"], workstream_expert_slugs=["security", "pr-notifier"])
+    mcp_catalog.expand(m, "claude")
+    recall_scope = {s["server_id"]: s["scope"] for s in m["mcp_servers"]}["agentteams-recall"]
+    assert "security" not in recall_scope and "pr-notifier" not in recall_scope

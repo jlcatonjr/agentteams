@@ -121,7 +121,10 @@ def _scope(role_scope: list[str], manifest: dict[str, Any], roster: set[str]) ->
     """``role_scope`` resolved to agent slugs in the roster: group tokens expand, order kept, no duplicates."""
     out: list[str] = []
     for item in role_scope:
-        members = (manifest.get(ROLE_GROUPS[item]) or []) if item in ROLE_GROUPS else [item]
+        if item in ROLE_GROUPS:  # a group reaches only its own kind of agent, whatever the manifest list holds
+            members = [m for m in manifest.get(ROLE_GROUPS[item]) or [] if str(m).endswith("-expert")]
+        else:
+            members = [item]
         out.extend(m for m in members if m in roster and m not in out)
     return out
 
