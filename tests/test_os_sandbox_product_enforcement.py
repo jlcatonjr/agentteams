@@ -623,7 +623,8 @@ def test_t_i4_settings_example_is_bash_unwritable(tmp_path: Path) -> None:
 # (measured, 2.1.251), so the paired baseline is the discriminator.
 
 _WRITE_TARGETS = (".claude/settings.hooks.example.json", ".claude/hooks/probe.py", ".claude/settings.local.json",
-                  "references/security-approvers.txt", ".goose/confined-run.example.sh")
+                  "references/security-approvers.txt", ".goose/confined-run.example.sh",
+                  ".codex/confined-run.example.sh")
 
 
 def _run_write_tool(project: Path, rel: str, mode: str) -> subprocess.CompletedProcess[str]:

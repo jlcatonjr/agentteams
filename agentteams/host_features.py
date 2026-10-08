@@ -51,13 +51,22 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # (honest fail-closed). The `goose` namespace lands here ahead of the goose bridge phase
     # (goose-integration.plan §5); bridge `goose:` tokens are still owed.
     "goose": frozenset({"mcp", "sandbox"}),
-    # codex: only `mcp` so far — wires operator-specified mcp_servers[] into
-    # .codex/config.toml (codex_mcp_emit.py). That module has always parsed the
-    # literal "codex:mcp" token itself, but the token could never reach it: CLI
-    # parsing validates against this table first (see host-features.md audit,
-    # api-doc-conformity-sweep, 2026-08-14) — this entry was simply never added
-    # when codex support landed elsewhere, so the token was rejected before emission.
-    "codex": frozenset({"mcp"}),
+    # codex: `mcp` wires operator-specified mcp_servers[] into .codex/config.toml
+    # (codex_mcp_emit.py). That module has always parsed the literal "codex:mcp" token
+    # itself, but the token could never reach it: CLI parsing validates against this
+    # table first (see host-features.md audit, api-doc-conformity-sweep, 2026-08-14) —
+    # this entry was simply never added when codex support landed elsewhere, so the
+    # token was rejected before emission. `sandbox` (Phase 1a, 2026-10-08):
+    # confined/exclusive expand to `codex:sandbox` (see _sandbox_token_for), which gates
+    # the operator-run `.codex/confined-run.example.sh` (Linux + macOS). Codex's own
+    # sandbox cannot nest inside the framework-neutral launcher `sandbox/confine-run.sh`,
+    # so that example runs Codex with `--sandbox danger-full-access` INSIDE the launcher,
+    # and the launcher is the boundary. Codex ignores a custom agent's `sandbox_mode`
+    # (spawned agents inherit the session's sandbox) and needs a writable CODEX_HOME that
+    # every agent command shares, so per-role limits on Codex stay INSTRUCTION-LEVEL only.
+    # Like goose:sandbox, the token records the REQUEST; generation cannot verify that
+    # Codex is actually launched through the example.
+    "codex": frozenset({"mcp", "sandbox"}),
     # C-4 (2026-08-26): `sandbox` removed from the bridge namespaces. The bridge writes only
     # subagent stubs into a foreign repo and never emits a `sandbox` settings block (bridge.py
     # wires subagents/hooks/schedule/cache-split/… but not sandbox), so accepting a
@@ -156,14 +165,20 @@ def _sandbox_token_for(framework: str | None) -> str:
     Claude Code was the first (and long the only) framework with an agentteams-configured
     OS sandbox. P1-1 makes the expansion framework-aware: ``goose`` maps to its own
     ``goose:sandbox`` token (macOS Seatbelt via ``GOOSE_SANDBOX``, emitted by
-    ``frameworks/_goose_sandbox_emit.py``). Every other framework (and a missing
+    ``frameworks/_goose_sandbox_emit.py``), and ``codex`` (Phase 1a, 2026-10-08) maps to
+    ``codex:sandbox`` (the operator-run ``.codex/confined-run.example.sh``, which runs Codex
+    inside the neutral launcher). Every other framework (and a missing
     framework) keeps ``claude:sandbox`` — preserving the historical framework-agnostic
     behavior: the token is harmless on a framework whose emitter never reads it, and the
     unenforceable-host request is surfaced by :func:`privilege_profile_advisory` either
     way. Note this is platform-INDEPENDENT: the token records the confinement REQUEST;
     :func:`is_sandbox_capable` decides whether the current OS can ENFORCE it.
     """
-    return "goose:sandbox" if framework == "goose" else "claude:sandbox"
+    if framework == "goose":
+        return "goose:sandbox"
+    if framework == "codex":
+        return "codex:sandbox"
+    return "claude:sandbox"
 
 
 #: The privilege_profile values the schema accepts. ``None`` is not in the set because a
@@ -220,7 +235,8 @@ def expand_privilege_profile(profile: str | None, framework: str | None = None) 
             parse operator input should first run :func:`validate_privilege_profile` so an
             unrecognized profile fails closed rather than silently expanding to nothing.
         framework: The target framework id. ``confined``/``exclusive`` expand to that
-            framework's sandbox token (``goose`` → ``goose:sandbox``); ``None`` or any other
+            framework's sandbox token (``goose`` → ``goose:sandbox``, ``codex`` →
+            ``codex:sandbox``); ``None`` or any other
             framework keeps ``claude:sandbox`` (the historical default). This is a REQUEST,
             platform-independent — enforceability is decided by :func:`is_sandbox_capable`.
 
@@ -409,8 +425,9 @@ def privilege_profile_advisory(
     Args:
         profile: The active ``privilege_profile`` (``cooperative``/``confined``/``exclusive``).
         framework_id: The target framework id (e.g. ``claude``, ``goose``).
-        host_features: The effective host-feature tokens; a direct ``claude:sandbox`` or
-            ``goose:sandbox`` token here also counts as a confinement request. ``None`` is
+        host_features: The effective host-feature tokens; a direct ``claude:sandbox``,
+            ``goose:sandbox`` or ``codex:sandbox`` token here also counts as a confinement
+            request. ``None`` is
             treated as empty.
         platform: Override for the platform string (defaults to live ``sys.platform``);
             forwarded to :func:`is_sandbox_capable` so callers/tests can evaluate the
@@ -425,7 +442,9 @@ def privilege_profile_advisory(
         target cannot enforce (or the host lacks the enforcing mechanism), else ``None``.
     """
     hf = list(host_features or [])
-    sandbox_token = next((t for t in ("claude:sandbox", "goose:sandbox") if t in hf), None)
+    sandbox_token = next(
+        (t for t in ("claude:sandbox", "goose:sandbox", "codex:sandbox") if t in hf), None
+    )
     requested = profile in {"confined", "exclusive"} or sandbox_token is not None
     if not requested:
         return None
@@ -482,6 +501,15 @@ def privilege_profile_advisory(
             ),
         }
 
+    # Codex (Phase 1a): name the emitted Codex wrapper, and the honest label, in both manual-wire
+    # advisories. Generation cannot verify that Codex is launched through it.
+    codex_note = (
+        " For Codex, run it through '.codex/confined-run.example.sh' (Codex's own sandbox off "
+        "inside the launcher, which is the boundary); per-role limits on Codex stay "
+        "instruction-level only, and agentteams cannot verify how Codex is launched."
+        if framework_id == "codex" else ""
+    )
+
     if plat.startswith("linux") and framework_id != "claude":
         # Enforcement IS emittable on Linux (the framework-neutral bwrap launcher), but for every
         # framework EXCEPT claude the launcher is the ONLY emitted boundary and it is NOT
@@ -505,7 +533,7 @@ def privilege_profile_advisory(
                 "nothing. For any cross-repo coordination_write_roots, pass each as "
                 "'--coord-root <sibling path>' (NOT --writable): --coord-root FAILS CLOSED if the "
                 "sibling is missing, whereas --writable would silently create an empty dir and mask "
-                "the misconfiguration."
+                "the misconfiguration." + codex_note
             ),
         }
 
@@ -534,7 +562,7 @@ def privilege_profile_advisory(
                 "no-new-privs; sole-proxy egress is loopback-only (remote-address control lives "
                 "out-of-band in PF). And the whole macOS path is ENFORCEMENT-UNVERIFIED until "
                 "'sandbox/mac-escape-tests.sh' passes UNNESTED, with its positive controls, on the "
-                "target box — wiring-verified is not enforcement-verified."
+                "target box — wiring-verified is not enforcement-verified." + codex_note
             ),
         }
 
@@ -577,7 +605,8 @@ def merge_profile_features(
         features: The explicitly-selected tokens (e.g. from --target-host-features).
         profile: The privilege_profile whose expansion is unioned in.
         framework: The target framework id, forwarded to :func:`expand_privilege_profile`
-            so ``goose`` unions ``goose:sandbox`` (not ``claude:sandbox``). ``None`` keeps
+            so ``goose`` unions ``goose:sandbox`` and ``codex`` unions ``codex:sandbox`` (not
+            ``claude:sandbox``). ``None`` keeps
             the historical ``claude:sandbox`` expansion.
 
     Returns:

@@ -23,7 +23,7 @@ from typing import Any
 
 #: Single-file prompt roots (project-relative).
 PROMPT_ROOT_FILES: tuple[str, ...] = (
-    ".github/copilot-instructions.md", "AGENTS.md", ".goosehints", "CLAUDE.md", "CLAUDE.local.md",
+    ".github/copilot-instructions.md", "AGENTS.md", "AGENTS.override.md", ".goosehints", "CLAUDE.md", "CLAUDE.local.md",
     ".mcp.json",
 )
 #: Directory prompt roots (project-relative), protected whole.

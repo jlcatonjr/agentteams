@@ -46,7 +46,7 @@ from agentteams.host_features import MAC_RESOURCE_CAPS, is_sandbox_capable
 # The canonical macOS-augmented launcher sha256. Handed back to baseAgent for its re-pin
 # (tests/test_confine_run_parity.py). A LITERAL pin (not a recompute) so any drift — a NETNS
 # rename, a UTF-8 re-encode, an accidental edit — fails loudly here.
-EXPECTED_LAUNCHER_SHA256 = "187bb211020edca1db7f9912703e7b8368d846dc7acd1d3214a4c3ebc1e6cd07"  # 2026-10-07: macOS F-4 parity
+EXPECTED_LAUNCHER_SHA256 = "6779fa05d24b3befa2e3bee9c79aab32866c21e4e00a2405ed8fca6578f725a7"  # 2026-10-08: .codex/confined-run.example.sh in the control plane
 
 _TEMPLATES_UNIVERSAL = Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "universal"
 _LAUNCHER_ASSET = _TEMPLATES_UNIVERSAL / _LAUNCHER_ASSET_REL

@@ -282,8 +282,9 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # pilot covers; every other framework renders as if the switch were off (outside the pilot's guarantee).
     scoped = description.get("write_policy_frameworks")
     if write_policy == "orchestrator-only" and scoped is not None:
-        if not (isinstance(scoped, list) and scoped and set(scoped) <= {"claude", "goose"}):
-            raise ValueError('write_policy_frameworks must be a non-empty list of "claude" and/or "goose"')
+        if not (isinstance(scoped, list) and scoped and set(scoped) <= {"claude", "goose", "codex"}):
+            raise ValueError('write_policy_frameworks must be a non-empty list of "claude", "goose" and/or '
+                             '"codex" (codex only when launched through .codex/confined-run.example.sh)')
         if framework not in scoped:
             print(f"  \u2139  write_policy orchestrator-only is scoped to {', '.join(scoped)}; the {framework} "
                   "team renders WITHOUT it (outside the pilot's guarantee).", file=sys.stderr)
@@ -297,9 +298,12 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         # Key custody (P4a, operator decision E): the out-of-session runner's key file is out of the
         # orchestrator's reach only where a session sandbox denies the key directory: claude and goose,
         # with a non-cooperative privilege_profile. Elsewhere the session could simply read it.
-        if framework not in ("claude", "goose"):
-            raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose only (their '
-                             f'session sandbox denies the ledger key); {framework} has no such sandbox')
+        # Phase 1a: codex too, with codex:sandbox in effect; agentteams' launcher masks the key directory when
+        # Codex runs through .codex/confined-run.example.sh. Generation can't verify that launch, so it says so.
+        if framework not in ("claude", "goose", "codex"):
+            raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose (their session sandbox '
+                             'denies the ledger key) and on codex only when launched through '
+                             f'.codex/confined-run.example.sh; {framework} has no such sandbox')
         if description.get("privilege_profile") == "cooperative":
             raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '
                              '"cooperative" turns it off')
@@ -308,6 +312,14 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         if description.get("privilege_profile") not in ("confined", "exclusive"):
             raise ValueError('write_policy "orchestrator-only" needs an explicit privilege_profile "confined" or '
                              '"exclusive" (the default leaves the Claude gate hook fail-open)')
+        if framework == "codex":
+            # The runner is emitted only where the launcher is (Linux, macOS); elsewhere nothing masks the key.
+            if not (sys.platform.startswith("linux") or sys.platform.startswith("darwin")):
+                raise ValueError('write_policy "orchestrator-only" on codex needs agentteams\' launcher, which is '
+                                 f'emitted only on Linux and macOS (this host: {sys.platform})')
+            print("  \u2139  write_policy on codex: KEY CUSTODY ONLY, and only via .codex/confined-run.example.sh (not "
+                  "verifiable here); every role can write the project; per-role limits are instruction-level.",
+                  file=sys.stderr)
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted
