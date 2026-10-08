@@ -219,8 +219,13 @@ every one.
 - **Gates can run without spending a use.** Dry runs execute gates, and since R1 a use is counted only when an
   artifact acts: after every check passes, right before the write, the deletion or the command. So refused
   artifacts don't count either, and one nonce can trigger unlimited gate runs. This is deliberate, so an agent
-  iterating on rejected attempts isn't locked out. Gates are registered by the operator, but they still run code
-  on agent-supplied content. Refusals are logged in the ledger.
+  iterating on rejected attempts isn't locked out. A separate attempt budget bounds it:
+  `DISPATCH_MAX_ATTEMPTS`, four times the use cap, counts every validated arrival, dry runs and refusals
+  included. Gates are registered by the operator, but they still run code on agent-supplied content. Refusals are
+  logged in the ledger.
+- **The Read deny rules bind only the built-in tools.** Under the switch, Claude's Read, Grep and Glob are denied
+  `.agentteams/**` and `.agentteams-queue/**`, which hold raw nonces in transit. A Bash command isn't bound by
+  them. Under the switch only the orchestrator keeps Bash.
 - **Writes outside the project** (e.g. `~/.gitconfig`, shell rc files) are not detected by this check. Under
   the runner, the sandbox refuses them.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and

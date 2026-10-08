@@ -320,3 +320,39 @@ def test_poll_result_never_blocks(runner):
     assert result is not None and result["ok"]
     with pytest.raises(R.RunnerError, match="bad request id"):
         R.poll_result(runner.root, "../x")
+
+
+def test_results_always_fit_the_read_back_limit():
+    """@security R1 condition 4: worst-case escaping (6 bytes per output byte) plus long lists still fit."""
+    worst = "\x01" * P.MAX_OUTPUT_BYTES
+    result = {"id": "a" * 32, "kind": "run-request", "ok": False, "error": "e" * 100000,
+              "result": {"stdout": worst, "stderr": worst, "undeclared_writes": [f"f{i}" for i in range(50000)]}}
+    data = R._fit_result(result)
+    assert len(data) <= R.RESULT_MAX_BYTES
+    back = json.loads(data)
+    assert back["result_cut"] is True and back["id"] == "a" * 32
+
+
+def test_close_leaves_no_late_heartbeat(project, key_file, monkeypatch):
+    """@security R1 condition 3."""
+    root, policy = project
+    monkeypatch.setattr(R, "HEARTBEAT_INTERVAL_SECONDS", 0.01)
+    r = R.Runner(root, root / "brief.json", policy)
+    time.sleep(0.1)
+    r.close()
+    time.sleep(0.2)
+    assert not (root / R.HEARTBEAT_REL).exists()
+
+
+def test_a_stalled_serve_loop_stops_the_heartbeat(project, key_file, monkeypatch):
+    """@security R1 condition 2: a stuck main thread can't hide behind a live heartbeat."""
+    root, policy = project
+    monkeypatch.setattr(R, "HEARTBEAT_INTERVAL_SECONDS", 0.05)
+    monkeypatch.setattr(R, "STALL_SECONDS", 0.2)
+    monkeypatch.setattr(R, "HEARTBEAT_STALE_SECONDS", 0.3)
+    r = R.Runner(root, root / "brief.json", policy)
+    try:
+        time.sleep(0.8)  # no serve_once: no progress
+        assert not R.runner_alive(root) and "no progress" in (r.heartbeat_error or "")
+    finally:
+        r.close()

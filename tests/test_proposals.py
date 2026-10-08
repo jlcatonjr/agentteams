@@ -638,3 +638,30 @@ def test_timeout_cap_bounds_the_entrys_timeout(project):
     with pytest.raises(P.UndeclaredWritesError, match="timed out after 2s"):
         P.run_request(_req(root, "x", [PY, "-c", code]), root=root, policy=policy, timeout_cap=2)
     assert time.monotonic() - started < 20
+
+
+def test_attempts_are_bounded_even_though_refusals_are_free(project, monkeypatch):
+    """@security R1 condition 1: refusals and dry runs don't spend uses, but they do spend a wider attempt budget."""
+    root, policy = project
+    monkeypatch.setattr(P, "DISPATCH_MAX_ATTEMPTS", 3)
+    nonce = P.issue_dispatch(root, "lean-prover")
+    bad = {"kind": "change-proposal", "dispatch": nonce, "path": "lean/MathAgentsWIP/Foo.lean",
+           "base_sha256": "0" * 64, "content": "x\n", "rationale": "stale"}
+    for _ in range(3):
+        with pytest.raises(P.ProposalError, match="stale base"):
+            P.apply_proposal(bad, root=root, policy=policy)
+    with pytest.raises(P.ProposalError, match="3 attempts"):
+        P.apply_proposal(bad, root=root, policy=policy, dry_run=True)
+
+
+def test_a_grandchild_holding_the_pipes_cannot_hang_the_runner(project, monkeypatch):
+    """@security R1 condition 2: after the group kill, draining the pipes is bounded."""
+    root, _ = project
+    code = ("import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], "
+            "start_new_session=True); time.sleep(60)")
+    policy = P.load_policy({"agent_policies": {"x": {"commands": [{"prefix": [PY, "-c", code], "args": []}]}}})
+    monkeypatch.setattr(P, "POST_KILL_DRAIN_SECONDS", 1)
+    started = time.monotonic()
+    with pytest.raises(P.UndeclaredWritesError, match="timed out"):
+        P.run_request(_req(root, "x", [PY, "-c", code]), root=root, policy=policy, timeout_cap=1)
+    assert time.monotonic() - started < 30
