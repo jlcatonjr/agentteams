@@ -174,6 +174,55 @@ def check_installed_readfs(root: Path) -> None:
                           "serve. Re-render the team with this agentteams install to reinstall it")
 
 
+def check_installed_runner_mcp(root: Path) -> None:
+    """Refuse to serve when the installed ``agentteams_runner`` MCP server isn't the shipped one (R4).
+
+    Same model as :func:`check_installed_readfs`: the copy every granted agent launches lives in the control plane,
+    and the runner, the trust anchor outside every session, checks it against the integrity-pinned
+    ``runner_mcp.SHA256``. A team with no installed copy (no grants) passes.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        None.
+
+    Raises:
+        RunnerError: The installed copy is a symlink, not a regular file, or doesn't match the pinned hash.
+    """
+    from agentteams.runner_mcp import PROTECTED_PATH, SHA256
+
+    path = root / PROTECTED_PATH
+    for parent in (path.parent.parent, path.parent):
+        if parent.is_symlink():
+            raise RunnerError(f"{parent.relative_to(root)} is a symlink; refusing to serve")
+    if not path.exists() and not path.is_symlink():
+        return
+    try:
+        data = _read_regular(path, 4 * 1024 * 1024)
+    except (OSError, RunnerError) as exc:
+        raise RunnerError(f"{PROTECTED_PATH} is not a regular file ({exc}); refusing to serve") from exc
+    if hashlib.sha256(data).hexdigest() != SHA256:
+        raise RunnerError(f"{PROTECTED_PATH} doesn't match the shipped agentteams_runner server; refusing to serve. "
+                          "Re-render the team with this agentteams install to reinstall it")
+
+
+def check_installed_servers(root: Path) -> None:
+    """Both control-plane MCP servers: Goose's read-only file server and ``agentteams_runner``.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        None.
+
+    Raises:
+        RunnerError: Either installed copy is not the shipped one.
+    """
+    check_installed_readfs(root)
+    check_installed_runner_mcp(root)
+
+
 # --- the runner ---------------------------------------------------------------------------------
 
 
@@ -234,7 +283,7 @@ class Runner:
         self.heartbeat_error: str | None = None
         self._heartbeat_thread: threading.Thread | None = None
         try:
-            check_installed_readfs(self.root)
+            check_installed_servers(self.root)
         except RunnerError:
             self.close()
             raise
@@ -396,7 +445,7 @@ class Runner:
             raise RunnerError("the operator confined_programs file changed since the runner started; restart it")
         # Re-checked every poll. This DETECTS a swapped server and stops serving; it doesn't stop Goose launching
         # it. Prevention is the session sandbox's write-deny on .agentteams/ (--check-wiring requires it live).
-        check_installed_readfs(self.root)
+        check_installed_servers(self.root)
         self._progress = time.monotonic()
         self._heartbeat()
         self._expire_results()
