@@ -861,6 +861,33 @@ policy (`--description`).
 Under the switch, `--issue-dispatch`, `--apply-proposal`, `--run-request` and `--verify-proposal-ledger` queue
 for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` waits again for one request.
 
+### `--sign-mcp-direct-grant AGENT`
+
+Operator only (R5); run it outside every agent session. It signs a direct-write grant for `AGENT`, whose brief
+`mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
+as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
+with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
+confirmed: a terminal y/N, or `--confirm-review-sha256`.
+- **What it binds:** the brief's current tools, write scopes and gates, the installed server's hash, an expiry
+  (`--grant-days`, 1–30, default 7) and a write cap (`--max-writes`, 1–500, default 50).
+- **Checks:** it refuses a grant with no gate and directory-wide scopes, and verifies the grant before saving it.
+- **Where it saves:** the grant goes to `~/.config/agentteams/mcp-grants/`, and the public key to
+  `~/.config/agentteams/verify-keys/`.
+- **Restart the runner** to load it.
+
+### `--list-mcp-direct-grants`
+
+Read-only (R5). Lists the operator's grants for `--project` and whether each verifies now against
+`--description`.
+
+### `--revoke-mcp-direct-grant AGENT`
+
+Operator only (R5). Removes `AGENT`'s grant. Restart the runner.
+
+### `--key-id ID`, `--grant-days N`, `--max-writes N`
+
+With `--sign-mcp-direct-grant`: the operator key's id, the grant's lifetime in days, and its write cap.
+
 ### `--list-staged`
 
 Orchestrator-only writes (R3). Lists the writes agents have staged through the `agentteams_runner` MCP server:

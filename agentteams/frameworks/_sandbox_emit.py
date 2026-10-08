@@ -127,6 +127,9 @@ SIGNING_KEY_DIR = "~/.config/agentteams/keys"
 #: P5b: the proposal runner's operator-owned ``confined_programs`` files (``agentteams.confinement`` reads it
 #: from here, so both name one directory).
 CONFINED_PROGRAMS_DIR = "~/.config/agentteams/confined"
+#: R5 (mcp-mediated-agent-writes): operator-signed direct-write grants, and the operator public keys that verify them.
+MCP_GRANTS_DIR = "~/.config/agentteams/mcp-grants"
+OPERATOR_VERIFY_KEYS_DIR = "~/.config/agentteams/verify-keys"
 #: The proposal ledger's directory; write-denied to every session under write_policy "orchestrator-only".
 LEDGER_DIR_REL = ".agentteams"
 
@@ -269,6 +272,9 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     # rules too. The key directory had only a Read rule, so the Write tool could create a file in it; the
     # orchestrator-only-writes runner's confined_programs file must stay out of every agent's reach.
     rules += [f"Edit({SIGNING_KEY_DIR}/**)", f"Edit({CONFINED_PROGRAMS_DIR})", f"Edit({CONFINED_PROGRAMS_DIR}/**)"]
+    # R5: the direct-write grants and the keys that verify them are the operator's alone.
+    rules += [f"Edit({d})" for d in (MCP_GRANTS_DIR, OPERATOR_VERIFY_KEYS_DIR)]
+    rules += [f"Edit({d}/**)" for d in (MCP_GRANTS_DIR, OPERATOR_VERIFY_KEYS_DIR)]
     store = _verify_key_store_path(framework)
     for path in protected_write_paths(framework):
         if path == _GATE_HOOK_PATH:
