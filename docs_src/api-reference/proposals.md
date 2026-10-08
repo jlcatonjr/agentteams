@@ -218,9 +218,16 @@ every one.
   unconfined, so it can read its parent's exec-time environment, and with it an environment key. Under the
   switch the CLI never runs directly. A process that leaves its process group (`setsid`) can still outlive
   the after-snapshot on macOS; on Linux, bwrap's PID namespace and `--die-with-parent` stop it.
-- **Dry runs execute gates** and don't count against a nonce's use limit, so one nonce can trigger
-  unlimited gate runs. Gates are registered by the operator, but they still run code on agent-supplied
-  content.
+- **Gates can run without spending a use.** Dry runs execute gates, and since R1 a use is counted only when an
+  artifact acts: after every check passes, right before the write, the deletion or the command. So refused
+  artifacts don't count either, and one nonce can trigger unlimited gate runs. This is deliberate, so an agent
+  iterating on rejected attempts isn't locked out. A separate attempt budget bounds it:
+  `DISPATCH_MAX_ATTEMPTS`, four times the use cap, counts every validated arrival, dry runs and refusals
+  included. Gates are registered by the operator, but they still run code on agent-supplied content. Refusals are
+  logged in the ledger.
+- **The Read deny rules bind only the built-in tools.** Under the switch, Claude's Read, Grep and Glob are denied
+  `.agentteams/**` and `.agentteams-queue/**`, which hold raw nonces in transit. A Bash command isn't bound by
+  them. Under the switch only the orchestrator keeps Bash.
 - **Writes outside the project** (e.g. `~/.gitconfig`, shell rc files) are not detected by this check. Under
   the runner, the sandbox refuses them.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and
@@ -282,7 +289,7 @@ without the key.
 - `issue_dispatch(root, agent)` → nonce; `agent_for(root, nonce)` → agent
 - `load_policy(brief, *, brief_rel=None)` → `Policy`
 - `apply_proposal(artifact, *, root, policy, dry_run=False)` → `{agent, path, base_sha256, new_sha256, gates, written}`
-- `run_request(artifact, *, root, policy, dry_run=False)` → `{agent, argv, exit, stdout, stderr, undeclared_writes, ran}`
+- `run_request(artifact, *, root, policy, dry_run=False, confine=False, timeout_cap=None)` → `{agent, argv, exit, stdout, stderr, truncated, undeclared_writes, ran}`. Each output stream is capped at `MAX_OUTPUT_BYTES` (256 KiB), and `truncated` says whether any was dropped. `timeout_cap` bounds the entry's timeout; the runner sets it for MCP-channel requests.
 - `record(root, entry)`, `verify_ledger(root)`
 - `ProposalError` (every refusal) and `UndeclaredWritesError` (the command ran; `.result` holds its output)
 

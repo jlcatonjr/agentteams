@@ -28,6 +28,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -48,12 +49,53 @@ HEARTBEAT_REL = ".agentteams/runner.heartbeat"
 KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger")
 REQUEST_MAX_BYTES = 2 * 1024 * 1024
 HEARTBEAT_STALE_SECONDS = 15
+#: How often the heartbeat thread refreshes the heartbeat, independent of serving (R1): a long command no longer
+#: makes the runner look dead to every other agent queueing behind it.
+HEARTBEAT_INTERVAL_SECONDS = 3.0
+#: Command cap for requests that arrive through the MCP channel (``"channel": "mcp"``). The queue is served one
+#: request at a time, because each command's write check diffs the whole worktree before and after it runs; a
+#: shorter cap bounds how long one agent's command holds everyone else's tool calls. A request that omits the field
+#: gets the entry's own cap, which is never wider than the brief allows.
+MCP_COMMAND_TIMEOUT = 120
+#: The heartbeat thread stops beating when the serve loop has made no progress for this long, so a stuck main
+#: thread can't hide behind a live heartbeat (@security R1 condition 2). Longer than any one request can take.
+STALL_SECONDS = 7200 + 600
+#: The largest result file the runner writes; bigger results are cut down to fit (R1 condition 4).
+RESULT_MAX_BYTES = REQUEST_MAX_BYTES
 RESULT_TTL_SECONDS = 300
 _ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 class RunnerError(P.ProposalError):
     """The runner can't serve, or the CLI found no runner answering."""
+
+
+def _fit_result(result: dict[str, Any]) -> bytes:
+    """Serialize *result* within :data:`RESULT_MAX_BYTES`, cutting command output and long lists if needed.
+
+    JSON escaping can grow a byte of output to six, so capped streams alone may not fit (R1 condition 4). The cut
+    is marked ``result_cut``; the ledger row holds the authoritative record either way.
+    """
+    data = json.dumps(result).encode()
+    if len(data) <= RESULT_MAX_BYTES:
+        return data
+    cut = json.loads(data)
+    inner = cut.get("result") if isinstance(cut.get("result"), dict) else {}
+    for key in ("stdout", "stderr"):
+        if isinstance(inner.get(key), str):
+            inner[key] = inner[key][:16 * 1024]
+    for key in ("undeclared_writes",):
+        if isinstance(inner.get(key), list) and len(inner[key]) > 200:
+            inner[key] = inner[key][:200] + [f"... and {len(inner[key]) - 200} more"]
+    if isinstance(cut.get("error"), str):
+        cut["error"] = cut["error"][:4000]
+    inner["truncated"] = True
+    cut["result_cut"] = True
+    data = json.dumps(cut).encode()
+    if len(data) <= RESULT_MAX_BYTES:
+        return data
+    return json.dumps({"id": result.get("id"), "kind": result.get("kind"), "ok": result.get("ok", False),
+                       "result_cut": True, "error": "result too large to return; see the ledger"}).encode()
 
 
 # --- small file helpers -------------------------------------------------------------------------
@@ -175,12 +217,31 @@ class Runner:
             (self.root / rel).mkdir(parents=True, exist_ok=True)  # session-writable by design
         for rel in (RESULTS_REL, CLAIMED_REL):
             (self.root / rel).mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._stop_heartbeat = threading.Event()
+        self._progress = time.monotonic()
+        #: The last heartbeat write failure (None when the last beat succeeded), for the serve loop to report.
+        self.heartbeat_error: str | None = None
+        self._heartbeat_thread: threading.Thread | None = None
         try:
             check_installed_readfs(self.root)
         except RunnerError:
             self.close()
             raise
         self._heartbeat()
+        self._heartbeat_thread = threading.Thread(target=self._heartbeat_loop, name="agentteams-runner-heartbeat",
+                                                  daemon=True)
+        self._heartbeat_thread.start()
+
+    def _heartbeat_loop(self) -> None:
+        while not self._stop_heartbeat.wait(HEARTBEAT_INTERVAL_SECONDS):
+            if time.monotonic() - self._progress > STALL_SECONDS:
+                self.heartbeat_error = "the serve loop made no progress; heartbeat stopped"
+                continue  # stale heartbeat: clients see no runner, and the operator restarts it
+            try:
+                self._heartbeat()
+                self.heartbeat_error = None
+            except OSError as exc:  # a missed beat only makes clients wait; the next beat retries
+                self.heartbeat_error = str(exc)
 
     def close(self) -> None:
         """Release the runner lock and remove the heartbeat (the lock file itself stays, on purpose).
@@ -188,6 +249,9 @@ class Runner:
         Raises:
             Nothing.
         """
+        self._stop_heartbeat.set()
+        if self._heartbeat_thread is not None:
+            self._heartbeat_thread.join()  # wakes at once on the event; only then is no beat in flight
         (self.root / HEARTBEAT_REL).unlink(missing_ok=True)
         os.close(self._lock_fd)
 
@@ -202,8 +266,9 @@ class Runner:
             return P.apply_proposal(request.get("artifact"), root=self.root, policy=self.policy,
                                     dry_run=bool(request.get("dry_run")), confine=True)
         if kind == "run-request":
+            cap = MCP_COMMAND_TIMEOUT if request.get("channel") == "mcp" else None
             return P.run_request(request.get("artifact"), root=self.root, policy=self.policy,
-                                 dry_run=bool(request.get("dry_run")), confine=True)
+                                 dry_run=bool(request.get("dry_run")), confine=True, timeout_cap=cap)
         if kind == "verify-ledger":
             return {"problems": P.verify_ledger(self.root)}
         raise RunnerError("unknown request kind")
@@ -247,7 +312,7 @@ class Runner:
         finally:
             claimed.unlink(missing_ok=True)
         result["serve_ms"] = int((time.monotonic() - served_from) * 1000)
-        _write_new(self.root / RESULTS_REL, name, json.dumps(result).encode())
+        _write_new(self.root / RESULTS_REL, name, _fit_result(result))
 
     def _expire_results(self) -> None:
         now = time.time()
@@ -279,6 +344,7 @@ class Runner:
         # Re-checked every poll. This DETECTS a swapped server and stops serving; it doesn't stop Goose launching
         # it. Prevention is the session sandbox's write-deny on .agentteams/ (--check-wiring requires it live).
         check_installed_readfs(self.root)
+        self._progress = time.monotonic()
         self._heartbeat()
         self._expire_results()
         served = 0
@@ -291,6 +357,7 @@ class Runner:
                     os.unlink(entry.name, dir_fd=requests_fd)
                     continue
                 self._serve_request(requests_fd, entry.name)
+                self._progress = time.monotonic()
                 served += 1
         finally:
             os.close(requests_fd)
@@ -357,6 +424,31 @@ def enqueue(root: Path, request: dict[str, Any]) -> str:
     return request_id
 
 
+def poll_result(root: Path, request_id: str) -> dict[str, Any] | None:
+    """Return the runner's result for *request_id* if it is ready (and acknowledge it), else None. Never blocks.
+
+    Args:
+        root: The project root.
+        request_id: From :func:`enqueue`.
+
+    Returns:
+        The result, as :func:`wait_result` returns it, or None while the request is queued or running.
+
+    Raises:
+        RunnerError: On a bad id, or a runner that stopped answering while the request is still pending.
+    """
+    if not _ID_RE.match(request_id):
+        raise RunnerError("bad request id")
+    path = root / RESULTS_REL / f"{request_id}.json"
+    if path.exists():
+        result = json.loads(_read_regular(path, REQUEST_MAX_BYTES * 2))
+        _write_new(root / ACKS_REL, request_id, b"")
+        return result
+    if not runner_alive(root):
+        raise RunnerError("the runner stopped answering; restart it and re-queue the request")
+    return None
+
+
 def wait_result(root: Path, request_id: str, *, timeout: float = 120.0) -> dict[str, Any]:
     """Wait for the runner's result for *request_id*, then acknowledge it so the runner deletes it.
 
@@ -373,14 +465,10 @@ def wait_result(root: Path, request_id: str, *, timeout: float = 120.0) -> dict[
     """
     if not _ID_RE.match(request_id):
         raise RunnerError("bad request id")
-    path = root / RESULTS_REL / f"{request_id}.json"
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if path.exists():
-            result = json.loads(_read_regular(path, REQUEST_MAX_BYTES * 2))
-            _write_new(root / ACKS_REL, request_id, b"")
+        result = poll_result(root, request_id)
+        if result is not None:
             return result
-        if not runner_alive(root):
-            raise RunnerError("the runner stopped answering; restart it and re-queue the request")
         time.sleep(0.2)
     raise RunnerError(f"no result for {request_id} within {timeout:.0f}s; wait longer with --wait-result")

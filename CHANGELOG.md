@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (runner hardening for MCP-mediated agent writes, phase R1)
+
+First phase of `references/plans/mcp-mediated-agent-writes.plan.md`: under the switch, non-orchestrator agents will
+write and execute only through a keyless MCP server that queues for the runner.
+- **Nonce uses are counted when an artifact acts, not when it arrives.** That means after every check passes,
+  right before the write, the deletion or the command. Refusals no longer spend an agent's uses, and the cap is
+  re-checked under the dispatch lock at that moment. A separate attempt budget (`DISPATCH_MAX_ATTEMPTS`, four
+  times the use cap) still bounds the gate runs and refusals one nonce can cause.
+- **A timed-out command's pipes are drained for at most 10 s** after the kill. A grandchild that left the process
+  group can no longer hang the runner. The heartbeat also stops if the serve loop makes no progress, and results
+  are cut to fit the read-back limit.
+- **The runner's heartbeat runs on its own thread.** A long command no longer makes the runner look dead, so
+  agents queued behind it wait instead of failing with "no runner".
+- **Commands arriving through the MCP channel** (`"channel": "mcp"`) are capped at 120 s
+  (`MCP_COMMAND_TIMEOUT`). The queue stays serial, because each command's write check diffs the worktree.
+- **Command output is capped** at 256 KiB per stream, with a `truncated` flag.
+- **New `proposal_runner.poll_result`** returns a result without blocking.
+- **Under the switch, Claude's built-in Read, Grep and Glob are denied** `.agentteams/**` and
+  `.agentteams-queue/**`. Both hold raw dispatch nonces in transit (@security C4).
+- **Restart the runner** after updating, to load this.
+
 ### feat (Codex under agentteams' launcher, Phase 1a)
 
 - `codex:sandbox` is a valid host feature, and a `confined`/`exclusive` `privilege_profile` on codex now expands

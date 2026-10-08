@@ -90,9 +90,17 @@ from agentteams.frameworks._write_roots import control_plane_of
 
 GATE_TIMEOUT = 120
 COMMAND_TIMEOUT = 600
+#: Seconds to drain a timed-out command's pipes after killing its group, before abandoning them (R1 condition 2).
+POST_KILL_DRAIN_SECONDS = 10
+#: Bytes of stdout and of stderr a command result carries; the rest is dropped and ``truncated`` is set (R1, C8).
+MAX_OUTPUT_BYTES = 256 * 1024
 DISPATCH_TTL_HOURS = 24
 #: Artifacts one dispatch may submit (proposals + requests) before the agent must be re-dispatched.
 DISPATCH_MAX_USES = 25
+#: Validated arrivals one dispatch may make, acting or not (refusals and dry runs included). Uses are counted only
+#: when an artifact acts (R1), so this separate, wider budget bounds how many gate runs and refusal rows one nonce
+#: can cause (@security R1 condition 1).
+DISPATCH_MAX_ATTEMPTS = 4 * DISPATCH_MAX_USES
 LEDGER_REL = ".agentteams/proposal-ledger.jsonl"
 HEAD_REL = ".agentteams/proposal-ledger.head"
 DISPATCH_REL = ".agentteams/dispatches.jsonl"
@@ -339,7 +347,8 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
             live_ids = {r["id"] for _l, r in rows
                         if r and "expires" in r and datetime.fromisoformat(r["expires"]) >= now}
             # Keep unexpired dispatches and the use rows that count against them; drop the rest.
-            live = [line for line, r in rows if r and (r.get("id") in live_ids or r.get("use") in live_ids)]
+            live = [line for line, r in rows if r and (r.get("id") in live_ids or r.get("use") in live_ids
+                                                         or r.get("attempt") in live_ids)]
             live.append(_signed(key, {"id": _nonce_id(key, nonce), "agent": agent, "max_uses": max_uses,
                                       "expires": (now + timedelta(hours=ttl_hours)).isoformat(timespec="seconds")}))
             _atomic_write_text(path, "\n".join(live) + "\n")
@@ -349,13 +358,15 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
     return nonce
 
 
-def agent_for(root: Path, nonce: Any, *, consume: bool = True) -> str:
+def agent_for(root: Path, nonce: Any, *, consume: bool = True, attempt: bool = False) -> str:
     """Return the agent a dispatch nonce was issued to, counting one use against it.
 
     Args:
         root: The project root.
         nonce: The nonce the artifact carries.
         consume: Record a use (``False`` for dry runs).
+        attempt: Record an attempt instead (every validated arrival, acting or not), refusing once
+            :data:`DISPATCH_MAX_ATTEMPTS` is reached.
 
     Returns:
         The agent slug from the signed dispatch record.
@@ -380,6 +391,11 @@ def agent_for(root: Path, nonce: Any, *, consume: bool = True) -> str:
             used = sum(1 for r in rows if r.get("use") == ident)
             if used >= int(dispatch.get("max_uses", DISPATCH_MAX_USES)):
                 raise ProposalError(f"dispatch nonce used {used} times (its limit); re-dispatch the agent")
+            if attempt:
+                tries = sum(1 for r in rows if r.get("attempt") == ident)
+                if tries >= DISPATCH_MAX_ATTEMPTS:
+                    raise ProposalError(f"dispatch nonce made {tries} attempts (its limit); re-dispatch the agent")
+                _locked_append(root / DISPATCH_REL, _signed(key, {"attempt": ident}))
             if consume:
                 _locked_append(root / DISPATCH_REL, _signed(key, {"use": ident}))
         finally:
@@ -530,11 +546,29 @@ def _check_shape(artifact: Any, kind: str) -> None:
 
 
 def _identity(root: Path, artifact: dict[str, Any], *, dry_run: bool = False) -> str:
-    agent = agent_for(root, artifact.get("dispatch"), consume=not dry_run)
+    """Resolve the agent from the artifact's nonce, without counting a use (see :func:`_consume`)."""
+    del dry_run  # a use is counted only once every check has passed, dry run or not (R1)
+    agent = agent_for(root, artifact.get("dispatch"), consume=False, attempt=True)
     claimed = artifact.get("agent")
     if claimed is not None and claimed != agent:
         raise ProposalError(f"artifact claims agent {claimed!r} but was dispatched to {agent!r}; refused")
     return agent
+
+
+def _consume(root: Path, artifact: dict[str, Any], agent: str) -> None:
+    """Count one use of the artifact's nonce, after validation passed and right before acting.
+
+    A refused artifact no longer spends a use (R1): an agent in an edit-and-build loop isn't locked out by its own
+    rejected attempts. The cap is re-checked under the dispatch lock, so two artifacts racing for the last use
+    can't both act; the agent is re-resolved so the nonce can't have changed hands in between.
+    """
+    if agent_for(root, artifact.get("dispatch"), consume=True) != agent:
+        raise ProposalError("dispatch nonce no longer resolves to the same agent; refused")
+
+
+def _cap_output(data: bytes) -> tuple[str, bool]:
+    """Decode command output, keeping at most :data:`MAX_OUTPUT_BYTES`; the flag says whether any was dropped."""
+    return data[:MAX_OUTPUT_BYTES].decode("utf-8", "replace"), len(data) > MAX_OUTPUT_BYTES
 
 
 def _check_base(root: Path, rel: str, base: Any) -> Path:
@@ -589,6 +623,7 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
             if not dry_run:
                 _check_destination(root, rel, policy, agent)  # re-resolve immediately before acting
                 _check_base(root, rel, artifact["base_sha256"])
+                _consume(root, artifact, agent)
                 record(root, {"action": "delete-proposal", "agent": agent, "path": rel,  # write-ahead
                               "base": artifact["base_sha256"], "rationale": rationale.strip()[:300]})
                 target.unlink()
@@ -610,6 +645,7 @@ def apply_proposal(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_
         if not dry_run:
             rel = _check_destination(root, rel, policy, agent)  # re-resolve after the gates ran
             target = _check_base(root, rel, artifact["base_sha256"])
+            _consume(root, artifact, agent)
             record(root, {"action": "apply-proposal", "agent": agent, "path": rel, "base": artifact["base_sha256"],
                           "new": new_hash, "bytes": size, "gates": gate_results,  # bytes: P5 cost measurement
                           "rationale": rationale.strip()[:300]})  # write-ahead
@@ -720,7 +756,7 @@ def _snapshot(root: Path, env: dict[str, str]) -> dict[str, Any] | None:
 
 
 def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
-                confine: bool = False) -> dict[str, Any]:
+                confine: bool = False, timeout_cap: int | None = None) -> dict[str, Any]:
     """Validate and (unless ``dry_run``) run one command request.
 
     Args:
@@ -733,9 +769,12 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             program lies outside its ``exec`` paths, or when no sandbox is usable and the brief has no logged
             ``allow_unconfined_runs`` opt-out. Any process still alive after the command exits is killed
             before the write check, and the run fails.
+        timeout_cap: An upper bound on the entry's timeout, in seconds (the runner sets one for requests that
+            arrive through the MCP channel, so one long command can't hold the serial queue for minutes).
 
     Returns:
-        ``{agent, argv, exit, stdout, stderr, undeclared_writes, ran}``. Outside a git worktree the command
+        ``{agent, argv, exit, stdout, stderr, truncated, undeclared_writes, ran}``. Each output stream is capped
+        at :data:`MAX_OUTPUT_BYTES`; ``truncated`` says whether anything was dropped. Outside a git worktree the command
         is refused, so ``undeclared_writes`` is always a list.
 
     Raises:
@@ -805,7 +844,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                        confine=confine)
             stdin_bytes = spec["content"].encode("utf-8")
         if dry_run:
-            return {"agent": agent, "argv": argv, "exit": None, "stdout": "", "stderr": "",
+            return {"agent": agent, "argv": argv, "exit": None, "stdout": "", "stderr": "", "truncated": False,
                     "undeclared_writes": [], "ran": False}
         before = _snapshot(root, env)
         if before is None:
@@ -813,12 +852,15 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                                 "refusing to run unchecked (fail-closed)")
         sandbox = _sandbox_for(policy) if jail is not None else None
         confined_as = sandbox or ("unconfined-opt-out" if jail is not None else None)
+        _consume(root, artifact, agent)
         record(root, {"action": "run-request-start", "agent": agent, "argv": argv, "purpose": purpose.strip()[:300],
                       **({"confined": confined_as} if confined_as else {})})
         before = _snapshot(root, env)  # re-taken after the write-ahead row, so only the command's changes count
         timed_out, group_killed, survivors = False, False, False
         # Per-entry timeout (P5a): a long check (e.g. a kernel audit) may set one, capped at MAX_COMMAND_TIMEOUT.
         timeout = max(1, min(int(entry.get("timeout") or COMMAND_TIMEOUT), MAX_COMMAND_TIMEOUT))
+        if timeout_cap is not None:
+            timeout = max(1, min(timeout, int(timeout_cap)))
         started = time.monotonic()
         run_tmp = tempfile.mkdtemp(prefix="agentteams-run-") if jail is not None else None
         command = [program, *argv[1:]]
@@ -851,7 +893,13 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 group_killed = True
             except ProcessLookupError:
                 group_killed = False  # the group had already exited; recorded on the timeout row
-            out, err = child.communicate()
+            try:  # bounded: a grandchild that left the group (setsid) may still hold the pipes open
+                out, err = child.communicate(timeout=POST_KILL_DRAIN_SECONDS)
+            except subprocess.TimeoutExpired:
+                for stream in (child.stdout, child.stderr):
+                    if stream is not None:
+                        stream.close()
+                out, err = b"", b"[output abandoned: a process outside the killed group kept the pipes open]"
             proc = subprocess.CompletedProcess(argv, -9, out or b"", err or b"")
         if jail is not None:
             # Anything the command left running could write after the snapshot: kill the group, fail the run.
@@ -886,15 +934,18 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             raise UndeclaredWritesError(
                 f"command timed out after {timeout}s"
                 + (f"; it wrote outside its declared writes: {', '.join(undeclared)}" if undeclared else ""),
-                {"agent": agent, "argv": argv, "exit": -9, "stdout": proc.stdout.decode("utf-8", "replace"),
-                 "stderr": proc.stderr.decode("utf-8", "replace"), "undeclared_writes": undeclared, "ran": True})
+                {"agent": agent, "argv": argv, "exit": -9, "stdout": _cap_output(proc.stdout)[0],
+                 "stderr": _cap_output(proc.stderr)[0],
+                 "truncated": _cap_output(proc.stdout)[1] or _cap_output(proc.stderr)[1],
+                 "undeclared_writes": undeclared, "ran": True})
         duration_ms = int((time.monotonic() - started) * 1000)
         record(root, {"action": "run-request", "agent": agent, "argv": argv, "exit": proc.returncode,
                       "duration_ms": duration_ms,
                       "undeclared_writes": undeclared, "purpose": purpose.strip()[:300],
                       **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {})})
+        (stdout, cut_out), (stderr, cut_err) = _cap_output(proc.stdout), _cap_output(proc.stderr)
         result = {"agent": agent, "argv": argv, "exit": proc.returncode, "duration_ms": duration_ms,
-                  "stdout": proc.stdout.decode("utf-8", "replace"), "stderr": proc.stderr.decode("utf-8", "replace"),
+                  "stdout": stdout, "stderr": stderr, "truncated": cut_out or cut_err,
                   "undeclared_writes": undeclared, "ran": True}
         if undeclared:
             raise UndeclaredWritesError(f"command wrote outside its declared writes: {', '.join(undeclared)}", result)
