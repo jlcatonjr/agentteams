@@ -71,10 +71,11 @@ def test_the_app_module_entry_point_reaches_the_refusal(tmp_path):
     src = _source(tmp_path)
     agents = _switched(tmp_path / "project", "claude")
     proc = subprocess.run([sys.executable, "-m", "agentteams.cli.app", "--convert-from", str(src), "--framework",
-                           "claude", "--output", str(agents), "--description", str(tmp_path / "missing.json")],
+                           "claude", "--output", str(agents), "--dry-run"],
                           capture_output=True, text=True, timeout=120, cwd=str(REPO))
     assert "NameError" not in proc.stderr, proc.stderr[-1500:]
     assert proc.returncode == 1
+    assert "--interop-from" in proc.stdout + proc.stderr, (proc.stdout + proc.stderr)[-1500:]
 
 
 @pytest.mark.parametrize("framework", ["claude", "goose"])
