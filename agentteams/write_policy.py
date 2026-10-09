@@ -338,10 +338,10 @@ def apply(content: str, slug: str, manifest: dict[str, Any]) -> str:
     return narrow_tools(body) + section
 
 
-def _section(slug: str, manifest: dict[str, Any]) -> str:
-    """The write-policy section this agent gets under the switch (unfenced)."""
+def _section(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
+    """The write-policy section this agent gets under the switch (unfenced); ``writer`` overrides the slug test."""
     grants = manifest.get("mcp_grants") or {}
-    if slug in ORCHESTRATOR_SLUGS:
+    if (slug in ORCHESTRATOR_SLUGS) if writer is None else writer:
         return _ORCHESTRATOR_SECTION + ("\n" + _ORCHESTRATOR_STAGED_PARAGRAPH if grants else "")
     return _RUNNER_SECTION if isinstance(grants.get(slug), dict) else _PROPOSALS_SECTION
 
@@ -356,7 +356,7 @@ def _fenced(section: str, body: str) -> str:
 _SECTION_HEADING_RE = re.compile(r"^## Write Policy: ", re.MULTILINE)
 
 
-def ensure_section(body: str, slug: str, manifest: dict[str, Any]) -> str:
+def ensure_section(body: str, slug: str, manifest: dict[str, Any], *, writer: bool | None = None) -> str:
     """Give an imported agent body (``--interop-from --description``) its write-policy section exactly once.
 
     A source rendered with :func:`apply` already carries it, so interop must not append a second copy. A body
@@ -367,6 +367,9 @@ def ensure_section(body: str, slug: str, manifest: dict[str, Any]) -> str:
         body: The agent's Markdown body (no front matter).
         slug: The agent's slug.
         manifest: The interop manifest carrying :func:`manifest_fields`.
+        writer: Whether this agent is the target framework's writer (orchestrator section). Defaults to
+            membership of :data:`ORCHESTRATOR_SLUGS`; interop passes it because ``bridge-orchestrator`` is a
+            writer only on Goose.
 
     Returns:
         The body, with the section appended when it was missing; unchanged without the switch.
@@ -378,7 +381,7 @@ def ensure_section(body: str, slug: str, manifest: dict[str, Any]) -> str:
     """
     if not enabled(manifest):
         return body
-    section = _section(slug, manifest)
+    section = _section(slug, manifest, writer)
     headings = len(_SECTION_HEADING_RE.findall(body))
     if section.strip() in body and headings == 1:
         return body
