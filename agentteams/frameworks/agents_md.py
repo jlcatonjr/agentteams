@@ -111,7 +111,24 @@ class AgentsMdAdapter(FrameworkAdapter):
         name, description = _extract_name_description(content, agent_slug, manifest)
         body = self._strip_yaml_front_matter(content)
         body = self._strip_handoffs_section(body)
-        body = body.replace(".github/agents", ".agents").strip()
+        # Rewrite `.github/agents` paths only on NATIVE generation, where this adapter
+        # materializes `.agents/references/`. Under an interop import
+        # (``manifest["interop_source_framework"]`` set) nothing is written at
+        # `.agents/references/`, so rewriting leaves every reference dangling — the same
+        # rule codex already applies (``codex.py``), and the same reason
+        # ``_neutralize_instructions(agents_dir=None)`` leaves them alone for interop.
+        # Measured before this guard existed: 24 `.agents/*.md` files in one consumer repo
+        # carried 88 `.agents/references/` paths against a directory that did not exist, 11
+        # of them the `conflict-log.csv` safe-append target that @conflict-auditor hands to
+        # @agent-updater — a governance-integrity bug, not a broken link.
+        if not manifest.get("interop_source_framework"):
+            body = body.replace(".github/agents", ".agents")
+            # This adapter writes `.agents/<slug>.md`, not `<slug>.agent.md`, so a rewritten
+            # cross-reference must drop the `.agent` infix or it names a file that is never
+            # written. Scoped to paths under the agents dir so prose about the copilot
+            # `.agent.md` convention elsewhere in a body is untouched.
+            body = _AGENTS_DIR_AGENT_MD_RE.sub(r"\1.md", body)
+        body = body.strip()
         body = _strip_leading_synthesized_header(body, description)
         header = f"# {name}\n"
         if description:
@@ -201,6 +218,11 @@ class AgentsMdAdapter(FrameworkAdapter):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+#: `.agents/<slug>.agent.md` -> `.agents/<slug>.md`. Only paths under the agents dir are
+#: rewritten; a bare mention of the `.agent.md` convention in prose is left alone.
+_AGENTS_DIR_AGENT_MD_RE = re.compile(r"(\.agents/[A-Za-z0-9._-]+)\.agent\.md")
+
 
 def _neutralize_instructions(content: str, agents_dir: str | None = ".agents") -> str:
     """Remove Copilot-specific branding/paths from the instructions body so the
