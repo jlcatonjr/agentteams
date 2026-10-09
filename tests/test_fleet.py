@@ -657,3 +657,136 @@ def test_target_argv_goose_direct(tmp_path):
     assert "--output" in argv
     assert str(ws) in argv
 
+
+
+# ---------------------------------------------------------------------------
+# 2026-10-09 pilot content-audit regressions
+# ---------------------------------------------------------------------------
+
+def test_prose_mentioning_user_editable_opens_no_region():
+    """Only a real marker opens a user region; fenced lines never count (UE-del false positives)."""
+    text = (
+        "Bare `--update` overwrites entire files including USER-EDITABLE content.\n"   # 1: prose, no region
+        "<!-- AGENTTEAMS:BEGIN content v=1 -->\n"                                          # 2
+        "> ⚙️ **USER-EDITABLE** quoted inside a fence\n"                               # 3: fenced, not user
+        "template text\n"                                                               # 4
+        "<!-- AGENTTEAMS:END content -->\n"                                            # 5
+        "## Project-Specific Notes\n"                                                  # 6
+        "\n"                                                                            # 7
+        "> ⚙️ **USER-EDITABLE** — project-specific rules\n"                            # 8: opens the region
+        "my hand-written rule\n"                                                       # 9
+        "## Next Section\n"                                                            # 10: a ## heading
+        "more of mine\n"                                                               # 11: doesn't close it
+    )
+    fenced, useredit = fleet._fence_and_useredit_lines(text)
+    assert fenced == {2, 3, 4, 5}
+    assert useredit == {8, 9, 10, 11}
+
+
+def test_every_direct_target_passes_the_project(tmp_path):
+    """claude-/goose-/codex-direct used to omit --project, which skipped the project scan."""
+    ws = tmp_path / "ws"
+    desc = ws / ".github" / "agents" / "_build-description.json"
+    desc.parent.mkdir(parents=True)
+    desc.write_text("{}", encoding="utf-8")
+    for target in ("github", "claude-direct", "goose-direct", "codex-direct"):
+        argv = fleet._target_argv(target, ws, desc, dry_run=False, shrink_policy="preserve")
+        assert argv[argv.index("--project") + 1] == str(ws), target
+
+
+def _bridge_entry(ws, name, source):
+    (ws / name).write_text(
+        "# Bridge Entry\n\n"
+        "<!-- AGENTTEAMS-BRIDGE:BEGIN claude-bridge-entry v=1 -->\n"
+        f"Use source framework `{source}` as canonical agent infrastructure.\n"
+        "<!-- AGENTTEAMS-BRIDGE:END claude-bridge-entry -->\n",
+        encoding="utf-8",
+    )
+
+
+def test_bridge_refreshes_from_the_recorded_source_framework(tmp_path):
+    from agentteams._fleet_bridge import recorded_bridge_source
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    assert recorded_bridge_source(ws, "claude-bridge") is None
+    (ws / "CLAUDE.md").write_text("Use source framework `goose` as canonical (prose, not fenced)\n",
+                                  encoding="utf-8")
+    assert recorded_bridge_source(ws, "claude-bridge") is None              # outside the fence: ignored
+    _bridge_entry(ws, "CLAUDE.md", "goose")
+    assert recorded_bridge_source(ws, "claude-bridge") == "goose"
+    argv = fleet._target_argv("claude-bridge", ws, None, dry_run=False, shrink_policy="preserve",
+                              bridge_source="goose")
+    assert argv[argv.index("--bridge-from") + 1] == str(ws / ".goose" / "recipes")
+    assert argv[argv.index("--bridge-source-framework") + 1] == "goose"
+    default = fleet._target_argv("goose-bridge", ws, None, dry_run=False, shrink_policy="preserve")
+    assert default[default.index("--bridge-from") + 1] == str(ws / ".github" / "agents")
+
+
+def test_fleet_skips_a_bridge_whose_recorded_source_it_cannot_use(tmp_path, capsys):
+    """A goose-canonical bridge with no .goose/recipes must be skipped, never re-bridged from .github."""
+    parent = tmp_path / "p"
+    ws = parent / "ws"
+    (ws / ".github" / "agents").mkdir(parents=True)
+    (ws / ".claude" / "agents").mkdir(parents=True)
+    _bridge_entry(ws, "CLAUDE.md", "goose")
+    assert "claude-bridge" in fleet._plan_targets(ws, "claude")
+    import argparse
+
+    args = argparse.Namespace(fleet=str(parent), fleet_frameworks="claude", fleet_report=str(tmp_path / "r"),
+                              fleet_allow_no_verify=False, yes=False, update=True, merge=True,
+                              shrink_policy="preserve", dry_run=False)
+    fleet.run_fleet(args, None)
+    out = capsys.readouterr().out
+    assert "claude-bridge: SKIP" in out and "'goose'" in out
+
+
+def test_orchestrator_notice_and_user_subheadings_stay_detected():
+    """Security conditions (2026-10-09): the orchestrator's blockquote notice opens a region; a user's own
+    ``## `` heading doesn't close it; a fence marker quoted in prose isn't a fence."""
+    text = (
+        "> ⚙️ **Project-specific rules go here.** This section is USER-EDITABLE and is preserved.\n"  # 1
+        "### Rules\n"                                                                                # 2
+        "my rule\n"                                                                                  # 3
+        "## My own heading\n"                                                                        # 4
+        "rule under my heading; quoting `AGENTTEAMS:BEGIN` in prose\n"                               # 5
+        "still mine\n"                                                                               # 6
+        "<!-- AGENTTEAMS:BEGIN next_section v=1 -->\n"                                              # 7
+        "template\n"                                                                                 # 8
+        "<!-- AGENTTEAMS:END next_section -->\n"                                                    # 9
+    )
+    fenced, useredit = fleet._fence_and_useredit_lines(text)
+    assert useredit == {1, 2, 3, 4, 5, 6}
+    assert fenced == {7, 8, 9}
+
+
+def test_a_bridge_naming_its_own_framework_is_skipped(tmp_path, capsys):
+    import argparse
+
+    for target_fw, source in (("claude", "claude"), ("goose", "goose")):
+        parent = tmp_path / f"p-{target_fw}"
+        ws = parent / "ws"
+        (ws / ".github" / "agents").mkdir(parents=True)
+        (ws / ".claude" / "agents").mkdir(parents=True)
+        (ws / ".goose" / "recipes").mkdir(parents=True)
+        entry = "CLAUDE.md" if target_fw == "claude" else "AGENTS.md"
+        _bridge_entry(ws, entry, source)
+        if target_fw == "goose":                              # make .goose a bridge consumer
+            mf = ws / "references" / "bridges" / "copilot-vscode-to-goose" / "bridge-manifest.json"
+            mf.parent.mkdir(parents=True)
+            mf.write_text('{"target_framework": "goose"}', encoding="utf-8")
+        args = argparse.Namespace(fleet=str(parent), fleet_frameworks="all", fleet_report=str(tmp_path / "r"),
+                                  fleet_allow_no_verify=False, yes=False, update=True, merge=True,
+                                  shrink_policy="preserve", dry_run=False)
+        fleet.run_fleet(args, None)
+        out = capsys.readouterr().out
+        assert f"{target_fw}-bridge: SKIP" in out and f"'{source}'" in out, out
+
+
+def test_claude_direct_skips_the_scan_for_a_brief_json(tmp_path):
+    ws = tmp_path / "ws"
+    desc = ws / ".agentteams" / "brief.json"
+    desc.parent.mkdir(parents=True)
+    desc.write_text("{}", encoding="utf-8")
+    argv = fleet._target_argv("claude-direct", ws, desc, dry_run=False, shrink_policy="preserve")
+    assert "--no-scan" in argv

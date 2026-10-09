@@ -37,6 +37,9 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
+from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
+from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
@@ -62,16 +65,14 @@ _PRUNE_DIRS = {
 }
 _PRUNE_SUBSTR = (".worktrees", "/archive/")
 
-# Fence markers (content fence in .agent.md files).
-_FENCE_BEGIN = re.compile(r"AGENTTEAMS[A-Z_-]*:BEGIN")
-_FENCE_END = re.compile(r"AGENTTEAMS[A-Z_-]*:END")
-# REAL fence markers (HTML-comment form only) for the fence-balance gate. The loose
-# _FENCE_BEGIN/_FENCE_END above match the bare substring and would miscount a marker
-# quoted in prose or displayed as data; these match only an actual fence line.
+# REAL fence markers (HTML-comment form only), for the fence-balance gate and the USER-EDITABLE detector.
+# A bare-substring match would miscount a marker quoted in prose or displayed as data.
 _REAL_FENCE_BEGIN_RE = re.compile(r"<!--\s*AGENTTEAMS:BEGIN\s")
 _REAL_FENCE_END_RE = re.compile(r"<!--\s*AGENTTEAMS:END\s")
-_USER_EDIT = re.compile(r"USER-EDITABLE|USER EDITABLE")
 _USER_EDIT_END = re.compile(r"END USER-EDITABLE|/USER-EDITABLE|END USER EDITABLE")
+#: What opens a user region: a blockquote notice naming USER-EDITABLE (Project-Specific Notes' and the
+#: orchestrator's "This section is USER-EDITABLE"), a heading naming it, or a BEGIN comment. Plain prose doesn't.
+_USER_EDIT_MARKER = re.compile(r"^\s*>.*USER[- ]EDITABLE|^#{1,6}\s.*USER[- ]EDITABLE|BEGIN USER[- ]EDITABLE")
 _BRIDGE_FENCE = "AGENTTEAMS-BRIDGE:BEGIN"
 _SUBAGENT_STUB_SIGNAL = "source_sha256"
 # Structural bridge signals (fleet.py false-positive fix, 2026-08-25). A real bridge fence is an
@@ -80,7 +81,7 @@ _SUBAGENT_STUB_SIGNAL = "source_sha256"
 # bridge_subagents.py). Matching the bare marker *substring* misclassified native claude teams whose
 # agent docs merely quote the fence/stub syntax in prose — e.g. exampleRecoveryRepo was routed to a
 # nonexistent claude-bridge source and FAILed the 2026-08-25 fleet run.
-_BRIDGE_FENCE_RE = re.compile(r"<!--\s*AGENTTEAMS-BRIDGE:BEGIN\s")
+_BRIDGE_FENCE_RE = _BRIDGE_FENCE_BEGIN_RE   # one definition, in fences
 _SUBAGENT_STUB_RE = re.compile(r"^source_sha256:\s*\S", re.MULTILINE)
 
 # Volatile / fully-generated files whose churn is expected (not a content-loss signal).
@@ -435,21 +436,32 @@ def _walk(parent: Path):
 # ---------------------------------------------------------------------------
 
 def _fence_and_useredit_lines(text: str) -> tuple[set[int], set[int]]:
+    """Return the line numbers inside AGENTTEAMS fences, and those inside USER-EDITABLE regions.
+
+    A user region starts only at a real marker: a blockquote notice naming USER-EDITABLE (the one that opens
+    ``## Project-Specific Notes``, ``fences.PROJECT_NOTES_SECTION``, or the orchestrator's project-rules
+    notice), a heading naming it, or an explicit ``BEGIN USER-EDITABLE`` comment. It runs to the next real
+    fence BEGIN, an end marker, or the end of the file, so a user's own ``## `` heading inside it doesn't
+    hide later deletions. Prose that merely mentions USER-EDITABLE (agent-updater's own instructions, for one)
+    opens nothing. Fences are the real HTML-comment markers only (a quoted marker in prose is not a fence),
+    and a fenced line is never user-editable.
+    """
     fenced, useredit = set(), set()
     in_f = in_u = False
     for i, ln in enumerate(text.splitlines(), 1):
-        if _FENCE_BEGIN.search(ln):
+        if _REAL_FENCE_BEGIN_RE.search(ln):
             in_f = True
-        if _USER_EDIT.search(ln) and not _USER_EDIT_END.search(ln):
+            in_u = False
+        if in_u and _USER_EDIT_END.search(ln):
+            in_u = False
+        if not in_f and _USER_EDIT_MARKER.search(ln) and not _USER_EDIT_END.search(ln):
             in_u = True
         if in_f:
             fenced.add(i)
-        if in_u:
+        elif in_u:
             useredit.add(i)
-        if _FENCE_END.search(ln):
+        if _REAL_FENCE_END_RE.search(ln):
             in_f = False
-        if _USER_EDIT_END.search(ln):
-            in_u = False
     return fenced, useredit
 
 
@@ -585,7 +597,24 @@ def _run_main(argv: list[str]) -> tuple[int, str]:
 
 
 def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
-                 shrink_policy: str) -> list[str] | None:
+                 shrink_policy: str, bridge_source: str = "copilot-vscode") -> list[str] | None:
+    """Build the in-process ``build_team`` argv for one fleet target.
+
+    Args:
+        target: ``github``, ``claude-direct``, ``claude-bridge``, ``goose-direct``, ``goose-bridge`` or
+            ``codex-direct``.
+        ws: The workspace.
+        descriptor: The resolved build description; required by every non-bridge target.
+        dry_run: Append ``--dry-run``.
+        shrink_policy: Passed through as ``--shrink-policy`` for update targets.
+        bridge_source: The bridge's recorded source framework (a key of ``_BRIDGE_SOURCE_DIRS``).
+
+    Returns:
+        The argv, or None when a required descriptor is missing or the target is unknown.
+
+    Raises:
+        KeyError: When *bridge_source* isn't a known source framework (the caller SKIPs those first).
+    """
     if target == "github":
         if descriptor is None:
             return None
@@ -604,14 +633,18 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             return None
         argv = [
             "--description", str(descriptor),
+            "--project", str(ws),
             "--output", str(ws / ".claude" / "agents"),
             "--framework", "claude",
             "--update", "--merge", "--yes",
             "--shrink-policy", shrink_policy,
         ]
+        if descriptor.name == "brief.json":
+            argv.append("--no-scan")
     elif target == "claude-bridge":
         argv = [
-            "--bridge-from", str(ws / ".github" / "agents"),
+            "--bridge-from", str(ws / _BRIDGE_SOURCE_DIRS[bridge_source]),
+            "--bridge-source-framework", bridge_source,
             "--framework", "claude",
             "--bridge-merge",
             "--output", str(ws),
@@ -622,6 +655,7 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             return None
         argv = [
             "--description", str(descriptor),
+            "--project", str(ws),
             "--output", str(ws),       # normalize_output_path appends .goose/recipes
             "--framework", "goose",
             "--update", "--merge", "--yes",
@@ -634,6 +668,7 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             return None
         argv = [
             "--description", str(descriptor),
+            "--project", str(ws),
             "--output", str(ws),       # normalize_output_path appends .codex/agents
             "--framework", "codex",
             "--update", "--merge", "--yes",
@@ -643,7 +678,8 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
             argv.append("--no-scan")
     elif target == "goose-bridge":
         argv = [
-            "--bridge-from", str(ws / ".github" / "agents"),
+            "--bridge-from", str(ws / _BRIDGE_SOURCE_DIRS[bridge_source]),
+            "--bridge-source-framework", bridge_source,
             "--framework", "goose",
             "--bridge-merge",
             "--output", str(ws),
@@ -758,7 +794,21 @@ def run_fleet(args, parser) -> int:
                 print(f"    codex: SKIP ({hint})")
                 continue
 
-            argv = _target_argv(target, ws, descriptor, dry_run=not apply, shrink_policy=shrink_policy)
+            bridge_source = "copilot-vscode"
+            if target.endswith("-bridge"):
+                recorded = _recorded_bridge_source(ws, target)
+                if recorded is not None and (recorded not in _BRIDGE_SOURCE_DIRS
+                                             or recorded == target.split("-")[0]
+                                             or not (ws / _BRIDGE_SOURCE_DIRS[recorded]).is_dir()):
+                    detail = (f"bridge records source framework {recorded!r}, which fleet cannot bridge from "
+                              "here; refresh it by hand (never re-bridge from .github/agents over it)")
+                    wr.targets.append(TargetResult(workspace=str(ws), target=target, status="SKIP",
+                                                   detail=detail))
+                    print(f"    {target}: SKIP ({detail})")
+                    continue
+                bridge_source = recorded or "copilot-vscode"
+            argv = _target_argv(target, ws, descriptor, dry_run=not apply, shrink_policy=shrink_policy,
+                                bridge_source=bridge_source)
             if argv is None:
                 wr.targets.append(TargetResult(
                     workspace=str(ws), target=target, status="FAIL",
