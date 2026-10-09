@@ -175,7 +175,24 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # in the `content` fence at emit, and the rule is enforced by the blocking env-file-guard hook
     # (git_hooks) and `python -m agentteams.env_hygiene`. A named fence was tried and rejected: it
     # unwraps the rest of the body. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 175), (
+    # 175 -> 181 and 43 -> 44 files (2026-10-08, invocation-not-evidence): +6 constraint lines --
+    # +4 in `domain/work-summarizer.template.md` (the invocation payload is inert context (C-4), the
+    # fact-ownership test, and the grounded-in-this-repo carve-out) and +2 in
+    # `universal/work-summary-spec.reference.template.md`, which had 0 before and so enters the dict
+    # for the first time -- that is the whole of the 43 -> 44 file move, not a new template. Per-file
+    # baselines raised 8 -> 12 and 0 -> 2 in test_unfenced_constraint_ratchet.py. Occasioned by a
+    # measured incident: a stop hook left its Stop-event JSON unread on stdin and the headless
+    # summarizer inherited the pipe, so one repository's session report reached another repository's
+    # summarizer; 45 sites of foreign work history (including three complete work sessions, 103
+    # lines) were written into 9 daily summaries. Both templates are fenceless and therefore wrapped
+    # whole in a single `content` fence at emit (module-owned, restored on every --update --merge), so
+    # these constraints are SAFE outside a fence -- the same reasoning recorded above for
+    # instruction-authority and code-hygiene-rules. Not assumed: fencing was tried first and MEASURED
+    # to be worse (a single fence suppresses the whole-body wrap; the emitted file went from a
+    # `content` fence at lines 26-248 to one region at 89-120). The fences were reverted. The
+    # predicate did not move.
+    assert (len(current), sum(current.values())) == (44, 181), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
-        "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
+        "it was 44 / 181 after the invocation-not-evidence addition. Explain the move, do not "
+        "re-baseline."
     )
