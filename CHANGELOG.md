@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (two tests that failed outside CI)
+
+- **`install-agent-doc-sync.sh` checks the interpreter before importing from it.** The checks for the
+  interpreter, its prefixes and the state, unit and log directories now run before `import agentteams`. A
+  refusal now names the real problem, for example an interpreter inside the project, instead of "cannot
+  import agentteams". The package location is still checked right after the import. That earlier failure
+  is what broke `test_refuses_interpreter_inside_project` and `…inside_an_allow_write_root` with a venv
+  interpreter, which loses its venv when symlinked.
+- **`test_acceptance_against_baseagent_copy`** now allows the team marker and control plane that an interop
+  run has written under `.codex/agents/references/` since 2026-10-01 (`result.marker_files`). It runs only
+  where the sibling baseAgent checkout exists, so CI never caught it.
+
 ### fix (interop carries write_policy and mcp_grants: adopted bespoke agents get the runner)
 
 - **`--interop-from DIR --framework claude|goose --description BRIEF`.** The interop manifest had no `write_policy`
