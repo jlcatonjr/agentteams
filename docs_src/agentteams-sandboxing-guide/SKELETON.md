@@ -554,7 +554,7 @@ path, `-I -S`, SHA256), `:67` (system pythons), `:145-168` `install_files`, `:23
 staged); `agentteams/frameworks/claude.py:151-155`, `agentteams/frameworks/goose.py:280-286` (launched
 `staged`); `agentteams/audit_agent_contract.py:33-34`, `:778` `_check_write_policy`;
 `agentteams/cli/standalone_modes.py:204-261` (`--check-wiring`); `agentteams/interop_write_policy.py:1-55`,
-`:193` `install_server`; `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
+`:191` `install_server`; `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
 as a subprocess).
 **Dial.** R Full · D Core · S Full · E Light (ceiling #4 in plain words).
 
