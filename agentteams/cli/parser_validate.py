@@ -325,8 +325,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("restore_backup", "--restore-backup"),
     ]
 
+    # --description is allowed: it supplies the target team's write_policy/mcp_grants (M6); no generation runs.
     interop_incompatible = [
-        ("description", "--description"),
         ("project", "--project"),
         ("self_update", "--self"),
         ("no_scan", "--no-scan"),
@@ -382,10 +382,7 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     if args.interop_from:
         for attr, flag in interop_incompatible:
             val = getattr(args, attr)
-            if attr == "description":
-                if val is not None:
-                    parser.error(f"{flag} cannot be used with --interop-from")
-            elif attr == "restore_backup":
+            if attr == "restore_backup":
                 if val is not None:
                     parser.error(f"{flag} cannot be used with --interop-from")
             elif val:

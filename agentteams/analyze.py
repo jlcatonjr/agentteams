@@ -15,6 +15,7 @@ from typing import Any
 # _plan_output_files extracted to agentteams/output_plan.py (CH-07);
 # re-exported so analyze._plan_output_files resolves unchanged.
 from agentteams.write_policy import manifest_fields as _wp_manifest_fields
+from agentteams.write_policy import resolve as _wp_resolve
 from agentteams.output_plan import _plan_output_files  # noqa: F401,E402
 
 from agentteams import tool_metadata_catalog
@@ -278,49 +279,10 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     goose_tool_scoping = description.get("goose_tool_scoping")
     # Orchestrator-only-writes pilot (opt-in): only the non-default value reaches the manifest, so a team
     # without the switch keeps a byte-identical manifest. The audit's AR_WRITE_POLICY check keys on it.
-    write_policy = description.get("write_policy")
-    # P5a: scope the switch to frameworks. A team brief that also emits copilot/codex lists the frameworks the
-    # pilot covers; every other framework renders as if the switch were off (outside the pilot's guarantee).
-    scoped = description.get("write_policy_frameworks")
-    if write_policy == "orchestrator-only" and scoped is not None:
-        if not (isinstance(scoped, list) and scoped and set(scoped) <= {"claude", "goose", "codex"}):
-            raise ValueError('write_policy_frameworks must be a non-empty list of "claude", "goose" and/or '
-                             '"codex" (codex only when launched through .codex/confined-run.example.sh)')
-        if framework not in scoped:
-            print(f"  \u2139  write_policy orchestrator-only is scoped to {', '.join(scoped)}; the {framework} "
-                  "team renders WITHOUT it (outside the pilot's guarantee).", file=sys.stderr)
-            write_policy = None
+    write_policy = _wp_resolve(description, framework)
     if write_policy == "orchestrator-only":
-        # Only grant-mode recipes derive their extensions from declared tools; a legacy recipe ships a full
-        # `developer` whatever the agent declares, so the narrowed tools would never reach Goose.
-        if goose_tool_scoping == "legacy":
-            raise ValueError('write_policy "orchestrator-only" requires goose_tool_scoping "grant" (or unset)')
+        # Only grant-mode recipes derive their extensions from declared tools (see write_policy.resolve).
         goose_tool_scoping = "grant"
-        # Key custody (P4a, operator decision E): the out-of-session runner's key file is out of the
-        # orchestrator's reach only where a session sandbox denies the key directory: claude and goose,
-        # with a non-cooperative privilege_profile. Elsewhere the session could simply read it.
-        # Phase 1a: codex too, with codex:sandbox in effect; agentteams' launcher masks the key directory when
-        # Codex runs through .codex/confined-run.example.sh. Generation can't verify that launch, so it says so.
-        if framework not in ("claude", "goose", "codex"):
-            raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose (their session sandbox '
-                             'denies the ledger key) and on codex only when launched through '
-                             f'.codex/confined-run.example.sh; {framework} has no such sandbox')
-        if description.get("privilege_profile") == "cooperative":
-            raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '
-                             '"cooperative" turns it off')
-        # The Claude gate hook goes fail-closed only for an EXPLICIT confined/exclusive profile (2026-W39: a
-        # defaulted profile must not flip a wired team's live gate). Under the pilot, require it explicitly.
-        if description.get("privilege_profile") not in ("confined", "exclusive"):
-            raise ValueError('write_policy "orchestrator-only" needs an explicit privilege_profile "confined" or '
-                             '"exclusive" (the default leaves the Claude gate hook fail-open)')
-        if framework == "codex":
-            # The runner is emitted only where the launcher is (Linux, macOS); elsewhere nothing masks the key.
-            if not (sys.platform.startswith("linux") or sys.platform.startswith("darwin")):
-                raise ValueError('write_policy "orchestrator-only" on codex needs agentteams\' launcher, which is '
-                                 f'emitted only on Linux and macOS (this host: {sys.platform})')
-            print("  \u2139  write_policy on codex holds only via .codex/confined-run.example.sh (not verifiable here): "
-                  "the launcher masks the key; a generated role gate limits spawned agents to read-only tools.",
-                  file=sys.stderr)
 
     # Strict agent-privilege switch (enforce decision signing). Defaults ON: an absent field
     # means the team gets the enforcement when it is (re)generated/updated (the emitted

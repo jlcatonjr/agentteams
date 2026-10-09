@@ -17,6 +17,8 @@ from typing import Any
 
 # Single source of truth for the framework-id -> adapter map (CH-05).
 from agentteams import capability_map as _capability_map
+from agentteams import interop_write_policy as _iwp
+from agentteams import write_policy as _write_policy
 from agentteams.frameworks.base import FrameworkAdapter as _FrameworkAdapter
 from agentteams.frameworks.registry import FRAMEWORKS as _ADAPTERS
 from agentteams.projection_marker import mark_interop_projection, write_projection_marker  # noqa: F401
@@ -381,6 +383,7 @@ def import_from_cai(
     overwrite: bool = False,
     preserve_existing: bool = False,
     skills_only: bool = False,
+    write_policy_fields: dict[str, Any] | None = None,
 ) -> InteropResult:
     """Import a CAI document into a target framework directory.
 
@@ -397,6 +400,9 @@ def import_from_cai(
             the canonical entry is left byte-for-byte untouched, and an existing instruction
             file is fence-merged instead of replaced (``interop_helpers.agent_unchanged`` /
             ``merge_instruction_file``).
+        write_policy_fields: ``interop_write_policy.manifest_fields`` of the target brief (``--description``):
+            under the switch every non-orchestrator agent is narrowed and given its write-policy section once,
+            granted agents get the agentteams_runner block, and the pinned server is installed.
 
     Returns:
         An :class:`InteropResult` listing converted, skipped and notice entries.
@@ -455,6 +461,8 @@ def import_from_cai(
     # parameters/response/retry + extension scoping) into the import
     # manifest stub so render-time re-emits it instead of dropping it.
     adapter.apply_framework_extensions(manifest, cai)
+    # M6: the target brief's write_policy/mcp_grants, set last so no captured extension overrides them.
+    _iwp.prepare(manifest, write_policy_fields, target_framework, target_dir, preserve_existing=preserve_existing)
     # The project-level framework_extensions.goose bucket's own contribution
     # (just set above), captured once before the loop — 2026-08-11 fix below
     # unions this with each agent's own tool_scopes-derived extensions, fresh
@@ -494,6 +502,7 @@ def import_from_cai(
             continue
         if dest.exists() and not overwrite:
             result.skipped.append(str(dest))
+            result.errors.extend(_iwp.left_in_place(dest, manifest))
             continue
 
         body = str(agent.get("body_markdown", "")).strip() + "\n"
@@ -509,8 +518,9 @@ def import_from_cai(
         # goose) preserve the metadata instead of falling back to a slug-derived
         # name. Since the P1 convergence (2026-08-15) copilot-cli shares
         # copilot-vscode's front-matter channel; it no longer strips it.
-        cai_name = str(agent.get("name", "")).strip()
-        cai_desc = str(agent.get("description", "")).strip()
+        # One line each: a line break would let the value inject a front-matter key (e.g. an earlier `tools:`).
+        cai_name = " ".join(str(agent.get("name", "")).split())
+        cai_desc = " ".join(str(agent.get("description", "")).split())
         cai_handoffs = [
             {
                 "label": str(h.get("label") or ""),
@@ -537,6 +547,10 @@ def import_from_cai(
         cai_tool_scopes = [
             str(t) for t in (agent.get("capabilities") or {}).get("tool_scopes") or []
         ]
+        narrowed = _iwp.restricted(slug, manifest, target_framework)
+        if narrowed:
+            cai_tool_scopes = _write_policy.narrow_scopes(cai_tool_scopes)
+        body = _write_policy.ensure_section(body, slug, manifest)  # unchanged without the switch
         if target_framework == "goose":
             agent_exts = _capability_map.canonical_to_goose_extensions(cai_tool_scopes)
             union_exts = dict.fromkeys(_bucket_recipe_extensions)
@@ -566,7 +580,8 @@ def import_from_cai(
                 cai_tools_line = f"tools: {raw_tools}"
             elif cai_tool_scopes:
                 cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
-        elif cai_tool_scopes and target_framework in ("copilot-vscode", "copilot-cli", "claude"):
+        elif cai_tool_scopes and (target_framework in ("copilot-vscode", "copilot-cli", "claude")
+                                  or (target_framework == "goose" and _write_policy.enabled(manifest))):
             # Both adapters' own render_agent_file already knows how to turn a
             # VS Code-shaped bracket list of canonical tokens into their native
             # tool declaration (copilot-vscode: pass-through, since its own
@@ -617,17 +632,23 @@ def import_from_cai(
                     rfm_val = cai_raw_fm[rfm_key]
                     if rfm_key in ("name", "description", "tools", "allowed-tools", "handoffs"):
                         continue  # already written above
+                    if narrowed and _iwp.withheld(rfm_key, rfm_val):  # a capability key the switch forbids
+                        result.notices.append(f"{slug}: source `{rfm_key}` withheld (write_policy orchestrator-only)")
+                        continue
                     header.append(_serialize_raw_fm_key(rfm_key, rfm_val))
             header.append("---")
             body = "\n".join(header) + "\n\n" + body
         if delivery == "manifest" and cai_handoffs:
             runtime_handoff_agents.append({"agent": slug, "handoffs": cai_handoffs})
         rendered = adapter.render_agent_file(body, slug, manifest)
+        if narrowed:  # backstop: the rendered file must pass AR_WRITE_POLICY exactly as a native render does
+            _iwp.check_rendered(slug, rel_name, rendered, target_framework, manifest)
         if not dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(rendered, encoding="utf-8")
         result.converted.append(str(dest))
 
+    result.converted.extend(_iwp.install_server(manifest, target_framework, target_dir, dry_run=dry_run))
     instructions_content = str(cai.get("instructions_binding", {}).get("content", ""))
     if instructions_content:
         # F.2: instructions filename + placement is framework-owned. goose's
@@ -758,6 +779,7 @@ def run_interop(
     dry_run: bool = False,
     overwrite: bool = False,
     skills_only: bool = False,
+    write_policy_fields: dict[str, Any] | None = None,
 ) -> InteropResult:
     """Run interop conversion with optional bundle artifact generation.
 
@@ -770,6 +792,7 @@ def run_interop(
         dry_run: Report without writing.
         overwrite: Replace existing target files.
         skills_only: Import only the source team's skills (see :func:`import_from_cai`).
+        write_policy_fields: The target brief's write-policy fields (see :func:`import_from_cai`).
 
     A real, error-free, non-skills-only run then writes the team marker, control plane first
     (``projection_marker.mark_interop_projection``); a refused marker is an error.
@@ -794,6 +817,7 @@ def run_interop(
         dry_run=dry_run,
         overwrite=overwrite,
         skills_only=skills_only,
+        write_policy_fields=write_policy_fields,
     )
 
     if mode == "bundle":

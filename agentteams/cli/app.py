@@ -487,7 +487,20 @@ def _main_dispatch(
     # --interop-from: CAI-based cross-framework interop pipeline
     # -----------------------------------------------------------------------
     if args.interop_from:
+        # M6: --description BRIEF carries the target team's write_policy/mcp_grants into the import.
+        interop_wp: dict = {}
+        if args.description:
+            from agentteams import ingest as _ingest
+            from agentteams.interop_write_policy import manifest_fields as _interop_wp_fields
+
+            try:
+                interop_wp = _interop_wp_fields(
+                    _ingest.load(Path(args.description).resolve(), scan_project=False), args.framework)
+            except (ValueError, OSError) as exc:
+                print(f"Error: --description: {exc}", file=sys.stderr)
+                return 1
         return _run_interop(
+            write_policy_fields=interop_wp,
             source_dir=Path(args.interop_from).resolve(),
             source_framework=args.interop_source_framework,
             target_framework=args.framework,

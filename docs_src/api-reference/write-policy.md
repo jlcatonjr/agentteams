@@ -17,6 +17,9 @@ so that only the orchestrator can write.
 | `ORCHESTRATOR_SLUGS` | Agents that keep their tools: `orchestrator` and Goose `bridge-orchestrator`. |
 | `enabled(manifest) -> bool` | True only for `write_policy: "orchestrator-only"`. |
 | `narrow_tools(content) -> str` | Narrows the one-line `tools: [...]` flow list. `read` is always kept, and a missing key becomes `['read', 'search']`. A one-line legacy Claude `allowed-tools:` grant is removed, since a host that reads it would ignore `tools:`. Raises `ValueError` for a `tools:` key of any other shape, or a multi-line `allowed-tools:`, rather than adding a second key. |
+| `resolve(description, framework) -> str \| None` | The write policy in effect for one framework's render, after every check: `write_policy_frameworks` scoping, legacy Goose refusal, supported frameworks, explicit `confined`/`exclusive` profile. Shared by `analyze.build_manifest` and `--interop-from --description`. Raises `ValueError`. |
+| `ensure_section(body, slug, manifest) -> str` | For an imported agent body: returned unchanged when its only write-policy section is the one the brief calls for, given that section when it has none. Raises `ValueError` for a different section or more than one. |
+| `narrow_scopes(scopes) -> list[str]` | The `narrow_tools` rule on a list of canonical tool scopes (always `read`; `['read', 'search']` when empty). |
 | `apply(content, slug, manifest) -> str` | Without the switch, returns the content unchanged. With it, the orchestrator gains the "Applying Proposals" section and every other agent is narrowed and gains the "Return Proposals" section. The section is fenced only when the body already is. |
 | `reference_doc() -> str` | The `references/write-policy.reference.md` shipped with a team under the switch. |
 

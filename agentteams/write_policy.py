@@ -22,6 +22,7 @@ check cannot drift apart. Stdlib only; integrity-pinned, since it decides C-3 gr
 from __future__ import annotations
 
 import re
+import sys
 from typing import Any
 
 #: Tools a non-orchestrator agent may hold under the switch: read, search and bookkeeping only.
@@ -175,6 +176,70 @@ def enabled(manifest: dict[str, Any]) -> bool:
     return manifest.get("write_policy") == "orchestrator-only"
 
 
+def resolve(description: dict[str, Any], framework: str) -> str | None:
+    """The write policy in effect for one framework's render of this brief, after every check (P5a).
+
+    Shared by native generation (``analyze.build_manifest``) and ``--interop-from --description``, so both
+    scope and refuse the switch identically. Under the switch the caller also sets ``goose_tool_scoping``
+    to ``"grant"``: only grant-mode recipes derive their extensions from declared tools.
+
+    Args:
+        description: The project brief.
+        framework: The target framework id.
+
+    Returns:
+        ``"orchestrator-only"`` when the switch applies to this framework, else the brief's value with the
+        switch scoped away (``None``), or the brief's own non-switch value.
+
+    Raises:
+        ValueError: A malformed ``write_policy_frameworks``, a legacy Goose scoping, an unsupported framework, or
+            a ``privilege_profile`` that leaves the session sandbox or the Claude gate hook off.
+    """
+    write_policy = description.get("write_policy")
+    # P5a: scope the switch to frameworks. A team brief that also emits copilot/codex lists the frameworks the
+    # pilot covers; every other framework renders as if the switch were off (outside the pilot's guarantee).
+    scoped = description.get("write_policy_frameworks")
+    if write_policy == "orchestrator-only" and scoped is not None:
+        if not (isinstance(scoped, list) and scoped and set(scoped) <= {"claude", "goose", "codex"}):
+            raise ValueError('write_policy_frameworks must be a non-empty list of "claude", "goose" and/or '
+                             '"codex" (codex only when launched through .codex/confined-run.example.sh)')
+        if framework not in scoped:
+            print(f"  \u2139  write_policy orchestrator-only is scoped to {', '.join(scoped)}; the {framework} "
+                  "team renders WITHOUT it (outside the pilot's guarantee).", file=sys.stderr)
+            write_policy = None
+    if write_policy == "orchestrator-only":
+        # Only grant-mode recipes derive their extensions from declared tools; a legacy recipe ships a full
+        # `developer` whatever the agent declares, so the narrowed tools would never reach Goose.
+        if description.get("goose_tool_scoping") == "legacy":
+            raise ValueError('write_policy "orchestrator-only" requires goose_tool_scoping "grant" (or unset)')
+        # Key custody (P4a, operator decision E): the out-of-session runner's key file is out of the
+        # orchestrator's reach only where a session sandbox denies the key directory: claude and goose,
+        # with a non-cooperative privilege_profile. Elsewhere the session could simply read it.
+        # Phase 1a: codex too, with codex:sandbox in effect; agentteams' launcher masks the key directory when
+        # Codex runs through .codex/confined-run.example.sh. Generation can't verify that launch, so it says so.
+        if framework not in ("claude", "goose", "codex"):
+            raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose (their session sandbox '
+                             'denies the ledger key) and on codex only when launched through '
+                             f'.codex/confined-run.example.sh; {framework} has no such sandbox')
+        if description.get("privilege_profile") == "cooperative":
+            raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '
+                             '"cooperative" turns it off')
+        # The Claude gate hook goes fail-closed only for an EXPLICIT confined/exclusive profile (2026-W39: a
+        # defaulted profile must not flip a wired team's live gate). Under the pilot, require it explicitly.
+        if description.get("privilege_profile") not in ("confined", "exclusive"):
+            raise ValueError('write_policy "orchestrator-only" needs an explicit privilege_profile "confined" or '
+                             '"exclusive" (the default leaves the Claude gate hook fail-open)')
+        if framework == "codex":
+            # The runner is emitted only where the launcher is (Linux, macOS); elsewhere nothing masks the key.
+            if not (sys.platform.startswith("linux") or sys.platform.startswith("darwin")):
+                raise ValueError('write_policy "orchestrator-only" on codex needs agentteams\' launcher, which is '
+                                 f'emitted only on Linux and macOS (this host: {sys.platform})')
+            print("  \u2139  write_policy on codex holds only via .codex/confined-run.example.sh (not verifiable here): "
+                  "the launcher masks the key; a generated role gate limits spawned agents to read-only tools.",
+                  file=sys.stderr)
+    return write_policy
+
+
 def manifest_fields(description: dict[str, Any], write_policy: str | None) -> dict[str, Any]:
     """Manifest fields the switch carries: ``write_policy``, and (R6) ``mcp_grants`` when set. Nothing without the
     switch, so every other team's manifest is unchanged.
@@ -267,17 +332,80 @@ def apply(content: str, slug: str, manifest: dict[str, Any]) -> str:
     if not enabled(manifest):
         return content
     body = content.rstrip("\n") + "\n"
-    grants = manifest.get("mcp_grants") or {}
-    if slug in ORCHESTRATOR_SLUGS:
-        section = _ORCHESTRATOR_SECTION + ("\n" + _ORCHESTRATOR_STAGED_PARAGRAPH if grants else "")
-    else:
-        section = _RUNNER_SECTION if isinstance(grants.get(slug), dict) else _PROPOSALS_SECTION
-    if _ANY_FENCE_RE.search(body):
-        section = ("\n<!-- AGENTTEAMS:BEGIN write_policy v=1 -->" + section
-                   + "<!-- AGENTTEAMS:END write_policy -->\n")
+    section = _fenced(_section(slug, manifest), body)
     if slug in ORCHESTRATOR_SLUGS:
         return body + section
     return narrow_tools(body) + section
+
+
+def _section(slug: str, manifest: dict[str, Any]) -> str:
+    """The write-policy section this agent gets under the switch (unfenced)."""
+    grants = manifest.get("mcp_grants") or {}
+    if slug in ORCHESTRATOR_SLUGS:
+        return _ORCHESTRATOR_SECTION + ("\n" + _ORCHESTRATOR_STAGED_PARAGRAPH if grants else "")
+    return _RUNNER_SECTION if isinstance(grants.get(slug), dict) else _PROPOSALS_SECTION
+
+
+def _fenced(section: str, body: str) -> str:
+    """The section in its own ``write_policy`` fence when the body already has fences (see :func:`apply`)."""
+    if _ANY_FENCE_RE.search(body):
+        return "\n<!-- AGENTTEAMS:BEGIN write_policy v=1 -->" + section + "<!-- AGENTTEAMS:END write_policy -->\n"
+    return section
+
+
+_SECTION_HEADING_RE = re.compile(r"^## Write Policy: ", re.MULTILINE)
+
+
+def ensure_section(body: str, slug: str, manifest: dict[str, Any]) -> str:
+    """Give an imported agent body (``--interop-from --description``) its write-policy section exactly once.
+
+    A source rendered with :func:`apply` already carries it, so interop must not append a second copy. A body
+    whose only write-policy section is the one this brief calls for is returned unchanged; one with none gets it
+    appended (fenced as :func:`apply` would). Tools are not touched here: interop narrows the agent's declared scopes itself.
+
+    Args:
+        body: The agent's Markdown body (no front matter).
+        slug: The agent's slug.
+        manifest: The interop manifest carrying :func:`manifest_fields`.
+
+    Returns:
+        The body, with the section appended when it was missing; unchanged without the switch.
+
+    Raises:
+        ValueError: The body has a write-policy section other than the one this brief calls for (for example
+            the proposals section on an agent the brief now grants agentteams_runner), or more than one:
+            re-render the source with the current brief rather than ship contradictory instructions.
+    """
+    if not enabled(manifest):
+        return body
+    section = _section(slug, manifest)
+    headings = len(_SECTION_HEADING_RE.findall(body))
+    if section.strip() in body and headings == 1:
+        return body
+    if headings:
+        raise ValueError(f"{slug}: its write-policy section doesn't match this brief (stale mcp_grants?); "
+                         "re-render the source agent with the current brief before importing it")
+    body = body.rstrip("\n") + "\n"
+    return body + _fenced(section, body)
+
+
+def narrow_scopes(scopes: list[str]) -> list[str]:
+    """An imported non-orchestrator agent's tool scopes under the switch: the rule :func:`narrow_tools` applies.
+
+    Args:
+        scopes: The agent's declared canonical tool scopes (CAI ``capabilities.tool_scopes``).
+
+    Returns:
+        The :data:`NARROWED_TOKENS` it declares, always with ``read``; ``['read', 'search']`` when it declares
+        none (as :func:`narrow_tools` does for a file without ``tools:``).
+
+    Raises:
+        Nothing.
+    """
+    if not scopes:
+        return ["read", "search"]
+    declared = {str(t).strip().split("(", 1)[0].strip().lower() for t in scopes}
+    return [t for t in NARROWED_TOKENS if t == "read" or t in declared]
 
 
 def reference_doc() -> str:
