@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (Codex runner: name every protected `CODEX_HOME` stub)
+
+- The `.codex/confined-run.example.sh` header comment now lists `plugins/` among the stubs it creates and makes
+  read-only. `frameworks.md` no longer says `config.toml`/`hooks.json` are read-only "when present", since the
+  runner always creates them. Comment and docs only, from the session-close conflict audit after #171.
+
 ### fix (runner follow-ups: Goose `~` excludes, shared read-only server pin, nested Codex config)
 
 - **Goose runner `~/` excludes now work.** An `exclusive` Goose team's `~/…` `protected_read_paths` were passed
