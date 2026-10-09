@@ -537,7 +537,11 @@ def test_acceptance_against_baseagent_copy(tmp_path: Path) -> None:
         assert path.read_bytes() == data, f"{path} was modified"
     new = {p for p in root.rglob("*") if p.is_file()} - set(before)
     if (root / "AGENTS.md") in before:
-        assert new == set(tomls)
+        # Since 2026-10-01 an interop run also writes its team marker and control plane under
+        # .codex/agents/references/ (projection_marker.mark_interop_projection), reported in marker_files.
+        marker = {Path(m) for m in result.marker_files}
+        assert all(m.is_relative_to(root / ".codex" / "agents" / "references") for m in marker)
+        assert new == set(tomls) | marker
     for p in tomls:
         d = tomllib.loads(p.read_text(encoding="utf-8"))
         assert set(d) <= _ALLOWED_KEYS

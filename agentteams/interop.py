@@ -550,7 +550,7 @@ def import_from_cai(
         narrowed = _iwp.restricted(slug, manifest, target_framework)
         if narrowed:
             cai_tool_scopes = _write_policy.narrow_scopes(cai_tool_scopes)
-        body = _write_policy.ensure_section(body, slug, manifest)  # unchanged without the switch
+        body = _write_policy.ensure_section(body, slug, manifest, writer=not narrowed)  # unchanged without the switch
         if target_framework == "goose":
             agent_exts = _capability_map.canonical_to_goose_extensions(cai_tool_scopes)
             union_exts = dict.fromkeys(_bucket_recipe_extensions)

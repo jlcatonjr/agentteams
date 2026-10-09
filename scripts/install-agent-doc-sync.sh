@@ -86,21 +86,27 @@ for name in ("settings.json", "settings.local.json"):
             path = os.path.expanduser(entry)
             roots.append((f"allowWrite root {entry!r} ({name})",
                           path if os.path.isabs(path) else os.path.join(real, path)))
+def refuse_inside(what, target):
+    for label, root in roots:
+        if inside(target, root):
+            sys.exit(f"refusing: the {what} ({target}) lies inside {label} ({root}); an agent could "
+                     "edit what the unit runs or trusts")
+
+# The interpreter and its prefixes are checked before anything is imported from them, so a refusal names the
+# real problem (an interpreter inside the project) instead of an import failure.
+# The unit runs with HOME=%h and no XDG_* variables, so its state dir and log dir are fixed.
+for what, target in (("python interpreter", py), ("python prefix", sys.prefix),
+                     ("python base prefix", sys.base_prefix),
+                     ("sync state dir", os.path.join(home, ".local", "state", "agentteams")),
+                     ("systemd user unit dir", unit_dir),
+                     ("log dir", os.path.join(home, ".cache", "agentteams"))):
+    refuse_inside(what, target)
 try:
     import agentteams
 except ImportError:
     sys.exit(f"refusing: {py} -I cannot import agentteams")
 pkg = os.path.dirname(os.path.realpath(agentteams.__file__))
-# The unit runs with HOME=%h and no XDG_* variables, so its state dir and log dir are fixed.
-for what, target in (("python interpreter", py), ("python prefix", sys.prefix),
-                     ("python base prefix", sys.base_prefix), ("agentteams package", pkg),
-                     ("sync state dir", os.path.join(home, ".local", "state", "agentteams")),
-                     ("systemd user unit dir", unit_dir),
-                     ("log dir", os.path.join(home, ".cache", "agentteams"))):
-    for label, root in roots:
-        if inside(target, root):
-            sys.exit(f"refusing: the {what} ({target}) lies inside {label} ({root}); an agent could "
-                     "edit what the unit runs or trusts")
+refuse_inside("agentteams package", pkg)
 for c in pkg:
     if c.isspace() or c in "'\"$`\\%;&|<>":
         sys.exit(f"refusing: unsafe agentteams package path: {pkg}")

@@ -258,14 +258,19 @@ def test_a_smuggled_front_matter_line_is_caught_by_the_backstop(tmp_path):
     assert [f.description for f in findings if f.severity == "error"] == []
 
 
-def test_a_claude_bridge_orchestrator_is_refused(tmp_path):
+def test_a_claude_bridge_orchestrator_is_narrowed_not_exempt(tmp_path):
+    """bridge-orchestrator writes only as Goose's entry recipe; on Claude it is an ordinary restricted agent
+    (narrowed, given the proposals section, audited), so a Copilot bridge's read-only one imports cleanly."""
     from agentteams.interop import import_from_cai
 
     cai = _cai("x")
     cai["agents"][0]["slug"] = "bridge-orchestrator"
-    with pytest.raises(ValueError, match="second writer"):
-        import_from_cai(cai, "claude", tmp_path / "project/.claude/agents",
-                        write_policy_fields=manifest_fields(BRIEF, "claude"))
+    target = tmp_path / "project/.claude/agents"
+    result = import_from_cai(cai, "claude", target, write_policy_fields=manifest_fields(BRIEF, "claude"))
+    assert result.success, result.errors
+    text = (target / "bridge-orchestrator.md").read_text()
+    assert "Write Policy: Return Proposals, Never Write" in text and "Applying Proposals" not in text
+    assert not {"Bash", "Write", "Edit", "Task"} & _tools(next(l for l in text.splitlines() if l.startswith("tools:")))
 
 
 def test_preserve_existing_is_refused_under_the_switch(tmp_path):
