@@ -605,10 +605,6 @@ def _main_dispatch(
     )
 
 
-if __name__ == "__main__":  # `python -I -m agentteams.cli.app ...` (the doc-sync unit's entry)
-    sys.exit(main())
-
-
 def _description_brief(args: argparse.Namespace) -> tuple[dict | None, bool]:
     """The ``--description`` brief for ``--convert-from`` / ``--bridge-from`` (write-policy detection), loaded once.
 
@@ -630,3 +626,7 @@ def _description_brief(args: argparse.Namespace) -> tuple[dict | None, bool]:
     except (ValueError, OSError) as exc:
         print(f"Error: --description: {exc}", file=sys.stderr)
         return None, True
+
+
+if __name__ == "__main__":  # `python -I -m agentteams.cli.app ...` (the doc-sync unit's entry)
+    sys.exit(main())

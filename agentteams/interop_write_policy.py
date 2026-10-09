@@ -229,23 +229,27 @@ def target_under_switch(agents_dir: Path) -> bool:
     """Whether the team in *agents_dir* was generated under ``write_policy: "orchestrator-only"``.
 
     Read from its ``references/build-log.json``, which native generation writes with a ``write_policy`` field only
-    under the switch. A missing or unreadable build-log reads as off: a bridge-only project with no native team
-    has no record, which is a documented ceiling (pass ``--description`` there).
+    under the switch. A missing build-log reads as off: a bridge-only project with no native team has no record,
+    which is a documented ceiling (pass ``--description`` there). A build-log that exists but can't be read or
+    isn't a JSON object reads as **on** (fail closed).
 
     Args:
         agents_dir: The target agents directory (``.claude/agents``, ``.goose/recipes``, ...).
 
     Returns:
-        True when the build-log records the switch.
+        True when the build-log records the switch, or exists but is unreadable or malformed.
 
     Raises:
         Nothing.
     """
-    try:
-        data = json.loads((Path(agents_dir) / "references" / "build-log.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    log = Path(agents_dir) / "references" / "build-log.json"
+    if not log.exists() and not log.is_symlink():
         return False
-    return isinstance(data, dict) and data.get("write_policy") == "orchestrator-only"
+    try:
+        data = json.loads(log.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return True  # present but unreadable: fail closed (a truncated log must not unblock convert/bridge)
+    return not isinstance(data, dict) or data.get("write_policy") == "orchestrator-only"
 
 
 def refuse_outside_interop(mode: str, framework: str, agents_dir: Path,
@@ -272,9 +276,11 @@ def refuse_outside_interop(mode: str, framework: str, agents_dir: Path,
     if not on and description is not None:
         on = bool(_wp.manifest_fields(description, _wp.resolve(description, framework)))
     if on:
+        fix = (f"Use: agentteams --interop-from <source agents dir> --framework {framework} --description <brief> "
+               "--overwrite" if framework in SUPPORTED else
+               f"Regenerate the {framework} team natively: agentteams --description <brief> --framework {framework}")
         raise ValueError(f"{mode}: this team runs write_policy \"orchestrator-only\", which {mode} doesn't apply "
-                         "(it would write agents that can write). Use: agentteams --interop-from <source agents dir> "
-                         f"--framework {framework} --description <brief> --overwrite")
+                         f"(it would write agents that can write). {fix}")
 
 
 def refuse_bridge_stubs(source_framework: str, framework: str, output_root: Path, host_features: list[str],

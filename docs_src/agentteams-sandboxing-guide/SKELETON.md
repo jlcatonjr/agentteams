@@ -532,8 +532,8 @@ sandbox.)*
    `--convert-from` and bridge subagent stubs (Claude, Goose) apply none of this, so they **refuse** a
    team under the switch and name the `--interop-from … --description … --overwrite` command. The switch
    is read from the target team's `references/build-log.json` (native generation records `write_policy`
-   there) or from `--description`. A bridge-only project with no native build-log has no record, so it is
-   detected only through `--description`.
+   there) or from `--description`. A build-log that exists but is unreadable fails closed. A bridge-only
+   project with no native build-log has no record, so it is detected only through `--description`.
 8. **Status and ceiling.** ✅ in code and tests: the narrowing, sections, refusals, runner, queue
    channels, staging, Ed25519 grants and caps, server deny list and pin, `AR_WRITE_POLICY`,
    `--check-wiring`'s checks, and interop. ⚙ **not yet verified:** that Claude Code and Goose actually

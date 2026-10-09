@@ -92,13 +92,16 @@ agentteams --interop-from .github/agents --interop-source-framework copilot-vsco
 ### `target_under_switch(agents_dir: Path) -> bool`
 
 True when the team's `references/build-log.json` records `write_policy: "orchestrator-only"`. Native generation
-writes that field only under the switch. A missing or unreadable build-log reads as off.
+writes that field only under the switch. A missing build-log reads as off. A build-log that exists but can't be
+read, or isn't a JSON object, reads as **on**: it fails closed.
 
 ### `refuse_outside_interop(mode: str, framework: str, agents_dir: Path, description: dict | None = None) -> None`
 
-**Raises:** `ValueError` naming the `--interop-from … --description … --overwrite` command when the target's
+**Raises:** `ValueError` when the target's
 build-log records the switch, or when `description` turns it on for `framework` (including `write_policy.resolve`'s
-own refusals).
+own refusals). For claude and goose, the message names the `--interop-from … --description … --overwrite`
+command. For any other framework, which interop refuses under the switch, it says to regenerate natively with
+`--description`.
 
 ### `refuse_bridge_stubs(source_framework: str, framework: str, output_root: Path, host_features: list[str], description: dict | None = None) -> None`
 

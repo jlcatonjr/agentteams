@@ -52,7 +52,29 @@ def test_the_build_log_records_the_switch(tmp_path):
     bad = tmp_path / "bad" / "references"
     bad.mkdir(parents=True)
     (bad / "build-log.json").write_text("{not json")
-    assert not target_under_switch(bad.parent)
+    assert target_under_switch(bad.parent), "a present but malformed build-log fails closed (@security cond. 1)"
+    (bad / "build-log.json").write_text("[1, 2]")
+    assert target_under_switch(bad.parent)
+
+
+def test_a_codex_refusal_points_to_native_regeneration(tmp_path):
+    """interop refuses codex under the switch, so the message must not point there (@security cond. 3)."""
+    agents = tmp_path / "project" / ".codex" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "references" / "build-log.json").write_text(json.dumps({"write_policy": "orchestrator-only"}))
+    with pytest.raises(ValueError, match="Regenerate the codex team natively"):
+        convert_team(_source(tmp_path), agents, "codex", overwrite=True)
+
+
+def test_the_app_module_entry_point_reaches_the_refusal(tmp_path):
+    """`python -m agentteams.cli.app` defines every helper before main() runs (@security cond. 2)."""
+    src = _source(tmp_path)
+    agents = _switched(tmp_path / "project", "claude")
+    proc = subprocess.run([sys.executable, "-m", "agentteams.cli.app", "--convert-from", str(src), "--framework",
+                           "claude", "--output", str(agents), "--description", str(tmp_path / "missing.json")],
+                          capture_output=True, text=True, timeout=120, cwd=str(REPO))
+    assert "NameError" not in proc.stderr, proc.stderr[-1500:]
+    assert proc.returncode == 1
 
 
 @pytest.mark.parametrize("framework", ["claude", "goose"])
