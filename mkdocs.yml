@@ -242,6 +242,7 @@ nav:
       - proposal_run: api-reference/proposal-run.md
       - proposal_staging: api-reference/proposal-staging.md
       - runner_mcp: api-reference/runner-mcp.md
+      - interop_write_policy: api-reference/interop-write-policy.md
       - mcp_direct_grants: api-reference/mcp-direct-grants.md
       - git_exec: api-reference/git-exec.md
       - source_provenance: api-reference/source-provenance.md

@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (interop carries write_policy and mcp_grants: adopted bespoke agents get the runner)
+
+- **`--interop-from DIR --framework claude|goose --description BRIEF`.** The interop manifest had no `write_policy`
+  or `mcp_grants`. A bespoke agent the brief grants `agentteams_runner` was told to write through it, but got no
+  runner block or tools, and the orchestrator's queue refused it. It could not write at all. Reported by
+  mathAgents (M6 pilot blocker).
+- With `--description`, an import now does what native generation does under the switch:
+  - every non-orchestrator agent is narrowed to read-only tools;
+  - capability keys `AR_WRITE_POLICY` forbids are withheld;
+  - each agent gets its write-policy section exactly once; a source carrying a section that contradicts the brief
+    is refused;
+  - granted agents get the canonical runner block;
+  - the pinned server is installed (the agents dir must be the project's canonical one, checked before writing).
+- **One resolver.** `write_policy.resolve` now holds the scoping and refusal rules native generation applied
+  inline in `analyze.py`, so interop and native generation can't drift. `write_policy.ensure_section` and
+  `narrow_scopes` are new; `apply` is unchanged in output.
+- **Hardening from the @security review.**
+  - Agent names and descriptions are written on one line in every import, since a line break could inject a
+    `tools:` key above the narrowed one.
+  - Each restricted agent's rendered file must pass `AR_WRITE_POLICY` or the import is refused.
+  - A body with more than one write-policy section is refused.
+  - Under the switch, an existing agent left in place without `--overwrite` fails the run, `preserve_existing` is
+    refused, and a non-Goose `bridge-orchestrator` is refused as a second writer.
+- New module `agentteams/interop_write_policy.py`, with an API reference page. `write_policy.py` is re-pinned in
+  `references/enforcement-integrity.json`. `--description` is no longer refused with `--interop-from`.
 ### fix (constitutional gate: PR merges prompt whatever client sends them)
 
 - The gate hook prompted for a PR merge only when it went through `gh` (`gh pr merge`, `gh api …/pulls/N/merge`,

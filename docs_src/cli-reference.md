@@ -134,6 +134,7 @@ Run the CAI-based interop pipeline from an existing source team.
 - `bundle` mode writes target files and compatibility artifacts under `references/interop/<source>-to-<target>/`.
 - All six registered frameworks (`copilot-vscode`, `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`) are valid interop targets, as is `canonical` (the durable exploded CAI directory). `--framework canonical` is interop-only and requires `--interop-from`; bundle mode is refused for the canonical target.
 - Non-dry-run interop runs also enforce the live security freshness preflight before writing, with the same signed-waiver exception path.
+- With `--description BRIEF` (claude and goose targets), the import takes the brief's `write_policy` and `mcp_grants`. Under `write_policy: "orchestrator-only"`, every non-orchestrator agent is narrowed and given its write-policy section once, agents named in `mcp_grants` get the `agentteams_runner` block and tools, and the pinned server is installed. The checks are the same as native generation's. See [`interop_write_policy`](api-reference/interop-write-policy.md). Without the switch, `--description` changes nothing.
 
 ### `--interop-source-framework NAME`
 

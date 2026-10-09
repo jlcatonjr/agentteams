@@ -52,7 +52,8 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         required=False,
         default=None,
-        help="Project description file (.json or .md). Required unless --self is used.",
+        help="Project description file (.json or .md). Required unless --self is used. With --interop-from, "
+             "supplies the target team's write_policy and mcp_grants (claude and goose imports).",
     )
     parser.add_argument(
         "--project", "-p",

@@ -315,7 +315,6 @@ def test_main_post_audit_implicitly_enables_enrich(
     [
         (["--convert-from", "src", "--description", "brief.json"], "cannot be used with --convert-from"),
         (["--convert-from", "src", "--update"], "cannot be used with --convert-from"),
-        (["--interop-from", "src", "--description", "brief.json"], "cannot be used with --interop-from"),
         (["--interop-from", "src", "--update"], "cannot be used with --interop-from"),
         (["--bridge-from", "src", "--description", "brief.json"], "cannot be used with --bridge-from"),
         (["--bridge-from", "src", "--update"], "cannot be used with --bridge-from"),
