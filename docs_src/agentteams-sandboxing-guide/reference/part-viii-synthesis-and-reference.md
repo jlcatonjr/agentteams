@@ -10,6 +10,12 @@ SB14–SB15) → **enforce** (OS + fail-open/closed hook, SB16–SB17), with the
 **tamper-tracked** (SB18–SB19) and every claim **honestly bounded** (SB20–SB21). No single stage is the
 boundary; confinement is the composition — and it engages *as tested* only when opted-in and wired.
 
+**An optional layer on top (SB24).** Under the opt-in `write_policy: "orchestrator-only"` (which needs an
+explicit `confined`/`exclusive`), only the orchestrator writes; other agents return proposals or go
+through the `agentteams_runner` MCP server, and an out-of-session runner — the only key holder — applies,
+stages or runs them, confined. It relies on the wired session sandbox to keep the key and the control
+plane out of the agents' reach.
+
 ```mermaid
 flowchart TD
     subgraph REQUEST
@@ -33,6 +39,7 @@ flowchart TD
     EMIT --> WIRE_ENFORCE
     INT["enforcement-integrity.json:<br/>pins emitters + launcher asset"] -.->|tamper-track| EMIT
     CEIL["honest ceilings:<br/>opt-in · inert-until-wired · Linux-verified-only · closes-nothing-absolutely"] -.-> WIRE_ENFORCE
+    WP["optional write_policy orchestrator-only (SB24):<br/>agents propose · out-of-session runner holds key,<br/>stages / applies / runs confined"] -.->|"relies on the wired sandbox"| WIRE_ENFORCE
     classDef m fill:#eef,stroke:#557;
 ```
 
@@ -71,6 +78,19 @@ launcher's `bwrap` / `build_macos` branch; only Windows/other lack an emittable 
 `agentteams/frameworks/_sandbox_emit.py` · `agentteams/frameworks/_linux_sandbox_emit.py` ·
 `agentteams/templates/universal/sandbox/confine-run.sh` (+ the hook and its own manifest).
 
+### The write-policy layer (SB24)
+
+| Item | Value |
+|---|---|
+| Switch | `write_policy: "orchestrator-only"` (opt-in; needs an explicit `confined`/`exclusive`) |
+| Frameworks | claude, goose; codex only via `.codex/confined-run.example.sh` + role gate (Linux/macOS); **not** Copilot / agents-md; interop: claude + goose |
+| Non-orchestrator tools | narrowed to `read`/`search`/`todo` (+ exact `mcp__agentteams_runner__*` names when granted) |
+| Runner | `agentteams --serve-requests --project <root> --description <brief>` — out of session, sole key holder, serial queue |
+| MCP tools | `read_file_hashed`, `write_file`, `delete_file`, `run_command`, `request_status` |
+| Write modes | staged (default) → `--list-staged` / `--show-staged` / `--apply-staged` / `--reject-staged`; direct only on a verified operator Ed25519 grant (≤30 d, ≤500 writes, ≤3 active); deletes always staged |
+| Checks | `AR_WRITE_POLICY` (audit); `--check-wiring` (configuration, not behaviour) |
+| Status | ✅ code + tests; ⚙ live launch by Claude Code / Goose not yet verified |
+
 ### Glossary
 
 - **Write-confinement** — the agent may write only inside `workspace_write_roots`.
@@ -79,6 +99,12 @@ launcher's `bwrap` / `build_macos` branch; only Windows/other lack an emittable 
 - **Inert until wired** — an emitted boundary confines nothing until the operator activates/wraps it.
 - **Manual-wire advisory** — the non-fatal Linux notice that the launcher must be wrapped.
 - **T6 / host-as-TCB** — the same-host operator/key-holder threat tier the sandbox does not close.
+- **Orchestrator-only write policy** — the opt-in switch under which only the orchestrator writes (SB24).
+- **Runner** — the out-of-session `--serve-requests` process: the only ledger-key holder; it applies,
+  stages and runs queued requests, confined. With the operator's host, it is the layer's TCB.
+- **`agentteams_runner`** — the keyless MCP queue client a granted agent writes and runs through.
+- **Staged / direct** — a staged write waits for the orchestrator's approval; a direct one lands at once,
+  only under a verified operator-signed grant. Deletes are always staged.
 
 > **The four ceilings, once more:** opt-in · inert-until-wired · Linux-verified-only · closes-nothing-
 > absolutely. No edition drops them.

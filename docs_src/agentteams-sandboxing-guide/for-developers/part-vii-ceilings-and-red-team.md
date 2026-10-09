@@ -11,7 +11,9 @@
   verified" wording has since been CORRECTED to match — the two guides now agree; see
   [Reference Part VII](../reference/part-vii-ceilings-and-red-team.md).)
 - **Ceiling #4 — closes nothing absolutely.** A same-host operator/key-holder (T6) and host-as-TCB stay
-  open; **seccomp/Landlock is not yet added**. The hook's uncovered surfaces are your responsibility.
+  open; **seccomp/Landlock is not yet added**. The hook's uncovered surfaces (an obfuscated PR merge
+  included) are your responsibility. The write-policy layer (SB24) doesn't change this: its runner and
+  your host are the TCB, its live launch by Claude Code/Goose is unverified, and it doesn't cover Copilot.
 
 Treat every boundary as **"engages as tested,"** never "secure."
 

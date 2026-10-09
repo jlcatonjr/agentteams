@@ -4,8 +4,10 @@
 
 **The whole flow you drive:** set `privilege_profile` → agentteams decides + emits an artifact →
 **you wire/wrap it** → OS + hook enforce → the emitters are tamper-tracked → every claim is bounded.
+Optionally, `write_policy: "orchestrator-only"` (SB24) adds a layer on top: agents propose, your
+out-of-session runner applies, stages or runs.
 
 **Quick reference** — see [Reference Part VIII](../reference/part-viii-synthesis-and-reference.md) for the
-full capability matrix, advisory-code table, mechanism table, and glossary. The one-line rule:
+full capability matrix, advisory-code table, mechanism table, write-policy table, and glossary. The one-line rule:
 
 > A confined team you never wire is a cooperative team with extra files. **Opt-in, then wire, then verify.**

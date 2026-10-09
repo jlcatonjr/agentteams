@@ -17,6 +17,10 @@ The honest verdicts a reviewer should record:
   out of scope; the sandbox boxes a mis-steered *agent*, not a determined local principal.
   **seccomp/Landlock is a further layer not yet added** (the launcher is filesystem + netns + NoNewPrivs,
   not syscall filtering).
+- **The write-policy layer (SB24) doesn't move ceiling #4.** Its runner and the operator's host are the
+  TCB (a same-host key reader or signing-key holder is out of scope); its live launch by Claude Code/Goose
+  is unverified; it covers claude and goose, codex only through its launcher + role gate, not Copilot.
+  The hook's PR-merge rule, like the delete gate, is evaded by an obfuscated or split command.
 
 The red-team methodology behind the "VERIFIED" claim is an escape/deny test on a live kernel — a boundary
 is only ever described as **"engages as tested."**

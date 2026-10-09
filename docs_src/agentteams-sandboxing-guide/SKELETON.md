@@ -4,7 +4,9 @@
 > (R/D/S/E) projects. It is a focused deep-dive on ONE layer of the broader
 > [Security Guide](../agentteams-security-guide/README.md) (its Part VI) — how *workspace
 > write-confinement, read-exclusion, egress control, and the runtime deny-hook* are requested,
-> decided, emitted, wired, enforced, tamper-tracked, and honestly bounded.
+> decided, emitted, wired, enforced, tamper-tracked, and honestly bounded — plus (SB24) the opt-in
+> *orchestrator-only write policy* and its `agentteams_runner` MCP server, which ride on that
+> confinement.
 >
 > It fixes two things the editions may **not** diverge on — the **section structure** (stable IDs
 > `SB1`…) and the **canonical facts** each section asserts. How deep and in what voice each edition
@@ -127,7 +129,7 @@ flowchart LR
    of the box, the boundary is emitted but dormant until wired.
 **Source.** `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/frameworks/_sandbox_emit.py:116` `_sandbox_feature_enabled`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:205` (`_FAIL_CLOSED_ON_ERROR = False`).
+`agentteams/templates/universal/hooks/constitutional-gate.py:230` (`_FAIL_CLOSED_ON_ERROR = False`).
 **Dial.** R Full · D Full · S Core · E Light (mandatory ceiling #1).
 
 ---
@@ -422,8 +424,21 @@ flowchart TD
    content deletion, MCP/non-Bash deletes, interpreter-mediated deletion it does not pattern-match,
    alias/quote/variable obfuscation, or harnesses that do not honor PreToolUse (or auto-approve under
    headless). A green delete-gate test means "these spellings are gated," never "deletion is prevented."
-**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:63` (delete gate);
-`agentteams/templates/universal/security.template.md` (scope + limits).
+3. **PR merges route to the operator too (since PR #173).** The same `ask` fires on a pull-request merge:
+   `gh [flags] pr [flags] merge` (flags may sit on either side of `pr`, e.g. `gh pr -R o/r merge`), the
+   REST merge endpoint `pulls/<n>/merge`, and the GraphQL `mergePullRequest` /
+   `enablePullRequestAutoMerge` mutations — the last two matched in the command text **whatever client
+   sends them** (`gh api`, `curl`, `wget`, httpie, an interpreter one-liner). A "merge" inside a PR body,
+   `gh pr view … mergeable`, or a later `git merge` does not prompt.
+4. **Same ceiling for the merge rule.** It is the same cooperative speed bump: a case-insensitive
+   pattern match over one `Bash` command string, so an obfuscated or split string (the path assembled
+   from variables, an encoded GraphQL body, a script file that does the call) still evades it, and a
+   merge made through a non-Bash tool is not seen at all.
+**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:63` (delete gate), `:75-85`
+(PR-merge rule), `:157-161` (Bash-only, case-insensitive match);
+`agentteams/templates/universal/security.template.md` (scope + limits);
+`tests/test_constitutional_gate_hook.py:226-228` (benign non-merges), `:280-292` (merge spellings incl.
+curl/wget/httpie/python).
 **Dial.** R Full · D Full · S Core · E Light.
 
 ### SB17 — Fail-open default, fail-closed under confinement  ✅
@@ -432,7 +447,7 @@ flowchart TD
    so a buggy gate never bricks a cooperative session. Under an **explicit** `confined`/`exclusive`, emission flips the
    sentinel to `_FAIL_CLOSED_ON_ERROR = True` (unless `--allow-fallback-fail-open`), so a crash emits a
    `deny` rather than a silent allow — the operator opted into a boundary a crash must not drop.
-**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:205`
+**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:230`
 (`_FAIL_CLOSED_ON_ERROR = False`); `agentteams/frameworks/claude.py` `_apply_fail_closed_policy`.
 **Dial.** R Full · D Full · S Core · E Light.
 
@@ -446,6 +461,102 @@ flowchart TD
     FC -->|"False (fail-open; gate flips only on explicit confined/exclusive)"| ALLOW2["fail-OPEN → allow<br/>(never brick a trusted session)"]
     FC -->|"True (confined/exclusive)"| DENY["fail-CLOSED → deny<br/>(operator opted into a boundary)"]
 ```
+
+### SB24 — The orchestrator-only write policy and the `agentteams_runner` MCP server  ✅/⚙
+*(Appended ID; it sits in Part V because it is an enforcement layer that rides on SB10–SB14's session
+sandbox.)*
+**Canonical facts.**
+1. **An opt-in switch.** `write_policy: "orchestrator-only"` in the brief turns it on; without it every
+   agent file renders byte-identical (`apply` returns the content unchanged). `write_policy.resolve` is
+   the single resolver native generation and `--interop-from --description` share. It **refuses** the
+   switch on any framework but `claude`, `goose` and `codex`; with `privilege_profile: "cooperative"`; and
+   without an **explicit** `confined`/`exclusive` (the default leaves the gate hook fail-open, SB17); and
+   it refuses a legacy Goose tool scoping. `write_policy_frameworks` can scope it to some of those
+   frameworks; the others render **without** it, with a notice. **Codex** is accepted only on Linux/macOS
+   and holds only when launched through `.codex/confined-run.example.sh` (the launcher masks the key; a
+   generated role gate, `codex-role-gate.py`, limits spawned agents to read-only tools) — generation says
+   it cannot verify that launch. **Copilot and agents-md are not covered.**
+2. **Narrowing + sections.** Under the switch every non-orchestrator agent's canonical `tools:` line is
+   narrowed to `read`/`search`/`todo` (always keeping `read`; no shell, no dispatch) before any adapter
+   reads it, a legacy one-line `allowed-tools:` is removed, and the agent gets a fenced "Write Policy:
+   Return Proposals, Never Write" section that overrides any write wording in its body: return a
+   `change-proposal` / `delete-proposal` / `command-request`. The `orchestrator` (and Goose's
+   `bridge-orchestrator`) keeps its tools and gets "Applying Proposals" instead.
+3. **The out-of-session runner holds the key.** The orchestrator's `agentteams --apply-proposal` /
+   `--run-request` only **queue** requests; the operator's `agentteams --serve-requests`, started outside
+   every agent session, is the only process that holds the ledger key (read from a 0600 key file under
+   `~/.config/agentteams/keys/`, which the session sandboxes read-deny; it refuses to start with a key in
+   its environment), applies writes, and runs commands — each command and gate inside an OS sandbox built
+   from `confined_programs` (no usable sandbox → refuse, unless the brief's logged
+   `allow_unconfined_runs`). It refuses a brief without the switch, pins the brief, the operator
+   `confined_programs` file and the grants file at start (a change stops it), and serves the queue **one
+   request at a time**. A request's **channel** (orchestrator vs MCP) comes from the directory it arrived
+   in, never from a field the sender writes; the MCP channel may queue only `stage-proposal` and
+   `run-request`, and its commands are capped at 120 s.
+4. **The `agentteams_runner` MCP server (`mcp_grants`).** An agent the brief grants it gets exactly the
+   granted subset of five tools — `read_file_hashed`, `write_file`, `delete_file`, `run_command`,
+   `request_status` — and nothing else. The server is a **keyless queue client**: it writes only request
+   and ack files under `.agentteams-queue/`, never the project, and is *not* a trust boundary (the runner
+   re-validates identity from the nonce, scopes, allowlist, gates and base hashes). Generation installs it
+   at `.agentteams/bin/agentteams-runner-mcp.py` (session-write-denied); agents launch it with an
+   absolute **system** `python3` (`/usr/bin`, `/usr/local/bin`, `/opt/homebrew/bin`, never PATH or a home
+   dir) and `-I -S`; the server derives the project root from that install location; the runner checks
+   the installed copy against a **pinned SHA256** on every poll and stops serving on a mismatch.
+   `read_file_hashed` applies its deny list (VCS dirs, the control plane and queue, credential names and
+   suffixes) to **both the requested and the resolved path**, so an in-project link to `.env` is refused.
+5. **Staged by default; direct only on a verified operator grant.** Generated agents always launch the
+   server as `staged`. A write is checked, gated and stored under `.agentteams/staged/` for the
+   orchestrator (`--list-staged`, `--show-staged`, `--apply-staged`, which re-runs every check against
+   the file as it is now, `--reject-staged`). The runner alone upgrades a staged `change-proposal` to a
+   direct write, and only for an agent holding an **operator Ed25519-signed grant** that verified at
+   start (purpose-tagged; bound to the agent, tools, scopes, gates and the server's sha256; ≤30 days;
+   ≤500 writes; at most 3 active grants, or none is used; read from an operator-owned file outside the
+   project, custody-checked). An unsigned `approval: "direct"` acts as staged. **Deletes are always
+   staged.** A direct grant is treated as a constraint-relaxing change (Rule 15), hence the asymmetric
+   signature and the caps.
+6. **Audit and wiring check.** `AR_WRITE_POLICY` (`audit_agent_contract`, importing the generator's
+   read-only token set so they cannot drift) flags any non-orchestrator agent that can write, dispatch,
+   or carries any capability key beyond its canonical runner block, generated or adopted.
+   `--check-wiring` adds `runner_mcp.wiring_problems` for a granted team: no config scope may define a
+   server named `agentteams_runner` (shadowing); Claude's live `settings.json` must deny edits to
+   `.agentteams/**` and `.claude/agents/**` and reads of `.agentteams/**` and `.agentteams-queue/**`,
+   enable the sandbox and `denyWrite` `.agentteams` and `.claude`, and `settings.local.json` may not
+   switch the sandbox off or allow unsandboxed commands; Goose's `.goose/sandbox.sb` must deny writes to
+   `.agentteams` and `.goose/recipes`. The layer's modules — `write_policy`, the audit, the runner and
+   its policy/staging halves, `runner_mcp` and the server, `mcp_direct_grants`, the Codex role gate —
+   are pinned in the integrity manifest (SB18).
+7. **Interop (PR #174).** `--interop-from DIR --description BRIEF` now carries `write_policy` and
+   `mcp_grants` into an import under the same `resolve` checks, narrows each imported agent's scopes,
+   gives it its section exactly once (a contradicting section is refused), and installs the pinned server
+   — for `claude` and `goose` imports only (codex is refused: interop does not emit its launcher).
+8. **Status and ceiling.** ✅ in code and tests: the narrowing, sections, refusals, runner, queue
+   channels, staging, Ed25519 grants and caps, server deny list and pin, `AR_WRITE_POLICY`,
+   `--check-wiring`'s checks, and interop. ⚙ **not yet verified:** that Claude Code and Goose actually
+   launch the inline server and honour it on a live host — the tests drive the server as a subprocess,
+   not through either harness (the mathAgents M6 pilot is that test). **Staged mode cannot run an
+   agent's own edit-test loop**: a staged write has not landed, so a command it runs sees the old file.
+   `--check-wiring` checks **configuration, not behaviour**. **Ceiling:** the runner and the operator's
+   host are the TCB — the layer bounds a mis-steered *agent*; whoever can read the ledger key or holds
+   the operator's signing key on the same host is out of scope (ceiling #4, SB21). It inherits SB14: it
+   holds only where the session sandbox is wired and in force.
+**Source.** `agentteams/write_policy.py:29-40` (token sets), `:49`, `:84`, `:109` (sections), `:164`
+`enabled`, `:179-240` `resolve`, `:263-307` `narrow_tools`, `:309-339` `apply`;
+`agentteams/proposal_runner.py:1-19` (runner model), `:43-73` (channels, MCP kinds, serial queue, 120 s
+cap), `:190-237` (installed-server check), `:268-282` (switch required, env-key refusal, key file),
+`:402-433` (direct upgrade; deletes never), `:504-521` (pins re-checked per poll);
+`agentteams/proposals.py:109-115` (key file custody); `agentteams/runner_mcp.py:21-27` (tools, install
+path, `-I -S`, SHA256), `:67` (system pythons), `:145-168` `install_files`, `:232-296` `wiring_problems`;
+`agentteams/data/agentteams-runner-mcp.py:14-24` (safety model), `:46`, `:56-62` (deny list),
+`:261-269` (requested + resolved path), `:357-367` (root from install location);
+`agentteams/proposal_staging.py:31-33`, `:101-128` `apply_direct`, `:166` `apply_staged`;
+`agentteams/mcp_direct_grants.py:1-18`, `:37-48` (caps), `:174-221` `verify`, `:224-259`
+`active_grants`; `agentteams/proposal_policy.py:220-245` (`mcp_grants` validation; unsigned direct =
+staged); `agentteams/frameworks/claude.py:151-155`, `agentteams/frameworks/goose.py:280-286` (launched
+`staged`); `agentteams/audit_agent_contract.py:33-34`, `:778` `_check_write_policy`;
+`agentteams/cli/standalone_modes.py:204-261` (`--check-wiring`); `agentteams/interop_write_policy.py:1-55`,
+`:193` `install_server`; `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
+as a subprocess).
+**Dial.** R Full · D Core · S Full · E Light (ceiling #4 in plain words).
 
 ---
 
@@ -533,9 +644,17 @@ flowchart LR
    principal.
 2. **seccomp/Landlock is a further layer NOT yet added** — the bwrap launcher is filesystem + netns +
    NoNewPrivs confinement, not syscall filtering.
-3. The PreToolUse hook's uncovered surfaces (SB16.2) remain the operator's responsibility.
+3. The PreToolUse hook's uncovered surfaces (SB16.2) remain the operator's responsibility — the PR-merge
+   rule (SB16.3–4) included: an obfuscated or split merge call still evades it.
+4. **The write-policy layer (SB24) does not close them either.** Its runner and the operator's host are
+   the TCB: a same-host principal who can read the ledger key or holds the operator's grant-signing key is
+   out of scope (this is ceiling #4 again, not a new one). It holds only where the session sandbox is
+   wired (SB14); its live launch by Claude Code/Goose is not yet verified; it covers claude and goose,
+   codex only through its launcher + role gate, and not Copilot.
 **Source.** `agentteams/templates/universal/sandbox/confine-run.sh` (policy header);
-`agentteams/templates/universal/security.template.md` (delete-gate limits).
+`agentteams/templates/universal/security.template.md` (delete-gate limits);
+`agentteams/templates/universal/hooks/constitutional-gate.py:75-85`; `agentteams/write_policy.py:179-240`;
+`agentteams/proposals.py:109-115`; `agentteams/mcp_direct_grants.py:1-18`.
 **Dial.** R Full · D Core · S Full · E Core (mandatory ceiling #4 restated).
 
 ---
@@ -549,6 +668,11 @@ flowchart LR
    SB14–SB15) → **enforce** (OS + fail-open/closed hook, SB16–SB17), with the emitters + launcher asset
    **tamper-tracked** (SB18–SB19) and every claim **honestly bounded** (SB20–SB21). No single stage is
    the boundary; confinement is the composition, and it engages *as tested* only when opted-in and wired.
+2. **An optional layer on top (SB24).** Under the opt-in `write_policy: "orchestrator-only"`, which
+   requires an explicit `confined`/`exclusive` profile, only the orchestrator writes; other agents return
+   proposals or go through the `agentteams_runner` MCP server, and an out-of-session runner — the only key
+   holder — applies, stages or runs them. It relies on the wired session sandbox to keep the key and the
+   control plane out of the agents' reach.
 **Source.** all of the above.
 **Dial.** R Full · D Core · S Full · E Light.
 
@@ -575,6 +699,7 @@ flowchart TD
     EMIT --> WIRE_ENFORCE
     INT["enforcement-integrity.json:<br/>pins emitters + launcher asset"] -.->|tamper-track| EMIT
     CEIL["honest ceilings:<br/>opt-in · inert-until-wired · Linux-verified-only · closes-nothing-absolutely"] -.-> WIRE_ENFORCE
+    WP["optional write_policy orchestrator-only (SB24):<br/>agents propose · out-of-session runner holds key,<br/>stages / applies / runs confined"] -.->|"relies on the wired sandbox"| WIRE_ENFORCE
     classDef m fill:#eef,stroke:#557;
 ```
 
@@ -584,7 +709,9 @@ flowchart TD
    macOS; claude everywhere; Windows none), the **three** advisory codes (SB8 — one fatal
    `unenforced-host`, two non-fatal manual-wire, one per POSIX platform), the mechanisms and their emit
    paths (SB10–SB12 — the native settings block, the native macOS Seatbelt paths, and the dual-branch
-   launcher `bwrap`+`sandbox-exec`), the pinned modules (SB18), and the four load-bearing ceilings (top of
+   launcher `bwrap`+`sandbox-exec`), the pinned modules (SB18), the write-policy layer's frameworks,
+   modes and commands (SB24 — claude/goose, codex via its launcher, not Copilot; staged by default, direct
+   only on a verified operator grant, deletes always staged), and the four load-bearing ceilings (top of
    this map) are the quick-reference surface. Editions R and D carry the full tables; S carries the matrix
    + ceilings; E carries the four ceilings in plain words.
 **Source.** this SKELETON.

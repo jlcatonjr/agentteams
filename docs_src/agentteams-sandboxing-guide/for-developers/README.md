@@ -21,7 +21,7 @@
 - **[Part II — The request](part-ii-the-request.md)** (SB4–SB6) — the knobs you set
 - **[Part III — The decision](part-iii-the-decision.md)** (SB7–SB9) — what agentteams will/won't emit
 - **[Part IV — The mechanisms](part-iv-the-mechanisms.md)** (SB10–SB13) — the three artifacts
-- **[Part V — Wiring & enforcement](part-v-wiring-and-enforcement.md)** (SB14–SB17) — how to activate + verify
+- **[Part V — Wiring & enforcement](part-v-wiring-and-enforcement.md)** (SB14–SB17, SB24) — how to activate + verify; the orchestrator-only write policy
 - **[Part VI — Integrity & drift](part-vi-integrity-and-drift.md)** (SB18–SB19)
 - **[Part VII — Ceilings & red-team](part-vii-ceilings-and-red-team.md)** (SB20–SB21)
 - **[Part VIII — Synthesis & reference](part-viii-synthesis-and-reference.md)** (SB22–SB23) — the tables

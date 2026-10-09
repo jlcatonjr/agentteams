@@ -46,12 +46,20 @@ Distinct mechanisms carry distinct verdicts — **never conflate them**:
    principal.
 2. **seccomp/Landlock is a further layer NOT yet added** — the bwrap launcher is filesystem + netns +
    NoNewPrivs confinement, not syscall filtering.
-3. The PreToolUse hook's uncovered surfaces (SB16) remain the operator's responsibility.
+3. The PreToolUse hook's uncovered surfaces (SB16) remain the operator's responsibility — the PR-merge
+   rule included: an obfuscated or split merge call still evades it.
+4. **The write-policy layer (SB24) does not close them either.** Its runner and the operator's host are
+   the TCB: a same-host principal who can read the ledger key or holds the operator's grant-signing key
+   is out of scope (ceiling #4 again, not a new one). It holds only where the session sandbox is wired
+   (SB14); its live launch by Claude Code/Goose is not yet verified; it covers claude and goose, codex
+   only through its launcher + role gate, and not Copilot.
 
 The honest posture throughout: a boundary is described as **"engages as tested,"** never "secure" or
 "unbypassable."
 
 *Source:* `agentteams/templates/universal/sandbox/confine-run.sh` (policy header);
 `agentteams/templates/universal/security.template.md` (delete-gate limits).
+`agentteams/templates/universal/hooks/constitutional-gate.py:75-85`; `agentteams/write_policy.py:179-240`;
+`agentteams/proposals.py:109-115`; `agentteams/mcp_direct_grants.py:1-18`.
 
 > **Next:** [Part VIII — Synthesis & reference matter](part-viii-synthesis-and-reference.md).
