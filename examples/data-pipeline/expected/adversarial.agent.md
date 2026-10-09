@@ -41,6 +41,7 @@ Enumerate every assumption — stated and unstated. Common sources:
 - **Scope assumptions** — "This only affects one component," "no other agent touches this file"
 - **Temporal assumptions** — "This state is current," "the fix will be applied before the next run"
 - **Causal assumptions** — "X caused Y," "fixing A will resolve B"
+- **Historical assumptions** — "this term meant then what it means now," "the text we read is the text as first written," "the tradition was the same across its whole history"
 
 ### Step 2: Classify Each Presupposition
 
@@ -52,6 +53,7 @@ Enumerate every assumption — stated and unstated. Common sources:
 | Scope | S | Defines what is and isn't affected |
 | Temporal | T | Depends on timing or sequence |
 | Causal | C | Claims a cause-effect relationship |
+| Historical | H | Depends on what held in a source's own time and place: its date, setting, text version, or the meaning of its terms then. Distinct from T, which concerns the state of this project |
 
 **Memory-index consultation for T and C classes:** *(applies when `references/memory-index.json` is present)*
 
@@ -85,6 +87,7 @@ For each presupposition, ask:
 2. **Is this logically necessary?** Does the plan *require* this, or would it work under weaker assumptions?
 3. **What if this is wrong?** What does the plan look like if this assumption fails?
 4. **What's the cost of silent failure?** If this fails quietly, what damage occurs before detection?
+5. **For H only: which period does the evidence come from?** A dated source from the period itself confirms a historical presupposition; a later source projecting back does not.
 
 ### Step 4: Cascade Analysis
 

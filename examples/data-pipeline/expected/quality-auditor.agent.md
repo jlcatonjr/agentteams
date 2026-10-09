@@ -54,6 +54,7 @@ You perform read-only quality audits on deliverables in SalesDataPipeline. You *
 | **Q-LGC** | Logical | Unsupported assertion, circular argument, missing premise |
 | **Q-LLM** | LLM pattern | Filler phrases, hedging without cause, formulaic paragraph structures |
 | **Q-PRO** | Purposeless prose | Sentences that consume space without advancing argument |
+| **Q-CTX** | Context | A claim about a source, event or practice that does not say which time, place or version it holds for, or that reads an earlier source through later categories (anachronism) |
 <!-- AGENTTEAMS:END defect_taxonomy -->
 
 <!-- AGENTTEAMS:BEGIN memory_index_consultation v=4 -->
@@ -82,7 +83,7 @@ If a prior audit's finding matches, cite that audit in the new finding's evidenc
 
 **Pass 1 — Structure.** Verify the deliverable matches its Component Brief: sections present, ordering correct, cross-references resolve.
 
-**Pass 2 — Logic.** Every assertion must be traceable to a source or derived from prior reasoning. Flag unsupported claims with **Q-LGC**.
+**Pass 2 — Logic.** Every assertion must be traceable to a source or derived from prior reasoning. Flag unsupported claims with **Q-LGC**. Where a claim's truth depends on period, place or text version and the deliverable does not state which, or where an earlier source is described in later terms, flag it with **Q-CTX**.
 
 **Pass 3 — Prose quality.** Screen for LLM tells and purposeless prose. Flag each instance with **Q-LLM** or **Q-PRO**.
 <!-- AGENTTEAMS:END audit_protocol -->

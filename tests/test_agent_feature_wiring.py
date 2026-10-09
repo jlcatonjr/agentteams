@@ -142,3 +142,19 @@ def test_primary_producer_ch29_step_present(rendered_team):
 def test_unix_philosophy_mapping_includes_ch29(rendered_team):
     txt = _read(rendered_team, "references/unix-philosophy-mapping.reference.md")
     assert "CH-29" in txt
+
+
+# --- historical context: Q-CTX (quality-auditor) and H class (adversarial) ---
+
+def test_quality_auditor_template_has_context_defect_code():
+    txt = (REPO_ROOT / "agentteams" / "templates" / "domain" / "quality-auditor.template.md").read_text(encoding="utf-8")
+    assert "**Q-CTX**" in txt
+    assert "anachronism" in txt.lower()
+    assert "flag it with **Q-CTX**" in txt
+
+
+def test_adversarial_has_historical_presupposition_class(rendered_team):
+    txt = _read(rendered_team, "adversarial.agent.md")
+    assert "| Historical | H |" in txt
+    assert "Historical assumptions" in txt
+    assert "For H only" in txt

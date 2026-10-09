@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (historical context: Q-CTX defect code and Historical presupposition class)
+
+- **`@quality-auditor` gains `Q-CTX` (Context).** It flags a claim whose truth depends on period, place
+  or text version when the deliverable does not say which, and a claim that describes an earlier source in
+  later terms (anachronism). Pass 2 (Logic) now checks for it.
+- **`@adversarial` gains a Historical (H) presupposition class,** separate from Temporal (T), which concerns
+  the state of the project. H covers a source's date, setting, text version and the meaning of its terms in
+  its own time. Step 3 adds a fifth question for H: whether the evidence comes from the period itself or from
+  a later source projecting back.
+- Both land inside existing fences, so derived repos pick them up on the next `agentteams --update --merge`
+  (or `researchteam update`). Origin: the OrthodoxLLM historical-context audit, 2026-10-09; the matching
+  protocol is researchteam's `docs/historical-context-protocol.md`.
+
 ### fix (interop: a non-Goose `bridge-orchestrator` is narrowed, not refused)
 
 - Under the switch, #174 refused a `bridge-orchestrator` imported to Claude, to avoid a second writer. That broke a
