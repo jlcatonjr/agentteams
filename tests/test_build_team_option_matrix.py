@@ -313,10 +313,8 @@ def test_main_post_audit_implicitly_enables_enrich(
 @pytest.mark.parametrize(
     "argv,error_substring",
     [
-        (["--convert-from", "src", "--description", "brief.json"], "cannot be used with --convert-from"),
         (["--convert-from", "src", "--update"], "cannot be used with --convert-from"),
         (["--interop-from", "src", "--update"], "cannot be used with --interop-from"),
-        (["--bridge-from", "src", "--description", "brief.json"], "cannot be used with --bridge-from"),
         (["--bridge-from", "src", "--update"], "cannot be used with --bridge-from"),
         (["--convert-from", "src", "--interop-from", "src2"], "mutually exclusive"),
         (["--bridge-from", "src", "--convert-from", "src2"], "mutually exclusive"),
@@ -601,7 +599,6 @@ def test_self_with_external_output_dry_run_is_allowed(
 @pytest.mark.parametrize(
     "argv,error_substring",
     [
-        (["--bridge-from", "src", "--description", "brief.json"], "Bridge mode is independent"),
         (["--bridge-from", "src", "--project", "/tmp/x"], "Bridge mode is independent"),
         (["--bridge-check"], "Bridge mode is independent"),
         (["--bridge-refresh"], "Bridge mode is independent"),

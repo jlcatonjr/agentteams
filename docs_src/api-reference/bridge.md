@@ -32,7 +32,9 @@ Property:
 
 ## Public Function
 
-### `run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True, host_features=None)`
+### `run_bridge(*, source_dir, target_framework, output_root, source_framework=None, dry_run=False, overwrite=False, check_only=False, merge_only=False, emit_skills=True, host_features=None, description=None)`
+
+When subagent stubs are requested for a team under `write_policy: "orchestrator-only"` (read from the target's build-log or from `description`), it raises `ValueError` before any write (`interop_write_policy.refuse_bridge_stubs`). The stubs copy the source's tools.
 
 Generate bridge artifacts or validate bridge freshness.
 

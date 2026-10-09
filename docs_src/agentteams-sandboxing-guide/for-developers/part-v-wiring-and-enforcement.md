@@ -76,7 +76,8 @@ An **opt-in** layer on top of the sandbox. Turn it on in the brief:
   server, the live Claude denies/`denyWrite` on `.agentteams` and `.claude`, Goose's `sandbox.sb`); the
   `AR_WRITE_POLICY` audit flags any non-orchestrator agent that can still write.
 - **Importing bespoke agents:** `agentteams --interop-from DIR --framework claude|goose --description
-  brief.json` carries the policy and grants into the import (PR #174).
+  brief.json` carries the policy and grants into the import (PR #174). `--convert-from` and bridge
+  subagent stubs don't apply the policy, so they refuse a team under the switch and print that command.
 
 **What it costs, honestly.** In staged mode an agent can't run its own edit-test loop — its write hasn't
 landed, so its test runs against the old file. `--check-wiring` checks configuration, not behaviour.

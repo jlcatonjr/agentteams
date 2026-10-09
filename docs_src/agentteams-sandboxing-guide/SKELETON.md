@@ -529,6 +529,11 @@ sandbox.)*
    `mcp_grants` into an import under the same `resolve` checks, narrows each imported agent's scopes,
    gives it its section exactly once (a contradicting section is refused), and installs the pinned server
    — for `claude` and `goose` imports only (codex is refused: interop does not emit its launcher).
+   `--convert-from` and bridge subagent stubs (Claude, Goose) apply none of this, so they **refuse** a
+   team under the switch and name the `--interop-from … --description … --overwrite` command. The switch
+   is read from the target team's `references/build-log.json` (native generation records `write_policy`
+   there) or from `--description`. A bridge-only project with no native build-log has no record, so it is
+   detected only through `--description`.
 8. **Status and ceiling.** ✅ in code and tests: the narrowing, sections, refusals, runner, queue
    channels, staging, Ed25519 grants and caps, server deny list and pin, `AR_WRITE_POLICY`,
    `--check-wiring`'s checks, and interop. ⚙ **not yet verified:** that Claude Code and Goose actually
@@ -554,7 +559,7 @@ path, `-I -S`, SHA256), `:67` (system pythons), `:145-168` `install_files`, `:23
 staged); `agentteams/frameworks/claude.py:151-155`, `agentteams/frameworks/goose.py:280-286` (launched
 `staged`); `agentteams/audit_agent_contract.py:33-34`, `:778` `_check_write_policy`;
 `agentteams/cli/standalone_modes.py:204-261` (`--check-wiring`); `agentteams/interop_write_policy.py:1-55`,
-`:191` `install_server`; `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
+`:192` `install_server`, `:228-304` (convert/bridge refusal); `build_team.py` `_write_run_log` (`write_policy`); `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
 as a subprocess).
 **Dial.** R Full · D Core · S Full · E Light (ceiling #4 in plain words).
 

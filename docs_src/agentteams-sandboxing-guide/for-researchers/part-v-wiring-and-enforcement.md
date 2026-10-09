@@ -49,7 +49,8 @@ channel is derived from the directory it arrived in, not from anything the sende
   profile).
 
 **Honest status.** ✅ in code and tests (runner, channels, staging, grants, server pin and deny list,
-audit, wiring checks, interop via `--interop-from --description`, PR #174). ⚙ **Not yet verified:** that
+audit, wiring checks, interop via `--interop-from --description`, PR #174; `--convert-from` and bridge
+subagent stubs refuse a team under the switch, detected from its build-log or `--description`). ⚙ **Not yet verified:** that
 Claude Code and Goose actually launch the inline server on a live host (tests drive it as a subprocess;
 the mathAgents M6 pilot is that test). `--check-wiring` checks configuration, not behaviour. Staged mode
 cannot support the agent's own edit-test loop.

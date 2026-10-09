@@ -84,3 +84,23 @@ Install the pinned `agentteams_runner` server when an agent is granted, and retu
 agentteams --interop-from .github/agents --interop-source-framework copilot-vscode \
   --framework claude --output .claude/agents --description brief.json --overwrite
 ```
+
+## Convert and bridge refusal
+
+`--convert-from` and bridge subagent stubs apply none of the above, so they refuse a team under the switch.
+
+### `target_under_switch(agents_dir: Path) -> bool`
+
+True when the team's `references/build-log.json` records `write_policy: "orchestrator-only"`. Native generation
+writes that field only under the switch. A missing or unreadable build-log reads as off.
+
+### `refuse_outside_interop(mode: str, framework: str, agents_dir: Path, description: dict | None = None) -> None`
+
+**Raises:** `ValueError` naming the `--interop-from … --description … --overwrite` command when the target's
+build-log records the switch, or when `description` turns it on for `framework` (including `write_policy.resolve`'s
+own refusals).
+
+### `refuse_bridge_stubs(source_framework: str, framework: str, output_root: Path, host_features: list[str], description: dict | None = None) -> None`
+
+Calls `refuse_outside_interop` when the bridge's subagent-stub feature for a Claude or Goose target is requested.
+

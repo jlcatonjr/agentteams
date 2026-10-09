@@ -738,6 +738,9 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         "front_matter_baseline": _compute_front_matter_baseline(
             result.written + result.merged + result.unchanged, output_dir
         ),
+        # Under the switch only, so every other team's build-log is unchanged. --convert-from and --bridge-from read
+        # it to refuse writing agents the policy doesn't cover (interop_write_policy.refuse_outside_interop).
+        **({"write_policy": manifest["write_policy"]} if manifest.get("write_policy") else {}),
     }
     from agentteams import prompt_roots  # #8 phase 1: per-fence prompt-root hashes (detection only)
 

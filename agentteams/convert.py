@@ -92,6 +92,7 @@ def convert_team(
     project_manifest: dict[str, Any] | None = None,
     dry_run: bool = False,
     overwrite: bool = False,
+    description: dict[str, Any] | None = None,
 ) -> ConvertResult:
     """Convert an existing agent team to a target framework format.
 
@@ -126,13 +127,18 @@ def convert_team(
             :class:`ConvertResult` without writing any files.
         overwrite: When ``False`` (default), skip target files that already
             exist.  When ``True``, overwrite them unconditionally.
+        description: The ``--description`` brief, when given: under ``write_policy: "orchestrator-only"`` the
+            conversion is refused (see below).
 
     Returns:
         :class:`ConvertResult` describing what was converted, skipped, or
         errored.
 
     Raises:
-        ValueError: If *target_framework* is not a known framework identifier.
+        ValueError: If *target_framework* is not a known framework identifier, or the target team runs
+            ``write_policy: "orchestrator-only"`` (its build-log says so, or *description* turns it on):
+            conversion doesn't apply the policy, so ``--interop-from --description`` must be used
+            (``interop_write_policy.refuse_outside_interop``).
         FileNotFoundError: If *source_dir* does not exist.
     """
     if target_framework not in _ADAPTERS:
@@ -142,6 +148,9 @@ def convert_team(
         )
     if not source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
+    from agentteams.interop_write_policy import refuse_outside_interop
+
+    refuse_outside_interop("--convert-from", target_framework, target_dir, description)
 
     manifest: dict[str, Any] = dict(project_manifest or {})
     adapter: FrameworkAdapter = _ADAPTERS[target_framework]()

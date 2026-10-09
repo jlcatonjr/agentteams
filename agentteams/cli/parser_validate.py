@@ -11,7 +11,8 @@ import argparse
 
 
 _BRIDGE_USAGE_HINT = (
-    " Bridge mode is independent of description/project-driven generation.\n"
+    " Bridge mode is independent of description/project-driven generation (--description is read only to\n"
+    "  detect write_policy, under which subagent stubs are refused).\n"
     "  Example:\n"
     "    agentteams --bridge-from <source-agents-dir> \\\n"
     "               --bridge-source-framework <claude|copilot-cli|copilot-vscode|goose|canonical> \\\n"
@@ -304,8 +305,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             elif val:
                 parser.error(f"{flag} cannot be used with --query-index")
 
+    # --description is allowed: under write_policy it makes convert refuse (it doesn't apply the policy).
     convert_incompatible = [
-        ("description", "--description"),
         ("project", "--project"),
         ("self_update", "--self"),
         ("no_scan", "--no-scan"),
@@ -346,8 +347,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("restore_backup", "--restore-backup"),
     ]
 
+    # --description is allowed: under write_policy it makes bridge subagent stubs refuse.
     bridge_incompatible = [
-        ("description", "--description"),
         ("project", "--project"),
         ("self_update", "--self"),
         ("no_scan", "--no-scan"),

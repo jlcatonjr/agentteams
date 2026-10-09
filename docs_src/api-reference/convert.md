@@ -27,7 +27,9 @@ Property:
 
 ## Public Function
 
-### `convert_team(source_dir, target_dir, target_framework, *, project_manifest=None, dry_run=False, overwrite=False)`
+### `convert_team(source_dir, target_dir, target_framework, *, project_manifest=None, dry_run=False, overwrite=False, description=None)`
+
+Under `write_policy: "orchestrator-only"`, read from the target's build-log or from `description` (the `--description` brief), it raises `ValueError` before writing and names the `--interop-from … --description` command (`interop_write_policy.refuse_outside_interop`). Conversion doesn't apply the policy.
 
 Convert an existing team into a target framework format.
 
