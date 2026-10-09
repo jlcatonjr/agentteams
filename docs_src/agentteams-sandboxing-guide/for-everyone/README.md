@@ -27,7 +27,7 @@ get one, how the lock actually works, and — honestly — what the lock does an
 - **[Part II — Asking for the room](part-ii-the-request.md)**
 - **[Part III — Which buildings have a lock](part-iii-the-decision.md)**
 - **[Part IV — The three kinds of lock](part-iv-the-mechanisms.md)**
-- **[Part V — Turning the key](part-v-wiring-and-enforcement.md)**
+- **[Part V — Turning the key](part-v-wiring-and-enforcement.md)** — and the optional "only the foreman holds the pen" rule
 - **[Part VI — The tamper-evident seal](part-vi-integrity-and-drift.md)**
 - **[Part VII — What the lock can't do](part-vii-ceilings-and-red-team.md)**
 - **[Part VIII — The whole story](part-viii-synthesis-and-reference.md)**

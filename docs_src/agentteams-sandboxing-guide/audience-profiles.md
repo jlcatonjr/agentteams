@@ -83,6 +83,7 @@ spine, or soften an **honest ceiling**.
 | The decision (SB7–SB9) | Full | Full | Full | Core |
 | The mechanisms (SB10–SB13) | Full | Full/Core | Core | Light |
 | Wiring & enforcement (SB14–SB17) | Full | Full | Core | Core |
+| Write policy & runner (SB24, in Part V) | Full | Core | Full | Light |
 | Integrity & drift (SB18–SB19) | Full | Core | Core | Light |
 | Ceilings & red-team (SB20–SB21) | Full | Core | Full | Core |
 | Synthesis & reference (SB22–SB23) | Full | Core | Full | Light |

@@ -3,6 +3,9 @@
 A rigorous, multi-projection deep-dive into **how agentteams sandboxes the agents it generates** —
 workspace write-confinement, read-exclusion, egress control, and the runtime deny-hook: how each is
 **requested, decided, emitted, wired, enforced, tamper-tracked, and honestly bounded**.
+It also covers the opt-in **orchestrator-only write policy** and its `agentteams_runner` MCP server
+(SB24, Part V), the layer that rides on that confinement so only the orchestrator — via an
+out-of-session runner — writes.
 
 This guide is a focused elaboration of **Part VI (OS confinement)** of the broader
 [Security Guide](../agentteams-security-guide/README.md). It follows the same single-source method: a
@@ -41,5 +44,6 @@ The four **honest ceilings**, which no projection may drop or soften:
 3. **Verified only on Linux** — the launcher's `bwrap` branch is proven by a live-kernel deny test; the
    newer macOS `build_macos` branch is emittable but enforcement-unverified (as are the native macOS
    Seatbelt paths); Windows has no emittable boundary.
-4. **Closes nothing absolutely** — a same-host operator/key-holder (T6) and host-as-TCB stay bounded;
-   seccomp/Landlock is a further layer not yet added.
+4. **Closes nothing absolutely** — a same-host operator/key-holder (T6) and host-as-TCB stay bounded
+   (for the write-policy layer, the runner and the operator's host are the TCB); seccomp/Landlock is a
+   further layer not yet added.

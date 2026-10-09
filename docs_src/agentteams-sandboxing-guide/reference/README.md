@@ -16,7 +16,8 @@
 - **[Part IV — The mechanisms](part-iv-the-mechanisms.md)** — the three emitters and what each denies
   (SB10–SB13). *Carries the mechanisms graph G3.*
 - **[Part V — Wiring & runtime enforcement](part-v-wiring-and-enforcement.md)** — inert-until-wired,
-  verification, and the fail-open/closed hook (SB14–SB17). *Carries the hook graph G4.*
+  verification, the fail-open/closed hook (SB14–SB17), and the orchestrator-only write policy +
+  `agentteams_runner` MCP server (SB24). *Carries the hook graph G4.*
 - **[Part VI — Integrity, provenance & drift](part-vi-integrity-and-drift.md)** — tamper-tracking and
   the cross-repo source of truth (SB18–SB19). *Carries the drift graph G5.*
 - **[Part VII — Honest ceilings & red-team](part-vii-ceilings-and-red-team.md)** — what is verified, and

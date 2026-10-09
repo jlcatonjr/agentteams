@@ -12,6 +12,8 @@ Two honest limits — the ones most likely to mislead if they're dropped:
 > someone who already holds the building's master key.** The room protects you from the *worker* going
 > wrong. It is not designed to stop the building owner, or anyone who already has full run of the
 > premises. And there are stronger locks that simply haven't been added yet.
+> The optional "only the foreman holds the pen" rule doesn't change this: it trusts the owner's own
+> computer, so someone on it with the clerk's key is beyond it too.
 
 The honest way to describe any of these locks is *"it holds as far as it's been tested"* — never
 "unbreakable."

@@ -8,6 +8,10 @@ to its own bench — and, if you asked for the *curtained* room, out of the secr
 Linux doorkeeper also cuts the phone line by default → the locks wear a tamper-evident
 seal → and every promise comes with its honest limit.
 
+If you want it, there's one optional extra on top: **only the foreman holds the pen**, and a clerk in
+the back office does the actual changing — which relies on the locked room being fitted, and trusts the
+owner's own computer.
+
 The four things to carry away, one more time:
 
 1. **By default the room is unlocked** — you have to ask.

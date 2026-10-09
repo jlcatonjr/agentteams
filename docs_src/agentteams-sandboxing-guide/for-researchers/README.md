@@ -19,7 +19,7 @@ confines nothing).
 - **[Part II — The request](part-ii-the-request.md)** (SB4–SB6)
 - **[Part III — The decision](part-iii-the-decision.md)** (SB7–SB9) — the capability/advisory model
 - **[Part IV — The mechanisms](part-iv-the-mechanisms.md)** (SB10–SB13)
-- **[Part V — Wiring & enforcement](part-v-wiring-and-enforcement.md)** (SB14–SB17) — inert-until-wired
+- **[Part V — Wiring & enforcement](part-v-wiring-and-enforcement.md)** (SB14–SB17, SB24) — inert-until-wired; the orchestrator-only write policy and its TCB
 - **[Part VI — Integrity & drift](part-vi-integrity-and-drift.md)** (SB18–SB19)
 - **[Part VII — Ceilings & red-team](part-vii-ceilings-and-red-team.md)** (SB20–SB21) — the honest verdicts
 - **[Part VIII — Synthesis & reference](part-viii-synthesis-and-reference.md)** (SB22–SB23)
