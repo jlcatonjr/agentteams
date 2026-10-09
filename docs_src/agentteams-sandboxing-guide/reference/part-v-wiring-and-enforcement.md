@@ -186,7 +186,8 @@ operator file outside the project — and more than **3** active grants activate
   `goose` imports only.
 - **Convert and bridge stubs refuse.** `--convert-from` and bridge subagent stubs (Claude, Goose) apply none
   of that, so they refuse a team under the switch (read from its `references/build-log.json` or from
-  `--description`) and print the interop command. A bridge-only project with no native build-log is
+  `--description`; a build-log that exists but is unreadable fails closed). For claude and goose they print the
+  interop command; for other convert targets, they say to regenerate natively. A bridge-only project with no native build-log is
   detected only through `--description`.
 - The layer's core modules (`write_policy`, the audit, the runner and its policy/staging halves, `runner_mcp` and the server, `mcp_direct_grants`, the Codex role gate) are pinned in the integrity manifest (SB18); the interop carrier `interop_write_policy` is not.
 
@@ -212,7 +213,7 @@ wired and in force.
 `agentteams/proposal_staging.py:31-33`, `:101-128`, `:166`; `agentteams/mcp_direct_grants.py:1-18`,
 `:37-48`, `:174-259`; `agentteams/proposal_policy.py:220-245`; `agentteams/frameworks/claude.py:151-155`;
 `agentteams/frameworks/goose.py:280-286`; `agentteams/audit_agent_contract.py:33-34`, `:778`;
-`agentteams/cli/standalone_modes.py:204-261`; `agentteams/interop_write_policy.py:1-55`, `:192`, `:228-304`;
+`agentteams/cli/standalone_modes.py:204-261`; `agentteams/interop_write_policy.py:1-55`, `:192`, `:228-310`;
 `agentteams/integrity.py:54-68`. API references for orientation:
 [write-policy](../../api-reference/write-policy.md), [runner-mcp](../../api-reference/runner-mcp.md),
 [proposal-staging](../../api-reference/proposal-staging.md),

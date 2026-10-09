@@ -530,7 +530,8 @@ sandbox.)*
    gives it its section exactly once (a contradicting section is refused), and installs the pinned server
    — for `claude` and `goose` imports only (codex is refused: interop does not emit its launcher).
    `--convert-from` and bridge subagent stubs (Claude, Goose) apply none of this, so they **refuse** a
-   team under the switch and name the `--interop-from … --description … --overwrite` command. The switch
+   team under the switch. For claude and goose, they name the `--interop-from … --description … --overwrite`
+   command; for other convert targets, they say to regenerate natively. The switch
    is read from the target team's `references/build-log.json` (native generation records `write_policy`
    there) or from `--description`. A build-log that exists but is unreadable fails closed. A bridge-only
    project with no native build-log has no record, so it is detected only through `--description`.
@@ -559,7 +560,7 @@ path, `-I -S`, SHA256), `:67` (system pythons), `:145-168` `install_files`, `:23
 staged); `agentteams/frameworks/claude.py:151-155`, `agentteams/frameworks/goose.py:280-286` (launched
 `staged`); `agentteams/audit_agent_contract.py:33-34`, `:778` `_check_write_policy`;
 `agentteams/cli/standalone_modes.py:204-261` (`--check-wiring`); `agentteams/interop_write_policy.py:1-55`,
-`:192` `install_server`, `:228-304` (convert/bridge refusal); `build_team.py` `_write_run_log` (`write_policy`); `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
+`:192` `install_server`, `:228-310` (convert/bridge refusal); `build_team.py` `_write_run_log` (`write_policy`); `agentteams/integrity.py:54-68` (pins); `tests/test_runner_mcp.py` (server driven
 as a subprocess).
 **Dial.** R Full · D Core · S Full · E Light (ceiling #4 in plain words).
 

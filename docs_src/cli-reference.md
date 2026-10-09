@@ -121,7 +121,7 @@ Output directory for generated agent files. Defaults by framework:
 Convert an existing team from `DIR` into the target `--framework` instead of rendering from a brief.
 
 - Preserves agent body prose.
-- **Refused under `write_policy: "orchestrator-only"`.** Conversion doesn't narrow tools or wire the runner, so it refuses when the target team's `references/build-log.json` records the switch, or when `--description BRIEF` turns it on for the target framework. It prints the `--interop-from … --description … --overwrite` command, which applies the policy.
+- **Refused under `write_policy: "orchestrator-only"`.** Conversion doesn't narrow tools or wire the runner. It refuses when the target team's `references/build-log.json` records the switch, when that build-log exists but is unreadable (it fails closed), or when `--description BRIEF` turns the switch on for the target framework. A missing build-log reads as off. For claude and goose targets, it prints the `--interop-from … --description … --overwrite` command, which applies the policy. For other frameworks, it says to regenerate natively with `--description`.
 - Replaces front matter and framework wrappers.
 - Converts instructions naming (`copilot-instructions.md` / `CLAUDE.md` / repo-root `AGENTS.md` for goose) based on target, and emits target sidecars (e.g. goose's `.goosehints`).
 - Supports the six directional combinations between `copilot-vscode`, `copilot-cli`, and `claude`, **and converting any of them to `goose`** (writes `.goose/recipes/*.yaml` + repo-root `AGENTS.md`). Orchestrator delegation (`sub_recipes`) wires from sources that preserve handoffs in their agent files — i.e. `copilot-vscode`; `claude`/`copilot-cli` sources strip handoffs at their own generation, so they convert to valid but flat (un-delegated) recipes.
@@ -173,7 +173,7 @@ concept (`claude`, `codex`); `--interop-mode bundle` is refused.
 
 Generate lightweight target-framework bridge artifacts that reference source canonical agents without regenerating source agent documentation.
 
-Subagent stubs (`bridge:copilot-vscode-to-claude:subagents`, `bridge:<src>-to-goose:subagents`) copy the source agents' tools, so they are **refused** for a team under `write_policy: "orchestrator-only"`: when the target's build-log records it, or when `--description BRIEF` turns it on. Use `--interop-from … --description … --overwrite` instead. Other bridge artifacts and `--bridge-check` are unaffected.
+Subagent stubs (`bridge:copilot-vscode-to-claude:subagents`, `bridge:<src>-to-goose:subagents`) copy the source agents' tools, so they are **refused** for a team under `write_policy: "orchestrator-only"`: when the target's build-log records it, when that build-log exists but is unreadable (it fails closed), or when `--description BRIEF` turns it on. Use `--interop-from … --description … --overwrite` instead. Other bridge artifacts and `--bridge-check` are unaffected.
 
 Bridge artifacts are written under:
 

@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `references/build-log.json`, under the switch only, so other build-logs are unchanged. Convert and bridge
   also accept `--description BRIEF`, used only to detect the switch. A bridge-only project with no native
   build-log is detected only through `--description`. A build-log that exists but is unreadable or malformed
-  reads as switched (fail closed). For codex, the refusal says to regenerate natively, because interop refuses
-  codex under the switch.
+  reads as switched (fail closed). For targets other than claude and goose, the refusal says to regenerate natively,
+  because interop refuses them under the switch.
 - **Where the code is.** New `interop_write_policy.target_under_switch` / `refuse_outside_interop` /
   `refuse_bridge_stubs`. Remediation item 1 (2026-10-09). @adversarial review: the safer choice over
   re-implementing #174 twice.
