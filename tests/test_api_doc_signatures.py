@@ -26,6 +26,8 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = REPO_ROOT / "docs_src/api-reference"
 PKG_DIR = REPO_ROOT / "agentteams"
@@ -204,6 +206,10 @@ def test_inventory_version_baseline_matches_the_installed_version() -> None:
     """
     import agentteams
 
+    if agentteams.__version__ == "0.0.0+local":
+        # agentteams/__init__.py's fallback when the package isn't installed: there is no installed version to
+        # compare against. CI and the dev venv install it, so the check still runs there.
+        pytest.skip("agentteams is not installed in this interpreter (version 0.0.0+local)")
     text = INVENTORY.read_text(encoding="utf-8")
     match = _VERSION_BASELINE_RE.search(text)
     assert match, "feature-inventory.md states no **Version baseline:** — format changed"

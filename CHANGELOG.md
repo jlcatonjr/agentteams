@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (version-baseline test skips when agentteams isn't installed)
+
+- `test_inventory_version_baseline_matches_the_installed_version` skips when `agentteams.__version__` is
+  `0.0.0+local`. That's the package's fallback when it isn't installed, so there's no installed version to
+  compare against. Running the suite with a bare interpreter no longer reports a false failure. CI and the dev
+  venv install the package, so the check still runs there.
+
 ### feat (historical context: Q-CTX defect code and Historical presupposition class)
 
 - **`@quality-auditor` gains `Q-CTX` (Context).** It flags a claim whose truth depends on period, place
