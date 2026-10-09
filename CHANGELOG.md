@@ -31,6 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     refused, and a non-Goose `bridge-orchestrator` is refused as a second writer.
 - New module `agentteams/interop_write_policy.py`, with an API reference page. `write_policy.py` is re-pinned in
   `references/enforcement-integrity.json`. `--description` is no longer refused with `--interop-from`.
+### fix (constitutional gate: PR merges prompt whatever client sends them)
+
+- The gate hook prompted for a PR merge only when it went through `gh` (`gh pr merge`, `gh api …/pulls/N/merge`,
+  `gh api graphql` merge mutations). `curl -X PUT https://api.github.com/repos/o/r/pulls/N/merge`, or the same call
+  from wget, httpie or an interpreter, matched nothing. The hook now asks on the REST merge endpoint
+  (`pulls/<n>/merge`) and on the `mergePullRequest` / `enablePullRequestAutoMerge` mutations whatever sends
+  them. Reported by mathAgents' @technical-validator.
+- Two parametrized tests in `test_constitutional_gate_hook.py` shared names with later ones, so their 33 cases
+  (branch, tag and resource deletes; benign `gh pr` and `git merge` commands) never ran. They are renamed and
+  run again.
+- Re-pinned the template and installed hooks in `references/enforcement-integrity.json`. A checkout with an
+  installed hook needs the template copied over `.claude/hooks/` and `.github/hooks/constitutional-gate.py`.
 
 ### docs (Codex runner: name every protected `CODEX_HOME` stub)
 
