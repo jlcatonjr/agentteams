@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (interop: a non-Goose `bridge-orchestrator` is narrowed, not refused)
+
+- Under the switch, #174 refused a `bridge-orchestrator` imported to Claude, to avoid a second writer. That broke a
+  legitimate flow: a Copilot bridge emits a read-only `bridge-orchestrator`. It is now treated as an ordinary
+  restricted agent there: narrowed, given the proposals section and audited. It stays a writer only on Goose.
+  `write_policy.ensure_section` takes a `writer` override. This also avoids a partial import, since the
+  refusal fired mid-loop. @security re-verification advisories, 2026-10-09.
+
 ### fix (two tests that failed outside CI)
 
 - **`install-agent-doc-sync.sh` checks the interpreter before importing from it.** The checks for the

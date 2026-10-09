@@ -119,10 +119,11 @@ def check_rendered(slug: str, name: str, rendered: str, framework: str, manifest
 
 
 def restricted(slug: str, manifest: dict[str, Any], framework: str) -> bool:
-    """Whether an imported agent is narrowed under the switch (every agent but the orchestrator).
+    """Whether an imported agent is narrowed under the switch (every agent but the framework's writer).
 
-    ``bridge-orchestrator`` is a writer only as Goose's bridge entry recipe; the Claude audit exempts
-    ``orchestrator`` alone, so a Claude import of that slug would be a second, unchecked writer and is refused.
+    ``bridge-orchestrator`` is a writer only as Goose's bridge entry recipe; elsewhere (the Claude audit exempts
+    ``orchestrator`` alone) it is narrowed and audited like any agent, e.g. the read-only one a Copilot bridge
+    emits.
 
     Args:
         slug: The agent's slug.
@@ -130,17 +131,14 @@ def restricted(slug: str, manifest: dict[str, Any], framework: str) -> bool:
         framework: The interop target framework.
 
     Returns:
-        True when the switch is on and the agent isn't this framework's orchestrator.
+        True when the switch is on and the agent isn't this framework's writer.
 
     Raises:
-        ValueError: A ``bridge-orchestrator`` imported to a framework other than goose under the switch.
+        Nothing.
     """
     if not _wp.enabled(manifest):
         return False
-    if slug in _wp.ORCHESTRATOR_SLUGS - {"orchestrator"} and framework != "goose":
-        raise ValueError(f"{slug}: a writer only as Goose's bridge entry recipe; under write_policy "
-                         f"orchestrator-only a {framework} import of it would be a second writer")
-    return slug not in _wp.ORCHESTRATOR_SLUGS
+    return slug not in (_wp.ORCHESTRATOR_SLUGS if framework == "goose" else {"orchestrator"})
 
 
 def withheld(key: str, value: Any) -> bool:

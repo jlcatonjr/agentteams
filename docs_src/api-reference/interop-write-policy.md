@@ -61,9 +61,9 @@ Raises `ValueError` when a restricted agent's rendered file fails `AR_WRITE_POLI
 
 ### `restricted(slug: str, manifest: dict, framework: str) -> bool`
 
-True when the switch is on and the agent isn't this framework's orchestrator. **Raises:** `ValueError` for a
-`bridge-orchestrator` imported to a framework other than goose (it writes only as Goose's bridge entry recipe; on
-Claude it would be a second writer the audit doesn't exempt).
+True when the switch is on and the agent isn't this framework's writer: `orchestrator`, plus `bridge-orchestrator`
+on Goose, where it is the bridge entry recipe. Elsewhere `bridge-orchestrator` is narrowed and audited like any
+agent, for example the read-only one a Copilot bridge emits.
 
 ### `withheld(key: str, value: Any) -> bool`
 

@@ -56,7 +56,7 @@
     "agentteams/templates/universal/sandbox/confine-run.sh": "6779fa05d24b3befa2e3bee9c79aab32866c21e4e00a2405ed8fca6578f725a7",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
-    "agentteams/write_policy.py": "6b56a49f546af036026e0788c05db87809e809ff599795609111c607f14d3356"
+    "agentteams/write_policy.py": "dfad63ee6fe69be9397af1a0d8cd152ef43df27970edde49a3a76b24685c7555"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1
