@@ -213,7 +213,7 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "psql -c 'DROP TABLE users'",
     ],
 )
-def test_delete_commands_require_authorization(command: str) -> None:
+def test_branch_and_resource_deletes_require_authorization(command: str) -> None:
     code, decision = _run_template(command)
     assert code == 0
     assert decision is not None, f"no decision emitted for: {command}"
@@ -224,9 +224,10 @@ def test_delete_commands_require_authorization(command: str) -> None:
     "command",
     ["ls -la", "git status", "git push origin main:main", "grep -rn foo .",
      'gh pr create --title t --body "fix the merge order"', "gh pr checkout 1 && git merge x",
-     "gh pr view 5 --json mergeable", "gh pr list --search is:merged"],
+     "gh pr view 5 --json mergeable", "gh pr list --search is:merged",
+     "curl https://api.github.com/repos/o/r/pulls/12", "gh api repos/o/r/pulls/12/files"],
 )
-def test_benign_commands_are_not_gated(command: str) -> None:
+def test_benign_gh_and_git_commands_are_not_gated(command: str) -> None:
     code, decision = _run_template(command)
     assert code == 0
     assert decision is None, f"benign command falsely gated: {command} -> {decision}"
@@ -283,6 +284,12 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "gh pr \\\nmerge 12",                        # line continuation
         "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
         "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'",
+        "curl -X PUT -H 'Authorization: token x' https://api.github.com/repos/o/r/pulls/12/merge",  # any client
+        "wget --method=PUT https://api.github.com/repos/o/r/pulls/12/merge",
+        "http PUT api.github.com/repos/o/r/pulls/12/merge",
+        "python3 -c \"import requests; requests.put('https://api.github.com/repos/o/r/pulls/12/merge')\"",
+        "gh api repos/o/r/pulls/12/merge -X PUT",       # relative path, no leading slash
+        "curl -d '{\"query\":\"mutation { mergePullRequest(input: {}) { clientMutationId } }\"}' https://api.github.com/graphql",
         "kubectl -n prod delete pod x",              # flags before the verb
         "docker container rm c1",                    # subcommand form
         "docker image rm img",

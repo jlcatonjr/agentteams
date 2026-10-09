@@ -1,7 +1,7 @@
 {
   "modules": {
-    ".claude/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
-    ".github/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
+    ".claude/hooks/constitutional-gate.py": "76c42b4ee14722d2aeeddb26380cf7ca5e706d2cf66570070a60665eca2ac07b",
+    ".github/hooks/constitutional-gate.py": "76c42b4ee14722d2aeeddb26380cf7ca5e706d2cf66570070a60665eca2ac07b",
     "agentteams/agent_doc_sync.py": "5689b5f000ed02f477ed2c4991886fe8bc00af1f47be4e51a035db83999b234e",
     "agentteams/atomicio.py": "f46a347095799d84845d52cc5f1e800cb7f43fcdf737c83a99f501add14f7214",
     "agentteams/audit_agent_contract.py": "d3816f7a5d768355a662e363bba8c9ef1d655f03ef19992058fa2f29b1f4f1d6",
@@ -51,7 +51,7 @@
     "agentteams/runner_mcp.py": "8b7940499f04bc8d0e9b990fadd839aeeb5eb50c4e021b6af924705217883944",
     "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/shrink_allow.py": "2bd045b95e660362f082d803fd468eb564d7cc4354ccc43acfc6d2b52603d07a",
-    "agentteams/templates/universal/hooks/constitutional-gate.py": "e1aa8e66c4e87c0facbe558cefc49296735aaa321bcba07aef09a58287551e37",
+    "agentteams/templates/universal/hooks/constitutional-gate.py": "76c42b4ee14722d2aeeddb26380cf7ca5e706d2cf66570070a60665eca2ac07b",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
     "agentteams/templates/universal/sandbox/confine-run.sh": "6779fa05d24b3befa2e3bee9c79aab32866c21e4e00a2405ed8fca6578f725a7",
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
