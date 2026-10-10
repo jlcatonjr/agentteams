@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -288,6 +289,40 @@ def run_install_confined(args: argparse.Namespace) -> int:
     return 0
 
 
+def _confined_reinstall_hint(args: argparse.Namespace, exc: Exception) -> list[str]:
+    """The exact review-and-reinstall commands when the runner refuses the operator confined file.
+
+    An upgrade can tighten what that file must record (``gate_argv_sha256`` since P5c), so a runner that worked
+    before refuses to start. The operator's fix is the two-step ``--install-confined`` review on the installed
+    file itself; this spells it out with the real paths.
+
+    Args:
+        args: Parsed CLI arguments (``project``, ``description``).
+        exc: The start-up error.
+
+    Returns:
+        Lines to print; empty unless the error asks for ``--install-confined`` and the file exists.
+
+    Raises:
+        Nothing.
+    """
+    if "--install-confined" not in str(exc) or not getattr(args, "description", None):
+        return []
+    try:
+        root = _root(args)
+        installed = _confinement.confined_file_for(root)
+    except (OSError, ValueError, _confinement.ConfinementError):
+        return []
+    if not installed.is_file():
+        return []
+    brief = Path(args.description).resolve()
+    return ["[serve-requests] to review and reinstall it, run outside every agent session:",
+            f"  agentteams --install-confined {shlex.quote(str(installed))} --project {shlex.quote(str(root))} "
+            f"--description {shlex.quote(str(brief))}",
+            "  then rerun that command with --confirm-review-sha256 <the sha256 it prints>, and restart "
+            "--serve-requests."]
+
+
 def run_serve_requests(args: argparse.Namespace) -> int:
     """Run the out-of-session runner: hold the ledger key and serve the project's queue.
 
@@ -310,6 +345,8 @@ def run_serve_requests(args: argparse.Namespace) -> int:
         runner = R.Runner(_root(args), Path(args.description).resolve(), _policy(args, "--serve-requests"))
     except (ProposalError, OSError, ValueError) as exc:
         print(f"[serve-requests] cannot start: {exc}", file=sys.stderr)
+        for line in _confined_reinstall_hint(args, exc):
+            print(line, file=sys.stderr)
         return 1
     print(f"[serve-requests] serving {runner.root} (brief {runner.brief_path.name}); Ctrl-C to stop")
     try:
