@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (release signer from rc.9)
+
+- `SECURITY.md` lists the release signing keys by tag. `v1.0.0-rc.9` onward is signed with RSA
+  `SHA256:IPdnLwlF…`, a different key from rc.8's (`SHA256:BZg5kgjl…`). The section gives the `allowed_signers`
+  line for the new key.
+
 ## [1.0.0-rc.9] - 2026-10-09
 
 ### release notes (rc9)
