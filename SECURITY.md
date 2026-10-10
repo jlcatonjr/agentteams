@@ -148,6 +148,19 @@ default (#10); every in-process check is a speed bump only, because tampered cod
    ```
    Keep `allowed_signers` outside every write root. Release tags are signed from rc8 onward; until then,
    pin a tag you have reviewed.
+
+   **Release signers.** Check the key fingerprint, not only "Good signature":
+
+   | Tags | Key |
+   |---|---|
+   | `v1.0.0-rc.8` | RSA `SHA256:BZg5kgjlNE9W05RhX++27uaSIVfgPB/ikhu65COxN7k` |
+   | `v1.0.0-rc.9` onward | RSA `SHA256:IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM` |
+
+   The key changed at rc.9 because the rc.8 key wasn't available on the release host. To verify rc.9 and later,
+   add this line to `allowed_signers`:
+   ```
+   jlcatonjr@gmail.com namespaces="git" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDNF8Zpv1GmOFZ/1HdH7nz/pV67yOYlXoV6IlrkMcoLv6qnz6P3GWDoZ3KeCIWvrATqNG6F96/6C7lcBjBpdoNV2jOxDTnvgR02lR0GxBtuQCV1+rc7/VRHAEKZRIv4T2kccCZvmznFf2nzu9xCEBFAKA4LLm/prnYZcWH3Ttkp92POotQP3j0/kfrPp8+CHSrTIf9tbHXxFYgmmvNitcMkZGcLG9BxICHV/IrBc2Q5Bz2ey+uY6AViTryUgfHq2DdeQt4CA2w6AI4x6H3bftiCtq+WWgyVTU+570VwSMRAgrpLizMYkD6IdhReuBFHU1q8p+HxcY3ayxwazOlxVNEFeZKPXN9iZbpxOd4FdX5IP+1YtrrXQcmfIp1LiBeC1Y/hwdJQ+K3MaahULjCt2Yx8KaqaFro9Ilo/ryOJArL6S6oeyMtOkjjYBoZ6cL48zW8AuD33ppfm0uSJoxDU5r7rHfFgHOc0kEr1GNXVEOaz33Lpp1K3pGj6Qo6+8rWcf8T6qTO89hm3XsWc5NdCmA0vrR8Nb+klGqlMVADpmqZBcTyDNAMy+bM02l+NoAWwA0qXzhzQ1uJ/yX7u51Sq7W0PMDd0vx3Rdsmp6Rjy7Ta12ucmiZ8m8NeCv7Z1obwCUxDvaVTfoi7yvn0pa6CxokkJfPiR8Z0gvLTOc3aN/pH9ew==
+   ```
 3. Install from that clone with `pipx install "./<clone>[signing]"`, with `PIPX_HOME` outside the project.
    Do not use a `git+https@tag` URL: it fetches the code again.
 4. Run the absolute console-script path. Never run `python -m agentteams` from a project root, because it
