@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -316,7 +317,8 @@ def _confined_reinstall_hint(args: argparse.Namespace, exc: Exception) -> list[s
         return []
     brief = Path(args.description).resolve()
     return ["[serve-requests] to review and reinstall it, run outside every agent session:",
-            f"  agentteams --install-confined {installed} --project {root} --description {brief}",
+            f"  agentteams --install-confined {shlex.quote(str(installed))} --project {shlex.quote(str(root))} "
+            f"--description {shlex.quote(str(brief))}",
             "  then rerun that command with --confirm-review-sha256 <the sha256 it prints>, and restart "
             "--serve-requests."]
 
