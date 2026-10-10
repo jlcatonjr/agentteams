@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.9] - 2026-10-09
+
+### release notes (rc9)
+
+76 pull requests (#96–#183) since rc.8. The main changes:
+
+- **Agents write and execute only through the runner (opt-in).** Under `write_policy: "orchestrator-only"`,
+  non-orchestrator agents granted the `agentteams_runner` MCP server (`mcp_grants`) write and run allowlisted
+  commands through it. They never write directly.
+  - **The runner:** an out-of-session process that holds the ledger key. It stages writes for the
+    orchestrator's approval by default, and applies them directly only under an operator Ed25519-signed grant.
+    Deletes are always staged. (R1–R7: #161, #163–#166, #168, #170.)
+  - **Checks:** generation, the `AR_WRITE_POLICY` audit and `--check-wiring` cover it.
+  - **Docs:** sandboxing guide SB24 (#179).
+- **Interop under the switch.** `--interop-from … --description BRIEF` carries the brief's `write_policy` and
+  `mcp_grants` into an import, so adopted bespoke agents get the runner (#174, #178).
+- **Convert and bridge under the switch.** `--convert-from` and bridge subagent stubs refuse a team under the
+  switch, and point to interop (#183).
+- **The gate hook** prompts for a PR merge whatever client sends it (#173).
+- **Also in this release:**
+  - the MCP server catalogue (#150);
+  - the Codex launcher and role gate (#160, #167);
+  - the governance-log validator (#159);
+  - historical-context checks (#180);
+  - fleet fixes (#181);
+  - test fixes (#178, #182).
+
+The entries below give the details.
+- Install hints now pin `v1.0.0-rc.9`, which is derived from the package version. The tag is SSH-signed by the
+  operator; see `SECURITY.md`, "Signing from a trusted install".
+
 ### fix (convert and bridge subagent stubs refuse a team under write_policy)
 
 - **What changed.** `--convert-from` and bridge subagent stubs (`bridge:copilot-vscode-to-claude:subagents`,
