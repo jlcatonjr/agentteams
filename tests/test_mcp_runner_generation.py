@@ -161,3 +161,11 @@ def test_rendering_refuses_an_install_outside_the_project(tmp_path):
                           capture_output=True, text=True, timeout=300)
     assert proc.returncode == 1 and "outside the project" in proc.stderr
     assert not (tmp_path / runner_mcp.PROTECTED_PATH).exists()
+
+
+@pytest.mark.parametrize("framework", ["claude", "goose"])
+def test_the_build_log_records_the_switch(renders, framework):
+    """--convert-from and bridge subagent stubs read this to refuse a team under the switch."""
+    directory, _ = _agents(renders[(framework, True)], framework)
+    log = json.loads((directory / "references" / "build-log.json").read_text())
+    assert log.get("write_policy") == "orchestrator-only"

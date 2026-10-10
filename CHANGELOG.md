@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (convert and bridge subagent stubs refuse a team under write_policy)
+
+- **What changed.** `--convert-from` and bridge subagent stubs (`bridge:copilot-vscode-to-claude:subagents`,
+  `bridge:<src>-to-goose:subagents`) now refuse a team under `write_policy: "orchestrator-only"`, before
+  writing, and print the `--interop-from … --description … --overwrite` command.
+- **Why.** Neither path narrows tools, adds the write-policy section or wires the runner. A converted agent
+  keeps its source tools, and a stub copies them, so under the switch both would write agents that can write.
+  `--interop-from --description` (#174) applies the policy.
+- **How the switch is detected.** Native generation now records `write_policy` in
+  `references/build-log.json`, under the switch only, so other build-logs are unchanged. Convert and bridge
+  also accept `--description BRIEF`, used only to detect the switch. A bridge-only project with no native
+  build-log is detected only through `--description`. A build-log that exists but is unreadable or malformed
+  reads as switched (fail closed). For targets other than claude and goose, the refusal says to regenerate natively,
+  because interop refuses them under the switch.
+- **Where the code is.** New `interop_write_policy.target_under_switch` / `refuse_outside_interop` /
+  `refuse_bridge_stubs`. Remediation item 1 (2026-10-09). @adversarial review: the safer choice over
+  re-implementing #174 twice.
 ### fix (fleet: project scan for direct teams, bridge source, USER-EDITABLE detection)
 
 Found by the 2026-10-09 fleet pilot's content audit (11 repos rendered in staging clones).

@@ -27,7 +27,9 @@ Property:
 
 ## Public Function
 
-### `convert_team(source_dir, target_dir, target_framework, *, project_manifest=None, dry_run=False, overwrite=False)`
+### `convert_team(source_dir, target_dir, target_framework, *, project_manifest=None, dry_run=False, overwrite=False, description=None)`
+
+Under `write_policy: "orchestrator-only"`, read from the target's build-log or from `description` (the `--description` brief), it raises `ValueError` before writing (`interop_write_policy.refuse_outside_interop`). For claude and goose, the message names the `--interop-from … --description` command; for other frameworks, it says to regenerate natively. A build-log that exists but is unreadable counts as switched (it fails closed); a missing one reads as off. Conversion doesn't apply the policy.
 
 Convert an existing team into a target framework format.
 

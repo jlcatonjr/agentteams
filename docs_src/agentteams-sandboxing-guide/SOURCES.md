@@ -47,7 +47,7 @@
 
 ## Write policy & the `agentteams_runner` MCP server (SB24)
 
-Line numbers are as of `origin/main` at `3399974` (PR #174).
+Line numbers are as of `origin/main` after the `fix/convert-bridge-write-policy` merge (convert and bridge refusal; earlier rows were checked at `3399974`, PR #174).
 
 | Fact | Source |
 |---|---|
@@ -70,7 +70,8 @@ Line numbers are as of `origin/main` at `3399974` (PR #174).
 | Ed25519 operator grants (a Rule 15 constraint-relaxing change): binding, ≤30 days, ≤500 writes, ≤3 active, operator-owned file | `agentteams/mcp_direct_grants.py:1-18`, `:37-48`, `:174-221` `verify`, `:224-259` `active_grants` |
 | `AR_WRITE_POLICY` shares the generator's token set | `agentteams/audit_agent_contract.py:33-34`, `:778` `_check_write_policy` |
 | `--check-wiring` runs `runner_mcp.wiring_problems` (configuration checks) | `agentteams/cli/standalone_modes.py:204-261`; `agentteams/runner_mcp.py:171-296` |
-| Interop carries the policy (claude/goose only) and installs the server (PR #174) | `agentteams/interop_write_policy.py:1-55`, `:191` `install_server`; `agentteams/cli/app.py:494` |
+| Interop carries the policy (claude/goose only) and installs the server (PR #174) | `agentteams/interop_write_policy.py:1-55`, `:192` `install_server`; `agentteams/cli/app.py:494` |
+| Convert and bridge subagent stubs refuse a team under the switch (build-log `write_policy` or `--description`) | `agentteams/interop_write_policy.py:228-310`; `agentteams/convert.py` `convert_team`; `agentteams/bridge.py` `run_bridge`; `build_team.py` `_write_run_log`; `tests/test_convert_bridge_write_policy.py` |
 | Layer modules integrity-pinned | `agentteams/integrity.py:54-68` |
 | Server tested as a subprocess, not via a live harness | `tests/test_runner_mcp.py` (`served` fixture + `Client`) |
 

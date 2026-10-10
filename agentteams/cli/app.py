@@ -475,7 +475,11 @@ def _main_dispatch(
     # --convert-from: format migration (no --description needed)
     # -----------------------------------------------------------------------
     if args.convert_from:
+        brief, failed = _description_brief(args)
+        if failed:
+            return 1
         return _run_convert(
+            description=brief,
             source_dir=Path(args.convert_from).resolve(),
             target_framework=args.framework,
             output=Path(args.output).resolve() if args.output else None,
@@ -562,6 +566,9 @@ def _main_dispatch(
                 "--bridge-check, --bridge-refresh, and --bridge-merge are "
                 "mutually exclusive; pass at most one."
             )
+        brief, failed = _description_brief(args)
+        if failed:
+            return 1
         return _run_bridge(
             source_dir=Path(args.bridge_from).resolve(),
             source_framework=args.bridge_source_framework,
@@ -573,6 +580,7 @@ def _main_dispatch(
             merge_only=args.bridge_merge,
             emit_skills=not args.bridge_no_skills,
             host_features=getattr(args, "host_features", []) or [],
+            description=brief,
         )
 
     # -----------------------------------------------------------------------
@@ -595,6 +603,29 @@ def _main_dispatch(
     return run_generate(
         args, strict_manual_placeholders, migrate_exemption=migrate_exemption
     )
+
+
+def _description_brief(args: argparse.Namespace) -> tuple[dict | None, bool]:
+    """The ``--description`` brief for ``--convert-from`` / ``--bridge-from`` (write-policy detection), loaded once.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        ``(brief or None, failed)``; ``failed`` is True after an error has been printed.
+
+    Raises:
+        Nothing: errors are printed.
+    """
+    if not args.description:
+        return None, False
+    from agentteams import ingest as _ingest
+
+    try:
+        return _ingest.load(Path(args.description).resolve(), scan_project=False), False
+    except (ValueError, OSError) as exc:
+        print(f"Error: --description: {exc}", file=sys.stderr)
+        return None, True
 
 
 if __name__ == "__main__":  # `python -I -m agentteams.cli.app ...` (the doc-sync unit's entry)

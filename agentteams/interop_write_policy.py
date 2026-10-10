@@ -10,6 +10,7 @@ server where native generation would.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -222,3 +223,88 @@ def install_server(manifest: dict[str, Any], framework: str, target_dir: Path, *
             _atomic_write_text(dest, content)
         written.append(str(dest))
     return written
+
+
+def target_under_switch(agents_dir: Path) -> bool:
+    """Whether the team in *agents_dir* was generated under ``write_policy: "orchestrator-only"``.
+
+    Read from its ``references/build-log.json``, which native generation writes with a ``write_policy`` field only
+    under the switch. A missing build-log reads as off: a bridge-only project with no native team has no record,
+    which is a documented ceiling (pass ``--description`` there). A build-log that exists but can't be read or
+    isn't a JSON object reads as **on** (fail closed).
+
+    Args:
+        agents_dir: The target agents directory (``.claude/agents``, ``.goose/recipes``, ...).
+
+    Returns:
+        True when the build-log records the switch, or exists but is unreadable or malformed.
+
+    Raises:
+        Nothing.
+    """
+    log = Path(agents_dir) / "references" / "build-log.json"
+    if not log.exists() and not log.is_symlink():
+        return False
+    try:
+        data = json.loads(log.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return True  # present but unreadable: fail closed (a truncated log must not unblock convert/bridge)
+    return not isinstance(data, dict) or data.get("write_policy") == "orchestrator-only"
+
+
+def refuse_outside_interop(mode: str, framework: str, agents_dir: Path,
+                           description: dict[str, Any] | None = None) -> None:
+    """Refuse ``--convert-from`` / bridge subagent stubs for a team under the switch; interop carries it instead.
+
+    Neither path narrows tools, adds the write-policy section or wires the runner, so under the switch they would
+    write agents that can write. ``--interop-from --description`` does all of that and is audited per agent.
+
+    Args:
+        mode: The refusing mode, for the message (``"--convert-from"``, ``"--bridge-from subagent stubs"``).
+        framework: The target framework.
+        agents_dir: The target agents directory (its build-log is checked).
+        description: The ``--description`` brief, when given.
+
+    Returns:
+        None.
+
+    Raises:
+        ValueError: The target's build-log records the switch, or the brief turns it on for *framework* (including
+            :func:`write_policy.resolve`'s own refusals).
+    """
+    on = target_under_switch(agents_dir)
+    if not on and description is not None:
+        on = bool(_wp.manifest_fields(description, _wp.resolve(description, framework)))
+    if on:
+        fix = (f"Use: agentteams --interop-from <source agents dir> --framework {framework} --description <brief> "
+               "--overwrite" if framework in SUPPORTED else
+               f"Regenerate the {framework} team natively: agentteams --description <brief> --framework {framework}")
+        raise ValueError(f"{mode}: this team runs write_policy \"orchestrator-only\", which {mode} doesn't apply "
+                         f"(it would write agents that can write). {fix}")
+
+
+def refuse_bridge_stubs(source_framework: str, framework: str, output_root: Path, host_features: list[str],
+                        description: dict[str, Any] | None = None) -> None:
+    """Refuse bridge subagent stubs (Claude or Goose) for a team under the switch, before the bridge writes.
+
+    The stubs copy the source agents' tools (``bridge_subagents._tools_to_allowed``; Goose stubs ship
+    ``developer``), so under the switch they would be writers. Other bridge artifacts are unaffected.
+
+    Args:
+        source_framework: The bridge's source framework.
+        framework: The bridge target framework.
+        output_root: The bridge output root (the project).
+        host_features: The bridge host-feature tokens.
+        description: The ``--description`` brief, when given.
+
+    Returns:
+        None.
+
+    Raises:
+        ValueError: Stubs are requested and the target team is under the switch (:func:`refuse_outside_interop`).
+    """
+    feature = ("bridge:copilot-vscode-to-claude:subagents" if framework == "claude"
+               else f"bridge:{source_framework}-to-{framework}:subagents")
+    if framework in SUPPORTED and feature in host_features:
+        refuse_outside_interop("--bridge-from subagent stubs", framework,
+                               Path(output_root).joinpath(*SUPPORTED[framework]), description)

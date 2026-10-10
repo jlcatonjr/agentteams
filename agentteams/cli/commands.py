@@ -456,6 +456,7 @@ def _run_convert(
     output: Path | None,
     dry_run: bool,
     overwrite: bool,
+    description: dict | None = None,
 ) -> int:
     """Execute the --convert-from path: convert an existing team to a new framework format.
 
@@ -465,6 +466,7 @@ def _run_convert(
         output: Explicit output directory, or None to auto-derive from source.
         dry_run: When True, report actions without writing files.
         overwrite: When True, overwrite existing target files.
+        description: The ``--description`` brief, for the write-policy refusal (``convert_team``).
 
     Returns:
         0 on success, 1 on error.
@@ -525,6 +527,7 @@ def _run_convert(
             project_manifest=project_manifest,
             dry_run=dry_run,
             overwrite=overwrite,
+            description=description,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -854,6 +857,7 @@ def _run_bridge(
     merge_only: bool = False,
     emit_skills: bool = True,
     host_features: list[str] | None = None,
+    description: dict | None = None,
 ) -> int:
     """Execute the --bridge-from path via lightweight compatibility artifacts."""
     from agentteams.bridge import run_bridge
@@ -902,6 +906,7 @@ def _run_bridge(
             merge_only=merge_only,
             emit_skills=emit_skills,
             host_features=host_features or [],
+            description=description,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)

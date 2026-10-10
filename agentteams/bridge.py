@@ -240,6 +240,7 @@ def run_bridge(
     merge_only: bool = False,
     emit_skills: bool = True,
     host_features: list[str] | None = None,
+    description: dict[str, Any] | None = None,
 ) -> BridgeResult:
     """Generate or validate lightweight bridge artifacts.
 
@@ -259,9 +260,17 @@ def run_bridge(
             skill templates at `.claude/skills/recall/SKILL.md` and
             `.claude/skills/code-recall/SKILL.md`. Default True. Has no effect
             on non-claude targets.
+        host_features: Bridge host-feature tokens (``bridge:<src>-to-<fw>:subagents`` opts into agent stubs).
+        description: The ``--description`` brief, when given. Subagent stubs copy the source's tools, so under
+            ``write_policy: "orchestrator-only"`` they are refused (the target's build-log or this brief).
 
     Returns:
         BridgeResult.
+
+    Raises:
+        FileNotFoundError: *source_dir* does not exist.
+        ValueError: An unknown or meaningless framework pair, or subagent stubs requested for a team under the
+            switch (``interop_write_policy.refuse_outside_interop``; use ``--interop-from --description``).
     """
     if not source_dir.is_dir():
         raise FileNotFoundError(f"Source directory not found: {source_dir}")
@@ -276,6 +285,11 @@ def run_bridge(
             "goose-to-goose bridge is meaningless; bridge a Goose source to "
             "claude/copilot-vscode/copilot-cli."
         )
+
+    if not check_only:  # before any write: stubs copy the source's tools, so a team under the switch gains writers
+        from agentteams.interop_write_policy import refuse_bridge_stubs
+
+        refuse_bridge_stubs(src_fw, target_framework, output_root, host_features or [], description)
 
     result = BridgeResult(dry_run=dry_run, check_only=check_only)
     inventory = _extract_inventory(source_dir, src_fw)
