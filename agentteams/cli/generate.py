@@ -346,11 +346,11 @@ def _run_generate_inner(
             print(refusal, file=sys.stderr)
             return 1
         if manifest.get("write_policy") == "orchestrator-only":
-            print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections, but never front "
-                  "matter or recipe/TOML grants, so agents keep their old tools (the audit reports each as "
-                  "AR_WRITE_POLICY). Markdown agents (claude, copilot): run --reconcile-front-matter "
-                  "--reconcile-apply. Goose recipes and Codex TOML: regenerate them (a fresh build, or "
-                  "--overwrite, which needs a recorded @security clearance).")
+            print("  ⚠  write_policy orchestrator-only: --update merges the proposal sections and Goose recipe "
+                  "extensions (their tool grants follow the template), but never Markdown front matter or Codex TOML "
+                  "grants, so those agents keep their old tools (the audit reports each as AR_WRITE_POLICY). "
+                  "Markdown agents (claude, copilot): run --reconcile-front-matter --reconcile-apply. Codex TOML: "
+                  "regenerate them (a fresh build, or --overwrite, which needs a recorded @security clearance).")
 
         from agentteams import drift
 

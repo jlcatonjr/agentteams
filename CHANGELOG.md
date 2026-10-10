@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (goose `--update --merge` keeps enriched recipe bodies and valid YAML)
+
+- **The merge-overwrite gate now checks the file on disk.**
+  - **Before:** a non-Markdown file was full-replaced whenever its fresh render had no AGENTTEAMS fence. Goose
+    recipe templates without a fence render fence-less, so every such recipe was overwritten, including recipes
+    whose on-disk `content` fence held a hand-enriched body. This happened silently, with no notice and no
+    sidecar. A scratch `researchteam update` that re-rendered native surfaces lost enriched bodies in 14
+    healthResearch and 15 SocialScienceHumanities recipes.
+  - **Now:** a file fenced on disk goes to the fence merge, which keeps every on-disk section the render lacks.
+    A notice says so and suggests `--overwrite` after review to adopt the template.
+- **A kept recipe's tool grants still follow the template.** A recipe's top-level `extensions:` span is now
+  reconciled from the fresh render (`goose_recipe_merge.reconcile_extensions`, beside `sub_recipes`), in every
+  merged recipe. Keeping fenced instructions therefore no longer freezes a wider on-disk
+  `extensions`/`available_tools`. The edit rolls back, with a notice, if the result doesn't reproduce the
+  template's grants or fails validation. A render with no `extensions` key leaves the file alone. (@security
+  review.) As a result, switching `write_policy` on for an existing Goose team now narrows its recipes on
+  `--update --merge`, with no regeneration needed. The update warning now asks for regeneration only for Codex
+  TOML.
+- **Stranded markers are repaired.** A column-0 AGENTTEAMS marker inside a recipe's `instructions: |` block is
+  re-indented on merge, with a notice (`goose_recipe_merge.repair_stranded_markers`). That's the damage the old
+  insert left behind: researchteam's `quality-auditor.yaml` on main doesn't parse.
+- **Indented markers keep their indent.** Inserting a new section before an indented marker now anchors at the
+  start of the line. Before, it stranded the indent and pulled the marker to column 0, which ended the
+  `instructions: |` block scalar, and 12 recipes in that run stopped parsing as YAML.
+- **`.lost.<sid>.md` sidecars stay inside the backup directory.** For a path above the team dir (goose's
+  `../../.goosehints`), `..` segments are kept as `_up_`. Before, the sidecar resolved back into the live
+  agents dir. A sidecar that would land outside the backup dir is refused, with a warning.
+- **Integrity:** `fences.py` is re-pinned.
+
 ### fix (interop: every front-matter scalar on one line; unsafe keys skipped)
 
 - **Every value written on one line.** Raw front-matter values, list items and handoff label/prompt/agent strings

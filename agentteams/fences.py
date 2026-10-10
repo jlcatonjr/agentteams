@@ -8,6 +8,7 @@ agentteams.emit unchanged.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -702,7 +703,26 @@ def _extract_fenced_regions(content: str) -> dict[str, str] | str:
     return regions
 
 
-def _is_machine_managed_merge_overwrite_path(rel_path: str, fresh_content: str) -> bool:
+def _kept_fenced_sections(rel_path: str, fresh_content: str, existing_text: str) -> bool:
+    """Whether a merge keeps a non-Markdown file's on-disk fences because its fresh render has none.
+
+    Args:
+        rel_path: The team-relative path.
+        fresh_content: The fresh render.
+        existing_text: The file on disk.
+
+    Returns:
+        True for a non-``.md``, non-allowlisted path whose on-disk text has a real fence and whose render has none.
+
+    Raises:
+        Nothing.
+    """
+    return (not rel_path.endswith(".md") and rel_path not in _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS
+            and _FENCE_BEGIN_RE.search(existing_text) is not None and _FENCE_BEGIN_RE.search(fresh_content) is None)
+
+
+def _is_machine_managed_merge_overwrite_path(rel_path: str, fresh_content: str,
+                                             existing_text: str | None = None) -> bool:
     """Return True when merge mode may safely full-replace a machine-managed file.
 
     Content-aware (2026-07-24, Gap 4): explicit-allowlist membership is always safe. Beyond
@@ -715,10 +735,18 @@ def _is_machine_managed_merge_overwrite_path(rel_path: str, fresh_content: str) 
     corrupted `.goosehints` in exactly this way. ``.md`` paths are never eligible here --
     ``_normalize_generated_content`` already governs their fencing, and the explicit set is
     for ``.md`` files that need full-replace for reasons unrelated to file-type safety.
+
+    The ON-DISK file counts too (2026-10-10): a file that already carries a real fence is never
+    full-replaced here, even when the fresh render has none. Goose recipe templates with no fence
+    of their own rendered fence-less, so a ``--merge`` replaced every enriched ``content`` fence in
+    those recipes with fresh template text (healthResearch, SocialScienceHumanities). Such a file
+    goes to the fence merge instead, which keeps every on-disk section the render lacks.
     """
     if rel_path in _MACHINE_MANAGED_MERGE_OVERWRITE_PATHS:
         return True
     if rel_path.endswith(".md"):
+        return False
+    if existing_text is not None and _FENCE_BEGIN_RE.search(existing_text):
         return False
     return _FENCE_BEGIN_RE.search(fresh_content) is None
 
@@ -844,7 +872,10 @@ def _insert_section_at_render_position(
     for nxt in render_order[k + 1:]:
         m = re.search(rf"<!--\s*AGENTTEAMS:BEGIN\s+{re.escape(nxt)}\b", merged)
         if m:
-            return merged[: m.start()].rstrip("\n") + "\n\n" + block + "\n" + merged[m.start():], None
+            # Anchor at the START of the marker's line: the marker may be indented (a YAML block scalar), and
+            # cutting at the marker itself would strand that indent and pull the marker to column 0.
+            at = merged.rfind("\n", 0, m.start()) + 1
+            return merged[:at].rstrip("\n") + "\n\n" + block + "\n" + merged[at:], None
 
     # 3. no anchor exists in this file at all.
     return (
@@ -1275,8 +1306,16 @@ def _write_lost_fence_sidecars(
         if not body.strip():
             continue
         # Flatten the rel_path into the filename so sibling files never collide:
-        # references/foo.md + sid=content → references/foo.md.lost.content.md
-        sidecar = backup_path / f"{rel_path}.lost.{sid}.md"
+        # references/foo.md + sid=content → references/foo.md.lost.content.md. A path above the team dir
+        # (goose's ``../../.goosehints``) keeps its ``..`` segments as ``_up_`` so the sidecar stays inside
+        # the backup dir instead of resolving back into the live agents dir.
+        safe_rel = "/".join("_up_" if part == ".." else part for part in Path(rel_path).parts
+                            if part not in ("", ".", "/"))
+        sidecar = backup_path / f"{safe_rel}.lost.{sid}.md"
+        if not sidecar.resolve().is_relative_to(backup_path.resolve()):
+            print(f"  ⚠  lost-fence sidecar for {rel_path} ({sid}) refused: it would land outside the backup dir",
+                  file=sys.stderr)
+            continue
         try:
             sidecar.parent.mkdir(parents=True, exist_ok=True)
             _atomic_write_text(sidecar, body)

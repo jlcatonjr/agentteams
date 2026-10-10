@@ -201,4 +201,131 @@ def reconcile_sub_recipes(fresh: str, merged: str) -> tuple[str, list[str]]:
     return text, notices
 
 
-__all__ = ["SUB_RECIPES_MANAGED_COMMENT", "is_goose_recipe", "reconcile_sub_recipes"]
+_STRANDED_MARKER_RE = re.compile(r"^<!--\s*AGENTTEAMS:(BEGIN|END)\b")
+
+
+def repair_stranded_markers(text: str) -> tuple[str, list[str]]:
+    """Re-indent AGENTTEAMS markers stranded at column 0 inside a recipe's ``instructions: |`` block.
+
+    An earlier merge inserted new sections before an indented marker by cutting at the marker itself, which
+    left the marker at column 0 and ended the block scalar there (the recipe stopped parsing: researchteam's
+    ``quality-auditor.yaml``). A column-0 line that is exactly such a marker, after ``instructions: |`` and before
+    the next real top-level key, is moved back to the block's indentation.
+
+    Args:
+        text: A Goose recipe.
+
+    Returns:
+        ``(text, notices)``; unchanged when nothing is stranded or *text* is not a recipe.
+
+    Raises:
+        Nothing.
+    """
+    if not is_goose_recipe(text):
+        return text, []
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if _INSTRUCTIONS_RE.match(ln)), None)
+    if start is None:
+        return text, []
+    indent = next((ln[:len(ln) - len(ln.lstrip())] for ln in lines[start + 1:] if ln.strip() and ln[0].isspace()), "")
+    if not indent:
+        return text, []
+    fixed = 0
+    for i in range(start + 1, len(lines)):
+        ln = lines[i]
+        if _STRANDED_MARKER_RE.match(ln):
+            lines[i] = indent + ln
+            fixed += 1
+        elif ln.strip() and not ln[0].isspace():
+            break  # the next top-level key ends the block
+    if not fixed:
+        return text, []
+    out = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+    return out, [f"instructions: re-indented {fixed} AGENTTEAMS marker(s) stranded at column 0 (the recipe did not "
+                 "parse as YAML)"]
+
+
+_EXT_KEY_RE = re.compile(r"^extensions\s*:")
+
+
+def _key_span(lines: list[str], key_re: re.Pattern[str]) -> tuple[int, int] | None:
+    """``[start, end)`` of a top-level key: its column-0 line through the line before the next column-0 key.
+
+    Zero-indent ``- item`` lines and indented lines belong to the key; trailing blank lines do not.
+
+    Raises:
+        _Unrecognised: the key appears more than once.
+    """
+    keys = [i for i, ln in enumerate(lines) if key_re.match(ln)]
+    if not keys:
+        return None
+    if len(keys) > 1:
+        raise _Unrecognised("the key appears more than once")
+    k = keys[0]
+    end = k + 1
+    while end < len(lines):
+        ln = lines[end]
+        if ln.strip() and not ln[0].isspace() and (ln.startswith("---") or not ln.startswith(("-", "#"))):
+            break  # a top-level key, or a document marker, ends the span
+        end += 1
+    while end > k + 1 and (not lines[end - 1].strip() or lines[end - 1].startswith("#")):
+        end -= 1
+    return k, end
+
+
+def reconcile_extensions(fresh: str, merged: str) -> tuple[str, list[str]]:
+    """Make *merged*'s top-level ``extensions`` span match *fresh*'s (the recipe's tool grants follow the template).
+
+    A recipe kept by the fence merge (its instructions are fenced on disk) would otherwise keep its on-disk
+    ``extensions``/``available_tools`` forever, so a template fix that narrows a grant never reached it
+    (@security, 2026-10-10). The grants are template-owned: derived from the agent's declared tools.
+
+    Args:
+        fresh: The freshly rendered recipe (authoritative for ``extensions``).
+        merged: The fence-merged on-disk recipe about to be written.
+
+    Returns:
+        ``(text, notices)``: *merged* unchanged when the spans already match, when either side is not a recipe,
+        when the fresh render has no ``extensions`` key (left alone: an absent key would load the user's
+        configured extensions), or when the edit fails the checks below (rolled back with a notice).
+
+    Raises:
+        Nothing: an unrecognised shape is reported as a notice, never raised.
+    """
+    from agentteams.frameworks.goose_recipe_read import recipe_extension_grants
+
+    if not (is_goose_recipe(fresh) and is_goose_recipe(merged)):
+        return merged, []
+    fresh_lines, merged_lines = fresh.splitlines(), merged.splitlines()
+    try:
+        fresh_span, disk_span = _key_span(fresh_lines, _EXT_KEY_RE), _key_span(merged_lines, _EXT_KEY_RE)
+    except _Unrecognised as exc:
+        return merged, [f"extensions: not reconcilable ({exc}); left unchanged — review the recipe's tool grants"]
+    if fresh_span is None:
+        return merged, []
+    new_block = fresh_lines[fresh_span[0]:fresh_span[1]]
+    old_block = merged_lines[disk_span[0]:disk_span[1]] if disk_span else []
+    if new_block == old_block:
+        return merged, []
+    if disk_span is None:
+        anchor = next((i for i, ln in enumerate(merged_lines) if _INSTRUCTIONS_RE.match(ln)), len(merged_lines))
+        out_lines = merged_lines[:anchor] + new_block + merged_lines[anchor:]
+    else:
+        out_lines = merged_lines[:disk_span[0]] + new_block + merged_lines[disk_span[1]:]
+    text = "\n".join(out_lines).rstrip("\n") + "\n"
+    if recipe_extension_grants(text) != recipe_extension_grants(fresh):
+        return merged, ["extensions: reconcile rolled back — the result did not reproduce the template's grants; "
+                        "left unchanged — review the recipe's tool grants"]
+    before = set(_validate_recipe_yaml(merged))
+    introduced = [v for v in _validate_recipe_yaml(text) if v not in before]
+    if introduced:
+        return merged, [f"extensions: reconcile rolled back — it would introduce {introduced}; left unchanged"]
+    old = {str(g.get("name")): g.get("available_tools") for g in (recipe_extension_grants(merged) or [])}
+    new = {str(g.get("name")): g.get("available_tools") for g in (recipe_extension_grants(text) or [])}
+    changes = ([f"added {n}" for n in new if n not in old] + [f"removed {n}" for n in old if n not in new]
+               + [f"{n} tools {old[n]} -> {new[n]}" for n in new if n in old and old[n] != new[n]])
+    return text, [f"extensions: aligned with the template ({'; '.join(changes) or 'entries regenerated'})"]
+
+
+__all__ = ["SUB_RECIPES_MANAGED_COMMENT", "is_goose_recipe", "reconcile_extensions", "reconcile_sub_recipes",
+           "repair_stranded_markers"]

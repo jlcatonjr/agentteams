@@ -185,8 +185,9 @@ def test_goose_non_orchestrator_withholds_operator_mcp_and_coordination():
     assert "agentteams_coordination" not in recipe and "lean-mcp" not in recipe
 
 
-def test_switching_on_an_existing_goose_team_is_flagged_until_regenerated(tmp_path):
-    """Reconcile reads only markdown, so recipe/TOML grants stay wide after --update; the audit must say so."""
+def test_switching_on_an_existing_goose_team_narrows_its_recipes_on_update(tmp_path):
+    """--update --merge reconciles each recipe's extensions from the render (#189), so switching the policy on for an
+    existing Goose team narrows its grants without a regeneration; the audit finds no AR_WRITE_POLICY error."""
     brief = json.loads(BRIEF.read_text(encoding="utf-8"))
     off, on = tmp_path / "off.json", tmp_path / "on.json"
     off.write_text(json.dumps(brief), encoding="utf-8")
@@ -204,11 +205,11 @@ def test_switching_on_an_existing_goose_team_is_flagged_until_regenerated(tmp_pa
         for fw, proc in procs.items():
             out, _ = proc.communicate(timeout=600)
             assert proc.returncode == 0, out[-1500:]
-            assert "regenerate them" in out
+            assert "Goose recipe extensions" in out and "extensions: aligned with the template" in out
             errors = [f for f in run_post_audit(tmp_path / fw / "agents", analyze.build_manifest(brief, framework=fw),
                                                 ai_audit=False).agent_refactor_findings
                       if f.code == "AR_WRITE_POLICY" and f.severity == "error"]
-            assert errors, f"{fw}: wide grants after --update must stay visible to the audit"
+            assert not errors, f"{fw}: --update must narrow recipe grants: {[e.description for e in errors][:3]}"
     finally:
         for proc in procs.values():
             if proc.poll() is None:
