@@ -55,7 +55,7 @@ This reference defines safe GitHub interaction and merge procedures for ProjectR
    - Fix the cause (code, config, or workflow), commit, and re-push with `git push`; the new push triggers a fresh run — re-verify from step 1. Iterate until green.
    - Re-run **only** for a confirmed transient/infrastructure flake, never to mask a real failure: re-push, or `gh run rerun <run-id>` (`--failed`) / REST `curl -X POST -H "Authorization: Bearer $GITHUB_TOKEN" .../actions/runs/<run-id>/rerun` when available.
    - Escalate to the orchestrator / `@security` if the fix is risky, ambiguous, or out of scope. **Deployment** workflow success (Pages/release/publish) is the binding outcome — a failed deploy means the change is not live and the operation is **not complete**.
-5. **Cross-repo guard:** if a fix requires pushing to a repository other than `*/outputs/`, that re-push is a cross-repository write — route it through `@repo-liaison` + `@security` (orchestrator Rule 11) before pushing.
+5. **Cross-repo guard:** if a fix requires pushing to a repository other than this project's own (ProjectRepositories), that re-push is a cross-repository write — route it through `@repo-liaison` + `@security` (orchestrator Rule 11) before pushing.
 
 ## Conflict Handling Decision Tree
 
