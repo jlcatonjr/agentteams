@@ -589,7 +589,7 @@ def import_from_cai(
         if cai_name or cai_desc or cai_tools_line or (delivery == "native" and cai_handoffs):
             header = ["---"]
             if cai_name:
-                header.append(f"name: {cai_name}")
+                header.append(f"name: {_scalar(cai_name)}")  # quoted when it holds YAML syntax
             if cai_desc:
                 header.append(f"description: {_quoted(cai_desc)}")
             if cai_tools_line:
@@ -960,6 +960,7 @@ from agentteams.interop_helpers import (
     handoff_header_lines as _handoff_header_lines,
     collapsed_prompt_notices as _collapsed_prompt_notices,
     quoted as _quoted,
+    scalar as _scalar,
     safe_fm_key as _safe_fm_key,
     serialize_raw_fm_key as _serialize_raw_fm_key,
     merge_sidecar_handoffs as _merge_sidecar_handoffs,

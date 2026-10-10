@@ -152,8 +152,9 @@ def safe_fm_key(key: Any) -> bool:
     return isinstance(key, str) and _SAFE_FM_KEY_RE.fullmatch(key) is not None
 
 
-#: A string YAML reads back unchanged when written bare: no indicator first, no ``: `` or `` #``, no quotes or escapes.
-_PLAIN_SCALAR_RE = re.compile(r"[A-Za-z0-9_(][A-Za-z0-9 _.,()/+=@-]*")
+#: What forces quoting: a YAML indicator first, ``: `` / `` #`` / a trailing ``:`` anywhere, a quote or backslash,
+#: or surrounding whitespace. Anything else (letters in any script, ``—``, ``(copilot)``) is read back unchanged bare.
+_NOT_PLAIN_RE = re.compile(r"""^[-?:,\[\]{}#&*!|>'"%@`\s]|: |\s#|:$|["'\\]|\s$""")
 
 
 def quoted(value: Any) -> str:
@@ -175,7 +176,7 @@ def quoted(value: Any) -> str:
 
 
 def scalar(value: str) -> str:
-    """A string as a YAML scalar: bare when it is plainly safe (:data:`_PLAIN_SCALAR_RE`), else :func:`quoted`.
+    """A string as a YAML scalar: bare unless :data:`_NOT_PLAIN_RE` finds YAML syntax in it, else :func:`quoted`.
 
     Args:
         value: The value to write.
@@ -187,7 +188,7 @@ def scalar(value: str) -> str:
         Nothing.
     """
     value = one_line(value)
-    return value if _PLAIN_SCALAR_RE.fullmatch(value) else quoted(value)
+    return value if value and not _NOT_PLAIN_RE.search(value) else quoted(value)
 
 
 def collapsed_prompt_notices(slug: str, handoffs: list[dict[str, Any]]) -> list[str]:

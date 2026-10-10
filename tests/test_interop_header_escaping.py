@@ -134,3 +134,13 @@ def test_a_collapsed_handoff_prompt_is_reported(tmp_path):
     handoff = {"label": "Go", "to": "reviewer", "prompt": "Step one\nStep two", "send": False}
     _, notices = _import(tmp_path, handoffs=[handoff])
     assert any("multi-line handoff prompt to reviewer" in n for n in notices)
+
+
+@pytest.mark.parametrize("name, written", [
+    ("Planner", "Planner"), ("Security — AgentTeamsModule", "Security — AgentTeamsModule"),
+    ("a: b", '"a: b"'), ('"x', "\"'x\""), ("[x", '"[x"'), ("trail:", '"trail:"'),
+])
+def test_an_agent_name_is_written_as_a_safe_scalar(tmp_path, name, written):
+    """@security re-verification advisory: a name with YAML syntax broke strict parsers; it is now quoted."""
+    fm, _ = _import(tmp_path, name=name)
+    assert f"name: {written}" in fm.splitlines()
