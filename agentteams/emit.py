@@ -48,6 +48,7 @@ from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-export
     _extract_fenced_regions,
     _fence_body,
     _is_machine_managed_merge_overwrite_path,
+    _kept_fenced_sections,
     _merge_fenced_content,
     _shrink_notice_lines,
     _shrink_notice_sid,
@@ -420,7 +421,7 @@ def emit_all(
             if (
                 merge
                 and existing_text is not None
-                and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content)
+                and _is_machine_managed_merge_overwrite_path(rel_path, normalized_content, existing_text)
             ):
                 # Mirror the real path: machine-managed maps full-replace in merge.
                 if existing_text == normalized_content:
@@ -609,7 +610,7 @@ def emit_all(
             # legacy-no-fence branch below, but the .md variants ARE fenced, so
             # _merge_fenced_content would keep the stale body and the roster table
             # would drift behind its companion diagram when the team grows.
-            if _is_machine_managed_merge_overwrite_path(rel_path, normalized_content):
+            if _is_machine_managed_merge_overwrite_path(rel_path, normalized_content, existing_text):
                 if existing_text == normalized_content:
                     result.unchanged.append(str(target))
                 else:
@@ -619,6 +620,11 @@ def emit_all(
                     except OSError as exc:
                         result.errors.append(f"Failed to write {target}: {exc}")
                 continue
+            if _kept_fenced_sections(rel_path, normalized_content, existing_text):
+                result.notices.append(
+                    f"{rel_path}: the template render has no AGENTTEAMS fence, so the on-disk fenced sections are "
+                    "kept as they are (a full replace would discard them); re-render it with --overwrite after "
+                    "review to adopt the template")
             merge_result = _merge_fenced_content(
                 normalized_content,
                 existing_text,

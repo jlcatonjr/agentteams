@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (goose `--update --merge` keeps enriched recipe bodies and valid YAML)
+
+- **The merge-overwrite gate now checks the file on disk.**
+  - **Before:** a non-Markdown file was full-replaced whenever its fresh render had no AGENTTEAMS fence. Goose
+    recipe templates without a fence render fence-less, so every such recipe was overwritten, including recipes
+    whose on-disk `content` fence held a hand-enriched body. This happened silently, with no notice and no
+    sidecar. A scratch `researchteam update` that re-rendered native surfaces lost enriched bodies in 14
+    healthResearch and 15 SocialScienceHumanities recipes.
+  - **Now:** a file fenced on disk goes to the fence merge, which keeps every on-disk section the render lacks.
+    A notice says so and suggests `--overwrite` after review to adopt the template.
+- **Indented markers keep their indent.** Inserting a new section before an indented marker now anchors at the
+  start of the line. Before, it stranded the indent and pulled the marker to column 0, which ended the
+  `instructions: |` block scalar, and 12 recipes in that run stopped parsing as YAML.
+- **`.lost.<sid>.md` sidecars stay inside the backup directory.** For a path above the team dir (goose's
+  `../../.goosehints`), `..` segments are kept as `_up_`. Before, the sidecar resolved back into the live
+  agents dir.
+- **Integrity:** `fences.py` is re-pinned.
+
 ### fix (interop: every front-matter scalar on one line; unsafe keys skipped)
 
 - **Every value written on one line.** Raw front-matter values, list items and handoff label/prompt/agent strings
