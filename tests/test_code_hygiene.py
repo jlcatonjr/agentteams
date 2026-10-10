@@ -220,8 +220,24 @@ def _packaged_duplicate(rel: str) -> bool:
     """
     if not rel.startswith("agentteams/data/"):
         return False
-    original = REPO_ROOT / "scripts" / Path(rel).name
-    return original.is_file() and original.read_bytes() == (REPO_ROOT / rel).read_bytes()
+    original_rel = f"scripts/{Path(rel).name}"
+    original = REPO_ROOT / original_rel
+    # The original must be TRACKED (so it is itself measured): a gitignored scripts/ file would leave the copy counted
+    # nowhere on a local run (@security, #191).
+    return (original_rel in _tracked_set() and original.is_file()
+            and original.read_bytes() == (REPO_ROOT / rel).read_bytes())
+
+
+def _tracked_set() -> frozenset[str]:
+    """Git-tracked paths only (no untracked files), cached per run."""
+    global _TRACKED
+    if _TRACKED is None:
+        out = subprocess.check_output(["git", "ls-files", "-z", "--cached"], cwd=REPO_ROOT, text=True)
+        _TRACKED = frozenset(p for p in out.split("\0") if p)
+    return _TRACKED
+
+
+_TRACKED: frozenset[str] | None = None
 
 
 def _count_exceptions(rel_paths: list[str]) -> tuple[int, int, dict[str, int]]:
