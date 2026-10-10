@@ -21,7 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   merged recipe. Keeping fenced instructions therefore no longer freezes a wider on-disk
   `extensions`/`available_tools`. The edit rolls back, with a notice, if the result doesn't reproduce the
   template's grants or fails validation. A render with no `extensions` key leaves the file alone. (@security
-  review.)
+  review.) As a result, switching `write_policy` on for an existing Goose team now narrows its recipes on
+  `--update --merge`, with no regeneration needed. The update warning now asks for regeneration only for Codex
+  TOML.
 - **Stranded markers are repaired.** A column-0 AGENTTEAMS marker inside a recipe's `instructions: |` block is
   re-indented on merge, with a notice (`goose_recipe_merge.repair_stranded_markers`). That's the damage the old
   insert left behind: researchteam's `quality-auditor.yaml` on main doesn't parse.
