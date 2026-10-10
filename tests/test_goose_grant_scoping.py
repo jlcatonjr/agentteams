@@ -208,7 +208,8 @@ def test_merge_notice_lists_unscoped_recipes(tmp_path, capsys):
 def test_missing_shipped_script_placeholder_fails_closed_without_install_path(tmp_path):
     from agentteams.frameworks.goose_docs import _shipped_script
 
-    text = _shipped_script(tmp_path / "home" / "someuser" / "goose-readfs-mcp.py")
-    assert "Placeholder: scripts/goose-readfs-mcp.py" in text and "someuser" not in text
+    # A name in neither scripts/ nor agentteams/data/ (the packaged copies are found first since #191).
+    text = _shipped_script(tmp_path / "home" / "someuser" / "goose-not-shipped.py")
+    assert "Placeholder: scripts/goose-not-shipped.py" in text and "someuser" not in text
     assert "raise SystemExit(1)" in text
 

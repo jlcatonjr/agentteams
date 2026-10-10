@@ -27,6 +27,7 @@ __all__ = [
     "_coordination_mcp_content",
     "_readfs_mcp_content",
     "_shipped_script",
+    "is_placeholder",
     "_goose_capabilities_content",
     "_RESILIENT_RUNNER_SOURCE",
     "_ROUTE_PROXY_SOURCE",
@@ -96,12 +97,34 @@ def _goosehints_content(project_name: str) -> str:
     )
 
 
+_PLACEHOLDER_MARK = "was not found in this agentteams install."
+
+
+def is_placeholder(text: str) -> bool:
+    """Whether *text* is :func:`_shipped_script`'s placeholder (the script was in neither location).
+
+    Args:
+        text: Emitted script content.
+
+    Returns:
+        True for the placeholder.
+
+    Raises:
+        Nothing.
+    """
+    return _PLACEHOLDER_MARK in text[:300]
+
+
 def _shipped_script(source: Path) -> str:
     """Return a first-party script's source, read from disk so the emitted copy never drifts.
 
-    Degrades to a placeholder that names only ``scripts/<file>`` (never the install path, which
-    carries the installing user's home directory: S-8) and exits non-zero, so a missing helper
-    fails closed rather than silently doing nothing.
+    The source checkout's ``scripts/<file>`` is read first. A pip install has no ``scripts/``
+    directory, so the packaged copy in ``agentteams/data/`` (kept byte-identical by a test) is
+    used next; before that fallback, every pip-installed render (researchteam's autosync CI)
+    emitted the placeholder and overwrote the working scripts in the target. If neither exists it
+    degrades to a placeholder that names only ``scripts/<file>`` (never the install path, which
+    carries the installing user's home directory: S-8) and exits non-zero; callers check
+    :func:`is_placeholder` and skip it rather than overwrite a real file.
 
     Args:
         source: The script's path inside the agentteams checkout.
@@ -112,16 +135,16 @@ def _shipped_script(source: Path) -> str:
     Raises:
         Nothing.
     """
-    try:
-        return source.read_text(encoding="utf-8")
-    except OSError:
-        return (
-            "#!/usr/bin/env python3\n"
-            f'"""Placeholder: scripts/{source.name} was not found in this agentteams install.\n'
-            "Reinstall agentteams or fetch the file from the agentteams source repo.\n"
-            '"""\n'
-            "raise SystemExit(1)\n"
-        )
+    for path in (source, Path(__file__).resolve().parent.parent / "data" / source.name):
+        if path.is_file():
+            return path.read_text(encoding="utf-8")
+    return (
+        "#!/usr/bin/env python3\n"
+        f'"""Placeholder: scripts/{source.name} {_PLACEHOLDER_MARK}\n'
+        "Reinstall agentteams or fetch the file from the agentteams source repo.\n"
+        '"""\n'
+        "raise SystemExit(1)\n"
+    )
 
 
 #: The read-only file server ships as package data, so a pip install has the real server (not a placeholder)

@@ -208,7 +208,20 @@ def _tracked_py_files() -> list[str]:
 
 
 def _in_scope(rel: str, exclude: tuple[str, ...]) -> bool:
-    return not rel.startswith(exclude)
+    return not rel.startswith(exclude) and not _packaged_duplicate(rel)
+
+
+def _packaged_duplicate(rel: str) -> bool:
+    """A packaged copy in ``agentteams/data/`` byte-identical to ``scripts/<same name>`` (#191).
+
+    Pip installs have no ``scripts/``, so a few Goose helper scripts also ship as package data. Counting both copies
+    would double-count one piece of code; only an exact duplicate is skipped (test_goose_scripts_packaged enforces
+    parity), so a diverged copy is measured like any module.
+    """
+    if not rel.startswith("agentteams/data/"):
+        return False
+    original = REPO_ROOT / "scripts" / Path(rel).name
+    return original.is_file() and original.read_bytes() == (REPO_ROOT / rel).read_bytes()
 
 
 def _count_exceptions(rel_paths: list[str]) -> tuple[int, int, dict[str, int]]:
