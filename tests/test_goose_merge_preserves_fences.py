@@ -189,3 +189,21 @@ def test_a_marker_stranded_at_column_zero_is_re_indented(tmp_path: Path):
     assert notices and "re-indented 1 AGENTTEAMS marker" in notices[0]
     assert "B" in yaml.safe_load(repaired)["instructions"]
     assert repair_stranded_markers(repaired) == (repaired, [])             # idempotent
+
+
+@pytest.mark.parametrize("hostile", [
+    WIDE.replace("instructions: |", "extensions: []\ninstructions: |"),                   # duplicate key
+    WIDE.replace("extensions:\n", "extensions:\n---\n"),                                 # document marker in the span
+    WIDE.replace("    timeout: 300\n", "    timeout: 300\n- not: [an, extension\n"),     # unparseable entry
+])
+def test_a_hostile_extensions_shape_never_corrupts_the_recipe(hostile):
+    """@security re-verification: a mis-span must roll back (or align exactly), never touch the instructions."""
+    from agentteams.frameworks.goose_recipe_merge import reconcile_extensions
+    from agentteams.frameworks.goose_recipe_read import recipe_extension_grants
+
+    out, notices = reconcile_extensions(NARROW_FRESH, hostile)
+    assert "Enriched body." in out and "<!-- AGENTTEAMS:BEGIN content v=1 -->" in out
+    if out != hostile:   # an edit happened: it must reproduce the template's grants exactly
+        assert recipe_extension_grants(out) == recipe_extension_grants(NARROW_FRESH)
+    else:
+        assert notices, "an unchanged hostile recipe must say why"

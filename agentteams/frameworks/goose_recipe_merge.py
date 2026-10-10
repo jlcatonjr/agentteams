@@ -265,8 +265,8 @@ def _key_span(lines: list[str], key_re: re.Pattern[str]) -> tuple[int, int] | No
     end = k + 1
     while end < len(lines):
         ln = lines[end]
-        if ln.strip() and not ln[0].isspace() and not ln.startswith(("-", "#")):
-            break
+        if ln.strip() and not ln[0].isspace() and (ln.startswith("---") or not ln.startswith(("-", "#"))):
+            break  # a top-level key, or a document marker, ends the span
         end += 1
     while end > k + 1 and (not lines[end - 1].strip() or lines[end - 1].startswith("#")):
         end -= 1
