@@ -497,8 +497,6 @@ def test_a_runner_refused_by_an_old_confined_file_prints_the_reinstall_command(t
     hint = next(line for line in out.stderr.splitlines() if "agentteams --install-confined" in line)
     assert f"--install-confined {shlex.quote(str(installed))}" in hint and f"--project {shlex.quote(str(root))}" in hint
     # The printed command works: its review step validates the file and prints the hash to confirm.
-    import shlex
-
     review = _cli(*shlex.split(hint)[1:], cwd=root, home=_home)
     assert review.returncode == 1 and "--confirm-review-sha256" in review.stdout, review.stderr
 
