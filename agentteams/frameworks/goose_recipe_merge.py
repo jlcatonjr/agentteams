@@ -289,7 +289,7 @@ def repair_misplaced_sections(text: str, fresh: str | None = None) -> tuple[str,
     """
     if fresh is None or not is_goose_recipe(text):
         return text, []
-    belongs = _instructions_sids(fresh)
+    belongs = _instructions_sids(fresh) - _instructions_sids(text)  # never duplicate a section already inside
     lines = text.splitlines()
     inst = next((i for i, ln in enumerate(lines) if _INSTRUCTIONS_RE.match(ln)), None)
     if inst is None:

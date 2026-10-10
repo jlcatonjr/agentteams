@@ -85,7 +85,6 @@ def test_a_section_spanning_a_top_level_key_is_left_alone():
     text = DISK.replace("extensions:", "  <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->\n  x\nextensions:", 1) + \
         "  <!-- AGENTTEAMS:END code_index_consultation -->\n"
     out, notices = repair_misplaced_sections(text, FRESH)
-    assert "extensions" in yaml.safe_load(out.replace("  <!-- AGENTTEAMS:END code_index_consultation -->\n", "")) or out == text
     assert out == text
 
 
@@ -103,3 +102,10 @@ def test_a_render_without_extensions_never_loses_the_on_disk_key(tmp_path: Path)
 def test_append_section_only_redirects_for_goose_recipes():
     md = "# Doc\n\n```yaml\ninstructions: |\n  x\nother: y\n```\n"
     assert _append_section(md, "block\n").endswith("block\n")
+
+
+def test_a_section_already_inside_the_instructions_is_not_duplicated():
+    inside = FRESH + ('  <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->\n  stray copy\n'
+                      '  <!-- AGENTTEAMS:END code_index_consultation -->\n')
+    out, _ = repair_misplaced_sections(inside, FRESH)
+    assert out.count("AGENTTEAMS:BEGIN code_index_consultation") == 2 and out == inside
