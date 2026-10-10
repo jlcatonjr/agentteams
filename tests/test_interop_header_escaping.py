@@ -100,3 +100,37 @@ def test_ordinary_values_are_unchanged():
     assert safe_fm_key("user-invocable") and not safe_fm_key("a b") and not safe_fm_key(3)
     assert handoff_header_lines([{"label": "L", "agent": "a", "prompt": "P", "send": False}]) == [
         "handoffs:", '  - label: "L"', '    agent: "a"', '    prompt: "P"', "    send: false"]
+
+
+@pytest.mark.parametrize("target", ["copilot-vscode", "codex"])
+def test_a_multi_line_raw_tools_value_cannot_widen_the_grant(tmp_path, target):
+    """@security: a raw tools value `['read']\\ntools: ['edit', 'execute']` passed the first-match C-3 check and
+    wrote two `tools:` lines (a YAML loader keeps the last). It now falls back to the canonical scopes."""
+    raw = "['read']\ntools: ['edit', 'execute']"
+    cai = _cai(capabilities={"tool_scopes": ["read"], "raw": {"copilot-vscode": raw, "claude": raw}})
+    out = tmp_path / ("x/.codex/agents" if target == "codex" else ".github/agents")
+    result = import_from_cai(cai, target, out)
+    assert result.success, result.errors
+    text = next(out.glob("planner.*")).read_text()
+    assert "execute" not in text.split("\n# ", 1)[0] and "'edit'" not in text
+
+
+def test_a_quote_cannot_split_a_list_item(tmp_path):
+    fm, _ = _import(tmp_path, raw_front_matter={"agents": ['reviewer", "orchestrator']})
+    roster = [l for l in fm.splitlines() if l.startswith("agents:")]
+    assert roster == ["agents: [\"reviewer', 'orchestrator\"]"]
+
+
+@pytest.mark.parametrize("value, written", [
+    ("ends with backslash\\", '"ends with backslash\\\\"'),
+    ("&anchor", '"&anchor"'), ("*alias", '"*alias"'), ("!tag", '"!tag"'), ("| block", '"| block"'),
+    ("- item", '"- item"'), ("%directive", '"%directive"'), ("> folded", '"> folded"'),
+])
+def test_yaml_indicators_and_backslashes_are_quoted(value, written):
+    assert serialize_raw_fm_key("k", value) == f"k: {written}"
+
+
+def test_a_collapsed_handoff_prompt_is_reported(tmp_path):
+    handoff = {"label": "Go", "to": "reviewer", "prompt": "Step one\nStep two", "send": False}
+    _, notices = _import(tmp_path, handoffs=[handoff])
+    assert any("multi-line handoff prompt to reviewer" in n for n in notices)

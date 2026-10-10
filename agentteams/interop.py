@@ -582,26 +582,16 @@ def import_from_cai(
                 cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
         elif cai_tool_scopes and (target_framework in ("copilot-vscode", "copilot-cli", "claude")
                                   or (target_framework == "goose" and _write_policy.enabled(manifest))):
-            # Both adapters' own render_agent_file already knows how to turn a
-            # VS Code-shaped bracket list of canonical tokens into their native
-            # tool declaration (copilot-vscode: pass-through, since its own
-            # vocabulary already is canonical; claude: claude.py's existing
-            # _map_allowed_tools/_VSCODE_TO_CLAUDE_TOOLS). Writing the same
-            # bracket-format line for both and letting each adapter's already-
-            # correct, already-tested logic do the rest is simpler and less
-            # error-prone than pre-translating per framework here — confirmed
-            # by direct testing: an earlier version of this fix pre-translated
-            # to Claude-native names in comma format, which claude.py's own
-            # _YAML_TOOLS_RE (bracket-only) silently failed to recognize,
-            # falling back to _CLAUDE_DEFAULT_ALLOWED_TOOLS — the same bug this
-            # fix exists to close, just relocated.
+            # One VS Code-shaped bracket list for every adapter: claude.py's _map_allowed_tools turns it into
+            # Claude names (pre-translating to comma form once fell through its bracket-only _YAML_TOOLS_RE to the
+            # default grant), and copilot-vscode keeps it as is.
             cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
         if cai_name or cai_desc or cai_tools_line or (delivery == "native" and cai_handoffs):
             header = ["---"]
             if cai_name:
                 header.append(f"name: {cai_name}")
             if cai_desc:
-                header.append(f'description: "{cai_desc.replace(chr(34), chr(39))}"')
+                header.append(f"description: {_quoted(cai_desc)}")
             if cai_tools_line:
                 header.append(cai_tools_line)
             if delivery == "native" and cai_handoffs:
@@ -609,6 +599,7 @@ def import_from_cai(
                 # FrameworkAdapter.extract_handoffs parses, so the imported
                 # file round-trips through the same parser.
                 header.extend(_handoff_header_lines(cai_handoffs))  # one line per value, quotes neutralised
+                result.notices += _collapsed_prompt_notices(slug, cai_handoffs)
             # A.2: Restore raw_front_matter escape-hatch keys into the header
             # for frameworks with a front-matter channel (copilot-vscode,
             # copilot-cli since the P1 convergence, claude). This closes the
@@ -967,6 +958,8 @@ from agentteams.interop_helpers import (
     capture_escape_hatches as _capture_escape_hatches,
     capture_references as _capture_references,
     handoff_header_lines as _handoff_header_lines,
+    collapsed_prompt_notices as _collapsed_prompt_notices,
+    quoted as _quoted,
     safe_fm_key as _safe_fm_key,
     serialize_raw_fm_key as _serialize_raw_fm_key,
     merge_sidecar_handoffs as _merge_sidecar_handoffs,

@@ -152,6 +152,61 @@ def safe_fm_key(key: Any) -> bool:
     return isinstance(key, str) and _SAFE_FM_KEY_RE.fullmatch(key) is not None
 
 
+#: A string YAML reads back unchanged when written bare: no indicator first, no ``: `` or `` #``, no quotes or escapes.
+_PLAIN_SCALAR_RE = re.compile(r"[A-Za-z0-9_(][A-Za-z0-9 _.,()/+=@-]*")
+
+
+def quoted(value: Any) -> str:
+    """A string as a one-line double-quoted YAML scalar that can't break out of its quotes.
+
+    The rule interop has always used for descriptions and handoffs (``"`` becomes ``'``), plus line breaks
+    collapsed (:func:`one_line`) and backslashes escaped, so a trailing ``\\`` can't swallow the closing quote.
+
+    Args:
+        value: The value to write.
+
+    Returns:
+        The quoted scalar.
+
+    Raises:
+        Nothing.
+    """
+    return '"' + one_line(str(value)).replace("\\", "\\\\").replace('"', "'") + '"'
+
+
+def scalar(value: str) -> str:
+    """A string as a YAML scalar: bare when it is plainly safe (:data:`_PLAIN_SCALAR_RE`), else :func:`quoted`.
+
+    Args:
+        value: The value to write.
+
+    Returns:
+        The scalar text for one header line.
+
+    Raises:
+        Nothing.
+    """
+    value = one_line(value)
+    return value if _PLAIN_SCALAR_RE.fullmatch(value) else quoted(value)
+
+
+def collapsed_prompt_notices(slug: str, handoffs: list[dict[str, Any]]) -> list[str]:
+    """Notices for handoff prompts :func:`handoff_header_lines` writes on one line (their line breaks are lost).
+
+    Args:
+        slug: The agent's slug.
+        handoffs: ``[{label, agent, prompt, send}]``.
+
+    Returns:
+        One notice per collapsed prompt.
+
+    Raises:
+        Nothing.
+    """
+    return [f"{slug}: multi-line handoff prompt to {h['agent']} written on one line"
+            for h in handoffs if one_line(str(h["prompt"])) != str(h["prompt"])]
+
+
 def handoff_header_lines(handoffs: list[dict[str, Any]]) -> list[str]:
     """The inline ``handoffs:`` block, in the shape ``FrameworkAdapter.extract_handoffs`` parses.
 
@@ -167,9 +222,6 @@ def handoff_header_lines(handoffs: list[dict[str, Any]]) -> list[str]:
     Raises:
         Nothing.
     """
-    def quoted(value: Any) -> str:
-        return '"' + one_line(str(value)).replace('"', "'") + '"'
-
     lines = ["handoffs:"]
     for h in handoffs:
         lines += [f"  - label: {quoted(h['label'])}", f"    agent: {quoted(h['agent'])}",
@@ -193,22 +245,18 @@ def serialize_raw_fm_key(key: str, value: Any) -> str:
     if isinstance(value, (int, float)):
         return f"{key}: {value}"
     if isinstance(value, str):
-        value = one_line(value)  # a line break would start a front-matter line of its own
-        # Quote if it contains special chars, else bare
-        if value.startswith("[") or ":" in value or "#" in value:
-            return f'{key}: "{value}"'
-        return f"{key}: {value}"
+        return f"{key}: {scalar(value)}"  # one line; bare only when plainly safe, else quote-safe
     if isinstance(value, list):
         if not value:
             return f"{key}: []"
         # Use flow notation for short lists (model), block for longer ones (agents:)
         if len(value) <= 2 and all(isinstance(v, str) for v in value):
-            items = ", ".join(f'"{one_line(v)}"' for v in value)
+            items = ", ".join(quoted(v) for v in value)
             return f"{key}: [{items}]"
         # Block list
         lines = [f"{key}:"]
         for item in value:
-            lines.append(f"  - {one_line(item)}" if isinstance(item, str) else f"  - {json.dumps(item)}")
+            lines.append(f"  - {scalar(item)}" if isinstance(item, str) else f"  - {json.dumps(item)}")
         return "\n".join(lines)
     # Fallback: JSON-encode complex values
     return f"{key}: {json.dumps(value)}"
@@ -352,17 +400,21 @@ def contained_path(base: Path, rel_path: str) -> Path:
     return joined
 
 
-def raw_scopes(raw: str) -> list[str]:
+def raw_scopes(raw: str) -> list[str] | None:
     """Canonical tool scopes a raw ``tools:`` string maps to (bracket or comma form).
 
     Args:
         raw: A captured raw tools value, e.g. ``['read', 'edit']`` or ``Read, Edit``.
 
     Returns:
-        Canonical-order scopes (empty when nothing maps).
+        Canonical-order scopes (empty when nothing maps). ``None`` for a value with a line break: written into a
+        header it would add a second ``tools:`` line that the first-match check below never sees, so it never
+        equals an agent's scopes and callers fall back to the canonical list.
     """
     from agentteams import capability_map
 
+    if _LINE_BREAK_RE.search(raw):
+        return None
     fm = f"---\ntools: {raw}\n---\n"
     return (capability_map.canonical_tools_for_copilot_vscode(fm)
             or capability_map.canonical_tools_for_claude(fm) or [])
