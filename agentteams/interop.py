@@ -608,12 +608,7 @@ def import_from_cai(
                 # Inline handoff block in the exact shape
                 # FrameworkAdapter.extract_handoffs parses, so the imported
                 # file round-trips through the same parser.
-                header.append("handoffs:")
-                for h in cai_handoffs:
-                    header.append(f'  - label: "{h["label"].replace(chr(34), chr(39))}"')
-                    header.append(f'    agent: "{h["agent"]}"')
-                    header.append(f'    prompt: "{h["prompt"].replace(chr(34), chr(39))}"')
-                    header.append(f'    send: {"true" if h["send"] else "false"}')
+                header.extend(_handoff_header_lines(cai_handoffs))  # one line per value, quotes neutralised
             # A.2: Restore raw_front_matter escape-hatch keys into the header
             # for frameworks with a front-matter channel (copilot-vscode,
             # copilot-cli since the P1 convergence, claude). This closes the
@@ -632,6 +627,9 @@ def import_from_cai(
                     rfm_val = cai_raw_fm[rfm_key]
                     if rfm_key in ("name", "description", "tools", "allowed-tools", "handoffs"):
                         continue  # already written above
+                    if not _safe_fm_key(rfm_key):  # a key with YAML syntax or a line break would inject lines
+                        result.notices.append(f"{slug}: source front-matter key {rfm_key!r} skipped (not a plain name)")
+                        continue
                     if narrowed and _iwp.withheld(rfm_key, rfm_val):  # a capability key the switch forbids
                         result.notices.append(f"{slug}: source `{rfm_key}` withheld (write_policy orchestrator-only)")
                         continue
@@ -968,6 +966,8 @@ from agentteams.interop_helpers import (
     merge_instruction_file as _merge_instruction_file,
     capture_escape_hatches as _capture_escape_hatches,
     capture_references as _capture_references,
+    handoff_header_lines as _handoff_header_lines,
+    safe_fm_key as _safe_fm_key,
     serialize_raw_fm_key as _serialize_raw_fm_key,
     merge_sidecar_handoffs as _merge_sidecar_handoffs,
 )

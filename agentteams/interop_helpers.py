@@ -113,6 +113,70 @@ def capture_references(source_dir: Path) -> list[dict[str, Any]]:
     return refs
 
 
+#: Characters that end a line for a YAML or line-based front-matter parser.
+_LINE_BREAK_RE = re.compile("[\r\n\v\f\x85\u2028\u2029]")
+#: A front-matter key interop may restore: a plain identifier, so it can't carry YAML syntax or a line break.
+_SAFE_FM_KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+
+
+def one_line(value: str) -> str:
+    """A scalar safe to write on one front-matter line: whitespace runs that contain a line break become a space.
+
+    A line break inside a value written into an imported agent's header would start a new line there, which
+    every first-match front-matter parser reads as a key (e.g. a ``tools:`` line above the declared one).
+
+    Args:
+        value: The value to write.
+
+    Returns:
+        *value* unchanged when it has no line break; otherwise its words joined by single spaces.
+
+    Raises:
+        Nothing.
+    """
+    return " ".join(value.split()) if _LINE_BREAK_RE.search(value) else value
+
+
+def safe_fm_key(key: Any) -> bool:
+    """Whether a captured front-matter key may be restored on import (a plain identifier).
+
+    Args:
+        key: The captured key.
+
+    Returns:
+        True for ``[A-Za-z][A-Za-z0-9_-]*``.
+
+    Raises:
+        Nothing.
+    """
+    return isinstance(key, str) and _SAFE_FM_KEY_RE.fullmatch(key) is not None
+
+
+def handoff_header_lines(handoffs: list[dict[str, Any]]) -> list[str]:
+    """The inline ``handoffs:`` block, in the shape ``FrameworkAdapter.extract_handoffs`` parses.
+
+    Every string is written on one line (:func:`one_line`) with ``"`` replaced by ``'``, so a handoff label,
+    agent or prompt can't break out of its quotes or onto a line of its own.
+
+    Args:
+        handoffs: ``[{label, agent, prompt, send}]``.
+
+    Returns:
+        The header lines, starting with ``handoffs:``.
+
+    Raises:
+        Nothing.
+    """
+    def quoted(value: Any) -> str:
+        return '"' + one_line(str(value)).replace('"', "'") + '"'
+
+    lines = ["handoffs:"]
+    for h in handoffs:
+        lines += [f"  - label: {quoted(h['label'])}", f"    agent: {quoted(h['agent'])}",
+                  f"    prompt: {quoted(h['prompt'])}", f"    send: {'true' if h['send'] else 'false'}"]
+    return lines
+
+
 def serialize_raw_fm_key(key: str, value: Any) -> str:
     """Serialize a raw_front_matter key-value pair into a YAML header line.
 
@@ -129,6 +193,7 @@ def serialize_raw_fm_key(key: str, value: Any) -> str:
     if isinstance(value, (int, float)):
         return f"{key}: {value}"
     if isinstance(value, str):
+        value = one_line(value)  # a line break would start a front-matter line of its own
         # Quote if it contains special chars, else bare
         if value.startswith("[") or ":" in value or "#" in value:
             return f'{key}: "{value}"'
@@ -138,12 +203,12 @@ def serialize_raw_fm_key(key: str, value: Any) -> str:
             return f"{key}: []"
         # Use flow notation for short lists (model), block for longer ones (agents:)
         if len(value) <= 2 and all(isinstance(v, str) for v in value):
-            items = ", ".join(f'"{v}"' for v in value)
+            items = ", ".join(f'"{one_line(v)}"' for v in value)
             return f"{key}: [{items}]"
         # Block list
         lines = [f"{key}:"]
         for item in value:
-            lines.append(f"  - {item}" if isinstance(item, str) else f"  - {json.dumps(item)}")
+            lines.append(f"  - {one_line(item)}" if isinstance(item, str) else f"  - {json.dumps(item)}")
         return "\n".join(lines)
     # Fallback: JSON-encode complex values
     return f"{key}: {json.dumps(value)}"

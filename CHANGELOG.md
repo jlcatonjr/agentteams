@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (interop: every front-matter scalar on one line; unsafe keys skipped)
+
+- **Every value written on one line.** Raw front-matter values, list items and handoff label/prompt/agent strings
+  are now written on one line (`interop_helpers.one_line`), with quotes neutralised in handoffs. Before, a line
+  break in one of them started a new header line in the imported agent: for example a `tools:` or
+  `permissionMode:` line that first-match parsers read as the agent's own. #174 had closed this only for names
+  and descriptions, and only backstopped restricted agents under the write policy. Every import is now covered.
+- **Unsafe keys skipped.** A captured key that isn't a plain identifier is skipped with a notice.
+- **Code changes.** Handoff header lines move into `interop_helpers.handoff_header_lines`. Remediation item 3
+  (2026-10-09).
+
 ## [1.0.0-rc.9] - 2026-10-09
 
 ### release notes (rc9)
