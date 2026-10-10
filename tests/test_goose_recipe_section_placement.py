@@ -42,19 +42,25 @@ def test_an_unanchored_section_is_appended_inside_the_instructions():
     assert _append_section("plain: x\n", "block\n").endswith("block\n")       # non-recipe: end of file
 
 
+FRESH = DISK.replace("  # Navigator\n  <!-- AGENTTEAMS:END content -->\n",
+                     "  # Navigator\n  <!-- AGENTTEAMS:END content -->\n  <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->\n"
+                     "  ## Code-index consultation\n  Use the index.\n  <!-- AGENTTEAMS:END code_index_consultation -->\n")
+
+
 def test_a_stranded_section_is_moved_back_and_the_recipe_parses():
     with pytest.raises(yaml.YAMLError):
         yaml.safe_load(STRANDED)
-    out, notices = repair_misplaced_sections(STRANDED)
+    assert repair_misplaced_sections(STRANDED) == (STRANDED, [])              # no fresh render: never moves
+    out, notices = repair_misplaced_sections(STRANDED, FRESH)
     loaded = yaml.safe_load(out)
     assert "Use the index." in loaded["instructions"] and [e["name"] for e in loaded["extensions"]] == ["developer"]
     assert notices and "code_index_consultation" in notices[0]
-    assert repair_misplaced_sections(out) == (out, [])                        # idempotent
+    assert repair_misplaced_sections(out, FRESH) == (out, [])                 # idempotent
 
 
 def test_an_unterminated_stranded_section_is_left_alone():
     broken = DISK + "\n  <!-- AGENTTEAMS:BEGIN x v=1 -->\n  no end\n"
-    out, notices = repair_misplaced_sections(broken)
+    out, notices = repair_misplaced_sections(broken, FRESH.replace("code_index_consultation", "x"))
     assert out == broken and "no END" in notices[0]
 
 
@@ -62,11 +68,38 @@ def test_merge_repairs_a_stranded_recipe(tmp_path: Path):
     recipes = tmp_path / ".goose" / "recipes"
     recipes.mkdir(parents=True)
     (recipes / "navigator.yaml").write_text(STRANDED, encoding="utf-8")
-    fresh = DISK.replace("  # Navigator\n", "  # Navigator\n  <!-- AGENTTEAMS:END content -->\n  "
-                         "<!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->\n  ## Code-index consultation\n"
-                         "  Use the index.\n", 1).replace("  <!-- AGENTTEAMS:END content -->\nextensions",
-                         "  <!-- AGENTTEAMS:END code_index_consultation -->\nextensions", 1)
-    res = emit.emit_all([("navigator.yaml", fresh)], output_dir=recipes, merge=True, yes=True)
+    res = emit.emit_all([("navigator.yaml", FRESH)], output_dir=recipes, merge=True, yes=True)
     loaded = yaml.safe_load((recipes / "navigator.yaml").read_text(encoding="utf-8"))
     assert "Use the index." in loaded["instructions"]
     assert [e["name"] for e in loaded["extensions"]] == ["developer"]
+
+
+def test_a_marker_pair_inside_another_block_scalar_is_never_moved():
+    """@security: a prompt: | (or response: >) block that quotes a section must stay where it is."""
+    text = DISK + ('prompt: |\n  <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->\n  quoted\n'
+                   '  <!-- AGENTTEAMS:END code_index_consultation -->\n')
+    assert repair_misplaced_sections(text, FRESH) == (text, [])
+
+
+def test_a_section_spanning_a_top_level_key_is_left_alone():
+    text = DISK.replace("extensions:", "  <!-- AGENTTEAMS:BEGIN code_index_consultation v=1 -->\n  x\nextensions:", 1) + \
+        "  <!-- AGENTTEAMS:END code_index_consultation -->\n"
+    out, notices = repair_misplaced_sections(text, FRESH)
+    assert "extensions" in yaml.safe_load(out.replace("  <!-- AGENTTEAMS:END code_index_consultation -->\n", "")) or out == text
+    assert out == text
+
+
+def test_a_render_without_extensions_never_loses_the_on_disk_key(tmp_path: Path):
+    """@security: if the repair dropped `extensions:` and the render has none, Goose would load the user's extensions."""
+    recipes = tmp_path / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "navigator.yaml").write_text(STRANDED, encoding="utf-8")
+    fresh_no_ext = FRESH.split("extensions:")[0]
+    emit.emit_all([("navigator.yaml", fresh_no_ext)], output_dir=recipes, merge=True, yes=True)
+    loaded = yaml.safe_load((recipes / "navigator.yaml").read_text(encoding="utf-8"))
+    assert [e["name"] for e in loaded["extensions"]] == ["developer"]
+
+
+def test_append_section_only_redirects_for_goose_recipes():
+    md = "# Doc\n\n```yaml\ninstructions: |\n  x\nother: y\n```\n"
+    assert _append_section(md, "block\n").endswith("block\n")

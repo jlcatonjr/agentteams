@@ -248,25 +248,48 @@ def repair_stranded_markers(text: str) -> tuple[str, list[str]]:
 _BEGIN_ANY_RE = re.compile(r"^\s*<!--\s*AGENTTEAMS:BEGIN\s+([\w.-]+)")
 
 
-def repair_misplaced_sections(text: str) -> tuple[str, list[str]]:
+def _top_level_keys(lines: list[str]) -> list[str]:
+    """The column-0 ``key:`` names of a recipe, in order."""
+    return [m.group(1) for ln in lines for m in [re.match(r"^([A-Za-z_][\w-]*)\s*:", ln)] if m]
+
+
+def _instructions_sids(text: str) -> set[str]:
+    """Section ids fenced inside *text*'s ``instructions: |`` block."""
+    lines = text.splitlines()
+    inst = next((i for i, ln in enumerate(lines) if _INSTRUCTIONS_RE.match(ln)), None)
+    if inst is None:
+        return set()
+    end = next((i for i in range(inst + 1, len(lines))
+                if lines[i].strip() and not lines[i][0].isspace() and not lines[i].startswith("#")), len(lines))
+    return {m.group(1) for ln in lines[inst + 1:end] for m in [_BEGIN_ANY_RE.match(ln)] if m}
+
+
+def repair_misplaced_sections(text: str, fresh: str | None = None) -> tuple[str, list[str]]:
     """Move fenced sections stranded AFTER a recipe's ``instructions: |`` block back to its end.
 
     The merge's "no anchor on disk" fallback used to append a new section at the end of the FILE, under whatever
     top-level key came last (``extensions:``), so the recipe stopped parsing (researchteam's ``navigator.yaml``).
     Each complete ``BEGIN``..``END`` block found after the instructions block is moved, in order, to the end of it.
 
+    A block is moved only when (@security, 2026-10-10): its section id is fenced inside *fresh*'s instructions
+    (the render says it belongs there); no top-level key sits between its BEGIN and END; and it is not inside
+    another key's block scalar (``prompt: |``, ``response: >``). After the move the recipe must keep exactly the
+    same top-level keys, or nothing is changed.
+
     Args:
         text: A Goose recipe.
+        fresh: The fresh render; without it nothing is moved.
 
     Returns:
         ``(text, notices)``; unchanged when nothing is misplaced, the shape is not recognised, or the move would
-        introduce a validation violation (rolled back with a notice).
+        drop a key or introduce a validation violation (rolled back with a notice).
 
     Raises:
         Nothing.
     """
-    if not is_goose_recipe(text):
+    if fresh is None or not is_goose_recipe(text):
         return text, []
+    belongs = _instructions_sids(fresh)
     lines = text.splitlines()
     inst = next((i for i, ln in enumerate(lines) if _INSTRUCTIONS_RE.match(ln)), None)
     if inst is None:
@@ -280,12 +303,17 @@ def repair_misplaced_sections(text: str) -> tuple[str, list[str]]:
     rest: list[str] = []
     while i < len(lines):
         m = _BEGIN_ANY_RE.match(lines[i])
-        if m:
+        owner = next((lines[k] for k in range(i - 1, end - 1, -1)
+                      if lines[k].strip() and not lines[k][0].isspace() and not lines[k].startswith(("#", "-"))), "")
+        if m and m.group(1) in belongs and not re.search(r":\s*[|>][-+0-9]*\s*$", owner):
             sid = m.group(1)
             j = next((k for k in range(i + 1, len(lines))
                       if re.match(rf"^\s*<!--\s*AGENTTEAMS:END\s+{re.escape(sid)}\s*-->", lines[k])), None)
             if j is None:
                 return text, [f"instructions: a section '{sid}' after the instructions block has no END; left unchanged"]
+            if any(ln.strip() and not ln[0].isspace() and not ln.startswith(("#", "-", "<!--"))
+                   for ln in lines[i + 1:j]):
+                return text, [f"instructions: section '{sid}' spans a top-level key; left unchanged"]
             block = [ln if (not ln.strip() or ln.startswith(indent)) else indent + ln.lstrip() for ln in lines[i:j + 1]]
             moved.append((sid, block))
             while rest and not rest[-1].strip():
@@ -305,6 +333,8 @@ def repair_misplaced_sections(text: str) -> tuple[str, list[str]]:
         out_lines += [""] + block
     out_lines += [""] + rest
     out = "\n".join(out_lines).rstrip("\n") + "\n"
+    if _top_level_keys(out.splitlines()) != _top_level_keys(lines):
+        return text, ["instructions: moving misplaced sections rolled back — it would change the recipe's top-level keys"]
     before = set(_validate_recipe_yaml(text))
     introduced = [v for v in _validate_recipe_yaml(out) if v not in before]
     if introduced:

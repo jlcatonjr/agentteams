@@ -44,7 +44,7 @@ def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, 
     if rel_path.endswith(".yaml"):
         merged, repaired = repair_stranded_markers(merged)  # before the span reconciles, which need the block intact
         notices += repaired
-        merged, moved = repair_misplaced_sections(merged)
+        merged, moved = repair_misplaced_sections(merged, fresh)
         notices += moved
         merged, more = reconcile_sub_recipes(fresh, merged)
         merged, grants = reconcile_extensions(fresh, merged)  # tool grants follow the template (@security)

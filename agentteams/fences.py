@@ -880,7 +880,8 @@ def _insert_section_at_render_position(
     # 3. no anchor exists in this file at all.
     return (
         _append_section(merged, block),
-        f"fence '{sid}': no anchoring section found on disk; appended at end of file",
+        f"fence '{sid}': no anchoring section found on disk; appended at the end (of a Goose recipe's "
+        "instructions, else of the file)",
     )
 
 
@@ -894,7 +895,9 @@ def _append_section(merged: str, block: str) -> str:
     under whatever top-level key came last (``extensions:``), which broke the YAML (researchteam's
     ``navigator.yaml``). When a top-level key follows the instructions block, the section goes before it.
     """
-    m = _INSTRUCTIONS_BLOCK_RE.search(merged)
+    from agentteams.frameworks.goose_recipe_merge import is_goose_recipe
+
+    m = _INSTRUCTIONS_BLOCK_RE.search(merged) if is_goose_recipe(merged) else None
     if m:
         after = merged.find("\n", m.end())
         nxt = re.search(r"^(?![ \t]|$|#)", merged[after + 1:], re.MULTILINE) if after >= 0 else None
