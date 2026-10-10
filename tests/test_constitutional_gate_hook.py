@@ -241,18 +241,6 @@ def test_benign_gh_and_git_commands_are_not_gated(command: str) -> None:
 # NOT cover Write/Edit content-shrink, MCP/non-Bash tools, obfuscation, or headless
 # auto-approve. See security.template.md for the authoritative limits.
 
-def _run_template(command: str) -> tuple[int, dict | None]:
-    proc = subprocess.run(
-        [sys.executable, str(TEMPLATE)],
-        input=json.dumps({"tool_name": "Bash", "tool_input": {"command": command}}),
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
-    return proc.returncode, out
-
-
 @pytest.mark.parametrize(
     "command",
     [
