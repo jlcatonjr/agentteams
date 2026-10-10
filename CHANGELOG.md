@@ -23,6 +23,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Where the code is.** New `interop_write_policy.target_under_switch` / `refuse_outside_interop` /
   `refuse_bridge_stubs`. Remediation item 1 (2026-10-09). @adversarial review: the safer choice over
   re-implementing #174 twice.
+### fix (fleet: project scan for direct teams, bridge source, USER-EDITABLE detection)
+
+Found by the 2026-10-09 fleet pilot's content audit (11 repos rendered in staging clones).
+- **Direct targets pass `--project`.** `claude-direct`, `goose-direct` and `codex-direct` omitted it, so the
+  project scan never ran for those teams. ProjectRepositories' `.claude` render dropped about 500 tool
+  references from its build log as a result.
+- **Bridges refresh from their recorded source.** Fleet bridged `.claude`/`.goose` from `.github/agents`
+  regardless. That rewrote a goose-canonical repo's `CLAUDE.md` entry to copilot-vscode (securityInfrastructure).
+  New `agentteams/_fleet_bridge.py` reads the source from the entry's `AGENTTEAMS-BRIDGE` fence. A source fleet
+  can't use is a `SKIP`: unknown, missing directory, unreadable entry, or the bridge's own framework.
+- **No more false USER-EDITABLE deletions.** The detector opened a region at any line mentioning the phrase,
+  including agent-updater's own prose, and counted fenced lines. Every pilot repo was flagged (8 or 41 "user"
+  lines), and all were template churn. A region now opens only at a real marker: a blockquote notice naming
+  USER-EDITABLE (including the orchestrator's), a heading naming it, or a BEGIN comment. It runs to the next
+  real fence, an end marker, or end of file, and never includes fenced lines. Fences are matched by their real
+  HTML-comment form only.
+- `claude-direct` adds `--no-scan` for a `brief.json` descriptor, like the other direct targets.
+
 ### fix (version-baseline test skips when agentteams isn't installed)
 
 - `test_inventory_version_baseline_matches_the_installed_version` skips when `agentteams.__version__` is
