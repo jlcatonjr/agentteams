@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### test (code hygiene: a name defined twice in a test module fails)
+
+- `test_code_hygiene.py::test_no_test_module_defines_a_name_twice` fails when two functions in one scope of a
+  `tests/*.py` file share a name, at module level or in one class. The later definition silently replaces the
+  earlier one; that hid 33 gate-hook cases until #173. Its first run found an identical duplicate
+  `_run_template` helper in `test_constitutional_gate_hook.py`, now removed. Remediation item 2 (2026-10-09).
+
 ## [1.0.0-rc.9] - 2026-10-09
 
 ### release notes (rc9)

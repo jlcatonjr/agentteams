@@ -11,6 +11,8 @@ rules mechanically so the refactor cannot regress and new code cannot re-offend:
     DOWN, never up.
   * CH-24 (no swallowing): the number of `except` clauses whose body is only
     `pass`/`continue` only ever ratchets DOWN.
+  * No test module defines a name twice in one scope (a later `def` silently replaces the earlier, so its
+    cases never run).
 
 Counts are measured by AST (not grep) so `except` inside strings/comments/docs
 is never counted. Scope is pinned explicitly: tracked `*.py` from `git ls-files`,
@@ -902,3 +904,32 @@ def test_the_ceiling_baseline_is_current() -> None:
         f"CEILING_MARGIN_BASELINE lists module(s) no longer crowding the ceiling: {stale}. "
         f"Remove them so the baseline keeps meaning what it says."
     )
+
+
+def _duplicate_definitions(tree: ast.Module) -> list[str]:
+    """Names defined twice in one scope: the module's top level, or one class body."""
+    scopes = [("", tree.body)] + [(f"{n.name}.", n.body) for n in tree.body if isinstance(n, ast.ClassDef)]
+    dups = []
+    for prefix, body in scopes:
+        seen: set[str] = set()
+        for node in body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.name in seen:
+                    dups.append(f"{prefix}{node.name} (line {node.lineno})")
+                seen.add(node.name)
+    return dups
+
+
+def test_no_test_module_defines_a_name_twice() -> None:
+    """A second ``def`` with the same name silently replaces the first, so its cases never run.
+
+    Two parametrized tests in ``test_constitutional_gate_hook.py`` shared names with later ones, and 33 gate cases
+    never ran until #173 renamed them. Covers test functions and helpers alike, at module and class level.
+    """
+    found = {}
+    for path in sorted((REPO_ROOT / "tests").rglob("*.py")):
+        dups = _duplicate_definitions(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+        if dups:
+            found[str(path.relative_to(REPO_ROOT))] = dups
+    assert not found, f"name(s) defined twice in one scope (the later one replaces the earlier): {found}"
+
