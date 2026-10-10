@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (runner: name the reinstall command when the operator confined file is out of date)
+
+- Sometimes `--serve-requests` refuses to start because of the operator confined file: `gate_argv_sha256` is
+  missing, as in a file installed before P5c, or a gate's argv changed. It now also prints the exact
+  `agentteams --install-confined <installed file> --project <root> --description <brief>` review command, then
+  the `--confirm-review-sha256` step. Other start errors are unchanged. Remediation item 4 (2026-10-09). This was
+  the error that stopped the mathAgents runner restart after the R1–R7 upgrade.
+
 ## [1.0.0-rc.9] - 2026-10-09
 
 ### release notes (rc9)

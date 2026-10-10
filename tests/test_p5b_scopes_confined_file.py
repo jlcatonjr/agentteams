@@ -474,3 +474,30 @@ def test_install_refuses_a_list_shaped_proposal_gates_cleanly(tmp_path, _home):
     out = _cli("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"),
                cwd=root, home=_home)
     assert out.returncode == 1 and "refused" in out.stderr and "Traceback" not in out.stderr
+
+
+def test_a_runner_refused_by_an_old_confined_file_prints_the_reinstall_command(tmp_path, _home):
+    """An upgrade that tightens the operator file (gate_argv_sha256, P5c) names the exact two-step fix."""
+    root = _git_project(tmp_path)
+    brief = json.loads((root / "brief.json").read_text())
+    brief["proposal_gates"] = _GATED["proposal_gates"]
+    (root / "brief.json").write_text(json.dumps(brief))
+    installed = C.install_confined_file(root, {**JAIL, **_bound({"scan": ["/opt/anaconda3"]})})
+    old = json.loads(installed.read_text())
+    del old["gate_argv_sha256"]  # as written before P5c
+    installed.write_text(json.dumps(old))
+    out = _cli("--serve-requests", "--once", "--project", str(root), "--description", str(root / "brief.json"),
+               cwd=root, home=_home)
+    assert out.returncode == 1 and "gate_argv_sha256" in out.stderr, out.stderr
+    hint = next(line for line in out.stderr.splitlines() if "agentteams --install-confined" in line)
+    assert f"--install-confined {installed}" in hint and f"--project {root}" in hint
+    # The printed command works: its review step validates the file and prints the hash to confirm.
+    review = _cli(*hint.split()[1:], cwd=root, home=_home)
+    assert review.returncode == 1 and "--confirm-review-sha256" in review.stdout, review.stderr
+
+
+def test_other_start_errors_print_no_reinstall_hint(tmp_path, _home):
+    root = _git_project(tmp_path)
+    out = _cli("--serve-requests", "--once", "--project", str(root), "--description", str(root / "nope.json"),
+               cwd=root, home=_home)
+    assert out.returncode == 1 and "--install-confined" not in out.stderr
