@@ -24,7 +24,7 @@
     "agentteams/data/agentteams-runner-mcp.py": "7335eeeaf69e3021d73c6ebc75a5af00c065f8962aeee126974c9e8bde301532",
     "agentteams/data/codex-role-gate.py": "8e2a3bea7a3b0022c85db521431699506641859bcc7577360bb82031e9f874c1",
     "agentteams/data/goose-readfs-mcp.py": "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58",
-    "agentteams/fences.py": "879c4be4720f3ceb92adad4dc45e93c7a17d0deb9fbf0152b5a95d82eefabac4",
+    "agentteams/fences.py": "14d153419372b8a929c6dac96f0c58d0beb946a4f6f121b58fa4789aae6dc4db",
     "agentteams/frameworks/_codex_role_gate_emit.py": "e5643ad71c6765c45d849b25ec539df1dd027f11603673eed9e45a41936bebf8",
     "agentteams/frameworks/_codex_sandbox_emit.py": "c8ddc80fbf66a327fdc16875230a3f3ce522ad896717c16b2c8e817c6a37d837",
     "agentteams/frameworks/_goose_sandbox_emit.py": "7bd2a9373713b99d9db29d3e4e3719a79f7eb6b58cc2b31165deeeb19b7c2dc1",

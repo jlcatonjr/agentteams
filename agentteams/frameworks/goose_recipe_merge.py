@@ -245,6 +245,75 @@ def repair_stranded_markers(text: str) -> tuple[str, list[str]]:
                  "parse as YAML)"]
 
 
+_BEGIN_ANY_RE = re.compile(r"^\s*<!--\s*AGENTTEAMS:BEGIN\s+([\w.-]+)")
+
+
+def repair_misplaced_sections(text: str) -> tuple[str, list[str]]:
+    """Move fenced sections stranded AFTER a recipe's ``instructions: |`` block back to its end.
+
+    The merge's "no anchor on disk" fallback used to append a new section at the end of the FILE, under whatever
+    top-level key came last (``extensions:``), so the recipe stopped parsing (researchteam's ``navigator.yaml``).
+    Each complete ``BEGIN``..``END`` block found after the instructions block is moved, in order, to the end of it.
+
+    Args:
+        text: A Goose recipe.
+
+    Returns:
+        ``(text, notices)``; unchanged when nothing is misplaced, the shape is not recognised, or the move would
+        introduce a validation violation (rolled back with a notice).
+
+    Raises:
+        Nothing.
+    """
+    if not is_goose_recipe(text):
+        return text, []
+    lines = text.splitlines()
+    inst = next((i for i, ln in enumerate(lines) if _INSTRUCTIONS_RE.match(ln)), None)
+    if inst is None:
+        return text, []
+    end = next((i for i in range(inst + 1, len(lines))
+                if lines[i].strip() and not lines[i][0].isspace() and not lines[i].startswith("#")), None)
+    if end is None:
+        return text, []
+    indent = next((ln[:len(ln) - len(ln.lstrip())] for ln in lines[inst + 1:end] if ln.strip()), "  ") or "  "
+    moved, keep, i = [], lines[:end], end
+    rest: list[str] = []
+    while i < len(lines):
+        m = _BEGIN_ANY_RE.match(lines[i])
+        if m:
+            sid = m.group(1)
+            j = next((k for k in range(i + 1, len(lines))
+                      if re.match(rf"^\s*<!--\s*AGENTTEAMS:END\s+{re.escape(sid)}\s*-->", lines[k])), None)
+            if j is None:
+                return text, [f"instructions: a section '{sid}' after the instructions block has no END; left unchanged"]
+            block = [ln if (not ln.strip() or ln.startswith(indent)) else indent + ln.lstrip() for ln in lines[i:j + 1]]
+            moved.append((sid, block))
+            while rest and not rest[-1].strip():
+                rest.pop()
+            i = j + 1
+            while i < len(lines) and not lines[i].strip():
+                i += 1
+            continue
+        rest.append(lines[i])
+        i += 1
+    if not moved:
+        return text, []
+    while keep and not keep[-1].strip():
+        keep.pop()
+    out_lines = list(keep)
+    for _sid, block in moved:
+        out_lines += [""] + block
+    out_lines += [""] + rest
+    out = "\n".join(out_lines).rstrip("\n") + "\n"
+    before = set(_validate_recipe_yaml(text))
+    introduced = [v for v in _validate_recipe_yaml(out) if v not in before]
+    if introduced:
+        return text, [f"instructions: moving misplaced sections rolled back — it would introduce {introduced}"]
+    names = ", ".join(sid for sid, _ in moved)
+    return out, [f"instructions: moved section(s) {names} back inside the instructions block (they were after "
+                 "a later top-level key, so the recipe did not parse)"]
+
+
 _EXT_KEY_RE = re.compile(r"^extensions\s*:")
 
 
@@ -328,4 +397,4 @@ def reconcile_extensions(fresh: str, merged: str) -> tuple[str, list[str]]:
 
 
 __all__ = ["SUB_RECIPES_MANAGED_COMMENT", "is_goose_recipe", "reconcile_extensions", "reconcile_sub_recipes",
-           "repair_stranded_markers"]
+           "repair_misplaced_sections", "repair_stranded_markers"]
