@@ -104,7 +104,7 @@ def test_no_anchor_appends_and_says_so():
         "solo", _fence("solo", "s"), ["solo"],
     )
     assert "BEGIN solo" in merged
-    assert notice and "appended at end of file" in notice
+    assert notice and "appended at the end" in notice
 
 
 def test_a_section_absent_from_the_render_order_still_appends():

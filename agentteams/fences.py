@@ -860,7 +860,7 @@ def _insert_section_at_render_position(
     try:
         k = render_order.index(sid)
     except ValueError:
-        return merged.rstrip("\n") + "\n\n" + block, None
+        return _append_section(merged, block), None
 
     # 1. nearest preceding section present in the file -> insert after its END marker.
     for prev in reversed(render_order[:k]):
@@ -879,9 +879,32 @@ def _insert_section_at_render_position(
 
     # 3. no anchor exists in this file at all.
     return (
-        merged.rstrip("\n") + "\n\n" + block,
-        f"fence '{sid}': no anchoring section found on disk; appended at end of file",
+        _append_section(merged, block),
+        f"fence '{sid}': no anchoring section found on disk; appended at the end (of a Goose recipe's "
+        "instructions, else of the file)",
     )
+
+
+_INSTRUCTIONS_BLOCK_RE = re.compile(r"^instructions:\s*\|", re.MULTILINE)
+
+
+def _append_section(merged: str, block: str) -> str:
+    """Append *block* at the end: of the file, or of a Goose recipe's ``instructions: |`` block.
+
+    A fenced section belongs inside the recipe's instructions. Appending it at the end of the FILE put it
+    under whatever top-level key came last (``extensions:``), which broke the YAML (researchteam's
+    ``navigator.yaml``). When a top-level key follows the instructions block, the section goes before it.
+    """
+    from agentteams.frameworks.goose_recipe_merge import is_goose_recipe
+
+    m = _INSTRUCTIONS_BLOCK_RE.search(merged) if is_goose_recipe(merged) else None
+    if m:
+        after = merged.find("\n", m.end())
+        nxt = re.search(r"^(?![ \t]|$|#)", merged[after + 1:], re.MULTILINE) if after >= 0 else None
+        if nxt:
+            at = after + 1 + nxt.start()
+            return merged[:at].rstrip("\n") + "\n\n" + block.rstrip("\n") + "\n" + merged[at:]
+    return merged.rstrip("\n") + "\n\n" + block
 
 
 def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:

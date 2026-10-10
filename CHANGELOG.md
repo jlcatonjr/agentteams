@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (goose: a new section with no anchor goes inside the instructions; stranded sections are moved back)
+
+- **Before:** the merge's last-resort fallback, for a section with no anchoring section on disk, appended it at
+  the end of the FILE. In a Goose recipe that is under the last top-level key (`extensions:`), so the recipe
+  stopped parsing. researchteam's `navigator.yaml` was broken this way.
+- **Now:** `fences._append_section` puts it at the end of the recipe's `instructions: |` block.
+- **Repair:** `goose_recipe_merge.repair_misplaced_sections` moves complete fenced sections stranded after the
+  instructions block back inside it, on merge, with a notice. It rolls back on a validation regression and
+  skips a section with no END.
+- **Result:** together with #189's stranded-marker repair, all 32 of researchteam's recipes parse again; 12
+  failed on main.
+
 ### fix (goose `--update --merge` keeps enriched recipe bodies and valid YAML)
 
 - **The merge-overwrite gate now checks the file on disk.**
