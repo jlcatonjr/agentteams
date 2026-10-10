@@ -17,9 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Raw `tools:` values with a line break are dropped.** A raw `tools:` value containing a line break no longer
   counts as matching the agent's scopes, so the import falls back to the canonical list. Before, such a value
   passed the first-match C-3 check while writing a second `tools:` line that YAML would use.
-- **Quoting.** A string that isn't plainly safe is double-quoted, with backslashes escaped and `"` turned into
-  `'`. This covers YAML indicators (`&`, `*`, `!`, `|`, `>`, `-`, `%`), `: ` and trailing backslashes. Flow-list
-  items are always quoted that way, so a `"` can't split one item into two.
+- **Quoting.** A string with YAML syntax is double-quoted, with backslashes escaped and `"` turned into `'`.
+  That means a leading YAML indicator (`-?:,[]{}#&*!|>'"%@` or a backtick), any quote or backslash, `: `, ` #`,
+  a trailing `:`, or leading or trailing whitespace. Flow-list items are always quoted that way, so a `"` can't
+  split one item into two.
 - **Collapsed handoff prompts are reported.** A multi-line handoff prompt now produces a notice when it is written
   on one line. Found by @security review.
 - **Code changes.** Handoff header lines move into `interop_helpers.handoff_header_lines`. Remediation item 3
