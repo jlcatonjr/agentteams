@@ -26,6 +26,7 @@ there is no backup dir (``--no-backup``), rather than release a section it canno
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -85,7 +86,9 @@ def parse_entries(entries: Iterable[str]) -> frozenset[str]:
         The normalized set (``./`` prefixes stripped).
 
     Raises:
-        ShrinkAllowError: An entry is malformed, lacks its digest, is absolute, or uses ``..``.
+        ShrinkAllowError: An entry is malformed, lacks its digest, is absolute, or uses ``..`` anywhere but as
+            leading segments (at most two: agentteams renders ``../copilot-instructions.md`` and Goose's
+            ``../../.goosehints`` above the agents dir, and its own shrink report names them that way).
     """
     out: set[str] = set()
     for raw in entries:
@@ -99,8 +102,12 @@ def parse_entries(entries: Iterable[str]) -> frozenset[str]:
                 "reviewed body>, as printed by the AGENTTEAMS_SHRINK_REPORT review"
             )
         path = m.group("path").removeprefix("./")
-        if path.startswith("/") or ".." in path.split("/"):
-            raise ShrinkAllowError(f"--shrink-allow {entry!r}: the path must stay inside the output dir")
+        parts = path.split("/")
+        ups = len(parts) - len(list(itertools.dropwhile(lambda p: p == "..", parts)))
+        if path.startswith("/") or ups > 2 or ".." in parts[ups:] or "." in parts or "" in parts[:-1]:
+            raise ShrinkAllowError(
+                f"--shrink-allow {entry!r}: the path must be relative to the output dir, with `..` only as at most "
+                "two leading segments (as the shrink report prints files rendered above the agents dir)")
         out.add(f"{path}:{m.group('sid')}@{m.group('digest')}")
     return frozenset(out)
 
@@ -115,10 +122,18 @@ def resolve(flag_entries: Iterable[str] | None) -> frozenset[str]:
         The validated override set (empty when neither source is set).
 
     Raises:
-        ShrinkAllowError: Any entry is malformed.
+        Nothing: a malformed entry is skipped with a warning.
     """
     env = os.environ.get(SHRINK_ALLOW_ENV, "")
-    return parse_entries([*(flag_entries or []), *env.split(";")])
+    valid: set[str] = set()
+    for raw in [*(flag_entries or []), *env.split(";")]:
+        try:
+            valid |= parse_entries([raw])
+        except ShrinkAllowError as exc:
+            # A grant the run cannot apply releases nothing (the section stays pinned), so it is skipped with a
+            # warning rather than failing the whole run (OrthodoxLLM, 2026-10-10).
+            print(f"  WARNING: {exc}; skipped (that section stays pinned)", file=sys.stderr)
+    return frozenset(valid)
 
 
 def announce(allowed: frozenset[str], *, has_backup: bool, dry_run: bool) -> frozenset[str]:

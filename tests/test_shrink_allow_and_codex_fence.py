@@ -32,13 +32,26 @@ D = "0123456789ab"
 def test_parse_entries_normalizes_and_rejects(monkeypatch):
     assert shrink_allow.parse_entries([f"./g.agent.md:content@{D}", " ", f"a/b.md:x_1@{D}"]) == {
         f"g.agent.md:content@{D}", f"a/b.md:x_1@{D}"}
-    for bad in ("no-colon", "g.md:content", f"/abs.md:content@{D}", f"../up.md:content@{D}",
-                f"f.md:Bad-Id@{D}", f":content@{D}", "g.md:content@xyz"):
+    for bad in ("no-colon", "g.md:content", f"/abs.md:content@{D}", f"../../../up.md:content@{D}",
+                f"a/../b.md:content@{D}", f"./a/./b.md:content@{D}", f"f.md:Bad-Id@{D}", f":content@{D}",
+                "g.md:content@xyz"):
         with pytest.raises(shrink_allow.ShrinkAllowError):
             shrink_allow.parse_entries([bad])
+    # Files agentteams itself renders above the agents dir, named as its own shrink report prints them.
+    assert shrink_allow.parse_entries([f"../copilot-instructions.md:directory_structure@{D}",
+                                       f"../../.goosehints:content@{D}"]) == {
+        f"../copilot-instructions.md:directory_structure@{D}", f"../../.goosehints:content@{D}"}
     monkeypatch.setenv(shrink_allow.SHRINK_ALLOW_ENV, f"x.md:content@{D};y.md:protocols@{D}")
     assert shrink_allow.resolve([f"z.md:content@{D}"]) == {
         f"x.md:content@{D}", f"y.md:protocols@{D}", f"z.md:content@{D}"}
+
+
+def test_a_grant_the_run_cannot_apply_is_skipped_not_fatal(monkeypatch, capsys):
+    """OrthodoxLLM 2026-10-10: one unappliable entry failed the whole run (exit 2); now it is skipped with a warning."""
+    monkeypatch.setenv(shrink_allow.SHRINK_ALLOW_ENV, f"/abs.md:content@{D};ok.md:content@{D}")
+    assert shrink_allow.resolve(["not-an-entry"]) == {f"ok.md:content@{D}"}
+    err = capsys.readouterr().err
+    assert "/abs.md" in err and "not-an-entry" in err and "skipped" in err
 
 
 # ---------------------------------------------------------------------------
@@ -230,3 +243,18 @@ def test_retrofit_keeps_hand_written_notes_outside_the_fence(tmp_path):
                   auto_fence_legacy=True, backup_path=tmp_path / "bk")
     di = _instructions(target.read_text(encoding="utf-8"))
     assert "Always use" in di and "keep this" in di
+
+
+def test_a_grant_for_a_file_above_the_agents_dir_releases_it(tmp_path):
+    """The shrink report names ../copilot-instructions.md this way; the grant it prints must be applicable."""
+    project, backup = tmp_path / "proj", tmp_path / "bk"
+    out = project / ".github" / "agents"
+    out.mkdir(parents=True)
+    (project / ".github" / "copilot-instructions.md").write_text(_DISK, encoding="utf-8")
+    entry = shrink_allow.parse_entries([_entry(path="../copilot-instructions.md")])
+    emit.emit_all([("../copilot-instructions.md", _NEW)], output_dir=out, merge=True, yes=True,
+                  backup_path=backup, shrink_allow=entry)
+    text = (project / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+    assert "new.md" in text and "retired-doc.md" not in text and "my note" in text
+    lost = list(backup.rglob("*.lost.*"))
+    assert lost and all(p.resolve().is_relative_to(backup.resolve()) for p in lost)
