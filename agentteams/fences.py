@@ -8,6 +8,7 @@ agentteams.emit unchanged.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -1312,6 +1313,8 @@ def _write_lost_fence_sidecars(
                             if part not in ("", ".", "/"))
         sidecar = backup_path / f"{safe_rel}.lost.{sid}.md"
         if not sidecar.resolve().is_relative_to(backup_path.resolve()):
+            print(f"  ⚠  lost-fence sidecar for {rel_path} ({sid}) refused: it would land outside the backup dir",
+                  file=sys.stderr)
             continue
         try:
             sidecar.parent.mkdir(parents=True, exist_ok=True)

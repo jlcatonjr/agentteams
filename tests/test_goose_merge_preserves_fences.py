@@ -101,3 +101,70 @@ def test_a_sidecar_for_a_path_above_the_team_dir_stays_in_the_backup(tmp_path: P
     path = Path(written["content"])
     assert path.resolve().is_relative_to(backup.resolve())
     assert not (tmp_path / ".goose" / "recipes" / ".goosehints.lost.content.md").exists()
+
+
+WIDE = '''version: "1.0.0"
+title: "Style Guardian — Project"
+description: "Enforces voice"
+extensions:
+  - type: builtin
+    name: developer
+    bundled: true
+    timeout: 300
+instructions: |
+  <!-- AGENTTEAMS:BEGIN content v=1 -->
+  # Style Guardian — Project
+  Enriched body.
+  <!-- AGENTTEAMS:END content -->
+'''
+
+NARROW_FRESH = '''version: "1.0.0"
+title: "Style Guardian — Project"
+description: "Enforces voice"
+extensions:
+  - type: builtin
+    name: developer
+    bundled: true
+    timeout: 300
+    available_tools: [tree]
+instructions: |
+  # Style Guardian — Project
+  Generic template body.
+'''
+
+
+def test_a_kept_recipe_still_takes_the_templates_tool_grants(tmp_path: Path):
+    """@security: keeping the fenced instructions must not freeze a wider on-disk extensions/available_tools."""
+    from agentteams.frameworks.goose_recipe_read import recipe_extension_grants
+
+    recipes = tmp_path / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    target = recipes / "style-guardian.yaml"
+    target.write_text(WIDE, encoding="utf-8")
+    res = emit.emit_all([("style-guardian.yaml", NARROW_FRESH)], output_dir=recipes, merge=True, yes=True)
+    out = target.read_text(encoding="utf-8")
+    assert "Enriched body." in out and "Generic template body." not in out          # instructions kept
+    assert recipe_extension_grants(out) == recipe_extension_grants(NARROW_FRESH)      # grants follow the template
+    assert any("extensions: aligned with the template" in n and "developer tools" in n for n in res.notices)
+    yaml.safe_load(out)
+
+
+def test_extensions_reconcile_is_idempotent_and_leaves_an_absent_fresh_key_alone():
+    from agentteams.frameworks.goose_recipe_merge import reconcile_extensions
+
+    once, _ = reconcile_extensions(NARROW_FRESH, WIDE)
+    twice, notices = reconcile_extensions(NARROW_FRESH, once)
+    assert twice == once and notices == []
+    no_key = NARROW_FRESH.replace("extensions:\n  - type: builtin\n    name: developer\n    bundled: true\n"
+                                  "    timeout: 300\n    available_tools: [tree]\n", "")
+    assert reconcile_extensions(no_key, WIDE) == (WIDE, [])
+
+
+def test_a_refused_sidecar_is_reported(tmp_path: Path, capsys):
+    backup = tmp_path / "b"
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (tmp_path / "b").mkdir()
+    (tmp_path / "b" / "link").symlink_to(outside)
+    assert _write_lost_fence_sidecars(backup, "link/x.md", {"content": "body"}) == {}
+    assert "refused" in capsys.readouterr().err

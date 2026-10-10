@@ -3,8 +3,8 @@
 Called once from :func:`agentteams.emit.emit_all`'s merge path, right after the fence merge and
 the front-matter merge, for every merged file. Each step is a no-op for files it does not own:
 
-* Goose recipes (``*.yaml``): the top-level ``sub_recipes`` key is reconciled from the fresh
-  render (:func:`agentteams.frameworks.goose_recipe_merge.reconcile_sub_recipes`).
+* Goose recipes (``*.yaml``): the top-level ``sub_recipes`` and ``extensions`` keys are reconciled from the
+  fresh render (:func:`agentteams.frameworks.goose_recipe_merge.reconcile_sub_recipes`, ``reconcile_extensions``).
 * Every markdown agent file and goose recipe: an ``AGENTTEAMS-LEARNED`` block the fence merge
   dropped is carried back from the fresh render (which :func:`agentteams.emit.emit_all` already
   seeded from the on-disk file) — :func:`agentteams.learned_blocks.carry_block_text`.
@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentteams.frameworks._agents_md_rules import duplicate_rules_notice
-from agentteams.frameworks.goose_recipe_merge import reconcile_sub_recipes
+from agentteams.frameworks.goose_recipe_merge import reconcile_extensions, reconcile_sub_recipes
 from agentteams.learned_blocks import carry_block_text
 
 
@@ -42,7 +42,8 @@ def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, 
         merged, notices = carry_block_text(rel_path, fresh, merged)
     if rel_path.endswith(".yaml"):
         merged, more = reconcile_sub_recipes(fresh, merged)
-        return merged, notices + list(more)
+        merged, grants = reconcile_extensions(fresh, merged)  # tool grants follow the template (@security)
+        return merged, notices + list(more) + list(grants)
     if Path(rel_path).name == "AGENTS.md":
         notice = duplicate_rules_notice(fresh, merged)
         return merged, notices + ([notice] if notice else [])

@@ -16,12 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     healthResearch and 15 SocialScienceHumanities recipes.
   - **Now:** a file fenced on disk goes to the fence merge, which keeps every on-disk section the render lacks.
     A notice says so and suggests `--overwrite` after review to adopt the template.
+- **A kept recipe's tool grants still follow the template.** A recipe's top-level `extensions:` span is now
+  reconciled from the fresh render (`goose_recipe_merge.reconcile_extensions`, beside `sub_recipes`), in every
+  merged recipe. Keeping fenced instructions therefore no longer freezes a wider on-disk
+  `extensions`/`available_tools`. The edit rolls back, with a notice, if the result doesn't reproduce the
+  template's grants or fails validation. A render with no `extensions` key leaves the file alone. (@security
+  review.)
 - **Indented markers keep their indent.** Inserting a new section before an indented marker now anchors at the
   start of the line. Before, it stranded the indent and pulled the marker to column 0, which ended the
   `instructions: |` block scalar, and 12 recipes in that run stopped parsing as YAML.
 - **`.lost.<sid>.md` sidecars stay inside the backup directory.** For a path above the team dir (goose's
   `../../.goosehints`), `..` segments are kept as `_up_`. Before, the sidecar resolved back into the live
-  agents dir.
+  agents dir. A sidecar that would land outside the backup dir is refused, with a warning.
 - **Integrity:** `fences.py` is re-pinned.
 
 ### fix (interop: every front-matter scalar on one line; unsafe keys skipped)
