@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tests/*.py` file share a name, at module level or in one class. The later definition silently replaces the
   earlier one; that hid 33 gate-hook cases until #173. Its first run found an identical duplicate
   `_run_template` helper in `test_constitutional_gate_hook.py`, now removed. Remediation item 2 (2026-10-09).
+### docs (release signer from rc.9)
+
+- `SECURITY.md` lists the release signing keys by tag. `v1.0.0-rc.9` onward is signed with RSA
+  `SHA256:IPdnLwlF…`, a different key from rc.8's (`SHA256:BZg5kgjl…`). The section gives the `allowed_signers`
+  line for the new key.
 
 ## [1.0.0-rc.9] - 2026-10-09
 
