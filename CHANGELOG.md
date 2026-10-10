@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (interop: every front-matter scalar on one line; unsafe keys skipped)
+
+- **Every value written on one line.** Raw front-matter values, list items and handoff label/prompt/agent strings
+  are now written on one line (`interop_helpers.one_line`), with quotes neutralised in handoffs. Before, a line
+  break in one of them started a new header line in the imported agent: for example a `tools:` or
+  `permissionMode:` line that first-match parsers read as the agent's own. #174 had closed this only for names
+  and descriptions, and only backstopped restricted agents under the write policy. Every import is now covered.
+- **Unsafe keys skipped.** A captured key that isn't a plain identifier is skipped with a notice.
+- **Raw `tools:` values with a line break are dropped.** A raw `tools:` value containing a line break no longer
+  counts as matching the agent's scopes, so the import falls back to the canonical list. Before, such a value
+  passed the first-match C-3 check while writing a second `tools:` line that YAML would use.
+- **Quoting.** A string with YAML syntax is double-quoted, with backslashes escaped and `"` turned into `'`.
+  That means a leading YAML indicator (`-?:,[]{}#&*!|>'"%@` or a backtick), any quote or backslash, `: `, ` #`,
+  a trailing `:`, or leading or trailing whitespace. Flow-list items are always quoted that way, so a `"` can't
+  split one item into two.
+- **Collapsed handoff prompts are reported.** A multi-line handoff prompt now produces a notice when it is written
+  on one line. Found by @security review.
+- **Code changes.** Handoff header lines move into `interop_helpers.handoff_header_lines`. Remediation item 3
+  (2026-10-09).
 ### fix (runner: name the reinstall command when the operator confined file is out of date)
 
 - Sometimes `--serve-requests` refuses to start because of the operator confined file: `gate_argv_sha256` is
