@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (shrink grants for files above the agents dir; cross-repo guard names the project)
+
+From OrthodoxLLM's triage, via researchteam-c7.
+- **Shrink grants for files above the agents dir.** The shrink review report names files rendered above the
+  agents dir as the run writes them (`../copilot-instructions.md:directory_structure@<digest>`, Goose's
+  `../../.goosehints`), but `--shrink-allow` refused any `..`, and that one entry failed the whole run (exit 2).
+  - **Allowed now:** up to two *leading* `..` segments. An override only ever releases a section of a file the
+    run itself writes, matched by exact path, so this widens nothing.
+  - **Still refused:** absolute paths, interior `..`, `.` segments and more than two levels.
+  - **Unappliable grants skipped:** an entry the run cannot apply is skipped with a warning (its section stays
+    pinned) instead of failing the run.
+- **Cross-repo guard.** In the github-workflows-merge reference and orchestrator Rule 11, the guard rendered
+  the primary output folder ("a repository other than `Projects/`") where the repository belongs. It now reads
+  "a repository other than this project's own (<project name>)". The example goldens are regenerated; only
+  those lines changed.
+
 ### fix (goose: helper scripts ship in the package; a pip install never emits the "not found" stub)
 
 - **The bug.** Every Goose render ships `scripts/goose-run-resilient.py` and
