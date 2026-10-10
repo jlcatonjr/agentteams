@@ -168,3 +168,24 @@ def test_a_refused_sidecar_is_reported(tmp_path: Path, capsys):
     (tmp_path / "b" / "link").symlink_to(outside)
     assert _write_lost_fence_sidecars(backup, "link/x.md", {"content": "body"}) == {}
     assert "refused" in capsys.readouterr().err
+
+
+def test_a_marker_stranded_at_column_zero_is_re_indented(tmp_path: Path):
+    """researchteam's quality-auditor.yaml on main: an earlier merge left a BEGIN marker at column 0."""
+    stranded = ('version: "1.0.0"\ntitle: "Q"\ninstructions: |\n  <!-- AGENTTEAMS:BEGIN a v=1 -->\n  A\n'
+                '  <!-- AGENTTEAMS:END a -->\n\n<!-- AGENTTEAMS:BEGIN b v=4 -->\n  B\n  <!-- AGENTTEAMS:END b -->\n')
+    with pytest.raises(yaml.YAMLError):
+        yaml.safe_load(stranded)
+    recipes = tmp_path / ".goose" / "recipes"
+    recipes.mkdir(parents=True)
+    (recipes / "quality-auditor.yaml").write_text(stranded, encoding="utf-8")
+    res = emit.emit_all([("quality-auditor.yaml", stranded.replace("\n<!-- AGENTTEAMS:BEGIN b", "\n  <!-- AGENTTEAMS:BEGIN b"))],
+                        output_dir=recipes, merge=True, yes=True)
+    out = (recipes / "quality-auditor.yaml").read_text(encoding="utf-8")
+    assert "B" in yaml.safe_load(out)["instructions"]                     # the merged recipe parses
+    from agentteams.frameworks.goose_recipe_merge import repair_stranded_markers
+
+    repaired, notices = repair_stranded_markers(stranded)                  # the repair itself
+    assert notices and "re-indented 1 AGENTTEAMS marker" in notices[0]
+    assert "B" in yaml.safe_load(repaired)["instructions"]
+    assert repair_stranded_markers(repaired) == (repaired, [])             # idempotent

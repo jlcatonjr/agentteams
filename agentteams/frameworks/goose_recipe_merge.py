@@ -201,6 +201,50 @@ def reconcile_sub_recipes(fresh: str, merged: str) -> tuple[str, list[str]]:
     return text, notices
 
 
+_STRANDED_MARKER_RE = re.compile(r"^<!--\s*AGENTTEAMS:(BEGIN|END)\b")
+
+
+def repair_stranded_markers(text: str) -> tuple[str, list[str]]:
+    """Re-indent AGENTTEAMS markers stranded at column 0 inside a recipe's ``instructions: |`` block.
+
+    An earlier merge inserted new sections before an indented marker by cutting at the marker itself, which
+    left the marker at column 0 and ended the block scalar there (the recipe stopped parsing: researchteam's
+    ``quality-auditor.yaml``). A column-0 line that is exactly such a marker, after ``instructions: |`` and before
+    the next real top-level key, is moved back to the block's indentation.
+
+    Args:
+        text: A Goose recipe.
+
+    Returns:
+        ``(text, notices)``; unchanged when nothing is stranded or *text* is not a recipe.
+
+    Raises:
+        Nothing.
+    """
+    if not is_goose_recipe(text):
+        return text, []
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if _INSTRUCTIONS_RE.match(ln)), None)
+    if start is None:
+        return text, []
+    indent = next((ln[:len(ln) - len(ln.lstrip())] for ln in lines[start + 1:] if ln.strip() and ln[0].isspace()), "")
+    if not indent:
+        return text, []
+    fixed = 0
+    for i in range(start + 1, len(lines)):
+        ln = lines[i]
+        if _STRANDED_MARKER_RE.match(ln):
+            lines[i] = indent + ln
+            fixed += 1
+        elif ln.strip() and not ln[0].isspace():
+            break  # the next top-level key ends the block
+    if not fixed:
+        return text, []
+    out = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+    return out, [f"instructions: re-indented {fixed} AGENTTEAMS marker(s) stranded at column 0 (the recipe did not "
+                 "parse as YAML)"]
+
+
 _EXT_KEY_RE = re.compile(r"^extensions\s*:")
 
 
@@ -283,4 +327,5 @@ def reconcile_extensions(fresh: str, merged: str) -> tuple[str, list[str]]:
     return text, [f"extensions: aligned with the template ({'; '.join(changes) or 'entries regenerated'})"]
 
 
-__all__ = ["SUB_RECIPES_MANAGED_COMMENT", "is_goose_recipe", "reconcile_extensions", "reconcile_sub_recipes"]
+__all__ = ["SUB_RECIPES_MANAGED_COMMENT", "is_goose_recipe", "reconcile_extensions", "reconcile_sub_recipes",
+           "repair_stranded_markers"]

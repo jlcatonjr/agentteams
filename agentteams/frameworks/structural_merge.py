@@ -20,7 +20,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentteams.frameworks._agents_md_rules import duplicate_rules_notice
-from agentteams.frameworks.goose_recipe_merge import reconcile_extensions, reconcile_sub_recipes
+from agentteams.frameworks.goose_recipe_merge import (reconcile_extensions, reconcile_sub_recipes,
+                                                      repair_stranded_markers)
 from agentteams.learned_blocks import carry_block_text
 
 
@@ -41,6 +42,8 @@ def post_merge_structural(rel_path: str, fresh: str, merged: str) -> tuple[str, 
     if "/" not in rel_path and Path(rel_path).name not in ("CLAUDE.md", "AGENTS.md"):
         merged, notices = carry_block_text(rel_path, fresh, merged)
     if rel_path.endswith(".yaml"):
+        merged, repaired = repair_stranded_markers(merged)  # before the span reconciles, which need the block intact
+        notices += repaired
         merged, more = reconcile_sub_recipes(fresh, merged)
         merged, grants = reconcile_extensions(fresh, merged)  # tool grants follow the template (@security)
         return merged, notices + list(more) + list(grants)

@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `extensions`/`available_tools`. The edit rolls back, with a notice, if the result doesn't reproduce the
   template's grants or fails validation. A render with no `extensions` key leaves the file alone. (@security
   review.)
+- **Stranded markers are repaired.** A column-0 AGENTTEAMS marker inside a recipe's `instructions: |` block is
+  re-indented on merge, with a notice (`goose_recipe_merge.repair_stranded_markers`). That's the damage the old
+  insert left behind: researchteam's `quality-auditor.yaml` on main doesn't parse.
 - **Indented markers keep their indent.** Inserting a new section before an indented marker now anchors at the
   start of the line. Before, it stranded the indent and pulled the marker to column 0, which ended the
   `instructions: |` block scalar, and 12 recipes in that run stopped parsing as YAML.
