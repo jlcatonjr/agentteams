@@ -3,10 +3,10 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **237**
+- Modules mapped: **240**
 - Packages: **9**
 - Internal import edges: **646**
-- Distinct external dependencies: **7**
+- Distinct external dependencies: **11**
 
 ---
 
@@ -24,7 +24,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | --- | --- | --- |
 | `agentteams` | 131 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 42 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
-| `agentteams.data` | 3 | — |
+| `agentteams.data` | 6 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 25 | `agentteams` |
@@ -126,7 +126,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry`, `agentteams.interop_write_policy` | `agentteams.cli.commands` |
 | `agentteams.data.agentteams-runner-mcp` | — | — |
 | `agentteams.data.codex-role-gate` | — | — |
+| `agentteams.data.goose-coordination-mcp` | — | — |
+| `agentteams.data.goose-openrouter-route-proxy` | — | — |
 | `agentteams.data.goose-readfs-mcp` | — | — |
+| `agentteams.data.goose-run-resilient` | — | — |
 | `agentteams.drift` | `agentteams.emit` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fences`, `agentteams.frameworks.structural_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
 | `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
@@ -290,7 +293,7 @@ Every module, coloured by package (full adjacency in the table below).
 
 Third-party (non-stdlib) top-level packages imported by the mapped package:
 
-`cryptography`, `httpx`, `jsonschema`, `playwright`, `pypdf`, `referencing`, `yaml`
+`PIL`, `cryptography`, `cv2`, `httpx`, `jsonschema`, `numpy`, `playwright`, `pypdf`, `pytesseract`, `referencing`, `yaml`
 
 **Repo-local (outside the mapped package):** `build_team`
 
@@ -1429,9 +1432,38 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.data.goose-coordination-mcp": {
+      "package": "agentteams.data",
+      "path": "agentteams/data/goose-coordination-mcp.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.data.goose-openrouter-route-proxy": {
+      "package": "agentteams.data",
+      "path": "agentteams/data/goose-openrouter-route-proxy.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [
+        "PIL",
+        "cv2",
+        "numpy",
+        "pytesseract"
+      ],
+      "repo_local": []
+    },
     "agentteams.data.goose-readfs-mcp": {
       "package": "agentteams.data",
       "path": "agentteams/data/goose-readfs-mcp.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.data.goose-run-resilient": {
+      "package": "agentteams.data",
+      "path": "agentteams/data/goose-run-resilient.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -5773,11 +5805,15 @@ digraph "agentteams architecture" {
     }
   ],
   "external_dependencies": [
+    "PIL",
     "cryptography",
+    "cv2",
     "httpx",
     "jsonschema",
+    "numpy",
     "playwright",
     "pypdf",
+    "pytesseract",
     "referencing",
     "yaml"
   ],

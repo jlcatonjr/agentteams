@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (goose: helper scripts ship in the package; a pip install never emits the "not found" stub)
+
+- **The bug.** Every Goose render ships `scripts/goose-run-resilient.py` and
+  `scripts/goose-openrouter-route-proxy.py`, plus `goose-coordination-mcp.py` when coordination is on. They were
+  read only from the agentteams source checkout's `scripts/`. A pip install has no `scripts/` directory, so every
+  pip-installed render emitted a 5-line "was not found in this agentteams install" placeholder and **overwrote
+  the working scripts** in the target. researchteam's autosync PR #40 replaced 959 lines this way; mathAgents had
+  restored them by hand before.
+- **Packaged copies.** The three scripts now also ship as package data in `agentteams/data/`, kept
+  byte-identical to `scripts/` by `tests/test_goose_scripts_packaged.py`. `_shipped_script` reads the checkout
+  copy first, then the packaged one.
+- **No placeholder emitted.** A script in neither location is not emitted at all, so a real copy in the target
+  is never overwritten.
+- **Code-hygiene ratchets** skip a packaged copy only when it is byte-identical to its `scripts/` original.
+
 ### fix (goose: a new section with no anchor goes inside the instructions; stranded sections are moved back)
 
 - **Before:** the merge's last-resort fallback, for a section with no anchoring section on disk, appended it at

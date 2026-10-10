@@ -208,7 +208,36 @@ def _tracked_py_files() -> list[str]:
 
 
 def _in_scope(rel: str, exclude: tuple[str, ...]) -> bool:
-    return not rel.startswith(exclude)
+    return not rel.startswith(exclude) and not _packaged_duplicate(rel)
+
+
+def _packaged_duplicate(rel: str) -> bool:
+    """A packaged copy in ``agentteams/data/`` byte-identical to ``scripts/<same name>`` (#191).
+
+    Pip installs have no ``scripts/``, so a few Goose helper scripts also ship as package data. Counting both copies
+    would double-count one piece of code; only an exact duplicate is skipped (test_goose_scripts_packaged enforces
+    parity), so a diverged copy is measured like any module.
+    """
+    if not rel.startswith("agentteams/data/"):
+        return False
+    original_rel = f"scripts/{Path(rel).name}"
+    original = REPO_ROOT / original_rel
+    # The original must be TRACKED (so it is itself measured): a gitignored scripts/ file would leave the copy counted
+    # nowhere on a local run (@security, #191).
+    return (original_rel in _tracked_set() and original.is_file()
+            and original.read_bytes() == (REPO_ROOT / rel).read_bytes())
+
+
+def _tracked_set() -> frozenset[str]:
+    """Git-tracked paths only (no untracked files), cached per run."""
+    global _TRACKED
+    if _TRACKED is None:
+        out = subprocess.check_output(["git", "ls-files", "-z", "--cached"], cwd=REPO_ROOT, text=True)
+        _TRACKED = frozenset(p for p in out.split("\0") if p)
+    return _TRACKED
+
+
+_TRACKED: frozenset[str] | None = None
 
 
 def _count_exceptions(rel_paths: list[str]) -> tuple[int, int, dict[str, int]]:

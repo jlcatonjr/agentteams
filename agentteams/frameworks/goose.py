@@ -64,6 +64,7 @@ from agentteams.frameworks.goose_docs import (
     _goosehints_content,
     _resilient_runner_content,
     _route_proxy_content,
+    is_placeholder as _is_placeholder,
 )
 
 # Recipe READ-side parse carved to goose_recipe_read.py (CH-07 carve, F.1/F.3
@@ -622,15 +623,24 @@ class GooseAdapter(FrameworkAdapter):
         files.extend([
             ("../../.goosehints", _goosehints_content(project_name)),
             ("references/goose-capabilities-reference.md", _goose_capabilities_content(project_name)),
-            ("../../scripts/goose-run-resilient.py", _resilient_runner_content()),
-            ("../../scripts/goose-openrouter-route-proxy.py", _route_proxy_content()),
         ])
+        # Never ship the "not found" placeholder: it would overwrite a working copy in the target.
+        for rel, text in (("../../scripts/goose-run-resilient.py", _resilient_runner_content()),
+                          ("../../scripts/goose-openrouter-route-proxy.py", _route_proxy_content())):
+            if _is_placeholder(text):
+                print(f"  ⚠  {rel[6:]} is missing from this agentteams install; not emitted (reinstall agentteams)",
+                      file=sys.stderr)
+            else:
+                files.append((rel, text))
         # Phase 2: ship the coordination server ONLY when coordination is declared (gated, unlike
         # the unconditional route proxy / resilient runner) so a non-coordinating team is unchanged.
         if _coordination_enabled(manifest):
-            files.append(
-                ("../../scripts/goose-coordination-mcp.py", _coordination_mcp_content())
-            )
+            coordination = _coordination_mcp_content()
+            if _is_placeholder(coordination):
+                print("  ⚠  scripts/goose-coordination-mcp.py is missing from this agentteams install; not emitted, so "
+                      "the coordination extension has no server (reinstall agentteams)", file=sys.stderr)
+            else:
+                files.append(("../../scripts/goose-coordination-mcp.py", coordination))
         # Grant-scoped recipes point readers at the read-only file server; ship it only in that mode. Under the
         # switch it goes into the control plane (session-write-denied), where every recipe of the team points.
         if _grant_mode(manifest):
