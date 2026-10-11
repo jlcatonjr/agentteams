@@ -264,6 +264,7 @@ def emit_all(
     shrink_allow: frozenset[str] | None = None,
     discard_user_regions: bool = False,
     twin_sources: dict[str, Any] | None = None,
+    twin_drop: bool | None = None,
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -302,6 +303,8 @@ def emit_all(
                         empty means none. Refused without a backup dir.
         twin_sources:   rel path -> ``fence_twins.TwinSource``; lets a merge prove an unfenced pre-fencing
                         twin is template text and drop it (only with a backup dir; see fence_twins).
+        twin_drop:      Whether the run may drop twins; None means "when backup_path is set". A dry run
+                        passes the real run's answer (``not --no-backup``) so its preview matches.
 
     Returns:
         EmitResult with results of all write operations.
@@ -442,7 +445,7 @@ def emit_all(
                     rel_path=rel_path,
                     brief_derived_files=brief_derived_files,
                     shrink_allow=_allow,
-                    twin_source=(twin_sources or {}).get(rel_path), twin_drop=True,
+                    twin_source=(twin_sources or {}).get(rel_path), twin_drop=bool(twin_drop),
                 )
                 _sa.track(_allow_used, _pinned, rel_path, existing_text, mr)
                 # Plan 3: dry-run preview also surfaces the notices that the
@@ -639,7 +642,7 @@ def emit_all(
                 rel_path=rel_path,
                 brief_derived_files=brief_derived_files,
                 shrink_allow=_allow,
-                twin_source=(twin_sources or {}).get(rel_path), twin_drop=backup_path is not None,
+                twin_source=(twin_sources or {}).get(rel_path), twin_drop=twin_drop is not False and backup_path is not None,
             )
             _sa.track(_allow_used, _pinned, rel_path, existing_text, merge_result)
             # Front-matter drift: the template's front matter moved on while this file kept its

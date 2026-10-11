@@ -228,3 +228,46 @@ def test_fence_leading_headings_reads_the_first_line_only():
     leads = fence_twins.fence_leading_headings(RENDER)
     assert leads == {"## Rules": ["rules"], "## Kept": ["kept"]}
     assert isinstance(_extract_fenced_regions(RENDER), dict)
+
+
+# --- review follow-ups: refusal coverage, dry-run fidelity ----------------------------------------
+
+@pytest.mark.parametrize("extra", [
+    "## Project-Specific Rules mention: Project-Specific\n\n",
+    "'''\n\n",
+    "Quoted marker: <!-- AGENTTEAMS-BRIDGE:BEGIN x -->\n\n",
+])
+def test_spans_holding_user_regions_delimiters_or_markers_are_kept(extra):
+    res = _merge(_deployed(twin=OLD_SECTION.replace("\n\n- Old", "\n\n" + extra + "- Old")))
+    assert "Old rule for Acme" in res.merged_content and res.twins_kept == ["## Rules"]
+
+
+def test_a_heading_leading_two_fences_is_kept():
+    render = RENDER.replace("## Kept\n\nfenced.", "## Rules\n\nfenced.")
+    res = _merge(_deployed().replace("## Kept\n\nfenced.", "## Rules\n\nfenced."), render=render, source=None)
+    assert "leads 2 fences" in " ".join(res.duplicate_section_notices)
+
+
+def test_a_fence_missing_from_the_render_is_kept():
+    render = RENDER.replace("<!-- AGENTTEAMS:BEGIN rules v=1 -->\n## Rules\n\n- New rule A for Acme.\n"
+                            "<!-- AGENTTEAMS:END rules -->\n", "")
+    res = _merge(_deployed(), render=render)
+    assert "Old rule for Acme" in res.merged_content
+
+
+def test_a_corrupt_corpus_keeps_every_twin(tmp_path, monkeypatch):
+    bad = tmp_path / "corpus.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert _SHIPPED_CORPUS.__wrapped__(bad) == {}
+    monkeypatch.setattr(fence_twins, "load_corpus", lambda *a, **k: {})
+    assert _merge(_deployed()).twins_kept == ["## Rules"]
+
+
+@pytest.mark.parametrize("twin_drop, dropped", [(True, True), (False, False)])
+def test_dry_run_previews_what_the_real_run_will_do(tmp_path, twin_drop, dropped):
+    out = tmp_path / "agents"
+    out.mkdir()
+    (out / "x.agent.md").write_text(_deployed(), encoding="utf-8")
+    result = emit.emit_all([("x.agent.md", RENDER)], output_dir=out, merge=True, yes=True, dry_run=True,
+                           twin_sources={"x.agent.md": SOURCE}, twin_drop=twin_drop)
+    assert any(fence_twins.DROPPED_PREFIX + ":" in n for n in result.notices) is dropped

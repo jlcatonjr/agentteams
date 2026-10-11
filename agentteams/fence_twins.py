@@ -32,8 +32,12 @@ string delimiter; the fence is not in the current render; or dropping is disable
 
 **Rule 12.** The corpus is deletion authority: text added to it becomes deletable from every
 deployed repository. It is therefore generated from git only, checked by regeneration, and pinned
-in ``references/enforcement-integrity.json`` together with this module. Placeholder resolution is
-done here rather than through ``render.py`` so the whole drop decision stays inside pinned code.
+in ``references/enforcement-integrity.json`` together with this module. Placeholder substitution is
+done here rather than through ``render.py``, so the equality test itself is pinned. Its INPUTS are not
+all pinned: the placeholder values and template path (``cli/render_pipeline.twin_sources``), the
+drop permission (``emit.py``), the current templates read by the adapter guard, and the Goose helpers
+(``user_regions._reindent``, ``goose_recipe_merge.is_goose_recipe``). Tampering with those can only
+change which text counts as "template", the same exposure as editing the unpinned renderer itself.
 
 Stdlib only.
 """
@@ -76,6 +80,8 @@ _MARKER_RE = re.compile(r"AGENTTEAMS[-A-Z]*:(?:BEGIN|END)")
 #: Notice prefixes ``fleet`` parses. Kept stable: a kept twin is a REVIEW reason.
 KEPT_PREFIX = "twin kept (not provably template)"
 DROPPED_PREFIX = "twin dropped"
+#: Marks a drop that took a rule line the current template no longer carries (``fleet`` -> REVIEW).
+RETIRED_MARK = "retired by template"
 
 
 @dataclass(frozen=True)
@@ -363,7 +369,7 @@ def _resolve_text(text: str, new_regions: Mapping[str, str], source: TwinSource 
         out.notices.append(
             f"{DROPPED_PREFIX}: {heading!r} (unfenced copy beside fence '{sid}') matched {match}; its text is "
             f"saved to the .lost.unfenced-{sid}.md sidecar in the backup dir"
-            + (f"; retired by template: {'; '.join(retired)}" if retired else ""))
+            + (f"; {RETIRED_MARK}: {'; '.join(retired)}" if retired else ""))
     for start, end in sorted(drops, reverse=True):
         out.content = out.content[:start] + out.content[end:]
     return out
@@ -385,6 +391,11 @@ def _instructions_block(text: str) -> tuple[int, int, str] | None:
     if first is None:
         return None
     return start, end, first.group(1)
+
+
+def _indent(text: str, indent: str) -> str:
+    """Re-indent column-0 *text* into a YAML block (blank lines kept as they are)."""
+    return "".join(indent + line if line.strip() else line for line in text.splitlines(keepends=True))
 
 
 def dedented_view(text: str) -> str:
@@ -442,11 +453,8 @@ def resolve(merged: str, new_regions: Mapping[str, str], source: TwinSource | No
         return TwinOutcome(content=merged)
     out = _resolve_text(dedented, new_regions, source, allow_drop, corpus, templates_dir, fresh)
     if out.dropped:
-        body = _reindent(out.content, "", indent)
-        if body is None:  # cannot happen: re-indenting from column 0 never under-indents
-            return TwinOutcome(content=merged, kept=out.kept + list(out.handled), notices=out.notices)
-        out.dropped = {sid: _reindent(text, "", indent) or text for sid, text in out.dropped.items()}
-        out.content = merged[:start] + body + merged[end:]
+        out.dropped = {sid: _indent(text, indent) for sid, text in out.dropped.items()}
+        out.content = merged[:start] + _indent(out.content, indent) + merged[end:]
     else:
         out.content = merged
     return out
@@ -481,6 +489,7 @@ __all__ = [
     "CORPUS_PATH",
     "DROPPED_PREFIX",
     "KEPT_PREFIX",
+    "RETIRED_MARK",
     "TwinOutcome",
     "TwinSource",
     "dedented_view",

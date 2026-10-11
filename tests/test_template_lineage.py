@@ -8,15 +8,21 @@ text from every deployed repository). Three guards:
   the shipped file byte for byte. It needs the archived pre-public history (``LINEAGE_TIPS``);
   where those commits are absent (a fresh clone of ``origin``, CI) the test skips, unless
   ``AGENTTEAMS_REQUIRE_LINEAGE_HISTORY=1`` makes their absence a failure.
-* **Per-entry provenance.** Every entry whose commit is present must be found, unfenced, under its
-  heading in ``git show <commit>:<path>`` — a weaker check that still runs on public history.
+* **Per-entry provenance.** Every entry whose commit is in this clone's ``HEAD`` history (public
+  history) must be found, unfenced, under its heading in ``git show <commit>:<path>``.
+* **Pinned pre-public set.** Entries citing a commit outside ``HEAD``'s history cannot be checked
+  where that history is absent, so their exact set (template, heading, commit, path, text) is pinned
+  by digest here. An entry with an invented SHA changes the digest and fails CI; changing the pin is
+  a reviewed edit that must follow a local regeneration with the archived history present.
 * **Shape.** Checked everywhere, history or not: every heading leads exactly one fence of its
   current template, every text starts with its heading and carries no AGENTTEAMS marker.
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -39,6 +45,16 @@ def _has_git_history() -> bool:
     return proc.returncode == 0 and proc.stdout.strip() == "false"
 
 
+#: sha256 of the canonical JSON of every corpus row whose commit is NOT in ``HEAD``'s history (the
+#: archived pre-public lineage). 111 rows, verified by regeneration with the archive present on 2026-10-10.
+PRE_PUBLIC_DIGEST = "02f346c447ac64a1d0c1fac6008bf96b7e7056c67218d70562eb086ca57dc83d"
+
+
+def _public_commits() -> set[str]:
+    return set(subprocess.run(["git", "-C", str(REPO), "rev-list", "HEAD"],
+                              capture_output=True, text=True).stdout.split())
+
+
 def _require_history() -> bool:
     return os.environ.get("AGENTTEAMS_REQUIRE_LINEAGE_HISTORY") == "1"
 
@@ -54,25 +70,34 @@ def test_corpus_regenerates_byte_for_byte():
         "scripts/build_template_lineage.py, review the diff, and re-pin the integrity manifest")
 
 
-def test_every_entry_present_in_git_is_its_cited_unfenced_section():
+def test_every_public_entry_is_its_cited_unfenced_section():
     if not _has_git_history():
         pytest.skip("shallow clone: no commit objects to check provenance against")
-    checked = 0
+    public = _public_commits()
     for template, headings in CORPUS.items():
         for heading, entries in headings.items():
             for entry in entries:
+                if entry["commit"] not in public:
+                    continue  # pre-public: pinned by digest below
                 show = subprocess.run(["git", "-C", str(REPO), "show", f"{entry['commit']}:{entry['path']}"],
                                       capture_output=True, text=True)
-                if show.returncode != 0:
-                    if _require_history():
-                        pytest.fail(f"{template} {heading}: {entry['commit']}:{entry['path']} not in this clone")
-                    continue
+                assert show.returncode == 0, f"{template} {heading}: {entry['commit']}:{entry['path']} unreadable"
                 span = fence_twins.unfenced_section(show.stdout, heading, allow_eof=True)
                 assert not isinstance(span, str), f"{template} {heading}@{entry['commit']}: {span}"
                 assert show.stdout[span[0]:span[1]] == entry["text"], f"{template} {heading}@{entry['commit']}"
-                checked += 1
-    if checked == 0 and not lineage.missing_tips():
-        pytest.fail("no corpus entry could be checked against git although the history is present")
+
+
+def test_pre_public_entries_match_the_pinned_set():
+    """CI cannot read the archived history, so an entry citing it must be one regeneration produced."""
+    if not _has_git_history():
+        pytest.skip("shallow clone: cannot tell public from pre-public commits")
+    public = _public_commits()
+    rows = sorted([t, h, e["commit"], e["path"], e["text"]]
+                  for t, hs in CORPUS.items() for h, es in hs.items() for e in es if e["commit"] not in public)
+    digest = hashlib.sha256(json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    assert digest == PRE_PUBLIC_DIGEST, (
+        "the corpus's pre-public entries changed. They are deletion authority CI cannot verify: regenerate "
+        "with the archived history present (AGENTTEAMS_REQUIRE_LINEAGE_HISTORY=1), review, then update the pin")
 
 
 def test_corpus_shape():

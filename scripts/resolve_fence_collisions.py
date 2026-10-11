@@ -55,6 +55,7 @@ import json  # noqa: E402
 import subprocess  # noqa: E402
 
 from agentteams.backup import backup_output_dir  # noqa: E402
+from agentteams.fence_twins import KEPT_PREFIX  # noqa: E402
 from agentteams.fences import (  # noqa: E402
     _extract_fenced_regions,
     _fence_body,
@@ -420,7 +421,7 @@ def _resolve_file(
     headings: list[str] = []
     for notice in result.duplicate_section_notices:
         # The merge names a fence-leading twin it kept with fence_twins' notice instead (2026-10-10).
-        m = re.search(r"(?:duplicate section|twin kept \(not provably template\)): '([^']+)'", notice)
+        m = re.search(rf"(?:duplicate section|{re.escape(KEPT_PREFIX)}): '([^']+)'", notice)
         if m and m.group(1) not in headings:
             headings.append(m.group(1))
     for heading in _duplicate_headings_in_file(text):

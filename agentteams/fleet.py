@@ -39,7 +39,7 @@ from pathlib import Path
 
 from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
-from agentteams.fence_twins import DROPPED_PREFIX, KEPT_PREFIX
+from agentteams.fence_twins import DROPPED_PREFIX, KEPT_PREFIX, RETIRED_MARK
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
@@ -580,6 +580,9 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "volatile_tracked": volatile_tracked,
         "twins_kept": [l.strip() for l in update_output.splitlines() if f"{KEPT_PREFIX}:" in l],
         "twins_dropped": [l.strip() for l in update_output.splitlines() if f"{DROPPED_PREFIX}:" in l],
+        # A drop that retired a rule the current template no longer carries is reviewed like a kept twin.
+        "twins_retired": [l.strip() for l in update_output.splitlines()
+                          if f"{DROPPED_PREFIX}:" in l and RETIRED_MARK in l],
     }
 
 
@@ -861,13 +864,16 @@ def run_fleet(args, parser) -> int:
                     tr.status = "REVIEW"
                     tr.detail = ("FENCE IMBALANCE (malformed render — do not push): "
                                  + ", ".join(cls["fence_imbalances"]))
-                elif cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]:
+                elif (cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]
+                      or cls["twins_retired"]):
                     tr.status = "REVIEW"
                     tr.detail = "; ".join(filter(None, (
                         "shrink notice / USER-EDITABLE deletion — review diff"
                         if cls["user_editable_deletions"] or cls["shrink_notices"] else "",
                         f"unfenced pre-fencing twin kept ({len(cls['twins_kept'])}) — resolve by hand"
-                        if cls["twins_kept"] else "")))
+                        if cls["twins_kept"] else "",
+                        f"dropped twin retired a rule ({len(cls['twins_retired'])}) — confirm in the .lost sidecar"
+                        if cls["twins_retired"] else "")))
                     if cls["volatile_tracked"]:
                         tr.detail += ("; tracked volatile file(s) churned (un-audited, review before commit): "
                                       + ", ".join(cls["volatile_tracked"]))

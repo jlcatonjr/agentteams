@@ -288,7 +288,9 @@ def twin_sources(manifest: dict[str, Any], adapter: Any) -> dict[str, Any]:
     sources: dict[str, Any] = {}
     for spec in manifest.get("output_files", []):
         template = spec.get("template", "")
-        if template and not (TEMPLATES_DIR / template).exists():
+        if not template:
+            continue
+        if not (TEMPLATES_DIR / template).exists():
             template = spec.get("fallback_template", "")
         if not template or not (TEMPLATES_DIR / template).exists():
             continue

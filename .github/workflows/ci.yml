@@ -61,10 +61,10 @@ jobs:
         run: bash scripts/check-durable-tmp-refs.sh
 
   # The fence-twin lineage corpus (agentteams/data/template_lineage.json) is deletion authority
-  # (Rule 12): every entry must be the unfenced section git says its cited commit held. The test job
-  # above is a shallow clone, so the provenance check runs here with full public history. Entries
-  # from the archived pre-public history (not on origin) are checked only where it is present; set
-  # AGENTTEAMS_REQUIRE_LINEAGE_HISTORY=1 on a runner that has it to make that check mandatory.
+  # (Rule 12). The test job above is a shallow clone, so this job runs the lineage tests with full
+  # public history: entries citing public commits are checked against git, and entries citing the
+  # archived pre-public history (not on origin, so unreadable here) must match the digest pinned in
+  # tests/test_template_lineage.py. Full regeneration runs only where that archive is present.
   template-lineage:
     runs-on: ubuntu-latest
     steps:

@@ -143,7 +143,7 @@ Outcome of `prune_backups()`.
 
 ## Functions
 
-### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset(), shrink_allow=None, discard_user_regions=False, twin_sources=None)`
+### `emit_all(rendered_files, *, output_dir, dry_run=False, overwrite=False, merge=False, yes=False, shrink_policy="preserve", backup_path=None, auto_fence_legacy=False, brief_derived_files=frozenset(), shrink_allow=None, discard_user_regions=False, twin_sources=None, twin_drop=None)`
 
 > *Source: `agentteams/emit.py`*
 
@@ -171,6 +171,7 @@ Write rendered files to `output_dir`.
 - `shrink_allow` (`frozenset[str] | None`, keyword-only): reviewed `<rel path>:<fence id>@<digest>` shrink overrides, already resolved by the caller (`shrink_allow.resolve`, which reads the flags and the environment). An override releases one pinned section whose on-disk body matches the reviewed digest; the old body goes to a `.lost` sidecar. All overrides are refused when `backup_path` is None (unless `dry_run`). Default: `None` (no overrides). See [`shrink_allow`](shrink-allow.md).
 - `discard_user_regions` (`bool`, keyword-only): with `overwrite`, drop the user-editable `## Project-Specific Notes` / `## Project-Specific Rules` regions instead of carrying them (P5a, [`user_regions`](user-regions.md)). Default: `False` (carry, print, and refuse to overwrite a file whose region the new render can't hold).
 - `twin_sources` (`dict[str, TwinSource] | None`, keyword-only): output path to the template and placeholder values it was rendered from (`cli.render_pipeline.twin_sources`). With it, a merge can prove that an unfenced pre-fencing copy of a fenced section is template text and drop it. Drops happen only with a backup dir; see [`fence_twins`](fence-twins.md). Default: `None` (a twin is dropped only when it equals the fenced copy, and only with a backup dir).
+- `twin_drop` (`bool | None`, keyword-only): whether the run may drop twins. `None` means "only when `backup_path` is set". The CLI passes `not --no-backup`, so a dry run (which has no backup dir) previews exactly what the real run will do. A real run never drops a twin without a backup dir. Default: `None`.
 
 **Returns:** `EmitResult` — Results of all write operations.
 

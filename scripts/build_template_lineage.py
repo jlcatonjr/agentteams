@@ -110,7 +110,7 @@ def _commits() -> list[tuple[int, str]]:
 
 
 def _blob_texts(blob_ids: list[str]) -> dict[str, str]:
-    """Read blobs in one ``cat-file --batch`` call; undecodable blobs are skipped."""
+    """Read blobs in one ``cat-file --batch`` call (invalid UTF-8 replaced: a binary blob holds no fence)."""
     raw = subprocess.run(git_argv(REPO_ROOT, "cat-file", "--batch", hardened=True),
                          input="\n".join(blob_ids).encode() + b"\n", capture_output=True, check=True,
                          timeout=300).stdout
@@ -133,6 +133,7 @@ def build() -> dict:
 
     Raises:
         RuntimeError: When a lineage tip is missing or a git command fails.
+        subprocess.SubprocessError: When the batched blob read fails or times out.
     """
     missing = missing_tips()
     if missing:
@@ -153,9 +154,7 @@ def build() -> dict:
     texts = _blob_texts(sorted({blob for _rel, blob in first_seen}))
     table: dict[str, dict[str, dict[str, tuple[int, str, str]]]] = {}
     for (rel, blob), (ct, sha, hist_path) in first_seen.items():
-        text = texts.get(blob)
-        if text is None:
-            continue
+        text = texts[blob]
         for heading in leads[rel]:
             span = unfenced_section(text, heading, allow_eof=True)
             if isinstance(span, str):
@@ -215,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         text = serialise(build())
-    except RuntimeError as exc:
+    except (RuntimeError, subprocess.SubprocessError) as exc:
         print(f"build_template_lineage: {exc}", file=sys.stderr)
         return 2
     if args.check:

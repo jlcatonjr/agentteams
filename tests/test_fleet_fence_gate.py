@@ -134,3 +134,9 @@ def test_a_dropped_twin_alone_is_not_a_review_reason(tmp_path, monkeypatch):
     (target,) = _fleet_run(tmp_path, monkeypatch, "Merged: 1 file(s)\n" + _DROPPED)
     assert target["status"] == "OK"
     assert len(target["twins_dropped"]) == 1
+
+
+def test_a_dropped_twin_that_retired_a_rule_is_a_review_reason(tmp_path, monkeypatch):
+    retired = _DROPPED.replace("sidecar\n", "sidecar; retired by template: you must never skip review\n", 1)
+    (target,) = _fleet_run(tmp_path, monkeypatch, "Merged: 1 file(s)\n" + retired)
+    assert target["status"] == "REVIEW" and "retired a rule" in target["detail"]
