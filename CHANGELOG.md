@@ -18,7 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `--reconcile-apply` adds it at the end of the front matter.
   - A block value is now replaced whole; before, it was skipped as "not found verbatim".
   - Missing non-capability keys are still not reported. Applying is still explicit, and every capability change
-    is still announced.
+    is still announced; additions print as `ADDED (absent)`.
+  - **@security conditions:**
+    - `hooks`, `memory` and a `permissionMode` other than `default`/`plan` are never added;
+    - an entry with an inline value plus continuation lines is reported but never applied, since the flat reader
+      would write `tools:` empty, and an empty value inherits every tool;
+    - replacements are anchored to a line start inside the front matter.
 
 ### fix (fleet and batch_update show skipped shrink grants)
 

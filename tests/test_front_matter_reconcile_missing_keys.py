@@ -73,3 +73,52 @@ def test_absent_non_capability_key_is_not_reported(tmp_path: Path) -> None:
 def test_file_without_front_matter_is_not_given_one(tmp_path: Path) -> None:
     _deploy(tmp_path, "no front matter here\n")
     assert find_divergences([("primary-producer.md", _TEMPLATE)], tmp_path) == []
+
+
+# --- @security conditions (2026-10-11) -------------------------------------------------------
+
+def test_added_key_is_labelled_added(tmp_path: Path) -> None:
+    _deploy(tmp_path, f"---\nname: Primary Producer\n{_TOOLS}---\nbody\n")
+    applied = apply_divergences(find_divergences([("primary-producer.md", _TEMPLATE)], tmp_path), tmp_path)
+    assert applied == ["ADDED (absent) primary-producer.md: mcpServers  [CAPABILITY GRANT CHANGED]"]
+
+
+def test_inline_value_with_continuation_is_never_applied(tmp_path: Path) -> None:
+    # The flat map reads `tools: Read` + `# note` as a bare block; writing that would leave
+    # `tools:` empty, which on Claude inherits every tool.
+    template = "---\nname: A\ntools: Read\n# note\n---\nbody\n"
+    path = _deploy(tmp_path, "---\nname: A\ntools: Read, Edit, Write\n---\nbody\n")
+    found = find_divergences([("primary-producer.md", template)], tmp_path)
+    assert [(d.key, d.ambiguous) for d in found] == [("tools", True)]
+    applied = apply_divergences(found, tmp_path)
+    assert applied[0].startswith("SKIPPED primary-producer.md: tools — inline value with continuation")
+    assert "tools: Read, Edit, Write" in path.read_text(encoding="utf-8")
+
+
+def test_replace_is_anchored_to_a_line_start_in_front_matter(tmp_path: Path) -> None:
+    deployed = ("---\nname: A\ndescription: \"see allowed-tools: Read\"\nallowed-tools: Read\ntools: Read\n---\n"
+                "tools: Read\n")
+    path = _deploy(tmp_path, deployed)
+    template = "---\nname: A\ndescription: \"see allowed-tools: Read\"\nallowed-tools: Read\ntools: Read, Grep\n---\nx\n"
+    applied = apply_divergences(find_divergences([("primary-producer.md", template)], tmp_path), tmp_path)
+    assert applied == ["applied primary-producer.md: tools  [CAPABILITY GRANT CHANGED]"]
+    text = path.read_text(encoding="utf-8")
+    assert "allowed-tools: Read\ntools: Read, Grep\n---\ntools: Read\n" in text  # body and sibling key untouched
+
+
+def test_high_risk_keys_are_never_added(tmp_path: Path) -> None:
+    template = ("---\nname: A\ntools: Read\nhooks:\n  PreToolUse: []\nmemory: project\n"
+                "permissionMode: bypassPermissions\n---\nbody\n")
+    path = _deploy(tmp_path, "---\nname: A\ntools: Read\n---\nbody\n")
+    found = find_divergences([("primary-producer.md", template)], tmp_path)
+    assert {d.key for d in found} == {"hooks", "memory", "permissionMode"}
+    applied = apply_divergences(found, tmp_path)
+    assert all(line.startswith("SKIPPED") and "not added" in line for line in applied), applied
+    assert path.read_text(encoding="utf-8") == "---\nname: A\ntools: Read\n---\nbody\n"
+
+
+def test_safe_permission_mode_is_added(tmp_path: Path) -> None:
+    _deploy(tmp_path, "---\nname: A\ntools: Read\n---\nbody\n")
+    template = "---\nname: A\ntools: Read\npermissionMode: plan\n---\nbody\n"
+    applied = apply_divergences(find_divergences([("primary-producer.md", template)], tmp_path), tmp_path)
+    assert applied == ["ADDED (absent) primary-producer.md: permissionMode  [CAPABILITY GRANT CHANGED]"]

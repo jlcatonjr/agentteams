@@ -53,13 +53,17 @@ class Divergence:
     key: str
     deployed: str | None
     template: str
+    #: The template or deployed entry has an inline value *and* continuation lines (a trailing
+    #: comment, a wrapped flow list). The flat map can't represent it faithfully, so it is
+    #: reported but never applied (@security, 2026-10-11).
+    ambiguous: bool = False
 
     @property
     def is_capability(self) -> bool:
         return self.key in CAPABILITY_KEYS
 
     def describe(self) -> str:
-        mark = "  [capability]" if self.is_capability else ""
+        mark = ("  [capability]" if self.is_capability else "") + ("  [ambiguous: not applied]" if self.ambiguous else "")
         return (
             f"{self.rel_path}: {self.key}{mark}\n"
             f"    deployed: {'(absent)' if self.deployed is None else self.deployed}\n"
@@ -266,16 +270,18 @@ def find_divergences(
         template_fm = _front_matter_map(content)
         if not template_fm:
             continue
-        deployed_fm = _front_matter_map(deployed_path.read_text(encoding="utf-8"))
+        deployed_text = deployed_path.read_text(encoding="utf-8")
+        deployed_fm = _front_matter_map(deployed_text)
         if not deployed_fm:
             continue  # cannot receive a block it never had; see the ledger row on that case
+        mixed = _mixed_keys(content) | _mixed_keys(deployed_text)
         for key, template_value in template_fm.items():
             deployed_value = deployed_fm.get(key)
             if deployed_value is None:
                 if key in CAPABILITY_KEYS:
-                    found.append(Divergence(rel_path, key, None, template_value))
+                    found.append(Divergence(rel_path, key, None, template_value, key in mixed))
             elif deployed_value != template_value:
-                found.append(Divergence(rel_path, key, deployed_value, template_value))
+                found.append(Divergence(rel_path, key, deployed_value, template_value, key in mixed))
     return sorted(found, key=lambda d: (d.rel_path, d.key))
 
 
@@ -304,19 +310,29 @@ def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[s
             continue
         new_text = text
         for d in items:
+            if d.ambiguous:
+                applied.append(f"SKIPPED {rel_path}: {d.key} — inline value with continuation lines "
+                               "(comment or wrapped list); edit it by hand")
+                continue
             new_entry = _entry_text(d.key, d.template)
             if d.deployed is None:
+                refusal = _never_added(d.key, d.template)
+                if refusal:
+                    applied.append(f"SKIPPED {rel_path}: {d.key} — not added: {refusal}; add it by hand if intended")
+                    continue
                 inserted = _append_to_front_matter(new_text, new_entry)
                 if inserted is None:
                     applied.append(f"SKIPPED {rel_path}: {d.key} — front matter not found")
                     continue
                 new_text = inserted
-            else:
-                old_entry = _entry_text(d.key, d.deployed)
-                if old_entry not in new_text:
-                    applied.append(f"SKIPPED {rel_path}: {d.key} — entry not found verbatim")
-                    continue
-                new_text = new_text.replace(old_entry, new_entry, 1)
+                applied.append(f"ADDED (absent) {rel_path}: {d.key}"
+                               + ("  [CAPABILITY GRANT CHANGED]" if d.is_capability else ""))
+                continue
+            replaced = _replace_in_front_matter(new_text, _entry_text(d.key, d.deployed), new_entry)
+            if replaced is None:
+                applied.append(f"SKIPPED {rel_path}: {d.key} — entry not found at a line start in the front matter")
+                continue
+            new_text = replaced
             applied.append(
                 f"applied {rel_path}: {d.key}"
                 + ("  [CAPABILITY GRANT CHANGED]" if d.is_capability else "")
@@ -335,15 +351,70 @@ def _entry_text(key: str, value: str) -> str:
     return f"{key}:{value}" if value.startswith("\n") else f"{key}: {value}"
 
 
-def _append_to_front_matter(text: str, entry: str) -> str | None:
-    """Insert *entry* as the last front-matter entry, or None when there is no front matter."""
+#: Capability keys reconcile never *adds* to a file that lacks them, whatever the template says:
+#: each grants more than a tool list (arbitrary shell at tool events; Read/Write/Edit for memory;
+#: disabled permission checks). An existing value can still be reconciled (@security, 2026-10-11).
+_NEVER_ADDED = {"hooks": "per-agent hooks run arbitrary shell", "memory": "memory grants Read, Write and Edit"}
+_SAFE_PERMISSION_MODES = {"default", "plan"}
+
+
+def _never_added(key: str, template_value: str) -> str | None:
+    """Why *key* must not be added to a file that lacks it, or None when adding it is allowed."""
+    if key in _NEVER_ADDED:
+        return _NEVER_ADDED[key]
+    if key == "permissionMode" and template_value.strip().strip("'\"") not in _SAFE_PERMISSION_MODES:
+        return f"permissionMode {template_value.strip()!r} relaxes permission checks"
+    return None
+
+
+def _mixed_keys(text: str) -> set[str]:
+    """Front-matter keys with an inline value *and* continuation lines (see ``Divergence.ambiguous``)."""
+    block, _body = _parse_front_matter(text)
+    mixed: set[str] = set()
+    key, inline, has_cont = None, "", False
+    for line in (block or "").splitlines() + ["end:"]:
+        is_top_level = line.strip() and not line.startswith((" ", "\t", "#")) and ":" in line
+        if is_top_level:
+            if key is not None and inline.strip() and has_cont:
+                mixed.add(key)
+            name, _sep, value = line.partition(":")
+            key, inline, has_cont = name.strip(), value, False
+        elif key is not None and line.strip():
+            has_cont = True
+    return mixed
+
+
+def _front_matter_span(text: str) -> tuple[int, int] | None:
+    """``(start, end)`` of the front-matter block inside *text*, or None when there is none."""
     block, _body = _parse_front_matter(text)
     if not block:
         return None
     start = text.find(block)
     if start < 0 or start > 8:  # the block sits right after the opening delimiter
         return None
-    end = start + len(block)
+    return start, start + len(block)
+
+
+def _replace_in_front_matter(text: str, old_entry: str, new_entry: str) -> str | None:
+    """Replace *old_entry* where it starts a line inside the front matter and ends at a line end."""
+    span = _front_matter_span(text)
+    if span is None:
+        return None
+    start, end = span
+    block = text[start:end]
+    match = re.search(r"(?m)^" + re.escape(old_entry) + r"(?=\n|\Z)", block)
+    if match is None:
+        return None
+    block = block[:match.start()] + new_entry + block[match.end():]
+    return text[:start] + block + text[end:]
+
+
+def _append_to_front_matter(text: str, entry: str) -> str | None:
+    """Insert *entry* as the last front-matter entry, or None when there is no front matter."""
+    span = _front_matter_span(text)
+    if span is None:
+        return None
+    end = span[1]
     rest = text[end:]
     if rest.startswith("\n"):
         rest = rest[1:]

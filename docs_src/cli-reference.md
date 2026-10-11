@@ -1258,9 +1258,12 @@ agent named in `mcp_grants`. A missing non-capability key is not reported.
 With `--reconcile-front-matter`, take the template's value for each diverging key.
 **Never implied by the report.** `allowed-tools` is a capability grant, and widening one is a
 privileged change (Constitutional C-3), so it requires saying so explicitly.
-A key absent on disk is added at the end of the front matter, and a block value (such as
-`mcpServers`) is replaced whole. Each capability change is printed as
-`[CAPABILITY GRANT CHANGED]`.
+A key absent on disk is added at the end of the front matter (printed `ADDED (absent)`), and a
+block value (such as `mcpServers`) is replaced whole; each capability change is printed as
+`[CAPABILITY GRANT CHANGED]`. Three keys are never *added*: `hooks`, `memory`, and a
+`permissionMode` other than `default`/`plan`; add them by hand if intended. An entry with an
+inline value and continuation lines (a trailing comment, a wrapped list) is reported but never
+applied, and a value is replaced only where its key starts a line inside the front matter.
 
 ---
 
