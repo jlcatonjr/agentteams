@@ -36,6 +36,14 @@ def rendered(tmp_path_factory):
     return project
 
 
+
+@pytest.fixture(autouse=True)
+def _macos_host(monkeypatch):
+    """The status channel is measured on macOS only; Linux is refused until measured (its own test below)."""
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+
 def _merge_emitted_settings(project: Path) -> None:
     """What the operator does: merge the emitted sandbox block and permissions into the live settings."""
     example = json.loads((project / ".claude" / "settings.hooks.example.json").read_text())
@@ -65,10 +73,13 @@ def test_a_shadowing_server_definition_is_refused(rel, tmp_path):
     assert any("shadow" in p for p in runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path))
 
 
-def test_teams_without_grants_have_no_runner_wiring_checks(tmp_path):
+def test_teams_without_the_switch_have_no_wiring_checks_and_no_grants_means_no_shadow_check(tmp_path):
     (tmp_path / ".mcp.json").write_text(json.dumps({"mcpServers": {runner_mcp.SERVER_NAME: {}}}))
-    assert runner_mcp.wiring_problems(tmp_path, "claude", {"write_policy": "orchestrator-only"}) == []
     assert runner_mcp.wiring_problems(tmp_path, "claude", {"mcp_grants": {"a": {}}}) == []
+    # Under the switch without grants the settings checks still run (the orchestrator's own runner channel
+    # depends on them, 2026-10-11), but nothing can be shadowed.
+    switched = runner_mcp.wiring_problems(tmp_path, "claude", {"write_policy": "orchestrator-only"}, home=tmp_path)
+    assert switched and not [p for p in switched if "C13" in p]
 
 
 def test_check_wiring_cli_reports_the_runner_problems(rendered):
@@ -142,6 +153,7 @@ def test_goose_profile_must_deny_the_server_and_recipes(tmp_path):
     from agentteams.frameworks._goose_sandbox_emit import _seatbelt_path_expr
 
     (tmp_path / ".goose" / "sandbox.sb").write_text("(deny file-write*\n    " + _seatbelt_path_expr(".agentteams")
+                                                   + "\n    " + _seatbelt_path_expr(".agentteams-status")
                                                    + "\n    " + _seatbelt_path_expr(".goose/recipes") + ")\n")
     assert runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path) == []
 
@@ -154,14 +166,42 @@ def test_a_team_with_grants_refuses_a_shell_on_any_non_orchestrator_agent():
     plain = _check_write_policy({"helper.md": agent}, agent_ext=".md", framework="claude", enabled=True)
     granted = _check_write_policy({"helper.md": agent}, agent_ext=".md", framework="claude", enabled=True,
                                   mcp_grants={"someone-else": {"tools": ["write_file"]}})
-    assert not [f for f in plain if f.severity == "error"]
+    assert [f for f in plain if f.severity == "error" and "orchestrator's runner channel" in f.description]
     assert [f for f in granted if f.severity == "error" and "queue a shell could read" in f.description]
 
 
 def test_the_sandbox_must_be_enabled_in_live_settings(tmp_path):
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / "settings.json").write_text(json.dumps({"permissions": {"deny": list(
-        runner_mcp.REQUIRED_CLAUDE_DENY)}, "sandbox": {"filesystem": {"denyWrite": [".agentteams", ".claude"]}}}))
+        runner_mcp.REQUIRED_CLAUDE_DENY)}, "sandbox": {"filesystem": {"denyWrite": [".agentteams", ".agentteams-status",
+                                                                                   ".claude"]}}}))
     problems = runner_mcp.wiring_problems(tmp_path, "claude", MANIFEST, home=tmp_path)
     assert problems == ["live .claude/settings.json doesn't enable the sandbox (sandbox.enabled true); merge the "
                         "emitted sandbox block (@security C4/C11)"]
+
+
+def test_a_read_rule_covering_the_status_tree_is_refused(tmp_path):
+    """Claude Code applies Read denies to sandboxed commands too (2026-10-11): one on the status tree would cut the
+    orchestrator's CLI off from the runner."""
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps({
+        "permissions": {"deny": [*runner_mcp.REQUIRED_CLAUDE_DENY, "Read(/.agentteams-status/**)"]},
+        "sandbox": {"enabled": True, "allowUnsandboxedCommands": True,
+                    "filesystem": {"denyWrite": [".agentteams", ".agentteams-status", ".claude"]}}}))
+    problems = runner_mcp.wiring_problems(tmp_path, "claude", MANIFEST, home=tmp_path)
+    assert any("covers .agentteams-status" in p for p in problems)
+    assert any("allows unsandboxed commands" in p for p in problems)
+
+
+def test_linux_is_refused_until_measured(tmp_path, monkeypatch):
+    import platform
+
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    problems = runner_mcp.wiring_problems(tmp_path, "claude", MANIFEST, home=tmp_path)
+    assert any("Linux bwrap" in p for p in problems)
+
+
+def test_switched_teams_install_the_status_tree_gitignore():
+    files = dict(runner_mcp.install_files({"write_policy": "orchestrator-only"}))
+    assert files == {"../../.agentteams-status/.gitignore": "*\n!.gitignore\n"}
+    assert runner_mcp.install_files({}) == []

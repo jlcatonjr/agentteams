@@ -283,6 +283,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         'SCRATCH="${CODEX_CONFINE_SCRATCH:-$(mktemp -d "${TMPDIR:-/tmp}/codex-confined.XXXXXX")}"\n'
         'PROTECT=()\n'
         'if [ -e "$ROOT/.agentteams" ]; then PROTECT+=( --protect "$ROOT/.agentteams" ); fi\n'
+        'if [ -e "$ROOT/.agentteams-status" ]; then PROTECT+=( --protect "$ROOT/.agentteams-status" ); fi\n'
         'for f in config.toml hooks.json AGENTS.md AGENTS.override.md rules prompts skills plugins; do\n'
         '  PROTECT+=( --protect "$CODEX_HOME/$f" ); done\n'
         'EGRESS="${CODEX_CONFINE_EGRESS:-host}"\n'

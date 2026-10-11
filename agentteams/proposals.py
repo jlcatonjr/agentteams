@@ -451,7 +451,7 @@ def _protected(rel: str, patterns: list[str]) -> str | None:
 
 #: Control-plane directory names refused at ANY depth (R6 review condition 2): a copy planted under a subdirectory
 #: (``sub/.agentteams/bin/...``) would be what a session started in ``sub/`` launches.
-_NESTED_CONTROL_PLANE = frozenset({".agentteams", ".agentteams-queue", ".claude"})
+_NESTED_CONTROL_PLANE = frozenset({".agentteams", ".agentteams-queue", ".agentteams-status", ".claude"})
 
 
 def nested_control_plane(rel: str) -> str | None:

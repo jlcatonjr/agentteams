@@ -209,9 +209,12 @@ def install_server(manifest: dict[str, Any], framework: str, target_dir: Path, *
     from agentteams.atomicio import _atomic_write_text
 
     files = runner_mcp.install_files(manifest)
+    canonical = SUPPORTED.get(framework)
+    if not manifest.get("mcp_grants") and Path(target_dir).resolve().parts[-2:] != canonical:
+        files = []  # only the status tree's .gitignore, which belongs beside the canonical agents dir; the runner
+        # creates the tree itself at start
     if not files:
         return []
-    canonical = SUPPORTED[framework]
     if Path(target_dir).resolve().parts[-2:] != canonical:
         raise ValueError(f"mcp_grants need the agents directory to be the project's {'/'.join(canonical)}; this "
                          "--output would install the agentteams_runner server outside the project")

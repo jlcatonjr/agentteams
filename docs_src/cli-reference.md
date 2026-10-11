@@ -863,7 +863,10 @@ policy (`--description`).
 - **The brief is pinned:** if it changes, the runner stops.
 
 Under the switch, `--issue-dispatch`, `--apply-proposal`, `--run-request` and `--verify-proposal-ledger` queue
-for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` waits again for one request.
+for the runner and wait (`--wait-timeout`, default 120s). `--wait-result ID` waits again for one request. It runs
+in a new process, which never had the request's reply key, so for an orchestrator request it reports only that
+the runner finished: re-query (`--list-staged`, `--show-staged`) for the outcome. Results reach the orchestrator
+sealed, through the session-readable `.agentteams-status/` tree (see [proposal-runner](api-reference/proposal-runner.md)).
 
 ### `--sign-mcp-direct-grant AGENT`
 

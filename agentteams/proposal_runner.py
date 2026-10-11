@@ -6,11 +6,18 @@ starts ``agentteams --serve-requests`` *outside* every agent session. It is the 
 which it reads from a 0600 key file (:func:`proposals.use_key_file`). It applies queued artifacts, and the
 orchestrator's CLI talks to it through a queue:
 
-* ``.agentteams-queue/requests/<id>.json``: written by the orchestrator's CLI. The session can write here.
-* ``.agentteams/queue-results/<id>.json``: written by the runner. Sessions under the switch can't write
-  ``.agentteams/``, so a result can't be forged.
-* ``.agentteams-queue/acks/<id>``: written by the CLI once it has read a result. The runner then deletes the
-  result, so a raw dispatch nonce doesn't linger where another agent could read it.
+* ``.agentteams-queue/requests/<id>.json`` then ``<id>.ready``: written by the orchestrator's CLI with one
+  exclusive create each (no temp file and rename: a Claude session's ``Read(/.agentteams-queue/**)`` deny makes
+  a rename into the tree fail, measured 2026-10-11). The runner serves a request only once its marker exists.
+* ``.agentteams-status/``: written only by the runner; the session may **read** it but not write it
+  (``Edit``/``denyWrite``). It holds the heartbeat and the orchestrator channel's results, each **sealed**
+  (:mod:`agentteams.sealed_result`) with the ``reply_key`` its request carried, so another agent reading the
+  tree learns nothing. Claude Code applies the session's ``Read(/.agentteams/**)`` deny to sandboxed
+  subprocesses too, so the orchestrator's CLI can't read ``.agentteams/`` (biographies pilot, 2026-10-11).
+* ``.agentteams/queue-results/<id>.json``: the MCP channel's results (its server runs unsandboxed), and the
+  refusal for an orchestrator request with no ``reply_key`` (an old client).
+* ``.agentteams-queue/acks/<id>``: written by a client once it has read a result. The runner then deletes the
+  result, so a raw dispatch nonce doesn't linger.
 
 Queue content is data (C-4). Every request is re-validated by :mod:`agentteams.proposals`, exactly as a
 direct CLI call is. The runner pins the project root, the brief and the policy at start, and stops serving
@@ -36,6 +43,7 @@ from typing import Any, Callable
 
 from agentteams import confinement as _confinement
 from agentteams import proposals as P
+from agentteams import sealed_result as _seal
 from agentteams.atomicio import FileTooLargeError, read_regular_nofollow, write_new_atomic
 
 QUEUE_DIR_REL = ".agentteams-queue"
@@ -47,7 +55,19 @@ ACKS_REL = ".agentteams-queue/acks"
 RESULTS_REL = ".agentteams/queue-results"
 CLAIMED_REL = ".agentteams/queue-claimed"
 LOCK_REL = ".agentteams/runner.lock"
-HEARTBEAT_REL = ".agentteams/runner.heartbeat"
+HEARTBEAT_REL = ".agentteams/runner.heartbeat"  # still written: the pinned MCP server reads it
+#: Session-readable, runner-written status tree (2026-10-11): the heartbeat and sealed orchestrator results.
+STATUS_REL = ".agentteams-status"
+STATUS_HEARTBEAT_REL = ".agentteams-status/heartbeat"
+SEALED_RESULTS_REL = ".agentteams-status/results"
+READY_SUFFIX = ".ready"
+#: An orchestrator request with no ``.ready`` marker after this long is a crashed or old client's: refused.
+STALE_REQUEST_SECONDS = 60
+#: At most this many sealed results are kept; the oldest go first.
+SEALED_RESULT_CAP = 500
+#: Orchestrator-channel reply keys, held in this process's memory only (@security condition 1).
+_REPLY_KEYS: dict[str, bytes] = {}
+_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
 
 #: Request kinds the runner serves. Commands and gates run confined (P4b).
 KINDS = ("issue-dispatch", "apply-proposal", "run-request", "verify-ledger",
@@ -270,7 +290,8 @@ class Runner:
             # Without the switch, session sandboxes don't write-deny .agentteams/, so results could be forged.
             raise RunnerError('the brief does not set write_policy "orchestrator-only"; the runner serves only '
                               "teams under the switch")
-        for rel in (".agentteams", QUEUE_DIR_REL, REQUESTS_REL, MCP_REQUESTS_REL, ACKS_REL, RESULTS_REL, CLAIMED_REL):
+        for rel in (".agentteams", QUEUE_DIR_REL, REQUESTS_REL, MCP_REQUESTS_REL, ACKS_REL, RESULTS_REL, CLAIMED_REL,
+                    STATUS_REL, SEALED_RESULTS_REL):
             if (self.root / rel).is_symlink():
                 raise RunnerError(f"{rel} is a symlink; refusing to serve")
         leaked = [name for name in P.KEY_ENV if os.environ.get(name)]
@@ -306,6 +327,8 @@ class Runner:
             (self.root / rel).mkdir(parents=True, exist_ok=True)  # session-writable by design
         for rel in (RESULTS_REL, CLAIMED_REL):
             (self.root / rel).mkdir(mode=0o700, parents=True, exist_ok=True)
+        for rel in (STATUS_REL, SEALED_RESULTS_REL):  # session-readable, never session-writable
+            (self.root / rel).mkdir(mode=0o755, parents=True, exist_ok=True)
         self._stop_heartbeat = threading.Event()
         self._progress = time.monotonic()
         #: The last heartbeat write failure (None when the last beat succeeded), for the serve loop to report.
@@ -348,10 +371,13 @@ class Runner:
         if self._heartbeat_thread is not None:
             self._heartbeat_thread.join()  # wakes at once on the event; only then is no beat in flight
         (self.root / HEARTBEAT_REL).unlink(missing_ok=True)
+        (self.root / STATUS_HEARTBEAT_REL).unlink(missing_ok=True)
         os.close(self._lock_fd)
 
     def _heartbeat(self) -> None:
-        _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, str(time.time()).encode())
+        beat = str(time.time()).encode()  # a timestamp only: no hostname or path (S-8)
+        _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, beat)
+        _write_new(self.root / STATUS_REL, Path(STATUS_HEARTBEAT_REL).name, beat)
 
     def _identity_args(self, request: dict[str, Any], channel: str) -> dict[str, Any]:
         """Channel rules for the proposal engine's identity check (R2).
@@ -462,6 +488,7 @@ class Runner:
         finally:
             os.close(claimed_fd)
         result: dict[str, Any] = {"id": request_id, "ok": False}
+        reply_key: bytes | None = None
         try:  # P5 measurement: how long the request waited in the queue, and how long serving it took
             result["queue_wait_ms"] = int((time.time() - os.stat(claimed, follow_symlinks=False).st_mtime) * 1000)
         except OSError:
@@ -473,6 +500,14 @@ class Runner:
             except (OSError, ValueError) as exc:
                 # Never echo request content: a request symlinked to a secret would leak it.
                 raise RunnerError("unreadable request (not a regular JSON file)") from exc
+            if channel == "orchestrator":  # first, so every later refusal is sealed too
+                key_hex = request.pop("reply_key", None) if isinstance(request, dict) else None
+                if not (isinstance(key_hex, str) and _KEY_RE.match(key_hex)):
+                    # Never answer in the clear where the session can read it: a client without a reply key is
+                    # older than the sealed channel (downgrade refused, 2026-10-11).
+                    raise RunnerError("this client is older than the runner's sealed orchestrator channel; use an "
+                                      "agentteams CLI of the runner's version")
+                reply_key = bytes.fromhex(key_hex)
             if not isinstance(request, dict) or request.get("kind") not in KINDS:
                 raise RunnerError("unknown request kind")
             result["kind"] = request["kind"]
@@ -485,7 +520,11 @@ class Runner:
         finally:
             claimed.unlink(missing_ok=True)
         result["serve_ms"] = int((time.monotonic() - served_from) * 1000)
-        _write_new(self.root / RESULTS_REL, name, _fit_result(result))
+        if reply_key is not None:  # sealed once per reply key, then the key is dropped
+            _write_new(self.root / SEALED_RESULTS_REL, f"{request_id}.sealed",
+                       _seal.seal(reply_key, request_id, _fit_result(result)))
+        else:
+            _write_new(self.root / RESULTS_REL, name, _fit_result(result))
 
     def _expire_results(self) -> None:
         now = time.time()
@@ -495,8 +534,14 @@ class Runner:
             for path in (self.root / RESULTS_REL).glob("*.json"):
                 if path.stem in acks or now - path.stat().st_mtime > RESULT_TTL_SECONDS:
                     path.unlink(missing_ok=True)
+            sealed = sorted((self.root / SEALED_RESULTS_REL).glob("*.sealed"), key=lambda p: p.stat().st_mtime)
+            for index, path in enumerate(sealed):
+                if (path.stem in acks or now - path.stat().st_mtime > RESULT_TTL_SECONDS
+                        or index < len(sealed) - SEALED_RESULT_CAP):
+                    path.unlink(missing_ok=True)
             for name in acks:
-                if not (self.root / RESULTS_REL / f"{name}.json").exists():
+                if not ((self.root / RESULTS_REL / f"{name}.json").exists()
+                        or (self.root / SEALED_RESULTS_REL / f"{name}.sealed").exists()):
                     os.unlink(name, dir_fd=acks_fd)  # relative to the opened dir: never outside it
         finally:
             os.close(acks_fd)
@@ -526,12 +571,26 @@ class Runner:
         for rel, channel in CHANNELS.items():
             requests_fd = self._open_session_dir(rel)
             try:
-                for entry in sorted(os.scandir(requests_fd), key=lambda e: e.name):
+                entries = sorted(os.scandir(requests_fd), key=lambda e: e.name)
+                names = {e.name for e in entries}
+                for entry in entries:
+                    if channel == "orchestrator" and entry.name.endswith(READY_SUFFIX):
+                        if entry.name[: -len(READY_SUFFIX)] + ".json" not in names:  # a marker without its request
+                            os.unlink(entry.name, dir_fd=requests_fd)
+                        continue
                     if not (entry.name.endswith(".json") and _ID_RE.match(entry.name[: -len(".json")])):
                         continue  # temp files, stray names: ignored, never opened
                     if not entry.is_file(follow_symlinks=False):
                         os.unlink(entry.name, dir_fd=requests_fd)
                         continue
+                    if channel == "orchestrator":
+                        ready = entry.name[: -len(".json")] + READY_SUFFIX
+                        if ready in names:
+                            os.unlink(ready, dir_fd=requests_fd)
+                        elif time.time() - entry.stat(follow_symlinks=False).st_mtime < STALE_REQUEST_SECONDS:
+                            continue  # still being written: served once its marker exists
+                        # else: no marker after STALE_REQUEST_SECONDS (an old client's atomic rename, or a crash):
+                        # served, and an old client is refused by the reply-key check.
                     self._serve_request(requests_fd, entry.name, channel)
                     self._progress = time.monotonic()
                     served += 1
@@ -572,10 +631,27 @@ def runner_alive(root: Path) -> bool:
     Raises:
         Nothing.
     """
-    try:
-        return time.time() - float((root / HEARTBEAT_REL).read_text()) < HEARTBEAT_STALE_SECONDS
+    try:  # the status tree: readable inside a Claude session, where .agentteams/ is not (2026-10-11)
+        beat = read_regular_nofollow(root / STATUS_HEARTBEAT_REL, 64)
+        return time.time() - float(beat) < HEARTBEAT_STALE_SECONDS
     except (OSError, ValueError):
         return False
+
+
+def _create_exclusive(directory: Path, name: str, data: bytes) -> None:
+    """Create ``directory/name`` with one exclusive open and write *data*: no stat, no temp file, no rename.
+
+    Inside a Claude session the queue tree is read-denied, which still allows creating a new file in it but not
+    renaming one into it (measured 2026-10-11).
+    """
+    fd = os.open(directory / name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+    try:
+        view = memoryview(data)
+        while view:
+            view = view[os.write(fd, view):]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def enqueue(root: Path, request: dict[str, Any], *, channel: str = "orchestrator") -> str:
@@ -601,7 +677,16 @@ def enqueue(root: Path, request: dict[str, Any], *, channel: str = "orchestrator
     if rel is None:
         raise RunnerError(f"unknown channel {channel!r}")
     request_id = secrets.token_hex(16)
-    _write_new(root / rel, f"{request_id}.json", json.dumps(request).encode())
+    if channel != "orchestrator":
+        _write_new(root / rel, f"{request_id}.json", json.dumps(request).encode())
+        return request_id
+    reply_key = _seal.new_reply_key()
+    try:
+        _create_exclusive(root / rel, f"{request_id}.json", json.dumps({**request, "reply_key": reply_key.hex()}).encode())
+        _create_exclusive(root / rel, f"{request_id}{READY_SUFFIX}", b"")
+    except OSError as exc:
+        raise RunnerError(f"can't queue the request in {rel}: {exc.strerror or exc}") from exc
+    _REPLY_KEYS[request_id] = reply_key  # memory only: never written to disk or printed
     return request_id
 
 
@@ -620,9 +705,38 @@ def poll_result(root: Path, request_id: str) -> dict[str, Any] | None:
     """
     if not _ID_RE.match(request_id):
         raise RunnerError("bad request id")
-    path = root / RESULTS_REL / f"{request_id}.json"
-    if path.exists():
-        result = json.loads(_read_regular(path, REQUEST_MAX_BYTES * 2))
+    sealed_path = root / SEALED_RESULTS_REL / f"{request_id}.sealed"
+    key = _REPLY_KEYS.get(request_id)
+    try:
+        blob = read_regular_nofollow(sealed_path, _seal.BUCKETS[-1] + 4096)
+    except FileNotFoundError:
+        blob = None
+    except (OSError, ValueError) as exc:
+        raise RunnerError(f"can't read the result: {exc}") from exc
+    if blob is not None:
+        if key is None:
+            # Another process's request (--wait-result): its reply key never left that process, so only the fact
+            # that the runner finished is knowable here.
+            return {"id": request_id, "ok": None, "sealed": True,
+                    "note": "the runner finished this request; its result is sealed to the process that queued it. "
+                            "Re-query (--list-staged / --show-staged) to see the outcome."}
+        try:
+            result = json.loads(_seal.open_sealed(key, request_id, blob))
+        except (_seal.SealError, ValueError) as exc:
+            raise RunnerError(f"refusing a result that failed verification: {exc}") from exc
+        del _REPLY_KEYS[request_id]
+        try:
+            _create_exclusive(root / ACKS_REL, request_id, b"")
+        except OSError as exc:  # optional: an unacked sealed result is unreadable to others and expires
+            result["ack_error"] = exc.strerror or str(exc)
+        return result
+    legacy = root / RESULTS_REL / f"{request_id}.json"
+    try:  # MCP channel, or an old client outside the sandbox
+        has_legacy = key is None and legacy.exists()
+    except PermissionError:
+        has_legacy = False  # inside a Claude session the control plane is read-denied
+    if has_legacy:
+        result = json.loads(_read_regular(legacy, REQUEST_MAX_BYTES * 2))
         _write_new(root / ACKS_REL, request_id, b"")
         return result
     if not runner_alive(root):

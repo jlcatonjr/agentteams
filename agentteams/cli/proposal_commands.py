@@ -61,8 +61,13 @@ def _read_json(path: str) -> dict:
 
 def _queue_mode(args: argparse.Namespace) -> bool:
     """Queue for the runner under the switch, or once any runner has served this project (fail closed)."""
-    if (_root(args) / R.HEARTBEAT_REL).exists() or (_root(args) / R.LOCK_REL).exists():
-        return True  # the lock is never deleted: once a runner has served this project, stay in queue mode
+    root = _root(args)
+    for rel in (R.STATUS_HEARTBEAT_REL, R.STATUS_REL, R.HEARTBEAT_REL, R.LOCK_REL):
+        try:
+            if (root / rel).exists():
+                return True  # the lock is never deleted: once a runner has served this project, stay in queue mode
+        except OSError:
+            return True  # a read-denied control plane (inside a Claude session under the switch): fail closed
     if getattr(args, "description", None):
         try:
             brief = ingest.load(Path(args.description).resolve(), scan_project=False)
@@ -382,6 +387,9 @@ def run_wait_result(args: argparse.Namespace) -> int:
     except ProposalError as exc:
         print(f"[wait-result] {exc}", file=sys.stderr)
         return 1
+    if result.get("sealed") and result.get("ok") is None:
+        print(f"[wait-result] {result['note']}")
+        return 0
     print(json.dumps(result, indent=2))
     return 0 if result.get("ok") else int(result.get("exit") or 1)
 

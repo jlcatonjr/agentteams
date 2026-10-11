@@ -355,7 +355,7 @@ def _build_seatbelt_profile(
     # live settings.json allowWrite baseline. A subpath deny covers the dir entry itself (rename).
     # write_policy "orchestrator-only" (P4a): the ledger dir too; only the out-of-session runner writes it.
     # R7 (@security C11): the recipes too, which carry each granted agent's agentteams_runner launch arguments.
-    ledger = (".agentteams", ".goose/recipes") if protect_ledger else ()
+    ledger = (".agentteams", ".agentteams-status", ".goose/recipes") if protect_ledger else ()
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
         *control_plane, framework_config_dir("claude"), *sib["copilot"], *sib["codex"],
         GRANT_ROSTER_PROJECT_REL, *ledger)) if e]

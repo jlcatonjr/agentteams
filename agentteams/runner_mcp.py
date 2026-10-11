@@ -143,10 +143,12 @@ def goose_extension(agent: str, tools: list[str], approval: str, python: str) ->
 
 
 def install_files(manifest: dict) -> list[tuple[str, str]]:
-    """The server install for a rendered team: ``[("../../" + PROTECTED_PATH, source)]`` when any agent is granted.
+    """Files the switch installs for a rendered team: the server when any agent is granted, and the status tree.
 
     Relative to an agents directory two levels below the root (``.claude/agents``, ``.goose/recipes``). Empty
-    unless the switch is on and ``mcp_grants`` names someone, so every other team is unchanged.
+    unless the switch is on, so every other team is unchanged. Under the switch: ``.agentteams-status/.gitignore``
+    (the runner's status tree exists from generation and its contents stay untracked), plus
+    ``[("../../" + PROTECTED_PATH, source)]`` when ``mcp_grants`` names someone.
 
     Args:
         manifest: The team manifest.
@@ -159,13 +161,18 @@ def install_files(manifest: dict) -> list[tuple[str, str]]:
     """
     import hashlib
 
-    if manifest.get("write_policy") != "orchestrator-only" or not manifest.get("mcp_grants"):
+    if manifest.get("write_policy") != "orchestrator-only":
         return []
+    # The runner's status tree must exist before a sandbox names it in denyWrite (a missing denyWrite path stops
+    # bwrap initializing), and what the runner writes there (heartbeat, sealed results) is never committed.
+    files = [(f"../../{STATUS_TREE}/.gitignore", "*\n!.gitignore\n")]
+    if not manifest.get("mcp_grants"):
+        return files
     source = server_content()
     if hashlib.sha256(source.encode("utf-8")).hexdigest() != SHA256:
         raise ValueError("the agentteams_runner server in this agentteams install doesn't match its pinned hash; "
                          "reinstall agentteams before rendering")
-    return [(f"../../{PROTECTED_PATH}", source)]
+    return [(f"../../{PROTECTED_PATH}", source), *files]
 
 
 #: Project files where an ``mcpServers`` entry would sit beside (and could shadow) the inline agentteams_runner.
@@ -175,7 +182,11 @@ MANAGED_MCP_FILES: tuple[str, ...] = ("/Library/Application Support/ClaudeCode/m
                                       "/etc/claude-code/managed-mcp.json")
 #: Live Claude rules a granted team needs (@security C4, C11).
 REQUIRED_CLAUDE_DENY: tuple[str, ...] = ("Edit(/.agentteams/**)", "Edit(/.claude/agents/**)", "Read(/.agentteams/**)",
-                                         "Read(/.agentteams-queue/**)")
+                                         "Read(/.agentteams-queue/**)", "Edit(/.agentteams-status/**)")
+#: The runner's session-readable status tree (2026-10-11). Claude Code applies a ``Read(...)`` deny to sandboxed
+#: subprocesses too, so a Read rule covering this tree cuts the orchestrator's CLI off from the runner.
+STATUS_TREE = ".agentteams-status"
+_STATUS_READ_BLOCKERS = ("/.agentteams-status/**", "/.agentteams-status", "**", "/**", "./**", "*")
 
 
 def _json(path):
@@ -230,14 +241,20 @@ def _shadowing(root, home) -> list[str]:
 
 
 def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[str]:
-    """Live-wiring problems for a team with ``mcp_grants`` (R7; @security C4, C11, C13). Empty when none apply.
+    """Live-wiring problems for a team under ``write_policy`` (R7; @security C4, C11, C13). Empty when none apply.
 
-    * **C13:** no config scope may define a server named ``agentteams_runner`` (:func:`_shadowing`).
+    Runs for every team under the switch, with or without ``mcp_grants``: the orchestrator's own channel to the
+    runner depends on the same settings (biographies pilot, 2026-10-11).
+
+    * **C13 (teams with grants):** no config scope may define a server named ``agentteams_runner``
+      (:func:`_shadowing`).
     * **Claude (C4, C11):** the live ``.claude/settings.json`` denies :data:`REQUIRED_CLAUDE_DENY`, and its merged
-      sandbox ``denyWrite`` holds ``.agentteams`` and ``.claude``; ``settings.local.json`` may not switch the
-      sandbox off or allow unsandboxed commands.
-    * **Goose (C11):** the emitted Seatbelt profile (``.goose/sandbox.sb``) denies writes to ``.agentteams`` and
-      ``.goose/recipes``.
+      sandbox ``denyWrite`` holds ``.agentteams``, ``.agentteams-status`` and ``.claude``; no ``Read(...)`` rule
+      covers ``.agentteams-status`` (it would cut the orchestrator's CLI off from the runner); neither
+      ``settings.json`` nor ``settings.local.json`` may switch the sandbox off or allow unsandboxed commands. Refused
+      on Linux until the status channel is measured under bwrap.
+    * **Goose (C11):** the emitted Seatbelt profile (``.goose/sandbox.sb``) denies writes to ``.agentteams``,
+      ``.agentteams-status`` and ``.goose/recipes``.
 
     Args:
         root: The project root.
@@ -252,13 +269,16 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
         Nothing: an unreadable file is a problem.
     """
     import os
+    import platform
     from pathlib import Path
 
-    if manifest.get("write_policy") != "orchestrator-only" or not manifest.get("mcp_grants"):
+    if manifest.get("write_policy") != "orchestrator-only":
         return []
     root = Path(root)
-    problems = [f"{p}; remove it so it can't shadow the canonical inline server granted agents launch "
-                "(@security C13)" for p in _shadowing(root, home or os.path.expanduser("~"))]
+    problems = []
+    if manifest.get("mcp_grants"):
+        problems += [f"{p}; remove it so it can't shadow the canonical inline server granted agents launch "
+                     "(@security C13)" for p in _shadowing(root, home or os.path.expanduser("~"))]
     if framework == "claude":
         def load(rel):
             path = root / ".claude" / rel
@@ -278,7 +298,17 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
             problems.append("live .claude/settings.json doesn't enable the sandbox (sandbox.enabled true); merge the "
                             "emitted sandbox block (@security C4/C11)")
         fs = (sandbox.get("filesystem") or {})
-        for rel in (".agentteams", ".claude"):
+        for rule in deny:
+            if isinstance(rule, str) and rule.startswith("Read(") and rule[5:-1] in _STATUS_READ_BLOCKERS:
+                problems.append(f"live .claude/settings.json denies {rule}, which covers {STATUS_TREE}: Claude Code "
+                                "applies Read denies to sandboxed commands too, so the orchestrator's CLI couldn't "
+                                "reach the runner. Remove it")
+        if sandbox.get("allowUnsandboxedCommands") is True:
+            problems.append("live .claude/settings.json allows unsandboxed commands (@security C11)")
+        if platform.system() == "Linux":
+            problems.append(f"the orchestrator's {STATUS_TREE} channel isn't measured under Linux bwrap yet (a "
+                            "read-denied queue may be masked rather than refused); not supported on Linux")
+        for rel in (".agentteams", STATUS_TREE, ".claude"):
             if rel not in (fs.get("denyWrite") or []):
                 problems.append(f"live .claude/settings.json's sandbox doesn't denyWrite {rel} (@security C11); "
                                 "merge the emitted sandbox block")
@@ -289,7 +319,7 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
     elif framework == "goose":
         profile = root / ".goose" / "sandbox.sb"
         text = profile.read_text(encoding="utf-8") if profile.exists() else ""
-        for rel in (".agentteams", ".goose/recipes"):
+        for rel in (".agentteams", STATUS_TREE, ".goose/recipes"):
             if f'"{rel}"' not in text and f"/{rel}\"" not in text:
                 problems.append(f".goose/sandbox.sb doesn't deny writes to {rel} (@security C11); re-render with the "
                                 "switch and wire the profile in")
@@ -298,4 +328,4 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
 
 __all__ = ["PROTECTED_PATH", "PYTHON_FLAGS", "SERVER_NAME", "SHA256", "SYSTEM_PYTHONS", "TOOLS", "claude_block",
            "goose_extension", "install_files", "interpreter", "launch_args", "server_content", "tool_names",
-           "MANAGED_MCP_FILES", "REQUIRED_CLAUDE_DENY", "SHADOW_FILES", "wiring_problems"]
+           "MANAGED_MCP_FILES", "REQUIRED_CLAUDE_DENY", "SHADOW_FILES", "STATUS_TREE", "wiring_problems"]
