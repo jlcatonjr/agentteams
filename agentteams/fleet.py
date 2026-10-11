@@ -120,6 +120,13 @@ class TargetResult:
     # in this workspace. Their churn is suffix-exempted from the content audit, so
     # a tracked one can ride un-audited into a commit — surface it for review.
     volatile_tracked: list[str] = field(default_factory=list)
+    # ``WARNING: --shrink-allow …`` lines from this target's run (a grant skipped as unappliable,
+    # refused for want of a backup dir, or one that released nothing). Captured with the rest of the
+    # output, so without this field a skipped grant left no trace in the fleet report (#192 advisory).
+    shrink_grant_warnings: list[str] = field(default_factory=list)
+    # Grants this target's run announced as active; lets the summary tell a grant that released
+    # nothing anywhere from one meant for another workspace.
+    shrink_grants_active: list[str] = field(default_factory=list)
     rc: int | None = None
 
 
@@ -579,6 +586,64 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
 # In-process per-target update
 # ---------------------------------------------------------------------------
 
+_SHRINK_GRANT_WARNING = "WARNING: --shrink-allow"
+_SHRINK_GRANT_ACTIVE = re.compile(r"shrink override active: (\S+)")
+_SHRINK_GRANT_UNUSED = re.compile(r"WARNING: --shrink-allow (\S+): released nothing")
+
+
+def _shrink_grant_lines(update_output: str) -> tuple[list[str], list[str]]:
+    """Pick the shrink-grant warnings and the announced grants out of one target's output.
+
+    Args:
+        update_output: The captured stdout+stderr of the target's update.
+
+    Returns:
+        ``(warnings, active)``: the ``WARNING: --shrink-allow`` lines, stripped, and the grant
+        entries the run announced as active.
+    """
+    warnings = [l.strip() for l in update_output.splitlines() if _SHRINK_GRANT_WARNING in l]
+    active = [m.group(1) for m in _SHRINK_GRANT_ACTIVE.finditer(update_output)]
+    return warnings, active
+
+
+def _shrink_grant_summary(rows: list[dict]) -> list[str]:
+    """Render the run-level shrink-grant section of ``summary.md``.
+
+    An exported ``AGENTTEAMS_SHRINK_ALLOW`` is read by every target, so a grant meant for one
+    workspace "releases nothing" everywhere else. A grant is listed as unused only when every
+    target that announced it reported it unused; every other warning (skipped, refused) is listed
+    against its own target.
+
+    Args:
+        rows: The per-target report rows (``asdict(TargetResult)``).
+
+    Returns:
+        Markdown lines, empty when no target printed a shrink-grant warning.
+    """
+    announced: dict[str, int] = {}
+    unused: dict[str, int] = {}
+    other: list[str] = []
+    for r in rows:
+        for g in set(r.get("shrink_grants_active", [])):
+            announced[g] = announced.get(g, 0) + 1
+        for w in r.get("shrink_grant_warnings", []):
+            m = _SHRINK_GRANT_UNUSED.search(w)
+            if m:
+                unused[m.group(1)] = unused.get(m.group(1), 0) + 1
+            else:
+                other.append(f"- {Path(r['workspace']).name} / {r['target']}: {w}")
+    nowhere = sorted(g for g, n in unused.items() if n >= announced.get(g, n))
+    if not other and not nowhere:
+        return []
+    lines = ["", "## Shrink grants", ""]
+    if other:
+        lines += ["Skipped or refused (the section stays pinned):", "", *other, ""]
+    if nowhere:
+        lines += ["Released nothing on any target (a typo, or the body changed since review):", "",
+                  *(f"- `{g}`" for g in nowhere), ""]
+    return lines
+
+
 def _run_main(argv: list[str]) -> tuple[int, str]:
     """Call build_team.main(argv) in-process, capturing stdout+stderr."""
     import build_team  # local import to avoid circular import at module load
@@ -822,6 +887,8 @@ def run_fleet(args, parser) -> int:
                 descriptor=str(descriptor) if descriptor else "",
                 status="OK",
             )
+            # Before the dry-run and non-git branches, so every path records them.
+            tr.shrink_grant_warnings, tr.shrink_grants_active = _shrink_grant_lines(out)
 
             if not apply:
                 # Dry-run: report intent; no diff (nothing written).
@@ -929,14 +996,15 @@ def _write_report(results, report_root: Path, parent: Path, apply: bool, framewo
     lines = [f"# Fleet update report ({'apply' if apply else 'dry-run'})", "",
              f"- Parent: `{parent}`", f"- Frameworks: {frameworks}",
              f"- Status counts: {counts}", "",
-             "| workspace | target | status | +/- | shrink | UE-del | detail |",
-             "|---|---|---|---|---|---|---|"]
+             "| workspace | target | status | +/- | shrink | grant warnings | UE-del | detail |",
+             "|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lines.append(
             f"| {Path(r['workspace']).name} | {r['target']} | {r['status']} | "
             f"+{r['added_lines']}/-{r['removed_lines']} | {len(r['shrink_notices'])} | "
-            f"{len(r['user_editable_deletions'])} | {r['detail']} |"
+            f"{len(r['shrink_grant_warnings'])} | {len(r['user_editable_deletions'])} | {r['detail']} |"
         )
+    lines += _shrink_grant_summary(rows)
     (report_root / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print("\n" + "=" * 70)
