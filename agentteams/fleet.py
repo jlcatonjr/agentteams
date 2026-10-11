@@ -41,9 +41,10 @@ from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
 from agentteams._fleet_report import write_report as _write_report
 from agentteams._fleet_shrink_grants import shrink_grant_lines
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
-from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX, RETIRED_MARK
+from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
 from agentteams.front_matter_baseline import HANDOFF_KEPT_PREFIX
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
+from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 
@@ -129,7 +130,8 @@ class TargetResult:
     # Pre-fencing twins (agentteams.fence_twins): kept ones are a REVIEW reason; dropped ones are listed only.
     twins_kept: list[str] = field(default_factory=list)
     twins_dropped: list[str] = field(default_factory=list)
-    twins_acknowledged: list[str] = field(default_factory=list)  # kept on an operator ack: listed, not REVIEW
+    twins_acknowledged: list[str] = field(default_factory=list)  # kept on an operator ack: REVIEW only until seen
+    twins_ack_unreviewed: list[str] = field(default_factory=list)  # acks not shown before: REVIEW (_fleet_twin_acks)
     handoffs_kept: list[str] = field(default_factory=list)  # hand-written handoffs a write would have dropped: REVIEW
     rc: int | None = None
 
@@ -558,7 +560,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
             removed += 1
     # Shrink Notices come from the update's own output (emit's shrink guard).
     # Twin notices name a fence too; they are classified on their own (a kept twin is REVIEW, a dropped one is not).
-    twin = (KEPT_PREFIX, DROPPED_PREFIX, ACKED_PREFIX)  # an acknowledged twin is a notice, never REVIEW
+    twin = (KEPT_PREFIX, DROPPED_PREFIX, ACKED_PREFIX)  # twin notices are classified by twin_signals
     shrink = [
         l.strip() for l in update_output.splitlines()
         if "Notice:" in l and "fence" in l and not any(t in l for t in twin)
@@ -585,14 +587,10 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "user_editable_deletions": ue,
         "fence_imbalances": _fence_imbalances(ws, files),
         "volatile_tracked": volatile_tracked,
-        "twins_kept": [l.strip() for l in update_output.splitlines() if f"{KEPT_PREFIX}:" in l],
-        "twins_dropped": [l.strip() for l in update_output.splitlines() if f"{DROPPED_PREFIX}:" in l],
-        "twins_acknowledged": [l.strip() for l in update_output.splitlines() if f"{ACKED_PREFIX}:" in l],
+        # Kept twins and drops that retired a rule are REVIEW reasons; acknowledged twins only once seen.
+        **_twin_acks.twin_signals(update_output),
         # front_matter_baseline: a hand-written handoff the merge would have dropped (portal, 2026-10-11).
         "handoffs_kept": [l.strip() for l in update_output.splitlines() if HANDOFF_KEPT_PREFIX in l],
-        # A drop that retired a rule the current template no longer carries is reviewed like a kept twin.
-        "twins_retired": [l.strip() for l in update_output.splitlines()
-                          if f"{DROPPED_PREFIX}:" in l and RETIRED_MARK in l],
     }
 
 
@@ -755,6 +753,7 @@ def run_fleet(args, parser) -> int:
     allow_no_verify = bool(getattr(args, "fleet_allow_no_verify", False))
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     report_root = Path(getattr(args, "fleet_report", None) or (parent / _FLEET_OUTPUT_DIR_NAME)) / run_id
+    seen_acks = _twin_acks.load_seen(report_root) if apply else {}
 
     skipped_worktrees: list[Path] = []
     workspaces = discover_workspaces(parent, frameworks, skipped_worktrees=skipped_worktrees)
@@ -868,6 +867,7 @@ def run_fleet(args, parser) -> int:
                 tr.volatile_tracked = cls["volatile_tracked"]
                 tr.twins_kept, tr.twins_dropped, tr.twins_acknowledged = (cls["twins_kept"], cls["twins_dropped"],
                                                                           cls["twins_acknowledged"])
+                tr.twins_ack_unreviewed = _twin_acks.unreviewed(seen_acks, str(ws), target, tr.twins_acknowledged)
                 tr.handoffs_kept = cls["handoffs_kept"]
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
@@ -878,15 +878,12 @@ def run_fleet(args, parser) -> int:
                     tr.detail = ("FENCE IMBALANCE (malformed render — do not push): "
                                  + ", ".join(cls["fence_imbalances"]))
                 elif (cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]
-                      or cls["twins_retired"] or cls["handoffs_kept"]):
+                      or cls["twins_retired"] or tr.twins_ack_unreviewed or cls["handoffs_kept"]):
                     tr.status = "REVIEW"
                     tr.detail = "; ".join(filter(None, (
                         "shrink notice / USER-EDITABLE deletion — review diff"
                         if cls["user_editable_deletions"] or cls["shrink_notices"] else "",
-                        f"unfenced pre-fencing twin kept ({len(cls['twins_kept'])}) — resolve by hand"
-                        if cls["twins_kept"] else "",
-                        f"dropped twin retired a rule ({len(cls['twins_retired'])}) — confirm in the .lost sidecar"
-                        if cls["twins_retired"] else "",
+                        *_twin_acks.twin_reasons(cls, tr.twins_ack_unreviewed),
                         f"hand-written handoff the merge would have dropped ({len(cls['handoffs_kept'])}) — review"
                         if cls["handoffs_kept"] else "")))
                     if cls["volatile_tracked"]:
@@ -920,7 +917,10 @@ def run_fleet(args, parser) -> int:
 
         results.append(wr)
 
-    return _write_report(results, report_root, parent, apply, frameworks)
+    rc = _write_report(results, report_root, parent, apply, frameworks)
+    if apply:   # after the report, so a notice is recorded as seen only once a report has shown it
+        _twin_acks.record_seen(report_root, (tr for wr in results for tr in wr.targets), seen_acks)
+    return rc
 
 
 def _first_error(out: str) -> str:

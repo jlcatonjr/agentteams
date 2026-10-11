@@ -28,6 +28,67 @@ agent-refactor, cleanup and conflict-resolution lost theirs, with no notice.
   `front matter: kept hand-written handoff` notice that fleet reports as REVIEW (`handoffs_kept`); a `handoffs:`
   it cannot check is reported the same way.
 - The proposal for a key with no recorded baseline no longer says it "changed in BOTH template and this file".
+### fix (reconcile adds missing capability keys, so existing teams can receive runner grants)
+
+- **The gap.** On an existing Claude team under `write_policy: orchestrator-only`, `--update --merge` then
+  `--reconcile-front-matter --reconcile-apply` gave the agents named in `mcp_grants` the runner tool names, but
+  never the `mcpServers: agentteams_runner` block. Those agents would list runner tools with no server behind
+  them. Reconcile skipped any template key the deployed file lacked, and could only rewrite single-line values.
+  The first pilot rehearsal (biographies) found it.
+- **The fix.**
+  - A capability key the template declares and the deployed file lacks is reported (`deployed: (absent)`).
+    `--reconcile-apply` adds it at the end of the front matter.
+  - A block value is now replaced whole; before, it was skipped as "not found verbatim".
+  - Missing non-capability keys are still not reported. Applying is still explicit, and every capability change
+    is still announced; additions print as `ADDED (absent)`.
+  - **@security conditions:**
+    - `hooks`, `memory` and a `permissionMode` other than `default`/`plan` are never added;
+    - an entry with an inline value plus continuation lines is reported but never applied, since the flat reader
+      would write `tools:` empty, and an empty value inherits every tool;
+    - replacements are anchored to a line start inside the front matter;
+    - column-0 comments are ignored when reading values, so a comment can't block a narrowing;
+    - a `permissionMode` is never changed to anything but `default`/`plan`, and an `agents` list is never added.
+### feat (fleet: a new or changed fence-twin acknowledgement is flagged for operator review)
+
+- **The problem.** A row in `references/fence-twin-acks.csv` (#198) ends a kept twin's fleet REVIEW, but
+  nothing ties the row to the operator. Anyone who can edit the team's files could add one, and the first
+  fleet run with it would report the twin as settled. The operator decided that ledger changes must be
+  flagged for operator review.
+- **The fix.** A new module, `agentteams/_fleet_twin_acks.py`, records the acknowledged-twin notices each
+  applied fleet run showed, per workspace and target, in `<run dir>/fence-twin-acks-seen.json` beside
+  `report.json`. The next applied run reads the latest earlier record. An acknowledgement that is not in it
+  makes the target `REVIEW` ("fence-twin acknowledgement new or changed since the last fleet run — needs
+  operator review") and is listed under the new `twins_ack_unreviewed` report field. This covers a new row,
+  a changed reason or digest, and a row removed and restored, whether or not it was committed. A new
+  acknowledgement can no longer clear REVIEW in the run that first applies it.
+- **Fail-safe.** The key is the sha256 of the whole notice line. A missing, unreadable or malformed record
+  flags every acknowledgement; so does the first run after upgrading. So does a record that is, or sits in,
+  a symlink, one inside a git work tree, or one whose location git cannot check (a fleet parent that is itself a repository could have a record
+  planted by its agents; pass `--fleet-report` outside every repository). A target with unflagged
+  acknowledgements is recorded only when its row is REVIEW with no fence imbalance and this reason shown,
+  a structured check, so a writer-chosen file name in the imbalance detail cannot fake it. A FAIL, a
+  fence-imbalance REVIEW or a target that did not run keeps its old record, so an unshown flag is shown
+  next time. Dry runs neither read nor write the record. Non-git workspaces are still not classified, so
+  neither this check nor the kept-twin one applies there (unchanged).
+- **Why fleet's own record and not git.** Fleet's pre-update snapshot commits the agent paths, ledger
+  included, and an agent that writes a row can usually commit it too, so "changed since the last commit"
+  would miss both cases. The record lives in the operator's fleet output directory, which fleet never
+  discovers or updates. It records "shown to the operator", not "approved": the flag is shown once, and an
+  operator who rejects the acknowledgement deletes the row. Residual risk: an agent that can run
+  `agentteams --fleet --yes` itself, or write the operator's fleet output directory, can still clear the
+  flag. An accept flag would not close that (an agent can run it too); only an operator signature would.
+- **Wiring.** `fleet._classify` takes its twin signals from `_fleet_twin_acks.twin_signals`, and the twin
+  REVIEW fragments come from `twin_reasons`. `fleet.py` does not grow (973 lines).
+- **Integrity.** `_fleet_twin_acks.py` joins `ENFORCEMENT_MODULES`. The manifest entries for it,
+  `fence_twin_acks.py` (trust-model docstring) and `integrity.py` are re-recorded.
+- **Tests.** `tests/test_fleet_twin_acks.py`: a new acknowledgement is REVIEW once and then OK; a changed
+  reason or digest, and a removed-and-restored row, are flagged again; a malformed record flags everything;
+  a flag hidden by a fence-imbalance REVIEW or a FAIL is not recorded; dry runs leave no record; later and
+  non-run directories are ignored; a wrong-shape record and a failed write warn; a record in a git work
+  tree or behind a symlink is not used; an imbalance detail naming the reason does not record.
+- **Docs.** `docs_src/api-reference/fleet.md` (REVIEW row, new section) and `fence-twin-acks.md`.
+
+
 
 ### fix (fleet and batch_update show skipped shrink grants)
 
@@ -40,6 +101,7 @@ Closes the @security advisory on #192: a grant skipped with a stderr-only warnin
 - **batch_update.** It echoed only the first 500 characters of stderr; every shrink-grant warning is now printed
   in full.
 - `shrink_allow.py` and the shrink review report are unchanged.
+
 ### fix (cross-repo guard in git-operations; single-path layout fields documented)
 
 Follow-up to the OrthodoxLLM triage.
@@ -52,6 +114,7 @@ Follow-up to the OrthodoxLLM triage.
   rendered as literal text, and that a project with deliverables in several places describes them in the
   instruction files' Project Layout section. `PLACEHOLDER-CONVENTIONS.md` says `{PRIMARY_OUTPUT_DIR}` is never a
   repository name. Structured multi-root fields stay deferred.
+
 ### feat (fence twins: an operator acknowledgement ends the REVIEW for a twin kept on purpose)
 
 - **The problem.** `fence_twins` keeps every unfenced twin it cannot prove is template text, and `fleet`

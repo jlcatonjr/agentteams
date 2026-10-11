@@ -195,6 +195,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # the on-disk value equals this module's baseline, and its handoff guard decides which handoffs a write
     # may drop. An unpinned edit could make a project's value look agentteams-authored again.
     "agentteams/front_matter_baseline.py",
+    # Acknowledgement review (2026-10-11). _fleet_twin_acks decides which acknowledged twins fleet still
+    # reports as REVIEW (one not shown to the operator by an earlier run); an unpinned edit could drop that flag.
+    "agentteams/_fleet_twin_acks.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

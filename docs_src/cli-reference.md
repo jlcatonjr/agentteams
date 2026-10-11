@@ -1249,11 +1249,22 @@ nothing. Front matter cannot be fenced, so an edited file keeps its own values a
 template's capability change stops there silently. This makes that visible without a full
 update run.
 
+A capability key the template declares but the deployed file lacks is reported as
+`deployed: (absent)`, for example the `mcpServers` block that `write_policy` gives each
+agent named in `mcp_grants`. A missing non-capability key is not reported.
+
 ### `--reconcile-apply`
 
 With `--reconcile-front-matter`, take the template's value for each diverging key.
 **Never implied by the report.** `allowed-tools` is a capability grant, and widening one is a
 privileged change (Constitutional C-3), so it requires saying so explicitly.
+A key absent on disk is added at the end of the front matter (printed `ADDED (absent)`), and a
+block value (such as `mcpServers`) is replaced whole; each capability change is printed as
+`[CAPABILITY GRANT CHANGED]`. Some keys are never *added*: `hooks`, `memory`, `agents`, and a
+`permissionMode` other than `default`/`plan` (which is also never set by a change); add them by
+hand if intended. Column-0 comments are ignored when values are read. An entry with an
+inline value and continuation lines (a trailing comment, a wrapped list) is reported but never
+applied, and a value is replaced only where its key starts a line inside the front matter.
 
 ---
 
