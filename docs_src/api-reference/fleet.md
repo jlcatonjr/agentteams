@@ -38,12 +38,39 @@ Each `(workspace, target)` row is one of:
 | Status | Meaning |
 |--------|---------|
 | `OK` | Merge succeeded; only fenced/generated regeneration and intel churn. |
-| `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. |
+| `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. Also a kept pre-fencing twin, a dropped twin that retired a rule, a duplicate section (`duplicates`: a heading present twice, including both copies inside fences; [`whole_body_migration`](whole-body-migration.md)), or a fence-twin acknowledgement that no earlier applied run has shown (see below). Twin and duplicate classes are matched at the start of the notice, so a quoted heading cannot reclassify one. |
 | `FAIL` | The merge itself errored (e.g. invalid/absent descriptor, bridge source missing). |
 | `SKIP` | Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also a bridge whose recorded source framework fleet can't bridge from: an unknown framework, a missing source directory, an unreadable entry file, or a source equal to the bridge's own framework. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
 | `WOULD-UPDATE` | Dry-run preview only. |
 
 > **Note on the `target` field when parsing `report.json`:** updated rows use one of `target = "github"`, `"claude-direct"`, `"claude-bridge"`, `"goose-direct"`, `"goose-bridge"`, or `"codex-direct"` (a native `.codex/agents` team, `--update --merge --framework codex`, `all` only). A `SKIP` row for an ambiguous `.claude/` carries `target = "claude"` (it could not be classified); an interop-projected Codex team's `SKIP` row carries `target = "codex"`. Filter for these explicitly so manual-review rows are not dropped.
+
+### Fence-twin acknowledgements are reviewed once
+
+A row in a team's `references/fence-twin-acks.csv` ([`fence_twin_acks`](fence-twin-acks.md)) turns a kept
+twin's REVIEW into a `twin kept (acknowledged)` notice. Nothing ties the row to the operator, so fleet
+(`agentteams/_fleet_twin_acks.py`, integrity-pinned) keeps it a REVIEW reason until an applied run has shown
+it. Each applied run writes the acknowledged-twin notices it showed, per workspace and target, to
+`<run dir>/fence-twin-acks-seen.json` beside `report.json`. The next applied run reads the record of the
+latest earlier run directory that has one. A notice missing from it (a new row, a changed reason or digest,
+a row removed and restored) is listed in the target's `twins_ack_unreviewed` and makes the row `REVIEW`:
+"fence-twin acknowledgement new or changed since the last fleet run (N) — needs operator review".
+
+The key is the sha256 of the whole notice line, so only an identical acknowledgement counts as seen.
+A new agentteams release that rewords a kept-twin reason re-flags those acknowledgements once (safe).
+It fails safe: a missing, unreadable or malformed record, or a `--fleet-report` directory with no
+earlier run, flags every acknowledgement. So does a record that is, or sits in, a symlink, one whose
+location git cannot check, or one inside a git work tree: when the fleet parent is itself a repository, its agents could plant a record in the
+default report dir, so pass `--fleet-report` outside every repository. A target with unflagged
+acknowledgements is recorded only when its row is `REVIEW` with no fence imbalance and that reason in
+its detail. A `FAIL`, a fence-imbalance `REVIEW` or a target that did not run keeps its old record, so a
+flag that was not shown is shown next time. Dry runs neither read nor write the record.
+
+**What it does not prove.** The record means "fleet showed this to the operator", not "the operator
+approved it": the flag is shown once, and an operator who rejects the acknowledgement deletes the row.
+An agent that can run `agentteams --fleet --yes` itself, or write the operator's fleet output directory,
+can still clear the flag; tying a row to the operator would take an operator signature. A non-git
+workspace is not classified at all, so neither this check nor the kept-twin one applies there.
 
 ### Safety guarantees
 

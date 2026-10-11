@@ -43,22 +43,30 @@ CAPABILITY_KEYS: frozenset[str] = CAPABILITY_FRONT_MATTER_KEYS
 
 @dataclass(frozen=True)
 class Divergence:
-    """One front-matter key whose deployed value differs from the template's."""
+    """One front-matter key whose deployed value differs from the template's.
+
+    ``deployed`` is None when the deployed file lacks a capability key the template declares
+    (reported only for capability keys; see :func:`find_divergences`).
+    """
 
     rel_path: str
     key: str
-    deployed: str
+    deployed: str | None
     template: str
+    #: The template or deployed entry has an inline value *and* continuation lines (a trailing
+    #: comment, a wrapped flow list). The flat map can't represent it faithfully, so it is
+    #: reported but never applied (@security, 2026-10-11).
+    ambiguous: bool = False
 
     @property
     def is_capability(self) -> bool:
         return self.key in CAPABILITY_KEYS
 
     def describe(self) -> str:
-        mark = "  [capability]" if self.is_capability else ""
+        mark = ("  [capability]" if self.is_capability else "") + ("  [ambiguous: not applied]" if self.ambiguous else "")
         return (
             f"{self.rel_path}: {self.key}{mark}\n"
-            f"    deployed: {self.deployed}\n"
+            f"    deployed: {'(absent)' if self.deployed is None else self.deployed}\n"
             f"    template: {self.template}"
         )
 
@@ -219,6 +227,8 @@ def _front_matter_map(text: str) -> dict[str, str]:
         out[current_key] = ("\n" + "\n".join(cont_lines)) if is_block else current_scalar.strip()
 
     for line in block.splitlines():
+        if line.startswith("#"):
+            continue  # a column-0 comment is not part of any value (@security, 2026-10-11)
         is_top_level = line.strip() and not line.startswith((" ", "\t", "#")) and ":" in line
         if is_top_level:
             key, sep, value = line.partition(":")
@@ -242,6 +252,11 @@ def find_divergences(
     template does not is a project addition, not a divergence — the template is not entitled to
     an opinion about it, and reporting it would train operators to ignore the report.
 
+    A **capability** key the template declares and the deployed file lacks is reported too, with
+    ``deployed=None``. Without it, an existing team could never receive a grant that arrives as a
+    new key: the runner's ``mcpServers`` block under ``write_policy`` (biographies pilot
+    rehearsal, 2026-10-11). An absent non-capability key is still not reported.
+
     Args:
         rendered:   ``(rel_path, content)`` pairs from the render pipeline.
         output_dir: Root of the deployed agents directory.
@@ -257,21 +272,28 @@ def find_divergences(
         template_fm = _front_matter_map(content)
         if not template_fm:
             continue
-        deployed_fm = _front_matter_map(deployed_path.read_text(encoding="utf-8"))
+        deployed_text = deployed_path.read_text(encoding="utf-8")
+        deployed_fm = _front_matter_map(deployed_text)
         if not deployed_fm:
             continue  # cannot receive a block it never had; see the ledger row on that case
+        mixed = _mixed_keys(content) | _mixed_keys(deployed_text)
         for key, template_value in template_fm.items():
             deployed_value = deployed_fm.get(key)
-            if deployed_value is not None and deployed_value != template_value:
-                found.append(Divergence(rel_path, key, deployed_value, template_value))
+            if deployed_value is None:
+                if key in CAPABILITY_KEYS:
+                    found.append(Divergence(rel_path, key, None, template_value, key in mixed))
+            elif deployed_value != template_value:
+                found.append(Divergence(rel_path, key, deployed_value, template_value, key in mixed))
     return sorted(found, key=lambda d: (d.rel_path, d.key))
 
 
 def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[str]:
     """Rewrite each deployed file's front-matter key to the template's value.
 
-    Only ever called on an explicit apply instruction. Rewrites the single ``key:`` line and
-    nothing else — the body is untouched, and so is every key not in *divergences*.
+    Only ever called on an explicit apply instruction. Rewrites the ``key:`` entry (its line, or
+    its whole block for a block value) and nothing else — the body is untouched, and so is every
+    key not in *divergences*. A key absent on disk (``deployed is None``) is appended at the end
+    of the front matter.
 
     Returns:
         One line per applied change, for the caller to print. Capability keys are marked,
@@ -290,12 +312,33 @@ def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[s
             continue
         new_text = text
         for d in items:
-            old_line = f"{d.key}: {d.deployed}"
-            new_line = f"{d.key}: {d.template}"
-            if old_line not in new_text:
-                applied.append(f"SKIPPED {rel_path}: {d.key} — line not found verbatim")
+            if d.ambiguous:
+                applied.append(f"SKIPPED {rel_path}: {d.key} — inline value with continuation lines "
+                               "(comment or wrapped list); edit it by hand")
                 continue
-            new_text = new_text.replace(old_line, new_line, 1)
+            new_entry = _entry_text(d.key, d.template)
+            if d.deployed is None:
+                refusal = _never_added(d.key, d.template)
+                if refusal:
+                    applied.append(f"SKIPPED {rel_path}: {d.key} — not added: {refusal}; add it by hand if intended")
+                    continue
+                inserted = _append_to_front_matter(new_text, new_entry)
+                if inserted is None:
+                    applied.append(f"SKIPPED {rel_path}: {d.key} — front matter not found")
+                    continue
+                new_text = inserted
+                applied.append(f"ADDED (absent) {rel_path}: {d.key}"
+                               + ("  [CAPABILITY GRANT CHANGED]" if d.is_capability else ""))
+                continue
+            if d.key == "permissionMode" and _never_added(d.key, d.template):
+                applied.append(f"SKIPPED {rel_path}: permissionMode — not changed: {_never_added(d.key, d.template)}; "
+                               "set it by hand if intended")
+                continue
+            replaced = _replace_in_front_matter(new_text, _entry_text(d.key, d.deployed), new_entry)
+            if replaced is None:
+                applied.append(f"SKIPPED {rel_path}: {d.key} — entry not found at a line start in the front matter")
+                continue
+            new_text = replaced
             applied.append(
                 f"applied {rel_path}: {d.key}"
                 + ("  [CAPABILITY GRANT CHANGED]" if d.is_capability else "")
@@ -303,6 +346,91 @@ def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[s
         if new_text != text:
             path.write_text(new_text, encoding="utf-8")
     return applied
+
+
+def _entry_text(key: str, value: str) -> str:
+    """The front-matter text of one entry, as :func:`_front_matter_map` reads it back.
+
+    A block value is stored with its leading newline (``"\\n  - item"``), so it joins the key
+    with no space; a scalar is ``key: value``.
+    """
+    return f"{key}:{value}" if value.startswith("\n") else f"{key}: {value}"
+
+
+#: Capability keys reconcile never *adds* to a file that lacks them, whatever the template says:
+#: each grants more than a tool list (arbitrary shell at tool events; Read/Write/Edit for memory;
+#: disabled permission checks). An existing value can still be reconciled (@security, 2026-10-11).
+_NEVER_ADDED = {
+    "hooks": "per-agent hooks run arbitrary shell",
+    "memory": "memory grants Read, Write and Edit",
+    "agents": "an agents list grants dispatch",
+}
+_SAFE_PERMISSION_MODES = {"default", "plan"}
+
+
+def _never_added(key: str, template_value: str) -> str | None:
+    """Why *key* must not be added to a file that lacks it, or None when adding it is allowed."""
+    if key in _NEVER_ADDED:
+        return _NEVER_ADDED[key]
+    if key == "permissionMode" and template_value.strip().strip("'\"") not in _SAFE_PERMISSION_MODES:
+        return f"permissionMode {template_value.strip()!r} relaxes permission checks"
+    return None
+
+
+def _mixed_keys(text: str) -> set[str]:
+    """Front-matter keys with an inline value *and* continuation lines (see ``Divergence.ambiguous``)."""
+    block, _body = _parse_front_matter(text)
+    mixed: set[str] = set()
+    key, inline, has_cont = None, "", False
+    for line in (block or "").splitlines() + ["end:"]:
+        if line.startswith("#"):
+            continue  # column-0 comments are skipped, as in _front_matter_map
+        is_top_level = line.strip() and not line.startswith((" ", "\t", "#")) and ":" in line
+        if is_top_level:
+            if key is not None and inline.strip() and has_cont:
+                mixed.add(key)
+            name, _sep, value = line.partition(":")
+            key, inline, has_cont = name.strip(), value, False
+        elif key is not None and line.strip():
+            has_cont = True
+    return mixed
+
+
+def _front_matter_span(text: str) -> tuple[int, int] | None:
+    """``(start, end)`` of the front-matter block inside *text*, or None when there is none."""
+    block, _body = _parse_front_matter(text)
+    if not block:
+        return None
+    start = text.find(block)
+    if start < 0 or start > 8:  # the block sits right after the opening delimiter
+        return None
+    return start, start + len(block)
+
+
+def _replace_in_front_matter(text: str, old_entry: str, new_entry: str) -> str | None:
+    """Replace *old_entry* where it starts a line inside the front matter and ends at a line end."""
+    span = _front_matter_span(text)
+    if span is None:
+        return None
+    start, end = span
+    block = text[start:end]
+    match = re.search(r"(?m)^" + re.escape(old_entry) + r"(?=\n|\Z)", block)
+    if match is None:
+        return None
+    block = block[:match.start()] + new_entry + block[match.end():]
+    return text[:start] + block + text[end:]
+
+
+def _append_to_front_matter(text: str, entry: str) -> str | None:
+    """Insert *entry* as the last front-matter entry, or None when there is no front matter."""
+    span = _front_matter_span(text)
+    if span is None:
+        return None
+    end = span[1]
+    rest = text[end:]
+    if rest.startswith("\n"):
+        rest = rest[1:]
+    return text[:end].rstrip("\n") + "\n" + entry + "\n" + rest
 
 
 def format_report(divergences: list[Divergence]) -> str:
