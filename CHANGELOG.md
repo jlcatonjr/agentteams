@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `hooks`, `memory` and a `permissionMode` other than `default`/`plan` are never added;
     - an entry with an inline value plus continuation lines is reported but never applied, since the flat reader
       would write `tools:` empty, and an empty value inherits every tool;
-    - replacements are anchored to a line start inside the front matter.
+    - replacements are anchored to a line start inside the front matter;
+    - column-0 comments are ignored when reading values, so a comment can't block a narrowing;
+    - a `permissionMode` is never changed to anything but `default`/`plan`, and an `agents` list is never added.
 
 ### fix (fleet and batch_update show skipped shrink grants)
 

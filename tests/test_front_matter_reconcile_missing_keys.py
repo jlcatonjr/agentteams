@@ -84,9 +84,9 @@ def test_added_key_is_labelled_added(tmp_path: Path) -> None:
 
 
 def test_inline_value_with_continuation_is_never_applied(tmp_path: Path) -> None:
-    # The flat map reads `tools: Read` + `# note` as a bare block; writing that would leave
-    # `tools:` empty, which on Claude inherits every tool.
-    template = "---\nname: A\ntools: Read\n# note\n---\nbody\n"
+    # A wrapped flow list reads as a bare block (the inline part is dropped); writing that would
+    # leave `tools:` without its first item, or empty, which on Claude inherits every tool.
+    template = "---\nname: A\ntools: [Read,\n  Grep]\n---\nbody\n"
     path = _deploy(tmp_path, "---\nname: A\ntools: Read, Edit, Write\n---\nbody\n")
     found = find_divergences([("primary-producer.md", template)], tmp_path)
     assert [(d.key, d.ambiguous) for d in found] == [("tools", True)]
@@ -122,3 +122,26 @@ def test_safe_permission_mode_is_added(tmp_path: Path) -> None:
     template = "---\nname: A\ntools: Read\npermissionMode: plan\n---\nbody\n"
     applied = apply_divergences(find_divergences([("primary-producer.md", template)], tmp_path), tmp_path)
     assert applied == ["ADDED (absent) primary-producer.md: permissionMode  [CAPABILITY GRANT CHANGED]"]
+
+
+def test_column0_comment_does_not_block_a_narrowing(tmp_path: Path) -> None:
+    path = _deploy(tmp_path, "---\nname: A\ntools: Read, Edit, Write\n# keep my tools\n---\nbody\n")
+    found = find_divergences([("primary-producer.md", "---\nname: A\ntools: Read\n---\nbody\n")], tmp_path)
+    assert [(d.key, d.deployed, d.ambiguous) for d in found] == [("tools", "Read, Edit, Write", False)]
+    assert apply_divergences(found, tmp_path) == ["applied primary-producer.md: tools  [CAPABILITY GRANT CHANGED]"]
+    assert "tools: Read\n# keep my tools\n" in path.read_text(encoding="utf-8")
+
+
+def test_permission_mode_is_never_relaxed_on_replace(tmp_path: Path) -> None:
+    path = _deploy(tmp_path, "---\nname: A\npermissionMode: default\n---\nbody\n")
+    template = "---\nname: A\npermissionMode: bypassPermissions\n---\nbody\n"
+    applied = apply_divergences(find_divergences([("primary-producer.md", template)], tmp_path), tmp_path)
+    assert applied[0].startswith("SKIPPED primary-producer.md: permissionMode — not changed")
+    assert "permissionMode: default" in path.read_text(encoding="utf-8")
+
+
+def test_agents_list_is_never_added(tmp_path: Path) -> None:
+    _deploy(tmp_path, "---\nname: A\ntools: Read\n---\nbody\n")
+    template = "---\nname: A\ntools: Read\nagents:\n  - writer\n---\nbody\n"
+    applied = apply_divergences(find_divergences([("primary-producer.md", template)], tmp_path), tmp_path)
+    assert applied[0].startswith("SKIPPED primary-producer.md: agents — not added")

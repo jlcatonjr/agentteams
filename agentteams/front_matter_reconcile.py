@@ -227,6 +227,8 @@ def _front_matter_map(text: str) -> dict[str, str]:
         out[current_key] = ("\n" + "\n".join(cont_lines)) if is_block else current_scalar.strip()
 
     for line in block.splitlines():
+        if line.startswith("#"):
+            continue  # a column-0 comment is not part of any value (@security, 2026-10-11)
         is_top_level = line.strip() and not line.startswith((" ", "\t", "#")) and ":" in line
         if is_top_level:
             key, sep, value = line.partition(":")
@@ -328,6 +330,10 @@ def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[s
                 applied.append(f"ADDED (absent) {rel_path}: {d.key}"
                                + ("  [CAPABILITY GRANT CHANGED]" if d.is_capability else ""))
                 continue
+            if d.key == "permissionMode" and _never_added(d.key, d.template):
+                applied.append(f"SKIPPED {rel_path}: permissionMode — not changed: {_never_added(d.key, d.template)}; "
+                               "set it by hand if intended")
+                continue
             replaced = _replace_in_front_matter(new_text, _entry_text(d.key, d.deployed), new_entry)
             if replaced is None:
                 applied.append(f"SKIPPED {rel_path}: {d.key} — entry not found at a line start in the front matter")
@@ -354,7 +360,11 @@ def _entry_text(key: str, value: str) -> str:
 #: Capability keys reconcile never *adds* to a file that lacks them, whatever the template says:
 #: each grants more than a tool list (arbitrary shell at tool events; Read/Write/Edit for memory;
 #: disabled permission checks). An existing value can still be reconciled (@security, 2026-10-11).
-_NEVER_ADDED = {"hooks": "per-agent hooks run arbitrary shell", "memory": "memory grants Read, Write and Edit"}
+_NEVER_ADDED = {
+    "hooks": "per-agent hooks run arbitrary shell",
+    "memory": "memory grants Read, Write and Edit",
+    "agents": "an agents list grants dispatch",
+}
 _SAFE_PERMISSION_MODES = {"default", "plan"}
 
 
@@ -373,6 +383,8 @@ def _mixed_keys(text: str) -> set[str]:
     mixed: set[str] = set()
     key, inline, has_cont = None, "", False
     for line in (block or "").splitlines() + ["end:"]:
+        if line.startswith("#"):
+            continue  # column-0 comments are skipped, as in _front_matter_map
         is_top_level = line.strip() and not line.startswith((" ", "\t", "#")) and ":" in line
         if is_top_level:
             if key is not None and inline.strip() and has_cont:
