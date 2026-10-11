@@ -40,6 +40,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docs.** `docs_src/api-reference/fence-twin-acks.md` is new. `fence-twins.md`, the API index and the
   mkdocs nav are updated.
 
+### fix (retire `scripts/resolve_fence_collisions.py --trust-provenance`)
+
+- **The bug.** `--trust-provenance` deleted an unfenced copy that did *not* match its fence whenever the
+  file still hashed to its build-log entry. It read that hash as proof that agentteams wrote every byte.
+  It is not proof: `--update --merge` keeps hand-written text outside fences, and the build log that run
+  writes hashes the merged file, hand edits included. A "pristine" file can therefore hold operator text,
+  and the flag could delete it.
+- **The fix.** The code path (`_file_is_pristine` and the `trust_provenance` / `args_ref` parameters of
+  `_resolve_file`) is removed. `--trust-provenance` and `--provenance-ref` are still parsed but hidden from
+  `--help`. Passing either one exits with status 2 before anything is rendered or written. The error
+  message points to `agentteams --update --merge` (`agentteams/fence_twins.py`), which drops a twin only on
+  proof and reports every other twin as fleet REVIEW. Equality with the fence is now the script's only
+  authorisation.
+- **Compatibility.** `scripts/` is not a SemVer surface (`STABILITY.md`), and the flag removed content
+  without proof, so it is retired immediately with no deprecation cycle. Tests in
+  `tests/test_resolve_fence_collisions.py` now check the refusal, that the code path is gone, and that a
+  build-log-pristine file with a differing copy is refused.
+
 ### fix (merge: resolve the unfenced pre-fencing copy of a fenced section, only on proof)
 
 - **The bug.** A team rendered before its template fenced a section carries that section unfenced. `--update
