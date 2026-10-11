@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (instructions: a USER-EDITABLE Project Layout region)
+
+- **The problem.** The generated Directory Structure and Output Conventions in `copilot-instructions.md`,
+  `CLAUDE.md` and `AGENTS.md` render a single `primary_output_dir` and `reference_db_path`. A repo whose
+  deliverables live elsewhere (`Projects/*/`) got shared instruction files that misdirect every tool. Reported by
+  OrthodoxLLM, via researchteam-c7.
+- **The fix.** These files now carry a **Project Layout** section, directly after the generated Directory
+  Structure and outside every fence, so `--update` never overwrites it. Existing files gain it on
+  `--update --merge`, the same way Project-Specific Notes are added. The generated sections defer to it where they
+  differ.
+- **Follow-up:** structured multi/glob deliverable roots in the brief (planned).
+
 ### fix (goose: helper scripts ship in the package; a pip install never emits the "not found" stub)
 
 - **The bug.** Every Goose render ships `scripts/goose-run-resilient.py` and
