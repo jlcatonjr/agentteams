@@ -173,6 +173,7 @@ nav:
       - fences: api-reference/fences.md
       - fence-twins: api-reference/fence-twins.md
       - fence-twin-acks: api-reference/fence-twin-acks.md
+      - whole-body-migration: api-reference/whole-body-migration.md
       - convert: api-reference/convert.md
       - integrity: api-reference/integrity.md
       - interop: api-reference/interop.md

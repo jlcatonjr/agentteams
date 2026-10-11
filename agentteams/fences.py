@@ -795,35 +795,27 @@ def _is_whole_body_migration(existing_regions: dict, new_regions: dict) -> bool:
 
     A template with no fences gets its whole body wrapped in a single ``content`` fence at emit
     time. The moment that template gains a named section, the render stops being wrapped — so a
-    team generated *before* the split has ``{content}`` on disk while the render has
-    ``{invariant_core, ...}``.
+    team generated *before* the split has ``content`` on disk while the render has
+    ``{invariant_core, ...}``. Merging those naively appends the named sections *alongside* the
+    stale ``content`` block: two contradictory copies of an agent's "⛔ Do not modify or omit"
+    contract (measured 2026-07-31), worse than not updating at all.
 
-    Merging those naively appends the named sections *alongside* the stale ``content`` block,
-    leaving the file with two copies of the same section — measured 2026-07-31, two contradictory
-    copies of an agent's "⛔ Do not modify or omit" contract. That is worse than not updating at
-    all, and it is the real reason ~19 templates could not be fenced. (The nesting error
-    originally blamed for it turned out to be a boundary bug in the fencing pass, since fixed.)
-
-    Replacing wholesale is safe *because* of what a fence means: everything inside ``content`` is
-    template-owned and already overwritten on every merge, so nothing a project authored lives
-    there. Content outside it is untouched, exactly as before — see
-    :func:`_split_at_last_fence_end`, which is what makes that last clause true. It was not true
-    when this branch first shipped: taking ``new_rendered`` verbatim also took the *render's*
-    out-of-fence tail, silently discarding the operator's ``## Project-Specific Notes`` — the one
-    region emit advertises as "preserved verbatim across ``agentteams --update --merge``".
+    Until 2026-10-11 this required ``content`` to be the file's ONLY fence. Files that also carried
+    ``memory_index_consultation`` (appended by an earlier merge) failed it, and the duplicates landed
+    across 12 repositories, both copies inside fences. The predicate and the rewrite now live in
+    :mod:`agentteams.whole_body_migration`: ``content`` must be the only on-disk fence the render no
+    longer has.
 
     Args:
         existing_regions: Fenced regions found on disk.
         new_regions: Fenced regions in the fresh render.
 
     Returns:
-        True when the on-disk file is wrapped and the render is not.
+        True when the on-disk ``content`` fence is the one stale fence and the render is split.
     """
-    return (
-        set(existing_regions) == {_WHOLE_BODY_FENCE}
-        and _WHOLE_BODY_FENCE not in new_regions
-        and bool(new_regions)
-    )
+    from agentteams.whole_body_migration import applies
+
+    return applies(existing_regions, new_regions)
 
 
 def _insert_section_at_render_position(
@@ -916,22 +908,12 @@ def _append_section(merged: str, block: str) -> str:
 def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
     """Report headings that appear twice in a merged file.
 
-    The partial-adoption sibling of :func:`_is_whole_body_migration`. When a template fences a
-    section that a team was generated *before*, the merge adds the fenced block while the
-    deployed file's unfenced copy of the same section is preserved unconditionally — leaving two
-    copies, one stale. Measured 2026-08-01 across this project's own team: 14 duplicated sections
-    in 5 files, including four duplicated "⛔ Do not modify or omit" contracts.
-
-    **Reported here; resolved only by :mod:`agentteams.fence_twins`, and only on proof.** The
-    duplicated section has never been inside a fence, so a project may have edited it believing it
-    was theirs. ``fence_twins`` drops a twin only when its text provably came from a template, and
-    the merge suppresses this report for the headings it examined (its own notice covers them).
-
-    Not gated on a section being added (2026-10-10): after the first merge an affected file carried
-    both copies and no notice ever again. With nothing added, only a heading that appears both
-    inside a fence and outside one is reported — the residue signature — so headings a project
-    legitimately repeats in its own prose stay quiet. A Goose recipe is read through its dedented
-    ``instructions:`` block, where the headings are indented two spaces.
+    The partial-adoption sibling of :func:`_is_whole_body_migration`: a template fences a section a
+    team was generated before, and the merge adds the fenced block beside the deployed unfenced copy.
+    Resolved only on proof, by :mod:`agentteams.fence_twins`; this report covers the rest. Since
+    2026-10-11 it also reports a section copied into two fences (a stale ``content`` block beside the
+    named sections), and says accurately where each copy sits — see
+    :func:`agentteams.whole_body_migration.duplicate_notices`.
 
     Args:
         merged: The merged file content.
@@ -940,32 +922,9 @@ def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
     Returns:
         Human-readable notices, one per duplicated heading. Empty when nothing collides.
     """
-    from agentteams.fence_twins import dedented_view
+    from agentteams.whole_body_migration import duplicate_notices
 
-    text = dedented_view(merged)
-    headings = [m.group(0).strip() for m in _MD_HEADING_RE.finditer(text)]
-    seen: dict[str, int] = {}
-    for heading in headings:
-        seen[heading] = seen.get(heading, 0) + 1
-    outside: dict[str, int] = {}
-    for line in unfenced_lines(text):
-        if line.strip() in seen:
-            outside[line.strip()] = outside.get(line.strip(), 0) + 1
-    if added_sids:
-        return [
-            f"duplicate section {heading!r}: appears {count}x after adding "
-            f"{', '.join(sorted(added_sids))} — the deployed file already carried this section "
-            f"unfenced. Delete the unfenced copy; the fenced one is now template-owned."
-            for heading, count in seen.items()
-            if count > 1
-        ]
-    return [
-        f"duplicate section {heading!r}: appears {count}x, inside a fence and outside one — the "
-        f"unfenced copy predates the fence. Move any real additions to ## Project-Specific Notes, "
-        f"then delete the unfenced copy."
-        for heading, count in seen.items()
-        if count > 1 and count > outside.get(heading, 0) >= 1
-    ]
+    return duplicate_notices(merged, added_sids)
 
 
 def _strip_corrupt_fence_tail(content: str) -> str:
@@ -1083,49 +1042,34 @@ def _merge_fenced_content(
     _new_probe = _extract_fenced_regions(new_rendered)
     if (isinstance(_existing_probe, dict) and isinstance(_new_probe, dict)
             and _is_whole_body_migration(_existing_probe, _new_probe)):
-        # Structural migration, not an ordinary merge — see _is_whole_body_migration.
-        # Merge Semantics rule 5 still applies: whatever sits outside the whole-body fence on
-        # disk is the project's, not the template's, so it survives the replacement.
-        prefix_new, tail_new = _split_at_last_fence_end(new_rendered)
-        _prefix_disk, tail_disk = _split_at_last_fence_end(existing_on_disk)
-        preserved_tail = bool(tail_disk.strip())
-        # "Everything inside it was template-owned" is false for a bridge block nested in the
-        # whole-body fence: the bridge wrote it. Dropping it also strands the bridge, since
-        # --bridge-merge skips a file with no bridge fence. Carry each block over, after the
-        # render's fenced prefix (unfenced, as the bridge writes it).
-        bridge_blocks = [
-            b for b in _bridge_blocks_in(_existing_probe.get(_WHOLE_BODY_FENCE, ""), rel_path)
-            if b not in prefix_new
-        ]
-        carried = ("\n" + "".join(bridge_blocks)) if bridge_blocks else ""
-        if preserved_tail or bridge_blocks:
-            result.merged_content = prefix_new + carried + (tail_disk if preserved_tail else tail_new)
-        else:
-            result.merged_content = new_rendered
-        result.sections_added = list(_new_probe)
-        result.sections_orphaned = [_WHOLE_BODY_FENCE]
-        # The old body WAS replaced: record it so the run writes a .lost sidecar and labels the
-        # notice "replaced" rather than "retained" under the default preserve policy.
-        result.lost_fence_bodies[_WHOLE_BODY_FENCE] = _fence_body(
-            _existing_probe.get(_WHOLE_BODY_FENCE, "")
+        # Structural migration: retire the stale `content` block, then merge ordinarily, so every
+        # other fence, the front matter and the twin pass behave exactly as in any merge. Merge
+        # Semantics rule 5 holds: only the `content` block is rewritten. "Everything inside it was
+        # template-owned" is false for a bridge block nested in it (the bridge wrote it), so each one
+        # is carried over unfenced. See agentteams.whole_body_migration.
+        from agentteams import whole_body_migration as _wbm
+
+        mig = _wbm.migrate(
+            new_rendered, existing_on_disk, _existing_probe,
+            bridge_blocks=_bridge_blocks_in(_existing_probe.get(_WHOLE_BODY_FENCE, ""), rel_path),
+            twin_source=twin_source,
         )
-        result.migrated = True
-        result.shrink_notices.append(
-            f"fence '{_WHOLE_BODY_FENCE}': this file predates its template being split into "
-            f"named sections; the whole-body fence was replaced by "
-            f"{', '.join(sorted(_new_probe))}. Everything inside it was template-owned"
-            + (
-                f" except {len(bridge_blocks)} AGENTTEAMS-BRIDGE block(s), carried over unchanged"
-                if bridge_blocks
-                else ""
+        if mig is not None:
+            inner = _merge_fenced_content(
+                new_rendered, mig.content, preserve_on_shrink,
+                additive_on_shrink=additive_on_shrink, file_is_unmodified=file_is_unmodified,
+                rel_path=rel_path, brief_derived_files=brief_derived_files, shrink_allow=shrink_allow,
+                twin_source=twin_source, twin_drop=twin_drop,
             )
-            + (
-                "; content outside it was carried over unchanged."
-                if preserved_tail
-                else "."
-            )
-        )
-        return result
+            inner.sections_added = mig.added + [s for s in inner.sections_added if s not in mig.added]
+            inner.sections_orphaned = [_WHOLE_BODY_FENCE] + inner.sections_orphaned
+            # The old body WAS replaced: record it so the run writes a .lost sidecar and labels the
+            # notice "replaced" rather than "retained" under the default preserve policy.
+            inner.lost_fence_bodies[_WHOLE_BODY_FENCE] = mig.old_body
+            inner.migrated = True
+            inner.shrink_notices.insert(0, _wbm.migration_notice(
+                mig, has_tail=bool(_split_at_last_fence_end(existing_on_disk)[1].strip())))
+            return inner
 
     # Reported, never applied: front matter lies outside every fence, so the merge below leaves
     # the on-disk version untouched. Recording the divergence is the whole remediation — the
@@ -1412,7 +1356,9 @@ def _shrink_notice_lines(
     Returns:
         One notice line per shrink notice; empty under ``allow``.
     """
-    if not merge_result.shrink_notices or shrink_policy == "allow":
+    # A structural migration is reported and its old body saved even under ``allow``: what it replaces
+    # is a whole fence's worth of text, not one shrinking section the operator chose to let go.
+    if not merge_result.shrink_notices or (shrink_policy == "allow" and not merge_result.migrated):
         return []
     sidecar_paths: dict[str, str] = {}
     if backup_path is not None and merge_result.lost_fence_bodies:
@@ -1427,7 +1373,7 @@ def _shrink_notice_lines(
             )
             continue
         line = f"{rel_path}: {notice}"
-        if shrink_policy == "preserve" and merge_result.migrated:
+        if shrink_policy == "preserve" and merge_result.migrated and sid == _WHOLE_BODY_FENCE:
             line += " — replaced (structural migration)"
         elif shrink_policy == "preserve" and sid in merge_result.shrink_overridden:
             line += " — replaced (operator --shrink-allow, reviewed-body digest matched)"

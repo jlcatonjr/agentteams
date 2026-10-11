@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (legacy `content` fence retired beside other fences; fenced duplicates reported)
+
+From the 2026-10-11 fleet re-render audit, which held 12 repositories on it.
+- **Migration predicate.** A legacy whole-body `content` fence was retired only when it was the file's only fence.
+  Files that also carried `memory_index_consultation` got the template's named sections added beside the stale
+  block, so quality-auditor, tool-doc-researcher and conflict-resolution carried every section twice, both copies
+  inside fences (`.github/agents` and Goose recipes). The merge now migrates whenever `content` is the only on-disk
+  fence the render no longer has. A file with a second orphaned fence is not migrated; its duplicates are reported.
+- **Method.** New `agentteams/whole_body_migration.py` (integrity-pinned) rewrites only the `content` block, then
+  runs the ordinary merge, so the other fences update in place and the front matter goes through the three-way
+  merge. The old branch replaced everything up to the last fence, front matter included, so a project's own
+  handoffs or a capability change were overwritten without the three-way merge seeing them.
+- **Text inside the old block.** Each section is matched to the render. A section the template leaves unfenced
+  keeps its deployed copy unless that copy is provably template text. A user region, or a section the template does
+  not have, is carried out unfenced. An unproven copy of a section the template now fences, or one holding a managed
+  marker, is not kept, because keeping it recreates the duplicate. The migration notice names every kept, carried or
+  unproven section, the old body goes to the `.lost.content.md` sidecar, and fleet reads the notice as REVIEW.
+  Under `--shrink-policy allow` the migration is now still reported and its sidecar written.
+- **Duplicate report.** The notice no longer claims an unfenced copy when both copies are fenced. A section copied
+  into two fences (a stale `content` block beside `invariant_core`) is now reported on every merge. Fleet files
+  duplicate-section notices as their own REVIEW class (`duplicates`), not as shrink notices.
+
 ### fix (fleet and batch_update show skipped shrink grants)
 
 Closes the @security advisory on #192: a grant skipped with a stderr-only warning could leave no trace.

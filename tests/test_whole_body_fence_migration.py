@@ -139,9 +139,11 @@ def test_a_file_still_wrapped_on_both_sides_is_not_migrated():
     assert result.sections_orphaned == []
 
 
-def test_the_predicate_requires_content_alone_on_disk():
-    """A file with `content` PLUS a named fence is not a pre-split file."""
+def test_the_predicate_requires_content_to_be_the_only_stale_fence():
+    """`content` beside a fence the render still has migrates (2026-10-11, see
+    tests/test_whole_body_coexisting_fences.py); beside a second orphaned fence it does not."""
     assert _is_whole_body_migration({"content": ""}, {"invariant_core": ""}) is True
+    assert _is_whole_body_migration({"content": "", "other": ""}, {"invariant_core": "", "other": ""}) is True
     assert _is_whole_body_migration({"content": "", "other": ""}, {"invariant_core": ""}) is False
     assert _is_whole_body_migration({"content": ""}, {"content": ""}) is False
     assert _is_whole_body_migration({"content": ""}, {}) is False

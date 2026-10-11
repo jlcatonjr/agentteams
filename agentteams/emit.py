@@ -454,7 +454,7 @@ def emit_all(
                 # with each shrink — preserve in place, or sidecar+write.
                 for notice in mr.shrink_notices:
                     if shrink_policy == "preserve" and _shrink_notice_sid(notice) in mr.lost_fence_bodies:
-                        why = ("structural migration" if mr.migrated else "operator --shrink-allow"
+                        why = ("structural migration" if mr.migrated and _shrink_notice_sid(notice) == "content" else "operator --shrink-allow"
                                if _shrink_notice_sid(notice) in mr.shrink_overridden
                                else "template-/brief-authoritative fence")
                         suffix = f" ({why}: the real run will replace it and keep the prior body in a .lost.<sid>.md sidecar in the backup dir)"
