@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **240**
+- Modules mapped: **241**
 - Packages: **9**
-- Internal import edges: **645**
+- Internal import edges: **646**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 131 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams` | 132 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 42 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 6 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -48,6 +48,7 @@ Every module, coloured by package (full adjacency in the table below).
 | --- | --- | --- |
 | `agentteams` | — | `agentteams.backup`, `agentteams.capability_hints`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.parser`, `agentteams.cli.signer_location`, `agentteams.git_hooks`, `agentteams.projection_marker`, `agentteams.source_provenance` |
 | `agentteams._fleet_bridge` | `agentteams.fences` | `agentteams.fleet` |
+| `agentteams._fleet_shrink_grants` | — | `agentteams.fleet` |
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.analyze_tools`, `agentteams.branch_cleanup`, `agentteams.ingest` |
 | `agentteams.adopted_agents` | `agentteams.yaml_frontmatter` | `agentteams.analyze`, `agentteams.cli.adopt_step` |
 | `agentteams.advisory` | — | — |
@@ -148,7 +149,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.feature_audit` | — | — |
 | `agentteams.fence_inject` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.emit`, `agentteams.fences`, `agentteams.frameworks.codex` | `agentteams.cli.app`, `agentteams.emit` |
 | `agentteams.fences` | `agentteams.atomicio`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.front_matter_merge`, `agentteams.shrink_allow`, `agentteams.unfenced` | `agentteams._fleet_bridge`, `agentteams.cli.artifacts`, `agentteams.cli.generate`, `agentteams.emit`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.codex`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.prompt_roots`, `agentteams.shrink_allow` |
-| `agentteams.fleet` | `agentteams._fleet_bridge`, `agentteams.backup`, `agentteams.fences`, `agentteams.git_exec`, `agentteams.projection_marker` | `agentteams.cli.app`, `agentteams.redteam.realcopy`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
+| `agentteams.fleet` | `agentteams._fleet_bridge`, `agentteams._fleet_shrink_grants`, `agentteams.backup`, `agentteams.fences`, `agentteams.git_exec`, `agentteams.projection_marker` | `agentteams.cli.app`, `agentteams.redteam.realcopy`, `agentteams.stale_detector`, `agentteams.stale_remediate` |
 | `agentteams.framework_conformance` | `agentteams.framework_research` | `agentteams.cli.artifacts` |
 | `agentteams.framework_freshness` | `agentteams.drift` | `agentteams.cli.commands` |
 | `agentteams.framework_research` | `agentteams.frameworks.format_spec` | `agentteams.cli.generate`, `agentteams.framework_conformance` |
@@ -400,6 +401,14 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.fences"
       ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams._fleet_shrink_grants": {
+      "package": "agentteams",
+      "path": "agentteams/_fleet_shrink_grants.py",
+      "is_package": false,
+      "imports_internal": [],
       "external": [],
       "repo_local": []
     },
@@ -1668,6 +1677,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams._fleet_bridge",
+        "agentteams._fleet_shrink_grants",
         "agentteams.backup",
         "agentteams.fences",
         "agentteams.git_exec",
@@ -4701,6 +4711,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.fleet",
       "target": "agentteams._fleet_bridge"
+    },
+    {
+      "source": "agentteams.fleet",
+      "target": "agentteams._fleet_shrink_grants"
     },
     {
       "source": "agentteams.fleet",
