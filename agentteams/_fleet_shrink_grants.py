@@ -3,6 +3,11 @@
 Fleet captures each target's output in-process; these helpers pick out the
 ``WARNING: --shrink-allow`` lines and the announced grants, and render the
 run-level "Shrink grants" section of ``summary.md``.
+
+``TargetResult.shrink_grant_warnings`` holds a target's warnings (a grant skipped as
+unappliable, refused for want of a backup dir, or one that released nothing);
+``shrink_grants_active`` holds the grants it announced. Fleet fills both straight after
+the in-process run, before the dry-run and non-git branches, so every path records them.
 """
 from __future__ import annotations
 

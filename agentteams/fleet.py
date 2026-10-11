@@ -38,8 +38,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
-from agentteams._fleet_shrink_grants import shrink_grant_lines as _shrink_grant_lines
-from agentteams._fleet_shrink_grants import shrink_grant_summary as _shrink_grant_summary
+from agentteams._fleet_shrink_grants import shrink_grant_lines, shrink_grant_summary
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import DROPPED_PREFIX, KEPT_PREFIX, RETIRED_MARK
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
@@ -123,12 +122,7 @@ class TargetResult:
     # in this workspace. Their churn is suffix-exempted from the content audit, so
     # a tracked one can ride un-audited into a commit — surface it for review.
     volatile_tracked: list[str] = field(default_factory=list)
-    # ``WARNING: --shrink-allow …`` lines from this target's run (a grant skipped as unappliable,
-    # refused for want of a backup dir, or one that released nothing). Captured with the rest of the
-    # output, so without this field a skipped grant left no trace in the fleet report (#192 advisory).
-    shrink_grant_warnings: list[str] = field(default_factory=list)
-    # Grants this target's run announced as active; lets the summary tell a grant that released
-    # nothing anywhere from one meant for another workspace.
+    shrink_grant_warnings: list[str] = field(default_factory=list)  # see agentteams._fleet_shrink_grants
     shrink_grants_active: list[str] = field(default_factory=list)
     # Pre-fencing twins (agentteams.fence_twins): kept ones are a REVIEW reason; dropped ones are listed only.
     twins_kept: list[str] = field(default_factory=list)
@@ -842,8 +836,7 @@ def run_fleet(args, parser) -> int:
                 descriptor=str(descriptor) if descriptor else "",
                 status="OK",
             )
-            # Before the dry-run and non-git branches, so every path records them.
-            tr.shrink_grant_warnings, tr.shrink_grants_active = _shrink_grant_lines(out)
+            tr.shrink_grant_warnings, tr.shrink_grants_active = shrink_grant_lines(out)  # every path, dry runs too
 
             if not apply:
                 # Dry-run: report intent; no diff (nothing written).
@@ -967,8 +960,7 @@ def _write_report(results, report_root: Path, parent: Path, apply: bool, framewo
             f"+{r['added_lines']}/-{r['removed_lines']} | {len(r['shrink_notices'])} | "
             f"{len(r['shrink_grant_warnings'])} | {len(r['user_editable_deletions'])} | {r['detail']} |"
         )
-    lines += _shrink_grant_summary(rows)
-    (report_root / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (report_root / "summary.md").write_text("\n".join(lines + shrink_grant_summary(rows)) + "\n", encoding="utf-8")
 
     print("\n" + "=" * 70)
     print(f"Fleet {'apply' if apply else 'dry-run'} complete: {counts}")
