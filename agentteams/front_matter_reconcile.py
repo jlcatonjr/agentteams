@@ -43,11 +43,15 @@ CAPABILITY_KEYS: frozenset[str] = CAPABILITY_FRONT_MATTER_KEYS
 
 @dataclass(frozen=True)
 class Divergence:
-    """One front-matter key whose deployed value differs from the template's."""
+    """One front-matter key whose deployed value differs from the template's.
+
+    ``deployed`` is None when the deployed file lacks a capability key the template declares
+    (reported only for capability keys; see :func:`find_divergences`).
+    """
 
     rel_path: str
     key: str
-    deployed: str
+    deployed: str | None
     template: str
 
     @property
@@ -58,7 +62,7 @@ class Divergence:
         mark = "  [capability]" if self.is_capability else ""
         return (
             f"{self.rel_path}: {self.key}{mark}\n"
-            f"    deployed: {self.deployed}\n"
+            f"    deployed: {'(absent)' if self.deployed is None else self.deployed}\n"
             f"    template: {self.template}"
         )
 
@@ -242,6 +246,11 @@ def find_divergences(
     template does not is a project addition, not a divergence — the template is not entitled to
     an opinion about it, and reporting it would train operators to ignore the report.
 
+    A **capability** key the template declares and the deployed file lacks is reported too, with
+    ``deployed=None``. Without it, an existing team could never receive a grant that arrives as a
+    new key: the runner's ``mcpServers`` block under ``write_policy`` (biographies pilot
+    rehearsal, 2026-10-11). An absent non-capability key is still not reported.
+
     Args:
         rendered:   ``(rel_path, content)`` pairs from the render pipeline.
         output_dir: Root of the deployed agents directory.
@@ -262,7 +271,10 @@ def find_divergences(
             continue  # cannot receive a block it never had; see the ledger row on that case
         for key, template_value in template_fm.items():
             deployed_value = deployed_fm.get(key)
-            if deployed_value is not None and deployed_value != template_value:
+            if deployed_value is None:
+                if key in CAPABILITY_KEYS:
+                    found.append(Divergence(rel_path, key, None, template_value))
+            elif deployed_value != template_value:
                 found.append(Divergence(rel_path, key, deployed_value, template_value))
     return sorted(found, key=lambda d: (d.rel_path, d.key))
 
@@ -270,8 +282,10 @@ def find_divergences(
 def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[str]:
     """Rewrite each deployed file's front-matter key to the template's value.
 
-    Only ever called on an explicit apply instruction. Rewrites the single ``key:`` line and
-    nothing else — the body is untouched, and so is every key not in *divergences*.
+    Only ever called on an explicit apply instruction. Rewrites the ``key:`` entry (its line, or
+    its whole block for a block value) and nothing else — the body is untouched, and so is every
+    key not in *divergences*. A key absent on disk (``deployed is None``) is appended at the end
+    of the front matter.
 
     Returns:
         One line per applied change, for the caller to print. Capability keys are marked,
@@ -290,12 +304,19 @@ def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[s
             continue
         new_text = text
         for d in items:
-            old_line = f"{d.key}: {d.deployed}"
-            new_line = f"{d.key}: {d.template}"
-            if old_line not in new_text:
-                applied.append(f"SKIPPED {rel_path}: {d.key} — line not found verbatim")
-                continue
-            new_text = new_text.replace(old_line, new_line, 1)
+            new_entry = _entry_text(d.key, d.template)
+            if d.deployed is None:
+                inserted = _append_to_front_matter(new_text, new_entry)
+                if inserted is None:
+                    applied.append(f"SKIPPED {rel_path}: {d.key} — front matter not found")
+                    continue
+                new_text = inserted
+            else:
+                old_entry = _entry_text(d.key, d.deployed)
+                if old_entry not in new_text:
+                    applied.append(f"SKIPPED {rel_path}: {d.key} — entry not found verbatim")
+                    continue
+                new_text = new_text.replace(old_entry, new_entry, 1)
             applied.append(
                 f"applied {rel_path}: {d.key}"
                 + ("  [CAPABILITY GRANT CHANGED]" if d.is_capability else "")
@@ -303,6 +324,30 @@ def apply_divergences(divergences: list[Divergence], output_dir: Path) -> list[s
         if new_text != text:
             path.write_text(new_text, encoding="utf-8")
     return applied
+
+
+def _entry_text(key: str, value: str) -> str:
+    """The front-matter text of one entry, as :func:`_front_matter_map` reads it back.
+
+    A block value is stored with its leading newline (``"\\n  - item"``), so it joins the key
+    with no space; a scalar is ``key: value``.
+    """
+    return f"{key}:{value}" if value.startswith("\n") else f"{key}: {value}"
+
+
+def _append_to_front_matter(text: str, entry: str) -> str | None:
+    """Insert *entry* as the last front-matter entry, or None when there is no front matter."""
+    block, _body = _parse_front_matter(text)
+    if not block:
+        return None
+    start = text.find(block)
+    if start < 0 or start > 8:  # the block sits right after the opening delimiter
+        return None
+    end = start + len(block)
+    rest = text[end:]
+    if rest.startswith("\n"):
+        rest = rest[1:]
+    return text[:end].rstrip("\n") + "\n" + entry + "\n" + rest
 
 
 def format_report(divergences: list[Divergence]) -> str:

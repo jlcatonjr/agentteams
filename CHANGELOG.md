@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (reconcile adds missing capability keys, so existing teams can receive runner grants)
+
+- **The gap.** On an existing Claude team under `write_policy: orchestrator-only`, `--update --merge` then
+  `--reconcile-front-matter --reconcile-apply` gave the agents named in `mcp_grants` the runner tool names, but
+  never the `mcpServers: agentteams_runner` block. Those agents would list runner tools with no server behind
+  them. Reconcile skipped any template key the deployed file lacked, and could only rewrite single-line values.
+  The first pilot rehearsal (biographies) found it.
+- **The fix.**
+  - A capability key the template declares and the deployed file lacks is reported (`deployed: (absent)`).
+    `--reconcile-apply` adds it at the end of the front matter.
+  - A block value is now replaced whole; before, it was skipped as "not found verbatim".
+  - Missing non-capability keys are still not reported. Applying is still explicit, and every capability change
+    is still announced.
+
 ### fix (fleet and batch_update show skipped shrink grants)
 
 Closes the @security advisory on #192: a grant skipped with a stderr-only warning could leave no trace.
