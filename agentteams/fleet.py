@@ -39,7 +39,7 @@ from pathlib import Path
 
 from agentteams._fleet_bridge import BRIDGE_SOURCE_DIRS as _BRIDGE_SOURCE_DIRS
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
-from agentteams.fence_twins import DROPPED_PREFIX, KEPT_PREFIX, RETIRED_MARK
+from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX, RETIRED_MARK
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
@@ -124,6 +124,7 @@ class TargetResult:
     # Pre-fencing twins (agentteams.fence_twins): kept ones are a REVIEW reason; dropped ones are listed only.
     twins_kept: list[str] = field(default_factory=list)
     twins_dropped: list[str] = field(default_factory=list)
+    twins_acknowledged: list[str] = field(default_factory=list)  # kept on an operator ack: listed, not REVIEW
     rc: int | None = None
 
 
@@ -551,7 +552,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
             removed += 1
     # Shrink Notices come from the update's own output (emit's shrink guard).
     # Twin notices name a fence too; they are classified on their own (a kept twin is REVIEW, a dropped one is not).
-    twin = (KEPT_PREFIX, DROPPED_PREFIX)
+    twin = (KEPT_PREFIX, DROPPED_PREFIX, ACKED_PREFIX)  # an acknowledged twin is a notice, never REVIEW
     shrink = [
         l.strip() for l in update_output.splitlines()
         if "Notice:" in l and "fence" in l and not any(t in l for t in twin)
@@ -580,6 +581,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "volatile_tracked": volatile_tracked,
         "twins_kept": [l.strip() for l in update_output.splitlines() if f"{KEPT_PREFIX}:" in l],
         "twins_dropped": [l.strip() for l in update_output.splitlines() if f"{DROPPED_PREFIX}:" in l],
+        "twins_acknowledged": [l.strip() for l in update_output.splitlines() if f"{ACKED_PREFIX}:" in l],
         # A drop that retired a rule the current template no longer carries is reviewed like a kept twin.
         "twins_retired": [l.strip() for l in update_output.splitlines()
                           if f"{DROPPED_PREFIX}:" in l and RETIRED_MARK in l],
@@ -855,7 +857,8 @@ def run_fleet(args, parser) -> int:
                 tr.user_editable_deletions = cls["user_editable_deletions"]
                 tr.fence_imbalances = cls["fence_imbalances"]
                 tr.volatile_tracked = cls["volatile_tracked"]
-                tr.twins_kept, tr.twins_dropped = cls["twins_kept"], cls["twins_dropped"]
+                tr.twins_kept, tr.twins_dropped, tr.twins_acknowledged = (cls["twins_kept"], cls["twins_dropped"],
+                                                                          cls["twins_acknowledged"])
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
