@@ -425,6 +425,15 @@ def _merge_front_matter(
             # and an unknown baseline must not be read as permission.
             merged[key] = template_value
             applied.append(f"front matter: added {key!r} = {template_value}")
+        elif base_value is None:
+            # No trusted record of who wrote the on-disk value (no baseline, a key the baseline leaves
+            # out, or a legacy block/capability key — see agentteams.front_matter_baseline). Saying
+            # "changed in BOTH" here claimed a history nobody recorded.
+            proposals.append(
+                f"front matter: {key!r} differs from the template — template {template_value}, on disk "
+                f"{disk_value!r} — and no baseline records agentteams writing the on-disk value. Kept "
+                f"yours; reconcile by hand."
+            )
         else:
             proposals.append(
                 f"front matter: {key!r} changed in BOTH template and this file — template "

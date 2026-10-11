@@ -43,6 +43,7 @@ from agentteams._fleet_shrink_grants import shrink_grant_lines
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
 from agentteams.whole_body_migration import DUPLICATE_PREFIX
+from agentteams.front_matter_baseline import HANDOFF_KEPT_PREFIX
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
@@ -133,6 +134,7 @@ class TargetResult:
     twins_acknowledged: list[str] = field(default_factory=list)  # kept on an operator ack: REVIEW only until seen
     twins_ack_unreviewed: list[str] = field(default_factory=list)  # acks not shown before: REVIEW (_fleet_twin_acks)
     duplicates: list[str] = field(default_factory=list)  # a section present twice (whole_body_migration): REVIEW
+    handoffs_kept: list[str] = field(default_factory=list)  # hand-written handoffs a write would have dropped: REVIEW
     rc: int | None = None
 
 
@@ -594,6 +596,9 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         # Its own REVIEW class, not a shrink: both copies may sit inside fences (a stale `content` block).
         "duplicates": [l.strip() for l in update_output.splitlines()
                        if _twin_acks.notice_body(l).startswith(f"{DUPLICATE_PREFIX} '")],
+        # front_matter_baseline: a hand-written handoff the merge would have dropped (portal, 2026-10-11).
+        "handoffs_kept": [l.strip() for l in update_output.splitlines()
+                          if _twin_acks.notice_body(l).startswith(HANDOFF_KEPT_PREFIX)],
     }
 
 
@@ -872,6 +877,7 @@ def run_fleet(args, parser) -> int:
                                                                           cls["twins_acknowledged"])
                 tr.twins_ack_unreviewed = _twin_acks.unreviewed(seen_acks, str(ws), target, tr.twins_acknowledged)
                 tr.duplicates = cls["duplicates"]
+                tr.handoffs_kept = cls["handoffs_kept"]
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
@@ -881,14 +887,17 @@ def run_fleet(args, parser) -> int:
                     tr.detail = ("FENCE IMBALANCE (malformed render — do not push): "
                                  + ", ".join(cls["fence_imbalances"]))
                 elif (cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]
-                      or cls["twins_retired"] or tr.twins_ack_unreviewed or cls["duplicates"]):
+                      or cls["twins_retired"] or tr.twins_ack_unreviewed or cls["duplicates"]
+                      or cls["handoffs_kept"]):
                     tr.status = "REVIEW"
                     tr.detail = "; ".join(filter(None, (
                         "shrink notice / USER-EDITABLE deletion — review diff"
                         if cls["user_editable_deletions"] or cls["shrink_notices"] else "",
                         *_twin_acks.twin_reasons(cls, tr.twins_ack_unreviewed),
                         f"duplicate section ({len(cls['duplicates'])}) — two copies, resolve by hand"
-                        if cls["duplicates"] else "")))
+                        if cls["duplicates"] else "",
+                        f"hand-written handoff the merge would have dropped ({len(cls['handoffs_kept'])}) — review"
+                        if cls["handoffs_kept"] else "")))
                     if cls["volatile_tracked"]:
                         tr.detail += ("; tracked volatile file(s) churned (un-audited, review before commit): "
                                       + ", ".join(cls["volatile_tracked"]))

@@ -37,6 +37,29 @@ Found live by the first orchestrator-only-writes pilot (biographies).
   dispatches it, it has the orchestrator's channel. agentteams doesn't render that subagent, so neither the audit
   nor a verified permission rule can narrow it.
 
+### fix (merge no longer replaces hand-written handoffs)
+
+From the 2026-10-11 fleet re-render audit: portal's orchestrator lost its two project-specific handoffs, and
+agent-refactor, cleanup and conflict-resolution lost theirs, with no notice.
+- **Root cause.** The three-way front-matter merge applies the template's value when the on-disk value equals the
+  baseline. `build-log.json` recorded the baseline as the front matter *as written*, and a merge writes the
+  project's value whenever it keeps it. One run after a project's edit was kept, the baseline held that edit, so the
+  next template change "applied to an untouched key" and replaced it. A kept conflict was protected for one run.
+- **Baseline version 2.** New `agentteams/front_matter_baseline.py` (integrity-pinned) records, per key, only the
+  value agentteams authored: the written value when it equals the template's render, else the previous version-2
+  value. The log carries `front_matter_baseline_version: 2`. A legacy baseline is treated as unknown (any of its
+  values may be a kept project value), so the transition run keeps every project value and proposes the
+  template's; legacy values are never carried forward.
+- **Migration front matter.** Before #201 the whole-body migration wrote the render's front matter wholesale, so the
+  three-way merge never saw the project's `model:`, `tools:`, roster or handoffs. #201's migration keeps the on-disk
+  block; emit also puts it back before the three-way merge whenever a migration ran (a no-op since #201, kept as a
+  guard on that path).
+- **Handoff guard.** A `--merge` write may not drop a handoff (agent and label) the on-disk file has unless the
+  baseline shows agentteams wrote it; a handoff to an agent the new block still reaches is a rewording, unless the
+  disk reached that agent more often. A dropped one is restored, indented to the new block, with a
+  `front matter: kept hand-written handoff` notice that fleet reports as REVIEW (`handoffs_kept`); a `handoffs:`
+  it cannot check is reported the same way.
+- The proposal for a key with no recorded baseline no longer says it "changed in BOTH template and this file".
 ### fix (legacy `content` fence retired beside other fences; fenced duplicates reported)
 
 From the 2026-10-11 fleet re-render audit, which held 12 repositories on it.
