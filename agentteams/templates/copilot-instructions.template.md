@@ -43,6 +43,8 @@ SECTION MANIFEST — copilot-instructions.template.md
 | `{REFERENCE_DB_PATH}` | Reference/bibliography database |
 | `.github/agents/` | Agent definition files |
 | `.github/agents/references/` | Shared reference data |
+
+Where this differs from the project's real layout, the **Project Layout** section below is authoritative.
 <!-- AGENTTEAMS:END directory_structure -->
 
 ---
@@ -50,7 +52,7 @@ SECTION MANIFEST — copilot-instructions.template.md
 <!-- AGENTTEAMS:BEGIN output_conventions v=1 -->
 ## Output Conventions
 
-- All primary deliverables are authored in `{PRIMARY_OUTPUT_DIR}` as `{DELIVERABLE_TYPE}`
+- All primary deliverables are authored in `{PRIMARY_OUTPUT_DIR}` as `{DELIVERABLE_TYPE}` (or where the **Project Layout** section says, when it differs)
 - Compiled output lives in `{BUILD_OUTPUT_DIR}` and is **never edited directly**
 - Figures are generated from source files in `{FIGURES_DIR}` — source files are authoritative
 - Every deliverable must correspond to a Component Spec defined by a workstream expert

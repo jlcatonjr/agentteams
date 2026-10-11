@@ -11,6 +11,35 @@ from agentteams.fences import _YAML_FM_RE
 
 _PROJECT_NOTES_HEADING = "## Project-Specific Notes"
 
+_PROJECT_LAYOUT_HEADING = "## Project Layout"
+#: Instruction files whose generated Directory Structure can't describe every project (one primary output dir,
+#: one reference DB): the project states its real layout here, outside every fence, so --update never touches it.
+PROJECT_LAYOUT_SECTION = (
+    "\n" + _PROJECT_LAYOUT_HEADING + "\n\n"
+    "> ⚙️ **USER-EDITABLE** — this project's real layout where it differs from the generated Directory Structure "
+    "and Output Conventions (for example, deliverables under `Projects/*/` rather than one output folder). "
+    "Where the two disagree, this section is authoritative. `--update` never overwrites it.\n"
+)
+_INSTRUCTION_FILES = frozenset({"copilot-instructions.md", "CLAUDE.md", "AGENTS.md"})
+_DIRECTORY_STRUCTURE_END = "<!-- AGENTTEAMS:END directory_structure -->"
+
+
+def _ensure_project_layout_section(rel_path: str, content: str) -> str:
+    """Insert the USER-EDITABLE 'Project Layout' section after an instruction file's Directory Structure, if absent.
+
+    Only for ``copilot-instructions.md`` / ``CLAUDE.md`` / ``AGENTS.md`` that carry the generated
+    ``directory_structure`` fence; inserted directly after its END marker. Idempotent and insert-only, like
+    :func:`_ensure_project_notes_section`, so existing files gain it on ``--update --merge``.
+    """
+    if rel_path.rsplit("/", 1)[-1] not in _INSTRUCTION_FILES or _PROJECT_LAYOUT_HEADING in content:
+        return content
+    at = content.find(_DIRECTORY_STRUCTURE_END)
+    if at < 0:
+        return content
+    eol = content.find("\n", at)
+    eol = len(content) if eol < 0 else eol + 1
+    return content[:eol] + PROJECT_LAYOUT_SECTION + content[eol:]
+
 
 def _is_agent_doc(rel_path: str, content: str) -> bool:
     """Return True when rel_path/content is a generated agent persona document.
@@ -41,6 +70,7 @@ def _ensure_project_notes_section(rel_path: str, content: str) -> str:
     unchanged. Applied to merged output as well as fresh renders, so existing
     fleet files gain the section on ``--update --merge`` (migration path b).
     """
+    content = _ensure_project_layout_section(rel_path, content)  # instruction files only; no-op elsewhere
     if rel_path.endswith(".yaml") and "references/" not in rel_path:
         # A Goose recipe (P5a): the region goes at the end of its `instructions: |` block.
         from agentteams.user_regions import ensure_recipe_notes
