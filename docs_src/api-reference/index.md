@@ -119,6 +119,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`proposal_staging`](proposal-staging.md) | Staged and direct agent writes through the runner, and the orchestrator's approvals (R3) |
 | [`proposal_run`](proposal-run.md) | The command-request half of `proposals`: validates, runs and checks one allowlisted, agent-requested command (carved out at R2) |
 | [`proposal_runner`](proposal-runner.md) | Orchestrator-only-writes pilot (P4a): the out-of-session runner that alone holds the ledger key and serves the orchestrator's queue |
+| [`sealed_result`](sealed-result.md) | Seals the orchestrator's runner results (in the session-readable `.agentteams-status/` tree) to the process that queued each request |
 | [`git_exec`](git-exec.md) | The one git core: argv, run, and the read-only hardening against repo-planted config |
 | [`source_provenance`](source-provenance.md) | Which agentteams code is running (kind, commit, branch, dirty), recorded in build-log.json and printed by `--version` |
 | [`user_regions`](user-regions.md) | The user-editable Notes/Rules regions of generated files, carried across `--overwrite` (P5a) |

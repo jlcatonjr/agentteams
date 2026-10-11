@@ -75,8 +75,10 @@ def test_check_is_inert_without_the_switch():
 @pytest.mark.parametrize("tools, framework, expected", [
     ("tools: Read, Grep", "claude", []),
     ("tools: Read, Edit", "claude", [("a.md", "error")]),
-    ("tools: Read, Bash", "claude", [("a.md", "warning")]),
-    ("tools: Bash(python -m x:*)", "claude", [("a.md", "warning")]),
+    # A shell is an error under the switch (2026-10-11): the sandbox can't tell agents apart, so a shell could use
+    # the orchestrator's runner channel.
+    ("tools: Read, Bash", "claude", [("a.md", "error")]),
+    ("tools: Bash(python -m x:*)", "claude", [("a.md", "error")]),
     (None, "claude", [("a.md", "error")]),                      # no tools key: inherits everything
     ("tools:", "claude", [("a.md", "error")]),                  # empty value, no block list
     ("tools: ['read', 'search']", "copilot-vscode", []),
@@ -127,9 +129,9 @@ def test_only_the_shallowest_orchestrator_is_exempt():
 @pytest.mark.parametrize("body, expected", [
     ("# agentteams-declared-tools: read, search\nextensions: []\n", []),
     ("# agentteams-declared-tools: read, edit\nextensions: []\n", ["error"]),
-    ("# agentteams-declared-tools: read, execute\nextensions: []\n", ["warning"]),
+    ("# agentteams-declared-tools: read, execute\nextensions: []\n", ["error"]),
     ("extensions: []\n", []),                                                           # unmarked, nothing granted
-    ("extensions:\n  - type: builtin\n    name: developer\n", ["error", "error", "warning"]),  # full developer; analyze on
+    ("extensions:\n  - type: builtin\n    name: developer\n", ["error", "error", "error"]),  # full developer; analyze on
     ("", ["error"]),                                                                    # fail-open extensions
     # the marker states its own authority: the real grant is judged too
     ("# agentteams-declared-tools: read\nextensions:\n  - type: builtin\n    name: developer\n"
@@ -175,8 +177,8 @@ def test_goose_recipes(body, expected):
 
 def test_recipe_without_an_exact_version_line_is_still_checked():
     recipe = 'version: 1.0.0\ntitle: t\nextensions:\n  - type: builtin\n    name: developer\n'
-    # full developer (write) and analyze left on beside it, plus the shell warning
-    assert [sev for _, sev in _codes({"a.yaml": recipe}, ".yaml", "goose")] == ["error", "error", "warning"]
+    # full developer (write) and analyze left on beside it, plus the shell (an error under the switch)
+    assert [sev for _, sev in _codes({"a.yaml": recipe}, ".yaml", "goose")] == ["error", "error", "error"]
 
 
 def test_bridge_orchestrator_exempt_only_on_goose():
