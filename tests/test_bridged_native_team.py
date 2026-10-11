@@ -325,10 +325,15 @@ def test_whole_body_migration_keeps_a_nested_bridge_block():
 
 
 def test_whole_body_migration_without_bridge_block_is_unchanged():
+    """No bridge block: nothing is carried as one. Since 2026-10-11 the unheaded old text, which the
+    render does not have and nothing proves is template text, is kept unfenced and named (it used to be
+    replaced silently — see tests/test_whole_body_coexisting_fences.py)."""
     existing = "<!-- AGENTTEAMS:BEGIN content v=1 -->\nold template body\n<!-- AGENTTEAMS:END content -->\n"
     new = "<!-- AGENTTEAMS:BEGIN notes v=1 -->\nnew\n<!-- AGENTTEAMS:END notes -->\ntail\n"
     mr = fences._merge_fenced_content(new, existing, preserve_on_shrink=True, rel_path="x.md")
-    assert mr.merged_content == new
+    assert mr.merged_content == new.replace("tail\n", "\nold template body\ntail\n")
+    assert not any("AGENTTEAMS-BRIDGE" in n for n in mr.shrink_notices)
+    assert any("carried '(text before the first heading)'" in n for n in mr.shrink_notices)
 
 
 def _legacy_with(block: str) -> str:

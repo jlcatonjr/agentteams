@@ -20,6 +20,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
 | [`fence_twins`](fence-twins.md) | Drops an unfenced pre-fencing copy of a fenced section only on proof (git-derived lineage corpus or the fenced copy); keeps and flags the rest |
 | [`fence_twin_acks`](fence-twin-acks.md) | Operator ledger that acknowledges a kept twin: it turns that twin's fleet REVIEW into a notice, is bound to the twin's exact text and never drops anything |
+| [`whole_body_migration`](whole-body-migration.md) | Retires a legacy whole-body `content` fence beside the fences the render still has, keeping or flagging non-template text; reports a section present twice |
 
 ## Core Support Modules
 

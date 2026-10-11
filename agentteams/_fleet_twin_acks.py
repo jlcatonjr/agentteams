@@ -67,6 +67,30 @@ def _key(line: str) -> str:
     return hashlib.sha256(line.strip().encode("utf-8")).hexdigest()
 
 
+#: A run-output notice line, ``Notice: <rel path>: <notice>``; group 1 is the notice itself.
+_NOTICE_BODY_RE = re.compile(r"Notice: \S+?: (.*)$")
+
+
+def notice_body(line: str) -> str:
+    """The notice itself, after ``Notice: <rel path>: ``; "" for any other line.
+
+    Classes are matched at the start of this, never anywhere in the line: a notice quotes deployed
+    headings, so a heading reading ``twin kept (acknowledged)`` must not reclassify the notice that quotes it
+    (whole-body migration review, 2026-10-11).
+
+    Args:
+        line: One line of a target's update output.
+
+    Returns:
+        The notice text, or "".
+
+    Raises:
+        Nothing.
+    """
+    m = _NOTICE_BODY_RE.search(line)
+    return m.group(1) if m else ""
+
+
 def twin_signals(update_output: str) -> dict[str, list[str]]:
     """Split an update's output into its pre-fencing twin notices.
 
@@ -80,12 +104,13 @@ def twin_signals(update_output: str) -> dict[str, list[str]]:
     Raises:
         Nothing.
     """
-    lines = [line.strip() for line in update_output.splitlines()]
+    lines = [(line.strip(), notice_body(line)) for line in update_output.splitlines()]
     return {
-        "twins_kept": [line for line in lines if f"{KEPT_PREFIX}:" in line],
-        "twins_dropped": [line for line in lines if f"{DROPPED_PREFIX}:" in line],
-        "twins_acknowledged": [line for line in lines if f"{ACKED_PREFIX}:" in line],
-        "twins_retired": [line for line in lines if f"{DROPPED_PREFIX}:" in line and RETIRED_MARK in line],
+        "twins_kept": [line for line, body in lines if body.startswith(f"{KEPT_PREFIX}:")],
+        "twins_dropped": [line for line, body in lines if body.startswith(f"{DROPPED_PREFIX}:")],
+        "twins_acknowledged": [line for line, body in lines if body.startswith(f"{ACKED_PREFIX}:")],
+        "twins_retired": [line for line, body in lines
+                          if body.startswith(f"{DROPPED_PREFIX}:") and RETIRED_MARK in line],
     }
 
 

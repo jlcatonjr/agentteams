@@ -21,8 +21,9 @@ was protected for exactly one run. portal's build log recorded its hand-written 
    project's kept value, so on the transition run the merge keeps every project value and proposes the
    template's. Nothing legacy is carried forward, so a key that still differs from the template stays
    unknown (a proposal on each run) until the project adopts the template's value or a fresh generation.
-3. :func:`keep_disk_front_matter` puts the project's block back before the three-way merge when the legacy
-   whole-body migration replaced it with the render's.
+3. :func:`keep_disk_front_matter` puts the project's block back before the three-way merge whenever a
+   whole-body migration ran. The pre-#201 migration replaced it with the render's; since #201
+   (:mod:`agentteams.whole_body_migration`) the migration keeps it and this is a no-op guard on that path.
 4. :func:`restore_dropped_handoffs` is the last line of defence on the ``--merge`` write (and its dry-run
    preview), whatever produced the merged content (the legacy whole-body migration takes the render's front
    matter wholesale): an on-disk handoff the content about to be written lacks is restored, unless the

@@ -19,15 +19,40 @@ agent-refactor, cleanup and conflict-resolution lost theirs, with no notice.
   value. The log carries `front_matter_baseline_version: 2`. A legacy baseline is treated as unknown (any of its
   values may be a kept project value), so the transition run keeps every project value and proposes the
   template's; legacy values are never carried forward.
-- **Migration front matter.** The legacy whole-body migration wrote the render's front matter wholesale, so the
-  three-way merge never saw the project's `model:`, `tools:`, roster or handoffs. The merge now puts the on-disk
-  block back first.
+- **Migration front matter.** Before #201 the whole-body migration wrote the render's front matter wholesale, so the
+  three-way merge never saw the project's `model:`, `tools:`, roster or handoffs. #201's migration keeps the on-disk
+  block; emit also puts it back before the three-way merge whenever a migration ran (a no-op since #201, kept as a
+  guard on that path).
 - **Handoff guard.** A `--merge` write may not drop a handoff (agent and label) the on-disk file has unless the
   baseline shows agentteams wrote it; a handoff to an agent the new block still reaches is a rewording, unless the
   disk reached that agent more often. A dropped one is restored, indented to the new block, with a
   `front matter: kept hand-written handoff` notice that fleet reports as REVIEW (`handoffs_kept`); a `handoffs:`
   it cannot check is reported the same way.
 - The proposal for a key with no recorded baseline no longer says it "changed in BOTH template and this file".
+### fix (legacy `content` fence retired beside other fences; fenced duplicates reported)
+
+From the 2026-10-11 fleet re-render audit, which held 12 repositories on it.
+- **Migration predicate.** A legacy whole-body `content` fence was retired only when it was the file's only fence.
+  Files that also carried `memory_index_consultation` got the template's named sections added beside the stale
+  block, so quality-auditor, tool-doc-researcher and conflict-resolution carried every section twice, both copies
+  inside fences (`.github/agents` and Goose recipes). The merge now migrates whenever `content` is the only on-disk
+  fence the render no longer has. A file with a second orphaned fence is not migrated; its duplicates are reported.
+- **Method.** New `agentteams/whole_body_migration.py` (integrity-pinned) rewrites only the `content` block, then
+  runs the ordinary merge, so the other fences update in place and the front matter goes through the three-way
+  merge. The old branch replaced everything up to the last fence, front matter included, so a project's own
+  handoffs or a capability change were overwritten without the three-way merge seeing them.
+- **Text inside the old block.** Each section is matched to the render. A section the template leaves unfenced
+  keeps its deployed copy unless that copy is provably template text. A user region, or a section the template does
+  not have, is carried out unfenced. An unproven copy of a section the template now fences is left to the
+  `.lost.content.md` sidecar when the run has a backup dir (keeping it recreates the duplicate); without one it is
+  carried out as a twin that the twin pass keeps and flags. Text holding a managed marker, a TOML delimiter or a
+  Rule S-5 instruction-override pattern is never re-emitted outside the fence. The migration notice names every
+  kept, carried or unproven section, and fleet reads it as REVIEW. Under `--shrink-policy allow` the migration is
+  now still reported and its sidecar written.
+- **Duplicate report.** The notice no longer claims an unfenced copy when both copies are fenced. A section copied
+  into two fences (a stale `content` block beside `invariant_core`) is now reported on every merge. Fleet files
+  duplicate-section notices as their own REVIEW class (`duplicates`), not as shrink notices, and matches every
+  twin/duplicate class at the start of the notice, so a quoted heading cannot move a notice out of REVIEW.
 ### fix (reconcile adds missing capability keys, so existing teams can receive runner grants)
 
 - **The gap.** On an existing Claude team under `write_policy: orchestrator-only`, `--update --merge` then

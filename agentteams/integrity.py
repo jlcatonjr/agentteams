@@ -191,6 +191,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # format, the 40-character reason) whose rows turn a kept twin's fleet REVIEW into a notice; an
     # unpinned edit there could let an unreviewed or reasonless row silence REVIEW. It cannot delete.
     "agentteams/fence_twin_acks.py",
+    # Whole-body fence retirement (2026-10-11). fences.py (pinned) delegates to whole_body_migration the
+    # rewrite of a legacy `content` block and the decision which of its sections are dropped as template
+    # text and which are kept or flagged. An unpinned edit there could widen what a migration deletes.
+    "agentteams/whole_body_migration.py",
     # Front-matter baseline (2026-10-11). front_matter_merge.py (pinned) applies a template value only when
     # the on-disk value equals this module's baseline, and its handoff guard decides which handoffs a write
     # may drop. An unpinned edit could make a project's value look agentteams-authored again.

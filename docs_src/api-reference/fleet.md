@@ -38,7 +38,7 @@ Each `(workspace, target)` row is one of:
 | Status | Meaning |
 |--------|---------|
 | `OK` | Merge succeeded; only fenced/generated regeneration and intel churn. |
-| `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. Also a kept pre-fencing twin, a dropped twin that retired a rule, or a fence-twin acknowledgement that no earlier applied run has shown (see below). |
+| `REVIEW` | A shrink Notice or a `USER-EDITABLE`-region deletion was detected — inspect the saved diff before committing. Also a kept pre-fencing twin, a dropped twin that retired a rule, a duplicate section (`duplicates`: a heading present twice, including both copies inside fences; [`whole_body_migration`](whole-body-migration.md)), or a fence-twin acknowledgement that no earlier applied run has shown (see below). Twin and duplicate classes are matched at the start of the notice, so a quoted heading cannot reclassify one. |
 | `FAIL` | The merge itself errored (e.g. invalid/absent descriptor, bridge source missing). |
 | `SKIP` | Ambiguous `.claude/` (no bridge signal and no resolvable descriptor), left for manual review. Also a bridge whose recorded source framework fleet can't bridge from: an unknown framework, a missing source directory, an unreadable entry file, or a source equal to the bridge's own framework. Also used for an interop-projected `.codex/agents` team (`origin: "interop"` marker): the row's `detail` carries the refresh command (`agentteams --interop-from <source> --framework codex --output . --overwrite`), which fleet never runs. |
 | `WOULD-UPDATE` | Dry-run preview only. |
