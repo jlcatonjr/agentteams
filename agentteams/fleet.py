@@ -42,6 +42,7 @@ from agentteams._fleet_report import write_report as _write_report
 from agentteams._fleet_shrink_grants import shrink_grant_lines
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
+from agentteams.whole_body_migration import DUPLICATE_PREFIX
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
@@ -131,6 +132,7 @@ class TargetResult:
     twins_dropped: list[str] = field(default_factory=list)
     twins_acknowledged: list[str] = field(default_factory=list)  # kept on an operator ack: REVIEW only until seen
     twins_ack_unreviewed: list[str] = field(default_factory=list)  # acks not shown before: REVIEW (_fleet_twin_acks)
+    duplicates: list[str] = field(default_factory=list)  # a section present twice (whole_body_migration): REVIEW
     rc: int | None = None
 
 
@@ -558,10 +560,12 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
             removed += 1
     # Shrink Notices come from the update's own output (emit's shrink guard).
     # Twin notices name a fence too; they are classified on their own (a kept twin is REVIEW, a dropped one is not).
-    twin = (KEPT_PREFIX, DROPPED_PREFIX, ACKED_PREFIX)  # twin notices are classified by twin_signals
+    # Matched at the START of the notice (_fleet_twin_acks.notice_body), never anywhere in the line: a notice
+    # quotes deployed headings, and a heading reading "twin kept (acknowledged)" must not move it out of REVIEW.
+    twin = (KEPT_PREFIX, DROPPED_PREFIX, ACKED_PREFIX, f"{DUPLICATE_PREFIX} '")  # classified on their own
     shrink = [
         l.strip() for l in update_output.splitlines()
-        if "Notice:" in l and "fence" in l and not any(t in l for t in twin)
+        if "Notice:" in l and "fence" in l and not _twin_acks.notice_body(l).startswith(twin)
     ]
     # USER-EDITABLE deletions across non-volatile changed files.
     ue: list[str] = []
@@ -587,6 +591,9 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "volatile_tracked": volatile_tracked,
         # Kept twins and drops that retired a rule are REVIEW reasons; acknowledged twins only once seen.
         **_twin_acks.twin_signals(update_output),
+        # Its own REVIEW class, not a shrink: both copies may sit inside fences (a stale `content` block).
+        "duplicates": [l.strip() for l in update_output.splitlines()
+                       if _twin_acks.notice_body(l).startswith(f"{DUPLICATE_PREFIX} '")],
     }
 
 
@@ -864,6 +871,7 @@ def run_fleet(args, parser) -> int:
                 tr.twins_kept, tr.twins_dropped, tr.twins_acknowledged = (cls["twins_kept"], cls["twins_dropped"],
                                                                           cls["twins_acknowledged"])
                 tr.twins_ack_unreviewed = _twin_acks.unreviewed(seen_acks, str(ws), target, tr.twins_acknowledged)
+                tr.duplicates = cls["duplicates"]
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
@@ -873,12 +881,14 @@ def run_fleet(args, parser) -> int:
                     tr.detail = ("FENCE IMBALANCE (malformed render — do not push): "
                                  + ", ".join(cls["fence_imbalances"]))
                 elif (cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]
-                      or cls["twins_retired"] or tr.twins_ack_unreviewed):
+                      or cls["twins_retired"] or tr.twins_ack_unreviewed or cls["duplicates"]):
                     tr.status = "REVIEW"
                     tr.detail = "; ".join(filter(None, (
                         "shrink notice / USER-EDITABLE deletion — review diff"
                         if cls["user_editable_deletions"] or cls["shrink_notices"] else "",
-                        *_twin_acks.twin_reasons(cls, tr.twins_ack_unreviewed))))
+                        *_twin_acks.twin_reasons(cls, tr.twins_ack_unreviewed),
+                        f"duplicate section ({len(cls['duplicates'])}) — two copies, resolve by hand"
+                        if cls["duplicates"] else "")))
                     if cls["volatile_tracked"]:
                         tr.detail += ("; tracked volatile file(s) churned (un-audited, review before commit): "
                                       + ", ".join(cls["volatile_tracked"]))
