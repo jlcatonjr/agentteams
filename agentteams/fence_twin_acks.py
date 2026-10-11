@@ -29,6 +29,9 @@ REVIEW. That is no wider than what such a writer already has: unfenced text that
 never reviewed at all, and deleting the twin also clears its REVIEW. What the ledger adds is a
 record — a committed row with a reason, in the diff that adds it — and ``fleet`` still lists every
 acknowledged twin (``twins_acknowledged``) with that reason, so nothing is silenced invisibly.
+Because no row is tied to the operator, ``fleet`` also reports an acknowledgement as REVIEW until an
+earlier applied fleet run has shown it (``agentteams._fleet_twin_acks``): a row added or changed by
+anyone is flagged for operator review once, and cannot clear REVIEW in the run that first applies it.
 
 Stdlib only.
 """
