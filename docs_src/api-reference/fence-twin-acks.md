@@ -25,7 +25,8 @@ agents/technical-validator.agent.md,## Accuracy Rules,3f1c0e9a2b7d4c51,CH-08..10
 
 A matching row changes the merge notice from `twin kept (not provably template)` to
 `twin kept (acknowledged)`, with the reason. `fleet` does not count that notice as REVIEW. It lists it
-in the target's `twins_acknowledged`, so the acknowledgement stays visible in the fleet report.
+in the target's `twins_acknowledged`, so the acknowledgement stays visible in the fleet report. The first
+applied fleet run that shows a given acknowledgement still reports REVIEW (below).
 
 - **It never deletes.** The row is read only after the drop decision, and only to pick the notice
   for a twin already being kept. A twin that is provably template text is dropped whether or not a
@@ -40,6 +41,11 @@ in the target's `twins_acknowledged`, so the acknowledgement stays visible in th
   the team's files can add a row. That is no wider than what such a writer can already do: unfenced
   text that is not a twin is never reviewed, and deleting the twin also clears its REVIEW. The
   ledger adds a committed, reasoned record, and `fleet` keeps listing the twin.
+- **Changes are flagged for operator review.** Because no row is tied to the operator, `fleet` reports an
+  acknowledged twin as REVIEW until an earlier applied fleet run has shown that exact acknowledgement
+  (see [fleet: fence-twin acknowledgements are reviewed once](fleet.md#fence-twin-acknowledgements-are-reviewed-once)).
+  A row added or changed by anyone, committed or not, is flagged once and cannot clear REVIEW in the run
+  that first applies it.
 - A twin whose span cannot be bounded (for example, a heading that appears twice unfenced) cannot be
   acknowledged; resolve it by hand.
 
