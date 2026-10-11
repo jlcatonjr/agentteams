@@ -42,7 +42,7 @@ from agentteams.cli.output_target import apply_adapter_guard, refuse_foreign_tar
 from agentteams.cli.post_emit_checks import _post_emit_security_scan
 from agentteams.cli.render_pipeline import (
     _apply_placeholder_policy,
-    _build_final_rendered,
+    _build_final_rendered, twin_sources,
     _make_content_matches,
     _preserve_manual_values,
     _remove_stale_tool_agents,
@@ -647,7 +647,7 @@ def _run_generate_inner(
             shrink_policy=getattr(args, "shrink_policy", "preserve"),
             backup_path=backup_path,
             auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
-            brief_derived_files=brief_derived_files,
+            brief_derived_files=brief_derived_files, twin_sources=twin_sources(manifest, adapter), twin_drop=not args.no_backup,
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
@@ -883,7 +883,7 @@ def _run_generate_inner(
         shrink_policy=getattr(args, "shrink_policy", "preserve"),
         backup_path=backup_path,
         auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
-        brief_derived_files=brief_derived_files,
+        brief_derived_files=brief_derived_files, twin_sources=twin_sources(manifest, adapter), twin_drop=not args.no_backup,
         shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
     )
     emit.print_summary(result, manifest)
