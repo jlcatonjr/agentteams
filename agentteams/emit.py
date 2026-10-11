@@ -59,6 +59,7 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 # cli/, build_team, drift, and tests resolve emit.<symbol> unchanged.
 from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.learned_blocks import carry_learned_block
+from agentteams.fence_twins import persist_dropped as _persist_twins
 from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     BACKUP_MANIFEST_NAME,
     BACKUP_MANIFEST_SCHEMA_VERSION,
@@ -262,6 +263,8 @@ def emit_all(
     brief_derived_files: frozenset[str] = frozenset(),
     shrink_allow: frozenset[str] | None = None,
     discard_user_regions: bool = False,
+    twin_sources: dict[str, Any] | None = None,
+    twin_drop: bool | None = None,
 ) -> EmitResult:
     """Write rendered files to output_dir.
 
@@ -298,6 +301,10 @@ def emit_all(
         shrink_allow:   Reviewed ``<rel path>:<fence id>@<digest>`` shrink overrides, already
                         resolved by the caller (``shrink_allow.resolve``: flags + env); None or
                         empty means none. Refused without a backup dir.
+        twin_sources:   rel path -> ``fence_twins.TwinSource``; lets a merge prove an unfenced pre-fencing
+                        twin is template text and drop it (only with a backup dir; see fence_twins).
+        twin_drop:      Whether the run may drop twins; None means "when backup_path is set". A dry run
+                        passes the real run's answer (``not --no-backup``) so its preview matches.
 
     Returns:
         EmitResult with results of all write operations.
@@ -438,6 +445,7 @@ def emit_all(
                     rel_path=rel_path,
                     brief_derived_files=brief_derived_files,
                     shrink_allow=_allow,
+                    twin_source=(twin_sources or {}).get(rel_path), twin_drop=bool(twin_drop),
                 )
                 _sa.track(_allow_used, _pinned, rel_path, existing_text, mr)
                 # Plan 3: dry-run preview also surfaces the notices that the
@@ -634,6 +642,7 @@ def emit_all(
                 rel_path=rel_path,
                 brief_derived_files=brief_derived_files,
                 shrink_allow=_allow,
+                twin_source=(twin_sources or {}).get(rel_path), twin_drop=twin_drop is not False and backup_path is not None,
             )
             _sa.track(_allow_used, _pinned, rel_path, existing_text, merge_result)
             # Front-matter drift: the template's front matter moved on while this file kept its
@@ -684,6 +693,7 @@ def emit_all(
             # auto-resolved — see fences._detect_duplicate_sections.
             for notice in merge_result.duplicate_section_notices:
                 result.notices.append(f"{rel_path}: {notice}")
+            result.notices.extend(_persist_twins(rel_path, merge_result.twins_dropped, backup_path))
             # A rule that vanished from an unfenced region is never restored by a merge, and
             # the drift notice above is silent on edited files — which is every tampered file.
             for notice in merge_result.deleted_constraint_notices:
