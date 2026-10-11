@@ -5,7 +5,7 @@
 
 - Modules mapped: **241**
 - Packages: **9**
-- Internal import edges: **654**
+- Internal import edges: **653**
 - Distinct external dependencies: **11**
 
 ---
@@ -105,7 +105,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.output_target` | `agentteams.backup`, `agentteams.drift` | `agentteams.cli.generate` |
 | `agentteams.cli.package_switch` | `agentteams.cli.security_gate`, `agentteams.security_refs`, `agentteams.team_package` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.parser` | `agentteams`, `agentteams.capability_hints`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.backup_switch`, `agentteams.cli.branch_switch`, `agentteams.cli.fleet_switch`, `agentteams.cli.goose_switch`, `agentteams.cli.package_switch`, `agentteams.cli.parser_validate`, `agentteams.cli.sync_switch`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.mcp_servers`, `agentteams.source_provenance` | `agentteams.cli.app` |
-| `agentteams.cli.parser_validate` | `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.branch_switch`, `agentteams.shrink_allow` | `agentteams.cli.parser` |
+| `agentteams.cli.parser_validate` | `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.branch_switch` | `agentteams.cli.parser` |
 | `agentteams.cli.post_emit_checks` | `agentteams.emit`, `agentteams.scan` | `agentteams.cli.generate` |
 | `agentteams.cli.proposal_commands` | `agentteams.confinement`, `agentteams.ingest`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` | `agentteams.cli.app` |
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
@@ -267,7 +267,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
 | `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch` |
 | `agentteams.session_scan` | `agentteams.plan_steps` | — |
-| `agentteams.shrink_allow` | `agentteams.fences` | `agentteams.cli.generate`, `agentteams.cli.parser_validate`, `agentteams.emit`, `agentteams.fences` |
+| `agentteams.shrink_allow` | `agentteams.fences` | `agentteams.cli.generate`, `agentteams.emit`, `agentteams.fences` |
 | `agentteams.source_provenance` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.parser` |
 | `agentteams.stale_detector` | `agentteams.backup`, `agentteams.bridge`, `agentteams.drift`, `agentteams.fleet`, `agentteams.frameworks.registry`, `agentteams.multi_sync`, `agentteams.sync_pin` | `agentteams.cli.commands`, `agentteams.stale_remediate` |
 | `agentteams.stale_remediate` | `agentteams.backup`, `agentteams.cli.commands`, `agentteams.fleet`, `agentteams.stale_detector` | `agentteams.cli.commands` |
@@ -1186,8 +1186,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.cli.agent_doc_sync_switch",
-        "agentteams.cli.branch_switch",
-        "agentteams.shrink_allow"
+        "agentteams.cli.branch_switch"
       ],
       "external": [],
       "repo_local": []
@@ -4316,10 +4315,6 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.parser_validate",
       "target": "agentteams.cli.branch_switch"
-    },
-    {
-      "source": "agentteams.cli.parser_validate",
-      "target": "agentteams.shrink_allow"
     },
     {
       "source": "agentteams.cli.post_emit_checks",
