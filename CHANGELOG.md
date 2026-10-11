@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (merge: resolve the unfenced pre-fencing copy of a fenced section, only on proof)
+
+- **The bug.** A team rendered before its template fenced a section carries that section unfenced. `--update
+  --merge` added the fenced block and kept the old copy, so the file held the section twice. researchteam's
+  `technical-validator` recipe held CH-01..10 beside TV-01..07 and two `## Invariant Core` headings. The
+  same defect affects 5 researchteam-family repos and 13 Visual-Knowledge repos, in `.md` agents and Goose
+  recipes. The duplicate notice fired only on the run that added the fence, and never inside a Goose
+  `instructions:` block, where headings are indented.
+- **The fix.** A new module, `agentteams/fence_twins.py`, runs on every merge. It drops an unfenced twin
+  **only** when its text, with whitespace collapsed, equals one of:
+  - the fenced copy; or
+  - a section that an earlier template emitted unfenced, resolved with today's placeholder values.
+
+  Earlier templates come from `agentteams/data/template_lineage.json`, which is generated from git by
+  `scripts/build_template_lineage.py`. The template comparison is skipped when an adapter transforms the
+  section. Everything else is kept, with a `twin kept (not provably template)` notice that `fleet` reports as
+  REVIEW. That includes researchteam's hand-written CH-08..10 rows. A dropped twin's text goes to a
+  `.lost.unfenced-<fence>.md` sidecar. With no backup dir, nothing is dropped.
+- **Integrity.** The corpus is deletion authority (Rule 12). `fence_twins.py` and the corpus are pinned in
+  `ENFORCEMENT_MODULES`, the manifest is re-recorded, and `tests/test_template_lineage.py` checks
+  regeneration and per-entry provenance. A new CI job runs that test with full public history. New red-team
+  probe D6 checks that a hand-edited twin survives a merge that holds drop authority.
+
 ### feat (instructions: a USER-EDITABLE Project Layout region)
 
 - **The problem.** The generated Directory Structure and Output Conventions in `copilot-instructions.md`,

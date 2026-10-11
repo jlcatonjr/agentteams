@@ -264,6 +264,41 @@ def _build_final_rendered(
         _graph.generate_graph_handoff_svg(graph_file_map, project_name=project_name),
     ))
     return final
+
+
+def twin_sources(manifest: dict[str, Any], adapter: Any) -> dict[str, Any]:
+    """Map each rendered output path to the template and placeholder values it was rendered from.
+
+    Mirrors :func:`render.render_all` (fallback template included) and the adapter's output-path
+    finalisation, so ``emit_all`` can let a merge prove that an unfenced pre-fencing twin is template
+    text (``agentteams.fence_twins``). A path missing here only ever keeps its twins.
+
+    Args:
+        manifest: The team manifest.
+        adapter: The framework adapter (``finalize_output_path``).
+
+    Returns:
+        ``{final rel path: fence_twins.TwinSource}``.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.fence_twins import TwinSource
+
+    sources: dict[str, Any] = {}
+    for spec in manifest.get("output_files", []):
+        template = spec.get("template", "")
+        if template and not (TEMPLATES_DIR / template).exists():
+            template = spec.get("fallback_template", "")
+        if not template or not (TEMPLATES_DIR / template).exists():
+            continue
+        placeholders = render._build_placeholder_map_for_file(
+            manifest, component_slug=spec.get("component_slug"), file_spec=spec)
+        final_path = adapter.finalize_output_path(spec["path"], _guess_file_type(spec["path"]))
+        sources[final_path] = TwinSource(template=template, placeholders=placeholders)
+    return sources
+
+
 def _make_content_matches(
     output_dir: Path,
     rendered_by_path: dict[str, str],

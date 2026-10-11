@@ -18,6 +18,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`render`](render.md) | Resolve templates and produce rendered agent file content |
 | [`emit`](emit.md) | Write rendered agent files to disk safely |
 | [`fences`](fences.md) | Section-fencing internals (regexes, MergeResult, fenced merge, shrink detection) — carved from emit |
+| [`fence_twins`](fence-twins.md) | Drops an unfenced pre-fencing copy of a fenced section only on proof (git-derived lineage corpus or the fenced copy); keeps and flags the rest |
 
 ## Core Support Modules
 

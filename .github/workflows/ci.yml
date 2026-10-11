@@ -60,6 +60,28 @@ jobs:
         if: runner.os == 'Linux'
         run: bash scripts/check-durable-tmp-refs.sh
 
+  # The fence-twin lineage corpus (agentteams/data/template_lineage.json) is deletion authority
+  # (Rule 12): every entry must be the unfenced section git says its cited commit held. The test job
+  # above is a shallow clone, so the provenance check runs here with full public history. Entries
+  # from the archived pre-public history (not on origin) are checked only where it is present; set
+  # AGENTTEAMS_REQUIRE_LINEAGE_HISTORY=1 on a runner that has it to make that check mandatory.
+  template-lineage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install package and pytest
+        run: pip install -e ".[test]"
+
+      - name: Lineage corpus provenance and regeneration
+        run: pytest tests/test_template_lineage.py -v
+
   # Follow-up #5 (2026-09-30): the goose Seatbelt profile under the REAL sandbox-exec on an unnested
   # macOS runner, plus the macOS launcher gate. ADVISORY until 2026-10-14 (remediation row
   # macos-seatbelt-job-required): a red result is visible but does not block merges yet.

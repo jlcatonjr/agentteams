@@ -419,7 +419,8 @@ def _resolve_file(
     # that sits both inside a fence and outside one, which is exactly that residue.
     headings: list[str] = []
     for notice in result.duplicate_section_notices:
-        m = re.search(r"duplicate section '([^']+)'", notice)
+        # The merge names a fence-leading twin it kept with fence_twins' notice instead (2026-10-10).
+        m = re.search(r"(?:duplicate section|twin kept \(not provably template\)): '([^']+)'", notice)
         if m and m.group(1) not in headings:
             headings.append(m.group(1))
     for heading in _duplicate_headings_in_file(text):

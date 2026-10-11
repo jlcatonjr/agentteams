@@ -364,8 +364,8 @@ def test_removal_refuses_a_span_containing_a_fence(tmp_path, monkeypatch):
 def test_duplicate_is_found_when_the_fence_is_already_present(tmp_path):
     """A heading appearing both inside a fence and outside one is a collision.
 
-    The merge-notice path cannot see this: re-merging an already-fenced file produces no
-    notices at all.
+    The merge-notice path could not see this until 2026-10-10: re-merging an already-fenced file
+    produced no notices at all. ``fence_twins`` now examines every merge, so both paths see it.
     """
     r = resolver
     deployed = tmp_path / "navigator.md"
@@ -381,10 +381,8 @@ def test_duplicate_is_found_when_the_fence_is_already_present(tmp_path):
     )
     text = deployed.read_text(encoding="utf-8")
 
-    # Precondition: the merge-notice path is blind here — that is the defect.
-    assert not r._merge_fenced_content(text, text).duplicate_section_notices, (
-        "fixture invalid: the notice path still sees this, so it proves nothing"
-    )
+    # The merge-notice path now reports it too (it was blind here; that was the defect).
+    assert any("'## Invariant Core'" in n for n in r._merge_fenced_content(text, text).duplicate_section_notices)
 
     found = r._duplicate_headings_in_file(text)
     assert "## Invariant Core" in found, (
