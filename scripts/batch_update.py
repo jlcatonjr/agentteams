@@ -256,6 +256,23 @@ def diff_backup_vs_current(backup_dir: Path, agents_dir: Path) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
+def echo_stderr(stderr: str) -> None:
+    """Print the update's stderr: the first 500 characters, then every shrink-grant warning in full.
+
+    A skipped, refused or unused ``--shrink-allow`` entry can sit past the 500-character echo, so its
+    warning line is always printed whole.
+
+    Args:
+        stderr: The captured stderr of one repository's update.
+    """
+    if not stderr:
+        return
+    print(f"  STDERR: {stderr[:500]}")
+    for line in stderr.splitlines():
+        if "WARNING: --shrink-allow" in line:
+            print(f"  {line.strip()}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run --update --merge on all local agent team repos.",
@@ -332,8 +349,7 @@ def main() -> int:
         stdout = result.stdout
         stderr = result.stderr
         print(stdout)
-        if stderr:
-            print(f"  STDERR: {stderr[:500]}")
+        echo_stderr(stderr)
 
         # ---- Post-update snapshot ----
         post_state = snapshot_repo_state(repo_path, agents_dir)
