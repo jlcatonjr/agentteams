@@ -46,6 +46,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tree or behind a symlink is not used; an imbalance detail naming the reason does not record.
 - **Docs.** `docs_src/api-reference/fleet.md` (REVIEW row, new section) and `fence-twin-acks.md`.
 
+
+### fix (cross-repo guard in git-operations; single-path layout fields documented)
+
+Follow-up to the OrthodoxLLM triage.
+- **Cross-repo guard.** git-operations' CI/CD verification rule still read "a repository other than
+  `{PRIMARY_OUTPUT_DIR}`", which renders as a folder (`src/`, `*/outputs/`). It now reads "a repository other than
+  this project's own (<project name>)", like the guards #192 fixed. The cross-repository coordination guide is
+  corrected too. The example goldens are regenerated; only that line changed. A regression test keeps every
+  template off the old wording.
+- **Docs.** `DESCRIPTION-FORMAT.md` says `primary_output_dir` and `reference_db_path` hold one path, that a glob is
+  rendered as literal text, and that a project with deliverables in several places describes them in the
+  instruction files' Project Layout section. `PLACEHOLDER-CONVENTIONS.md` says `{PRIMARY_OUTPUT_DIR}` is never a
+  repository name. Structured multi-root fields stay deferred.
+
 ### feat (fence twins: an operator acknowledgement ends the REVIEW for a twin kept on purpose)
 
 - **The problem.** `fence_twins` keeps every unfenced twin it cannot prove is template text, and `fleet`

@@ -120,6 +120,15 @@ Copy this template and fill in your values. Only `project_goal` is required; all
 **Default:** Inferred from project type (`"src/"` for software, `"html/"` for content).  
 **Purpose:** Where authored files live. This is what agents treat as the "source of truth" for primary deliverables.
 
+**One path only.** The field holds a single directory. A glob such as `*/outputs/` is not expanded: it is rendered
+as literal text. It names a place inside this project, never a repository; templates name the repository with
+`{PROJECT_NAME}`.
+
+**Deliverables in several places.** Describe the real layout in the **Project Layout** section of
+`copilot-instructions.md`, `CLAUDE.md` and `AGENTS.md`. That section is user-editable and sits outside every fence,
+so `--update` never overwrites it, and the generated Directory Structure and Output Conventions defer to it where
+they differ. Structured multi-root fields are not supported yet.
+
 ---
 
 ### `build_output_dir`
@@ -174,6 +183,9 @@ Each entry:
 **Type:** string (path) or null  
 **Default:** null  
 **Purpose:** Path to a BibTeX `.bib` file or similar citation database. When provided, the `reference-manager` archetype is included and this path populates the agent's database reference.
+
+A single path. A glob (e.g. `Projects/*/references/bibliography.bib`) is rendered as literal text. If a project
+keeps several bibliographies, list them in the instruction files' **Project Layout** section.
 
 ---
 

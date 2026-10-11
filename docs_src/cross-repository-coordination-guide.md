@@ -121,7 +121,7 @@ New repos discovered without a `_build-description.json` are recorded as `exclud
 
 ## Governance: Constitutional Rule #11
 
-Any action that modifies files in a repository other than the project's `PRIMARY_OUTPUT_DIR` must first be assessed by `@repo-liaison` and cleared by `@security`. This applies without exception:
+Any action that modifies files in a repository other than this project's own repository must first be assessed by `@repo-liaison` and cleared by `@security`. This applies without exception:
 
 - Template propagation to adjacent repos
 - Bridge artifact writes into another repo's `references/` directory

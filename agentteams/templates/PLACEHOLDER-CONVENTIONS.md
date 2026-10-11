@@ -12,7 +12,7 @@ These are filled automatically by the rendering engine from the project descript
 
 - `{PROJECT_NAME}` — The project name
 - `{PROJECT_GOAL}` — One-sentence project goal
-- `{PRIMARY_OUTPUT_DIR}` — Path to the primary output directory
+- `{PRIMARY_OUTPUT_DIR}` — Path to the primary output directory. It is a directory (or literal glob text) inside the project; the repository itself is `{PROJECT_NAME}`.
 - `{AGENT_SLUG_LIST}` — Multi-line YAML list of all agent slugs
 - `{ADOPTED_AGENT_ROUTING_ROWS}` — Orchestrator routing-table rows for `--adopt-orphans` agents, one `\n`-prefixed row each, sorted by slug; `""` when nothing is adopted. Sits at the end of the last fixed row (not on its own line) so a team without adopted agents renders byte-identically
 - `{DOMAIN_AGENT_SLUGS}` — Comma-separated list of domain agent slugs
