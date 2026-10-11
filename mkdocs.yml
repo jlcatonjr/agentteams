@@ -172,6 +172,7 @@ nav:
       - emit: api-reference/emit.md
       - fences: api-reference/fences.md
       - fence-twins: api-reference/fence-twins.md
+      - fence-twin-acks: api-reference/fence-twin-acks.md
       - convert: api-reference/convert.md
       - integrity: api-reference/integrity.md
       - interop: api-reference/interop.md
