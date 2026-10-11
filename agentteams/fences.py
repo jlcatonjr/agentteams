@@ -766,10 +766,10 @@ _WHOLE_BODY_FENCE = "content"
 def _split_at_last_fence_end(content: str) -> tuple[str, str]:
     """Split *content* immediately after the final fence END marker's line.
 
-    Used by the whole-body migration branch to honour Merge Semantics rule 5 ("all content
-    outside any fence marker in the on-disk file is preserved unconditionally") on a code path
-    that otherwise replaces the file wholesale. For a whole-body-wrapped file the tail is
-    everything the wrap did not cover — in practice the ``## Project-Specific Notes`` region.
+    The whole-body migration uses the tail only to say whether content outside the retired fence
+    was carried over (since 2026-10-11 it rewrites just the ``content`` block, so nothing outside it
+    is replaced). For a whole-body-wrapped file the tail is everything the wrap did not cover — in
+    practice the ``## Project-Specific Notes`` region.
 
     Args:
         content: A full file body.
@@ -1052,7 +1052,7 @@ def _merge_fenced_content(
         mig = _wbm.migrate(
             new_rendered, existing_on_disk, _existing_probe,
             bridge_blocks=_bridge_blocks_in(_existing_probe.get(_WHOLE_BODY_FENCE, ""), rel_path),
-            twin_source=twin_source,
+            twin_source=twin_source, allow_drop=twin_drop,
         )
         if mig is not None:
             inner = _merge_fenced_content(

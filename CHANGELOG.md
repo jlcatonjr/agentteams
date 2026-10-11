@@ -20,13 +20,16 @@ From the 2026-10-11 fleet re-render audit, which held 12 repositories on it.
   handoffs or a capability change were overwritten without the three-way merge seeing them.
 - **Text inside the old block.** Each section is matched to the render. A section the template leaves unfenced
   keeps its deployed copy unless that copy is provably template text. A user region, or a section the template does
-  not have, is carried out unfenced. An unproven copy of a section the template now fences, or one holding a managed
-  marker, is not kept, because keeping it recreates the duplicate. The migration notice names every kept, carried or
-  unproven section, the old body goes to the `.lost.content.md` sidecar, and fleet reads the notice as REVIEW.
-  Under `--shrink-policy allow` the migration is now still reported and its sidecar written.
+  not have, is carried out unfenced. An unproven copy of a section the template now fences is left to the
+  `.lost.content.md` sidecar when the run has a backup dir (keeping it recreates the duplicate); without one it is
+  carried out as a twin that the twin pass keeps and flags. Text holding a managed marker, a TOML delimiter or a
+  Rule S-5 instruction-override pattern is never re-emitted outside the fence. The migration notice names every
+  kept, carried or unproven section, and fleet reads it as REVIEW. Under `--shrink-policy allow` the migration is
+  now still reported and its sidecar written.
 - **Duplicate report.** The notice no longer claims an unfenced copy when both copies are fenced. A section copied
   into two fences (a stale `content` block beside `invariant_core`) is now reported on every merge. Fleet files
-  duplicate-section notices as their own REVIEW class (`duplicates`), not as shrink notices.
+  duplicate-section notices as their own REVIEW class (`duplicates`), not as shrink notices, and matches every
+  twin/duplicate class at the start of the notice, so a quoted heading cannot move a notice out of REVIEW.
 
 ### fix (fleet and batch_update show skipped shrink grants)
 

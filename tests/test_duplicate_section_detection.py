@@ -79,7 +79,7 @@ def test_the_whole_body_migration_path_is_unaffected():
     """That case auto-resolves and must not also emit a collision notice for its own result."""
     deployed = "---\nname: A\n---\n\n<!-- AGENTTEAMS:BEGIN content v=1 -->\n## X\n\nold.\n<!-- AGENTTEAMS:END content -->\n"
     render = "---\nname: A\n---\n\n<!-- AGENTTEAMS:BEGIN x v=1 -->\n## X\n\nnew.\n<!-- AGENTTEAMS:END x -->\n"
-    result = _merge_fenced_content(render, deployed)
+    result = _merge_fenced_content(render, deployed, twin_drop=True)  # a real run, with a backup dir
     assert result.merged_content.count("## X") == 1
     assert result.duplicate_section_notices == []
 

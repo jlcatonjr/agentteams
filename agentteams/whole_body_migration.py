@@ -28,13 +28,19 @@ edited it. Each heading section of the old body (``#``/``##``, with its subsecti
   template text (template text means every line is in the render's copy, or the section equals a past
   template rendering in the lineage corpus). That section is project-owned from now on, exactly as it is in
   a freshly generated file;
-* any other section: dropped when every line survives elsewhere in the result, or when it equals a past
-  template rendering of its heading (lineage corpus). A ``USER-EDITABLE`` or ``Project-Specific`` region,
-  and a section the template does not have at all, is carried over unfenced: keeping it duplicates nothing.
-  Two kinds are not kept in the file: an unproven copy of a section the template now fences (keeping it
-  recreates the duplicate this module exists to remove) and a section holding a managed marker (re-emitting
-  a marker outside its fence would forge one). They are named in the notice, and their text is in the
-  ``.lost.content.md`` sidecar.
+* any other section: dropped when every line survives in the result (judged against the other fences'
+  *new* bodies), or when it equals a past template rendering of its heading (lineage corpus). A
+  ``USER-EDITABLE`` or ``Project-Specific`` region, and a section the template does not have at all, is carried
+  over unfenced: keeping it duplicates nothing. An unproven copy of a section the template now fences is left
+  out (keeping it recreates the duplicate this module exists to remove) only when the run has a backup dir to
+  save it to; without one it is carried out as a twin, which :mod:`agentteams.fence_twins` keeps and flags.
+
+Nothing holding a managed marker, a TOML string delimiter or a Rule S-5 instruction-override pattern is ever
+re-emitted outside the fence (:func:`_unsafe`): a marker would be forged, and injected text would become
+project-owned text every later merge keeps (C-4). The template's copy is used and the old text stays in the
+``.lost.content.md`` sidecar. Marker and injection text is overwritten even on a run without a backup dir, as the
+whole-body branch always did; any other text that would survive only in a sidecar makes such a run skip the
+migration instead (the old fence stays, and the duplicate report names it) until a run with a backup dir.
 
 Every kept, carried or unproven section is named in the migration notice, which ``fleet`` reads as REVIEW.
 
@@ -54,23 +60,24 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agentteams import fence_twins
+from agentteams.fences import _WHOLE_BODY_FENCE
 from agentteams.unfenced import _FENCE_BEGIN_RE, _FENCE_END_RE
 from agentteams.user_regions import HEADINGS as _USER_HEADINGS
 
-#: The section id ``_normalize_generated_content`` uses when it wraps an entire unfenced body.
-WHOLE_BODY_FENCE = "content"
+#: The section id ``_normalize_generated_content`` uses when it wraps an entire unfenced body (single-sourced
+#: in :mod:`agentteams.fences`, which fence_twins imports first).
+WHOLE_BODY_FENCE = _WHOLE_BODY_FENCE
 #: Prefix of every duplicate-section notice. ``fleet`` files these as their own REVIEW class.
 DUPLICATE_PREFIX = "duplicate section"
 
 _SPLIT_RE = re.compile(r"^[ \t]*#{1,2}[ \t]+\S")
-_HEADING_RE = re.compile(r"^#{2,6}[ \t]+\S")
-_CODE_RE = re.compile(r"^[ \t]*(?:```|~~~)")
+_HEADING_RE = re.compile(r"^[ \t]*(#{1,6})[ \t]+\S")
+_CODE_RE = fence_twins._CODE_FENCE_RE
 _FM_CLOSE_RE = re.compile(r"^---[ \t]*$")
-_INSTRUCTIONS_RE = re.compile(r"^instructions:[ \t]*\|")
+_INSTRUCTIONS_RE = fence_twins._INSTRUCTIONS_RE
 #: A managed-region marker of any kind (template fence, bridge, learned block), even quoted in prose.
 _MARKER_RE = re.compile(r"AGENTTEAMS[-A-Z]*:(?:BEGIN|END)")
 _TOML_DELIMS = ("'''", '"""')
-_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _USER_MARKER_RE = re.compile(r"^\s*>.*USER[- ]EDITABLE|^\s*#{1,6}\s.*USER[- ]EDITABLE|BEGIN USER[- ]EDITABLE")
 
 
@@ -88,6 +95,9 @@ class Migration:
         retired: Headings dropped as a past template rendering of a section the template removed.
         other_fences: The other fences the file already carried, updated in place.
         bridge_blocks: How many ``AGENTTEAMS-BRIDGE`` blocks were carried out of the old fence.
+        twins: Headings of unproven copies of now-fenced sections kept unfenced (no backup dir to drop to).
+        tampered: The subset of *unproven* holding a managed marker or an injection pattern: overwritten
+            even without a backup dir, as the whole-body branch always did (@security, 2026-09-30).
     """
 
     content: str
@@ -99,6 +109,8 @@ class Migration:
     retired: list[str] = field(default_factory=list)
     other_fences: list[str] = field(default_factory=list)
     bridge_blocks: int = 0
+    twins: list[str] = field(default_factory=list)
+    tampered: list[str] = field(default_factory=list)
 
 
 def applies(existing_regions: Mapping[str, str], new_regions: Mapping[str, str]) -> bool:
@@ -187,14 +199,35 @@ def _norm_lines(lines: list[str] | str) -> set[str]:
 
 
 def _covered(chunk: list[str], pool: set[str]) -> bool:
-    """True when every non-blank line of *chunk*, outside HTML comments, is in *pool*.
+    """True when every non-blank line of *chunk* is in *pool*."""
+    return all(fence_twins.norm(x) in pool for x in chunk if x.strip())
 
-    A comment (an old template's SECTION MANIFEST) instructs no agent, so a stale one is not a reason to
-    keep the deployed copy. A managed marker is a comment too, but a chunk holding one is refused before
-    this is asked.
+
+def _unsafe(chunk: list[str]) -> str:
+    """Why *chunk* must never be re-emitted outside its fence, or ``""``.
+
+    A managed marker (even quoted) would forge a fence, bridge or learned block once outside the fence; a
+    TOML string delimiter would break a Codex agent; a Rule S-5 instruction-override pattern would turn
+    text a merge used to overwrite into project-owned text every later merge keeps (C-4).
     """
-    text = _COMMENT_RE.sub("", "".join(chunk))
-    return all(fence_twins.norm(x) in pool for x in text.splitlines() if x.strip())
+    from agentteams.scan import scan_content
+
+    text = "".join(chunk)
+    if _MARKER_RE.search(text):
+        return "holds a managed marker"
+    if any(d in text for d in _TOML_DELIMS):
+        return "holds a string delimiter"
+    if any(f.category == "injection" for f in scan_content(text)):
+        return "holds a Rule S-5 instruction-override pattern"
+    return ""
+
+
+def _withhold(mig: Migration, label: str, why: str) -> None:
+    """Record an unsafe section the result leaves out. Marker or injection text is tampering to overwrite."""
+    entry = f"{label} ({why})"
+    mig.unproven.append(entry)
+    if "delimiter" not in why:
+        mig.tampered.append(entry)
 
 
 def _corpus_match(chunk: list[str], heading: str, source: Any) -> bool:
@@ -213,25 +246,29 @@ def _corpus_match(chunk: list[str], heading: str, source: Any) -> bool:
     return False
 
 
-def _headings(text: str) -> tuple[set[str], set[str]]:
-    """``(fenced, unfenced)`` heading lines of *text*, stripped (``#``-``######``)."""
-    fenced: set[str] = set()
-    unfenced: set[str] = set()
-    depth = 0
+def _heading_sites(text: str) -> list[tuple[str, int, str | None]]:
+    """``(heading, level, fence sid or None)`` for every heading outside a code block, in order."""
+    sites: list[tuple[str, int, str | None]] = []
+    sid: str | None = None
     in_code = False
     for line in text.splitlines():
-        if _FENCE_BEGIN_RE.search(line):
-            depth, in_code = 1, False
-            continue
-        if _FENCE_END_RE.search(line):
-            depth, in_code = 0, False
+        m = _FENCE_BEGIN_RE.search(line)
+        if m or _FENCE_END_RE.search(line):
+            sid, in_code = (m.group("sid") if m else None), False
             continue
         if _CODE_RE.match(line):
             in_code = not in_code
             continue
-        if not in_code and re.match(r"^[ \t]*#{1,6}[ \t]+\S", line):
-            (fenced if depth else unfenced).add(line.strip())
-    return fenced, unfenced
+        h = _HEADING_RE.match(line)
+        if h and not in_code:
+            sites.append((line.strip(), len(h.group(1)), sid))
+    return sites
+
+
+def _headings(text: str) -> tuple[set[str], set[str]]:
+    """``(fenced, unfenced)`` heading lines of *text*, stripped (``#``-``######``)."""
+    sites = _heading_sites(text)
+    return {h for h, _, sid in sites if sid}, {h for h, _, sid in sites if not sid}
 
 
 def _last_end(lines: list[str]) -> int:
@@ -254,11 +291,14 @@ def _trim_blank_end(lines: list[str]) -> list[str]:
 
 
 def _rebuild(units: list[tuple[str, str, list[str]]], skip: set[str], pool: dict[str, list[list[str]]],
-             source: Any, mig: Migration, *, intro: bool) -> list[str]:
+             source: Any, mig: Migration, *, intro: bool, present: set[str]) -> list[str]:
     """The render's units with on-disk fences cut out and edited unfenced sections taken from disk.
 
     Text before the first heading (key ``""``) is matched only when *intro* is set and it is the
-    render's first unit: anywhere else an unheaded run is not the old body's preamble.
+    render's first unit: anywhere else an unheaded run is not the old body's preamble. A text unit whose
+    every line the file already carries outside the old fence (*present*: a title above it) is skipped.
+    Once a deployed section replaces the render's, the render's continuation of that section after a fence
+    is skipped too: the deployed copy is the whole section, and adding the template's tail would repeat it.
     """
     out: list[str] = []
     skip_space = False
@@ -278,13 +318,18 @@ def _rebuild(units: list[tuple[str, str, list[str]]], skip: set[str], pool: dict
             if not skip_space:
                 out += lines
         elif kind == "cont":
-            if key not in used or not _covered(lines, used[key]):
+            if key not in used:
                 out += lines
+        elif present and _covered(lines, present):
+            continue
         else:
             deployed = pool.get(key, []) if key or (intro and n == 0) else []
             disk = deployed.pop(0) if deployed else None
             if disk is None or _covered(disk, section.get(key, set())) or _corpus_match(disk, key, source):
                 out += lines
+            elif _unsafe(disk):
+                out += lines                    # the template's copy; the deployed one stays in the sidecar
+                _withhold(mig, key or "(text before the first heading)", _unsafe(disk))
             else:
                 out += disk[:-1] + [disk[-1] if disk[-1].endswith("\n") else disk[-1] + "\n"]
                 used[key] = _norm_lines(disk)
@@ -294,7 +339,8 @@ def _rebuild(units: list[tuple[str, str, list[str]]], skip: set[str], pool: dict
 
 
 def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str], *,
-            bridge_blocks: list[str] | None = None, twin_source: Any = None) -> Migration | None:
+            bridge_blocks: list[str] | None = None, twin_source: Any = None,
+            allow_drop: bool = False) -> Migration | None:
     """Retire the on-disk ``content`` fence in favour of the render's named sections.
 
     Args:
@@ -304,11 +350,15 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
         bridge_blocks: ``AGENTTEAMS-BRIDGE`` blocks inside the old fence to carry over verbatim.
         twin_source: The file's :class:`agentteams.fence_twins.TwinSource`, or None (limits proof to the
             result itself).
+        allow_drop: Whether an unproven copy of a section the template now fences may be left out (its text
+            then lives only in the ``.lost`` sidecar). False — the default, and every run without a backup
+            dir — carries it out unfenced instead, where :mod:`agentteams.fence_twins` keeps and flags it.
 
     Returns:
         The rewritten file and what happened to the old body, or None when the file's layout cannot be
-        mapped safely (the render's indentation differs, or the render has no fence): the caller then
-        falls back to the ordinary merge, which keeps ``content`` and reports the duplicates.
+        mapped safely (the render's indentation differs, or the render has no fence), or when *allow_drop*
+        is False and some old text would survive only in a sidecar: the caller then falls back to the
+        ordinary merge, which keeps ``content`` and reports the duplicates.
 
     Raises:
         Nothing.
@@ -349,14 +399,18 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
     if r_title and d_title and r_title != d_title and r_title not in pool and pool.get(d_title):
         pool[r_title] = [pool[d_title].pop(0)]
     before, after = d_lines[:begin], d_lines[end + 1:]
-    tail_blank = not "".join(d_lines[_last_end(d_lines) + 1:]).strip()
+    present = _norm_lines(d_lines[_body_start(d_lines):begin])
+    # The render's own tail (## Project-Specific Notes) is new only when the file carries no unfenced text
+    # after the old fence — wherever its last fence sits (an earlier merge could append one after the notes).
+    tail_blank = not any(x.strip() for kind, _, lines in _units(after) if kind != "fence" for x in lines)
     skip = set(mig.other_fences)
     section = _trim_blank_end(_rebuild(_units(r_lines[r_start:r_end + 1]), skip, pool, twin_source, mig,
-                                       intro=True))
+                                       intro=True, present=present))
     tail: list[str] = []
     if tail_blank and "".join(r_lines[r_end + 1:]).strip():
         # The file ends at its last fence: the render's own tail (## Project-Specific Notes) is new.
-        tail = _rebuild(_units(r_lines[r_end + 1:]), skip, pool, twin_source, mig, intro=False)
+        tail = _rebuild(_units(r_lines[r_end + 1:]), skip, pool, twin_source, mig, intro=False,
+                        present=present)
         after = _trim_blank_end(after)
     section += ["\n"] + carried_bridge if carried_bridge else []
 
@@ -369,23 +423,32 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
 
     fenced_r, unfenced_r = _headings(new_rendered)
     leftovers = [(key, lines) for key, lines in order if any(lines is c for c in pool.get(key, []))]
-    result_lines = _norm_lines(assemble([]))
+    # Coverage is judged against the result as the ordinary merge will leave it: the other fences carry the
+    # render's bodies, not their old ones, so a line only an old fence body holds is not "kept".
+    render_blocks = {key: lines for kind, key, lines in _units(r_lines) if kind == "fence"}
+    result_lines = _norm_lines([x for kind, key, lines in _units(assemble([]).splitlines(keepends=True))
+                                for x in (render_blocks.get(key, lines) if kind == "fence" else lines)])
     carried: list[str] = []
     for key, lines in leftovers:
         label = key or "(text before the first heading)"
         if _covered(lines, result_lines):
             continue
-        text = "".join(lines)
         user_region = key in _USER_HEADINGS or any(_USER_MARKER_RE.search(x) for x in lines)
-        if _MARKER_RE.search(text) or any(d in text for d in _TOML_DELIMS):
-            mig.unproven.append(label)      # never re-emit a managed marker outside its fence
+        if _unsafe(lines):
+            _withhold(mig, label, _unsafe(lines))
         elif user_region:
             carried += _trim_blank_end(lines) + ["\n"]
             mig.carried.append(label)
         elif key in fenced_r:
-            # The template now fences this section: keeping the old copy recreates the duplicate.
-            if not _corpus_match(lines, key, twin_source):
+            # The template now fences this section: keeping the old copy recreates the duplicate, so it is
+            # left out only when a backup holds it; otherwise it becomes a twin the twin pass flags.
+            if _corpus_match(lines, key, twin_source):
+                continue
+            if allow_drop:
                 mig.unproven.append(label)
+            else:
+                carried += _trim_blank_end(lines) + ["\n"]
+                mig.twins.append(label)
         elif key and _corpus_match(lines, key, twin_source):
             mig.retired.append(label)
         elif key in unfenced_r and fence_twins.norm(key) in result_lines:
@@ -393,6 +456,10 @@ def migrate(new_rendered: str, existing: str, existing_regions: Mapping[str, str
         else:
             carried += _trim_blank_end(lines) + ["\n"]
             (mig.kept_deployed if key in unfenced_r else mig.carried).append(label)
+    if set(mig.unproven) - set(mig.tampered) and not allow_drop:
+        # Something would live only in a sidecar this run will not write: keep the old fence instead. The
+        # ordinary merge then reports the duplicates, and a run with a backup dir migrates.
+        return None
     mig.content = assemble(_trim_blank_end(carried))
     return mig
 
@@ -430,6 +497,9 @@ def migration_notice(mig: Migration, *, has_tail: bool) -> str:
     if mig.retired:
         parts.append("; dropped " + ", ".join(repr(h) for h in mig.retired)
                      + " (a past template rendering of a section the template retired)")
+    if mig.twins:
+        parts.append("; kept " + ", ".join(repr(h) for h in mig.twins) + " unfenced beside the template's fenced "
+                     "copy (not provably template text, and no backup dir to save it to) — see the twin notices")
     if mig.unproven:
         parts.append("; NOT KEPT, not provably template text: " + ", ".join(repr(h) for h in mig.unproven)
                      + " — review the old body in the .lost sidecar and move any real additions to "
@@ -462,23 +532,10 @@ def duplicate_notices(merged: str, added_sids: list[str]) -> list[str]:
     Raises:
         Nothing.
     """
-    text = fence_twins.dedented_view(merged)
     where: dict[str, list[str | None]] = {}
-    sid: str | None = None
-    in_code = False
-    for line in text.splitlines():
-        m = _FENCE_BEGIN_RE.search(line)
-        if m:
-            sid, in_code = m.group("sid"), False
-            continue
-        if _FENCE_END_RE.search(line):
-            sid, in_code = None, False
-            continue
-        if _CODE_RE.match(line):
-            in_code = not in_code
-            continue
-        if not in_code and _HEADING_RE.match(line):
-            where.setdefault(line.strip(), []).append(sid)
+    for heading, level, sid in _heading_sites(fence_twins.dedented_view(merged)):
+        if level >= 2:
+            where.setdefault(heading, []).append(sid)
     added = ", ".join(sorted(added_sids))
     out: list[str] = []
     for heading, sids in where.items():

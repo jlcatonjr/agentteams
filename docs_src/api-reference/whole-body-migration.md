@@ -33,8 +33,10 @@ Each heading section of the old body is matched to the render:
 | Heading the render keeps unfenced | the deployed copy is kept unless it is provably template text |
 | A user region, or a heading the render does not have | carried out of the fence, unfenced |
 | Equals a past template rendering of its heading (lineage corpus) | dropped |
-| An unproven copy of a section the render fences | **not kept**: keeping it recreates the duplicate |
-| Holds a managed marker or a TOML string delimiter | **not kept**: a marker outside its fence would forge one |
+| An unproven copy of a section the render fences | **not kept** when the run has a backup dir (keeping it recreates the duplicate); without one, carried out as a twin that `fence_twins` keeps and flags |
+| Holds a managed marker, a TOML string delimiter or a Rule S-5 instruction-override pattern | **never re-emitted** outside the fence (a marker would be forged; injected text would become project-owned) |
+
+On a run without a backup dir, text that would survive only in the sidecar makes `migrate` return `None`, so the old fence stays and the duplicate report names it; marker and injection text is the exception and is overwritten, as before.
 
 `migration_notice` names every kept, carried, dropped-as-retired and not-kept section. The notice is a
 `fence 'content':` shrink notice, so the old body goes to the `.lost.content.md` sidecar (also under
@@ -59,6 +61,6 @@ saying where the copies sit. Each notice starts with `DUPLICATE_PREFIX` (`duplic
 | `DUPLICATE_PREFIX` | `"duplicate section"`. |
 | `Migration` | The rewritten file and what happened to each old section. |
 | `applies(existing_regions, new_regions)` | The predicate above. |
-| `migrate(new_rendered, existing, existing_regions, *, bridge_blocks=None, twin_source=None)` | Returns a `Migration`, or `None` when the layout cannot be mapped (the render's indentation differs, or it has no fence). |
+| `migrate(new_rendered, existing, existing_regions, *, bridge_blocks=None, twin_source=None, allow_drop=False)` | Returns a `Migration`, or `None` when the layout cannot be mapped (the render's indentation differs, or it has no fence). |
 | `migration_notice(mig, *, has_tail)` | The notice line. |
 | `duplicate_notices(merged, added_sids)` | The duplicate report. |

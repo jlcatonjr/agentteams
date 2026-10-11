@@ -70,13 +70,18 @@ def test_adding_a_fence_suppresses_the_wrapper():
 # --- the migration ---------------------------------------------------------
 
 def test_the_section_is_not_duplicated():
-    """The defect itself: two copies of the same section, one stale."""
-    merged = _merge_fenced_content(_render(), _deployed()).merged_content
+    """The defect itself: two copies of the same section, one stale.
+
+    ``twin_drop=True`` is a real run with a backup dir. Since 2026-10-11 an unproven old copy of a
+    now-fenced section is left to the ``.lost`` sidecar only then; without a backup it is kept as a
+    flagged twin (tests/test_whole_body_coexisting_fences.py).
+    """
+    merged = _merge_fenced_content(_render(), _deployed(), twin_drop=True).merged_content
     assert merged.count("## Invariant Core") == 1
 
 
 def test_the_template_text_wins_and_the_stale_copy_goes():
-    merged = _merge_fenced_content(_render(), _deployed()).merged_content
+    merged = _merge_fenced_content(_render(), _deployed(), twin_drop=True).merged_content
     assert "NEW text" in merged
     assert "OLD text" not in merged
     assert "AGENTTEAMS:BEGIN content" not in merged
