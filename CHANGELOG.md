@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (reconcile adds missing capability keys, so existing teams can receive runner grants)
+
+- **The gap.** On an existing Claude team under `write_policy: orchestrator-only`, `--update --merge` then
+  `--reconcile-front-matter --reconcile-apply` gave the agents named in `mcp_grants` the runner tool names, but
+  never the `mcpServers: agentteams_runner` block. Those agents would list runner tools with no server behind
+  them. Reconcile skipped any template key the deployed file lacked, and could only rewrite single-line values.
+  The first pilot rehearsal (biographies) found it.
+- **The fix.**
+  - A capability key the template declares and the deployed file lacks is reported (`deployed: (absent)`).
+    `--reconcile-apply` adds it at the end of the front matter.
+  - A block value is now replaced whole; before, it was skipped as "not found verbatim".
+  - Missing non-capability keys are still not reported. Applying is still explicit, and every capability change
+    is still announced; additions print as `ADDED (absent)`.
+  - **@security conditions:**
+    - `hooks`, `memory` and a `permissionMode` other than `default`/`plan` are never added;
+    - an entry with an inline value plus continuation lines is reported but never applied, since the flat reader
+      would write `tools:` empty, and an empty value inherits every tool;
+    - replacements are anchored to a line start inside the front matter;
+    - column-0 comments are ignored when reading values, so a comment can't block a narrowing;
+    - a `permissionMode` is never changed to anything but `default`/`plan`, and an `agents` list is never added.
 ### feat (fleet: a new or changed fence-twin acknowledgement is flagged for operator review)
 
 - **The problem.** A row in `references/fence-twin-acks.csv` (#198) ends a kept twin's fleet REVIEW, but
