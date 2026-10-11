@@ -32,6 +32,11 @@ Four ways this could destroy content, and what stops each:
 3. A file with no fresh render is skipped.
 4. Whitespace-only normalisation, so no real difference can be normalised away.
 
+**Retired: ``--trust-provenance``.** It also deleted a *differing* copy when the file still hashed
+to its build-log entry. That hash is not proof that agentteams wrote the text — the merge keeps
+hand edits and the next build log hashes them — so the flag now fails with that reason. Twins that
+equality cannot settle are handled by ``agentteams --update --merge`` (``agentteams/fence_twins.py``).
+
 Usage::
 
     python scripts/resolve_fence_collisions.py --brief <brief.json> --output <agents-dir>
@@ -49,10 +54,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
-
-import hashlib  # noqa: E402
-import json  # noqa: E402
-import subprocess  # noqa: E402
 
 from agentteams.backup import backup_output_dir  # noqa: E402
 from agentteams.fence_twins import KEPT_PREFIX  # noqa: E402
@@ -86,52 +87,23 @@ def _run_pipeline(brief: Path, out_dir: Path, framework: str) -> None:
     _rp(brief, out_dir, framework=framework)
 
 
-def _file_is_pristine(agents_dir: Path, deployed: Path, ref: str = "HEAD") -> bool:
-    """True when *deployed* is byte-identical to what agentteams last emitted.
-
-    The second authorisation, and a stronger one than the equality proof. If a file still hashes
-    to its build-log entry, every byte in it was written by this tool — so an unfenced copy of a
-    section the template now fences is *necessarily* the stale pre-fencing version, whatever it
-    says. No project edit can be hiding in it, because the file contains no project edit at all.
-    Same reasoning `_merge_front_matter` uses to decide when a template value may be applied,
-    applied to sections instead of keys.
-
-    Falls back to the file's state at *ref* because a prior equality-proof run can itself modify
-    files (deletions only) and thereby invalidate their working-tree hash. ``HEAD`` is the default
-    and is wrong once that run has been committed — hence the ref is an operator-supplied argument
-    rather than a hardcoded ``HEAD~1``, which would be brittle against any other history shape.
-    The comparison is always against the **build log**, never against the ref's content, so a
-    project edit that was merely committed still fails.
-
-    A stale build log makes this conservative, never permissive: a hash that does not match
-    declines the resolution.
-    """
-    log = agents_dir / "references" / "build-log.json"
-    if not log.is_file():
-        return False
-    try:
-        hashes = json.loads(log.read_text(encoding="utf-8")).get("file_hashes", {})
-    except (OSError, json.JSONDecodeError):
-        return False
-    rel = deployed.relative_to(agents_dir).as_posix()
-    recorded = hashes.get(rel)
-    if not recorded:
-        return False
-
-    def _matches(blob: str) -> bool:
-        digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()
-        return digest.startswith(recorded) or recorded.startswith(digest[: len(recorded)])
-
-    if _matches(deployed.read_text(encoding="utf-8")):
-        return True
-    head = subprocess.run(
-        ["git", "show", f"{ref}:{deployed.as_posix()}"],
-        capture_output=True, text=True, cwd=REPO_ROOT,
+#: Retired flags -> why. ``--trust-provenance`` (with its ``--provenance-ref``) deleted a differing
+#: unfenced copy when the file still hashed to its build-log entry, reading that hash as proof that
+#: agentteams wrote every byte. It is not: ``--update --merge`` preserves hand-written text outside
+#: fences, and the build log it then writes hashes the merged file, hand edits included. So a
+#: "pristine" file can hold operator text, and the flag could delete it. Retired 2026-10-11. Delete
+#: this stub (and its tests) once no wrapper or runbook passes either flag; it exists only to explain.
+_RETIRED_FLAGS = {
+    flag: (
+        "retired. A build-log hash does not prove agentteams wrote a section: --update --merge keeps "
+        "hand-written text, and the next build log hashes it too. Pre-fencing twins are now resolved on "
+        "proof by `agentteams --update --merge` (agentteams/fence_twins.py): a twin of a fence-leading "
+        "heading that it cannot prove is kept and reported (fleet REVIEW), and other duplicated headings "
+        "get a duplicate-section notice; resolve those by hand. This script still removes a copy that "
+        "equals its fence."
     )
-    return head.returncode == 0 and _matches(head.stdout)
-
-
-_PROJECT_NOTES = "## Project-Specific Notes"
+    for flag in ("--trust-provenance", "--provenance-ref")
+}
 
 
 _FENCE_BEGIN_COUNT_RE = re.compile(r"AGENTTEAMS:BEGIN\s+([A-Za-z0-9_-]+)")
@@ -195,7 +167,8 @@ def _unfenced_starts(text: str, heading: str) -> list[int]:
     ones included, so a heading with a fenced twin always looked "duplicated". That refused all
     20 real collisions in this repo's own team through `_unfenced_section_span`, and — fixed
     there but not here — went on to refuse the six trailing ones through `_trailing_span`,
-    including under `--trust-provenance`, which was supposed to be their escape hatch.
+    including under the since-retired ``--trust-provenance`` flag, which was supposed to be their
+    escape hatch.
     """
     fenced_spans = _fenced_char_spans(text)
     return [
@@ -325,8 +298,8 @@ def _trailing_duplicates_a_deployed_fence(text: str, heading: str) -> bool:
     The authorisation for bounding a trailing section at end-of-file. If the text from the
     unfenced heading to EOF equals the body of a fenced region *in the same deployed file*,
     then removing it deletes nothing that does not survive inside that fence. The proof is
-    local: no provenance, no build log, no git ref, and no ``--trust-provenance``. That flag's
-    last use gutted a deployed ``security.md`` from 363 lines to 32, and it answers a different
+    local: no provenance, no build log, no git ref. The retired ``--trust-provenance`` flag's
+    last use gutted a deployed ``security.md`` from 363 lines to 32, and it answered a different
     question — "has anyone edited this file?" — which is not the one that makes a delete safe.
 
     Compared against the **deployed** fence, never the incoming render. The recurring defect in
@@ -394,19 +367,11 @@ def _unfenced_section_span(text: str, heading: str) -> tuple[int, int] | str:
     return start, start + len(heading) + following
 
 
-def _resolve_file(
-    deployed: Path,
-    fresh: str,
-    *,
-    agents_dir: Path | None = None,
-    trust_provenance: bool = False,
-    args_ref: str = "HEAD",
-) -> tuple[str | None, list[str], list[str]]:
+def _resolve_file(deployed: Path, fresh: str) -> tuple[str | None, list[str], list[str]]:
     """Return (new_text_or_None, resolved_headings, skipped_reports) for one file.
 
-    ``trust_provenance`` enables the second authorisation described in
-    :func:`_file_is_pristine`. Off by default and deliberately so: it removes content that does
-    *not* match the template, which the equality proof would refuse.
+    Equality is the only authorisation. The build-log provenance route (``--trust-provenance``)
+    was retired on 2026-10-11: see :data:`_RETIRED_FLAGS`.
     """
     text = deployed.read_text(encoding="utf-8")
     result = _merge_fenced_content(fresh, text)
@@ -463,18 +428,10 @@ def _resolve_file(
 
         span = _unfenced_section_span(working, heading)
         # A trailing section that is an exact copy of a fence already in this file can be
-        # bounded at EOF without provenance: the content survives inside the fence. Tried
-        # before the provenance route because it proves more with less — see
+        # bounded at EOF: the content survives inside the fence — see
         # `_trailing_duplicates_a_deployed_fence`.
         if span == "trailing" and _trailing_duplicates_a_deployed_fence(working, heading):
             span = _trailing_span(working, heading)
-        if span == "trailing" and trust_provenance and agents_dir is not None:
-            # A trailing section can only swallow a user region if one exists below it. Reference
-            # files never receive `## Project-Specific Notes` (emit._is_agent_doc excludes them),
-            # and a pristine file contains no operator content anywhere. Requiring BOTH is what
-            # makes bounding at end-of-file safe here; either alone would not be.
-            if _PROJECT_NOTES not in working and _file_is_pristine(agents_dir, deployed, args_ref):
-                span = _trailing_span(working, heading)
         if isinstance(span, str):
             skipped.append(f"{deployed.name}: {heading!r} — cannot bound: {span}")
             continue
@@ -527,19 +484,10 @@ def _resolve_file(
                 )
                 continue
         if _norm(working[start:end]) != _norm(_fence_body(incoming)):
-            pristine = (
-                trust_provenance
-                and agents_dir is not None
-                and _file_is_pristine(agents_dir, deployed, args_ref)
+            skipped.append(
+                f"{deployed.name}: {heading!r} — deployed copy differs from the template's; "
+                f"review by hand"
             )
-            if not pristine:
-                skipped.append(
-                    f"{deployed.name}: {heading!r} — deployed copy differs from the template's; "
-                    f"review by hand"
-                )
-                continue
-            working = working[:start] + working[end:]
-            resolved.append(f"{heading}  [provenance]")
             continue
 
         working = working[:start] + working[end:]
@@ -555,15 +503,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--framework", default="claude",
                     choices=["claude", "copilot-vscode", "copilot-cli"],
                     help="framework the deployed team was generated with (default: claude)")
-    ap.add_argument("--trust-provenance", action="store_true",
-                    help="also resolve a differing copy when the file is byte-identical to what "
-                         "agentteams last emitted (build-log hash) — a wider authorisation than "
-                         "the equality proof; see _file_is_pristine")
-    ap.add_argument("--provenance-ref", default="HEAD",
-                    help="git ref holding the pre-change state, used when a prior run of this "
-                         "script has already modified the working tree (default: HEAD)")
+    for flag in _RETIRED_FLAGS:
+        # Still parsed, only so that using one fails with the reason instead of argparse's bare
+        # "unrecognized arguments". Hidden from --help: there is nothing left to choose.
+        ap.add_argument(flag, nargs="?", const=True, default=None, help=argparse.SUPPRESS)
     ap.add_argument("--apply", action="store_true", help="write changes (default: report only)")
+    # Checked before parsing too, so the reason shows even when --brief/--output are missing.
+    raw = sys.argv[1:] if argv is None else argv
+    used = [f for f in _RETIRED_FLAGS if any(a == f or a.startswith(f + "=") for a in raw)]
+    if used:
+        ap.error(f"{', '.join(used)}: {_RETIRED_FLAGS[used[0]]}")
     args = ap.parse_args(argv)
+    used = [f for f in _RETIRED_FLAGS if getattr(args, f.lstrip("-").replace("-", "_")) is not None]
+    if used:
+        ap.error(f"{', '.join(used)}: {_RETIRED_FLAGS[used[0]]}")
 
     with tempfile.TemporaryDirectory() as td:
         generated = Path(td)
@@ -585,11 +538,7 @@ def main(argv: list[str] | None = None) -> int:
             if match is None:
                 unmatched.append(str(rel))
                 continue
-            new_text, resolved, skipped = _resolve_file(
-                deployed, match.read_text(encoding="utf-8"),
-                agents_dir=args.output, trust_provenance=args.trust_provenance,
-                args_ref=args.provenance_ref,
-            )
+            new_text, resolved, skipped = _resolve_file(deployed, match.read_text(encoding="utf-8"))
             all_skipped.extend(skipped)
             if new_text is not None:
                 planned[deployed] = new_text

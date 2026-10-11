@@ -144,138 +144,104 @@ def test_normalisation_is_whitespace_only(norm_in, norm_out):
     assert resolver._norm("Do not modify.") != resolver._norm("do not modify")
 
 
-# --- the provenance authorisation ------------------------------------------
-# Wider than the equality proof: it removes a copy that does NOT match the template, on the
-# grounds that a file still hashing to its build-log entry contains no project edit anywhere, so
-# an unfenced copy of a now-fenced section is necessarily the stale pre-fencing version.
-# Measured before building it: of the 20 collisions the equality proof refused, 11 were in
-# unmodified files, 9 in files this session's own deletion-only run had touched, and ZERO were
-# genuine project edits.
+# --- the retired provenance authorisation -----------------------------------
+# `--trust-provenance` deleted a copy that did NOT match the template when the file still hashed to
+# its build-log entry, reading the hash as "agentteams wrote every byte". It never meant that:
+# `--update --merge` keeps hand-written text outside fences and the next build log hashes the merged
+# file, hand edits included. Retired 2026-10-11; equality is the only authorisation left.
 
-def _with_build_log(tmp_path: Path, text: str, *, record_hash: bool) -> Path:
+def _with_build_log(tmp_path: Path, text: str) -> Path:
+    """A deployed file whose build-log hash matches it — the state the retired flag trusted."""
     import hashlib
     import json
 
     agents = tmp_path / "agents"
     (agents / "references").mkdir(parents=True)
-    f = agents / "a.agent.md"
-    f.write_text(text, encoding="utf-8")
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest() if record_hash else "0" * 64
+    (agents / "a.agent.md").write_text(text, encoding="utf-8")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
     (agents / "references" / "build-log.json").write_text(
         json.dumps({"file_hashes": {"a.agent.md": digest}}), encoding="utf-8"
     )
     return agents
 
 
-def test_a_differing_copy_resolves_when_the_file_is_pristine(tmp_path):
-    """The whole point: refusing here left 20 collisions that carried no project edit at all."""
-    text = _deployed("A stale earlier version of the contract.")
-    agents = _with_build_log(tmp_path, text, record_hash=True)
-    new_text, resolved, skipped = resolver._resolve_file(
-        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
-    )
-    assert resolved == ["## Invariant Core  [provenance]"], (resolved, skipped)
-    assert new_text is not None and "operator content that must survive" in new_text
+@pytest.mark.parametrize("argv", [
+    ["--trust-provenance"],
+    ["--provenance-ref", "HEAD~1"],
+    ["--provenance-ref=HEAD~1"],
+    ["--trust-provenance", "--provenance-ref", "HEAD~1", "--apply"],
+    ["--trust-prov"],                                   # an abbreviation argparse would accept
+])
+@pytest.mark.parametrize("with_required", [True, False])
+def test_the_retired_flags_refuse_with_the_reason(tmp_path, capsys, argv, with_required):
+    """Fails before rendering or writing anything, and says where twins are handled now."""
+    required = ["--brief", str(tmp_path / "absent.json"), "--output", str(tmp_path)]
+    if not with_required and argv == ["--trust-prov"]:
+        pytest.skip("an abbreviation is only resolved once the required arguments parse")
+    with pytest.raises(SystemExit) as exc:
+        resolver.main([*(required if with_required else []), *argv])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "retired" in err and "fence_twins" in err and "--update --merge" in err, err
 
 
-def test_an_edited_file_is_never_resolved_on_provenance(tmp_path):
-    """A hash that does not match declines. This is the guard the whole authorisation rests on."""
+def test_the_retired_flags_are_hidden_from_help(capsys):
+    with pytest.raises(SystemExit):
+        resolver.main(["--help"])
+    assert "provenance" not in capsys.readouterr().out
+
+
+def test_the_provenance_code_path_is_gone():
+    """Pins the ban itself, not just one helper name: the script never reads the build log."""
+    source = Path(resolver.__file__).read_text(encoding="utf-8")
+    for token in ("build-log.json", "file_hashes", "hashlib", "subprocess"):
+        assert token not in source, token
+    assert not hasattr(resolver, "_file_is_pristine")
+    with pytest.raises(TypeError):
+        resolver._resolve_file(Path("x"), _FRESH, trust_provenance=True)  # type: ignore[call-arg]
+
+
+def test_a_differing_copy_in_a_build_log_pristine_file_is_still_refused(tmp_path):
+    """The exact case the flag existed for. A matching hash no longer licenses the delete."""
     text = _deployed("A stale earlier version of the contract.")
-    agents = _with_build_log(tmp_path, text, record_hash=False)
-    new_text, resolved, skipped = resolver._resolve_file(
-        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
-    )
-    assert resolved == []
-    assert new_text is None
+    agents = _with_build_log(tmp_path, text)
+    new_text, resolved, skipped = resolver._resolve_file(agents / "a.agent.md", _FRESH)
+    assert (new_text, resolved) == (None, [])
     assert any("differs from the template" in s for s in skipped), skipped
 
 
-def test_provenance_is_off_unless_asked_for(tmp_path):
-    """A wider authorisation must never be reachable by default."""
-    text = _deployed("A stale earlier version of the contract.")
-    agents = _with_build_log(tmp_path, text, record_hash=True)
-    _, resolved, skipped = resolver._resolve_file(
-        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=False
-    )
-    assert resolved == []
-    assert any("differs from the template" in s for s in skipped)
-
-
 def test_a_trailing_section_is_still_refused_when_a_user_region_follows(tmp_path):
-    """The safety-critical case. Clean provenance does NOT license bounding at end-of-file here.
-
-    A trailing section can only swallow a user region if one exists below it — so the allowance
-    requires BOTH no `## Project-Specific Notes` and clean provenance. This fixture has the region,
-    so it must refuse however pristine the file is.
-    """
+    """A trailing section must never be bounded at EOF across `## Project-Specific Notes`."""
     with_notes = (
         "---\nname: A\ndescription: x\n---\n\n"
         + _KEPT_FENCE +
         "## Invariant Core\n\nA stale earlier version.\n"
         "\n## Project-Specific Notes\n\n- operator content that must survive.\n"
     )
-    agents = _with_build_log(tmp_path, with_notes, record_hash=True)
-    new_text, resolved, skipped = resolver._resolve_file(
-        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
-    )
-    assert new_text is None or "operator content that must survive" in new_text
-    assert not any("[provenance]" in r and "Invariant Core" in r for r in resolved) or (
-        "operator content that must survive" in (new_text or "")
-    ), "the user region below a trailing section must never be swallowed"
-
-
-def test_provenance_cannot_delete_a_section_with_no_survivor_on_disk(tmp_path):
-    """Pristine provenance is not a licence to remove the only copy.
-
-    This previously asserted the removal SUCCEEDED. The fixture has no `invariant_core` fence,
-    so "resolving" it left the file with no invariant core at all — and `_file_is_pristine` was
-    the exact authorisation that took `security.md` from 363 lines to 32 on 2026-08-01.
-
-    Provenance answers "has anyone edited this file?". That is a real question and the answer
-    is used elsewhere. It is not the question that makes a delete safe, which is "does a copy
-    remain afterwards?" — and the two were being conflated.
-
-    The trailing case is still resolvable when a survivor exists: see
-    `test_trailing_collision_equality.py`, where equality against a deployed fence authorises
-    EOF-bounding with no provenance at all.
-    """
-    trailing_only = (
-        "---\nname: A\ndescription: x\n---\n\n"
-        + _KEPT_FENCE +
-        "## Invariant Core\n\nA stale earlier version.\n"
-    )
-    agents = _with_build_log(tmp_path, trailing_only, record_hash=True)
-    new_text, resolved, skipped = resolver._resolve_file(
-        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
-    )
-    assert resolved == [], f"provenance authorised deleting the only copy: {resolved}"
-    assert any("no fence carrying that section" in s for s in skipped), skipped
-    if new_text is not None:
-        assert "## Invariant Core" in new_text
-
-
-def test_a_trailing_section_is_refused_without_provenance(tmp_path):
-    """The allowance needs BOTH conditions; a dirty file with no notes region still refuses."""
-    trailing_only = (
-        "---\nname: A\ndescription: x\n---\n\n"
-        + _KEPT_FENCE +
-        "## Invariant Core\n\nA stale earlier version.\n"
-    )
-    agents = _with_build_log(tmp_path, trailing_only, record_hash=False)
-    _, resolved, skipped = resolver._resolve_file(
-        agents / "a.agent.md", _FRESH, agents_dir=agents, trust_provenance=True
-    )
+    agents = _with_build_log(tmp_path, with_notes)
+    new_text, resolved, _ = resolver._resolve_file(agents / "a.agent.md", _FRESH)
     assert resolved == []
-    assert any("trailing" in s for s in skipped), skipped
+    assert new_text is None
 
 
-def test_a_missing_build_log_declines(tmp_path):
-    """No baseline means no provenance claim; it must not default to trusting."""
-    agents = tmp_path / "agents"
-    agents.mkdir()
-    f = agents / "a.agent.md"
-    f.write_text(_deployed("A stale earlier version."), encoding="utf-8")
-    assert resolver._file_is_pristine(agents, f) is False
+def test_a_section_with_no_survivor_on_disk_is_never_removed(tmp_path):
+    """Removing the only copy is deletion, not deduplication — whatever the build log says.
+
+    The retired provenance route was the authorisation that took `security.md` from 363 lines to
+    32 on 2026-08-01. Equality against a DEPLOYED fence (`test_trailing_collision_equality.py`) is
+    what may bound a trailing section at EOF.
+    """
+    only_copy = (
+        "---\nname: A\ndescription: x\n---\n\n"
+        + _KEPT_FENCE +
+        "## Invariant Core\n\nThe contract. Do not modify.\n"
+        "\n## Later\n\nbounds the span, so the survivor check is what refuses.\n"
+    )
+    agents = _with_build_log(tmp_path, only_copy)
+    new_text, resolved, skipped = resolver._resolve_file(agents / "a.agent.md", _FRESH)
+    assert resolved == [], f"deleted the only copy: {resolved}"
+    assert new_text is None
+    assert any("no fence carrying that section" in s for s in skipped), skipped
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +260,7 @@ def test_a_missing_build_log_declines(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_removal_refuses_a_span_containing_a_fence(tmp_path, monkeypatch):
+def test_removal_refuses_a_span_containing_a_fence(tmp_path):
     """The exact shape of the security.md loss, reduced.
 
     Reproducing it needs all three conditions the real file had, and the first draft of
@@ -303,14 +269,14 @@ def test_removal_refuses_a_span_containing_a_fence(tmp_path, monkeypatch):
 
     * a **bounded** span (a later same-level heading), not a trailing one;
     * deployed content that **differs** from the template's fence body, so the equality
-      proof refuses and only provenance can authorise;
-    * ``_file_is_pristine`` True, which the real deployed file was.
+      proof refuses;
+    * build-log provenance, which the real deployed file had and which the since-retired
+      ``--trust-provenance`` accepted as authorisation (no longer reachable at all).
 
     The span then encloses the file's own fenced region, and removing it deletes managed
     content. 363 lines -> 32 in the live incident, 2 fences -> 0.
     """
     r = resolver
-    monkeypatch.setattr(r, "_file_is_pristine", lambda *a, **k: True)
 
     deployed = tmp_path / "security.md"
     deployed.write_text(
@@ -340,9 +306,7 @@ def test_removal_refuses_a_span_containing_a_fence(tmp_path, monkeypatch):
         "fixture is wrong: the span must enclose a fence"
     )
 
-    new_text, resolved, skipped = r._resolve_file(
-        deployed, fresh, agents_dir=tmp_path, trust_provenance=True
-    )
+    new_text, resolved, skipped = r._resolve_file(deployed, fresh)
     surviving = new_text if new_text is not None else original
     assert "AGENTTEAMS:BEGIN security_rules_invariant" in surviving, (
         "the removal deleted a fenced region — that is deletion of managed content, not "

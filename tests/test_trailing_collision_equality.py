@@ -17,7 +17,7 @@ fenced copy directly above it**:
 
 When the text from the unfenced heading to EOF equals the deployed fenced body, removing it
 deletes nothing that does not survive inside the fence. That is a proof, local to the file,
-and it needs no `--trust-provenance`, no `_file_is_pristine`, and no git ref.
+and it needs no build-log provenance (the retired `--trust-provenance`) and no git ref.
 
 **Against the DEPLOYED fence, never the incoming render.** The pre-existing bug class in this
 script is precisely that confusion: `incoming` comes from the fresh render, so a template
