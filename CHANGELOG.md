@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (fleet and batch_update show skipped shrink grants)
+
+Closes the @security advisory on #192: a grant skipped with a stderr-only warning could leave no trace.
+- **Fleet.** `--fleet` captured each target's output but kept only shrink Notices, so `WARNING: --shrink-allow`
+  lines were dropped. Each target's report now records them (`shrink_grant_warnings`, dry runs included), and
+  `summary.md` gets a count column and a **Shrink grants** section. A grant counts as "released nothing" only
+  when it released nothing on every target that announced it: an exported `AGENTTEAMS_SHRINK_ALLOW` reaches every
+  target, so the others ignoring a grant does not make it a typo.
+- **batch_update.** It echoed only the first 500 characters of stderr; every shrink-grant warning is now printed
+  in full.
+- `shrink_allow.py` and the shrink review report are unchanged.
 ### fix (cross-repo guard in git-operations; single-path layout fields documented)
 
 Follow-up to the OrthodoxLLM triage.

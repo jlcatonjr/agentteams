@@ -71,3 +71,16 @@ def test_diff_snapshots_reports_only_changed_files():
     out = bu.diff_snapshots(pre, post)
     assert "a.md" in out
     assert "b.md" not in out
+
+
+def test_echo_stderr_prints_shrink_grant_warnings_past_the_truncation(capsys):
+    warning = "  WARNING: --shrink-allow 'x:y@0123456789ab': expected <rel path>; skipped (that section stays pinned)"
+    bu.echo_stderr("noise " * 200 + "\n" + warning + "\n")
+    out = capsys.readouterr().out
+    assert warning.strip() in out
+    assert out.count("STDERR: ") == 1
+
+
+def test_echo_stderr_silent_on_empty(capsys):
+    bu.echo_stderr("")
+    assert capsys.readouterr().out == ""

@@ -790,3 +790,81 @@ def test_claude_direct_skips_the_scan_for_a_brief_json(tmp_path):
     desc.write_text("{}", encoding="utf-8")
     argv = fleet._target_argv("claude-direct", ws, desc, dry_run=False, shrink_policy="preserve")
     assert "--no-scan" in argv
+
+
+# ---------------------------------------------------------------------------
+# Shrink-grant warnings (#192 advisory: a skipped grant must reach the fleet report)
+# ---------------------------------------------------------------------------
+
+_GRANT = "copilot-instructions.md:directory_structure@0123456789ab"
+
+
+def _two_workspaces(tmp_path: Path) -> None:
+    for name in ("ws1", "ws2"):
+        agents = tmp_path / name / ".github" / "agents"
+        _mk_agent(agents, "_build-description.json", "{}")
+        _mk_agent(agents, "a.agent.md", "x\n")
+        _init_repo(tmp_path / name)
+
+
+def _report(tmp_path: Path) -> tuple[dict, str]:
+    import json
+    run = next((tmp_path / ".agentteams-fleet").iterdir())
+    return json.loads((run / "report.json").read_text()), (run / "summary.md").read_text()
+
+
+def test_skipped_grant_is_recorded_per_target_and_summarized(tmp_path, monkeypatch):
+    _two_workspaces(tmp_path)
+    skipped = "  WARNING: --shrink-allow '/abs:x@0123456789ab': the path must be relative; skipped"
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, f"ok\n{skipped}\n"))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
+    data, summary = _report(tmp_path)
+    targets = [t for w in data["workspaces"] for t in w["targets"]]
+    assert all(t["shrink_grant_warnings"] == [skipped.strip()] for t in targets)
+    assert "## Shrink grants" in summary and "Skipped or refused" in summary
+    assert "| grant warnings |" in summary
+
+
+def test_dry_run_records_grant_warnings(tmp_path, monkeypatch):
+    _two_workspaces(tmp_path)
+    line = "  WARNING: --shrink-allow refused: this run has no backup dir"
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, f"[DRY RUN]\n{line}\n"))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=False), parser=None)
+    data, _ = _report(tmp_path)
+    assert all(t["shrink_grant_warnings"] == [line.strip()]
+               for w in data["workspaces"] for t in w["targets"])
+
+
+def test_grant_released_on_one_target_is_not_reported_unused(tmp_path, monkeypatch):
+    _two_workspaces(tmp_path)
+    active = f"  ⚠  shrink override active: {_GRANT}"
+    unused = f"  WARNING: --shrink-allow {_GRANT}: released nothing (no pinned section)"
+
+    def fake(argv):
+        ws = argv[argv.index("--output") + 1] if "--output" in argv else " ".join(argv)
+        return 0, f"{active}\n" + (unused if "ws2" in ws else "Merged: 1 file(s)") + "\n"
+
+    monkeypatch.setattr(fleet, "_run_main", fake)
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
+    data, summary = _report(tmp_path)
+    per = {Path(w["path"]).name: w["targets"][0]["shrink_grant_warnings"] for w in data["workspaces"]}
+    assert per["ws1"] == [] and per["ws2"] == [unused.strip()]  # raw lines stay per target
+    assert "Released nothing on any target" not in summary
+
+
+def test_grant_released_nowhere_is_reported_unused(tmp_path, monkeypatch):
+    _two_workspaces(tmp_path)
+    out = (f"  ⚠  shrink override active: {_GRANT}\n"
+           f"  WARNING: --shrink-allow {_GRANT}: released nothing (no pinned section)\n")
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, out))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
+    _, summary = _report(tmp_path)
+    assert "Released nothing on any target" in summary and f"`{_GRANT}`" in summary
+
+
+def test_no_grant_section_without_warnings(tmp_path, monkeypatch):
+    _two_workspaces(tmp_path)
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, "Merged: 0 file(s)"))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
+    _, summary = _report(tmp_path)
+    assert "## Shrink grants" not in summary
