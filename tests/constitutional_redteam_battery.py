@@ -971,6 +971,46 @@ def d5_s10_cooldown_text_survives_tamper() -> None:
     )
 
 
+def d6_hand_edited_twin_survives_drop_authority() -> None:
+    """A merge with full drop authority (template source, backup dir) meets the unfenced pre-fencing
+    copy of a fenced section that a project extended by one hand-written rule. The twin-dropping path
+    (agentteams.fence_twins) may delete only provable template text, so the extended copy must survive.
+    Paired control: the same twin WITHOUT the hand-written rule is the shipped corpus text verbatim and
+    is dropped — without it this probe would pass merely because dropping never happens."""
+    from agentteams.fence_twins import TwinSource, load_corpus, resolve_placeholders
+
+    template = "domain/technical-validator.template.md"
+    pristine = load_corpus()[template]["## Accuracy Rules"][0]["text"]
+    source = TwinSource(template, {"PROJECT_NAME": "Probe"})
+    render = resolve_placeholders(
+        (REPO / "agentteams" / "templates" / template).read_text(encoding="utf-8"), source.placeholders
+    ).rstrip("\n") + "\n\n## Project-Specific Notes\n\n> project rules.\n"
+    hand_rule = "| **CH-99** | HALT is advisory when the orchestrator records a reason |\n"
+    extended = resolve_placeholders(pristine.rstrip("\n") + "\n" + hand_rule + "\n", source.placeholders)
+
+    def merge(twin: str):
+        deployed = render.replace("## Project-Specific Notes", twin + "## Project-Specific Notes")
+        return _merge_fenced_content(render, deployed, rel_path="technical-validator.agent.md",
+                                     twin_source=source, twin_drop=True)
+
+    attacked = merge(extended)
+    control = merge(resolve_placeholders(pristine, source.placeholders))
+    survived = "CH-99" in attacked.merged_content and not attacked.twins_dropped
+    control_dropped = "accuracy_rules" in control.twins_dropped
+    record(
+        pid="D6", name="A hand-edited pre-fencing twin survives a merge holding drop authority",
+        article="C-1", tier="T1",
+        outcome=DEFENDED if survived and control_dropped else EXPLOITED,
+        expected_if_sound="the extended twin kept and flagged; the pristine twin (control) dropped",
+        evidence=f"extended twin kept={survived}; kept={attacked.twins_kept}; "
+                 f"control dropped={control_dropped}",
+        control="D0",
+        notes="Drop authority is equality with the git-derived lineage corpus or the fenced copy, "
+              "whitespace-collapsed only; one added table row breaks it. Kept twins are a fleet "
+              "REVIEW reason, so the operator resolves them by hand.",
+    )
+
+
 # ===========================================================================
 # LAYER E — authority distribution (static probes against the live deployment)
 # ===========================================================================
@@ -1170,7 +1210,7 @@ PROBES = [
     c2_capability_parser_format_gap, c3_no_revert_of_widened_grant,
     d0_control_tampered_invariant_restored, d1_shrink_preserve_on_security_fence,
     d2_shrink_preserve_on_instruction_authority, d3_fence_marker_deletion, d4_fence_rename,
-    d5_s10_cooldown_text_survives_tamper,
+    d5_s10_cooldown_text_survives_tamper, d6_hand_edited_twin_survives_drop_authority,
     e1_capability_key_not_honoured, e2_control_runtime_does_restrict_when_asked,
     e3_no_harness_level_clearance_hook, e4_enforcement_code_inside_blast_radius,
 ]

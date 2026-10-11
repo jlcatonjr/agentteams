@@ -11,6 +11,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from agentteams.atomicio import _atomic_write_text
 
@@ -118,6 +119,11 @@ class MergeResult:
     # Template rules absent from the deployed file. Fires regardless of modification state —
     # see `_detect_deleted_constraints` for why `_detect_unfenced_drift` cannot cover this.
     deleted_constraint_notices: list[str] = field(default_factory=list)
+    # Pre-fencing twins (see agentteams.fence_twins): section_id -> the unfenced copy removed because it
+    # was provably template text (its text goes to a .lost.unfenced-<sid>.md sidecar), and the headings of
+    # twins kept because they were not. Their notices ride in duplicate_section_notices.
+    twins_dropped: dict[str, str] = field(default_factory=dict)
+    twins_kept: list[str] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
@@ -908,7 +914,7 @@ def _append_section(merged: str, block: str) -> str:
 
 
 def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
-    """Report headings that appear twice after new fences were added.
+    """Report headings that appear twice in a merged file.
 
     The partial-adoption sibling of :func:`_is_whole_body_migration`. When a template fences a
     section that a team was generated *before*, the merge adds the fenced block while the
@@ -916,12 +922,16 @@ def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
     copies, one stale. Measured 2026-08-01 across this project's own team: 14 duplicated sections
     in 5 files, including four duplicated "⛔ Do not modify or omit" contracts.
 
-    **Reported, never auto-resolved, and the asymmetry with the whole-body case is deliberate.**
-    There, everything inside a ``content`` fence is template-owned *by definition*, so replacing
-    it can lose nothing. Here the duplicated section has never been inside a fence, so a project
-    may legitimately have edited it believing it was theirs. Choosing for them is how out-of-fence
-    content gets destroyed — the defect fixed in this same module on the same day. Naming the
-    collision lets an operator resolve each one by looking at it.
+    **Reported here; resolved only by :mod:`agentteams.fence_twins`, and only on proof.** The
+    duplicated section has never been inside a fence, so a project may have edited it believing it
+    was theirs. ``fence_twins`` drops a twin only when its text provably came from a template, and
+    the merge suppresses this report for the headings it examined (its own notice covers them).
+
+    Not gated on a section being added (2026-10-10): after the first merge an affected file carried
+    both copies and no notice ever again. With nothing added, only a heading that appears both
+    inside a fence and outside one is reported — the residue signature — so headings a project
+    legitimately repeats in its own prose stay quiet. A Goose recipe is read through its dedented
+    ``instructions:`` block, where the headings are indented two spaces.
 
     Args:
         merged: The merged file content.
@@ -930,18 +940,31 @@ def _detect_duplicate_sections(merged: str, added_sids: list[str]) -> list[str]:
     Returns:
         Human-readable notices, one per duplicated heading. Empty when nothing collides.
     """
-    if not added_sids:
-        return []
-    headings = [m.group(0).strip() for m in _MD_HEADING_RE.finditer(merged)]
+    from agentteams.fence_twins import dedented_view
+
+    text = dedented_view(merged)
+    headings = [m.group(0).strip() for m in _MD_HEADING_RE.finditer(text)]
     seen: dict[str, int] = {}
     for heading in headings:
         seen[heading] = seen.get(heading, 0) + 1
+    outside: dict[str, int] = {}
+    for line in unfenced_lines(text):
+        if line.strip() in seen:
+            outside[line.strip()] = outside.get(line.strip(), 0) + 1
+    if added_sids:
+        return [
+            f"duplicate section {heading!r}: appears {count}x after adding "
+            f"{', '.join(sorted(added_sids))} — the deployed file already carried this section "
+            f"unfenced. Delete the unfenced copy; the fenced one is now template-owned."
+            for heading, count in seen.items()
+            if count > 1
+        ]
     return [
-        f"duplicate section {heading!r}: appears {count}x after adding "
-        f"{', '.join(sorted(added_sids))} — the deployed file already carried this section "
-        f"unfenced. Delete the unfenced copy; the fenced one is now template-owned."
+        f"duplicate section {heading!r}: appears {count}x, inside a fence and outside one — the "
+        f"unfenced copy predates the fence. Move any real additions to ## Project-Specific Notes, "
+        f"then delete the unfenced copy."
         for heading, count in seen.items()
-        if count > 1
+        if count > 1 and count > outside.get(heading, 0) >= 1
     ]
 
 
@@ -1015,6 +1038,8 @@ def _merge_fenced_content(
     rel_path: str = "",
     brief_derived_files: frozenset[str] = frozenset(),
     shrink_allow: frozenset[str] = frozenset(),
+    twin_source: Any = None,
+    twin_drop: bool = False,
 ) -> MergeResult:
     """Merge fenced sections from *new_rendered* into *existing_on_disk*.
 
@@ -1038,6 +1063,10 @@ def _merge_fenced_content(
             (:mod:`agentteams.shrink_allow`): a named section whose on-disk body still matches the
             reviewed digest takes the replace path even when it would shrink (its old body goes
             to the ``.lost`` sidecar).
+        twin_source: The file's :class:`agentteams.fence_twins.TwinSource` (template + placeholder
+            values), or None. Lets an unfenced pre-fencing twin be proved template text.
+        twin_drop: Allow a provable twin to be dropped. False (the default, and any run without a
+            backup dir) keeps and reports every twin.
 
     Returns:
         MergeResult describing what changed.  ``merged_content`` is empty on
@@ -1285,8 +1314,17 @@ def _merge_fenced_content(
             if notice:
                 result.shrink_notices.append(notice)
 
+    # Pre-fencing twins: an unfenced copy of a section a fence now owns. Examined on EVERY merge, not
+    # only when the fence was just added, so an already-affected file is resolved (or re-flagged).
+    from agentteams import fence_twins
+
+    twins = fence_twins.resolve(merged, new_regions, twin_source, allow_drop=twin_drop, fresh=new_rendered)
+    merged = twins.content
+    result.twins_dropped, result.twins_kept = twins.dropped, twins.kept
     result.merged_content = merged
-    result.duplicate_section_notices = _detect_duplicate_sections(merged, result.sections_added)
+    result.duplicate_section_notices = twins.notices + [
+        n for n in _detect_duplicate_sections(merged, result.sections_added)
+        if not any(f"{h!r}" in n for h in twins.handled)]
     return result
 
 

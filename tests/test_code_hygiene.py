@@ -65,7 +65,7 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # --sign-decision body into the integrity-pinned cli/operator_signing.py (now 1092).
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
-    # fences.py (1130): itself a CH-07 carve of emit.py (the fence/merge extraction the
+    # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the
     # build_team/app comment above records), tipped over the 1000 ceiling by the
     # `--shrink-policy=additive` splice engine (`_split_headed_segments`, `_additive_merge_block`
     # and helpers). Kept in fences.py deliberately: the splice is cohesive fence-merge logic, and

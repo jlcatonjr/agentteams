@@ -181,6 +181,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # shrink_allow.key/body_digest; an unpinned edit there could drop the reviewed-body digest
     # check and release sections nobody reviewed (security A4 re-verification, finding 1).
     "agentteams/shrink_allow.py",
+    # Pre-fencing twins (2026-10-10). fences.py (pinned) delegates to fence_twins the one decision that
+    # deletes UNFENCED text — an unfenced copy of a section a fence now owns — and the lineage corpus
+    # is that decision's authority (Rule 12): text added to it becomes deletable from every deployed
+    # repository. An unpinned edit to either would widen what a merge may delete.
+    "agentteams/fence_twins.py",
+    "agentteams/data/template_lineage.json",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 
