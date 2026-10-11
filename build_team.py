@@ -691,12 +691,7 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
     from agentteams import front_matter_baseline as _fm_baseline
 
     # Read before this run overwrites it. Only a version-2 baseline is carried forward.
-    try:
-        _prev_log = _drift.load_build_log(output_dir)
-    except (FileNotFoundError, ValueError, OSError):
-        _prev_log = {}
-    _previous_baseline = (_fm_baseline.load(_prev_log)
-                          if _prev_log.get(_fm_baseline.VERSION_KEY) == _fm_baseline.BASELINE_VERSION else None)
+    _previous_baseline = _fm_baseline.load_for(output_dir, version_2_only=True)
     # None (no render recorded, e.g. a result built outside emit_all) falls back to the as-written baseline.
     _template_fm = getattr(result, "template_front_matter", None) or None
 

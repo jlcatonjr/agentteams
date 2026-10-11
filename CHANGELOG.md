@@ -16,13 +16,17 @@ agent-refactor, cleanup and conflict-resolution lost theirs, with no notice.
   next template change "applied to an untouched key" and replaced it. A kept conflict was protected for one run.
 - **Baseline version 2.** New `agentteams/front_matter_baseline.py` (integrity-pinned) records, per key, only the
   value agentteams authored: the written value when it equals the template's render, else the previous version-2
-  value. The log carries `front_matter_baseline_version: 2`. A legacy baseline is read without its block-valued
-  (`handoffs:`) and capability keys, where projects author entries; legacy values are never carried forward.
-- **Handoff guard.** Whatever path produced the content (the legacy whole-body migration takes the render's front
-  matter wholesale), a write may not drop a handoff to an agent the new block no longer reaches unless the baseline
-  shows agentteams wrote it. Such a handoff is restored with a `front matter: kept hand-written handoff` notice,
-  which fleet reports as REVIEW (`handoffs_kept`). A handoff whose target survives with the template's wording is
-  named too.
+  value. The log carries `front_matter_baseline_version: 2`. A legacy baseline is treated as unknown (any of its
+  values may be a kept project value), so the transition run keeps every project value and proposes the
+  template's; legacy values are never carried forward.
+- **Migration front matter.** The legacy whole-body migration wrote the render's front matter wholesale, so the
+  three-way merge never saw the project's `model:`, `tools:`, roster or handoffs. The merge now puts the on-disk
+  block back first.
+- **Handoff guard.** A `--merge` write may not drop a handoff (agent and label) the on-disk file has unless the
+  baseline shows agentteams wrote it; a handoff to an agent the new block still reaches is a rewording, unless the
+  disk reached that agent more often. A dropped one is restored, indented to the new block, with a
+  `front matter: kept hand-written handoff` notice that fleet reports as REVIEW (`handoffs_kept`); a `handoffs:`
+  it cannot check is reported the same way.
 - The proposal for a key with no recorded baseline no longer says it "changed in BOTH template and this file".
 
 ### fix (fleet and batch_update show skipped shrink grants)

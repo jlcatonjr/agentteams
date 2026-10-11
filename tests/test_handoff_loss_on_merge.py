@@ -87,12 +87,20 @@ def test_a_polluted_legacy_baseline_no_longer_replaces_hand_written_handoffs(tmp
     assert any("'handoffs' differs from the template" in n for n in result.notices), "and the divergence named"
 
 
-def test_the_legacy_loader_drops_block_and_capability_keys_only():
-    log = {"front_matter_baseline": {"a.md": {"handoffs": "\n  - label: x", "tools": "['read']",
-                                              "agents": "['x']", "argument-hint": "a goal"}}}
-    assert fmb.load(log) == {"a.md": {"argument-hint": "a goal"}}
+def test_a_legacy_baseline_is_unknown_and_a_version_2_one_is_trusted():
+    """Any legacy (as-written) value may be a kept project value: scalars included (`invariant-sections`)."""
+    log = {"front_matter_baseline": {"a.md": {"handoffs": "\n  - label: x", "argument-hint": "a goal"}}}
+    assert fmb.load(log) == {}
     log[fmb.VERSION_KEY] = fmb.BASELINE_VERSION
-    assert fmb.load(log)["a.md"]["handoffs"] == "\n  - label: x"
+    assert fmb.load(log)["a.md"] == {"handoffs": "\n  - label: x", "argument-hint": "a goal"}
+
+
+def test_a_polluted_legacy_scalar_is_not_reverted(tmp_path):
+    project = _doc(_PROJECT_HANDOFFS).replace("description:", "argument-hint: \"acme goal\"\ndescription:")
+    legacy_log = {"front_matter_baseline": {"orchestrator.agent.md": _front_matter_keys(project)}}
+    target = _deploy(tmp_path, project, legacy_log)
+    _emit(tmp_path, _doc(_TEMPLATE_HANDOFFS).replace("description:", "argument-hint: \"template goal\"\ndescription:"))
+    assert 'argument-hint: "acme goal"' in target.read_text(encoding="utf-8")
 
 
 def test_the_baseline_records_only_what_agentteams_authored():
@@ -140,6 +148,7 @@ def test_the_run_log_writes_a_version_2_baseline(tmp_path):
     build_team._write_run_log(manifest, result, out, {})
     log = json.loads((out / "references" / "build-log.json").read_text(encoding="utf-8"))
     assert log[fmb.VERSION_KEY] == fmb.BASELINE_VERSION
+    assert "orchestrator.agent.md" in log["front_matter_baseline"], "the render key and the log key agree"
     assert "handoffs" not in log["front_matter_baseline"].get("orchestrator.agent.md", {})
     again = _emit(out, _doc(_TEMPLATE_HANDOFFS.replace("Locate files.", "Locate files and modules.")))
     assert "agent: acme-frontend" in (out / "orchestrator.agent.md").read_text(encoding="utf-8")
@@ -179,10 +188,49 @@ def test_a_whole_body_migration_that_takes_the_renders_front_matter_keeps_the_ha
     result = _emit(tmp_path, _doc(_TEMPLATE_HANDOFFS))
     written = target.read_text(encoding="utf-8")
     assert "agent: acme-frontend" in written and "agent: pricing" in written
-    assert any(fmb.HANDOFF_KEPT_PREFIX in n for n in result.notices)
+    assert "Security Review (REQUIRED before destructive ops)" in written, "the project's block, not the render's"
+    assert any("'handoffs' differs from the template" in n for n in result.notices)
 
 
 def test_fleet_reviews_a_restored_handoff(tmp_path):
     out = f"    Notice: orchestrator.agent.md: {fmb.HANDOFF_KEPT_PREFIX}(s) the update would have dropped: x\n"
     cls = fleet._classify(tmp_path, "HEAD", "", out)
     assert cls["handoffs_kept"] and cls["shrink_notices"] == []
+
+
+def test_an_uncheckable_handoffs_value_is_reported_not_skipped():
+    inline = _doc("handoffs: [{label: X, agent: acme-frontend}]\n")
+    _content, notices = fmb.restore_dropped_handoffs(_doc(_TEMPLATE_HANDOFFS), inline, None)
+    assert any(n.startswith(fmb.HANDOFF_KEPT_PREFIX) and "NOT checked" in n for n in notices)
+    _content, notices = fmb.restore_dropped_handoffs("no front matter\n", _doc(_PROJECT_HANDOFFS), None)
+    assert any("NOT restored" in n for n in notices)
+
+
+def test_two_handoffs_to_one_agent_are_not_merged_into_one():
+    disk = _doc(_PROJECT_HANDOFFS + "  - label: Escalate\n    agent: security\n    prompt: \"Escalate.\"\n    send: false\n")
+    content, notices = fmb.restore_dropped_handoffs(_doc(_TEMPLATE_HANDOFFS), disk, None)
+    labels = [label for (_, label), _ in fmb.handoff_items(_front_matter_keys(content)["handoffs"])]
+    assert "Escalate" in labels or "Security Review (REQUIRED before destructive ops)" in labels
+    assert sum(1 for (agent, _), _ in fmb.handoff_items(_front_matter_keys(content)["handoffs"])
+               if agent == "security") == 2
+
+
+def test_a_restored_item_takes_the_new_blocks_indentation():
+    import re
+    flush_left = _doc(_TEMPLATE_HANDOFFS.replace("\n  - ", "\n- ").replace("\n    ", "\n  "))
+    content, _ = fmb.restore_dropped_handoffs(flush_left, _doc(_PROJECT_HANDOFFS), None)
+    block = _front_matter_keys(content)["handoffs"]
+    assert not re.search(r"^  - ", block, re.M), block
+    assert [a for (a, _), _ in fmb.handoff_items(block)][-2:] == ["acme-frontend", "pricing"]
+
+
+def test_the_whole_body_migration_keeps_every_project_front_matter_value(tmp_path):
+    """Not only handoffs: the migration took the render's whole block (model, tools, roster)."""
+    legacy = _doc(_PROJECT_HANDOFFS, "<!-- AGENTTEAMS:BEGIN content v=1 -->\n## Rules\n\nold\n"
+                                     "<!-- AGENTTEAMS:END content -->\n").replace(
+        "description:", "model: [\"Acme Model\"]\ndescription:")
+    target = _deploy(tmp_path, legacy, {})
+    _emit(tmp_path, _doc(_TEMPLATE_HANDOFFS).replace("description:", "model: [\"Template Model\"]\ndescription:"))
+    written = target.read_text(encoding="utf-8")
+    assert 'model: ["Acme Model"]' in written
+    assert "'acme-frontend', 'pricing'" in written and "agent: acme-frontend" in written

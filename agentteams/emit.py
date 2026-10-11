@@ -60,7 +60,8 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.learned_blocks import carry_learned_block
 from agentteams.fence_twins import persist_dropped as _persist_twins
-from agentteams.front_matter_baseline import load as load_front_matter_baseline, restore_dropped_handoffs
+from agentteams.front_matter_baseline import (
+    keep_disk_front_matter, load_for as _front_matter_baseline, restore_dropped_handoffs)
 from agentteams.front_matter_merge import _front_matter_keys
 from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     BACKUP_MANIFEST_NAME,
@@ -206,25 +207,6 @@ def _normalize_generated_content(rel_path: str, content: str) -> str:
         normalized += "\n"
     normalized += "<!-- AGENTTEAMS:END content -->\n"
     return normalized
-
-
-def _front_matter_baseline(output_dir: Path) -> dict[str, dict[str, str]]:
-    """Return the per-file front matter recorded at last generation.
-
-    Args:
-        output_dir: The agents directory being written to.
-
-    Returns:
-        ``{rel_path: {key: value}}``, or ``{}`` when no build log exists or it predates the
-        baseline field. Empty means "unknown", and an unknown baseline suppresses every
-        automatic application — the conservative reading.
-    """
-    try:
-        from agentteams import drift as _drift
-
-        return load_front_matter_baseline(_drift.load_build_log(output_dir))
-    except (FileNotFoundError, ValueError, OSError, KeyError):
-        return {}
 
 
 def _unmodified_since_build(output_dir: Path) -> frozenset[str]:
@@ -519,6 +501,8 @@ def emit_all(
                     # what an operator reads before approving one. `_merge_front_matter` is pure:
                     # it returns keys and notices and writes nothing, so the preview stays a
                     # preview.
+                    if mr.migrated:   # the whole-body migration took the render's front matter
+                        mr.merged_content = keep_disk_front_matter(mr.merged_content, existing_text)
                     _pv_keys, _pv_applied, _pv_props = _merge_front_matter(
                         normalized_content, mr.merged_content, _fm_baseline.get(rel_path)
                     )
@@ -661,6 +645,8 @@ def emit_all(
             # first bytes of the file), so it needs its own mechanism. Metadata keys whose
             # baseline proves the project never edited them are applied; capability keys and
             # genuine conflicts are reported instead — see fences._merge_front_matter.
+            if merge_result.migrated:   # the whole-body migration took the render's front matter (portal)
+                merge_result.merged_content = keep_disk_front_matter(merge_result.merged_content, existing_text)
             _merged_keys, _fm_applied, _fm_proposals = _merge_front_matter(
                 normalized_content,
                 merge_result.merged_content,
