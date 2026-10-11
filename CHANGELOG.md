@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (cross-repo guard in git-operations; single-path layout fields documented)
+
+Follow-up to the OrthodoxLLM triage.
+- **Cross-repo guard.** git-operations' CI/CD verification rule still read "a repository other than
+  `{PRIMARY_OUTPUT_DIR}`", which renders as a folder (`src/`, `*/outputs/`). It now reads "a repository other than
+  this project's own (<project name>)", like the guards #192 fixed. The cross-repository coordination guide is
+  corrected too. The example goldens are regenerated; only that line changed. A regression test keeps every
+  template off the old wording.
+- **Docs.** `DESCRIPTION-FORMAT.md` says `primary_output_dir` and `reference_db_path` hold one path, that a glob is
+  rendered as literal text, and that a project with deliverables in several places describes them in the
+  instruction files' Project Layout section. `PLACEHOLDER-CONVENTIONS.md` says `{PRIMARY_OUTPUT_DIR}` is never a
+  repository name. Structured multi-root fields stay deferred.
+
 ### fix (shrink grants for files above the agents dir; cross-repo guard names the project)
 
 From OrthodoxLLM's triage, via researchteam-c7.
