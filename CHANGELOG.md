@@ -17,6 +17,52 @@ Closes the @security advisory on #192: a grant skipped with a stderr-only warnin
 - **batch_update.** It echoed only the first 500 characters of stderr; every shrink-grant warning is now printed
   in full.
 - `shrink_allow.py` and the shrink review report are unchanged.
+### fix (cross-repo guard in git-operations; single-path layout fields documented)
+
+Follow-up to the OrthodoxLLM triage.
+- **Cross-repo guard.** git-operations' CI/CD verification rule still read "a repository other than
+  `{PRIMARY_OUTPUT_DIR}`", which renders as a folder (`src/`, `*/outputs/`). It now reads "a repository other than
+  this project's own (<project name>)", like the guards #192 fixed. The cross-repository coordination guide is
+  corrected too. The example goldens are regenerated; only that line changed. A regression test keeps every
+  template off the old wording.
+- **Docs.** `DESCRIPTION-FORMAT.md` says `primary_output_dir` and `reference_db_path` hold one path, that a glob is
+  rendered as literal text, and that a project with deliverables in several places describes them in the
+  instruction files' Project Layout section. `PLACEHOLDER-CONVENTIONS.md` says `{PRIMARY_OUTPUT_DIR}` is never a
+  repository name. Structured multi-root fields stay deferred.
+### feat (fence twins: an operator acknowledgement ends the REVIEW for a twin kept on purpose)
+
+- **The problem.** `fence_twins` keeps every unfenced twin it cannot prove is template text, and `fleet`
+  reports each one as REVIEW. Some twins are kept deliberately, such as researchteam's hand-written
+  CH-08..10 rows. With no way to record that decision, the same REVIEW came back on every fleet run.
+- **The ledger.** A new module, `agentteams/fence_twin_acks.py`, reads
+  `<output dir>/references/fence-twin-acks.csv` (header `file,heading,digest,reason`). It is modelled on
+  `--shrink-allow`, but kept in a committed file, because the acknowledgement has to outlast a single run.
+  `digest` is `fence_twins.ack_digest`: sha256 of the file, the heading and the twin's
+  whitespace-collapsed text. The kept-twin notice prints the exact row to add. `reason` must be at least
+  40 characters, the same bar as the red-team ledgers. A row that fails validation is skipped with a
+  warning, and the twin stays under REVIEW.
+- **What it changes.** Only the notice. A matching row turns `twin kept (not provably template)` into
+  `twin kept (acknowledged)` with the reason, and `fleet` does not count that as REVIEW. The ledger is
+  read after the drop decision, so it never causes a drop. `fleet` lists every acknowledged twin, with its
+  reason, under `twins_acknowledged` in its report, so it is never silenced invisibly. A row naming a file
+  the run does not render prints a warning. A twin that is provably template text is
+  dropped whether or not a row names it. If the twin's text changes, the row stops applying: REVIEW
+  returns, and the notice says the acknowledgement on record no longer matches.
+- **Wiring.** `cli.render_pipeline.twin_sources` now takes the output dir. It loads the ledger once and
+  attaches each file's rows to its `TwinSource`, which gains `rel_path` and `acks`. `emit.py` and
+  `fences.py` are unchanged.
+- **Integrity.** `fence_twin_acks.py` joins `ENFORCEMENT_MODULES`. The manifest entries for it,
+  `fence_twins.py` and `integrity.py` are re-recorded.
+- **Tests.** `tests/test_fence_twin_acks.py` covers these cases:
+  - an acknowledged twin produces no REVIEW and still prints a notice;
+  - a one-word edit or an added row brings REVIEW back;
+  - with or without a row, the merge writes the same content and drops the same twins;
+  - a reason under 40 characters is rejected;
+  - malformed rows and a wrong header are skipped;
+  - the ledger is read end to end through `emit_all` and `twin_sources`.
+- **Docs.** `docs_src/api-reference/fence-twin-acks.md` is new. `fence-twins.md`, the API index and the
+  mkdocs nav are updated.
+
 ### fix (retire `scripts/resolve_fence_collisions.py --trust-provenance`)
 
 - **The bug.** `--trust-provenance` deleted an unfenced copy that did *not* match its fence whenever the

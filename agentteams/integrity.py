@@ -187,6 +187,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # repository. An unpinned edit to either would widen what a merge may delete.
     "agentteams/fence_twins.py",
     "agentteams/data/template_lineage.json",
+    # Kept-twin acknowledgements (2026-10-11). fence_twin_acks validates the operator ledger (digest
+    # format, the 40-character reason) whose rows turn a kept twin's fleet REVIEW into a notice; an
+    # unpinned edit there could let an unreviewed or reasonless row silence REVIEW. It cannot delete.
+    "agentteams/fence_twin_acks.py",
     "agentteams/integrity.py",           # self, so removing an entry is itself detectable
 )
 

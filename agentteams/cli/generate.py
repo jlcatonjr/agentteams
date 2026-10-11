@@ -647,7 +647,7 @@ def _run_generate_inner(
             shrink_policy=getattr(args, "shrink_policy", "preserve"),
             backup_path=backup_path,
             auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
-            brief_derived_files=brief_derived_files, twin_sources=twin_sources(manifest, adapter), twin_drop=not args.no_backup,
+            brief_derived_files=brief_derived_files, twin_sources=twin_sources(manifest, adapter, output_dir), twin_drop=not args.no_backup,
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
@@ -883,7 +883,7 @@ def _run_generate_inner(
         shrink_policy=getattr(args, "shrink_policy", "preserve"),
         backup_path=backup_path,
         auto_fence_legacy=not getattr(args, "no_add_fence_markers", False),
-        brief_derived_files=brief_derived_files, twin_sources=twin_sources(manifest, adapter), twin_drop=not args.no_backup,
+        brief_derived_files=brief_derived_files, twin_sources=twin_sources(manifest, adapter, output_dir), twin_drop=not args.no_backup,
         shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
     )
     emit.print_summary(result, manifest)

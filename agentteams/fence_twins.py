@@ -23,6 +23,13 @@ Anything else is kept, with a ``twin kept`` notice that ``fleet`` turns into REV
 here is in the keeping direction: a placeholder value that changed, a renamed placeholder, a
 one-word edit, an extra table row (researchteam's hand-written CH-08..10) all fail the equality.
 
+**Acknowledged twins.** An operator who decides to keep a twin records it in the team's
+``references/fence-twin-acks.csv`` (``agentteams.fence_twin_acks``). The row binds to
+:func:`ack_digest` (file, heading, whitespace-collapsed text). A matching row turns the kept notice
+into ``twin kept (acknowledged)``, which ``fleet`` does not count as REVIEW. It is consulted only
+after the drop decision is final, and only to choose the notice for a twin already being kept, so
+it can never cause a drop. Once the text changes, the row no longer matches and REVIEW returns.
+
 **Refusals (kept, never dropped).** The heading leads more than one fence, or appears unfenced more
 than once; the twin has no following heading of its level or higher and no fence marker after it
 (it would run to the end of the file or of the Goose ``instructions:`` block); the twin's span holds
@@ -45,12 +52,16 @@ Stdlib only.
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agentteams.fence_twin_acks import DIGEST_HEX as _ACK_DIGEST_HEX
+from agentteams.fence_twin_acks import LEDGER_REL as ACK_LEDGER_REL
+from agentteams.fence_twin_acks import TwinAck, ledger_row
 from agentteams.fences import _extract_fenced_regions, _fence_body, _write_lost_fence_sidecars
 from agentteams.unfenced import (
     CONSTRAINT_BEARING_RE,
@@ -80,6 +91,8 @@ _MARKER_RE = re.compile(r"AGENTTEAMS[-A-Z]*:(?:BEGIN|END)")
 #: Notice prefixes ``fleet`` parses. Kept stable: a kept twin is a REVIEW reason.
 KEPT_PREFIX = "twin kept (not provably template)"
 DROPPED_PREFIX = "twin dropped"
+#: A twin kept on an operator's acknowledgement (``fleet`` lists it under ``twins_acknowledged``, without REVIEW).
+ACKED_PREFIX = "twin kept (acknowledged)"
 #: Marks a drop that took a rule line the current template no longer carries (``fleet`` -> REVIEW).
 RETIRED_MARK = "retired by template"
 
@@ -91,10 +104,14 @@ class TwinSource:
     Attributes:
         template: Template path relative to the templates dir (the manifest's ``template``).
         placeholders: The placeholder values the current render used for this file.
+        rel_path: The file's output-relative path ("" when unknown: no twin can be acknowledged).
+        acks: The operator's acknowledgement rows for this file (``agentteams.fence_twin_acks``).
     """
 
     template: str
     placeholders: Mapping[str, str] = field(default_factory=dict)
+    rel_path: str = ""
+    acks: tuple[TwinAck, ...] = ()
 
 
 @dataclass
@@ -104,7 +121,8 @@ class TwinOutcome:
     Attributes:
         content: The merged content with every dropped twin removed.
         dropped: section_id -> the exact twin text removed (for the ``.lost`` sidecar).
-        kept: Headings of twins left in place.
+        kept: Headings of twins left in place (acknowledged ones included).
+        acknowledged: The subset of ``kept`` an operator acknowledgement matched (no REVIEW).
         notices: One human-readable notice per twin (dropped or kept).
         handled: Headings this pass examined, so the generic duplicate report can skip them.
     """
@@ -112,6 +130,7 @@ class TwinOutcome:
     content: str
     dropped: dict[str, str] = field(default_factory=dict)
     kept: list[str] = field(default_factory=list)
+    acknowledged: list[str] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
     handled: set[str] = field(default_factory=set)
 
@@ -301,10 +320,46 @@ def _retired_rules(twin: str, fresh: str) -> list[str]:
             and norm(line) not in haystack]
 
 
-def _keep_notice(heading: str, sid: str, why: str) -> str:
-    """The notice for a twin left in place (``fleet`` parses :data:`KEPT_PREFIX`)."""
-    return (f"{KEPT_PREFIX}: {heading!r} beside fence '{sid}' — {why}; resolve by hand (move real "
-            "additions to ## Project-Specific Notes, then delete the unfenced copy)")
+def ack_digest(rel_path: str, heading: str, twin: str) -> str:
+    """The digest an acknowledgement binds to: the file, the heading and the twin's text.
+
+    Args:
+        rel_path: Output-relative path of the file.
+        heading: The twin's heading line, stripped.
+        twin: The twin's text (heading included); only whitespace is collapsed.
+
+    Returns:
+        The first 16 hex characters of the sha256 of the three, NUL-separated.
+
+    Raises:
+        Nothing.
+    """
+    payload = "\0".join((rel_path, heading, norm(twin)))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:_ACK_DIGEST_HEX]
+
+
+def _keep_notice(heading: str, sid: str, why: str, text: str, source: TwinSource | None, out: TwinOutcome) -> str:
+    """The notice for a twin left in place, after checking the operator's acknowledgements.
+
+    Never changes what is kept: the caller has already decided to keep the twin. A matching
+    acknowledgement only swaps :data:`KEPT_PREFIX` (``fleet`` REVIEW) for :data:`ACKED_PREFIX`.
+    """
+    span = unfenced_section(text, heading) if text and source is not None and source.rel_path else None
+    if not isinstance(span, tuple):
+        return (f"{KEPT_PREFIX}: {heading!r} beside fence '{sid}' — {why}; resolve by hand (move real "
+                "additions to ## Project-Specific Notes, then delete the unfenced copy)")
+    digest = ack_digest(source.rel_path, heading, text[span[0]:span[1]])
+    on_record = [a for a in source.acks if a.file == source.rel_path and a.heading == heading]
+    match = next((a for a in on_record if a.digest == digest), None)
+    if match is not None:
+        out.acknowledged.append(heading)
+        return (f"{ACKED_PREFIX}: {heading!r} beside fence '{sid}' — {why}; kept as acknowledged in "
+                f"{ACK_LEDGER_REL} (digest {digest}): {match.reason}")
+    stale = (f"; the acknowledgement on record ({', '.join(a.digest for a in on_record)}) no longer "
+             "matches: the twin changed since it was reviewed") if on_record else ""
+    return (f"{KEPT_PREFIX}: {heading!r} beside fence '{sid}' — {why}{stale}; resolve by hand (move real "
+            "additions to ## Project-Specific Notes, then delete the unfenced copy), or, to keep it on "
+            f"purpose, add this row to {ACK_LEDGER_REL}: {ledger_row(source.rel_path, heading, digest)}")
 
 
 def _bounded_twins(text: str, leads: Mapping[str, list[str]],
@@ -350,7 +405,7 @@ def _resolve_text(text: str, new_regions: Mapping[str, str], source: TwinSource 
         out.handled.add(heading)
         if span is None:
             out.kept.append(heading)
-            out.notices.append(_keep_notice(heading, sid, reason))
+            out.notices.append(_keep_notice(heading, sid, reason, text, source, out))
             continue
         twin = text[span[0]:span[1]]
         if norm(twin) == norm(_fence_body(regions[sid])):
@@ -361,7 +416,8 @@ def _resolve_text(text: str, new_regions: Mapping[str, str], source: TwinSource 
         if match is None or not allow_drop:
             out.kept.append(heading)
             out.notices.append(_keep_notice(
-                heading, sid, why if match is None else f"it matches {match}, but dropping is disabled (no backup dir)"))
+                heading, sid, why if match is None else f"it matches {match}, but dropping is disabled (no backup dir)",
+                text, source, out))
             continue
         drops.append(span)
         out.dropped[sid] = twin
@@ -486,12 +542,14 @@ def persist_dropped(rel_path: str, dropped: Mapping[str, str], backup_path: Path
 
 
 __all__ = [
+    "ACKED_PREFIX",
     "CORPUS_PATH",
     "DROPPED_PREFIX",
     "KEPT_PREFIX",
     "RETIRED_MARK",
     "TwinOutcome",
     "TwinSource",
+    "ack_digest",
     "dedented_view",
     "fence_leading_headings",
     "load_corpus",
