@@ -98,13 +98,20 @@ def _read_front_matter_or_empty(path: Path) -> dict[str, str]:
     return _front_matter_keys(text)
 
 def _compute_front_matter_baseline(
-    written_abs_paths: list[str], output_dir: Path
+    written_abs_paths: list[str],
+    output_dir: Path,
+    template: dict[str, dict[str, str]] | None = None,
+    previous: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, dict[str, str]]:
-    """Record each emitted file's front matter as written, for three-way merge on later updates.
+    """Record each emitted file's front matter for the three-way merge on later updates.
 
     Args:
         written_abs_paths: Absolute paths of every file this run wrote, merged or left unchanged.
         output_dir: The agents directory, used to relativise keys.
+        template: Each file's front matter in this run's template render. When given, only the values
+            agentteams authored are recorded (:func:`agentteams.front_matter_baseline.compute`); when None,
+            the front matter as written (the version-1 baseline, which a kept project value pollutes).
+        previous: The previous version-2 baseline, carried forward for keys the project holds.
 
     Returns:
         ``{rel_path: {key: value}}`` for files that have front matter; files without one are
@@ -120,7 +127,11 @@ def _compute_front_matter_baseline(
             rel = _baseline_key(path, output_dir)
             if rel is not None:
                 baseline[rel] = keys
-    return baseline
+    if template is None:
+        return baseline
+    from agentteams.front_matter_baseline import compute
+
+    return compute(baseline, template, previous)
 
 
 def _baseline_key(path: Path, output_dir: Path) -> str | None:

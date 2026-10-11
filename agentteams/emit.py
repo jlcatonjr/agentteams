@@ -60,6 +60,8 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.learned_blocks import carry_learned_block
 from agentteams.fence_twins import persist_dropped as _persist_twins
+from agentteams.front_matter_baseline import load as load_front_matter_baseline, restore_dropped_handoffs
+from agentteams.front_matter_merge import _front_matter_keys
 from agentteams.backup import (  # noqa: F401 — re-exported for callers/tests
     BACKUP_MANIFEST_NAME,
     BACKUP_MANIFEST_SCHEMA_VERSION,
@@ -141,6 +143,8 @@ class EmitResult:
     # declined) and `errors` (true failures) — these are intentional
     # non-writes that the operator can review.
     shrink_blocked: list[str] = field(default_factory=list)
+    # Each file's front matter in this run's template render: the baseline records what agentteams authored.
+    template_front_matter: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -218,7 +222,7 @@ def _front_matter_baseline(output_dir: Path) -> dict[str, dict[str, str]]:
     try:
         from agentteams import drift as _drift
 
-        return _drift.load_build_log(output_dir).get("front_matter_baseline", {}) or {}
+        return load_front_matter_baseline(_drift.load_build_log(output_dir))
     except (FileNotFoundError, ValueError, OSError, KeyError):
         return {}
 
@@ -368,6 +372,7 @@ def emit_all(
     for rel_path, content in rendered_files:
         target = _resolve_path(output_dir, rel_path)
         normalized_content = _normalize_generated_content(rel_path, content)
+        result.template_front_matter[rel_path] = _front_matter_keys(normalized_content)
         normalized_content = _ensure_project_notes_section(rel_path, normalized_content)
         normalized_content, _lb_n = carry_learned_block(rel_path, normalized_content, target)  # every path
         result.notices.extend(f"{rel_path}: {n}" for n in _lb_n)
@@ -541,7 +546,9 @@ def emit_all(
                     # Both streams, matching the real path: `_pv_applied` is what the merge
                     # WILL do, `_pv_props` is what it proposes but cannot do on its own
                     # authority (an escalation it will report rather than apply).
-                    for notice in list(_pv_applied) + list(_pv_props):
+                    _pv_content, _pv_hand = restore_dropped_handoffs(
+                        _pv_content, existing_text, _fm_baseline.get(rel_path))
+                    for notice in list(_pv_applied) + list(_pv_props) + _pv_hand:
                         annotated = f"{rel_path}: {notice}"
                         result.notices.append(annotated)
                         if result.dry_run_report is not None:
@@ -682,7 +689,9 @@ def emit_all(
             merge_result.merged_content, _fm_guard_notices = _restore_blanked_front_matter_blocks(
                 merge_result.merged_content, existing_text
             )
-            for notice in _fm_guard_notices:
+            merge_result.merged_content, _fm_hand = restore_dropped_handoffs(  # portal, 2026-10-11
+                merge_result.merged_content, existing_text, _fm_baseline.get(rel_path))
+            for notice in _fm_guard_notices + _fm_hand:
                 result.notices.append(f"{rel_path}: {notice}")
             # #15/#16: structurally-owned unfenced regions (goose sub_recipes; AGENTS.md rules).
             merge_result.merged_content, _sn = post_merge_structural(

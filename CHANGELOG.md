@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (merge no longer replaces hand-written handoffs)
+
+From the 2026-10-11 fleet re-render audit: portal's orchestrator lost its two project-specific handoffs, and
+agent-refactor, cleanup and conflict-resolution lost theirs, with no notice.
+- **Root cause.** The three-way front-matter merge applies the template's value when the on-disk value equals the
+  baseline. `build-log.json` recorded the baseline as the front matter *as written*, and a merge writes the
+  project's value whenever it keeps it. One run after a project's edit was kept, the baseline held that edit, so the
+  next template change "applied to an untouched key" and replaced it. A kept conflict was protected for one run.
+- **Baseline version 2.** New `agentteams/front_matter_baseline.py` (integrity-pinned) records, per key, only the
+  value agentteams authored: the written value when it equals the template's render, else the previous version-2
+  value. The log carries `front_matter_baseline_version: 2`. A legacy baseline is read without its block-valued
+  (`handoffs:`) and capability keys, where projects author entries; legacy values are never carried forward.
+- **Handoff guard.** Whatever path produced the content (the legacy whole-body migration takes the render's front
+  matter wholesale), a write may not drop a handoff to an agent the new block no longer reaches unless the baseline
+  shows agentteams wrote it. Such a handoff is restored with a `front matter: kept hand-written handoff` notice,
+  which fleet reports as REVIEW (`handoffs_kept`). A handoff whose target survives with the template's wording is
+  named too.
+- The proposal for a key with no recorded baseline no longer says it "changed in BOTH template and this file".
+
 ### fix (fleet and batch_update show skipped shrink grants)
 
 Closes the @security advisory on #192: a grant skipped with a stderr-only warning could leave no trace.

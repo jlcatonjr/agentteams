@@ -688,6 +688,18 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
     from agentteams import drift as _drift
     from agentteams.source_provenance import source_provenance as _source_provenance
 
+    from agentteams import front_matter_baseline as _fm_baseline
+
+    # Read before this run overwrites it. Only a version-2 baseline is carried forward.
+    try:
+        _prev_log = _drift.load_build_log(output_dir)
+    except (FileNotFoundError, ValueError, OSError):
+        _prev_log = {}
+    _previous_baseline = (_fm_baseline.load(_prev_log)
+                          if _prev_log.get(_fm_baseline.VERSION_KEY) == _fm_baseline.BASELINE_VERSION else None)
+    # None (no render recorded, e.g. a result built outside emit_all) falls back to the as-written baseline.
+    _template_fm = getattr(result, "template_front_matter", None) or None
+
     # Convert absolute paths to project-relative paths for portability
     project_root = output_dir.parent.parent  # output_dir is .github/agents/
     files_written = []
@@ -736,8 +748,12 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # deliberate project choice from an untouched default, which is why an earlier
         # `--sync-front-matter` design was withdrawn. See fences._merge_front_matter.
         "front_matter_baseline": _compute_front_matter_baseline(
-            result.written + result.merged + result.unchanged, output_dir
+            result.written + result.merged + result.unchanged, output_dir,
+            template=_template_fm, previous=_previous_baseline,
         ),
+        # Version 2 (2026-10-11): the baseline records what agentteams AUTHORED, not what was written —
+        # see agentteams/front_matter_baseline.py for the handoff loss the as-written baseline caused.
+        **({_fm_baseline.VERSION_KEY: _fm_baseline.BASELINE_VERSION} if _template_fm is not None else {}),
         # Under the switch only, so every other team's build-log is unchanged. --convert-from and --bridge-from read
         # it to refuse writing agents the policy doesn't cover (interop_write_policy.refuse_outside_interop).
         **({"write_policy": manifest["write_policy"]} if manifest.get("write_policy") else {}),

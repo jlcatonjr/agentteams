@@ -234,6 +234,7 @@ nav:
       - baseline: api-reference/baseline.md
       - template-pins: api-reference/template-pins.md
       - front-matter-reconcile: api-reference/front-matter-reconcile.md
+      - front-matter-baseline: api-reference/front-matter-baseline.md
       - bridge-subagents: api-reference/bridge-subagents.md
       - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
       - adopted-agents: api-reference/adopted-agents.md

@@ -42,6 +42,7 @@ from agentteams._fleet_report import write_report as _write_report
 from agentteams._fleet_shrink_grants import shrink_grant_lines
 from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX, RETIRED_MARK
+from agentteams.front_matter_baseline import HANDOFF_KEPT_PREFIX
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
@@ -129,6 +130,7 @@ class TargetResult:
     twins_kept: list[str] = field(default_factory=list)
     twins_dropped: list[str] = field(default_factory=list)
     twins_acknowledged: list[str] = field(default_factory=list)  # kept on an operator ack: listed, not REVIEW
+    handoffs_kept: list[str] = field(default_factory=list)  # hand-written handoffs a write would have dropped: REVIEW
     rc: int | None = None
 
 
@@ -586,6 +588,8 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         "twins_kept": [l.strip() for l in update_output.splitlines() if f"{KEPT_PREFIX}:" in l],
         "twins_dropped": [l.strip() for l in update_output.splitlines() if f"{DROPPED_PREFIX}:" in l],
         "twins_acknowledged": [l.strip() for l in update_output.splitlines() if f"{ACKED_PREFIX}:" in l],
+        # front_matter_baseline: a hand-written handoff the merge would have dropped (portal, 2026-10-11).
+        "handoffs_kept": [l.strip() for l in update_output.splitlines() if HANDOFF_KEPT_PREFIX in l],
         # A drop that retired a rule the current template no longer carries is reviewed like a kept twin.
         "twins_retired": [l.strip() for l in update_output.splitlines()
                           if f"{DROPPED_PREFIX}:" in l and RETIRED_MARK in l],
@@ -864,6 +868,7 @@ def run_fleet(args, parser) -> int:
                 tr.volatile_tracked = cls["volatile_tracked"]
                 tr.twins_kept, tr.twins_dropped, tr.twins_acknowledged = (cls["twins_kept"], cls["twins_dropped"],
                                                                           cls["twins_acknowledged"])
+                tr.handoffs_kept = cls["handoffs_kept"]
                 if rc != 0 and _is_hard_error(out):
                     tr.status, tr.detail = "FAIL", _first_error(out)
                 elif cls["fence_imbalances"]:
@@ -873,7 +878,7 @@ def run_fleet(args, parser) -> int:
                     tr.detail = ("FENCE IMBALANCE (malformed render — do not push): "
                                  + ", ".join(cls["fence_imbalances"]))
                 elif (cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]
-                      or cls["twins_retired"]):
+                      or cls["twins_retired"] or cls["handoffs_kept"]):
                     tr.status = "REVIEW"
                     tr.detail = "; ".join(filter(None, (
                         "shrink notice / USER-EDITABLE deletion — review diff"
@@ -881,7 +886,9 @@ def run_fleet(args, parser) -> int:
                         f"unfenced pre-fencing twin kept ({len(cls['twins_kept'])}) — resolve by hand"
                         if cls["twins_kept"] else "",
                         f"dropped twin retired a rule ({len(cls['twins_retired'])}) — confirm in the .lost sidecar"
-                        if cls["twins_retired"] else "")))
+                        if cls["twins_retired"] else "",
+                        f"hand-written handoff the merge would have dropped ({len(cls['handoffs_kept'])}) — review"
+                        if cls["handoffs_kept"] else "")))
                     if cls["volatile_tracked"]:
                         tr.detail += ("; tracked volatile file(s) churned (un-audited, review before commit): "
                                       + ", ".join(cls["volatile_tracked"]))

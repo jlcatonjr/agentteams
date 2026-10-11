@@ -98,6 +98,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`parallel_plan`](parallel-plan.md) | Parallelisation analysis over a plan's `depends_on` column |
 | [`feature_inventory`](feature-inventory.md) | Generated inventory of the shipped feature surface |
 | [`front_matter_reconcile`](front-matter-reconcile.md) | Report (and optionally apply) template-vs-deployed YAML front-matter divergence |
+| [`front_matter_baseline`](front-matter-baseline.md) | The three-way front-matter merge's baseline (what agentteams authored, version 2) and the guard that restores dropped hand-written handoffs |
 | [`template_pins`](template-pins.md) | Trust root for installed template digests (`--pin-templates`) |
 
 ## Host Features & Bridge Emission
