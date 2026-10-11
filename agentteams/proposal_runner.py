@@ -376,8 +376,9 @@ class Runner:
 
     def _heartbeat(self) -> None:
         beat = str(time.time()).encode()  # a timestamp only: no hostname or path (S-8)
-        _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, beat)
+        # The status heartbeat first: it is the orchestrator's liveness signal; the legacy one serves the MCP server.
         _write_new(self.root / STATUS_REL, Path(STATUS_HEARTBEAT_REL).name, beat)
+        _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, beat)
 
     def _identity_args(self, request: dict[str, Any], channel: str) -> dict[str, Any]:
         """Channel rules for the proposal engine's identity check (R2).

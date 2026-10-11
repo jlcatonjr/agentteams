@@ -205,3 +205,12 @@ def test_switched_teams_install_the_status_tree_gitignore():
     files = dict(runner_mcp.install_files({"write_policy": "orchestrator-only"}))
     assert files == {"../../.agentteams-status/.gitignore": "*\n!.gitignore\n"}
     assert runner_mcp.install_files({}) == []
+
+
+def test_a_read_rule_on_a_status_subpath_is_refused(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps({
+        "permissions": {"deny": [*runner_mcp.REQUIRED_CLAUDE_DENY, "Read(/.agentteams-status/results/**)"]},
+        "sandbox": {"enabled": True, "filesystem": {"denyWrite": [".agentteams", ".agentteams-status", ".claude"]}}}))
+    assert any("covers .agentteams-status" in p for p in runner_mcp.wiring_problems(tmp_path, "claude", MANIFEST,
+                                                                                    home=tmp_path))

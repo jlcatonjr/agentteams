@@ -33,6 +33,9 @@ Found live by the first orchestrator-only-writes pilot (biographies).
     - Linux, until the channel is measured under bwrap.
   - A shell on any non-orchestrator agent is an `AR_WRITE_POLICY` error under the switch.
   - Teams under the switch get `.agentteams-status/.gitignore`.
+- **Residual (documented).** Claude Code's built-in general-purpose subagent holds Bash, so if the orchestrator
+  dispatches it, it has the orchestrator's channel. agentteams doesn't render that subagent, so neither the audit
+  nor a verified permission rule can narrow it.
 
 ### fix (legacy `content` fence retired beside other fences; fenced duplicates reported)
 

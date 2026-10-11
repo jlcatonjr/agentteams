@@ -299,7 +299,9 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
                             "emitted sandbox block (@security C4/C11)")
         fs = (sandbox.get("filesystem") or {})
         for rule in deny:
-            if isinstance(rule, str) and rule.startswith("Read(") and rule[5:-1] in _STATUS_READ_BLOCKERS:
+            target = rule[5:-1] if isinstance(rule, str) and rule.startswith("Read(") else None
+            if target is not None and (target in _STATUS_READ_BLOCKERS or target.startswith(f"/{STATUS_TREE}/")
+                                       or target.startswith(f"./{STATUS_TREE}/")):
                 problems.append(f"live .claude/settings.json denies {rule}, which covers {STATUS_TREE}: Claude Code "
                                 "applies Read denies to sandboxed commands too, so the orchestrator's CLI couldn't "
                                 "reach the runner. Remove it")

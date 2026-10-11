@@ -78,6 +78,11 @@ The runner refuses to start when:
 - **The sandbox can't tell agents apart.** Any process in the session with a shell can create a request and read
   its own sealed result, which is the orchestrator's whole channel. The audit therefore makes a shell on any
   non-orchestrator agent an error under the switch (AR_WRITE_POLICY).
+- **Built-in subagents (residual).** Claude Code's built-in general-purpose subagent holds Bash, and agentteams
+  doesn't render it, so the audit can't narrow it, and no verified permission rule denies it. If the orchestrator
+  dispatches it, it has the orchestrator's channel, as the orchestrator itself does. Under the switch the
+  orchestrator dispatches only the team's own agents; treat a general-purpose dispatch as acting as the
+  orchestrator.
 - **Linux.** The status channel is measured on macOS (Claude Code 2.1.246). Under Linux bwrap a read-denied
   queue might be masked rather than refused, so `--check-wiring` refuses Linux until it is measured.
 - **Queue contents.** Under the emitted Claude settings, no agent in the session can read `.agentteams-queue/`
