@@ -24,19 +24,31 @@ it as REVIEW. A twin is also kept, and never dropped, when:
 - it overlaps another twin;
 - the run has no backup dir.
 
+An operator who keeps a twin on purpose can record it in the team's
+`references/fence-twin-acks.csv` ([`fence_twin_acks`](fence-twin-acks.md)). A matching row turns the
+notice into `twin kept (acknowledged)`, which `fleet` does not report as REVIEW. The row binds to
+`ack_digest` of the file, the heading and the twin's text, so any edit to the twin brings REVIEW back.
+The row is read only after the drop decision, so it never causes a drop. The kept-twin notice prints
+the row to record.
+
 A dropped twin's text goes to `<backup>/<rel path>.lost.unfenced-<fence id>.md`. Goose recipes are
 resolved inside their dedented `instructions:` block, then re-indented.
 
 | Name | Purpose |
 |---|---|
-| `TwinSource(template, placeholders)` | Template path and placeholder values for one rendered file; built by `cli.render_pipeline.twin_sources`. |
-| `TwinOutcome` | `content`, `dropped` (fence id to text), `kept` (headings), `notices`, `handled`. |
-| `KEPT_PREFIX`, `DROPPED_PREFIX` | Notice prefixes that `fleet` parses. |
+| `TwinSource(template, placeholders, rel_path='', acks=())` | Template path, placeholder values, output-relative path and acknowledgement rows for one rendered file; built by `cli.render_pipeline.twin_sources`. |
+| `TwinOutcome` | `content`, `dropped` (fence id to text), `kept` (headings), `acknowledged` (the kept headings an acknowledgement matched), `notices`, `handled`. |
+| `KEPT_PREFIX`, `DROPPED_PREFIX`, `ACKED_PREFIX` | Notice prefixes that `fleet` parses. `KEPT_PREFIX` is a REVIEW reason, as is a drop that retired a rule; `ACKED_PREFIX` is not. |
 | `CORPUS_PATH`, `load_corpus(path)` | The lineage corpus. If it is missing or unreadable, every twin is kept. |
 
 ### `resolve(merged, new_regions, source=None, *, allow_drop=False, fresh='', corpus=None, templates_dir=None)`
 
 Drops each provable twin and keeps and flags every other one. Returns a `TwinOutcome`.
+
+### `ack_digest(rel_path, heading, twin)`
+
+Returns the 16-hex digest that an acknowledgement row binds to: the sha256 of the file path, the
+heading and the twin's whitespace-collapsed text.
 
 ### `unfenced_section(text, heading, *, allow_eof=False)`
 

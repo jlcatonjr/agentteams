@@ -266,16 +266,19 @@ def _build_final_rendered(
     return final
 
 
-def twin_sources(manifest: dict[str, Any], adapter: Any) -> dict[str, Any]:
+def twin_sources(manifest: dict[str, Any], adapter: Any, output_dir: Path | None = None) -> dict[str, Any]:
     """Map each rendered output path to the template and placeholder values it was rendered from.
 
     Mirrors :func:`render.render_all` (fallback template included) and the adapter's output-path
     finalisation, so ``emit_all`` can let a merge prove that an unfenced pre-fencing twin is template
-    text (``agentteams.fence_twins``). A path missing here only ever keeps its twins.
+    text (``agentteams.fence_twins``). A path missing here only ever keeps its twins. Each source also
+    carries the operator's acknowledgements for that path from ``<output_dir>/references/fence-twin-acks.csv``
+    (``agentteams.fence_twin_acks``), which can only turn a kept twin's REVIEW into a notice.
 
     Args:
         manifest: The team manifest.
         adapter: The framework adapter (``finalize_output_path``).
+        output_dir: The run's output dir, where the acknowledgement ledger lives; None reads none.
 
     Returns:
         ``{final rel path: fence_twins.TwinSource}``.
@@ -283,8 +286,10 @@ def twin_sources(manifest: dict[str, Any], adapter: Any) -> dict[str, Any]:
     Raises:
         Nothing.
     """
+    from agentteams import fence_twin_acks
     from agentteams.fence_twins import TwinSource
 
+    acks = fence_twin_acks.load(output_dir)
     sources: dict[str, Any] = {}
     for spec in manifest.get("output_files", []):
         template = spec.get("template", "")
@@ -297,7 +302,11 @@ def twin_sources(manifest: dict[str, Any], adapter: Any) -> dict[str, Any]:
         placeholders = render._build_placeholder_map_for_file(
             manifest, component_slug=spec.get("component_slug"), file_spec=spec)
         final_path = adapter.finalize_output_path(spec["path"], _guess_file_type(spec["path"]))
-        sources[final_path] = TwinSource(template=template, placeholders=placeholders)
+        sources[final_path] = TwinSource(template=template, placeholders=placeholders, rel_path=final_path,
+                                         acks=acks.get(final_path, ()))
+    for unused in sorted(set(acks) - set(sources)):
+        print(f"  WARNING: {fence_twin_acks.LEDGER_REL}: no rendered file {unused!r}; its acknowledgement(s) "
+              "apply to nothing (renamed or no longer rendered?)", file=sys.stderr)
     return sources
 
 
