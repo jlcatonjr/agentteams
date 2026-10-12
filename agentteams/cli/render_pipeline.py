@@ -395,13 +395,16 @@ def _backup_verified(backup_path: Path | None, output_dir: Path, p: Path) -> boo
     except (OSError, ValueError):
         return False
     # Agent files are backed up inert (*.agentteams-bak); older backups used the plain name.
-    for candidate in (rel.with_name(inert_backup_name(rel.name)), rel):
-        try:
-            if (backup_path / candidate).read_bytes() == data:
-                return True
-        except OSError:
-            continue
-    return False
+    return any(_copy_matches(backup_path / candidate, data)
+               for candidate in (rel.with_name(inert_backup_name(rel.name)), rel))
+
+
+def _copy_matches(copy: Path, data: bytes) -> bool:
+    """Whether the backup *copy* exists and holds exactly *data*."""
+    try:
+        return copy.is_file() and copy.read_bytes() == data
+    except OSError:
+        return False
 
 
 def _remove_stale_tool_agents(
