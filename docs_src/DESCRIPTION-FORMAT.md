@@ -178,6 +178,23 @@ Each entry:
 
 ---
 
+### `write_policy`
+
+**Type:** `"default"` or `"orchestrator-only"` · **Default:** absent (off)
+**Purpose:** Under `"orchestrator-only"`:
+- non-orchestrator agents are read-only and return proposals;
+- agents named in `mcp_grants` write through the `agentteams_runner` MCP server as staged proposals;
+- the operator's out-of-session runner applies everything.
+
+**Requirements and support:**
+- an explicit `privilege_profile` of `"confined"` or `"exclusive"`;
+- **supported on Claude** (and Codex through its launcher);
+- **refused on Goose**: Goose delegates inherit the orchestrator's write tools (agentteams #204).
+
+See `docs_src/api-reference/proposal-runner.md` and `runner-mcp.md`.
+
+---
+
 ### `reference_db_path`
 
 **Type:** string (path) or null  
