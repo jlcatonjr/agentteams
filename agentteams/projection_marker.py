@@ -21,6 +21,9 @@ section B and its binding "Codex marker" conditions):
   the source or target team forces ``true``), the store sentinel, then the roster stubs
   (``control_plane_io``). Every required
   entry is then re-checked to be a real file / directory, never a symlink. Any failure: NO marker.
+  Exception (2026-10-11): the switch is no longer write-if-absent. It tracks the source on every
+  projection when the pipeline owns it (``signing_switch.apply_switch``); a switch of unclear
+  ownership is kept and reported, and a true -> false change prints a fleet REVIEW notice.
 * **Real directories only.** The agents dir, its parent, ``references/`` and the store must not be
   symlinks; the marker is written by temp file + ``os.replace`` inside a checked ``references/``.
 * **origin "interop" authorises nothing (cond 13).** ``drift.is_interop_marker`` lets every reader
@@ -42,6 +45,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agentteams.signing_switch import (  # the single home of the switch constants
+    GOVERNED_MARKER as _GOVERNED_MARKER,
+    SWITCH_REL as _SWITCH_REL,
+    TEAM_DIRS as _TEAM_DIRS,
+    TEAM_MARKER_REL as _MARKER_REL,
+    read_switch as _read_switch,
+)
+
 #: Same schema version as the native build-log (``build_team._write_run_log``).
 MARKER_SCHEMA_VERSION = "1.5"
 
@@ -51,9 +62,6 @@ INTEROP_ORIGIN = "interop"
 #: Registry frameworks whose projection gets a marker. agents-md and canonical have no team-marker
 #: convention; claude is excluded (see the module docstring).
 MARKER_FRAMEWORKS: frozenset[str] = frozenset({"codex", "copilot-vscode", "copilot-cli", "goose"})
-
-_SWITCH_REL = "references/agent-privilege.json"
-_MARKER_REL = "references/build-log.json"
 
 
 @dataclass
@@ -66,6 +74,7 @@ class ProjectionMarkerResult:
         skipped: Why nothing was written (a native build-log, an unsupported framework), or ``""``.
         error: Why the marker was refused after a failed or unsafe write, or ``""``.
         created: True when no marker existed before this call.
+        notices: Switch notices to print (``signing_switch``: relaxed / kept / tightened).
     """
 
     marker: Path | None = None
@@ -73,6 +82,7 @@ class ProjectionMarkerResult:
     skipped: str = ""
     error: str = ""
     created: bool = False
+    notices: list[str] = field(default_factory=list)
 
 
 def _sha16(path: Path) -> str:
@@ -143,10 +153,9 @@ def _unsafe_dir(path: Path) -> str:
     return ""
 
 
-_GOVERNED_MARKER = "signing-governed.marker"
-
 #: Repo-relative source dirs a refresh hint may name (security C4); anything else is ``<source>``.
-_KNOWN_SOURCE_DIRS: frozenset[str] = frozenset({".github/agents", ".claude/agents", ".goose/recipes"})
+#: Every team dir but ``.codex/agents``, which is only ever a projection target.
+_KNOWN_SOURCE_DIRS: frozenset[str] = frozenset(_TEAM_DIRS) - {".codex/agents"}
 
 
 def safe_source_hint(value: Any) -> str:
@@ -166,27 +175,16 @@ def safe_source_hint(value: Any) -> str:
     return shlex.quote(value) if isinstance(value, str) and value in _KNOWN_SOURCE_DIRS else "<source>"
 
 
-def _read_switch(path: Path) -> bool | None:
-    """Return a switch's ``enforce_decision_signing``; ``None`` when absent.
+def _switch_tracked(source_dir: Path, agents_dir: Path) -> bool:
+    """True when the projection carries a value an existing target switch should track.
 
-    Raises:
-        ValueError: The switch is present but a symlink, not a regular file, unreadable,
-            malformed, or its value is not a JSON boolean (security C2: never default to false).
+    A source with no switch carries none (multi_sync's canonical dir never has one): an existing
+    target switch is then only created-if-absent, never rewritten to ``false`` — that would relax a
+    switch because a file is missing, not because the description said so. A governed team always
+    tracks (its value is ``true``).
     """
-    if not os.path.lexists(path):
-        return None
-    if path.is_symlink() or not stat.S_ISREG(os.lstat(path).st_mode):
-        raise ValueError(f"switch {path} is a symlink or not a regular file")
-    try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-        with os.fdopen(fd, encoding="utf-8") as fh:
-            data = json.loads(fh.read())
-    except (OSError, ValueError) as exc:
-        raise ValueError(f"switch {path} is unreadable or malformed: {exc}") from exc
-    value = data.get("enforce_decision_signing") if isinstance(data, dict) else None
-    if not isinstance(value, bool):
-        raise ValueError(f"switch {path} has no boolean enforce_decision_signing")
-    return value
+    return os.path.lexists(source_dir / _SWITCH_REL) or any(
+        os.path.lexists(d / _GOVERNED_MARKER) for d in (source_dir, agents_dir))
 
 
 def _switch_value(source_dir: Path, agents_dir: Path) -> bool:
@@ -205,12 +203,23 @@ def _switch_value(source_dir: Path, agents_dir: Path) -> bool:
     return True  # C1: a governed source or target always projects ON, never false
 
 
-def _write_control_plane(agents_dir: Path, framework: str, enforce: bool) -> list[Path]:
-    """Create the switch, store sentinel and roster stubs (each write-if-absent).
+def _write_control_plane(
+    agents_dir: Path, framework: str, enforce: bool, notices: list[str] | None = None,
+    *, track: bool = True,
+) -> list[Path]:
+    """Write the switch, then create the store sentinel and roster stubs (each write-if-absent).
+
+    The switch tracks ``enforce`` on every projection when the pipeline owns it
+    (``signing_switch.apply_switch``: a team marker plus a pipeline note); a switch of unclear
+    ownership is kept and reported. It was write-if-absent until 2026-10-11, so a description's
+    ``enforce_decision_signing: false`` never reached an existing ``.codex/agents`` switch. With
+    ``track`` false (:func:`_switch_tracked`: the source has no switch) it is still create-only.
 
     Raises:
         OSError: A create failed, or a path is (or passes through) a symlink.
     """
+    from agentteams.signing_switch import PROJECTION_NOTE, apply_switch
+
     from agentteams import control_plane_io
     from agentteams.frameworks._sandbox_emit import (
         VERIFY_KEY_STORE_SENTINEL_REL,
@@ -228,15 +237,12 @@ def _write_control_plane(agents_dir: Path, framework: str, enforce: bool) -> lis
         reason = _unsafe_dir(directory)  # raced into a link between the check and the mkdir
         if reason:
             raise OSError(reason)
-    switch = agents_dir / _SWITCH_REL
-    payload = json.dumps({
-        "enforce_decision_signing": enforce,
-        "note": "Projected by agentteams interop from the source team's switch (absent there = "
-                "false, the same as no switch; a signing-governed team is always true). Read by "
-                "the security gate.",
-    }, indent=2) + "\n"
-    if not os.path.lexists(switch) and control_plane_io._create_exclusive(switch, payload):
-        created.append(switch)
+    outcome = apply_switch(agents_dir, enforce, PROJECTION_NOTE, label=f"[{framework}] ",
+                           create_only=not track)
+    if outcome.written:
+        created.append(outcome.path)
+    if notices is not None:
+        notices.extend(outcome.notices)
     sentinel = agents_dir / VERIFY_KEY_STORE_SENTINEL_REL
     if not os.path.lexists(sentinel) and control_plane_io._create_exclusive(
             sentinel, VERIFY_KEY_STORE_SENTINEL_TEXT):
@@ -244,6 +250,30 @@ def _write_control_plane(agents_dir: Path, framework: str, enforce: bool) -> lis
     created += control_plane_io.write_control_plane_stubs(
         agents_dir, framework, {"enforce_decision_signing": enforce})
     return created
+
+
+def _track_switch_only(
+    agents_dir: Path, framework: str, source_dir: Path, result: ProjectionMarkerResult,
+) -> None:
+    """Re-point an existing interop team's switch at its source when nothing else was projected.
+
+    A no-op projection must still carry a changed source switch (e.g. the description's
+    ``enforce_decision_signing`` flipped). Failures become :data:`signing_switch.KEPT_PREFIX`
+    notices; the marker itself is left as it is.
+    """
+    from agentteams.signing_switch import KEPT_PREFIX, PROJECTION_NOTE, apply_switch
+
+    try:
+        reason = _unsafe_dir(agents_dir) or _unsafe_dir(agents_dir / "references")
+        if reason:
+            raise OSError(reason)
+        if not _switch_tracked(source_dir, agents_dir):
+            return  # the source carries no switch value to track
+        enforce = _switch_value(source_dir, agents_dir)
+        result.notices += apply_switch(agents_dir, enforce, PROJECTION_NOTE,
+                                       label=f"[{framework}] ").notices
+    except (OSError, ValueError) as exc:
+        result.notices.append(f"  ⚠  {KEPT_PREFIX}: [{framework}] projected switch not updated: {exc}")
 
 
 def _control_plane_hole(agents_dir: Path) -> str:
@@ -386,6 +416,7 @@ def write_projection_marker(
         return result
     if origin == INTEROP_ORIGIN and not files_written:
         result.skipped = "nothing projected; the existing interop marker is kept"
+        _track_switch_only(agents_dir, framework, source_dir, result)
         return result
     for directory in (agents_dir.parent, agents_dir):
         reason = _unsafe_dir(directory)
@@ -398,7 +429,9 @@ def write_projection_marker(
         result.error = f"refusing the projection marker: {exc}"
         return result
     try:
-        result.control_plane = _write_control_plane(agents_dir, framework, enforce)
+        result.control_plane = _write_control_plane(
+            agents_dir, framework, enforce, result.notices,
+            track=_switch_tracked(source_dir, agents_dir))
     except OSError as exc:
         result.error = f"refusing the projection marker: control-plane write failed: {exc}"
         return result
@@ -445,6 +478,7 @@ def mark_interop_projection(
         files_written=list(result.converted),
         agent_slugs=[str(a.get("slug")) for a in cai.get("agents", []) if a.get("slug")],
     )
+    result.notices.extend(marker.notices)
     if marker.error:
         result.errors.append(f"{marker.error}. NO team marker was written.")
         return
@@ -479,6 +513,8 @@ def print_marker_outcome(result: ProjectionMarkerResult, *, label: str = "") -> 
         result: From :func:`write_projection_marker`.
         label: A prefix such as ``"[codex] "``.
     """
+    for line in result.notices:
+        print(line)
     if result.error:
         print(f"  ✗  {label}{result.error}. NO team marker was written.", file=sys.stderr)
     elif result.marker is not None:

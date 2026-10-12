@@ -561,6 +561,8 @@ def _mark_projected_team(
         agent_slugs=[str(a.get("slug")) for a in canonical_cai.get("agents", []) if a.get("slug")],
     )
     print_marker_outcome(outcome, label=f"[{framework}] ")
+    if notices is not None:
+        notices.extend(outcome.notices)  # switch relaxed / kept (signing_switch)
     if outcome.error and notices is not None:
         notices.append(f"[{framework}] {outcome.error}; NO team marker was written")
 

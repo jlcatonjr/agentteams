@@ -255,7 +255,7 @@ MODEL_ROUTING_REL_PATH = "references/model-routing.json"
 #: Where the strict agent-privilege switch is emitted, relative to the team root. The
 #: security gate reads this at enforcement time; an ABSENT file is treated as OFF (a
 #: workspace that predates the feature is never surprised into fail-closed behavior).
-AGENT_PRIVILEGE_REL_PATH = "references/agent-privilege.json"
+from agentteams.signing_switch import SWITCH_REL as AGENT_PRIVILEGE_REL_PATH  # noqa: E402  (single home)
 
 
 def _write_agent_privilege_config(manifest: dict, output_dir: Path) -> Path | None:
@@ -264,30 +264,31 @@ def _write_agent_privilege_config(manifest: dict, output_dir: Path) -> Path | No
     Framework-neutral (the security gate that reads it is framework-neutral). Written on
     every generate/update so the switch is explicit in the team; the value is
     ``manifest['enforce_decision_signing']`` (defaulted true in ``analyze.build_manifest``
-    when the brief does not set it). Returns the path written, or ``None`` when the manifest
-    carries no switch (older manifests — nothing to emit).
+    when the brief does not set it). Returns the switch path, or ``None`` when the manifest
+    carries no switch (older manifests — nothing to emit). An existing switch is rewritten only
+    when the pipeline owns it (``signing_switch.apply_switch``); a true -> false change and a
+    kept, divergent switch each print a notice the fleet treats as a REVIEW reason.
 
     Args:
         manifest: The team manifest.
         output_dir: The team root.
 
     Returns:
-        The written path, or ``None`` when there is no switch to emit.
+        The switch path, or ``None`` when there is no switch to emit.
+
+    Raises:
+        OSError: The write failed, or the switch / ``references/`` is a symlink.
     """
     if "enforce_decision_signing" not in manifest:
         return None
-    payload = {
-        "enforce_decision_signing": bool(manifest.get("enforce_decision_signing")),
-        "note": (
-            "Strict agent-privilege switch. When true, an unsigned AUTHORIZING "
-            "security-decision row is refused (fail-closed) rather than trusted on its "
-            "author name. Read by the security gate. Turn off by setting "
-            "enforce_decision_signing:false in the project brief and re-running --update."
-        ),
-    }
-    config_path = output_dir / AGENT_PRIVILEGE_REL_PATH
-    _atomic_write_text(config_path, json.dumps(payload, indent=2) + "\n")
-    return config_path
+    from agentteams.signing_switch import NATIVE_NOTE, apply_switch
+
+    # Tracks the description on every render, but only for a switch the pipeline owns: a
+    # hand-written / marker-less one is kept and reported (signing_switch, 2026-10-11).
+    outcome = apply_switch(output_dir, bool(manifest.get("enforce_decision_signing")), NATIVE_NOTE)
+    for line in outcome.notices:
+        print(line)
+    return outcome.path
 
 
 #: Where the management-authority config is emitted, relative to the team root. Names this

@@ -34,9 +34,12 @@ format, so `--verify-integrity` reads them), `template_hashes: {}`, `origin`, `s
   unparseable one, or a symlink. An existing interop marker is refreshed. When nothing was
   projected, an existing interop marker is left as it is.
 - **The control plane is written first (security condition 12).** Once the marker exists, the
-  launcher requires the team's switch, verify-key store and rosters. They are created
-  write-if-absent (`O_CREAT|O_EXCL|O_NOFOLLOW`), in this order:
-  1. the switch, which mirrors the source team's `enforce_decision_signing`. A missing source
+  launcher requires the team's switch, verify-key store and rosters. They are written in this
+  order (the sentinel and stubs write-if-absent, `O_CREAT|O_EXCL|O_NOFOLLOW`):
+  1. the switch, which mirrors the source team's `enforce_decision_signing`. Since 2026-10-11 it
+     is not write-if-absent: [`signing_switch.apply_switch`](signing-switch.md) rewrites a switch
+     the pipeline owns on every projection, including one that projected no files, keeps one of
+     unclear ownership, and prints a fleet REVIEW notice for a `true -> false` change. A missing source
      switch gives `false`, which reads like no switch. A source switch that is a symlink, not a
      regular file, unreadable, malformed or non-boolean refuses the marker, and no switch is
      written. When the source or target team has `signing-governed.marker`, the switch is always
@@ -65,7 +68,8 @@ Returns a `ProjectionMarkerResult` with these fields:
 - `control_plane`: the files created before the marker;
 - `skipped`: why nothing was written;
 - `error`: why the marker was refused;
-- `created`: true when no marker existed before.
+- `created`: true when no marker existed before;
+- `notices`: switch notices (relaxed, kept, tightened), printed by `print_marker_outcome`.
 
 ### `existing_marker_origin(agents_dir) -> str | None`
 

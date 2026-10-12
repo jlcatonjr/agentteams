@@ -44,6 +44,7 @@ from agentteams.fences import _BRIDGE_FENCE_BEGIN_RE
 from agentteams.fence_twins import ACKED_PREFIX, DROPPED_PREFIX, KEPT_PREFIX
 from agentteams.whole_body_migration import DUPLICATE_PREFIX
 from agentteams.front_matter_baseline import HANDOFF_KEPT_PREFIX
+from agentteams.signing_switch import review_lines as _switch_review_lines, review_reason as _switch_reason
 from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_source
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
@@ -599,6 +600,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
         # front_matter_baseline: a hand-written handoff the merge would have dropped (portal, 2026-10-11).
         "handoffs_kept": [l.strip() for l in update_output.splitlines()
                           if _twin_acks.notice_body(l).startswith(HANDOFF_KEPT_PREFIX)],
+        "signing_switch": _switch_review_lines(update_output),  # relaxed / kept switch (Rule 15)
     }
 
 
@@ -888,7 +890,7 @@ def run_fleet(args, parser) -> int:
                                  + ", ".join(cls["fence_imbalances"]))
                 elif (cls["user_editable_deletions"] or cls["shrink_notices"] or cls["twins_kept"]
                       or cls["twins_retired"] or tr.twins_ack_unreviewed or cls["duplicates"]
-                      or cls["handoffs_kept"]):
+                      or cls["handoffs_kept"] or cls["signing_switch"]):
                     tr.status = "REVIEW"
                     tr.detail = "; ".join(filter(None, (
                         "shrink notice / USER-EDITABLE deletion — review diff"
@@ -897,7 +899,8 @@ def run_fleet(args, parser) -> int:
                         f"duplicate section ({len(cls['duplicates'])}) — two copies, resolve by hand"
                         if cls["duplicates"] else "",
                         f"hand-written handoff the merge would have dropped ({len(cls['handoffs_kept'])}) — review"
-                        if cls["handoffs_kept"] else "")))
+                        if cls["handoffs_kept"] else "",
+                        _switch_reason(cls["signing_switch"]))))
                     if cls["volatile_tracked"]:
                         tr.detail += ("; tracked volatile file(s) churned (un-audited, review before commit): "
                                       + ", ".join(cls["volatile_tracked"]))
@@ -909,6 +912,9 @@ def run_fleet(args, parser) -> int:
                                  + ", ".join(cls["volatile_tracked"]))
                 else:
                     tr.status = "OK"
+                switch_reason = _switch_reason(cls["signing_switch"])  # also on FAIL / fence imbalance
+                if switch_reason and switch_reason not in tr.detail:
+                    tr.detail = "; ".join(filter(None, (tr.detail, switch_reason)))
                 # Persist the per-workspace diff for human review.
                 if diff_text:
                     report_root.mkdir(parents=True, exist_ok=True)
@@ -919,8 +925,10 @@ def run_fleet(args, parser) -> int:
                 # Non-git: recovery is the pre-write .agentteams-backups snapshot,
                 # created by emit (direct targets) and by run_bridge (bridge
                 # targets) before any overwrite/merge of an existing file.
-                tr.status = "OK" if rc == 0 else "REVIEW"
-                tr.detail = "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)"
+                switch_reason = _switch_reason(_switch_review_lines(out))
+                tr.status = "OK" if rc == 0 and not switch_reason else "REVIEW"
+                tr.detail = "; ".join(filter(None, (
+                    "non-git workspace — recovery via .agentteams-backups (pre-write snapshot)", switch_reason)))
             print(f"    {target}: {tr.status}  (+{tr.added_lines}/-{tr.removed_lines}, "
                   f"{len(tr.shrink_notices)} shrink, {len(tr.user_editable_deletions)} UE-del, "
                   f"{len(tr.fence_imbalances)} fence-imbalance, "

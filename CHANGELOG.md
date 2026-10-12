@@ -6,6 +6,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (the signing switch tracks the description on every surface; no project script is a default task)
+
+Found by the fleet-sync round-3 security review.
+- **Signing switch.** A projected `.codex/agents/references/agent-privilege.json` was written only when absent,
+  so `"enforce_decision_signing": false` in the description never reached it (researchteam and baseAgent stayed
+  `true`). New `agentteams/signing_switch.py` is now the one writer for both native generation and interop /
+  multi-sync projection:
+  - An **owned** switch (a team marker, i.e. `references/build-log.json`, plus one of the pipeline's own notes)
+    is rewritten to track the rendered value on every render, update and projection, including no-op projections.
+  - A native render also re-points every sibling team in the project that is an interop projection **of it**
+    (`.codex/agents` projected from `.github/agents`, …), so the fleet's `github` update carries the value to the
+    Codex surface the fleet otherwise SKIPs. The value carried is the one on disk in the source team, so a kept,
+    hand-pinned source switch is not contradicted. Siblings are reached through real directories only.
+  - A projection whose source has no switch (`multi_sync`'s `.agentteams/canonical`) only creates an absent
+    switch and never rewrites one, so a missing file can't relax it.
+  - A signing-governed team (`signing-governed.marker`) never gets `false`, on the native path too.
+  - A switch of **unclear ownership** (no team marker, a hand-written note, a malformed file, a symlink) is never
+    changed. When its value differs, a `SIGNING SWITCH KEPT` notice is printed.
+  - A `true -> false` change prints a `SIGNING SWITCH RELAXED` notice. The fleet turns either notice into a
+    REVIEW reason ("signing switch relaxed" / "signing switch kept"), in git and non-git workspaces alike, and
+    on FAIL and fence-imbalance results. `--dry-run` doesn't preview a relax.
+  - Unchanged: an absent description key still means `true`; writes never follow a symlink.
+- **`.vscode/tasks.json` defaults.** Tracers-Reporting-Automation's generated tasks made
+  `script: install_tracers_purge_cron` (it installs a cron job) the default build task. Now:
+  - A `scripts/*.sh` is never a group default. Only declared tooling (package.json, Makefile, pyproject, tox,
+    Taskfile) can be, and never a command named `install`, `deploy`, `publish`, `release`, `upload`, `setup`,
+    `bootstrap` or `provision`. A make target is not a default either when it installs (`pip install`,
+    `npm install`, `uv pip install`, `brew install`, `sudo`/`doas`, `install`/`$(INSTALL)`, `setup.py install`,
+    `curl … | sh`, …) or runs a target that does.
+  - Some commands are not emitted as tasks at all. A one-line stderr notice names each one:
+    - a command whose name says it schedules jobs or purges/deletes data (`cron`, `launchd`, `systemd`,
+      `purge`, `delete`, `wipe`, …);
+    - a script, npm script or make target whose body does (`crontab`, `launchctl`, `systemctl … enable`,
+      `*.timer`, `DELETE FROM`, `DROP TABLE`, `rm -r`/`rm -rf`/`rm --recursive`, `$(RM) -r`, `find … -delete`,
+      `git clean -f`, …). New private `agentteams/_makefile_screen.py` reads what a make target runs: its
+      recipe (continuations, `target: ; recipe`, conditionals and `.RECIPEPREFIX` included), the variables and
+      `define` blocks it expands, and every target it runs as a prerequisite, through a pattern rule or through
+      a recursive `$(MAKE)`. A variable is judged by every value it is ever given (conditional branches,
+      `+=` and target-specific values like `clean: CMD = rm -rf` included), `$X` counts as a reference, and a
+      computed name (`$(CMD_$(T))`) may be any variable. A hazard in text make runs while reading the file
+      (any line outside a rule's recipe, tab-prefixed or not, that reaches `$(shell …)` or `$(eval …)`,
+      directly or through variables, and `!=`) drops every target, and a Makefile over
+      256 KiB is not offered at all. So a `make clean` that runs `rm -rf build` is no longer offered. Not
+      covered: `include`d makefiles, a sub-directory's own makefile (`$(MAKE) -C sub`), computed sub-make
+      targets (`$(MAKE) $(T)`), and a hazard inside a program a recipe calls.
+  - An already-generated (AGENTTEAMS-tagged) task the new render dropped or changed is removed or rewritten
+    on the next render, in plain-JSON and commented (JSONC) `tasks.json` alike. User tasks and comments are kept.
+
 ### fix (security: backups can no longer be loaded as agents; this defeated the write policy)
 
 Found by the accuracy-test harness (2026-10-12).
