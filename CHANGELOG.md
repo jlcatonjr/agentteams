@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (the sandboxed Claude orchestrator reaches the runner: sealed results in `.agentteams-status/`)
+
+Found live by the first orchestrator-only-writes pilot (biographies).
+- **The bug.** Claude Code 2.1.246 applies the session's `Read(/.agentteams/**)` and `Read(/.agentteams-queue/**)`
+  denies to sandboxed commands too, not only to the built-in tools. So the orchestrator's own `agentteams` CLI
+  couldn't read the runner's heartbeat or results, and every approval-loop call (`--list-staged`, `--apply-staged`,
+  `--issue-dispatch` …) refused with "no runner is serving this project". This affected every Claude team under the
+  switch, with or without `mcp_grants`.
+- **The fix.**
+  - **Status tree.** The runner publishes its heartbeat and the orchestrator's results in `.agentteams-status/`,
+    which the session can read but never write (`Edit` deny and `denyWrite`).
+  - **Sealed results.** Each result is sealed (new `agentteams/sealed_result.py`) with a `reply_key` the CLI puts
+    in its request and keeps in memory. Other agents reading the tree learn nothing.
+  - **Request writes.** Requests are written with exclusive creates plus a `.ready` marker, because a rename into
+    the read-denied queue fails.
+  - **Old clients.** A request without a `reply_key` (an old client) is refused, never answered in the clear.
+  - **`--wait-result`.** From a new process it can only report completion.
+  - **MCP channel.** Unchanged; its server runs unsandboxed.
+- **Hardening that comes with it** (@security):
+  - `.agentteams-status` is protected in the Claude settings, `confinement.PROTECTED_REL`, the Codex launcher,
+    Goose's Seatbelt profile and the control-plane path checks.
+  - `--check-wiring` now runs for every team under the switch, not only teams with grants. It refuses:
+    - a `Read(...)` rule covering the status tree;
+    - `allowUnsandboxedCommands`;
+    - Linux, until the channel is measured under bwrap.
+  - A shell on any non-orchestrator agent is an `AR_WRITE_POLICY` error under the switch.
+  - Teams under the switch get `.agentteams-status/.gitignore`.
+- **Residual (documented).** Claude Code's built-in general-purpose subagent holds Bash, so if the orchestrator
+  dispatches it, it has the orchestrator's channel. agentteams doesn't render that subagent, so neither the audit
+  nor a verified permission rule can narrow it.
+
 ### fix (merge no longer replaces hand-written handoffs)
 
 From the 2026-10-11 fleet re-render audit: portal's orchestrator lost its two project-specific handoffs, and

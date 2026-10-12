@@ -132,6 +132,8 @@ MCP_GRANTS_DIR = "~/.config/agentteams/mcp-grants"
 OPERATOR_VERIFY_KEYS_DIR = "~/.config/agentteams/verify-keys"
 #: The proposal ledger's directory; write-denied to every session under write_policy "orchestrator-only".
 LEDGER_DIR_REL = ".agentteams"
+#: The runner's status tree: session-readable, written only by the runner (2026-10-11).
+STATUS_DIR_REL = ".agentteams-status"
 
 #: The pre-F-1 private-key location. Key files there are denied TRANSITIONALLY (@security ruling
 #: (b), 2026-09-30); remove once a release has shipped the migration advisory. The glob form is
@@ -822,9 +824,9 @@ def _build_sandbox_block(
     if protect_prompt_roots:
         filesystem["denyWrite"] += [p for p in present_prompt_roots(project_root)
                                     if p not in filesystem["denyWrite"]]
-    if protect_ledger and LEDGER_DIR_REL not in filesystem["denyWrite"]:
-        # write_policy "orchestrator-only" (P4a): only the out-of-session runner writes the ledger.
-        filesystem["denyWrite"].append(LEDGER_DIR_REL)
+    if protect_ledger:
+        # write_policy "orchestrator-only" (P4a): only the out-of-session runner writes the ledger and its status.
+        filesystem["denyWrite"] += [p for p in (LEDGER_DIR_REL, STATUS_DIR_REL) if p not in filesystem["denyWrite"]]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
@@ -917,10 +919,13 @@ def _inject_sandbox_block(
         # file server Goose launches) is the runner's alone. The sandbox's denyWrite doesn't bind the built-in
         # Write/Edit tools, so they need this rule too; CLI and runner writes don't go through those tools.
         rules.append(f"Edit(/{LEDGER_DIR_REL}/**)")
-        # R1 (@security C4): the request queue and the runner's results briefly hold raw dispatch nonces, so no
-        # agent's built-in Read/Grep/Glob may open them (the orchestrator's CLI reads results as a subprocess,
-        # which these tool rules don't bind). Goose's read-only file server already refuses both trees.
-        rules += [f"Read(/{LEDGER_DIR_REL}/**)", "Read(/.agentteams-queue/**)"]
+        # R1 (@security C4): the request queue and the runner's control plane hold raw dispatch nonces, so no agent
+        # may read them. Claude Code (2.1.246, measured 2026-10-11) applies these Read denies to sandboxed commands
+        # too, the orchestrator's own CLI included: so the runner publishes the heartbeat and the orchestrator's
+        # results, sealed to each request's reply key, in the session-readable .agentteams-status/ tree, which no
+        # Read rule may cover and nothing in the session may write. Goose's read-only file server refuses the two
+        # denied trees.
+        rules += [f"Read(/{LEDGER_DIR_REL}/**)", "Read(/.agentteams-queue/**)", f"Edit(/{STATUS_DIR_REL}/**)"]
         # R7 (@security C11): the agent files carry each granted agent's agentteams_runner block; the sandbox's
         # denyWrite .claude binds only the shell, so the built-in Edit/Write tools need their own rule.
         rules.append("Edit(/.claude/agents/**)")

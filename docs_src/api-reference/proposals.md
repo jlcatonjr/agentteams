@@ -225,9 +225,11 @@ every one.
   `DISPATCH_MAX_ATTEMPTS`, four times the use cap, counts every validated arrival, dry runs and refusals
   included. Gates are registered by the operator, but they still run code on agent-supplied content. Refusals are
   logged in the ledger.
-- **The Read deny rules bind only the built-in tools.** Under the switch, Claude's Read, Grep and Glob are denied
-  `.agentteams/**` and `.agentteams-queue/**`, which hold raw nonces in transit. A Bash command isn't bound by
-  them. Under the switch only the orchestrator keeps Bash.
+- **The Read deny rules bind sandboxed commands too.** Under the switch, Claude is denied `.agentteams/**` and
+  `.agentteams-queue/**`, which hold raw nonces in transit. Claude Code 2.1.246 applies those rules to sandboxed
+  Bash commands as well, the orchestrator's CLI included (measured 2026-10-11). So the runner publishes liveness and
+  the orchestrator's results, sealed, in the session-readable `.agentteams-status/`
+  ([proposal-runner](proposal-runner.md)). Under the switch only the orchestrator keeps Bash.
 - **Writes outside the project** (e.g. `~/.gitconfig`, shell rc files) are not detected by this check. Under
   the runner, the sandbox refuses them.
 - The policy lint for argument patterns is a probe-based sample. It catches option-, parent-, absolute- and

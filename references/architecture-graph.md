@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **247**
+- Modules mapped: **248**
 - Packages: **9**
-- Internal import edges: **676**
+- Internal import edges: **677**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 138 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams` | 139 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 42 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 6 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -231,7 +231,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.cli.generate_helpers` |
 | `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.proposal_commands`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_run`, `agentteams.proposal_staging`, `agentteams.proposals` |
 | `agentteams.proposal_run` | `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposals` |
-| `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.mcp_direct_grants`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.proposal_commands` |
+| `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.mcp_direct_grants`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.runner_mcp`, `agentteams.sealed_result` | `agentteams.cli.proposal_commands` |
 | `agentteams.proposal_staging` | `agentteams.atomicio`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposal_runner`, `agentteams.proposals` |
 | `agentteams.proposals` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks._write_roots`, `agentteams.git_exec`, `agentteams.proposal_policy`, `agentteams.proposal_run`, `agentteams.proposal_staging` | `agentteams.cli.proposal_commands`, `agentteams.mcp_direct_grants`, `agentteams.proposal_run`, `agentteams.proposal_runner`, `agentteams.proposal_staging` |
 | `agentteams.provenance` | — | — |
@@ -269,6 +269,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.runner_mcp` | — | `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner` |
 | `agentteams.scan` | `agentteams.backup` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.whole_body_migration` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
+| `agentteams.sealed_result` | — | `agentteams.proposal_runner` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
 | `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch` |
 | `agentteams.session_scan` | `agentteams.plan_steps` | — |
@@ -2617,7 +2618,8 @@ digraph "agentteams architecture" {
         "agentteams.mcp_direct_grants",
         "agentteams.proposal_staging",
         "agentteams.proposals",
-        "agentteams.runner_mcp"
+        "agentteams.runner_mcp",
+        "agentteams.sealed_result"
       ],
       "external": [],
       "repo_local": []
@@ -3010,6 +3012,14 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.atomicio"
       ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.sealed_result": {
+      "package": "agentteams",
+      "path": "agentteams/sealed_result.py",
+      "is_package": false,
+      "imports_internal": [],
       "external": [],
       "repo_local": []
     },
@@ -5648,6 +5658,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.proposal_runner",
       "target": "agentteams.runner_mcp"
+    },
+    {
+      "source": "agentteams.proposal_runner",
+      "target": "agentteams.sealed_result"
     },
     {
       "source": "agentteams.proposal_staging",
