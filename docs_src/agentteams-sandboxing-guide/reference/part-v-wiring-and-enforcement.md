@@ -99,6 +99,7 @@ unchanged, so a default team is byte-identical. One resolver, `write_policy.reso
 generation and `--interop-from --description`, and it **refuses** the switch:
 
 - on any framework but `claude`, `goose` and `codex` (Copilot and agents-md are not covered);
+- on `goose` itself (agentteams #204): Goose delegates inherit the orchestrator's write/edit/shell extensions, so the policy can't be enforced; `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1` lifts this for one process with a warning and an UNENFORCED banner;
 - with `privilege_profile: "cooperative"` (no session sandbox);
 - without an **explicit** `confined`/`exclusive` — the defaulted profile leaves the gate hook fail-open
   (SB17);

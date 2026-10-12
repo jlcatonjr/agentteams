@@ -1,5 +1,7 @@
 # `runner_mcp` — AgentTeamsModule
 
+> **Goose is refused under `write_policy: "orchestrator-only"`** (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's `write`/`edit`/`shell` extensions instead of their sub-recipe's narrowed `extensions:`, so the policy can't be enforced there. `write_policy.resolve` and `--check-wiring` refuse it; use the switch on Claude (or Codex through its launcher).
+
 The `agentteams_runner` MCP server: under `write_policy: "orchestrator-only"`, the **only** way a granted
 non-orchestrator agent writes or executes (phase R4 of `references/plans/mcp-mediated-agent-writes.plan.md`). Its
 tools queue requests for the out-of-session runner, which holds the ledger key, checks each request against that
@@ -30,7 +32,7 @@ Under `write_policy: "orchestrator-only"`, an agent named in `mcp_grants` is ren
 | `write_file(dispatch, path, content, base_sha256, rationale, gates?)` | Write a whole file. Always submitted for staging. The runner applies it at once only when the agent's operator-signed grant verified; otherwise it waits for the orchestrator. | `stage-proposal` |
 | `delete_file(dispatch, path, base_sha256, rationale)` | Ask to delete. **Always staged**, even for an agent with a direct grant. | `stage-proposal` |
 | `run_command(dispatch, argv, purpose, cwd?, expected_writes?, stdin_path?, stdin_content?)` | Run an allowlisted command in the agent's sandbox. Stdin goes only through `stdin_from_content` and its gates. | `run-request` |
-| `request_status(request_id)` | A result this instance queued earlier, or `queued`. | none |
+| `request_status(request_id)` | A result this instance queued earlier, or `queued`. Only for a call that returned a `request_id` (a long `run_command`): a `write_file`/`delete_file` receipt is final, and a staged-only grant can omit this tool. | none |
 
 Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runner's result. Otherwise it returns a
 `request_id` to poll.
@@ -63,3 +65,6 @@ Each call waits up to `--wait` seconds (20 by default, 120 at most) for the runn
 | `goose_extension(agent, tools, approval, python) -> dict` | The canonical Goose stdio extension, with an exact `available_tools` list. |
 | `SHADOW_FILES`, `MANAGED_MCP_FILES`, `REQUIRED_CLAUDE_DENY`, `wiring_problems(root, framework, manifest, *, home=None) -> list[str]` | Live-wiring checks run by `--check-wiring` for a team with grants (R7). See the CLI reference for the full list. |
 | `install_files(manifest) -> list` | The server install (`../../.agentteams/bin/...`) when the switch is on and `mcp_grants` names someone. It refuses a packaged copy whose hash doesn't match. |
+
+**Reads are not write-scoped.** `read_file_hashed` reads any project file the session sandbox allows; `write_scopes`
+bound only writes. Staging receipts show expiry in UTC.

@@ -135,7 +135,7 @@ Run the CAI-based interop pipeline from an existing source team.
 - `bundle` mode writes target files and compatibility artifacts under `references/interop/<source>-to-<target>/`.
 - All six registered frameworks (`copilot-vscode`, `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`) are valid interop targets, as is `canonical` (the durable exploded CAI directory). `--framework canonical` is interop-only and requires `--interop-from`; bundle mode is refused for the canonical target.
 - Non-dry-run interop runs also enforce the live security freshness preflight before writing, with the same signed-waiver exception path.
-- With `--description BRIEF` (claude and goose targets), the import takes the brief's `write_policy` and `mcp_grants`. Under `write_policy: "orchestrator-only"`, every non-orchestrator agent is narrowed and given its write-policy section once, agents named in `mcp_grants` get the `agentteams_runner` block and tools, and the pinned server is installed. The checks are the same as native generation's. See [`interop_write_policy`](api-reference/interop-write-policy.md). Without the switch, `--description` changes nothing.
+- With `--description BRIEF` (claude and goose targets), the import takes the brief's `write_policy` and `mcp_grants` (a goose target under the switch is refused, agentteams #204). Under `write_policy: "orchestrator-only"`, every non-orchestrator agent is narrowed and given its write-policy section once, agents named in `mcp_grants` get the `agentteams_runner` block and tools, and the pinned server is installed. The checks are the same as native generation's. See [`interop_write_policy`](api-reference/interop-write-policy.md). Without the switch, `--description` changes nothing.
 
 ### `--interop-source-framework NAME`
 
@@ -671,6 +671,8 @@ stderr.
 
 ### `--list-backups`
 
+Backups live in `<agents dir>/.agentteams-backups/<timestamp>/`. Backed-up agent files (`.md`, `.yaml`, `.yml`, `.toml`) are stored with an `.agentteams-bak` suffix, so no agent runtime loads a backup as an agent; `--restore-backup` maps the names back. Each backup run also neutralizes loadable files left by older backups (renamed in place, manifest kept consistent).
+
 List all available backups for the output directory (newest first) and exit. Prints timestamp, path, and file count for each backup.
 
 ### `--restore-backup TIMESTAMP`
@@ -848,6 +850,9 @@ instead of carrying them into the new files. By default `--overwrite` carries ea
 since carried text is instruction-bearing. See [`user_regions`](api-reference/user-regions.md).
 
 ### `--serve-requests`
+
+> **Goose is refused under `write_policy: "orchestrator-only"`** (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's `write`/`edit`/`shell` extensions instead of their sub-recipe's narrowed `extensions:`, so the policy can't be enforced there. `write_policy.resolve` and `--check-wiring` refuse it; use the switch on Claude (or Codex through its launcher).
+
 
 Orchestrator-only-writes pilot (P4a/P4b). Runs the out-of-session runner for `--project` under the brief's
 policy (`--description`).

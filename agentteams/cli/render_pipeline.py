@@ -191,7 +191,8 @@ def _build_final_rendered(
                     runtime_handoff_agents.append({"agent": slug, "handoffs": handoffs})
             content = adapter.render_agent_file(content, slug, manifest)
         elif file_type == "instructions":
-            content = adapter.render_instructions_file(content, manifest)
+            # Under the switch the top-level session is the orchestrator: give it the dispatch contract (F1).
+            content = adapter.render_instructions_file(_write_policy.apply_instructions(content, manifest), manifest)
         elif file_type == "skill":
             # Directory-per-skill (`<slug>/SKILL.md`): the slug is the DIRECTORY
             # name — that is also the invocable command name. Taking the file stem
@@ -386,10 +387,23 @@ def _backup_verified(backup_path: Path | None, output_dir: Path, p: Path) -> boo
     """True when *p*'s bytes are present, identical, in the backup taken for its removal."""
     if backup_path is None:
         return False
+    from agentteams.backup import inert_backup_name
+
     try:
         rel = p.resolve().relative_to(output_dir.resolve())
-        return (backup_path / rel).read_bytes() == p.read_bytes()
+        data = p.read_bytes()
     except (OSError, ValueError):
+        return False
+    # Agent files are backed up inert (*.agentteams-bak); older backups used the plain name.
+    return any(_copy_matches(backup_path / candidate, data)
+               for candidate in (rel.with_name(inert_backup_name(rel.name)), rel))
+
+
+def _copy_matches(copy: Path, data: bytes) -> bool:
+    """Whether the backup *copy* exists and holds exactly *data*."""
+    try:
+        return copy.is_file() and copy.read_bytes() == data
+    except OSError:
         return False
 
 

@@ -12,7 +12,7 @@ read       ``agentteams_readfs`` stdio server: read_file, list_dir, find, grep, 
 search     (same as read)
 edit       ``developer``: write, edit, tree
 execute    ``developer``: shell, tree
-agent      ``summon``: delegate, load
+agent      ``summon``: delegate, load (``load`` only outside the orchestrator: ``spawn=False``)
 =========  ==========================================================================
 
 Facts behind the map (stub-model spike, Goose 1.37.0, ``references/goose-tool-scoping-spike.md``):
@@ -25,6 +25,23 @@ Facts behind the map (stub-model spike, Goose 1.37.0, ``references/goose-tool-sc
 * ``developer``'s only content-reading tool is ``shell``; ``tree`` and ``analyze`` are not
   workspace-confined. Readers therefore get ``agentteams_readfs`` (realpath-confined, no write tool),
   never ``developer`` for reading.
+
+The map is enforced only on a recipe Goose *runs directly* (``goose run --recipe``). Under ``delegate`` it is
+not (biographies pilot 1, G1/G2/G9, 2026-10-11; re-measured with ``scripts/goose-probe/run_delegate_case.sh``):
+
+* A delegated child gets the **delegating session's** extensions. Goose ignores the sub-recipe's own
+  ``extensions:`` and allowlists, and a ``sub_recipes`` entry has no extensions field, so the emitter cannot
+  narrow a child structurally.
+* ``delegate``'s ``extensions`` argument narrows by extension *name* only. Omitted, the child inherits
+  everything, ``developer`` write/edit/shell included. ``[]`` means none. A named extension arrives with the
+  delegator's allowlist, not the target's, and a name the delegator lacks is silently dropped:
+  ``agentteams_runner`` or an operator MCP server can never be added.
+* A child never gets ``delegate``, only ``load``.
+
+So the grant-mode orchestrator is told the exact ``extensions`` argument for each target
+(:func:`delegate_extensions`). A target whose grant that argument can't carry gets a read-only delegate, and
+its granted work goes to a direct ``goose run --recipe`` by the operator. The narrowing relies on the
+orchestrator passing the argument: Goose can't enforce it.
 
 Unknown tool tokens (``todo``, ``web``, ``retrieval``...) grant nothing on Goose. A recipe granted
 nothing is emitted with ``extensions: []``, never a bare ``extensions:`` or no key: Goose 1.37 reads
@@ -126,13 +143,15 @@ def declared_tools(content: str) -> frozenset[str]:
     return frozenset(str(t).strip().lower() for t in tokens if isinstance(t, str))
 
 
-def grant_extensions(tools: frozenset[str], *, protected: bool = False,
+def grant_extensions(tools: frozenset[str], *, protected: bool = False, spawn: bool = True,
                      ) -> tuple[list[str], dict[str, list[str]], list[dict[str, Any]]]:
     """Map declared tools to a recipe's extensions.
 
     Args:
         tools: Declared canonical tool tokens (:func:`declared_tools`).
         protected: Under ``write_policy: "orchestrator-only"``: launch readfs from :data:`READFS_PROTECTED_PATH`.
+        spawn: Keep ``summon``'s ``delegate``. Pass False for every recipe but the orchestrator: other agents hand
+            off with ``load``, and a recipe run directly could otherwise ``delegate`` with no ``extensions``.
 
     Returns:
         ``(builtin_or_platform_names, available_tools, stdio_extensions)``:
@@ -157,7 +176,7 @@ def grant_extensions(tools: frozenset[str], *, protected: bool = False,
         allow["analyze"] = [DISABLED]
     if "summon" in granted:
         names.append("summon")
-        allow["summon"] = [t for t in _TOOL_ORDER["summon"] if t in granted["summon"]]
+        allow["summon"] = [t for t in _TOOL_ORDER["summon"] if t in granted["summon"] and (spawn or t != "delegate")]
     stdio = [readfs_extension(protected=protected)] if READFS_NAME in granted else []
     return names, allow, stdio
 
@@ -185,6 +204,45 @@ def readfs_extension(*, protected: bool = False) -> dict[str, Any]:
         "available_tools": list(READFS_TOOLS),
     }
 
+
+
+def delegate_extensions(tools: frozenset[str] | None, extra: tuple[str, ...] = (),
+                        ) -> tuple[list[str], list[str]]:
+    """Return the ``extensions`` argument for ``delegate`` to one agent, and what that argument can't carry.
+
+    ``delegate`` narrows the delegator's own extensions by name, each with the delegator's allowlist (module
+    docstring). A name is passed only when the delegator's copy can't exceed the target's grant: the readfs
+    server and ``summon`` always (a child never gets ``delegate``), and ``developer`` only when the target holds
+    all of it. Whatever else the target holds is reported, and the caller routes that work to a direct run.
+
+    Args:
+        tools: The target's declared tools, or ``None`` when they can't be known (fail closed: read-only).
+        extra: Other extensions the target's own recipe carries (``agentteams_runner``, operator MCP
+            servers, the coordination server). ``delegate`` cannot add any of them.
+
+    Returns:
+        ``(names, withheld)``: the names to pass (``[]`` means no tools), and a short phrase per part of the
+        target's grant left out. An empty ``withheld`` means the delegate gets the target's whole grant.
+
+    Raises:
+        Nothing.
+    """
+    if tools is None:
+        return [READFS_NAME], ["its declared tools are unknown at render time"]
+    names, allow, stdio = grant_extensions(tools)
+    passed: list[str] = []
+    withheld: list[str] = []
+    if "developer" in names:
+        if allow["developer"] == list(_TOOL_ORDER["developer"]):
+            passed.append("developer")
+        else:
+            withheld.append(f"developer {', '.join(allow['developer'])} (a delegate would get your developer tools)")
+    if "summon" in names:
+        passed.append("summon")
+    if stdio:
+        passed.append(READFS_NAME)
+    withheld += [f"{name} (delegate cannot add it)" for name in extra]
+    return passed, withheld
 
 
 #: Extension names grant mode manages; an operator MCP server may not reuse them.

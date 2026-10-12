@@ -61,8 +61,49 @@ The user config (`~/.config/goose/config.yaml`) enables `developer`. The stub as
    the user's configured extensions plus its defaults. That is the opposite of fail-closed. The grant-mode
    emitter writes `extensions: []` when nothing is granted.
 
+## Delegated children (2026-10-12, after biographies pilot 1 G1/G2/G9)
+
+`scripts/goose-probe/run_delegate_case.sh`: the prime recipe calls `delegate` (`source: child`); the child's
+own recipe declares its own `extensions:`. Prime: `developer` `[write, edit, shell, tree]`, `analyze`
+`[__none__]`, `summon` `[delegate, load]`, stdio `probe` (allowlist per case). Goose 1.37.0's `delegate`
+schema documents `extensions` as "Extensions to enable. Omit to inherit all, empty array for none". A
+`sub_recipes` entry has five fields (name, path, values, sequential_when_repeated, description) and no
+extensions field.
+
+| Case | Child recipe declares | `delegate` `extensions` | Child offered | Child's call | Result |
+|---|---|---|---|---|---|
+| D1 | `[]` | omitted | the prime's set minus `delegate`: `write`, `edit`, `shell`, `tree`, `load`, `probe__read_probe` | `shell touch` | **executed**: `PROBE_WRITTEN` (G1) |
+| D2 | `[]` | `["probe"]` | `probe__read_probe` | `shell` | refused (G9) |
+| D3 | `probe`, no allowlist | `["probe"]` (prime: `[read_probe]`) | `probe__read_probe` | `write_probe` | refused: the prime's allowlist applies |
+| D3c | `probe` `[read_probe]` | `["probe"]` (prime: unrestricted) | `probe__read_probe`, `probe__write_probe` | `write_probe` | **executed**: the child's narrower allowlist is ignored |
+| D3b | `[]` | `["developer"]` | `write`, `edit`, `shell`, `tree` | `shell touch` | **executed**: a named extension brings the prime's whole allowlist |
+| D4 | `probe` | `["probe"]` (prime lacks it) | none | `read_probe` | not offered: `delegate` cannot add an extension (G2) |
+| D5 | `[]` | `[]` | none | `shell` | not offered |
+| D6 | `[]` | `["summon"]` | `load` | `delegate` | refused: a child never gets `delegate` |
+| D6b | `[]` | `["summon"]`, and omitted (prime's `summon` unrestricted) | `load` | `delegate` | refused both ways |
+| L1 | (direct run) `summon` `[load]` | n/a | `load` | `delegate` | refused: the allowlist withholds `delegate` |
+
+End to end, on a generated grant-mode team (`examples/software-project` brief with `goose_tool_scoping:
+"grant"`), with the generated `orchestrator.yaml` as the prime and `source: quality_auditor`:
+
+| Case | `extensions` | Child offered | Child's call | Result |
+|---|---|---|---|---|
+| E1 | omitted | the orchestrator's set: readfs, `write`, `edit`, `shell`, `tree`, `load` | `write` | **executed** (G1 reproduced) |
+| E2 | `["agentteams_readfs"]` (the orchestrator's table) | the five readfs tools | `write` | refused |
+| E3 | `["agentteams_readfs"]` | the five readfs tools | `list_dir .` | executed |
+
+8. **Under `delegate`, a recipe's own extensions do not apply.** The child gets the delegating session's
+   extensions, narrowed only by the call's `extensions` argument, by name, with the delegator's allowlists.
+   Nothing in the recipe or `sub_recipes` can narrow it, and nothing can add an extension the delegator lacks.
+   Grant mode therefore gives the orchestrator the argument per target, and routes work that needs a grant the
+   argument can't carry (a partial `developer`, `agentteams_runner`, an MCP server) to a direct
+   `goose run --recipe` (`goose_tool_scoping.delegate_extensions`). The narrowing depends on the orchestrator
+   passing the argument; Goose doesn't enforce it.
+
 ## Not covered
 
-- Delegation and subagent inheritance (mathAgents tested `delegate`).
+- A real model following the orchestrator's narrowing table (the stub calls `delegate` as told).
+- A plain `goose session` that adopts the orchestrator through `.goosehints`: its extensions are the user's
+  configuration, not the orchestrator recipe's, so the table's names may be missing (dropped) or unrestricted.
 - Desktop and `goose session` entry points.
 - Goose versions after 1.37.0: re-run `run_case.sh` and bump the pin.

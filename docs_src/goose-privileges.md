@@ -1,5 +1,7 @@
 # Goose Privilege Configuration Reference
 
+> **Goose is refused under `write_policy: "orchestrator-only"`** (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's `write`/`edit`/`shell` extensions instead of their sub-recipe's narrowed `extensions:`, so the policy can't be enforced there. `write_policy.resolve` and `--check-wiring` refuse it; use the switch on Claude (or Codex through its launcher).
+
 How to control what Goose is allowed to do: tool execution, file writes, shell access, and extension capabilities.
 
 ---
@@ -167,7 +169,7 @@ extensions are then derived from the agent's declared `tools:`:
 | `read`, `search` | `agentteams_readfs` (all five read tools) |
 | `edit` | `developer`: `write`, `edit`, `tree` |
 | `execute` | `developer`: `shell`, `tree` |
-| `agent` | `summon`: `delegate`, `load` |
+| `agent` | `summon`: `delegate`, `load` (orchestrator); `load` (every other agent) |
 
 Any recipe that has `developer` also lists `analyze` as `[__none__]`. Under `"legacy"`, the default,
 every recipe keeps the whole `developer`. A merge keeps a recipe's on-disk `extensions:`, so switching an
@@ -192,6 +194,45 @@ on (1.37.0). Re-run `scripts/goose-probe/` before relying on grant mode with ano
 
 Bridge recipes (`--bridge-from`) and CAI interop imports are outside grant scoping and keep the legacy
 extensions.
+
+### Delegated agents don't get their recipe's grant
+
+The grant above applies when Goose runs a recipe directly (`goose run --recipe`). It does **not** apply
+under `delegate` (biographies pilot 1, findings G1, G2 and G9; re-measured with
+`scripts/goose-probe/run_delegate_case.sh`, `references/goose-tool-scoping-spike.md`):
+
+- A delegate gets the **delegating session's** extensions. Goose ignores the sub-recipe's own
+  `extensions:` and allowlists, and a `sub_recipes` entry has no field that could narrow them.
+- `delegate`'s `extensions` argument narrows by extension name. Omitted, the delegate inherits everything,
+  `developer` write, edit and shell included: a read-only auditor dispatched that way edited a deliverable.
+  `[]` means no tools. A named extension keeps the delegator's allowlist, not the target's.
+- `delegate` cannot add an extension the delegator lacks, so `agentteams_runner` and operator MCP servers
+  never reach a delegate.
+- A delegate never gets `delegate` itself, only `load`.
+
+So in grant mode:
+
+- The orchestrator recipe has a **Delegation narrowing (Goose)** table with the exact `extensions` argument
+  for each `sub_recipes` target, and an instruction to pass it on every call. The argument names
+  `agentteams_readfs` and `summon` whenever the target holds them, and `developer` only when the target holds
+  all of it (write, edit, shell, tree). Any other part of the target's grant is listed as withheld, so that
+  delegate only gets read-only work. An ad-hoc delegate, or a target the table doesn't list, gets
+  `["agentteams_readfs"]`. If a target's declared tools can't be read at render time, it gets read-only.
+- Work that needs a withheld grant (a partial `developer`, `agentteams_runner`, an MCP server) is not
+  delegated. The orchestrator gives the operator `goose run --recipe .goose/recipes/<agent>.yaml` instead,
+  and doesn't do the work with its own tools or start that run from its own shell. This is the conservative
+  route: a direct run is the only Goose path where the recipe's own extensions apply, and the operator sees
+  and starts it.
+- Every recipe except the orchestrator's has `summon` limited to `load`. Those agents hand off with `load`,
+  and a recipe run directly can no longer `delegate`.
+
+The narrowing depends on the orchestrator passing the argument, and Goose doesn't enforce it: a delegate is
+bounded by the orchestrator's own extensions, not by its recipe. The table also assumes those extensions are
+the orchestrator recipe's. A plain `goose session` that adopts the orchestrator through `.goosehints` holds
+your configured extensions instead: `agentteams_readfs` is usually missing (so read-only delegates get no
+tools) and `developer` is usually unrestricted. Grant mode bounds nothing there, so start grant-mode teams
+with `goose run --recipe .goose/recipes/orchestrator.yaml`. For a mechanical per-agent boundary, run the
+agent's recipe directly. This is also why `write_policy: "orchestrator-only"` stays refused on Goose.
 
 The stub-model runs started Goose in the project root, which the relative script path relies on.
 Other entry points (Goose Desktop, `goose session` started elsewhere) have not been verified.

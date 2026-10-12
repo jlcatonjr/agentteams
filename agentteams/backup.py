@@ -78,12 +78,15 @@ _EXTERNAL_BACKUP_PREFIX = "__external__"
 _EXTERNAL2_BACKUP_PREFIX = "__external2__"
 
 
-# Backups live INSIDE the agents dir, and Codex loads every `*.toml` under
-# `.codex/agents/` recursively (codex-rs agent-roles discovery.rs). A backed-up
-# `security.toml` would therefore load as a second `security` agent. Loadable
-# extensions are stored with this suffix and mapped back on restore.
+# Backups live INSIDE the agents dir, and the agent runtimes load agent files from it recursively:
+# Codex every `*.toml` under `.codex/agents/` (codex-rs agent-roles discovery.rs), and Claude Code every
+# `*.md` under `.claude/agents/`, dot-directories included (measured 2026-10-12, Claude Code 2.1.296: a
+# backed-up pre-switch `primary-producer.md` shadowed the narrowed one and kept Write, defeating the write
+# policy). Goose recipes (`*.yaml`) and Copilot agents (`*.agent.md`) are treated the same. Loadable
+# extensions are stored with this suffix and mapped back on restore; legacy backups are neutralized by
+# :func:`neutralize_legacy_backups`.
 _INERT_BACKUP_SUFFIX = ".agentteams-bak"
-_LOADABLE_BACKUP_EXTENSIONS = (".toml",)
+_LOADABLE_BACKUP_EXTENSIONS = (".toml", ".md", ".yaml", ".yml")
 
 
 def _backup_rel(src: Path, output_dir: Path) -> Path:
@@ -109,6 +112,68 @@ def inert_backup_name(name: str) -> str:
         *name* with the inert suffix appended when Codex would otherwise load the copy.
     """
     return name + _INERT_BACKUP_SUFFIX if name.endswith(_LOADABLE_BACKUP_EXTENSIONS) else name
+
+
+def loadable_backup_files(output_dir: Path) -> list[Path]:
+    """Backed-up files under *output_dir*'s backup tree that an agent runtime would still load.
+
+    Args:
+        output_dir: The agents directory (``.claude/agents``, ``.goose/recipes``, ``.codex/agents`` ...).
+
+    Returns:
+        Files under ``<output_dir>/.agentteams-backups/`` whose name ends in a loadable extension
+        (:data:`_LOADABLE_BACKUP_EXTENSIONS`), sorted. Empty when there is no backup tree.
+    """
+    root = output_dir / _BACKUP_DIR_NAME
+    if not root.is_dir():
+        return []
+    # Symlinks included (never followed): a loader may follow one, so it is renamed/reported like a file.
+    return sorted(p for p in root.rglob("*") if (p.is_symlink() or p.is_file())
+                  and p.name.endswith(_LOADABLE_BACKUP_EXTENSIONS))
+
+
+def neutralize_legacy_backups(output_dir: Path) -> list[str]:
+    """Rename loadable files in existing backups to their inert names, keeping each manifest consistent.
+
+    Backups made before ``.md``/``.yaml`` became inert (2026-10-12) can shadow live agents. This renames
+    them in place (never deletes) and rewrites the ``backup_path`` entries of each backup's
+    ``_manifest.json`` so ``--verify-backup`` and ``--restore-backup`` keep working.
+
+    Args:
+        output_dir: The agents directory.
+
+    Returns:
+        The renamed files, relative to the backup root.
+
+    Raises:
+        OSError: When a rename or manifest write fails.
+    """
+    import json as _json
+
+    root = output_dir / _BACKUP_DIR_NAME
+    renamed: list[str] = []
+    for path in loadable_backup_files(output_dir):
+        target = path.with_name(inert_backup_name(path.name))
+        if target.exists() or target.is_symlink():
+            continue  # never overwrite; loadable_backup_files (and --check-wiring) still report it
+        path.rename(target)
+        renamed.append(str(path.relative_to(root)))
+        backup_dir = root / path.relative_to(root).parts[0]
+        manifest_path = backup_dir / BACKUP_MANIFEST_NAME
+        if manifest_path.is_file() and not manifest_path.is_symlink():
+            try:
+                manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
+                files = manifest.get("files") if isinstance(manifest, dict) else None
+            except (ValueError, UnicodeDecodeError):
+                files = None
+            if not isinstance(files, list):
+                continue  # malformed manifest: the rename stands; --verify-backup reports the mismatch
+            old_rel, new_rel = str(path.relative_to(backup_dir)), str(target.relative_to(backup_dir))
+            for entry in files:
+                if isinstance(entry, dict) and entry.get("backup_path") == old_rel:
+                    entry["backup_path"] = new_rel
+            _atomic_write_text(manifest_path, _json.dumps(manifest, indent=2) + "\n")
+    return renamed
 
 
 def _restored_rel(rel: Path) -> Path:
@@ -231,6 +296,17 @@ def backup_output_dir(
     if not output_dir.exists():
         result.skipped = True
         return result
+
+    # Legacy backups (before .md/.yaml became inert) can shadow live agents: neutralize them first.
+    try:
+        renamed = neutralize_legacy_backups(output_dir)
+    except OSError as exc:
+        print(f"  WARNING: couldn't neutralize loadable files in {output_dir / _BACKUP_DIR_NAME}: {exc}",
+              file=sys.stderr)
+    else:
+        if renamed:
+            print(f"  ✓  Neutralized {len(renamed)} loadable backup file(s) under {_BACKUP_DIR_NAME}/ "
+                  f"(renamed *{_INERT_BACKUP_SUFFIX}) so no agent runtime loads them as agents", file=sys.stderr)
 
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = output_dir / _BACKUP_DIR_NAME / ts

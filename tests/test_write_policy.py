@@ -237,7 +237,7 @@ _AGENTS_SUBDIR = {"codex": Path(".codex") / "agents"}
 def test_switch_refused_where_no_session_sandbox_guards_the_key(framework):
     desc = {"project_goal": "x" * 20, "project_name": "P", "components": [{"slug": "a", "name": "A"}],
             "write_policy": "orchestrator-only"}
-    with pytest.raises(ValueError, match="supported on claude and goose") as exc:
+    with pytest.raises(ValueError, match="supported on claude") as exc:
         analyze.build_manifest(desc, framework=framework)
     assert ".codex/confined-run.example.sh" in str(exc.value)
 

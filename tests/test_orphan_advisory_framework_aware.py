@@ -181,7 +181,7 @@ def test_goose_legacy_tool_yaml_overwrite_backs_up_then_deletes(tmp_path: Path) 
     )
     assert removed == [str(out / "tool-x.yaml")] and notices == []
     assert not (out / "tool-x.yaml").exists() and (out / "navigator.yaml").exists()
-    backups = list((out / ".agentteams-backups").rglob("tool-x.yaml"))
+    backups = list((out / ".agentteams-backups").rglob("tool-x.yaml.agentteams-bak"))  # stored inert
     assert backups and backups[0].read_text(encoding="utf-8") == "# stub\n"
 
 

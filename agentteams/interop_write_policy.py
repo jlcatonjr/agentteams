@@ -74,6 +74,8 @@ def prepare(manifest: dict[str, Any], fields: dict[str, Any] | None, framework: 
             switch (every agent must be re-rendered).
     """
     manifest.update(fields or {})
+    if _wp.enabled(manifest):
+        manifest["write_policy_target_framework"] = framework  # the UNENFORCED-on-goose banner keys on it
     install_server(manifest, framework, target_dir, dry_run=True)
     if _wp.enabled(manifest) and preserve_existing:
         raise ValueError("write_policy orchestrator-only: preserve_existing is not supported (re-render every agent)")

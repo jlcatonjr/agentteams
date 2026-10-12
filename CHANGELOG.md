@@ -54,6 +54,78 @@ Found by the fleet-sync round-3 security review.
   - An already-generated (AGENTTEAMS-tagged) task the new render dropped or changed is removed or rewritten
     on the next render, in plain-JSON and commented (JSONC) `tasks.json` alike. User tasks and comments are kept.
 
+### fix (security: backups can no longer be loaded as agents; this defeated the write policy)
+
+Found by the accuracy-test harness (2026-10-12).
+- **The bug.** agentteams keeps pre-update backups in `<agents dir>/.agentteams-backups/<ts>/`. Claude Code loads
+  every `*.md` under `.claude/agents/`, dot-directories included. So a backed-up pre-switch agent, with its
+  original `Write` tool, **shadowed the narrowed agent** and silently defeated `write_policy: orchestrator-only`.
+  - **Measured on Claude Code 2.1.296:** a "granted" agent wrote a file directly. With the backup folder removed,
+    it couldn't.
+  - **Scope:** any Claude team, after any update. It could also load stale agent versions on teams without the
+    switch.
+  - **Pilot 1 was spared by luck:** its newest backup already held the narrowed agents.
+- **The fix.**
+  - Backed-up `.md`, `.yaml` and `.yml` files are stored **inert** (`*.agentteams-bak`), as `.toml` already was
+    for Codex. `--restore-backup` maps them back.
+  - Every backup run first neutralizes loadable files left by older backups. It renames them in place (never
+    deletes) and keeps each backup's manifest consistent, so `--verify-backup` still passes.
+  - Under the switch, `--check-wiring` refuses any loadable file inside the agents directory's backup tree.
+- **Operator action for existing teams:** run `--update` once, or move `.agentteams-backups` out of the agents
+  directory, before relying on the switch.
+### fix (goose: grant mode narrows every `delegate` call; delegated children don't get their recipe's grant)
+
+From the biographies pilot's Goose round (findings G1, G2 and G9, 2026-10-11). Re-measured on Goose 1.37.0 with the
+new delegated-child probe, `scripts/goose-probe/run_delegate_case.sh` (`references/goose-tool-scoping-spike.md`).
+- **The facts.** A delegate runs with the delegating session's extensions. Goose ignores the sub-recipe's own
+  `extensions:` and allowlists, and a `sub_recipes` entry has no extensions field. `delegate`'s `extensions`
+  argument narrows by name, with the delegator's allowlist on each name. Omitted, it passes everything; `[]` passes
+  nothing. It can't add an extension the delegator lacks, so `agentteams_runner` never reaches a delegate. So
+  `goose_tool_scoping: "grant"` applied only to recipes run directly.
+- **The change (grant mode).** The orchestrator recipe gets a **Delegation narrowing (Goose)** table: the exact
+  `extensions` argument for each `sub_recipes` target (`goose_tool_scoping.delegate_extensions`), and an
+  instruction to pass it on every call. `developer` is named only for a target that holds all of it. A partial
+  `developer`, `agentteams_runner` and MCP servers are listed as withheld: that work isn't delegated, and the
+  operator gets `goose run --recipe .goose/recipes/<agent>.yaml` instead. A target whose declared tools can't be
+  read, an ad-hoc delegate and an unlisted target all get `["agentteams_readfs"]`. Every other recipe's `summon` is
+  now `load` only.
+- **Still cooperative.** Goose doesn't enforce the argument. A delegate is bounded by the orchestrator's own
+  extensions, not by its recipe, so `write_policy: "orchestrator-only"` stays refused on Goose. Docs:
+  `docs_src/goose-privileges.md`, the generated `.goosehints` and capabilities reference. Legacy mode is unchanged.
+
+### docs (Goose refusal stated everywhere the switch's frameworks are described)
+
+Follow-up to #204, from the close-out consistency audit. The `resolve` error messages, the
+`write_policy`/`write_policy_frameworks` schema descriptions, the sandboxing guide (developer and reference editions),
+the CLI reference's interop entry and a new `write_policy` entry in `DESCRIPTION-FORMAT.md` now say that the switch is
+refused on Goose. Behaviour is unchanged.
+
+### fix (write policy: Goose refused; the top-level session gets the dispatch contract; staged receipts are final)
+
+From the first orchestrator-only-writes pilot (biographies, findings F1 and F2).
+- **F1.** In Claude Code the session that dispatches agents is the top-level one. It reads `CLAUDE.md`, not the
+  orchestrator's agent file, so in the pilot it dispatched a granted agent without a dispatch nonce. The agent
+  correctly refused to write, which cost a round trip. Under the switch the instructions file now carries a
+  **Write Policy: You Are the Orchestrator** section: issue a nonce for every dispatch, the approval loop
+  (`--list-staged` / `--show-staged` / `--apply-staged` / `--reject-staged`), and `--verify-proposal-ledger` at
+  closeout. Teams without the switch are unchanged.
+- **F2.** Granted agents called `request_status` after a `write_file` receipt and got "unknown request_id". Their
+  section now says a write or delete receipt is final, and that `request_status` is only for a call that returned a
+  `request_id`.
+- **Goose is refused under the switch (G1, critical).**
+  - **What the pilot's Goose round found** (Goose 1.37, Seatbelt-confined): a delegated sub-agent inherits the
+    orchestrator's extensions (`write`, `edit`, `shell`), not its sub-recipe's narrowed `extensions:`. A read-only
+    agent without grants got write tools and edited a deliverable; it was reverted. Granted sub-recipes never
+    received their `agentteams_runner` extension.
+  - **What it means.** Per-recipe narrowing protects nothing on Goose.
+  - **The change.** `write_policy.resolve` refuses `write_policy: "orchestrator-only"` for goose, and
+    `--check-wiring` reports it. A brief listing goose in `write_policy_frameworks` fails closed at render.
+  - **The override.** `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1` lifts the refusal for one process, warning on
+    every use. It exists for agentteams' own test suite and for testing a future Goose fix, never for a real team.
+  - **Unaffected:** Claude, and Codex through its launcher.
+- **runner-mcp docs:** a staged-only grant can omit `request_status`; reads aren't write-scoped; staging expiry is
+  shown in UTC.
+
 ### fix (the sandboxed Claude orchestrator reaches the runner: sealed results in `.agentteams-status/`)
 
 Found live by the first orchestrator-only-writes pilot (biographies).

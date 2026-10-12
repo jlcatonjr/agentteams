@@ -124,7 +124,7 @@ def test_mirror_copies_backup_and_manifest(tmp_path, monkeypatch):
     slug_dirs = list(mirror.iterdir())
     assert len(slug_dirs) == 1  # one output-dir slug
     mirrored = slug_dirs[0] / res.backup_path.name
-    assert (mirrored / "a.agent.md").read_text() == "alpha\n"
+    assert (mirrored / "a.agent.md.agentteams-bak").read_text() == "alpha\n"  # stored inert (never loadable as an agent)
     assert (mirrored / "_manifest.json").exists()
 
 

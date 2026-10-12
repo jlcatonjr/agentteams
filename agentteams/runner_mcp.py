@@ -279,6 +279,15 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
     if manifest.get("mcp_grants"):
         problems += [f"{p}; remove it so it can't shadow the canonical inline server granted agents launch "
                      "(@security C13)" for p in _shadowing(root, home or os.path.expanduser("~"))]
+    from agentteams.backup import loadable_backup_files
+
+    agents_dir = root / (".claude/agents" if framework == "claude" else ".goose/recipes")
+    shadow = loadable_backup_files(agents_dir) if framework in ("claude", "goose") else []
+    if shadow:
+        problems.append(f"{len(shadow)} backed-up agent file(s) under {agents_dir.relative_to(root)}/.agentteams-backups/ "
+                        f"can be loaded as agents and shadow the narrowed ones (e.g. {shadow[0].name}); run "
+                        "`agentteams --update` to neutralize them (renamed *.agentteams-bak), or move the backups "
+                        "out of the agents directory")
     if framework == "claude":
         def load(rel):
             path = root / ".claude" / rel
@@ -319,6 +328,10 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
             problems.append(".claude/settings.local.json turns the sandbox off or allows unsandboxed commands, which "
                             "overrides settings.json (@security C11)")
     elif framework == "goose":
+        # Always reported, override or not: the override must never silence the check that names it (@security).
+        problems.append('write_policy "orchestrator-only" is not enforced on goose: delegates inherit the '
+                        "orchestrator's write/edit/shell extensions (biographies pilot 1, G1); run this team's "
+                        "Goose sessions without the switch, or not at all, until a confined per-agent launch exists")
         profile = root / ".goose" / "sandbox.sb"
         text = profile.read_text(encoding="utf-8") if profile.exists() else ""
         for rel in (".agentteams", STATUS_TREE, ".goose/recipes"):
