@@ -51,7 +51,8 @@ An **opt-in** layer on top of the sandbox. Turn it on in the brief:
  "mcp_grants": {"<agent-slug>": {"tools": ["read_file_hashed", "write_file", "run_command", "request_status"]}}}
 ```
 
-- **Where it renders.** claude and goose; codex only on Linux/macOS and only if you launch Codex through
+- **Where it renders.** claude (goose is refused: see below); codex only on Linux/macOS and only if you launch Codex through
+  **Goose is refused under the switch** (agentteams #204, biographies pilot 1 G1): Goose delegates inherit the orchestrator's write/edit/shell extensions, so the policy can't be enforced there.
   `.codex/confined-run.example.sh` (generation can't verify that). Copilot/agents-md: refused. It also
   refuses `cooperative` and a *defaulted* profile — set `confined`/`exclusive` explicitly.
 - **What changes.** Every non-orchestrator agent is narrowed to `read`/`search`/`todo` and told to return
