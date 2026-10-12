@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security: backups can no longer be loaded as agents; this defeated the write policy)
+
+Found by the accuracy-test harness (2026-10-12).
+- **The bug.** agentteams keeps pre-update backups in `<agents dir>/.agentteams-backups/<ts>/`. Claude Code loads
+  every `*.md` under `.claude/agents/`, dot-directories included. So a backed-up pre-switch agent, with its
+  original `Write` tool, **shadowed the narrowed agent** and silently defeated `write_policy: orchestrator-only`.
+  - **Measured on Claude Code 2.1.296:** a "granted" agent wrote a file directly. With the backup folder removed,
+    it couldn't.
+  - **Scope:** any Claude team, after any update. It could also load stale agent versions on teams without the
+    switch.
+  - **Pilot 1 was spared by luck:** its newest backup already held the narrowed agents.
+- **The fix.**
+  - Backed-up `.md`, `.yaml` and `.yml` files are stored **inert** (`*.agentteams-bak`), as `.toml` already was
+    for Codex. `--restore-backup` maps them back.
+  - Every backup run first neutralizes loadable files left by older backups. It renames them in place (never
+    deletes) and keeps each backup's manifest consistent, so `--verify-backup` still passes.
+  - Under the switch, `--check-wiring` refuses any loadable file inside the agents directory's backup tree.
+- **Operator action for existing teams:** run `--update` once, or move `.agentteams-backups` out of the agents
+  directory, before relying on the switch.
+
 ### docs (Goose refusal stated everywhere the switch's frameworks are described)
 
 Follow-up to #204, from the close-out consistency audit. The `resolve` error messages, the
