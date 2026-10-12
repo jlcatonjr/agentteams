@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (goose: grant mode narrows every `delegate` call; delegated children don't get their recipe's grant)
+
+From the biographies pilot's Goose round (findings G1, G2 and G9, 2026-10-11). Re-measured on Goose 1.37.0 with the
+new delegated-child probe, `scripts/goose-probe/run_delegate_case.sh` (`references/goose-tool-scoping-spike.md`).
+- **The facts.** A delegate runs with the delegating session's extensions. Goose ignores the sub-recipe's own
+  `extensions:` and allowlists, and a `sub_recipes` entry has no extensions field. `delegate`'s `extensions`
+  argument narrows by name, with the delegator's allowlist on each name. Omitted, it passes everything; `[]` passes
+  nothing. It can't add an extension the delegator lacks, so `agentteams_runner` never reaches a delegate. So
+  `goose_tool_scoping: "grant"` applied only to recipes run directly.
+- **The change (grant mode).** The orchestrator recipe gets a **Delegation narrowing (Goose)** table: the exact
+  `extensions` argument for each `sub_recipes` target (`goose_tool_scoping.delegate_extensions`), and an
+  instruction to pass it on every call. `developer` is named only for a target that holds all of it. A partial
+  `developer`, `agentteams_runner` and MCP servers are listed as withheld: that work isn't delegated, and the
+  operator gets `goose run --recipe .goose/recipes/<agent>.yaml` instead. A target whose declared tools can't be
+  read, an ad-hoc delegate and an unlisted target all get `["agentteams_readfs"]`. Every other recipe's `summon` is
+  now `load` only.
+- **Still cooperative.** Goose doesn't enforce the argument. A delegate is bounded by the orchestrator's own
+  extensions, not by its recipe, so `write_policy: "orchestrator-only"` stays refused on Goose. Docs:
+  `docs_src/goose-privileges.md`, the generated `.goosehints` and capabilities reference. Legacy mode is unchanged.
+
 ### docs (Goose refusal stated everywhere the switch's frameworks are described)
 
 Follow-up to #204, from the close-out consistency audit. The `resolve` error messages, the

@@ -1,10 +1,16 @@
-"""Stub OpenAI chat-completions server: logs offered tools, requests one tool call, then finishes."""
+"""Stub OpenAI chat-completions server: logs offered tools, requests one tool call, then finishes.
+
+Optional 5th argument (delegated-child probe): the JSON arguments of a ``delegate`` call. The first fresh turn
+(the prime) then calls ``delegate`` with them, and the next fresh turn (the delegated child) calls TARGET.
+"""
 import json, sys, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 TARGET = sys.argv[2]          # tool-name suffix to request, e.g. write_probe
 ARGS = json.loads(sys.argv[3])  # arguments for that call
 LOG = sys.argv[4]
+PRIME = json.loads(sys.argv[5]) if len(sys.argv) > 5 else None  # delegate args for the prime's first turn
+FRESH = [0]  # fresh turns (no tool results yet) seen so far: 0 = prime, 1 = delegated child
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -39,10 +45,14 @@ class H(BaseHTTPRequestHandler):
         open(LOG + ".tools.json", "w").write(json.dumps(req.get("tools", []), indent=1)) if req.get("tools") else None
         with open(LOG, "a") as f:
             f.write(json.dumps({"tools": sorted(tools), "tool_results": [str(m.get("content"))[:300] for m in tool_results]}) + "\n")
-        if not tool_results:
-            name = next((t for t in tools if t == TARGET or t.endswith("__" + TARGET)), TARGET)
+        # A prime run skips tool-less turns (Goose's own side requests), so the turn order stays prime, child.
+        if not tool_results and (tools or PRIME is None):
+            prime = PRIME is not None and FRESH[0] == 0
+            FRESH[0] += 1
+            want, args = ("delegate", PRIME) if prime else (TARGET, ARGS)
+            name = next((t for t in tools if t == want or t.endswith("__" + want)), want)
             msg = {"role": "assistant", "content": None, "tool_calls": [
-                {"id": "call_1", "type": "function", "function": {"name": name, "arguments": json.dumps(ARGS)}}]}
+                {"id": f"call_{FRESH[0]}", "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
             fr = "tool_calls"
         else:
             msg = {"role": "assistant", "content": "done"}; fr = "stop"

@@ -2,6 +2,7 @@
 # run_case.sh NAME PORT TARGET ARGS_JSON EXTENSIONS_YAML
 set -u
 NAME=$1; PORT=$2; TARGET=$3; ARGS=$4; EXT=$5
+case $NAME in ""|*[!A-Za-z0-9_-]*) echo "NAME must be [A-Za-z0-9_-]+" >&2; exit 2;; esac
 D=$PWD/cases/$NAME; rm -rf "$D"; mkdir -p "$D/home" "$D/work"
 echo "hello" > "$D/work/sample.py"; echo "API_KEY=s3cret" > "$D/work/.env"; echo 'def f(x):\n    return x' >> "$D/work/sample.py"
 cat > "$D/recipe.yaml" <<R

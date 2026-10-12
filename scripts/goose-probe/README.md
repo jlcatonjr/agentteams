@@ -10,4 +10,9 @@ bumping `GOOSE_MAP_VERSION`. Results for Goose 1.37.0 are in `references/goose-t
   with an isolated `HOME` and `GOOSE_MODE=auto`. It prints the offered tools and the call result, and
   reports whether the work directory changed.
 
+- `run_delegate_case.sh NAME PORT TARGET ARGS_JSON DELEGATE_ARGS_JSON PRIME_EXTENSIONS_YAML CHILD_EXTENSIONS_YAML`:
+  the delegated-child probe. The prime recipe (with a `child` sub_recipe) calls `delegate` with the given
+  arguments, and the child, whose own recipe declares CHILD_EXTENSIONS_YAML, calls TARGET. The stub logs the
+  prime's tools first, then the child's. Results are in the spike record's "Delegated children" section.
+
 Needs `goose` on `PATH`. It makes no network calls; the model is the local stub.
