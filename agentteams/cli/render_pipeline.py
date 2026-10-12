@@ -191,7 +191,8 @@ def _build_final_rendered(
                     runtime_handoff_agents.append({"agent": slug, "handoffs": handoffs})
             content = adapter.render_agent_file(content, slug, manifest)
         elif file_type == "instructions":
-            content = adapter.render_instructions_file(content, manifest)
+            # Under the switch the top-level session is the orchestrator: give it the dispatch contract (F1).
+            content = adapter.render_instructions_file(_write_policy.apply_instructions(content, manifest), manifest)
         elif file_type == "skill":
             # Directory-per-skill (`<slug>/SKILL.md`): the slug is the DIRECTORY
             # name — that is also the invocable command name. Taking the file stem

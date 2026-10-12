@@ -39,6 +39,27 @@ NARROWED_TOKENS: tuple[str, ...] = ("read", "search", "todo")
 #: Agents that keep their tools: the orchestrator and Goose's bridge entry recipe (also an orchestrator).
 ORCHESTRATOR_SLUGS: frozenset[str] = frozenset({"orchestrator", "bridge-orchestrator"})
 
+#: The switch is refused on Goose (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the
+#: orchestrator's extensions, so per-recipe narrowing isn't enforced. The refusal is the shipped default; only
+#: :data:`GOOSE_OVERRIDE_ENV` lifts it, for one process, with a warning on stderr and an UNENFORCED banner in every
+#: rendered Goose agent, and ``--check-wiring`` reports it regardless (@security, 2026-10-12).
+GOOSE_SWITCH_REFUSED = True
+#: Lifts the refusal for one process: agentteams' own test suite (renders run in subprocesses) or a deliberate
+#: operator experiment on a future Goose fix. Every use prints a warning that the policy is NOT enforced on Goose.
+GOOSE_OVERRIDE_ENV = "AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH"
+
+
+def _goose_override() -> bool:
+    import os
+    import sys
+
+    if os.environ.get(GOOSE_OVERRIDE_ENV) != "1":
+        return False
+    print(f"WARNING: {GOOSE_OVERRIDE_ENV}=1: rendering write_policy \"orchestrator-only\" for goose, where it is NOT "
+          "enforced (Goose delegates inherit the orchestrator's write/edit/shell extensions; biographies pilot 1, "
+          "G1). Never rely on it for a real team.", file=sys.stderr)
+    return True
+
 _ANY_FENCE_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN ")
 
 _FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
@@ -97,13 +118,38 @@ checks every request against your policy and does the work.
 - **To delete a file:** call `delete_file`. Deletions are always staged.
 - **To run a command:** call `run_command` with an `argv` list (never a shell string). Only commands on your
   allowlist run, inside your sandbox.
-- **If a call returns a `request_id`** instead of a result, call `request_status` with it later.
+- **A `write_file` or `delete_file` receipt is final:** report its `sid` and stop; don't call `request_status`
+  after it. Only when a call returns a `request_id` instead of a result (a long `run_command`) call
+  `request_status` with it later.
 - **Every call** carries the `dispatch` value the orchestrator gave you for this task. Never invent or reuse one.
 - **If you can't do what the task needs** with these, attach a gap note to your handoff; the orchestrator records
   it (`references/mcp-need.reference.md`).
 
 Refusals come back as tool results that say why (stale base, out of scope, a gate failed): fix the cause and
 retry, rather than working around it. Schemas and limits: `references/write-policy.reference.md`.
+"""
+
+#: The top-level session's instructions file (CLAUDE.md, AGENTS.md, copilot-instructions.md) under the switch. In
+#: Claude Code the session that dispatches agents is the top-level one, which reads this file, not the orchestrator's
+#: agent file, so the dispatch contract must be here too (biographies pilot 1, finding F1, 2026-10-12).
+_INSTRUCTIONS_SECTION = """
+## Write Policy: You Are the Orchestrator
+
+This team runs `write_policy: "orchestrator-only"`. In this top-level session **you are the orchestrator**, the
+only agent that writes. Every other agent is read-only and returns proposals; agents granted `agentteams_runner`
+stage their writes through it for your approval. Follow the orchestrator agent file's **Write Policy: Applying
+Proposals** section in full. In particular:
+
+- **Before every dispatch,** run `agentteams --issue-dispatch --agent <slug> --description <brief>` and put the
+  printed nonce in the task as the agent's `dispatch` value. An agent without one can't write.
+- **Returned artifacts:** apply them with `agentteams --apply-proposal FILE.json --description <brief>` or
+  `--run-request`.
+- **Staged writes:** review them with `agentteams --list-staged` and `--show-staged SID`, then decide with
+  `--apply-staged SID` or `--reject-staged SID`.
+- **At closeout:** run `agentteams --verify-proposal-ledger`.
+
+These commands queue for the operator's runner. If one says no runner is serving, ask the operator to start it.
+Reference: the team's `references/write-policy.reference.md`.
 """
 
 _ORCHESTRATOR_SECTION = """
@@ -217,6 +263,15 @@ def resolve(description: dict[str, Any], framework: str) -> str | None:
         # with a non-cooperative privilege_profile. Elsewhere the session could simply read it.
         # Phase 1a: codex too, with codex:sandbox in effect; agentteams' launcher masks the key directory when
         # Codex runs through .codex/confined-run.example.sh. Generation can't verify that launch, so it says so.
+        if framework == "goose" and GOOSE_SWITCH_REFUSED and not _goose_override():
+            # Biographies pilot 1, Goose round (G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's
+            # extensions (write/edit/shell), not their sub-recipe's narrowed `extensions:`, and a granted
+            # sub-recipe's agentteams_runner extension is never surfaced. Per-recipe narrowing therefore protects
+            # nothing on Goose, so the switch is refused there until a confined per-agent Goose launch exists.
+            raise ValueError('write_policy "orchestrator-only" is not supported on goose: Goose delegates inherit the '
+                             "orchestrator's write/edit/shell extensions instead of their sub-recipe's narrowed set "
+                             "(measured, Goose 1.37), so the policy can't be enforced. Remove goose from "
+                             "write_policy_frameworks; run Goose teams without the switch")
         if framework not in ("claude", "goose", "codex"):
             raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose (their session sandbox '
                              'denies the ledger key) and on codex only when launched through '
@@ -338,8 +393,50 @@ def apply(content: str, slug: str, manifest: dict[str, Any]) -> str:
     return narrow_tools(body) + section
 
 
+def apply_instructions(content: str, manifest: dict[str, Any]) -> str:
+    """Add the top-level orchestrator's write-policy section to a rendered instructions file.
+
+    The session that dispatches agents reads this file (``CLAUDE.md`` on Claude Code), not the orchestrator's agent
+    file, so it needs the dispatch contract here too (biographies pilot 1, F1). Without the switch the content is
+    returned unchanged, so default teams stay byte-identical.
+
+    Args:
+        content: The rendered instructions file.
+        manifest: The team manifest.
+
+    Returns:
+        The content, with the section appended (in its own ``write_policy`` fence when the file has fences).
+
+    Raises:
+        Nothing.
+    """
+    if not enabled(manifest):
+        return content
+    body = content.rstrip("\n") + "\n"
+    banner = _GOOSE_UNENFORCED_BANNER if _renders_for_goose(manifest) else ""
+    return body + _fenced(banner + _INSTRUCTIONS_SECTION, body)
+
+
+_GOOSE_UNENFORCED_BANNER = """
+> **UNENFORCED ON GOOSE.** This Goose team was rendered under `write_policy: "orchestrator-only"` with
+> `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1`. Goose delegates inherit the orchestrator's write/edit/shell
+> extensions, so this file's Write Policy section is not enforced by the tool surface (biographies pilot 1, G1).
+> Not for a real team.
+"""
+
+
 def _section(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
     """The write-policy section this agent gets under the switch (unfenced); ``writer`` overrides the slug test."""
+    return (_GOOSE_UNENFORCED_BANNER if _renders_for_goose(manifest) else "") + _section_body(slug, manifest, writer)
+
+
+def _renders_for_goose(manifest: dict[str, Any]) -> bool:
+    """Whether this render targets Goose: native renders set ``framework``; interop sets
+    ``write_policy_target_framework`` (its manifest has no ``framework``)."""
+    return "goose" in (manifest.get("framework"), manifest.get("write_policy_target_framework"))
+
+
+def _section_body(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
     grants = manifest.get("mcp_grants") or {}
     if (slug in ORCHESTRATOR_SLUGS) if writer is None else writer:
         return _ORCHESTRATOR_SECTION + ("\n" + _ORCHESTRATOR_STAGED_PARAGRAPH if grants else "")
@@ -381,15 +478,18 @@ def ensure_section(body: str, slug: str, manifest: dict[str, Any], *, writer: bo
     """
     if not enabled(manifest):
         return body
-    section = _section(slug, manifest, writer)
+    section = _section_body(slug, manifest, writer)  # compared without the goose banner, added below
+    banner = _GOOSE_UNENFORCED_BANNER if _renders_for_goose(manifest) else ""
     headings = len(_SECTION_HEADING_RE.findall(body))
     if section.strip() in body and headings == 1:
+        if banner and banner.strip() not in body:
+            return body.rstrip("\n") + "\n" + banner
         return body
     if headings:
         raise ValueError(f"{slug}: its write-policy section doesn't match this brief (stale mcp_grants?); "
                          "re-render the source agent with the current brief before importing it")
     body = body.rstrip("\n") + "\n"
-    return body + _fenced(section, body)
+    return body + _fenced(banner + section, body)
 
 
 def narrow_scopes(scopes: list[str]) -> list[str]:

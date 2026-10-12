@@ -301,3 +301,12 @@ def test_the_backstop_refuses_a_wide_rendered_agent(tmp_path, monkeypatch, frame
     with pytest.raises(ValueError, match="write-policy audit"):
         import_from_cai(_cai("x"), framework, target, write_policy_fields=manifest_fields(BRIEF, framework))
     assert not (target / f"{GRANTED}{TARGETS[framework][1]}").exists()
+
+
+def test_a_goose_import_under_the_override_carries_the_unenforced_banner(tmp_path):
+    """Pilot 1 G1 (@security 3a): the switch isn't enforced on Goose, so an import made under the override says so."""
+    project, _ = _import(tmp_path, "goose")
+    files = _files(project, "goose")
+    assert all("UNENFORCED ON GOOSE" in text for name, text in files.items() if "Write Policy" in text)
+    claude_project, _ = _import(tmp_path / "c", "claude")
+    assert not any("UNENFORCED ON GOOSE" in t for t in _files(claude_project, "claude").values())
