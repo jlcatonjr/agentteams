@@ -196,8 +196,9 @@ def member_declared_tools(manifest: dict[str, Any], slug: str, templates_dir: Pa
 
     Read from the template this run renders for it (narrowed under the write policy, as the render pipeline
     does), then intersected with the ``# agentteams-declared-tools:`` marker of its recipe already on disk, if
-    any: an operator's hand-narrowed recipe is never widened by the table. The grant map is monotone, so the
-    intersection's grant is within both.
+    any, so a marker narrowed by hand is not widened by the table (until the next render rewrites that marker from
+    the template). A recipe whose ``extensions:`` were narrowed without its marker is not detected. The grant map
+    is monotone, so the intersection's grant is within both.
 
     Args:
         manifest: The team manifest.
@@ -233,10 +234,10 @@ def member_declared_tools(manifest: dict[str, Any], slug: str, templates_dir: Pa
     project = manifest.get("existing_project_path")
     if tools is not None and project:
         try:
-            on_disk = declared_from_marker(
-                (Path(project) / ".goose" / "recipes" / f"{slug}.yaml").read_text(encoding="utf-8"))
+            recipe: str | None = (Path(project) / ".goose" / "recipes" / f"{slug}.yaml").read_text(encoding="utf-8")
         except OSError:
-            on_disk = None
+            recipe = None  # no deployed recipe: the template's tools stand
+        on_disk = declared_from_marker(recipe) if recipe is not None else None
         if on_disk is not None:
             tools = tools & on_disk
     return tools
@@ -257,7 +258,7 @@ def delegation_rows(manifest: dict[str, Any], slugs: list[str], templates_dir: P
     Raises:
         ValueError: As :func:`member_declared_tools` and :func:`recipe_extras`.
     """
-    rows = []
+    rows: list[tuple[str, str, list[str], list[str]]] = []
     for slug in slugs:
         extra = tuple(str(e["name"]) for e in recipe_extras(manifest, slug)[0])
         names, withheld = delegate_extensions(member_declared_tools(manifest, slug, templates_dir), extra)
