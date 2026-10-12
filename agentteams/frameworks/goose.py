@@ -16,7 +16,10 @@ spawn another (source: SessionType::SubAgent guard in goose's summon platform
 extension). We therefore reinterpret the agentteams handoff DAG faithfully:
 
   * Depth 0 (orchestrator) -> a recipe declaring `summon` + `sub_recipes` of its
-    direct handoff targets. This is TRUE delegation (isolated child sessions).
+    direct handoff targets. This is TRUE delegation (isolated child sessions), but a
+    child runs with the ORCHESTRATOR's extensions, not its recipe's (narrowed only by
+    `delegate`'s `extensions` argument), so in grant mode the orchestrator gets a
+    per-target narrowing table (goose_tool_scoping.delegate_extensions).
   * Depth 1+ (every other agent) -> a recipe. Its own handoffs are depth-2 by
     construction, so they are rewritten as `summon` `load("<slug>")` directives
     inside the recipe instructions: the agent loads the referenced recipe's
@@ -45,7 +48,7 @@ from agentteams import capability_map as _capability_map
 # handoffs (depth-2 delegation). Mirrors agents_md.py's
 # _strip_leading_synthesized_header fix for the same class of bug.
 _DELEGATION_REF_HEADING_RE = re.compile(
-    r"^#{1,3}\s+Delegation & references \(Goose\).*?(?=^#{1,3}\s|^<!--\s*AGENTTEAMS(?:-BRIDGE)?:|\Z)",
+    r"^#{1,3}\s+Delegation (?:& references|narrowing) \(Goose\).*?(?=^#{1,3}\s|^<!--\s*AGENTTEAMS(?:-BRIDGE)?:|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -79,7 +82,7 @@ from agentteams.frameworks.goose_recipe_read import (
 # `from agentteams.frameworks.goose import _validate_recipe_yaml` keeps working.
 from agentteams.frameworks.goose_recipe_validate import _validate_recipe_yaml
 # Recipe YAML emission + its constants carved to goose_recipe_emit.py (CH-07); re-imported so the
-# retained GooseAdapter/build_bridge_recipe/_goose_extension_for call sites and external importers
+# retained GooseAdapter/build_bridge_recipe call sites and external importers
 # (`from agentteams.frameworks.goose import _emit_recipe` in bridge_subagents_goose;
 # `import _MCP_EXT_TIMEOUT` in goose_coordination) keep resolving.
 from agentteams.frameworks.goose_recipe_emit import (  # noqa: F401
@@ -88,9 +91,21 @@ from agentteams.frameworks.goose_recipe_emit import (  # noqa: F401
     _MCP_EXT_TIMEOUT,
     _extract_name_description,
     _load_section,
+    delegation_section as _delegation_section,
     _yaml_dq,
     _indent_block,
     _emit_recipe,
+)
+# MCP wiring, per-recipe extras and the delegation table carved to goose_recipe_grants.py (CH-07); re-imported so
+# `from agentteams.frameworks.goose import _GOOSE_MCP_TOKEN` (mcp_catalog) and the other names keep resolving.
+from agentteams.frameworks.goose_recipe_grants import (  # noqa: F401
+    _GOOSE_MCP_TOKEN,
+    _goose_extension_for,
+    _goose_wirable,
+    _mcp_recipe_extensions,
+    _tool_name,
+    delegation_rows as _delegation_rows,
+    recipe_extras as _recipe_extras,
 )
 # Cross-repo coordination helpers (CH-07 carve). Imported with the historical `_`-prefixed
 # aliases so existing call sites and any `from ...goose import _coordination_*` keep working.
@@ -105,7 +120,6 @@ from agentteams.frameworks.goose_tool_scoping import (
     READFS_PROTECTED_PATH as _READFS_PROTECTED_PATH,
     READFS_SCRIPT as _READFS_SCRIPT,
     declared_tools as _declared_tools,
-    filter_operator_mcp as _filter_operator_mcp,
     grant_extensions as _grant_extensions,
     grant_mode as _grant_mode,
     mark_declared as _mark_declared,
@@ -138,11 +152,6 @@ _ORCHESTRATOR_PROBE_PROMPT = (
 
 # Recipe structural-validation regexes + _validate_recipe_yaml carved to
 # goose_recipe_validate.py (CH-07). Re-imported above so call sites keep working.
-
-# MCP-extension wiring (opt-in via the goose:mcp host-feature token).
-_GOOSE_MCP_TOKEN = "goose:mcp"
-# _MCP_EXT_TIMEOUT carved to goose_recipe_emit.py (CH-07); re-imported below so the retained
-# `_goose_extension_for` and `from ...goose import _MCP_EXT_TIMEOUT` (goose_coordination) keep working.
 
 # Cross-repo coordination (Phase 2) carved to goose_coordination.py (CH-07): the gate + the
 # first-party stdio coordination-server extension entry. Imported below with the module's
@@ -259,41 +268,17 @@ class GooseAdapter(FrameworkAdapter):
         # with an available_tools allowlist, readers on the read-only agentteams_readfs server, and
         # summon (delegation / load handoffs) only for an agent that declares `agent`.
         if _grant_mode(manifest):
+            # Only the orchestrator keeps summon's `delegate`; every other agent hands off with `load`.
             extensions, allowlists, scoped_stdio = _grant_extensions(
-                _declared_tools(content), protected=_write_policy.enabled(manifest))
+                _declared_tools(content), protected=_write_policy.enabled(manifest), spawn=agent_slug == "orchestrator")
             may_delegate = "summon" in extensions
         else:
             extensions, allowlists, scoped_stdio = _scoped_builtin_extensions(manifest), None, []
             may_delegate = True
-        # Opt-in MCP servers scoped to this agent (empty unless goose:mcp is on).
-        mcp_exts, mcp_notes = _mcp_recipe_extensions(manifest, agent_slug)
-        # write_policy "orchestrator-only": a non-orchestrator recipe carries no operator MCP server (it can't
-        # be classified as read-only) and no coordination server (it writes request/log files).
-        restricted = _write_policy.enabled(manifest) and agent_slug not in _write_policy.ORCHESTRATOR_SLUGS
-        if restricted and mcp_exts:
-            mcp_notes = list(mcp_notes) + ["write_policy orchestrator-only: operator MCP servers withheld from "
-                                           "this non-orchestrator agent"]
-            mcp_exts = []
-        if _grant_mode(manifest):
-            mcp_exts, clash_notes = _filter_operator_mcp(list(mcp_exts))
-            mcp_notes = list(mcp_notes) + clash_notes
-        mcp_exts = list(scoped_stdio) + list(mcp_exts)
-        grant = (manifest.get("mcp_grants") or {}).get(agent_slug) if restricted else None
-        if isinstance(grant, dict) and grant.get("tools"):
-            # R6: a granted agent writes and executes only through the installed agentteams_runner server.
-            from agentteams import runner_mcp
-
-            mcp_exts = list(mcp_exts) + [runner_mcp.goose_extension(
-                agent_slug, grant["tools"], "staged", runner_mcp.interpreter())]
-        # Phase 2: wire the first-party stdio coordination server into coordinator/liaison
-        # recipes when the team declares coordination (file-based; only reads/records).
-        if _coordination_enabled(manifest) and agent_slug in _COORDINATION_AGENT_SLUGS and not restricted:
-            mcp_exts = list(mcp_exts) + [_coordination_extension()]
-            mcp_notes = list(mcp_notes) + [
-                "agentteams_coordination (stdio): file-based cross-repo coordination tools "
-                "(read registry, file a Coordination Request, append the log, request clearance). "
-                "Records/files only — never grants or executes."
-            ]
+        # Operator MCP servers, agentteams_runner and the coordination server: one source shared with the
+        # orchestrator's delegation table (goose_recipe_grants.recipe_extras).
+        extras, mcp_notes = _recipe_extras(manifest, agent_slug)
+        mcp_exts = list(scoped_stdio) + extras
 
         # Gap 2: parameters / response / retry are available to ANY agent whose
         # manifest declares them (previously orchestrator-only). An ordinary agent
@@ -319,7 +304,9 @@ class GooseAdapter(FrameworkAdapter):
             # Agents in the team roster but missing from the handoffs: block are still
             # valid delegation targets; include them at the end with empty descriptions.
             target_slugs = frozenset(h["agent"] for h in delegates)
+            sub_recipe_slugs = [h["agent"] for h in delegates]
             for slug in sorted(team - target_slugs - excluded - frozenset([agent_slug])) if may_delegate else ():
+                sub_recipe_slugs.append(slug)
                 sub_recipes.append({
                     "name": _tool_name(slug),
                     "path": f"./{slug}.yaml",
@@ -327,6 +314,9 @@ class GooseAdapter(FrameworkAdapter):
                 })
             if sub_recipes and "summon" not in extensions:
                 extensions.append("summon")
+            if "summon" in extensions and _grant_mode(manifest):
+                # G1/G2: a delegate gets this session's extensions, so every delegate call must narrow them.
+                body = body + "\n\n" + _delegation_section(_delegation_rows(manifest, sub_recipe_slugs, _TEMPLATES_DIR))
             # Phase-4a: reference declared parameter keys in the orchestrator's
             # probe prompt so the Goose params<->{{ template }} coupling stays valid.
             # (recipe_parameters / recipe_response / recipe_retry are resolved above,
@@ -409,7 +399,7 @@ class GooseAdapter(FrameworkAdapter):
         if _write_policy.enabled(manifest):
             # Only the orchestrator writes: the builder gets the grant its (narrowed) declared tools give,
             # like every other agent, and returns proposals/command requests instead of writing.
-            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content), protected=True)
+            extensions, allowlists, scoped_stdio = _grant_extensions(_declared_tools(content), protected=True, spawn=False)
             recipe = _emit_recipe(
                 title=name or "Team Builder",
                 description=description,
@@ -665,11 +655,6 @@ class GooseAdapter(FrameworkAdapter):
 # _YAML_SCALAR_RE carved to goose_recipe_emit.py (CH-07); re-imported below.
 
 
-def _tool_name(slug: str) -> str:
-    """Goose generates a tool name per sub-recipe; keep it identifier-safe."""
-    return re.sub(r"[^a-z0-9_]", "_", slug.replace("-", "_").lower())
-
-
 def _dedupe_by_agent(handoffs: Any) -> list[dict[str, Any]]:
     """Keep one handoff per target agent (first wins, i.e. the YAML block entry).
 
@@ -759,110 +744,6 @@ def _sub_recipe_exclusions(manifest: dict[str, Any], team: frozenset[str]) -> fr
             )
             excluded.add(slug)
     return frozenset(excluded)
-
-
-# ---------------------------------------------------------------------------
-# MCP-extension wiring (opt-in; report §5.4/§6 + goose-integration.plan §6.5)
-# ---------------------------------------------------------------------------
-
-def _goose_wirable(server: dict[str, Any]) -> bool:
-    """True iff a specified MCP server is safe to AUTO-WIRE as a runnable Goose
-    extension. Wiring makes the server runnable (an activation step), so the bar is
-    report §5.4's named auto-activation candidate — STRICTER than the inert Claude
-    emitter's ``_requires_authorization`` (which also allows ``write``):
-
-      first-party  AND  every tool side_effects == "read"  AND  no review required.
-
-    Anything else (third-party, any write/destructive tool, security_review.required)
-    is skipped and surfaced for explicit operator handling — never silently activated.
-    """
-    if server.get("trust_tier") != "first-party":
-        return False
-    if (server.get("security_review") or {}).get("required") is True:
-        return False
-    tools = server.get("tools")
-    if not isinstance(tools, list) or not tools:
-        return False
-    for tool in tools:
-        if not isinstance(tool, dict) or tool.get("side_effects") != "read":
-            return False
-    return True
-
-
-def _goose_extension_for(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
-    """Map one mcp-server.schema.json entry to a Goose recipe extension dict.
-
-    Returns ``(extension, None)`` when runnable, or ``(None, reason)`` when the
-    server is in-scope but cannot be faithfully/ safely wired (surfaced as a recipe
-    comment, never silently dropped). Credentials are referenced by name via
-    ``env_keys`` — never inlined.
-    """
-    if not _goose_wirable(server):
-        return None, "needs operator authorization (not first-party read-only)"
-
-    auth = server.get("auth") or {}
-    mechanism = auth.get("mechanism", "none")
-    env_keys: list[str] = []
-    if mechanism == "env":
-        ref = auth.get("credential_ref")
-        if ref:
-            env_keys = [str(ref)]
-    elif mechanism in ("secret-store", "oauth"):
-        return None, f"credential mechanism '{mechanism}' not expressible as Goose env_keys"
-    # mechanism == "none" -> no env_keys
-
-    name = _tool_name(str(server.get("server_id", "")))
-    transport = server.get("transport")
-    if transport == "stdio":
-        command = server.get("command")
-        if not command:
-            return None, "stdio server has no 'command' to launch"
-        return {
-            "type": "stdio",
-            "name": name,
-            "cmd": str(command),
-            "args": [str(a) for a in (server.get("args") or [])],
-            "env_keys": env_keys,
-            "timeout": _MCP_EXT_TIMEOUT,
-        }, None
-    if transport == "http":
-        uri = auth.get("url")
-        if not uri:
-            return None, "http server has no auth.url (uri) endpoint"
-        return {
-            "type": "streamable_http",
-            "name": name,
-            "uri": str(uri),
-            "env_keys": env_keys,
-            "timeout": _MCP_EXT_TIMEOUT,
-        }, None
-    return None, f"unknown transport {transport!r}"
-
-
-def _mcp_recipe_extensions(
-    manifest: dict[str, Any], agent_slug: str
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Return (extensions, skip_notes) for the MCP servers scoped to ``agent_slug``.
-
-    OPT-IN: returns ``([], [])`` unless the ``goose:mcp`` host-feature token is
-    active, so a default Goose build is byte-identical to the developer-only
-    baseline. Least-privilege: only servers whose ``scope`` lists this agent.
-    """
-    if _GOOSE_MCP_TOKEN not in (manifest.get("host_features") or []):
-        return [], []
-    extensions: list[dict[str, Any]] = []
-    notes: list[str] = []
-    for server in manifest.get("mcp_servers") or []:
-        if not isinstance(server, dict):
-            continue
-        if agent_slug not in (server.get("scope") or []):
-            continue
-        ext, reason = _goose_extension_for(server)
-        if ext is not None:
-            extensions.append(ext)
-        else:
-            notes.append(f"{server.get('server_id', '<unknown>')} not wired ({reason})")
-    return extensions, notes
 
 
 def build_bridge_recipe(

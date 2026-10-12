@@ -36,7 +36,7 @@
     "agentteams/frameworks/_prompt_root_protect.py": "1933f1e895e40186b33dd15d0e75814bda14a90ee050c3321c713ff98d0c5931",
     "agentteams/frameworks/_sandbox_emit.py": "a8a8f621e7aca4ba5d29ada0ccf25e2a2c8a5142352c099c35344adc7239ef42",
     "agentteams/frameworks/_write_roots.py": "b76afa0aac3d3e6b8e5303f6a4e9f26106be4a315d5eab4eb681d38427289621",
-    "agentteams/frameworks/goose_tool_scoping.py": "7cebf56014f83100bb615e1a435e6c008ffc50a74950f340bd9cc321c1e13cfd",
+    "agentteams/frameworks/goose_tool_scoping.py": "2b8c3410dc31c2fa00aed94de932742c91946a4d2b15b05174eafd413e10a0cf",
     "agentteams/front_matter_baseline.py": "5ac5553a968cdd5517f56056edf57b562ce64feab8f582964beadd1ec763ef41",
     "agentteams/front_matter_merge.py": "0dec0b096f7433952cca8de922379f013cd130e739df069665c4b937d875b99a",
     "agentteams/front_matter_reconcile.py": "e07758e1606ea49553959009d22698933fd9e0d0c3069a64d64096bb838140fe",
