@@ -387,11 +387,21 @@ def _backup_verified(backup_path: Path | None, output_dir: Path, p: Path) -> boo
     """True when *p*'s bytes are present, identical, in the backup taken for its removal."""
     if backup_path is None:
         return False
+    from agentteams.backup import inert_backup_name
+
     try:
         rel = p.resolve().relative_to(output_dir.resolve())
-        return (backup_path / rel).read_bytes() == p.read_bytes()
+        data = p.read_bytes()
     except (OSError, ValueError):
         return False
+    # Agent files are backed up inert (*.agentteams-bak); older backups used the plain name.
+    for candidate in (rel.with_name(inert_backup_name(rel.name)), rel):
+        try:
+            if (backup_path / candidate).read_bytes() == data:
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _remove_stale_tool_agents(

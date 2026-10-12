@@ -268,7 +268,7 @@ def test_backup_creates_timestamped_dir(tmp_path):
 def test_backup_copies_file_contents(tmp_path):
     (tmp_path / "agent.agent.md").write_text("ORIGINAL", encoding="utf-8")
     result = backup_output_dir(tmp_path)
-    backed_up = result.backup_path / "agent.agent.md"
+    backed_up = result.backup_path / "agent.agent.md.agentteams-bak"  # stored inert
     assert backed_up.exists()
     assert backed_up.read_text(encoding="utf-8") == "ORIGINAL"
 
@@ -278,8 +278,8 @@ def test_backup_selective_only_backs_up_listed_files(tmp_path):
     (tmp_path / "b.agent.md").write_text("B", encoding="utf-8")
     result = backup_output_dir(tmp_path, files_to_backup=["a.agent.md"])
     assert result.files_backed_up == 1
-    assert (result.backup_path / "a.agent.md").exists()
-    assert not (result.backup_path / "b.agent.md").exists()
+    assert (result.backup_path / "a.agent.md.agentteams-bak").exists()
+    assert not (result.backup_path / "b.agent.md.agentteams-bak").exists()
 
 
 def test_backup_skipped_when_output_dir_missing(tmp_path):

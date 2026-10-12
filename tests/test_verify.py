@@ -74,7 +74,7 @@ def test_verify_backup_pass_fail_and_no_manifest(tmp_path):
     assert {e["status"] for e in emit.verify_backup(res.backup_path)} == {"PASS"}
 
     # bit-rot one backup copy
-    (res.backup_path / "a.agent.md").write_text("TAMPERED\n")
+    (res.backup_path / "a.agent.md.agentteams-bak").write_text("TAMPERED\n")  # stored inert
     by_file = {e["source_path"]: e["status"] for e in emit.verify_backup(res.backup_path)}
     assert by_file["a.agent.md"] == "FAIL" and by_file["b.agent.md"] == "PASS"
 

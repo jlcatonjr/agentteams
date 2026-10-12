@@ -36,7 +36,7 @@ def test_stale_removal_overwrite_deletes_and_backs_up(tmp_path):
     assert removed == [str(legacy)]
     assert notices == []
     # The file was backed up before deletion (recoverable).
-    backups = list((out / ".agentteams-backups").rglob("tool-postgresql.agent.md"))
+    backups = list((out / ".agentteams-backups").rglob("tool-postgresql.agent.md.agentteams-bak"))  # stored inert
     assert backups, "legacy tool agent must be backed up before removal"
 
 
