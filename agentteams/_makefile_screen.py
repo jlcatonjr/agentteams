@@ -38,8 +38,8 @@ _RECIPEPREFIX_RE = re.compile(r"^\s*\.RECIPEPREFIX\s*:{0,3}=\s*(\S?)")
 _HEADER_RE = re.compile(r"^([^\s:=][^:=]*)(::?)(?![:=])([^=;]*)(?:;(.*))?$")
 _SIMPLE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 _VAR_REF_RE = re.compile(r"\$[({](?:call\s+|value\s+)?([A-Za-z0-9_.-]+)|\$([A-Za-z0-9_])")
-#: A variable name computed from another reference (``$(CMD_$(T))``).
-_COMPUTED_REF_RE = re.compile(r"\$[({][A-Za-z0-9_.-]*\$")
+#: A variable name computed from another reference (``$(CMD_$(T))``, ``$(call $(F))``).
+_COMPUTED_REF_RE = re.compile(r"\$[({](?:(?:call|value)\s+)?[A-Za-z0-9_.-]*\$")
 #: The reference a computed name stands for: it may name any variable.
 ANY_VARIABLE = "\0any"
 #: Functions that run while make reads the file.
@@ -237,14 +237,12 @@ def screen_makefile(
     """
     rules = parse_makefile(text)
     var_edges = {n: _var_refs(v) for n, v in rules.variables.items()}
-    for refs in var_edges.values():
-        if ANY_VARIABLE in refs:
-            refs.update(rules.variables)
+    # One node stands for "any variable": it reaches every variable, and a computed reference
+    # reaches it, so tainting stays linear in the number of references.
+    var_edges[ANY_VARIABLE] = set(rules.variables)
 
     def judge(pred: Callable[[str], bool]) -> Callable[[str], bool]:
         tainted = closure({n for n, v in rules.variables.items() if pred(v)}, var_edges)
-        if tainted:
-            tainted.add(ANY_VARIABLE)
         return lambda t: pred(t) or not tainted.isdisjoint(_var_refs(t))
 
     is_hazard = judge(lambda t: bool(hazard_text(t) or MAKE_RM_RE.search(t)))

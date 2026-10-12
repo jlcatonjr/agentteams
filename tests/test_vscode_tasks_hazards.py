@@ -422,3 +422,29 @@ def test_pattern_rule_matching_uses_only_the_first_percent():
     _, hazardous, _ = screen_makefile("%.dir: ; rm -rf x\nall: cache.dir\n",
                                       lambda t: "rm -rf" in t, lambda n: False, lambda n: False)
     assert "all" in hazardous
+
+
+@pytest.mark.parametrize("makefile", [
+    "F := CMD\nCMD = rm -rf x\nX := $(shell $(call $(F)))\n.PHONY: test\ntest:\n\tpytest\n",
+    "F := CMD\nCMD = crontab -r\nX := $(shell $(value $(F)))\n.PHONY: test\ntest:\n\tpytest\n",
+    "F := CMD\nCMD = rm -rf x\n.PHONY: clean\nclean:\n\t$(call $(F))\n",
+])
+def test_computed_names_passed_to_call_or_value(tmp_path, makefile):
+    assert _makefile(tmp_path, makefile) == {}
+
+
+def test_many_computed_names_taint_in_linear_time():
+    """A hostile Makefile full of computed references must not hang the render."""
+    import time
+
+    from agentteams._makefile_screen import MAKEFILE_MAX_BYTES, screen_makefile
+    lines, size, i = ["HZ = crontab -r"], 0, 0
+    while size < MAKEFILE_MAX_BYTES - 64:
+        line = f"V{i} = $(A_$(B{i}))" if i % 2 else f"V{i} = x"
+        lines.append(line)
+        size += len(line) + 1
+        i += 1
+    body = "\n".join(lines) + "\nall:\n\techo $(V1)\n"
+    start = time.monotonic()
+    _, hazardous, _ = screen_makefile(body, lambda t: "crontab" in t, lambda n: False, lambda n: False)
+    assert "all" in hazardous and time.monotonic() - start < 5
