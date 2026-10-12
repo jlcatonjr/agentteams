@@ -67,3 +67,10 @@ def test_the_wiring_check_reports_goose_even_with_the_override(tmp_path, monkeyp
     monkeypatch.setenv(W.GOOSE_OVERRIDE_ENV, "1")
     problems = runner_mcp.wiring_problems(tmp_path, "goose", {"write_policy": "orchestrator-only"}, home=tmp_path)
     assert any("not enforced on goose" in p for p in problems)
+
+
+def test_interop_goose_renders_and_instructions_carry_the_banner():
+    interop = {**_ON, "write_policy_target_framework": "goose"}  # interop's manifest has no "framework"
+    assert "UNENFORCED ON GOOSE" in W._section("producer", interop)
+    assert "UNENFORCED ON GOOSE" in W.apply_instructions("# Team\n", {**_ON, "framework": "goose"})
+    assert "UNENFORCED ON GOOSE" not in W.apply_instructions("# Team\n", {**_ON, "framework": "claude"})

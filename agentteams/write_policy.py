@@ -413,7 +413,8 @@ def apply_instructions(content: str, manifest: dict[str, Any]) -> str:
     if not enabled(manifest):
         return content
     body = content.rstrip("\n") + "\n"
-    return body + _fenced(_INSTRUCTIONS_SECTION, body)
+    banner = _GOOSE_UNENFORCED_BANNER if _renders_for_goose(manifest) else ""
+    return body + _fenced(banner + _INSTRUCTIONS_SECTION, body)
 
 
 _GOOSE_UNENFORCED_BANNER = """
@@ -425,8 +426,13 @@ _GOOSE_UNENFORCED_BANNER = """
 
 def _section(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
     """The write-policy section this agent gets under the switch (unfenced); ``writer`` overrides the slug test."""
-    return (_GOOSE_UNENFORCED_BANNER if manifest.get("framework") == "goose" else "") + _section_body(
-        slug, manifest, writer)
+    return (_GOOSE_UNENFORCED_BANNER if _renders_for_goose(manifest) else "") + _section_body(slug, manifest, writer)
+
+
+def _renders_for_goose(manifest: dict[str, Any]) -> bool:
+    """Whether this render targets Goose: native renders set ``framework``; interop sets
+    ``write_policy_target_framework`` (its manifest has no ``framework``)."""
+    return "goose" in (manifest.get("framework"), manifest.get("write_policy_target_framework"))
 
 
 def _section_body(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
@@ -471,15 +477,18 @@ def ensure_section(body: str, slug: str, manifest: dict[str, Any], *, writer: bo
     """
     if not enabled(manifest):
         return body
-    section = _section(slug, manifest, writer)
+    section = _section_body(slug, manifest, writer)  # compared without the goose banner, added below
+    banner = _GOOSE_UNENFORCED_BANNER if _renders_for_goose(manifest) else ""
     headings = len(_SECTION_HEADING_RE.findall(body))
     if section.strip() in body and headings == 1:
+        if banner and banner.strip() not in body:
+            return body.rstrip("\n") + "\n" + banner
         return body
     if headings:
         raise ValueError(f"{slug}: its write-policy section doesn't match this brief (stale mcp_grants?); "
                          "re-render the source agent with the current brief before importing it")
     body = body.rstrip("\n") + "\n"
-    return body + _fenced(section, body)
+    return body + _fenced(banner + section, body)
 
 
 def narrow_scopes(scopes: list[str]) -> list[str]:
