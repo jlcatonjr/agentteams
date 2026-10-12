@@ -93,6 +93,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`mcp_servers`](mcp-servers.md) | `--serve-mcp`: the first-party read-only servers `recall` and `gitread` |
 | [`mcp_need_report`](mcp-need-report.md) | `--mcp-need-report`: read-only per-agent summary of the runner ledger and the need register (protocol phase N3) |
 | [`control_plane_io`](control-plane-io.md) | Write-if-absent sandbox roster stubs and the in-sandbox write preflight |
+| [`signing_switch`](signing-switch.md) | The one writer of `references/agent-privilege.json`: an owned switch tracks the description, an unclear one is kept, a relax is a fleet REVIEW |
 | [`projection_marker`](projection-marker.md) | The `origin: "interop"` team marker an interop / multi_sync projection writes, control plane first |
 | [`team_dir_advisories`](team-dir-advisories.md) | Generation-time advisories for planted team markers and planted Codex config keys (detection only) |
 | [`prompt_roots`](prompt-roots.md) | Prompt-root change detection: per-fence hashes in the build-log, `PROMPT-ROOT CHANGED` warning, `--strict-prompt-roots` (detection only) |
@@ -233,7 +234,7 @@ stdlib stamp helper documented at each consumer's sidecar, not yet warranting it
 Most of the growth came from CH-07 carves splitting documented modules — `unfenced` out of
 `fences`, `audit_types` out of `audit`, `graph_inputs` out of `graph`.
 
-Four exceed 400 lines (`stale_detector` 739, `vscode_tasks` 673, `backup` 486,
+Four exceed 400 lines (`stale_detector` 739, `vscode_tasks` 851, `backup` 486,
 `svg_render` 470) and are the highest-value additions. `backup`'s public API is
 partially documented inside [`emit`](emit.md), which re-exports it.
 

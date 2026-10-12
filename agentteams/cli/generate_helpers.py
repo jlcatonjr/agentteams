@@ -507,22 +507,26 @@ def _emit_agent_privilege_config(manifest: dict, output_dir: Path) -> None:
 
     Emitted on every real generate/update so the strict agent-privilege switch is explicit
     in the team. When the switch resolves ON (the default), a notice names the opt-out — the
-    "default on at update, notify after, opportunity to switch off" contract.
+    "default on at update, notify after, opportunity to switch off" contract. This team's interop
+    projections (``signing_switch.sync_projected_switches``) are brought into line too.
 
     Args:
         manifest: The team manifest (carries ``enforce_decision_signing``).
         output_dir: The team root.
     """
     from agentteams.cli.artifacts import AGENT_PRIVILEGE_REL_PATH
+    from agentteams.signing_switch import KEPT_PREFIX, sync_projected_switches
 
     try:
         path = _write_agent_privilege_config(manifest, output_dir)
     except OSError as exc:
-        print(f"  !  agent-privilege config write failed: {exc}", file=sys.stderr)
+        print(f"  !  {KEPT_PREFIX}: agent-privilege config write failed: {exc}", file=sys.stderr)
         path = None  # the sandbox warnings below still apply (3b: never skipped by a failed write)
     _warn_legacy_signing_keys(manifest)
     if path is None:
         return
+    for line in sync_projected_switches(output_dir):
+        print(line)  # this team's interop projections (.codex/agents, ...) track its on-disk switch
     _warn_sandbox_deny_path_mismatch(manifest, output_dir)
     if manifest.get("enforce_decision_signing"):
         print(

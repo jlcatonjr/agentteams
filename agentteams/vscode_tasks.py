@@ -43,6 +43,10 @@ class ProjectCommand:
     group: str = "none"      # "test" | "build" | "none"
     is_default: bool = False
     presentation: "dict[str, Any] | None" = None  # None → default (panel: shared)
+    # False for an arbitrary project script (scripts/*.sh): never the default build/test task.
+    default_eligible: bool = True
+    # False for a launcher whose label is not a project command name (Goose recipes).
+    hazard_screened: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +55,8 @@ class ProjectCommand:
 
 _TEST_KEYWORDS = ("test", "spec", "check", "lint", "verify", "qa")
 _BUILD_KEYWORDS = ("build", "compile", "bundle", "dist", "package", "install")
+#: Side-effecting names that may be a build/test-group task but never the one-keystroke default.
+_NO_DEFAULT_KEYWORDS = ("install", "deploy", "publish", "release", "upload")
 
 
 def _classify_group(name: str) -> str:
@@ -63,10 +69,18 @@ def _classify_group(name: str) -> str:
 
 
 def _assign_group_defaults(commands: list[ProjectCommand]) -> None:
-    """Mark the first test-group and first build-group command as group defaults."""
+    """Mark the first test-group and first build-group command as group defaults.
+
+    Only commands from declared project tooling (package.json, Makefile, pyproject, tox,
+    Taskfile) are eligible, and none whose name installs, deploys or publishes. An arbitrary
+    ``scripts/*.sh`` is never made the default: the default build task runs on a single
+    keystroke, and the fleet once bound a cron installer to it.
+    """
     saw_test = False
     saw_build = False
     for cmd in commands:
+        if not cmd.default_eligible or any(k in cmd.label.lower() for k in _NO_DEFAULT_KEYWORDS):
+            continue
         if cmd.group == "test" and not saw_test:
             cmd.is_default = True
             saw_test = True
@@ -88,8 +102,11 @@ def _from_package_json(project_path: Path) -> list[ProjectCommand]:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         return []
     commands: list[ProjectCommand] = []
-    for name in (data.get("scripts") or {}):
+    for name, body in (data.get("scripts") or {}).items():
         if not isinstance(name, str) or not _safe_name(name):
+            continue
+        if isinstance(body, str) and _HAZARD_CONTENT_RE.search(body):
+            _skip_notice(f"npm script '{name}'")
             continue
         commands.append(ProjectCommand(
             label=f"npm: {name}",
@@ -253,6 +270,56 @@ def _from_taskfile(project_path: Path) -> list[ProjectCommand]:
     ]
 
 
+#: Name tokens marking a command that schedules jobs or purges/deletes data. Such commands are not
+#: offered as tasks at all: a one-click task is the wrong surface for them (fleet round 3, 2026-10-11).
+_HAZARD_TOKENS = frozenset({
+    "cron", "crontab", "launchd", "launchctl", "systemd", "systemctl",
+    "purge", "wipe", "destroy", "nuke", "delete", "erase", "truncate",
+})
+_HAZARD_TOKEN_PREFIXES = ("cron", "purge", "launchd", "launchctl", "systemd", "systemctl")
+_TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
+#: Script-body signals of the same: installing a scheduled job, or deleting stored data.
+_HAZARD_CONTENT_RE = re.compile(
+    r"\bcrontab\b|\blaunchctl\b|LaunchAgents|LaunchDaemons|/etc/cron|\bsystemctl\b[^\n]*\b(enable|start)\b"
+    r"|\.timer\b|\bDROP\s+(TABLE|DATABASE|SCHEMA)\b|\bDELETE\s+FROM\b|\bTRUNCATE\s+TABLE\b|\bshred\b"
+    r"|\brm\s+(-\w+\s+)*-\w*(r\w*f|f\w*r)|\brm\s+-\w*[rR]\w*\s+-\w*f|\bfind\b[^\n]*\s-delete\b|\bgit\s+clean\s+-\w*f",
+    re.IGNORECASE,
+)
+_HAZARD_SCAN_BYTES = 65536
+
+
+def _skip_notice(what: str) -> None:
+    print(f"  ℹ  .vscode/tasks.json: {what} not offered as a task (it schedules jobs or "
+          "purges/deletes data); run it by hand.", file=sys.stderr)
+
+
+def hazardous_command_name(name: str) -> bool:
+    """Return True when a command name says it schedules jobs or purges/deletes data.
+
+    Args:
+        name: A script stem, npm script, make target or task name.
+
+    Returns:
+        True for names such as ``install_tracers_purge_cron`` or ``purge-store``.
+    """
+    for token in _TOKEN_SPLIT_RE.split(name.lower()):
+        if token in _HAZARD_TOKENS or token.startswith(_HAZARD_TOKEN_PREFIXES):
+            return True
+    return False
+
+
+def _hazardous_script(script: Path) -> bool:
+    """True when a script's name or (first 64 KiB of) content schedules jobs or purges data."""
+    if hazardous_command_name(script.stem):
+        return True
+    try:
+        with script.open("rb") as fh:
+            head = fh.read(_HAZARD_SCAN_BYTES).decode("utf-8", errors="replace")
+    except OSError:
+        return True  # unreadable: cannot clear it, so do not offer it
+    return bool(_HAZARD_CONTENT_RE.search(head))
+
+
 def _from_scripts_dir(project_path: Path) -> list[ProjectCommand]:
     scripts_dir = project_path / "scripts"
     if not scripts_dir.is_dir():
@@ -262,10 +329,14 @@ def _from_scripts_dir(project_path: Path) -> list[ProjectCommand]:
         stem = script.stem
         if not _safe_name(stem):
             continue
+        if _hazardous_script(script):
+            _skip_notice(f"scripts/{script.name}")
+            continue
         commands.append(ProjectCommand(
             label=f"script: {stem}",
             command=f"bash scripts/{script.name}",
             group=_classify_group(stem),
+            default_eligible=False,
         ))
     return commands
 
@@ -303,6 +374,7 @@ def _from_goose_recipes(project_path: Path) -> list[ProjectCommand]:
             command=command,
             group="none",
             presentation=_GOOSE_PRESENTATION,
+            hazard_screened=False,  # an agent launcher, labelled by its recipe title
         ))
     return commands
 
@@ -388,12 +460,29 @@ _DISCOVERERS = (
 
 
 def discover_project_commands(project_path: Path) -> list[ProjectCommand]:
-    """Discover runnable commands from project tooling files."""
+    """Discover runnable commands from project tooling files.
+
+    Commands whose name marks them as scheduling jobs or purging/deleting data
+    (:func:`hazardous_command_name`) are dropped, and ``scripts/*.sh`` are additionally screened
+    by content; neither kind is ever emitted as a task.
+
+    Args:
+        project_path: The project root.
+
+    Returns:
+        The discovered commands, with group defaults assigned.
+    """
     commands: list[ProjectCommand] = []
     for discoverer in _DISCOVERERS:
         commands.extend(discoverer(project_path))
-    _assign_group_defaults(commands)
-    return commands
+    kept: list[ProjectCommand] = []
+    for cmd in commands:
+        if not cmd.hazard_screened or not hazardous_command_name(cmd.label.split(": ", 1)[-1]):
+            kept.append(cmd)
+        else:
+            _skip_notice(f"'{cmd.label}'")
+    _assign_group_defaults(kept)
+    return kept
 
 
 # ---------------------------------------------------------------------------
@@ -469,7 +558,12 @@ def _merge_standard_json(existing: dict[str, Any], new_content: str) -> str:
 
 
 def _find_tasks_close_bracket(raw: str) -> int:
-    """Find the index of the ] that closes the top-level 'tasks' array.
+    """Find the index of the ] that closes the top-level 'tasks' array (-1 when not found)."""
+    return _find_tasks_array(raw)[1]
+
+
+def _find_tasks_array(raw: str) -> tuple[int, int]:
+    """Find the ``[`` and ``]`` indices of the top-level 'tasks' array (``(-1, -1)`` if absent).
 
     Performs a forward scan of raw JSONC text, properly tracking string
     boundaries (including \\ escape sequences) and // / /* */ comment regions,
@@ -540,6 +634,7 @@ def _find_tasks_close_bracket(raw: str) -> int:
                             j += 1
                         if j < n and raw[j] == "[":
                             # Track bracket depth to find the matching ].
+                            open_pos = j
                             arr_depth = 0
                             while j < n:
                                 ch = raw[j]
@@ -558,9 +653,9 @@ def _find_tasks_close_bracket(raw: str) -> int:
                                 elif ch == "]":
                                     arr_depth -= 1
                                     if arr_depth == 0:
-                                        return j
+                                        return open_pos, j
                                 j += 1
-                            return -1  # unmatched opening [
+                            return -1, -1  # unmatched opening [
                 i = key_end
                 continue
             else:
@@ -574,7 +669,85 @@ def _find_tasks_close_bracket(raw: str) -> int:
 
         i += 1
 
-    return -1
+    return -1, -1
+
+
+def _skip_jsonc_token(raw: str, i: int) -> int | None:
+    """Index just past the string / comment starting at ``raw[i]``, or None when none starts there."""
+    if raw[i] == '"':
+        i += 1
+        while i < len(raw) and raw[i] != '"':
+            i += 2 if raw[i] == "\\" else 1
+        return i + 1
+    if raw.startswith("//", i):
+        end = raw.find("\n", i)
+        return len(raw) if end == -1 else end
+    if raw.startswith("/*", i):
+        end = raw.find("*/", i + 2)
+        return len(raw) if end == -1 else end + 2
+    return None
+
+
+def _task_object_spans(raw: str) -> list[tuple[int, int, int | None, int | None]]:
+    """``(start, end, comma_before, comma_after)`` of each object element of the tasks array.
+
+    ``end`` is the index of the closing ``}``; the commas are the depth-0 separators around it.
+    """
+    open_pos, close_pos = _find_tasks_array(raw)
+    spans: list[tuple[int, int, int | None, int | None]] = []
+    if open_pos == -1:
+        return spans
+    depth, start, last_comma, i = 0, -1, None, open_pos + 1
+    while i < close_pos:
+        skipped = _skip_jsonc_token(raw, i)
+        if skipped is not None:
+            i = skipped
+            continue
+        c = raw[i]
+        if c in "{[":
+            if depth == 0 and c == "{":
+                start = i
+            depth += 1
+        elif c in "}]":
+            depth -= 1
+            if depth == 0 and c == "}" and start != -1:
+                spans.append((start, i, last_comma, None))
+                start = -1
+        elif c == "," and depth == 0:
+            if spans and spans[-1][3] is None:
+                spans[-1] = spans[-1][:3] + (i,)
+            last_comma = i
+        i += 1
+    return spans
+
+
+def _refresh_jsonc_sentinels(raw: str, new_tasks: list[dict[str, Any]]) -> str:
+    """Drop or rewrite AGENTTEAMS-tagged tasks in a JSONC file that the new render changed.
+
+    A tagged task no longer rendered (e.g. a script now screened out as hazardous) is removed with
+    one adjacent comma; one whose content changed (e.g. it lost ``isDefault``) is replaced in place.
+    User tasks, comments and formatting elsewhere are untouched. A tagged task that does not parse
+    after comment-stripping is left as it is.
+    """
+    by_label = {t["label"]: t for t in new_tasks}
+    for _ in range(len(new_tasks) + 1000):  # one edit per pass; bounded
+        for start, end, before, after in _task_object_spans(raw):
+            obj = _try_parse_json(_strip_jsonc_comments(raw[start:end + 1]))
+            if not isinstance(obj, dict) or obj.get("detail") != "AGENTTEAMS":
+                continue
+            new = by_label.get(obj.get("label"))
+            if new is None:
+                lo, hi = (before, end + 1) if before is not None else (
+                    start, (after + 1) if after is not None else end + 1)
+                raw = raw[:lo] + raw[hi:]
+                break
+            if obj != new:
+                body = "\n".join("    " + l for l in json.dumps(new, indent=2, ensure_ascii=False).splitlines())
+                raw = raw[:start] + body.lstrip() + raw[end + 1:]
+                break
+        else:
+            return raw
+    return raw
 
 
 def _merge_jsonc(existing: dict[str, Any], raw: str, new_content: str) -> str:
@@ -590,6 +763,11 @@ def _merge_jsonc(existing: dict[str, Any], raw: str, new_content: str) -> str:
     sentinel labels are found, and ``tasks_to_add`` is empty — so the raw string
     is returned unchanged (idempotent).
     """
+    new_tasks_all: list[dict[str, Any]] = json.loads(new_content).get("tasks", [])
+    refreshed = _refresh_jsonc_sentinels(raw, new_tasks_all)
+    if refreshed != raw:
+        raw = refreshed
+        existing = _try_parse_json(_strip_jsonc_comments(raw)) or existing
     existing_tasks = existing.get("tasks") or []
     existing_sentinel_labels = {
         t.get("label") for t in existing_tasks

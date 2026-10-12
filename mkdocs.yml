@@ -227,6 +227,7 @@ nav:
       - governance_logs: api-reference/governance-logs.md
       - control-plane-io: api-reference/control-plane-io.md
       - projection-marker: api-reference/projection-marker.md
+      - signing-switch: api-reference/signing-switch.md
       - team-dir-advisories: api-reference/team-dir-advisories.md
       - prompt-roots: api-reference/prompt-roots.md
       - host-features: api-reference/host-features.md
