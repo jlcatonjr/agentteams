@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentteams import fleet
-from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME, inert_backup_name
 from agentteams.stale_detector import (
     GitRunner,
     StalenessReport,
@@ -82,10 +82,12 @@ def snapshot_files(root: Path, rel_paths: list[str], *, stamp: str | None = None
     entries: list[dict[str, str]] = []
     for rel in rels:
         data = (root / rel).read_bytes()
-        dst = files_dir / rel
+        # Stored inert (as backup.py does), so a snapshot of `.claude/agents/x.md` is never loadable as an agent.
+        stored = str(Path(rel).with_name(inert_backup_name(Path(rel).name)))
+        dst = files_dir / stored
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes(data)
-        entries.append({"rel": rel, "sha256": hashlib.sha256(data).hexdigest()})
+        entries.append({"rel": rel, "stored": stored, "sha256": hashlib.sha256(data).hexdigest()})
     snap.mkdir(parents=True, exist_ok=True)
     (snap / "manifest.json").write_text(
         json.dumps({"created_utc": _utc_stamp(), "files": entries}, indent=2),
@@ -121,7 +123,7 @@ def restore_snapshot(root: Path, snap_dir: Path) -> list[str]:
     planned: list[tuple[str, bytes]] = []
     for entry in manifest.get("files", []):
         rel = entry["rel"]
-        backup_file = snap_dir / "files" / rel
+        backup_file = snap_dir / "files" / (entry.get("stored") or rel)  # legacy snapshots stored the plain name
         if not backup_file.is_file():
             raise ValueError(f"snapshot missing backup for {rel}")
         data = backup_file.read_bytes()

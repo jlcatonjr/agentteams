@@ -71,3 +71,38 @@ def test_wiring_check_refuses_a_loadable_backup_under_the_switch(tmp_path, monke
     (legacy / "producer.md").write_text("old\n")
     problems = runner_mcp.wiring_problems(tmp_path, "claude", {"write_policy": "orchestrator-only"}, home=tmp_path)
     assert any("shadow the narrowed ones" in p for p in problems)
+
+
+def test_a_non_object_manifest_does_not_abort_neutralization(tmp_path):
+    agents = _team(tmp_path)
+    legacy = agents / ".agentteams-backups" / "20260101-000000"
+    legacy.mkdir(parents=True)
+    (legacy / "a.md").write_text("x\n")
+    (legacy / "b.md").write_text("y\n")
+    (legacy / B.BACKUP_MANIFEST_NAME).write_text("[1, 2]")  # valid JSON, not an object
+    assert sorted(B.neutralize_legacy_backups(agents)) == ["20260101-000000/a.md", "20260101-000000/b.md"]
+    assert not B.loadable_backup_files(agents)
+
+
+def test_a_symlinked_loadable_backup_is_renamed_not_followed(tmp_path):
+    agents = _team(tmp_path)
+    legacy = agents / ".agentteams-backups" / "20260101-000000"
+    legacy.mkdir(parents=True)
+    (legacy / "evil.md").symlink_to(agents / "producer.md")
+    assert [p.name for p in B.loadable_backup_files(agents)] == ["evil.md"]
+    B.neutralize_legacy_backups(agents)
+    assert not B.loadable_backup_files(agents) and (legacy / "evil.md.agentteams-bak").is_symlink()
+    assert (agents / "producer.md").read_text().startswith("---")  # the target was never touched
+
+
+def test_stale_fix_snapshots_store_agent_files_inert_and_restore(tmp_path):
+    from agentteams import stale_remediate as SR
+
+    agents = _team(tmp_path)
+    snap = SR.snapshot_files(tmp_path, [".claude/agents/producer.md"], stamp="20260101-000000")
+    stored = list((snap / "files").rglob("*"))
+    assert any(p.name == "producer.md.agentteams-bak" for p in stored)
+    assert not any(p.name == "producer.md" for p in stored)
+    (agents / "producer.md").write_text("changed\n")
+    assert SR.restore_snapshot(tmp_path, snap) == [".claude/agents/producer.md"]
+    assert "tools: Read, Edit, Write" in (agents / "producer.md").read_text()

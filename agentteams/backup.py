@@ -127,7 +127,8 @@ def loadable_backup_files(output_dir: Path) -> list[Path]:
     root = output_dir / _BACKUP_DIR_NAME
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob("*") if p.is_file() and not p.is_symlink()
+    # Symlinks included (never followed): a loader may follow one, so it is renamed/reported like a file.
+    return sorted(p for p in root.rglob("*") if (p.is_symlink() or p.is_file())
                   and p.name.endswith(_LOADABLE_BACKUP_EXTENSIONS))
 
 
@@ -153,20 +154,23 @@ def neutralize_legacy_backups(output_dir: Path) -> list[str]:
     renamed: list[str] = []
     for path in loadable_backup_files(output_dir):
         target = path.with_name(inert_backup_name(path.name))
-        if target.exists():
-            continue  # never overwrite; the check still reports it
+        if target.exists() or target.is_symlink():
+            continue  # never overwrite; loadable_backup_files (and --check-wiring) still report it
         path.rename(target)
         renamed.append(str(path.relative_to(root)))
         backup_dir = root / path.relative_to(root).parts[0]
         manifest_path = backup_dir / BACKUP_MANIFEST_NAME
-        if manifest_path.is_file():
+        if manifest_path.is_file() and not manifest_path.is_symlink():
             try:
                 manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
-            except ValueError:
-                continue
+                files = manifest.get("files") if isinstance(manifest, dict) else None
+            except (ValueError, UnicodeDecodeError):
+                files = None
+            if not isinstance(files, list):
+                continue  # malformed manifest: the rename stands; --verify-backup reports the mismatch
             old_rel, new_rel = str(path.relative_to(backup_dir)), str(target.relative_to(backup_dir))
-            for entry in manifest.get("files", []):
-                if entry.get("backup_path") == old_rel:
+            for entry in files:
+                if isinstance(entry, dict) and entry.get("backup_path") == old_rel:
                     entry["backup_path"] = new_rel
             _atomic_write_text(manifest_path, _json.dumps(manifest, indent=2) + "\n")
     return renamed

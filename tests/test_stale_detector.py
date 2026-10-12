@@ -365,7 +365,7 @@ class TestSnapshotRestore:
         f.write_text("hi\n")
         snap = sr.snapshot_files(tmp_path, ["a.md"], stamp="20260619-000001")
         # Tamper with the backup copy → sha256 mismatch → restore must refuse (fail-safe).
-        (snap / "files" / "a.md").write_text("tampered")
+        (snap / "files" / "a.md.agentteams-bak").write_text("tampered")  # snapshots store agent files inert
         f.write_text("current")
         with pytest.raises(ValueError):
             sr.restore_snapshot(tmp_path, snap)
