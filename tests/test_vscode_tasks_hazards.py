@@ -391,3 +391,34 @@ def test_closure_is_linear_on_long_chains():
     body += "".join(f"t{i}: t{i + 1}\n" for i in range(3000)) + "t3000:\n\techo $(V2999)\n"
     _, hazardous, _ = screen_makefile(body, lambda t: "crontab" in t, lambda n: False, lambda n: False)
     assert "t0" in hazardous and time.monotonic() - start < 5
+
+
+@pytest.mark.parametrize("makefile", [
+    # A tab-prefixed line outside any rule is read as makefile text, so its $(shell) runs.
+    "X := 1\n\t$(shell rm -rf ~/data)\n.PHONY: test\ntest:\n\tpytest\n",
+    "\t$(shell crontab -r)\n.PHONY: test\ntest:\n\tpytest\n",
+    "define D\nx\nendef\n\t$(shell crontab -r)\n.PHONY: test\ntest:\n\tpytest\n",
+    # A computed variable name may name the hazardous variable.
+    "T = clean\nCMD_clean = crontab -r\nX := $(shell $(CMD_$(T)))\n.PHONY: test\ntest:\n\tpytest\n",
+    "T = clean\nCMD_clean = rm -rf build\n.PHONY: clean\nclean:\n\t$(CMD_$(T))\n",
+])
+def test_makefile_tab_lines_outside_rules_and_computed_names(tmp_path, makefile):
+    assert _makefile(tmp_path, makefile) == {}
+
+
+def test_computed_name_without_any_tainted_variable_is_kept(tmp_path):
+    cmds = _makefile(tmp_path, "T = a\nCMD_a = pytest\n.PHONY: test\ntest:\n\t$(CMD_$(T))\n")
+    assert set(cmds) == {"make: test"}
+
+
+def test_pattern_rule_matching_uses_only_the_first_percent():
+    import time
+
+    from agentteams._makefile_screen import screen_makefile
+    body = "%" + "a%" * 2000 + ": ; rm -rf x\nall: " + "a" * 5000 + "\n"
+    start = time.monotonic()
+    _, hazardous, _ = screen_makefile(body, lambda t: "rm -rf" in t, lambda n: False, lambda n: False)
+    assert "all" not in hazardous and time.monotonic() - start < 2
+    _, hazardous, _ = screen_makefile("%.dir: ; rm -rf x\nall: cache.dir\n",
+                                      lambda t: "rm -rf" in t, lambda n: False, lambda n: False)
+    assert "all" in hazardous

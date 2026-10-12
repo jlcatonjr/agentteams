@@ -43,10 +43,11 @@ Found by the fleet-sync round-3 security review.
       `git clean -f`, …). New private `agentteams/_makefile_screen.py` reads what a make target runs: its
       recipe (continuations, `target: ; recipe`, conditionals and `.RECIPEPREFIX` included), the variables and
       `define` blocks it expands, and every target it runs as a prerequisite, through a pattern rule or through
-      a recursive `$(MAKE)`. A variable is judged by every value it is ever given (conditional branches, `+=`
-      and target-specific values like `clean: CMD = rm -rf` included), and `$X` counts as a reference. A hazard
-      in text make runs while reading the file (any line outside a recipe that reaches `$(shell …)` or
-      `$(eval …)`, directly or through variables, and `!=`) drops every target, and a Makefile over
+      a recursive `$(MAKE)`. A variable is judged by every value it is ever given (conditional branches,
+      `+=` and target-specific values like `clean: CMD = rm -rf` included), `$X` counts as a reference, and a
+      computed name (`$(CMD_$(T))`) may be any variable. A hazard in text make runs while reading the file
+      (any line outside a rule's recipe, tab-prefixed or not, that reaches `$(shell …)` or `$(eval …)`,
+      directly or through variables, and `!=`) drops every target, and a Makefile over
       256 KiB is not offered at all. So a `make clean` that runs `rm -rf build` is no longer offered. Not
       covered: `include`d makefiles, a sub-directory's own makefile (`$(MAKE) -C sub`), computed sub-make
       targets (`$(MAKE) $(T)`), and a hazard inside a program a recipe calls.

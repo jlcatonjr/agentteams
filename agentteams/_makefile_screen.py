@@ -38,6 +38,10 @@ _RECIPEPREFIX_RE = re.compile(r"^\s*\.RECIPEPREFIX\s*:{0,3}=\s*(\S?)")
 _HEADER_RE = re.compile(r"^([^\s:=][^:=]*)(::?)(?![:=])([^=;]*)(?:;(.*))?$")
 _SIMPLE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 _VAR_REF_RE = re.compile(r"\$[({](?:call\s+|value\s+)?([A-Za-z0-9_.-]+)|\$([A-Za-z0-9_])")
+#: A variable name computed from another reference (``$(CMD_$(T))``).
+_COMPUTED_REF_RE = re.compile(r"\$[({][A-Za-z0-9_.-]*\$")
+#: The reference a computed name stands for: it may name any variable.
+ANY_VARIABLE = "\0any"
 #: Functions that run while make reads the file.
 _PARSE_FN_RE = re.compile(r"\$[({](?:shell|eval)\b")
 #: A recursive make at the start of a command (``$(MAKE) purge``, ``@make -C sub clean``). The
@@ -79,8 +83,14 @@ class MakefileRules:
 
 
 def _var_refs(text: str) -> set[str]:
-    """Return the names of the variables ``text`` references (``$(X)``, ``${X}``, ``$X``)."""
-    return {a or b for a, b in _VAR_REF_RE.findall(text)}
+    """Return the names of the variables ``text`` references (``$(X)``, ``${X}``, ``$X``).
+
+    A computed name (``$(CMD_$(T))``) could be any variable, so it adds :data:`ANY_VARIABLE`.
+    """
+    refs = {a or b for a, b in _VAR_REF_RE.findall(text)}
+    if _COMPUTED_REF_RE.search(text):
+        refs.add(ANY_VARIABLE)
+    return refs
 
 
 def parse_makefile(text: str) -> MakefileRules:
@@ -106,7 +116,8 @@ def parse_makefile(text: str) -> MakefileRules:
             else:
                 rules.variables[define] = rules.variables.get(define, "") + "\n" + line
             continue
-        if line.startswith(prefix):
+        # A prefixed line outside any rule is ordinary makefile text, and make reads it as such.
+        if line.startswith(prefix) and current:
             for target in current:
                 raw[target].append(line)
             continue
@@ -170,7 +181,7 @@ def _record_target_variable(rules: MakefileRules, line: str) -> None:
 
 def _link_pattern_rules(rules: MakefileRules) -> None:
     """Make a prerequisite with no rule of its own run every pattern rule (``%.x:``) it matches."""
-    patterns = {t: re.compile("^" + re.escape(t).replace("%", ".+") + "$") for t in rules.recipes if "%" in t}
+    patterns = {t: re.compile("^" + re.escape(t).replace("%", ".+", 1) + "$") for t in rules.recipes if "%" in t}
     for runs in list(rules.edges.values()):
         for prereq in list(runs):
             if prereq not in rules.recipes:
@@ -226,9 +237,14 @@ def screen_makefile(
     """
     rules = parse_makefile(text)
     var_edges = {n: _var_refs(v) for n, v in rules.variables.items()}
+    for refs in var_edges.values():
+        if ANY_VARIABLE in refs:
+            refs.update(rules.variables)
 
     def judge(pred: Callable[[str], bool]) -> Callable[[str], bool]:
         tainted = closure({n for n, v in rules.variables.items() if pred(v)}, var_edges)
+        if tainted:
+            tainted.add(ANY_VARIABLE)
         return lambda t: pred(t) or not tainted.isdisjoint(_var_refs(t))
 
     is_hazard = judge(lambda t: bool(hazard_text(t) or MAKE_RM_RE.search(t)))
