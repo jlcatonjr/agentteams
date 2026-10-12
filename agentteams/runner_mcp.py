@@ -279,6 +279,15 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
     if manifest.get("mcp_grants"):
         problems += [f"{p}; remove it so it can't shadow the canonical inline server granted agents launch "
                      "(@security C13)" for p in _shadowing(root, home or os.path.expanduser("~"))]
+    from agentteams.backup import loadable_backup_files
+
+    agents_dir = root / (".claude/agents" if framework == "claude" else ".goose/recipes")
+    shadow = loadable_backup_files(agents_dir) if framework in ("claude", "goose") else []
+    if shadow:
+        problems.append(f"{len(shadow)} backed-up agent file(s) under {agents_dir.relative_to(root)}/.agentteams-backups/ "
+                        f"can be loaded as agents and shadow the narrowed ones (e.g. {shadow[0].name}); run "
+                        "`agentteams --update` to neutralize them (renamed *.agentteams-bak), or move the backups "
+                        "out of the agents directory")
     if framework == "claude":
         def load(rel):
             path = root / ".claude" / rel

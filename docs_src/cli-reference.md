@@ -671,6 +671,8 @@ stderr.
 
 ### `--list-backups`
 
+Backups live in `<agents dir>/.agentteams-backups/<timestamp>/`. Backed-up agent files (`.md`, `.yaml`, `.yml`, `.toml`) are stored with an `.agentteams-bak` suffix, so no agent runtime loads a backup as an agent; `--restore-backup` maps the names back. Each backup run also neutralizes loadable files left by older backups (renamed in place, manifest kept consistent).
+
 List all available backups for the output directory (newest first) and exit. Prints timestamp, path, and file count for each backup.
 
 ### `--restore-backup TIMESTAMP`

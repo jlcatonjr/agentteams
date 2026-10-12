@@ -146,7 +146,7 @@ def test_cli_in_place_with_yes_rewrites_and_backs_up(tmp_path, capsys):
     backups_root = tmp_path / ".agentteams-backups"
     assert backups_root.exists()
     snaps = list(backups_root.iterdir())
-    assert snaps and (snaps[0] / "x.md").exists()
+    assert snaps and (snaps[0] / "x.md.agentteams-bak").exists()  # stored inert
 
 
 def test_cli_missing_file_returns_one(tmp_path, capsys):

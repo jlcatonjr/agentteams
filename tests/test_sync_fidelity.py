@@ -86,9 +86,9 @@ def test_sync_init_backs_up_before_projecting(tmp_path: Path) -> None:
     _project(tmp_path)
     (tmp_path / ".claude" / "agents" / "orchestrator.md").write_text("# hand-made\n", encoding="utf-8")
     sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "claude"])
-    backups = list((tmp_path / ".claude" / "agents" / ".agentteams-backups").glob("*/orchestrator.md"))
+    backups = list((tmp_path / ".claude" / "agents" / ".agentteams-backups").glob("*/orchestrator.md.agentteams-bak"))
     assert backups and backups[0].read_text(encoding="utf-8") == "# hand-made\n"
-    ext = list((tmp_path / ".claude" / "agents" / ".agentteams-backups").glob("*/__external__/CLAUDE.md"))
+    ext = list((tmp_path / ".claude" / "agents" / ".agentteams-backups").glob("*/__external__/CLAUDE.md.agentteams-bak"))
     assert ext and "KEEP_THIS_CLAUDE_ONLY_RULE" in ext[0].read_text(encoding="utf-8")
 
 
@@ -181,7 +181,7 @@ def test_projection_backup_includes_skills(tmp_path: Path) -> None:
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("---\nname: recall\n---\nkeep\n", encoding="utf-8")
     sync_init(tmp_path, pin="copilot-vscode", frameworks=["copilot-vscode", "claude"])
-    backed = list((tmp_path / ".claude" / "agents" / ".agentteams-backups").glob("*/__external__/skills/recall/SKILL.md"))
+    backed = list((tmp_path / ".claude" / "agents" / ".agentteams-backups").glob("*/__external__/skills/recall/SKILL.md.agentteams-bak"))
     assert backed
 
 
