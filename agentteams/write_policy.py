@@ -97,13 +97,38 @@ checks every request against your policy and does the work.
 - **To delete a file:** call `delete_file`. Deletions are always staged.
 - **To run a command:** call `run_command` with an `argv` list (never a shell string). Only commands on your
   allowlist run, inside your sandbox.
-- **If a call returns a `request_id`** instead of a result, call `request_status` with it later.
+- **A `write_file` or `delete_file` receipt is final:** report its `sid` and stop; don't call `request_status`
+  after it. Only when a call returns a `request_id` instead of a result (a long `run_command`) call
+  `request_status` with it later.
 - **Every call** carries the `dispatch` value the orchestrator gave you for this task. Never invent or reuse one.
 - **If you can't do what the task needs** with these, attach a gap note to your handoff; the orchestrator records
   it (`references/mcp-need.reference.md`).
 
 Refusals come back as tool results that say why (stale base, out of scope, a gate failed): fix the cause and
 retry, rather than working around it. Schemas and limits: `references/write-policy.reference.md`.
+"""
+
+#: The top-level session's instructions file (CLAUDE.md, AGENTS.md, copilot-instructions.md) under the switch. In
+#: Claude Code the session that dispatches agents is the top-level one, which reads this file, not the orchestrator's
+#: agent file, so the dispatch contract must be here too (biographies pilot 1, finding F1, 2026-10-12).
+_INSTRUCTIONS_SECTION = """
+## Write Policy: You Are the Orchestrator
+
+This team runs `write_policy: "orchestrator-only"`. In this top-level session **you are the orchestrator**, the
+only agent that writes. Every other agent is read-only and returns proposals; agents granted `agentteams_runner`
+stage their writes through it for your approval. Follow the orchestrator agent file's **Write Policy: Applying
+Proposals** section in full. In particular:
+
+- **Before every dispatch,** run `agentteams --issue-dispatch --agent <slug> --description <brief>` and put the
+  printed nonce in the task as the agent's `dispatch` value. An agent without one can't write.
+- **Returned artifacts:** apply them with `agentteams --apply-proposal FILE.json --description <brief>` or
+  `--run-request`.
+- **Staged writes:** review them with `agentteams --list-staged` and `--show-staged SID`, then decide with
+  `--apply-staged SID` or `--reject-staged SID`.
+- **At closeout:** run `agentteams --verify-proposal-ledger`.
+
+These commands queue for the operator's runner. If one says no runner is serving, ask the operator to start it.
+Reference: the team's `references/write-policy.reference.md`.
 """
 
 _ORCHESTRATOR_SECTION = """
@@ -336,6 +361,29 @@ def apply(content: str, slug: str, manifest: dict[str, Any]) -> str:
     if slug in ORCHESTRATOR_SLUGS:
         return body + section
     return narrow_tools(body) + section
+
+
+def apply_instructions(content: str, manifest: dict[str, Any]) -> str:
+    """Add the top-level orchestrator's write-policy section to a rendered instructions file.
+
+    The session that dispatches agents reads this file (``CLAUDE.md`` on Claude Code), not the orchestrator's agent
+    file, so it needs the dispatch contract here too (biographies pilot 1, F1). Without the switch the content is
+    returned unchanged, so default teams stay byte-identical.
+
+    Args:
+        content: The rendered instructions file.
+        manifest: The team manifest.
+
+    Returns:
+        The content, with the section appended (in its own ``write_policy`` fence when the file has fences).
+
+    Raises:
+        Nothing.
+    """
+    if not enabled(manifest):
+        return content
+    body = content.rstrip("\n") + "\n"
+    return body + _fenced(_INSTRUCTIONS_SECTION, body)
 
 
 def _section(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
