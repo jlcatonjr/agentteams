@@ -24,7 +24,7 @@ from agentteams.frameworks.goose_recipe_merge import SUB_RECIPES_MANAGED_COMMENT
 _RECIPE_VERSION = "1.0.0"
 
 #: Default MCP-extension timeout (seconds) — used by ``_emit_recipe`` here and by the retained
-#: ``_goose_extension_for`` in ``goose.py`` (which re-imports it), and re-exported for
+#: ``_goose_extension_for`` in ``goose_recipe_grants.py`` (which imports it), and re-exported for
 #: ``goose_coordination.py``.
 _MCP_EXT_TIMEOUT = 300
 
@@ -73,6 +73,50 @@ def _load_section(targets: list[dict[str, Any]]) -> str:
             f'- **{label}** — call `load("{slug}")` to bring `{slug}`\'s '
             f"instructions into context, then act on them here."
         )
+    return "\n".join(lines)
+
+
+def delegation_section(rows: list[tuple[str, str, list[str], list[str]]]) -> str:
+    """Render the grant-mode orchestrator's "Delegation narrowing (Goose)" block.
+
+    Goose gives a delegate the delegating session's extensions, never its sub-recipe's (biographies pilot 1,
+    G1/G2/G9), so the only narrowing is the ``extensions`` argument of each ``delegate`` call. This block
+    states that argument per target; ``goose_tool_scoping.delegate_extensions`` computes it.
+
+    Args:
+        rows: ``(source, slug, names, withheld)`` per delegation target, in ``sub_recipes`` order: the
+            ``sub_recipes`` name ``delegate`` takes as ``source``, the recipe slug, and
+            ``delegate_extensions``' result.
+
+    Returns:
+        The Markdown block (no trailing newline).
+
+    Raises:
+        Nothing.
+    """
+    lines = [
+        "## Delegation narrowing (Goose)",
+        "",
+        "Goose gives a delegate **your** extensions, not the ones its recipe lists. A `delegate` call without "
+        "`extensions` hands the delegate everything you hold, `developer` write, edit and shell included "
+        "(measured on Goose 1.37). The `extensions` argument is the only way to narrow it.",
+        "",
+        "1. **Every `delegate` call passes `extensions`, exactly as listed below.** Never omit it. `[]` means no "
+        "tools at all.",
+        '2. An ad-hoc delegate (no `source`), or a target not listed here, gets `extensions: ["agentteams_readfs"]` '
+        "and read-only work.",
+        "3. **Withheld grants are direct-run only.** `delegate` can't add an extension you don't hold, and it "
+        "passes your allowlist with each one. When a row lists a withheld grant, the delegate gets only the "
+        "listed extensions: don't ask it for work that needs the withheld grant (writing, running commands, "
+        "`agentteams_runner`, an MCP server), and don't do that work for it with your own tools. Give the "
+        "operator the command `goose run --recipe .goose/recipes/<recipe>` instead. A direct run is the "
+        "only Goose path where that recipe's own extensions apply. Don't start it from your own shell.",
+        "",
+        "| `source` | Recipe | `extensions` to pass | Withheld: direct run only |",
+        "|---|---|---|---|",
+    ]
+    for source, slug, names, withheld in rows:
+        lines.append(f"| `{source}` | `{slug}.yaml` | `{json.dumps(names)}` | {'; '.join(withheld) or '—'} |")
     return "\n".join(lines)
 
 
