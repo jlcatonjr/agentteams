@@ -155,7 +155,9 @@ def test_goose_profile_must_deny_the_server_and_recipes(tmp_path):
     (tmp_path / ".goose" / "sandbox.sb").write_text("(deny file-write*\n    " + _seatbelt_path_expr(".agentteams")
                                                    + "\n    " + _seatbelt_path_expr(".agentteams-status")
                                                    + "\n    " + _seatbelt_path_expr(".goose/recipes") + ")\n")
-    assert runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path) == []
+    # With the profile wired, only the always-reported G1 problem remains (goose isn't enforced under the switch).
+    remaining = runner_mcp.wiring_problems(tmp_path, "goose", MANIFEST, home=tmp_path)
+    assert len(remaining) == 1 and "not enforced on goose" in remaining[0]
 
 
 def test_a_team_with_grants_refuses_a_shell_on_any_non_orchestrator_agent():

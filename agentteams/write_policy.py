@@ -40,9 +40,9 @@ NARROWED_TOKENS: tuple[str, ...] = ("read", "search", "todo")
 ORCHESTRATOR_SLUGS: frozenset[str] = frozenset({"orchestrator", "bridge-orchestrator"})
 
 #: The switch is refused on Goose (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the
-#: orchestrator's extensions, so per-recipe narrowing isn't enforced. A code constant, not a flag or environment
-#: variable, so nothing a session controls can lift it; the test suite lowers it only to keep the Goose machinery a
-#: future fix will reuse under test.
+#: orchestrator's extensions, so per-recipe narrowing isn't enforced. The refusal is the shipped default; only
+#: :data:`GOOSE_OVERRIDE_ENV` lifts it, for one process, with a warning on stderr and an UNENFORCED banner in every
+#: rendered Goose agent, and ``--check-wiring`` reports it regardless (@security, 2026-10-12).
 GOOSE_SWITCH_REFUSED = True
 #: Lifts the refusal for one process: agentteams' own test suite (renders run in subprocesses) or a deliberate
 #: operator experiment on a future Goose fix. Every use prints a warning that the policy is NOT enforced on Goose.
@@ -416,8 +416,20 @@ def apply_instructions(content: str, manifest: dict[str, Any]) -> str:
     return body + _fenced(_INSTRUCTIONS_SECTION, body)
 
 
+_GOOSE_UNENFORCED_BANNER = """
+> **UNENFORCED ON GOOSE.** This Goose team was rendered under `write_policy: "orchestrator-only"` with
+> `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1`. Goose delegates inherit the orchestrator's write/edit/shell
+> extensions, so nothing below is enforced by the tool surface (biographies pilot 1, G1). Not for a real team.
+"""
+
+
 def _section(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
     """The write-policy section this agent gets under the switch (unfenced); ``writer`` overrides the slug test."""
+    return (_GOOSE_UNENFORCED_BANNER if manifest.get("framework") == "goose" else "") + _section_body(
+        slug, manifest, writer)
+
+
+def _section_body(slug: str, manifest: dict[str, Any], writer: bool | None = None) -> str:
     grants = manifest.get("mcp_grants") or {}
     if (slug in ORCHESTRATOR_SLUGS) if writer is None else writer:
         return _ORCHESTRATOR_SECTION + ("\n" + _ORCHESTRATOR_STAGED_PARAGRAPH if grants else "")

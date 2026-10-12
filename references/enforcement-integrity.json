@@ -53,7 +53,7 @@
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
     "agentteams/redteam/registry.py": "72e3916101ff0686e53bec5eba4eeea6103963a0d00e3e24febca88a22db0046",
-    "agentteams/runner_mcp.py": "4b9a6e3ce16c0c8a503dfb327fecd69e2c2b2ade17eb0bd9911c17d6b9e70d8b",
+    "agentteams/runner_mcp.py": "d3e018b249cf403d73da08b4e7afb1f947de71575f50cf9d24d57015c24477ab",
     "agentteams/scan.py": "db6316fb05643cd57b4bfe679e15a268aa8af1979801e9ccd9131298f4f3be58",
     "agentteams/sealed_result.py": "30c467f3551be3e888d0d2bbd24361f87ee02366704b4ed88fc8ee3f7b16a7cc",
     "agentteams/shrink_allow.py": "27ac50296e5898b110e64111d19194713945305e6232a0faad6811bc0af73c80",
@@ -63,7 +63,7 @@
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
     "agentteams/whole_body_migration.py": "ee2733842041beae63aeb0dda0024d297fe27934a41511352c3ca8d6c897b8be",
-    "agentteams/write_policy.py": "5e400a530ecb380bada62f9270e1c5ec7f51dd9edfb28878b111c372d072c3b9"
+    "agentteams/write_policy.py": "59a803cbd4cc9710ccbd45741f8b8901b9827dc49b134342bc27170fc818ca07"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1

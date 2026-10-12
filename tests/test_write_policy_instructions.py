@@ -53,3 +53,17 @@ def test_the_override_warns(monkeypatch, capsys):
     monkeypatch.setenv(W.GOOSE_OVERRIDE_ENV, "1")
     assert W.resolve({"write_policy": "orchestrator-only", "privilege_profile": "confined"}, "goose") == "orchestrator-only"
     assert "NOT enforced" in capsys.readouterr().err
+
+
+def test_goose_renders_under_the_override_carry_the_unenforced_banner():
+    goose = {**_ON, "framework": "goose"}
+    assert "UNENFORCED ON GOOSE" in W._section("producer", goose)
+    assert "UNENFORCED ON GOOSE" not in W._section("producer", {**_ON, "framework": "claude"})
+
+
+def test_the_wiring_check_reports_goose_even_with_the_override(tmp_path, monkeypatch):
+    from agentteams import runner_mcp
+
+    monkeypatch.setenv(W.GOOSE_OVERRIDE_ENV, "1")
+    problems = runner_mcp.wiring_problems(tmp_path, "goose", {"write_policy": "orchestrator-only"}, home=tmp_path)
+    assert any("not enforced on goose" in p for p in problems)
