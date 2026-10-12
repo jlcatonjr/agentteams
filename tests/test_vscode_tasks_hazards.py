@@ -311,3 +311,52 @@ def test_long_header_lines_parse_in_linear_time():
 def test_more_install_like_recipes_are_never_the_default(tmp_path, recipe):
     cmds = _makefile(tmp_path, f".PHONY: build\nbuild:\n\t{recipe}\n")
     assert not cmds["make: build"].is_default
+
+
+@pytest.mark.parametrize("makefile", [
+    # A conditional runs its $(shell) while make reads the file.
+    "ifeq ($(shell crontab -r),)\nendif\n.PHONY: test\ntest:\n\tpytest\n",
+    # `#` inside a function call is literal, not a comment.
+    "X := $(shell echo '#'; crontab -r)\n.PHONY: test\ntest:\n\tpytest\n",
+    # Indirection: the shell call and the hazard reach the immediate value through variables.
+    "CMD = crontab ops/c.txt\nRUN = $(shell $(CMD))\nY := $(RUN)\n.PHONY: test\ntest:\n\tpytest\n",
+    "define DEF\nx:\n\trm -rf data\nendef\n$(eval $(DEF))\n.PHONY: test\ntest:\n\tpytest\n",
+    "OUT != crontab -l\n.PHONY: test\ntest:\n\tpytest\n",
+])
+def test_makefile_parse_time_hazards_through_indirection(tmp_path, makefile):
+    assert _makefile(tmp_path, makefile) == {}
+
+
+def test_makefile_target_specific_variable_and_empty_recipeprefix(tmp_path):
+    cmds = _makefile(tmp_path, (
+        ".RECIPEPREFIX = >\n.PHONY: test clean\ntest:\n> pytest\n.RECIPEPREFIX =\n"
+        "clean: CMD = rm -rf\nclean:\n\t$(CMD) build\n"))
+    assert set(cmds) == {"make: test"}
+
+
+def test_ordinary_immediate_values_do_not_mark_every_target(tmp_path):
+    cmds = _makefile(tmp_path, (
+        "CLEAN := rm -rf build\nVERSION := $(shell git describe)\n"
+        ".PHONY: test clean\ntest:\n\tpytest\nclean:\n\t$(CLEAN)\n"))
+    assert set(cmds) == {"make: test"}
+
+
+def test_variable_expansion_does_not_blow_up():
+    import time
+
+    from agentteams._makefile_screen import screen_makefile
+    big = "X0 = " + "a" * 60000 + "\n" + "".join(f"X{i} = $(X{i-1}) $(X{i-1})\n" for i in range(1, 40))
+    body = big + "".join(f"t{i}:\n\techo $(X39)\n" for i in range(500))
+    start = time.monotonic()
+    _, hazardous, _ = screen_makefile(body, lambda t: "crontab" in t, lambda n: False, lambda n: False)
+    assert hazardous == set() and time.monotonic() - start < 5
+
+
+def test_submake_and_install_patterns_are_linear_on_whitespace():
+    import time
+
+    from agentteams._makefile_screen import INSTALL_CONTENT_RE, parse_makefile
+    start = time.monotonic()
+    parse_makefile("t:\n\t" + " " * 200000 + "x\n")
+    INSTALL_CONTENT_RE.search(";" + " " * 200000 + "x")
+    assert time.monotonic() - start < 2
