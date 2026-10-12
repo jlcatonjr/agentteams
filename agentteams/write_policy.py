@@ -420,7 +420,8 @@ def apply_instructions(content: str, manifest: dict[str, Any]) -> str:
 _GOOSE_UNENFORCED_BANNER = """
 > **UNENFORCED ON GOOSE.** This Goose team was rendered under `write_policy: "orchestrator-only"` with
 > `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1`. Goose delegates inherit the orchestrator's write/edit/shell
-> extensions, so nothing below is enforced by the tool surface (biographies pilot 1, G1). Not for a real team.
+> extensions, so this file's Write Policy section is not enforced by the tool surface (biographies pilot 1, G1).
+> Not for a real team.
 """
 
 
