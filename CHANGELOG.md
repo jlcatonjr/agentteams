@@ -31,13 +31,22 @@ Found by the fleet-sync round-3 security review.
 - **`.vscode/tasks.json` defaults.** Tracers-Reporting-Automation's generated tasks made
   `script: install_tracers_purge_cron` (it installs a cron job) the default build task. Now:
   - A `scripts/*.sh` is never a group default. Only declared tooling (package.json, Makefile, pyproject, tox,
-    Taskfile) can be, and never a command named `install`, `deploy`, `publish`, `release` or `upload`.
+    Taskfile) can be, and never a command named `install`, `deploy`, `publish`, `release`, `upload`, `setup`,
+    `bootstrap` or `provision`. A make target is not a default either when it installs (`pip install`,
+    `npm install`, `uv pip install`, `brew install`, `sudo`/`doas`, `install`/`$(INSTALL)`, `setup.py install`,
+    `curl … | sh`, …) or runs a target that does.
   - Some commands are not emitted as tasks at all. A one-line stderr notice names each one:
     - a command whose name says it schedules jobs or purges/deletes data (`cron`, `launchd`, `systemd`,
       `purge`, `delete`, `wipe`, …);
-    - a script or npm script whose body does (`crontab`, `launchctl`, `systemctl … enable`, `*.timer`,
-      `DELETE FROM`, `DROP TABLE`, `rm -rf`, `find … -delete`, `git clean -f`, …). Makefile recipes are
-      screened by name only.
+    - a script, npm script or make target whose body does (`crontab`, `launchctl`, `systemctl … enable`,
+      `*.timer`, `DELETE FROM`, `DROP TABLE`, `rm -r`/`rm -rf`/`rm --recursive`, `$(RM) -r`, `find … -delete`,
+      `git clean -f`, …). New private `agentteams/_makefile_screen.py` reads what a make target runs: its
+      recipe (continuations, `target: ; recipe`, conditionals and `.RECIPEPREFIX` included), the variables and
+      `define` blocks it expands, and every target it runs as a prerequisite, through a pattern rule or through
+      a recursive `$(MAKE)`. A hazard in text make runs while reading the file (`$(shell …)`, `!=`) drops every
+      target, and a Makefile over 256 KiB is not offered at all. So a `make clean` that runs `rm -rf build` is
+      no longer offered. Not covered: `include`d makefiles, computed sub-make targets (`$(MAKE) $(T)`), and a
+      hazard inside a program a recipe calls.
   - An already-generated (AGENTTEAMS-tagged) task the new render dropped or changed is removed or rewritten
     on the next render, in plain-JSON and commented (JSONC) `tasks.json` alike. User tasks and comments are kept.
 

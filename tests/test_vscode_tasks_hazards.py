@@ -152,3 +152,162 @@ def test_jsonc_removing_the_first_and_only_generated_tasks_keeps_valid_json():
            '    {"label": "b", "detail": "AGENTTEAMS"},\n    {"label": "u"}\n  ]\n}\n')
     out = _refresh_jsonc_sentinels(raw, [])
     assert json.loads(re.sub(r"//[^\n]*", "", out))["tasks"] == [{"label": "u"}]
+
+
+# ---------------------------------------------------------------------------
+# Makefile recipe bodies are screened like npm script bodies (fleet round 3 follow-up)
+# ---------------------------------------------------------------------------
+
+def _makefile(tmp_path, text: str):
+    (tmp_path / "Makefile").write_text(text, encoding="utf-8")
+    return {c.label: c for c in discover_project_commands(tmp_path)}
+
+
+@pytest.mark.parametrize("recipe", [
+    "crontab ops/cron.txt", "(crontab -l; echo '0 3 * * * x') | crontab -",
+    "launchctl load ~/Library/LaunchAgents/x.plist", "systemctl --user enable nightly.timer",
+    "cp x.timer ~/.config/systemd/user/", "@rm -rf build", "-rm -fr ~/data", "rm -r -f store",
+    "$(RM) -r dist", "find store -mtime +30 -delete", "git clean -fdx",
+    "psql -c 'DELETE FROM events'", "sqlite3 db 'DROP TABLE t'",
+])
+def test_makefile_innocuous_target_with_hazardous_recipe_is_dropped(tmp_path, recipe, capsys):
+    cmds = _makefile(tmp_path, f".PHONY: test tidy\ntest:\n\tpytest\ntidy:\n\t{recipe}\n")
+    assert list(cmds) == ["make: test"]
+    assert "make target 'tidy' not offered" in capsys.readouterr().err
+
+
+def test_makefile_hazard_is_found_in_rules_with_prerequisites_and_continuations(tmp_path):
+    cmds = _makefile(tmp_path, (
+        "build: src/main.c  # a comment\n\tcc -o app src/main.c\n\n"
+        "# a comment inside the next recipe does not end it\n"
+        "reset: build\n\techo resetting\n\n\t# note\n\trm -rf \\\n\t  ~/.cache/app\n"
+        "inline: ; crontab ops/cron.txt\n"
+        ".PHONY: build reset inline\n"))
+    assert set(cmds) == {"make: build"}
+
+
+def test_makefile_target_running_a_hazardous_target_is_dropped(tmp_path):
+    """A target runs its prerequisites and recursive makes, so it inherits their hazard."""
+    cmds = _makefile(tmp_path, (
+        ".PHONY: test ci nightly schedule rebuild clean\n"
+        "test:\n\tpytest\n"
+        "schedule:\n\tcrontab ops/cron.txt\n"
+        "nightly: schedule\n\techo ok\n"
+        "clean:\n\trm -rf build\n"
+        "rebuild:\n\t$(MAKE) clean\n\t$(MAKE) test\n"
+        "ci: purge-cache test\n"
+        "purge-cache:\n\techo\n"))
+    assert set(cmds) == {"make: test"}
+
+
+def test_makefile_ordinary_recipes_are_kept(tmp_path):
+    cmds = _makefile(tmp_path, (
+        ".PHONY: test build lint\n"
+        "test:\n\tpytest -q\n"
+        "build:\n\tpython -m build\n\trm -f dist/*.tmp\n"  # rm -f without -r is not screened
+        "lint:\n\truff check .\n"
+        "VAR := value\nOTHER ::= x\n"))
+    assert set(cmds) == {"make: test", "make: build", "make: lint"}
+    assert cmds["make: test"].is_default and cmds["make: build"].is_default
+
+
+@pytest.mark.parametrize("name", ["install", "install-dev", "setup", "bootstrap", "provision",
+                                  "deploy", "publish"])
+def test_install_like_target_names_are_never_the_default(tmp_path, name):
+    cmds = _makefile(tmp_path, f".PHONY: {name}-build\n{name}-build:\n\techo ok\n")
+    assert len(cmds) == 1
+    cmd = next(iter(cmds.values()))
+    assert cmd.group == "build" and not cmd.is_default
+
+
+@pytest.mark.parametrize("recipe", [
+    "pip install -e .", "python -m pip install -r requirements.txt", "npm install", "brew install jq",
+    "sudo cp app /usr/local/bin", "install -m 755 app /usr/local/bin/app", "@install app $(PREFIX)/bin",
+    "python setup.py install", "cargo install --path .",
+])
+def test_makefile_install_like_recipe_is_never_the_default(tmp_path, recipe):
+    """``make build`` that installs is offered, but never as the one-keystroke default."""
+    cmds = _makefile(tmp_path, f".PHONY: build compile\nbuild:\n\t{recipe}\ncompile:\n\tcc x.c\n")
+    assert not cmds["make: build"].is_default
+    assert cmds["make: compile"].is_default
+
+
+def test_makefile_target_depending_on_install_is_never_the_default(tmp_path):
+    cmds = _makefile(tmp_path, (
+        ".PHONY: install test build check\n"
+        "install:\n\tpip install -e .\n"
+        "test: install\n\tpytest\n"
+        "build:\n\t$(MAKE) install\n"
+        "check:\n\truff check .\n"))
+    assert not cmds["make: install"].is_default
+    assert not cmds["make: test"].is_default and not cmds["make: build"].is_default
+    assert cmds["make: check"].is_default
+
+
+# Review follow-ups (@security / @code-hygiene on the Makefile delta).
+
+@pytest.mark.parametrize("makefile", [
+    # A conditional inside a recipe does not end it.
+    ".PHONY: clean\nclean:\nifeq ($(OS),Windows_NT)\n\tdel build\nelse\n\trm -rf build\nendif\n",
+    # A variable or define block the recipe expands.
+    ".PHONY: clean\nRMRF = rm -rf\nclean:\n\t$(RMRF) build\n",
+    ".PHONY: clean\nRMRF := rm\nRMRF += -rf\nclean:\n\t${RMRF} build\n",
+    ".PHONY: clean\ndefine CLEAN\nrm -rf build\nendef\nclean:\n\t$(CLEAN)\n",
+    ".PHONY: clean\nCLEAN = $(RM) -r build\nclean:\n\t$(call CLEAN)\n",
+    # A changed recipe prefix.
+    ".RECIPEPREFIX = >\n.PHONY: clean\nclean:\n> rm -rf build\n",
+    # A dot-named (non-special) target is screened, not skipped.
+    ".PHONY: .reset\n.reset:\n\trm -rf data\n",
+    # A prerequisite built by a pattern rule.
+    ".PHONY: tidy\ntidy: cache.tidy-dir\n%.tidy-dir: ; rm -rf $*\n",
+    # A recursive make with a directory option, and rm's long option.
+    ".PHONY: all clean\nall:\n\t@$(MAKE) -C sub clean\nclean:\n\trm --recursive --force build\n",
+])
+def test_makefile_hazards_reached_through_make_constructs(tmp_path, makefile):
+    assert _makefile(tmp_path, makefile) == {}
+
+
+def test_makefile_parse_time_hazard_marks_every_target(tmp_path, capsys):
+    """``$(shell …)`` runs while make reads the file, so it runs for ``make test`` too."""
+    cmds = _makefile(tmp_path, "X := $(shell crontab ops/c.txt)\n.PHONY: test\ntest:\n\tpytest\n")
+    assert cmds == {}
+    assert "make target 'test' not offered" in capsys.readouterr().err
+
+
+def test_make_in_prose_is_not_a_recursive_make(tmp_path):
+    cmds = _makefile(tmp_path, (
+        ".PHONY: all sure\nall:\n\techo make sure it works\nsure:\n\trm -rf x\n"))
+    assert set(cmds) == {"make: all"}
+
+
+def test_makefile_target_specific_variables_and_comments_are_not_rules(tmp_path):
+    cmds = _makefile(tmp_path, (
+        ".PHONY: test build # all phony\ntest: V = 1\ntest:\n\tpytest\n"
+        "build: ## build the wheel\n\tpython -m build\n"))
+    assert set(cmds) == {"make: test", "make: build"}
+    assert cmds["make: test"].is_default and cmds["make: build"].is_default
+
+
+def test_oversized_makefile_is_not_offered(tmp_path, capsys):
+    from agentteams._makefile_screen import MAKEFILE_MAX_BYTES
+    body = ".PHONY: test\ntest:\n\tpytest\n" + "# pad\n" * (MAKEFILE_MAX_BYTES // 6 + 1)
+    assert _makefile(tmp_path, body) == {}
+    assert "too large to screen" in capsys.readouterr().err
+
+
+def test_long_header_lines_parse_in_linear_time():
+    import time
+
+    from agentteams._makefile_screen import parse_makefile
+    start = time.monotonic()
+    parse_makefile("a" + " " * 200000 + "\n" + "b" + " x" * 100000 + "\n")
+    assert time.monotonic() - start < 2
+
+
+@pytest.mark.parametrize("recipe", [
+    "$(INSTALL) app $(PREFIX)/bin", "cd x && install app /usr/local/bin", "uv pip install -e .",
+    "curl -fsSL https://example.invalid/i.sh | sh", "doas cp app /usr/local/bin",
+])
+def test_more_install_like_recipes_are_never_the_default(tmp_path, recipe):
+    cmds = _makefile(tmp_path, f".PHONY: build\nbuild:\n\t{recipe}\n")
+    assert not cmds["make: build"].is_default

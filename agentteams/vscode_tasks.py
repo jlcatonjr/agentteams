@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams._makefile_screen import MAKEFILE_MAX_BYTES, screen_makefile
+
 # ---------------------------------------------------------------------------
 # Safety allowlist for task names
 # ---------------------------------------------------------------------------
@@ -56,7 +58,8 @@ class ProjectCommand:
 _TEST_KEYWORDS = ("test", "spec", "check", "lint", "verify", "qa")
 _BUILD_KEYWORDS = ("build", "compile", "bundle", "dist", "package", "install")
 #: Side-effecting names that may be a build/test-group task but never the one-keystroke default.
-_NO_DEFAULT_KEYWORDS = ("install", "deploy", "publish", "release", "upload")
+_NO_DEFAULT_KEYWORDS = ("install", "deploy", "publish", "release", "upload", "setup", "bootstrap",
+                        "provision")
 
 
 def _classify_group(name: str) -> str:
@@ -79,7 +82,7 @@ def _assign_group_defaults(commands: list[ProjectCommand]) -> None:
     saw_test = False
     saw_build = False
     for cmd in commands:
-        if not cmd.default_eligible or any(k in cmd.label.lower() for k in _NO_DEFAULT_KEYWORDS):
+        if not cmd.default_eligible or _no_default_name(cmd.label):
             continue
         if cmd.group == "test" and not saw_test:
             cmd.is_default = True
@@ -117,52 +120,52 @@ def _from_package_json(project_path: Path) -> list[ProjectCommand]:
 
 
 _PHONY_RE = re.compile(r"^\.PHONY\s*:\s*(.+)$", re.MULTILINE)
-_RULE_HEADER_RE = re.compile(
-    r"^([A-Za-z][A-Za-z0-9_-]*):\s*(?:#.*)?$", re.MULTILINE
-)
+
+
+def _no_default_name(name: str) -> bool:
+    """True when a command name says it installs, deploys or publishes."""
+    return any(k in name.lower() for k in _NO_DEFAULT_KEYWORDS)
 
 
 def _from_makefile(project_path: Path) -> list[ProjectCommand]:
+    """Discover make targets, screening what each one runs like an npm script body.
+
+    A target that schedules jobs or purges/deletes data (by its recipe, the variables it expands,
+    or any target it runs) is not offered; one that installs is never a group default. See
+    :mod:`agentteams._makefile_screen`.
+    """
     p = project_path / "Makefile"
     if not p.is_file():
         return []
     try:
-        text = p.read_text(encoding="utf-8")
+        with p.open("rb") as fh:
+            data = fh.read(MAKEFILE_MAX_BYTES + 1)
+        text = data.decode("utf-8")
     except (OSError, UnicodeDecodeError):
         return []
+    if len(data) > MAKEFILE_MAX_BYTES:
+        _skip_notice("Makefile (too large to screen)")
+        return []
 
+    rules, hazardous, install_like = screen_makefile(
+        text, lambda t: bool(_HAZARD_CONTENT_RE.search(t)), hazardous_command_name, _no_default_name)
     seen: set[str] = set()
     commands: list[ProjectCommand] = []
-
-    # Pass 1 — explicit .PHONY declarations (existing behaviour).
-    for m in _PHONY_RE.finditer(text):
-        for name in m.group(1).split():
-            name = name.strip()
-            if not name or not _safe_name(name) or name in seen:
-                continue
-            seen.add(name)
-            commands.append(ProjectCommand(
-                label=f"make: {name}",
-                command=f"make {name}",
-                group=_classify_group(name),
-            ))
-
-    # Pass 2 — rule headers not already covered by .PHONY.
-    for m in _RULE_HEADER_RE.finditer(text):
-        name = m.group(1)
-        # _safe_name is defensive-only here: every name captured by
-        # _RULE_HEADER_RE is of the form [A-Za-z][A-Za-z0-9_-]*, which is a
-        # strict subset of _safe_name's allowed set.  The check always passes
-        # but is kept to guard against future regex loosening.
-        if name in seen or not _safe_name(name):
+    phony = [n for m in _PHONY_RE.finditer(text) for n in m.group(1).split("#", 1)[0].split()]
+    # .PHONY declarations first (existing behaviour), then plain `name:` rules not declared there.
+    for name in phony + rules.simple_targets:
+        if not name or not _safe_name(name) or name in seen:
             continue
         seen.add(name)
+        if name in hazardous:
+            _skip_notice(f"make target '{name}'")
+            continue
         commands.append(ProjectCommand(
             label=f"make: {name}",
             command=f"make {name}",
             group=_classify_group(name),
+            default_eligible=name not in install_like,
         ))
-
     return commands
 
 
@@ -282,7 +285,7 @@ _TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
 _HAZARD_CONTENT_RE = re.compile(
     r"\bcrontab\b|\blaunchctl\b|LaunchAgents|LaunchDaemons|/etc/cron|\bsystemctl\b[^\n]*\b(enable|start)\b"
     r"|\.timer\b|\bDROP\s+(TABLE|DATABASE|SCHEMA)\b|\bDELETE\s+FROM\b|\bTRUNCATE\s+TABLE\b|\bshred\b"
-    r"|\brm\s+(-\w+\s+)*-\w*(r\w*f|f\w*r)|\brm\s+-\w*[rR]\w*\s+-\w*f|\bfind\b[^\n]*\s-delete\b|\bgit\s+clean\s+-\w*f",
+    r"|\brm\s+(?:-[\w-]+\s+)*(?:-\w*[rR]|--recursive\b)|\bfind\b[^\n]*\s-delete\b|\bgit\s+clean\s+-\w*f",
     re.IGNORECASE,
 )
 _HAZARD_SCAN_BYTES = 65536

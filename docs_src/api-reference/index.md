@@ -234,7 +234,7 @@ stdlib stamp helper documented at each consumer's sidecar, not yet warranting it
 Most of the growth came from CH-07 carves splitting documented modules — `unfenced` out of
 `fences`, `audit_types` out of `audit`, `graph_inputs` out of `graph`.
 
-Four exceed 400 lines (`stale_detector` 739, `vscode_tasks` 851, `backup` 486,
+Four exceed 400 lines (`stale_detector` 739, `vscode_tasks` 854, `backup` 486,
 `svg_render` 470) and are the highest-value additions. `backup`'s public API is
 partially documented inside [`emit`](emit.md), which re-exports it.
 
