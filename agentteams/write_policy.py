@@ -39,6 +39,27 @@ NARROWED_TOKENS: tuple[str, ...] = ("read", "search", "todo")
 #: Agents that keep their tools: the orchestrator and Goose's bridge entry recipe (also an orchestrator).
 ORCHESTRATOR_SLUGS: frozenset[str] = frozenset({"orchestrator", "bridge-orchestrator"})
 
+#: The switch is refused on Goose (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the
+#: orchestrator's extensions, so per-recipe narrowing isn't enforced. A code constant, not a flag or environment
+#: variable, so nothing a session controls can lift it; the test suite lowers it only to keep the Goose machinery a
+#: future fix will reuse under test.
+GOOSE_SWITCH_REFUSED = True
+#: Lifts the refusal for one process: agentteams' own test suite (renders run in subprocesses) or a deliberate
+#: operator experiment on a future Goose fix. Every use prints a warning that the policy is NOT enforced on Goose.
+GOOSE_OVERRIDE_ENV = "AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH"
+
+
+def _goose_override() -> bool:
+    import os
+    import sys
+
+    if os.environ.get(GOOSE_OVERRIDE_ENV) != "1":
+        return False
+    print(f"WARNING: {GOOSE_OVERRIDE_ENV}=1: rendering write_policy \"orchestrator-only\" for goose, where it is NOT "
+          "enforced (Goose delegates inherit the orchestrator's write/edit/shell extensions; biographies pilot 1, "
+          "G1). Never rely on it for a real team.", file=sys.stderr)
+    return True
+
 _ANY_FENCE_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN ")
 
 _FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
@@ -242,6 +263,15 @@ def resolve(description: dict[str, Any], framework: str) -> str | None:
         # with a non-cooperative privilege_profile. Elsewhere the session could simply read it.
         # Phase 1a: codex too, with codex:sandbox in effect; agentteams' launcher masks the key directory when
         # Codex runs through .codex/confined-run.example.sh. Generation can't verify that launch, so it says so.
+        if framework == "goose" and GOOSE_SWITCH_REFUSED and not _goose_override():
+            # Biographies pilot 1, Goose round (G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's
+            # extensions (write/edit/shell), not their sub-recipe's narrowed `extensions:`, and a granted
+            # sub-recipe's agentteams_runner extension is never surfaced. Per-recipe narrowing therefore protects
+            # nothing on Goose, so the switch is refused there until a confined per-agent Goose launch exists.
+            raise ValueError('write_policy "orchestrator-only" is not supported on goose: Goose delegates inherit the '
+                             "orchestrator's write/edit/shell extensions instead of their sub-recipe's narrowed set "
+                             "(measured, Goose 1.37), so the policy can't be enforced. Remove goose from "
+                             "write_policy_frameworks; run Goose teams without the switch")
         if framework not in ("claude", "goose", "codex"):
             raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose (their session sandbox '
                              'denies the ledger key) and on codex only when launched through '

@@ -319,6 +319,12 @@ def wiring_problems(root, framework: str, manifest: dict, *, home=None) -> list[
             problems.append(".claude/settings.local.json turns the sandbox off or allows unsandboxed commands, which "
                             "overrides settings.json (@security C11)")
     elif framework == "goose":
+        from agentteams import write_policy as _wp
+
+        if _wp.GOOSE_SWITCH_REFUSED and os.environ.get(_wp.GOOSE_OVERRIDE_ENV) != "1":
+            problems.append('write_policy "orchestrator-only" is not enforced on goose: delegates inherit the '
+                            "orchestrator's write/edit/shell extensions (biographies pilot 1, G1); run this team's "
+                            "Goose sessions without the switch, or not at all, until a confined per-agent launch exists")
         profile = root / ".goose" / "sandbox.sb"
         text = profile.read_text(encoding="utf-8") if profile.exists() else ""
         for rel in (".agentteams", STATUS_TREE, ".goose/recipes"):

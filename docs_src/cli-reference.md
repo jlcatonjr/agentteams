@@ -849,6 +849,9 @@ since carried text is instruction-bearing. See [`user_regions`](api-reference/us
 
 ### `--serve-requests`
 
+> **Goose is refused under `write_policy: "orchestrator-only"`** (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's `write`/`edit`/`shell` extensions instead of their sub-recipe's narrowed `extensions:`, so the policy can't be enforced there. `write_policy.resolve` and `--check-wiring` refuse it; use the switch on Claude (or Codex through its launcher).
+
+
 Orchestrator-only-writes pilot (P4a/P4b). Runs the out-of-session runner for `--project` under the brief's
 policy (`--description`).
 - **Confinement (P4b):** every command and gate it runs is confined in an OS sandbox from `confined_programs`:

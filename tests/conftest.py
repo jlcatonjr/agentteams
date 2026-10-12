@@ -196,3 +196,24 @@ def signing_preapproved(monkeypatch):
 
     monkeypatch.setattr(operator_signing, "_confirm", lambda digest, confirm: True)
     monkeypatch.setattr(signer_location, "verify_install_location", lambda *a, **k: [])
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _goose_switch_machinery_under_test():
+    """Keep the Goose write-policy machinery under test while the switch is refused on Goose.
+
+    agentteams ships ``write_policy.GOOSE_SWITCH_REFUSED = True``; the suite sets ``AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1`` (biographies pilot 1, G1: Goose delegates inherit
+    the orchestrator's extensions, so per-recipe narrowing isn't enforced). Session-scoped so module-scoped render
+    fixtures see it too. ``tests/test_write_policy_instructions.py`` asserts the shipped default refuses.
+    """
+    import os
+
+    from agentteams import write_policy
+
+    previous = os.environ.get(write_policy.GOOSE_OVERRIDE_ENV)
+    os.environ[write_policy.GOOSE_OVERRIDE_ENV] = "1"  # inherited by the build_team.py subprocesses too
+    yield
+    if previous is None:
+        os.environ.pop(write_policy.GOOSE_OVERRIDE_ENV, None)
+    else:
+        os.environ[write_policy.GOOSE_OVERRIDE_ENV] = previous

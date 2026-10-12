@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### fix (write policy: the top-level session gets the dispatch contract; staged receipts are final)
+### fix (write policy: Goose refused; the top-level session gets the dispatch contract; staged receipts are final)
 
 From the first orchestrator-only-writes pilot (biographies, findings F1 and F2).
 - **F1.** In Claude Code the session that dispatches agents is the top-level one. It reads `CLAUDE.md`, not the
@@ -18,6 +18,17 @@ From the first orchestrator-only-writes pilot (biographies, findings F1 and F2).
 - **F2.** Granted agents called `request_status` after a `write_file` receipt and got "unknown request_id". Their
   section now says a write or delete receipt is final, and that `request_status` is only for a call that returned a
   `request_id`.
+- **Goose is refused under the switch (G1, critical).**
+  - **What the pilot's Goose round found** (Goose 1.37, Seatbelt-confined): a delegated sub-agent inherits the
+    orchestrator's extensions (`write`, `edit`, `shell`), not its sub-recipe's narrowed `extensions:`. A read-only
+    agent without grants got write tools and edited a deliverable; it was reverted. Granted sub-recipes never
+    received their `agentteams_runner` extension.
+  - **What it means.** Per-recipe narrowing protects nothing on Goose.
+  - **The change.** `write_policy.resolve` refuses `write_policy: "orchestrator-only"` for goose, and
+    `--check-wiring` reports it. A brief listing goose in `write_policy_frameworks` fails closed at render.
+  - **The override.** `AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1` lifts the refusal for one process, warning on
+    every use. It exists for agentteams' own test suite and for testing a future Goose fix, never for a real team.
+  - **Unaffected:** Claude, and Codex through its launcher.
 - **runner-mcp docs:** a staged-only grant can omit `request_status`; reads aren't write-scoped; staging expiry is
   shown in UTC.
 

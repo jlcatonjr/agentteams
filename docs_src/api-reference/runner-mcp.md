@@ -1,5 +1,7 @@
 # `runner_mcp` — AgentTeamsModule
 
+> **Goose is refused under `write_policy: "orchestrator-only"`** (biographies pilot 1, finding G1, 2026-10-12): Goose 1.37 delegates inherit the orchestrator's `write`/`edit`/`shell` extensions instead of their sub-recipe's narrowed `extensions:`, so the policy can't be enforced there. `write_policy.resolve` and `--check-wiring` refuse it; use the switch on Claude (or Codex through its launcher).
+
 The `agentteams_runner` MCP server: under `write_policy: "orchestrator-only"`, the **only** way a granted
 non-orchestrator agent writes or executes (phase R4 of `references/plans/mcp-mediated-agent-writes.plan.md`). Its
 tools queue requests for the out-of-session runner, which holds the ledger key, checks each request against that

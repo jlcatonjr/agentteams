@@ -33,3 +33,23 @@ def test_fenced_instructions_get_their_own_fence():
 def test_granted_agents_are_told_a_receipt_is_final():
     section = W._section("producer", _ON)
     assert "receipt is final" in section and "don't call `request_status`" in section
+
+
+def test_the_shipped_default_refuses_the_switch_on_goose(monkeypatch):
+    """Pilot 1, Goose round (G1): delegates inherit the orchestrator's write/edit/shell extensions."""
+    import inspect
+
+    import pytest
+
+    assert "\nGOOSE_SWITCH_REFUSED = True\n" in inspect.getsource(W)  # shipped default (the test session lowers it)
+    monkeypatch.delenv(W.GOOSE_OVERRIDE_ENV, raising=False)  # the shipped behaviour, without the suite's override
+    brief = {"write_policy": "orchestrator-only", "privilege_profile": "confined"}
+    with pytest.raises(ValueError, match="not supported on goose"):
+        W.resolve(brief, "goose")
+    assert W.resolve(brief, "claude") == "orchestrator-only"
+
+
+def test_the_override_warns(monkeypatch, capsys):
+    monkeypatch.setenv(W.GOOSE_OVERRIDE_ENV, "1")
+    assert W.resolve({"write_policy": "orchestrator-only", "privilege_profile": "confined"}, "goose") == "orchestrator-only"
+    assert "NOT enforced" in capsys.readouterr().err
