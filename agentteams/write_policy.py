@@ -248,7 +248,8 @@ def resolve(description: dict[str, Any], framework: str) -> str | None:
     if write_policy == "orchestrator-only" and scoped is not None:
         if not (isinstance(scoped, list) and scoped and set(scoped) <= {"claude", "goose", "codex"}):
             raise ValueError('write_policy_frameworks must be a non-empty list of "claude", "goose" and/or '
-                             '"codex" (codex only when launched through .codex/confined-run.example.sh)')
+                             '"codex" (codex only when launched through .codex/confined-run.example.sh; goose is '
+                             'refused unless AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1, where it is not enforced)')
         if framework not in scoped:
             print(f"  \u2139  write_policy orchestrator-only is scoped to {', '.join(scoped)}; the {framework} "
                   "team renders WITHOUT it (outside the pilot's guarantee).", file=sys.stderr)
@@ -273,8 +274,9 @@ def resolve(description: dict[str, Any], framework: str) -> str | None:
                              "(measured, Goose 1.37), so the policy can't be enforced. Remove goose from "
                              "write_policy_frameworks; run Goose teams without the switch")
         if framework not in ("claude", "goose", "codex"):
-            raise ValueError(f'write_policy "orchestrator-only" is supported on claude and goose (their session sandbox '
-                             'denies the ledger key) and on codex only when launched through '
+            raise ValueError(f'write_policy "orchestrator-only" is supported on claude (its session sandbox denies the '
+                             'ledger key; goose is refused: its delegates inherit the orchestrator\'s write tools) and on '
+                             'codex only when launched through '
                              f'.codex/confined-run.example.sh; {framework} has no such sandbox')
         if description.get("privilege_profile") == "cooperative":
             raise ValueError('write_policy "orchestrator-only" needs the session sandbox: privilege_profile '

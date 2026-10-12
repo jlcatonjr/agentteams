@@ -26,6 +26,13 @@ new delegated-child probe, `scripts/goose-probe/run_delegate_case.sh` (`referenc
   extensions, not by its recipe, so `write_policy: "orchestrator-only"` stays refused on Goose. Docs:
   `docs_src/goose-privileges.md`, the generated `.goosehints` and capabilities reference. Legacy mode is unchanged.
 
+### docs (Goose refusal stated everywhere the switch's frameworks are described)
+
+Follow-up to #204, from the close-out consistency audit. The `resolve` error messages, the
+`write_policy`/`write_policy_frameworks` schema descriptions, the sandboxing guide (developer and reference editions),
+the CLI reference's interop entry and a new `write_policy` entry in `DESCRIPTION-FORMAT.md` now say that the switch is
+refused on Goose. Behaviour is unchanged.
+
 ### fix (write policy: Goose refused; the top-level session gets the dispatch contract; staged receipts are final)
 
 From the first orchestrator-only-writes pilot (biographies, findings F1 and F2).
