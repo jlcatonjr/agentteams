@@ -360,3 +360,34 @@ def test_submake_and_install_patterns_are_linear_on_whitespace():
     parse_makefile("t:\n\t" + " " * 200000 + "x\n")
     INSTALL_CONTENT_RE.search(";" + " " * 200000 + "x")
     assert time.monotonic() - start < 2
+
+
+@pytest.mark.parametrize("makefile", [
+    # Every assignment counts: a conditional branch or a later value cannot hide a hazardous one.
+    "ifeq ($(OS),Windows_NT)\nCMD = rm -rf build\nelse\nCMD = echo\nendif\n.PHONY: clean\nclean:\n\t$(CMD)\n",
+    ".PHONY: clean\nclean: CMD = rm -rf build\nCMD = echo\nclean:\n\t$(CMD)\n",
+    # Indirect parse-time text: a bare reference, a conditional, a prerequisite, an include, `+=`.
+    "DO = $(shell crontab -r)\n$(DO)\n.PHONY: test\ntest:\n\tpytest\n",
+    "DO = $(shell crontab -r)\nifeq ($(DO),)\nendif\n.PHONY: test\ntest:\n\tpytest\n",
+    "DO = $(shell crontab -r)\n.PHONY: test\ntest: $(DO)\n\tpytest\n",
+    "DO = $(shell crontab -r)\ninclude $(DO)\n.PHONY: test\ntest:\n\tpytest\n",
+    "Y := ok\nDO = crontab -r\nY += $(shell $(DO))\n.PHONY: test\ntest:\n\tpytest\n",
+    # A single-character reference.
+    "X = rm -rf build\n.PHONY: clean\nclean:\n\t$X\n",
+])
+def test_makefile_hidden_values_and_indirect_parse_time_text(tmp_path, makefile):
+    assert _makefile(tmp_path, makefile) == {}
+
+
+def test_closure_is_linear_on_long_chains():
+    import time
+
+    from agentteams._makefile_screen import closure, screen_makefile
+    n = 20000
+    edges = {f"t{i}": {f"t{i + 1}"} for i in range(n)}
+    start = time.monotonic()
+    assert len(closure({f"t{n}"}, edges)) == n + 1
+    body = "V0 = crontab -r\n" + "".join(f"V{i} = $(V{i - 1})\n" for i in range(1, 3000))
+    body += "".join(f"t{i}: t{i + 1}\n" for i in range(3000)) + "t3000:\n\techo $(V2999)\n"
+    _, hazardous, _ = screen_makefile(body, lambda t: "crontab" in t, lambda n: False, lambda n: False)
+    assert "t0" in hazardous and time.monotonic() - start < 5

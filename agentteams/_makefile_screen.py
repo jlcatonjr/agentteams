@@ -32,13 +32,12 @@ _DEFINE_RE = re.compile(r"^\s*(?:(?:export|override|private)\s+)*define\s+([^\s:
 _ENDEF_RE = re.compile(r"^\s*endef\b")
 _ASSIGN_RE = re.compile(
     r"^\s*(?:(?:export|override|private)\s+)*([A-Za-z0-9_.-]+)\s*(:::=|::=|:=|!=|\?=|\+=|=)(.*)$")
-_IMMEDIATE_OPS = frozenset({":=", "::=", ":::="})
 _RECIPEPREFIX_RE = re.compile(r"^\s*\.RECIPEPREFIX\s*:{0,3}=\s*(\S?)")
 #: ``targets: prerequisites [; inline recipe]``, comments already stripped. Greedy, colon-anchored
 #: groups keep matching linear on long lines.
 _HEADER_RE = re.compile(r"^([^\s:=][^:=]*)(::?)(?![:=])([^=;]*)(?:;(.*))?$")
 _SIMPLE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
-_VAR_REF_RE = re.compile(r"\$[({](?:call\s+|value\s+)?([A-Za-z0-9_.-]+)")
+_VAR_REF_RE = re.compile(r"\$[({](?:call\s+|value\s+)?([A-Za-z0-9_.-]+)|\$([A-Za-z0-9_])")
 #: Functions that run while make reads the file.
 _PARSE_FN_RE = re.compile(r"\$[({](?:shell|eval)\b")
 #: A recursive make at the start of a command (``$(MAKE) purge``, ``@make -C sub clean``). The
@@ -68,13 +67,20 @@ class MakefileRules:
     recipes: dict[str, str] = field(default_factory=dict)
     #: Target -> the targets it runs (prerequisites, pattern rules, recursive makes).
     edges: dict[str, set[str]] = field(default_factory=dict)
-    #: Variable or ``define`` name -> its value (``+=`` appended; target-specific values included).
+    #: Variable or ``define`` name -> every value ever assigned to it, joined (conditional branches,
+    #: ``+=`` and target-specific values included), so no branch can hide a hazardous one.
     variables: dict[str, str] = field(default_factory=dict)
     #: ``name:`` headers with one plain name and no prerequisites, in file order.
     simple_targets: list[str] = field(default_factory=list)
-    #: Text make may run while reading the file: lines calling a function outside a recipe,
-    #: immediate (``:=``) values, and ``!=`` commands (wrapped as ``$(shell …)``).
+    #: Text make may run while reading the file: every line outside a recipe or ``define`` body,
+    #: and ``!=`` commands (wrapped as ``$(shell …)``). The screen keeps only text that reaches
+    #: ``$(shell …)``/``$(eval …)``, directly or through variables.
     parse_time: list[str] = field(default_factory=list)
+
+
+def _var_refs(text: str) -> set[str]:
+    """Return the names of the variables ``text`` references (``$(X)``, ``${X}``, ``$X``)."""
+    return {a or b for a, b in _VAR_REF_RE.findall(text)}
 
 
 def parse_makefile(text: str) -> MakefileRules:
@@ -109,8 +115,7 @@ def parse_makefile(text: str) -> MakefileRules:
         if not code.strip():
             continue
         assign = _ASSIGN_RE.match(line)
-        if not assign and _PARSE_FN_RE.search(line):
-            rules.parse_time.append(line)
+        rules.parse_time.append(line)
         if _CONDITIONAL_RE.match(code):
             continue
         if m := _RECIPEPREFIX_RE.match(code):
@@ -149,12 +154,10 @@ def parse_makefile(text: str) -> MakefileRules:
 
 
 def _record_assignment(rules: MakefileRules, name: str, op: str, value: str) -> None:
-    """Record one variable assignment, and its value as parse-time text when make runs it now."""
-    rules.variables[name] = (rules.variables.get(name, "") + " " + value) if op == "+=" else value
+    """Record one variable assignment (kept alongside earlier ones), and a ``!=`` command."""
+    rules.variables[name] = rules.variables.get(name, "") + "\n" + value
     if op == "!=":
         rules.parse_time.append(f"$(shell {value})")
-    elif op in _IMMEDIATE_OPS:
-        rules.parse_time.append(value)
 
 
 def _record_target_variable(rules: MakefileRules, line: str) -> None:
@@ -184,14 +187,17 @@ def closure(seed: set[str], edges: dict[str, set[str]]) -> set[str]:
     Returns:
         The marked set.
     """
+    parents: dict[str, list[str]] = {}
+    for node, runs in edges.items():
+        for child in runs:
+            parents.setdefault(child, []).append(node)
     marked = set(seed)
-    changed = True
-    while changed:
-        changed = False
-        for node, runs in edges.items():
-            if node not in marked and runs & marked:
-                marked.add(node)
-                changed = True
+    todo = list(seed)
+    while todo:
+        for parent in parents.get(todo.pop(), ()):
+            if parent not in marked:
+                marked.add(parent)
+                todo.append(parent)
     return marked
 
 
@@ -219,11 +225,11 @@ def screen_makefile(
         name or recipe.
     """
     rules = parse_makefile(text)
-    var_edges = {n: set(_VAR_REF_RE.findall(v)) for n, v in rules.variables.items()}
+    var_edges = {n: _var_refs(v) for n, v in rules.variables.items()}
 
     def judge(pred: Callable[[str], bool]) -> Callable[[str], bool]:
         tainted = closure({n for n, v in rules.variables.items() if pred(v)}, var_edges)
-        return lambda t: pred(t) or not tainted.isdisjoint(_VAR_REF_RE.findall(t))
+        return lambda t: pred(t) or not tainted.isdisjoint(_var_refs(t))
 
     is_hazard = judge(lambda t: bool(hazard_text(t) or MAKE_RM_RE.search(t)))
     runs_now = judge(lambda t: bool(_PARSE_FN_RE.search(t)))
