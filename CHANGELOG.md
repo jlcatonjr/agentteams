@@ -31,7 +31,8 @@ what an agent *reads*, not what it *derives*.
   were superlinear: the PR-merge pattern took ~50 s on 14 repeats of `--repo -R`, the existing `git push`
   delete/force patterns 89 s on `git push ` x2000. Multi-gap patterns are now single-anchor lookaheads, the
   linear command-name tokenizer runs first, patterns are checked per line, and a command over 32 768
-  characters (or a line over 2 048) is routed to the operator unscanned. Worst case at the caps: ~1 s on python3 3.9.
+  characters (or a line over 8 192) is routed to the operator unscanned; separators inside quotes are masked.
+  Worst case at the caps: ~4 s on python3 3.9.
 - **A write to any git config file** (`.git/config`, `.gitconfig`, worktree configs; case-insensitive) is asked,
   after the content scan, so a credential in it is still denied.
 - **OCR proxy** fences image text with a per-call nonce and an untrusted-data label; marker look-alikes inside the

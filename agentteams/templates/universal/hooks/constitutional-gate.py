@@ -91,15 +91,20 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     (r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
     (r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
-     r"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
      r"\bgit\b[^\n]*\s-c\s+['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
-     r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:))|"
+     r"\bgh\s+api\b[^\n|;&]*(?:\$\(|`)|"
+     r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:|[\w-]+(?:\.[\w-]+)+:[^\s/]*/?))|"
+     r"\bGIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+|PARAMETERS|GLOBAL|SYSTEM)\b|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?![^\n]*\s(?:--(?:get|get-all|get-regexp|get-urlmatch|list|show-origin)|-l)\b)(?=[^\n]*\binclude(?:if\b[^\n]*)?\.path\b)|"
+     r"^(?=[^\n]*(?:\.git[\\/](?:config|modules[\\/]\S+[\\/]config|worktrees[\\/]\S+[\\/]config)|\.gitconfig))"
+     r"(?=[^\n]*(?:\b(?:cp|mv|ln|install|dd|rsync)\b|\bsed\b[^\n]*\s-i|\bperl\b[^\n]*\s-p?i))|"
      r"(?:>>?|\btee\b(?:\s+-\S+)*)\s*['\"]?[^\s;&|'\"]*"
      r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
      "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
      "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
-    (r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*data=|"
+    (r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*(?:data=|,)|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
     # ── Delete-authorization gate (operator-directed; C-5: clearance precedes destruction) ──────────
@@ -163,13 +168,36 @@ _WRITE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit", "MultiEdit"})
 #: harness times out lets the command run. Every `[^\n]*` gap stops at a newline, so evaluating per
 #: line changes no verdict; a line or command beyond the caps is routed to the operator instead of
 #: being scanned slowly. Worst case at the caps is a few seconds on python3 3.9.
-_MAX_LINE = 2048
+_MAX_LINE = 8192
 _MAX_COMMAND = 32768
 _GIT_CONFIG_PATH = re.compile(
-    r"(?:^|[\\/])(?:\.git[\\/](?:config(?:\.worktree)?|worktrees[\\/][^\\/]+[\\/]config(?:\.worktree)?)"
+    r"(?:^|[\\/])(?:\.git[\\/](?:config(?:\.worktree)?|(?:worktrees|modules)[\\/].+[\\/]config(?:\.worktree)?)"
     r"|\.gitconfig|\.config[\\/]git[\\/]config)$",
     re.IGNORECASE,
 )
+
+
+def _mask_quoted_separators(command: str) -> str:
+    """Replace ``&``, ``|`` and ``;`` inside quotes with ``_`` so they no longer split a command.
+
+    One linear pass tracking single/double quotes and backslash escapes. Unquoted separators —
+    the ones the shell acts on — are untouched, so pipe and sequence patterns still see them.
+    """
+    out, quote, escaped = [], "", False
+    for ch in command:
+        if escaped:
+            escaped = False
+        elif ch == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if ch == quote:
+                quote = ""
+            elif ch in "&|;":
+                ch = "_"
+        elif ch in "'\"":
+            quote = ch
+        out.append(ch)
+    return "".join(out)
 
 
 def _bash_trigger(command: str) -> str | None:
@@ -181,6 +209,8 @@ def _bash_trigger(command: str) -> str | None:
     if len(command) > _MAX_COMMAND or any(len(line) > _MAX_LINE for line in lines):
         return (f"command too long to check reliably (over {_MAX_COMMAND} characters, or a line over "
                 f"{_MAX_LINE}) — the gate routes it to you rather than scanning it slowly")
+    command = _mask_quoted_separators(command)
+    lines = command.splitlines() or [""]
     why = _command_name_trigger(command)
     if why:
         return why
@@ -199,19 +229,19 @@ def _bash_trigger(command: str) -> str | None:
 _SEGMENT_SPLIT = re.compile(r"[\n;&|(){}`]|\$\(")
 _WRAPPERS = {
     "sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-D", "-r", "-t", "--user", "--group", "--chdir"},
-    "doas": {"-u", "-C"}, "env": {"-u", "-C", "-S", "--unset", "--chdir", "--split-string"},
+    "doas": {"-u", "-C"}, "env": {"-u", "-C", "--unset", "--chdir"},
     "timeout": {"-s", "-k", "--signal", "--kill-after"}, "nice": {"-n", "--adjustment"},
     "xargs": {"-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--max-args", "--max-procs",
               "--max-lines", "--delimiter", "--max-chars", "--eof"},
     "stdbuf": {"-i", "-o", "-e"}, "watch": {"-n", "--interval", "-d"}, "ionice": {"-c", "-n"},
     "flock": {"-w", "--timeout"}, "chrt": set(), "setsid": set(), "eval": set(), "unbuffer": set(),
-    "caffeinate": set(), "command": set(), "exec": {"-a"}, "nohup": set(), "time": set(), "busybox": set(),
+    "caffeinate": set(), "coproc": set(), "command": set(), "exec": {"-a"}, "nohup": set(), "time": set(), "busybox": set(),
     "then": set(), "do": set(), "else": set(), "if": set(), "while": set(), "until": set(), "!": set(),
     "sh": set(), "bash": set(), "zsh": set(), "dash": set(),
 }
 #: Wrappers whose first positional argument is not the command (a duration, lock file, priority).
 _WRAPPER_POSITIONALS = {"timeout": 1, "flock": 1, "chrt": 1}
-_RAW_SOCKET_TOOLS = frozenset({"ncat", "socat", "telnet", "sftp", "scp"})
+_RAW_SOCKET_TOOLS = frozenset({"ncat", "socat", "telnet", "sftp", "scp", "ssh"})
 _DNS_TOOLS = frozenset({"dig", "nslookup", "drill", "host"})
 
 
