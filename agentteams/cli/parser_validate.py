@@ -184,6 +184,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     # run-time refusal in interop.run_interop stays as the backstop).
     if getattr(args, "interop_skills_only", False) and not getattr(args, "interop_from", None):
         parser.error("--interop-skills-only requires --interop-from <source team dir>")
+    if getattr(args, "interop_allow_cooperative", None) and not getattr(args, "interop_from", None):
+        parser.error("--interop-allow-cooperative requires --interop-from <source team dir>")
 
     if getattr(args, "framework", None) == "canonical":
         if not getattr(args, "interop_from", None):

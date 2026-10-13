@@ -17,6 +17,7 @@ from typing import Any
 
 # Single source of truth for the framework-id -> adapter map (CH-05).
 from agentteams import capability_map as _capability_map
+from agentteams import interop_grant_check as _igc
 from agentteams import interop_write_policy as _iwp
 from agentteams import write_policy as _write_policy
 from agentteams.frameworks.base import FrameworkAdapter as _FrameworkAdapter
@@ -384,6 +385,7 @@ def import_from_cai(
     preserve_existing: bool = False,
     skills_only: bool = False,
     write_policy_fields: dict[str, Any] | None = None,
+    projection: _igc.ProjectionPolicy | None = None,
 ) -> InteropResult:
     """Import a CAI document into a target framework directory.
 
@@ -403,14 +405,16 @@ def import_from_cai(
         write_policy_fields: ``interop_write_policy.manifest_fields`` of the target brief (``--description``):
             under the switch every non-orchestrator agent is narrowed and given its write-policy section once,
             granted agents get the agentteams_runner block, and the pinned server is installed.
+        projection: ``run_interop``'s checks (:mod:`interop_grant_check`): goose renders grant-scoped and every agent
+            is checked before any is written. ``None`` (multi_sync, direct callers) skips them.
 
     Returns:
         An :class:`InteropResult` listing converted, skipped and notice entries.
 
     Raises:
         ValueError: For an unknown target framework, an MCP server failing re-validation, an
-            unsafe agent/skill slug or skill file path, or ``skills_only`` with a target that
-            has no skill concept (including ``canonical``).
+            unsafe agent/skill slug or skill file path, ``skills_only`` with a target that
+            has no skill concept (including ``canonical``), or a projection check refusing.
     """
     # F.5 guard (plan §5.6): same named exception as export_to_cai — the
     # canonical target dispatches to canonical.py (materialize) instead of a
@@ -463,11 +467,10 @@ def import_from_cai(
     adapter.apply_framework_extensions(manifest, cai)
     # M6: the target brief's write_policy/mcp_grants, set last so no captured extension overrides them.
     _iwp.prepare(manifest, write_policy_fields, target_framework, target_dir, preserve_existing=preserve_existing)
-    # The project-level framework_extensions.goose bucket's own contribution
-    # (just set above), captured once before the loop — 2026-08-11 fix below
-    # unions this with each agent's own tool_scopes-derived extensions, fresh
-    # per agent, rather than letting one clobber the other or leak across agents.
-    _bucket_recipe_extensions = list(manifest.get("recipe_extensions") or [])
+    if projection is not None:  # goose renders grant-scoped (its readers need agentteams_readfs installed)
+        result.notices += _igc.prepare(manifest, cai, target_framework, target_dir, projection)
+    refusals: list[str] = []
+    pending: list[tuple[Path, str]] = []  # agent files are written only once every agent has passed
     # C.3: apply captured handoffs per the adapter's delivery mode. `native`
     # frameworks (copilot-vscode, goose) keep handoffs inline in the agent
     # file's front matter (goose encodes them into sub_recipes at recipe render
@@ -541,9 +544,7 @@ def import_from_cai(
         # silently re-default every copilot-cli import's tools/user-invocable/
         # model to _YAML_DEFAULTS regardless of what the CAI specified, the
         # exact gap this comment describes, just for a framework added later.
-        # goose's channel is the recipe-level `extensions:` list, wired
-        # separately below via manifest['recipe_extensions'], not through this
-        # front-matter header.
+        # goose takes the same header line; grant mode maps it to scoped extensions, never a whole `developer`.
         cai_tool_scopes = [
             str(t) for t in (agent.get("capabilities") or {}).get("tool_scopes") or []
         ]
@@ -551,16 +552,12 @@ def import_from_cai(
         if narrowed:
             cai_tool_scopes = _write_policy.narrow_scopes(cai_tool_scopes)
         body = _write_policy.ensure_section(body, slug, manifest, writer=not narrowed)  # unchanged without the switch
-        if target_framework == "goose":
-            agent_exts = _capability_map.canonical_to_goose_extensions(cai_tool_scopes)
-            union_exts = dict.fromkeys(_bucket_recipe_extensions)
-            union_exts.update(dict.fromkeys(agent_exts))
-            if union_exts:
-                manifest["recipe_extensions"] = list(union_exts)
-            else:
-                manifest.pop("recipe_extensions", None)
         cai_tools_line: str | None = None
         cai_raw_caps = (agent.get("capabilities") or {}).get("raw") or {}
+        source_scopes = cai_tool_scopes if (cai_tool_scopes or cai_raw_caps) else None  # None: no grant declared
+        if projection is not None:
+            body, notes = _igc.annotate(body, slug, source_scopes, target_framework, manifest, projection)
+            result.notices += notes
         copilot_raw = next((str(v) for k, v in cai_raw_caps.items()
                             if k in ("copilot-vscode", "copilot-cli") and str(v).strip()), "")
         if copilot_raw and _raw_scopes(copilot_raw) != cai_tool_scopes:
@@ -574,17 +571,16 @@ def import_from_cai(
             # source's tools VERBATIM (capabilities.raw) — a bespoke tool outside the
             # canonical vocabulary (e.g. runCommands) is neither dropped nor widened.
             raw_tools = next((str(v) for v in cai_raw_caps.values() if str(v).strip()), "")
-            if raw_tools and _raw_scopes(raw_tools) != cai_tool_scopes:
-                raw_tools = ""  # same C-3 rule as above: canonical scopes win over stale raw
+            if raw_tools and (_raw_scopes(raw_tools) != cai_tool_scopes or _igc.maps_to_canonical(raw_tools)):
+                raw_tools = ""  # C-3: stale raw never wins; Claude names become tokens (sandbox_mode keys on them)
             if raw_tools:
                 cai_tools_line = f"tools: {raw_tools}"
             elif cai_tool_scopes:
                 cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
-        elif cai_tool_scopes and (target_framework in ("copilot-vscode", "copilot-cli", "claude")
-                                  or (target_framework == "goose" and _write_policy.enabled(manifest))):
+        elif cai_tool_scopes and target_framework in ("copilot-vscode", "copilot-cli", "claude", "goose"):
             # One VS Code-shaped bracket list for every adapter: claude.py's _map_allowed_tools turns it into
             # Claude names (pre-translating to comma form once fell through its bracket-only _YAML_TOOLS_RE to the
-            # default grant), and copilot-vscode keeps it as is.
+            # default grant), copilot-vscode keeps it as is, and goose's grant mode derives extensions from it.
             cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
         if cai_name or cai_desc or cai_tools_line or (delivery == "native" and cai_handoffs):
             header = ["---"]
@@ -632,11 +628,16 @@ def import_from_cai(
         rendered = adapter.render_agent_file(body, slug, manifest)
         if narrowed:  # backstop: the rendered file must pass AR_WRITE_POLICY exactly as a native render does
             _iwp.check_rendered(slug, rel_name, rendered, target_framework, manifest)
-        if not dry_run:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(rendered, encoding="utf-8")
+        if projection is not None:  # re-read as the surface reads it: no widening, enforcement class, size
+            refusals += _igc.check_agent(slug, source_scopes, target_framework, rendered, manifest, projection)
+        pending.append((dest, rendered))
         result.converted.append(str(dest))
 
+    if refusals:
+        raise ValueError("projection refused, nothing written:\n  " + "\n  ".join(refusals))
+    for dest, rendered in () if dry_run else pending:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(rendered, encoding="utf-8")
     result.converted.extend(_iwp.install_server(manifest, target_framework, target_dir, dry_run=dry_run))
     instructions_content = str(cai.get("instructions_binding", {}).get("content", ""))
     if instructions_content:
@@ -769,6 +770,7 @@ def run_interop(
     overwrite: bool = False,
     skills_only: bool = False,
     write_policy_fields: dict[str, Any] | None = None,
+    allow_cooperative: str | list[str] | None = None,
 ) -> InteropResult:
     """Run interop conversion with optional bundle artifact generation.
 
@@ -782,6 +784,7 @@ def run_interop(
         overwrite: Replace existing target files.
         skills_only: Import only the source team's skills (see :func:`import_from_cai`).
         write_policy_fields: The target brief's write-policy fields (see :func:`import_from_cai`).
+        allow_cooperative: ``--interop-allow-cooperative`` slugs (``SLUG[,SLUG...]``; :mod:`interop_grant_check`).
 
     A real, error-free, non-skills-only run then writes the team marker, control plane first
     (``projection_marker.mark_interop_projection``); a refused marker is an error.
@@ -790,13 +793,14 @@ def run_interop(
         The :class:`InteropResult` (``marker_files`` lists the marker and the files before it).
 
     Raises:
-        ValueError: For an invalid mode, ``skills_only`` with ``bundle`` mode, or any
-            :func:`import_from_cai` refusal.
+        ValueError: For an invalid mode, ``skills_only`` with ``bundle`` mode, a malformed
+            ``allow_cooperative``, or any :func:`import_from_cai` refusal (projection checks included).
     """
     if mode not in {"direct", "bundle"}:
         raise ValueError("interop mode must be 'direct' or 'bundle'")
     if skills_only and mode == "bundle":
         raise ValueError("--interop-skills-only does not support --interop-mode bundle")
+    projection = _igc.ProjectionPolicy(_igc.parse_slug_list(allow_cooperative))
 
     cai = export_to_cai(source_dir, source_framework=source_framework)
     result = import_from_cai(
@@ -807,6 +811,7 @@ def run_interop(
         overwrite=overwrite,
         skills_only=skills_only,
         write_policy_fields=write_policy_fields,
+        projection=projection,
     )
 
     if mode == "bundle":

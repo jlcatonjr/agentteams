@@ -560,6 +560,7 @@ def _run_interop(
     overwrite: bool,
     skills_only: bool = False,
     write_policy_fields: dict | None = None,
+    allow_cooperative: list[str] | None = None,
 ) -> int:
     """Execute the --interop-from path via CAI normalization pipeline."""
     from agentteams.interop import detect_framework, run_interop
@@ -618,6 +619,7 @@ def _run_interop(
             overwrite=overwrite,
             skills_only=skills_only,
             write_policy_fields=write_policy_fields,
+            allow_cooperative=allow_cooperative,
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
