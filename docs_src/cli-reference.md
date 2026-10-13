@@ -13,7 +13,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--bridge-from DIR] [--bridge-source-framework NAME]
            [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills]
            [--dry-run] [--json] [--overwrite] [--merge] [--yes]
-           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check]
+           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--adopt-only SLUG[,SLUG...]] [--check]
            [--refresh-index] [--agent-check] [--window-hours H] [--force]
            [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
            [--refresh-code-index] [--query-code TEXT] [--code-query-k N]
@@ -245,7 +245,7 @@ Global exclusions:
 - `--bridge-check`, `--bridge-refresh`, and `--bridge-merge` are mutually exclusive; at most one may be passed.
 - `--refresh-index` and `--query-index` are mutually exclusive.
 - `--query-k` must be `>= 1`.
-- `--fleet` requires `--update` and `--merge`, forbids `--shrink-policy=allow`, and is mutually exclusive with `--self`, `--project`, `--description`, `--output`, `--overwrite`, `--prune`, `--migrate`, `--revert-migration`, `--adopt-orphans`, `--bridge-from`, `--bridge-refresh`, `--convert-from`, `--interop-from`, `--refresh-index`, `--query-index`, `--list-backups`, `--restore-backup`, `--add-fence-markers`, `--capture-baseline`, and `--check-baseline` (it operates on many workspaces, each resolved independently).
+- `--fleet` requires `--update` and `--merge`, forbids `--shrink-policy=allow`, and is mutually exclusive with `--self`, `--project`, `--description`, `--output`, `--overwrite`, `--prune`, `--migrate`, `--revert-migration`, `--adopt-orphans`, `--adopt-only`, `--bridge-from`, `--bridge-refresh`, `--convert-from`, `--interop-from`, `--refresh-index`, `--query-index`, `--list-backups`, `--restore-backup`, `--add-fence-markers`, `--capture-baseline`, and `--check-baseline` (it operates on many workspaces, each resolved independently).
 
 Excluded with `--convert-from`, `--interop-from`, or `--bridge-from`:
 - `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--refresh-index`, `--query-index`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
@@ -299,6 +299,37 @@ Register pre-existing agent files that the generated taxonomy does not produce (
 `--overwrite` without `--adopt-orphans` rebuilds the routing fence from the brief alone), the run is refused
 (`[ADOPTED-ROWS] blocked`). Re-run with `--adopt-orphans`, or use `--update --merge`, which carries them. Delete
 an agent's file, or `--prune` it, to drop its row on purpose.
+
+### `--adopt-only`
+
+`--adopt-only SLUG[,SLUG...]` adopts exactly the named orphan agents and does nothing else: no render, no
+merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/adopt_only.py`), mutually
+exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
+`--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
+
+- **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
+  build doesn't emit it, and it isn't a tool agent. Any other slug refuses the whole run (`[ADOPT-ONLY] refused`)
+  and is named.
+- **Routing rows.** In the orchestrator's `routing_table_rows` fence only the `*(adopted)*` rows are rewritten:
+  the rows already adopted on disk plus the named ones, rendered exactly as `--update` renders them. Every other
+  row, and everything outside the fence, stays byte-identical. A second run changes nothing, and a later
+  `--update --merge` carries the rows forward from the orchestrator itself with no diff.
+- **The `agents:` list.** Where the orchestrator's front matter has one (Copilot), it is extended with exactly the
+  named slugs it lacks, through the same `adopt-orphans-merge` gate as `--update --adopt-orphans`: a
+  signing-governed workspace, an Ed25519-signed decision with `scope=adopt-orphans-merge` and `effect_grants`
+  exactly `agents:<slug>` for those slugs (a superset or subset refuses), the Rule 15(d) cap, the
+  `references/adopt-orphans-merge.log.csv` record and a backup. Where there is none (Claude), only the rows
+  change and no decision is needed.
+- **Write set.** The orchestrator file and its backup under the agents directory's `.agentteams-backups/`
+  (`--no-backup` skips it), plus on the gated path the gate's own writes (the decision's consumption, the record
+  and the backup). Nothing else. An adopted row whose agent file is gone is dropped, as `--update` drops it,
+  and reported under `removed`; the run prints `N added, M removed`.
+- **`--dry-run --json`** prints one document: the adopted-row diff (`routing_rows.added` / `removed`), whether
+  there is an `agents:` list and what it would gain (`agents_to_add`, with the gate's clearance status under
+  `adopt_orphans_merge`), and each named slug's `tools:` line with `wider_than_read_only` set when it grants more
+  than Read/Grep/Glob, or has no `tools:` line at all. On Claude that line, not the routing row, is the real grant.
+
+Example: `agentteams --self --framework claude --adopt-only injection-test-designer --dry-run --json`.
 
 ### `--materialize-native`
 
@@ -511,6 +542,10 @@ CC-2 opt-out. For a `confined`/`exclusive` `privilege_profile`, agentteams emits
 ### `--self`
 
 Operate on the module's own agent team using `.github/agents/_build-description.json`. Equivalent to running `agentteams` with the module's internal description file.
+
+Without `--output`, the run writes to the selected `--framework`'s own agents directory, resolved from the framework registry: `copilot-vscode` (the default) → `.github/agents`, `copilot-cli` → `.github/agents`, `claude` → `.claude/agents`, `goose` → `.goose/recipes`, `codex` → `.codex/agents`, `agents-md` → `.agents`. The description itself is always read from `.github/agents/_build-description.json`. So a `--self --framework claude` run reads and writes its governance under `.claude/agents/references/`, not `.github/agents/references/`. (Before this, every `--self` run defaulted to `.github/agents` whatever the framework, so `--framework claude` rendered Claude-format files into the Copilot directory.)
+
+**`--self` fails closed on a weaker surface.** After the output directory is resolved (default or explicit `--output`, for every framework), the run refuses (`[SELF-GOVERNANCE] refused`, exit 1, `--dry-run` included) when that directory's signing switch (`references/agent-privilege.json`) is weaker than the canonical self surface's (`.github/agents`): ON there while the target is OFF or missing, since a missing switch makes the gates fall back to legacy unsigned behaviour. Both missing (a fresh clone: the switch is gitignored) proceeds, as before; so do both ON and the target being `.github/agents` itself. A present but malformed switch on either side refuses. To fix a refusal, render or seed that surface's governance first, or use a governed surface such as the default `.github/agents`.
 
 ### `--allow-external-self-output`
 

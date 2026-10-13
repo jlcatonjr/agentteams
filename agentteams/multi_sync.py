@@ -45,7 +45,7 @@ from agentteams.frameworks._sandbox_emit import (
     VERIFY_KEY_STORE_SENTINEL_TEXT,
 )
 from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
-from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS
+from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
 from agentteams.interop import export_to_cai, import_from_cai
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
@@ -116,9 +116,7 @@ def framework_agents_dir(root: Path, framework: str) -> Path:
     Raises:
         ValueError: If ``framework`` is not registered.
     """
-    if framework not in FRAMEWORKS:
-        raise ValueError(f"unknown framework {framework!r}")
-    return FRAMEWORKS[framework]().get_agents_dir(Path(root))
+    return agents_dir_for(framework, Path(root))
 
 
 def _reject_directory_collisions(root: Path, frameworks: list[str]) -> None:

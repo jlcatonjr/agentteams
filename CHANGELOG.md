@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (`--adopt-only SLUG[,SLUG...]`: adopt a named subset, touching only the orchestrator)
+
+- Adopting one bespoke agent used to need `--update --merge --adopt-orphans`: a full render and merge that
+  adopted every orphan and rewrote the team's other governed files. The new standalone mode
+  (`agentteams/cli/adopt_only.py`, dispatched from `cli/standalone_modes.py`) adopts exactly the named slugs:
+  - Each must be an adoptable orphan (`discover_orphans` with `adoption_exclusions`); any other slug refuses the
+    whole run and is named.
+  - Only the `*(adopted)*` rows of the orchestrator's `routing_table_rows` fence are rewritten, as
+    `format_adopted_routing_rows(previously_adopted ∪ named)` with the label `--update` uses. Every other row is
+    byte-identical, a second run is a no-op, and a later `--update --merge` carries the rows with zero diff, so
+    there are no manifest or build-log writes.
+  - A Copilot orchestrator's `agents:` list is extended with exactly the named slugs through the unchanged
+    `adopt-orphans-merge` gate (governed workspace, Ed25519-signed decision granting exactly `agents:<slug>`,
+    Rule 15(d) cap, record, backup). Claude has no `agents:` list, so only rows change and no decision is needed.
+  - `--dry-run --json` reports the row diff, the `agents:` additions with the gate's clearance status, and each
+    slug's `tools:` line, flagged when wider than Read/Grep/Glob.
+  - Mutually exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`.
+  - Writes only the orchestrator and its backup (`.agentteams-backups/`; `--no-backup` skips it), plus the gate's
+    own writes on the Copilot path. A row whose agent file is gone is dropped and reported under `removed`.
+
+### fix (`--self` without `--output` writes to the chosen framework's agents directory)
+
+- `--self` used to default `--output` to `.github/agents` whatever `--framework` said, so
+  `--self --framework claude` rendered Claude-format `.md` agents into the Copilot directory and adoption read
+  `*.agent.md` stems as slugs. The default now comes from the framework registry's new
+  `agents_dir_for(framework, project_root)` (each adapter's `get_agents_dir`; `multi_sync.framework_agents_dir`
+  delegates to it): claude → `.claude/agents`, goose → `.goose/recipes`, codex → `.codex/agents`,
+  agents-md → `.agents`. copilot-vscode, the default framework, still writes `.github/agents`, so the VS Code
+  tasks and the documented `--self --update --merge --yes` are unchanged. The self-description is still read
+  from `.github/agents/_build-description.json`. A `--self --framework claude` run now reads and writes its
+  governance under `.claude/agents/references/`.
+- `--self` now fails closed on a weaker surface (@security): once the output directory is resolved (default or
+  explicit `--output`, any framework, `--dry-run` included) the run refuses when that directory's signing switch
+  (`references/agent-privilege.json`) is weaker than the canonical self surface's (`.github/agents`): ON there,
+  OFF or missing in the target. Otherwise a `--self --framework goose|codex|agents-md` run would read a missing
+  switch as legacy unsigned and silently relax the governance `--self` used to get. Both missing (a fresh
+  clone; the switch is gitignored) proceeds as before, and a malformed switch on either side refuses. The
+  check is `signing_switch.self_governance_refusal`.
+
 ### fix (the signing switch tracks the description on every surface; no project script is a default task)
 
 Found by the fleet-sync round-3 security review.

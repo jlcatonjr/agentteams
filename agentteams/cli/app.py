@@ -446,8 +446,20 @@ def _main_dispatch(
             return 1
         args.description = str(self_desc)
         args.project = str(_SCRIPT_DIR)
+        from agentteams.frameworks.registry import FRAMEWORKS, agents_dir_for
+        from agentteams.signing_switch import self_governance_refusal
+        # Default to the chosen framework's own agents directory (registry-owned, CH-05); the
+        # description above is still read from .github/agents. Non-rendering ids keep copilot's.
+        self_fw = args.framework if args.framework in FRAMEWORKS else "copilot-vscode"
         if not args.output:
-            args.output = str(_SCRIPT_DIR / ".github" / "agents")
+            args.output = str(agents_dir_for(self_fw, _SCRIPT_DIR))
+        # Fail closed when that surface's governance is weaker than .github/agents' (signing_switch).
+        refusal = self_governance_refusal(
+            FRAMEWORKS[self_fw]().normalize_output_path(Path(args.output).resolve()),
+            _SCRIPT_DIR / ".github" / "agents")
+        if refusal:
+            print(f"[SELF-GOVERNANCE] refused: {refusal}", file=sys.stderr)
+            return 1
         print(f"Self-maintenance mode: using {self_desc.name}")
 
     strict_manual_placeholders = _resolve_strict_manual_mode(

@@ -75,3 +75,28 @@ Operator flow:
 2. Sign a decision with `action_reviewed=adopt-orphans-merge`, `scope=adopt-orphans-merge` and
    `effect_grants=agents:<a>;agents:<b>…` matching that list (`--sign-decision`).
 3. Run `agentteams --update --adopt-orphans`.
+
+## Subset adoption (`--adopt-only SLUG[,SLUG...]`)
+
+> Source: `agentteams/cli/adopt_only.py` (a standalone mode, dispatched from
+> `agentteams/cli/standalone_modes.py`; no render).
+
+Adopts exactly the named orphans. It reuses this module's `discover_orphans` and
+`adoption_exclusions` to validate them (any slug that is not an adoptable orphan refuses the whole
+run), and `previously_adopted` plus `format_adopted_routing_rows` to build the adopted block. The
+block is spliced into the `routing_table_rows` fence in place of the existing `*(adopted)*` rows, so
+every other row stays byte-identical and a later `--update` carries the rows forward unchanged. On an
+orchestrator with an `agents:` list, the named slugs it lacks go through the merge-mode gate above
+(`adopt_merge_gate.run` with exactly those slugs, so the decision must grant exactly
+`agents:<slug>` for them). Without one, only the rows change.
+
+| Function | Purpose |
+|---|---|
+| `parse_slugs(raw) -> list[str]` | Splits and validates the flag value (sorted, de-duplicated) |
+| `splice_adopted_rows(text, block) -> str` | Replaces only the adopted rows of the single `routing_table_rows` fence, keeping its indentation |
+| `tools_grant(path) -> dict` | An adopted file's `tools:` line, with `wider_than_read_only` when it grants more than Read/Grep/Glob or has none |
+| `run_adopt_only(args, manifest, description, output_dir) -> int` | The mode: validate, gate, splice; `--dry-run --json` prints the report |
+
+`AdoptOnlyError` is raised for a refusal. The mode writes the orchestrator and its backup (`--no-backup`
+skips it), plus the gate's own writes on the gated path. A row whose agent file is gone is dropped and
+reported under `removed`. Operator reference: `docs_src/cli-reference.md` (`--adopt-only`).

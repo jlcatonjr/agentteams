@@ -10,6 +10,7 @@ namespace unchanged.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from agentteams import __version__
@@ -23,7 +24,7 @@ from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
-from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS
+from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS, agents_dir_for
 
 
 class _VersionAction(argparse.Action):
@@ -188,6 +189,22 @@ def _build_parser() -> argparse.ArgumentParser:
              "only, and a signed decision whose scope is adopt-orphans-merge and whose "
              "effect_grants list exactly agents:<slug> for the slugs a --dry-run --json "
              "reports.",
+    )
+    parser.add_argument(
+        "--adopt-only",
+        metavar="SLUG[,SLUG...]",
+        dest="adopt_only",
+        default=None,
+        help="Adopt exactly the named orphan agents and nothing else: no render. Each slug must be "
+             "an adoptable orphan in the target agent directory, or the whole run refuses. Only the "
+             "adopted rows inside the orchestrator's routing_table_rows fence are rewritten (every "
+             "other row stays byte-identical; a second run is a no-op; a later --update carries "
+             "them forward). Where the orchestrator has an agents: list (Copilot) it is extended "
+             "with exactly the named slugs through the adopt-orphans-merge gate (governed "
+             "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
+             "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
+             "line, flagged when wider than Read/Grep/Glob. Mutually exclusive with --update, "
+             "--overwrite, --migrate, --prune and --adopt-orphans.",
     )
     parser.add_argument(
         "--check",
@@ -459,7 +476,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--self",
         action="store_true",
         dest="self_update",
-        help="Operate on the module's own agent team using .github/agents/_build-description.json",
+        help=(
+            "Operate on the module's own agent team using .github/agents/_build-description.json. "
+            "Without --output it writes to the --framework's own agents directory ("
+            + "; ".join(f"{fid}: {agents_dir_for(fid, Path()).as_posix()}" for fid in FRAMEWORKS)
+            + "); the description is always read from .github/agents. Refused (fail closed, "
+            "--dry-run too) when that directory's references/agent-privilege.json signing switch "
+            "is weaker than .github/agents' (ON there, OFF or missing in the target)."
+        ),
     )
     parser.add_argument(
         "--allow-foreign-output",

@@ -12,8 +12,10 @@ workarounds — moving logic out, trimming a comment, folding a call into anothe
 where working around a ceiling becomes the defect it was meant to prevent.
 
 What belongs here: a mode that answers a question or performs one action against an existing
-output directory and returns an exit code, without rendering templates. What does not:
-``--adopt-orphans``, which mutates the manifest *before* rendering and so is part of the
+output directory and returns an exit code, without rendering templates. That now includes
+``--adopt-only`` (:mod:`agentteams.cli.adopt_only`), which adopts a named subset of orphan agents
+by rewriting only the orchestrator's adopted routing rows (and, gated, its ``agents:`` list). What
+does not: ``--adopt-orphans``, which mutates the manifest *before* rendering and so is part of the
 pipeline, not an alternative to it.
 """
 
@@ -27,6 +29,7 @@ from typing import Any
 
 from agentteams import emit, template_pins
 from agentteams.cli import security_gate
+from agentteams.cli.adopt_only import run_adopt_only
 from agentteams.cli.artifacts import _run_retrieval_utility_modes
 
 
@@ -95,8 +98,11 @@ def run_standalone_modes(
     Returns:
         An exit code when one of them ran, or None so the caller continues into the
         render/emit pipeline. Order is preserved exactly from the original inline sequence:
-        restore-backup, scan-security, check-budget, template pinning, retrieval utilities.
+        restore-backup, scan-security, check-budget, template pinning, retrieval utilities;
+        ``--adopt-only`` runs first.
     """
+    if getattr(args, "adopt_only", None):
+        return run_adopt_only(args, manifest, description, output_dir)
     if args.restore_backup is not None:
         backups = emit.list_backups(output_dir)
         if not backups:

@@ -147,6 +147,53 @@ def read_switch(path: Path) -> bool | None:
     return _parse_switch(_read_regular_text(path), path)["enforce_decision_signing"]
 
 
+def _switch_state(agents_dir: Path) -> tuple[bool | None, str]:
+    """Read ``agents_dir``'s switch for :func:`self_governance_refusal`.
+
+    Raises:
+        ValueError: The switch is present but unusable (see :func:`read_switch`).
+    """
+    value = read_switch(agents_dir / SWITCH_REL)
+    return value, {True: "ON", False: "OFF", None: "missing"}[value]
+
+
+def self_governance_refusal(agents_dir: Path, canonical_dir: Path) -> str | None:
+    """Return why a ``--self`` run into ``agents_dir`` must refuse, or ``None`` when it may proceed.
+
+    ``--self`` reads its governance (this switch, the decision log, the Rule 15(d) cap) from the
+    target surface's ``references/``; before ``--self`` followed ``--framework`` it always read the
+    canonical self surface (``.github/agents``). The run refuses only when the target is WEAKER than
+    that canonical surface: canonical ON while the target is OFF or missing (a missing switch means
+    legacy unsigned). Both missing (a fresh clone, the switch is gitignored) is the pre-existing
+    behaviour and proceeds, as does the target being the canonical directory itself. A present but
+    unusable switch on either side refuses.
+
+    Args:
+        agents_dir: The resolved ``--self`` agents directory.
+        canonical_dir: The canonical self surface (``<module root>/.github/agents``).
+
+    Returns:
+        The refusal message, or ``None`` when the run may proceed.
+
+    Raises:
+        Nothing; an unreadable or malformed switch is reported as a refusal.
+    """
+    try:
+        target, target_state = _switch_state(agents_dir)
+        canonical, canonical_state = _switch_state(canonical_dir)
+    except ValueError as exc:
+        return f"--self cannot read a signing switch: {exc}. Fix or remove it."
+    if target is True or canonical is not True:
+        return None
+    return (
+        f"--self targets {agents_dir} (signing switch {target_state}), weaker than the canonical self "
+        f"surface {canonical_dir} (signing switch {canonical_state}). --self reads its governance from "
+        "the target, so it refuses rather than run with signing relaxed. Render or seed that surface's "
+        'governance first (references/agent-privilege.json with "enforce_decision_signing": true), or '
+        "use a framework whose surface is governed (e.g. the default copilot-vscode, .github/agents)."
+    )
+
+
 def switch_payload(value: bool, note: str) -> str:
     """Render the switch file text.
 

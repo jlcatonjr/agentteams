@@ -13,6 +13,8 @@ import the registry.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from agentteams.frameworks.agents_md import AgentsMdAdapter
 from agentteams.frameworks.base import FrameworkAdapter
 from agentteams.frameworks.claude import ClaudeAdapter
@@ -39,3 +41,25 @@ FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
 # this exactly — pinned by tests/test_framework_enum_consistency.py so the
 # recurring enum-staleness bug cannot return silently (CH-05 extension).
 FRAMEWORK_IDS: tuple[str, ...] = tuple(FRAMEWORKS.keys())
+
+
+def agents_dir_for(framework: str, project_root: Path) -> Path:
+    """Return a registered framework's default agents directory under a project root.
+
+    The per-framework directory is owned by each adapter's ``get_agents_dir``; this
+    accessor is the one place callers resolve it by framework id, so no caller keeps
+    its own framework → directory table (CH-05).
+
+    Args:
+        framework: A registered framework id (a key of :data:`FRAMEWORKS`).
+        project_root: The project root directory.
+
+    Returns:
+        The framework's agents directory (e.g. ``<root>/.claude/agents`` for ``claude``).
+
+    Raises:
+        ValueError: If ``framework`` is not registered.
+    """
+    if framework not in FRAMEWORKS:
+        raise ValueError(f"unknown framework {framework!r}")
+    return FRAMEWORKS[framework]().get_agents_dir(Path(project_root))
