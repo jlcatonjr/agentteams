@@ -512,6 +512,8 @@ CC-2 opt-out. For a `confined`/`exclusive` `privilege_profile`, agentteams emits
 
 Operate on the module's own agent team using `.github/agents/_build-description.json`. Equivalent to running `agentteams` with the module's internal description file.
 
+Without `--output`, the run writes to the selected `--framework`'s own agents directory, resolved from the framework registry: `copilot-vscode` (the default) → `.github/agents`, `copilot-cli` → `.github/agents`, `claude` → `.claude/agents`, `goose` → `.goose/recipes`, `codex` → `.codex/agents`, `agents-md` → `.agents`. The description itself is always read from `.github/agents/_build-description.json`. So a `--self --framework claude` run reads and writes its governance under `.claude/agents/references/`, not `.github/agents/references/`. (Before this, every `--self` run defaulted to `.github/agents` whatever the framework, so `--framework claude` rendered Claude-format files into the Copilot directory.)
+
 ### `--allow-external-self-output`
 
 Permit `--self` to write self-maintenance artifacts to an `--output` path outside the AgentTeams module source tree. Required to prevent accidental writes into consumer repositories.

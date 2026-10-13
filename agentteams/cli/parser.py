@@ -23,7 +23,9 @@ from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
-from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS
+from pathlib import Path
+
+from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS, agents_dir_for
 
 
 class _VersionAction(argparse.Action):
@@ -459,7 +461,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--self",
         action="store_true",
         dest="self_update",
-        help="Operate on the module's own agent team using .github/agents/_build-description.json",
+        help=(
+            "Operate on the module's own agent team using .github/agents/_build-description.json. "
+            "Without --output it writes to the --framework's own agents directory ("
+            + "; ".join(f"{fid}: {agents_dir_for(fid, Path()).as_posix()}" for fid in FRAMEWORKS)
+            + "); the description is always read from .github/agents."
+        ),
     )
     parser.add_argument(
         "--allow-foreign-output",

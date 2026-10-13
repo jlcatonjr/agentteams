@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (`--self` without `--output` writes to the chosen framework's agents directory)
+
+- `--self` used to default `--output` to `.github/agents` whatever `--framework` said, so
+  `--self --framework claude` rendered Claude-format `.md` agents into the Copilot directory and adoption read
+  `*.agent.md` stems as slugs. The default now comes from the framework registry's new
+  `agents_dir_for(framework, project_root)` (each adapter's `get_agents_dir`; `multi_sync.framework_agents_dir`
+  delegates to it): claude → `.claude/agents`, goose → `.goose/recipes`, codex → `.codex/agents`,
+  agents-md → `.agents`. copilot-vscode, the default framework, still writes `.github/agents`, so the VS Code
+  tasks and the documented `--self --update --merge --yes` are unchanged. The self-description is still read
+  from `.github/agents/_build-description.json`. A `--self --framework claude` run now reads and writes its
+  governance under `.claude/agents/references/`.
+
 ### fix (the signing switch tracks the description on every surface; no project script is a default task)
 
 Found by the fleet-sync round-3 security review.

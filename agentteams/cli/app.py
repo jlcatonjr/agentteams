@@ -447,7 +447,12 @@ def _main_dispatch(
         args.description = str(self_desc)
         args.project = str(_SCRIPT_DIR)
         if not args.output:
-            args.output = str(_SCRIPT_DIR / ".github" / "agents")
+            # Default to the chosen framework's own agents directory (registry-owned,
+            # CH-05); the description above is still read from .github/agents. The
+            # non-rendering ids (canonical, generic) keep the copilot default.
+            from agentteams.frameworks.registry import FRAMEWORKS, agents_dir_for
+            self_fw = args.framework if args.framework in FRAMEWORKS else "copilot-vscode"
+            args.output = str(agents_dir_for(self_fw, _SCRIPT_DIR))
         print(f"Self-maintenance mode: using {self_desc.name}")
 
     strict_manual_placeholders = _resolve_strict_manual_mode(
