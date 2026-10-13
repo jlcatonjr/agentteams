@@ -77,6 +77,7 @@ from agentteams.frameworks.goose_docs import (
 from agentteams.frameworks.goose_recipe_read import (
     _RECIPE_SUB_PATH_RE,
     parse_recipe_fields,
+    recipe_extension_grants,
 )
 # _validate_recipe_yaml carved to goose_recipe_validate.py (CH-07); re-imported so
 # `from agentteams.frameworks.goose import _validate_recipe_yaml` keeps working.
@@ -442,15 +443,17 @@ class GooseAdapter(FrameworkAdapter):
 
         Recipes are YAML, not front-matter Markdown, so the interop default
         Markdown path cannot extract fields from them. Mapping: title -> name,
-        description -> description, instructions -> body; extension names map
-        coarse to the canonical capability vocabulary
-        (``capability_map.goose_extensions_to_canonical``); sub_recipes become
+        description -> description, instructions -> body; the parsed extensions,
+        allowlists included, map to the canonical capability vocabulary
+        (``capability_map.goose_grants_to_canonical``: a missing ``extensions``
+        key reads as the whole ``developer``, ``agentteams_readfs`` as read and
+        search); sub_recipes become
         true-delegation handoffs (send=True) and ``load("<slug>")`` references
         become context-load handoffs (send=False), deduped one-per-agent with
         sub_recipes winning.
         """
         fields = parse_recipe_fields(content)
-        tokens = _capability_map.goose_extensions_to_canonical(fields["extension_names"])
+        tokens = _capability_map.goose_grants_to_canonical(recipe_extension_grants(content))
         handoffs: list[dict[str, Any]] = []
         seen: set[str] = set()
         for slug in fields["sub_recipe_slugs"]:

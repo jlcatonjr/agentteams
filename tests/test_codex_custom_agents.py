@@ -275,6 +275,20 @@ def test_adapter_layout() -> None:
 # Interop: canonical copilot-vscode team -> codex
 # ---------------------------------------------------------------------------
 
+#: Every agent of _source_team is narrower than Codex's default, which Codex can't enforce, so the
+#: operator opts each one in (interop_grant_check; refused otherwise).
+_COOP = "orchestrator,security,wasm-wat-expert"
+
+
+def _decision_log(codex_agents: Path) -> Path:
+    """The destination decision log each opt-in is recorded in (refused without one)."""
+    log = codex_agents / "references" / "security-decisions.log.csv"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,consumed\n",
+                   encoding="utf-8")
+    return log
+
+
 def _source_team(root: Path) -> Path:
     agents = root / ".github" / "agents"
     agents.mkdir(parents=True)
@@ -301,19 +315,23 @@ def test_interop_emits_toml_only_and_guards_shared_files(tmp_path: Path) -> None
     agents = _source_team(tmp_path)
     (tmp_path / "AGENTS.md").write_text("# Goose bridge entry\n", encoding="utf-8")
     (tmp_path / "AGENTS.override.md").write_text("# project-owned\n", encoding="utf-8")
+    target = tmp_path / ".codex" / "agents"
+    log = _decision_log(target)
     before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
 
-    target = tmp_path / ".codex" / "agents"
-    result = run_interop(agents, "codex", target, overwrite=True)
+    result = run_interop(agents, "codex", target, overwrite=True, allow_cooperative=_COOP)
 
     assert result.success
     tomls = sorted(target.glob("*.toml"))
     assert [p.stem for p in tomls] == ["orchestrator", "security", "wasm-wat-expert"]
     # Zero writes outside .codex/agents: every pre-existing file is byte-identical and the
     # only new files are the TOML agents plus (2026-10-01) the team marker and the control plane
-    # it requires, all inside .codex/agents/references (projection_marker).
+    # it requires, all inside .codex/agents/references (projection_marker). The decision log
+    # inside it gains one opt-in row per agent (interop_grant_check.record_opt_ins).
     for path, data in before.items():
-        assert path.read_bytes() == data, f"{path} was modified"
+        if path != log:
+            assert path.read_bytes() == data, f"{path} was modified"
+    assert log.read_text(encoding="utf-8").count("interop-allow-cooperative:codex:") == 3
     new = {p for p in tmp_path.rglob("*") if p.is_file()} - set(before)
     assert new == set(tomls) | {Path(p) for p in result.marker_files}
     assert all(Path(p).is_relative_to(target / "references") for p in result.marker_files)
@@ -338,12 +356,13 @@ def test_interop_emits_toml_only_and_guards_shared_files(tmp_path: Path) -> None
 def test_interop_writes_agents_md_when_absent_and_refreshes_own(tmp_path: Path) -> None:
     agents = _source_team(tmp_path)
     target = tmp_path / ".codex" / "agents"
-    run_interop(agents, "codex", target)
+    _decision_log(target)
+    run_interop(agents, "codex", target, allow_cooperative=_COOP)
     agents_md = tmp_path / "AGENTS.md"
     assert agents_md.is_file()
     assert agents_md_is_codex_owned(agents_md)
     # A second run may refresh a Codex-generated AGENTS.md.
-    result = run_interop(agents, "codex", target, overwrite=True)
+    result = run_interop(agents, "codex", target, overwrite=True, allow_cooperative=_COOP)
     assert str(agents_md) in result.converted
     assert not (tmp_path / "AGENTS.override.md").exists()
 
@@ -440,7 +459,9 @@ def test_symlinked_agents_md_is_never_written(tmp_path: Path) -> None:
     agents = _source_team(tmp_path / "proj")
     link = tmp_path / "proj" / "AGENTS.md"
     link.symlink_to(tmp_path / "outside.md")  # dangling, outside the project
-    result = run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", overwrite=True)
+    _decision_log(tmp_path / "proj" / ".codex" / "agents")
+    result = run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", overwrite=True,
+                         allow_cooperative=_COOP)
     assert str(link) in result.skipped
     assert not (tmp_path / "outside.md").exists()
     assert victim.read_text(encoding="utf-8") == "keep\n"
@@ -482,9 +503,15 @@ def test_block_list_tools_are_read() -> None:
 
 
 def test_codex_notice_not_carried_into_other_targets(tmp_path: Path) -> None:
+    from agentteams.frameworks.goose_docs import _readfs_mcp_content
+
     agents = _source_team(tmp_path)
-    run_interop(agents, "codex", tmp_path / ".codex" / "agents")
+    _decision_log(tmp_path / ".codex" / "agents")
+    run_interop(agents, "codex", tmp_path / ".codex" / "agents", allow_cooperative=_COOP)
     goose_dir = tmp_path / "g" / ".goose" / "recipes"
+    readfs = tmp_path / "g" / "scripts" / "goose-readfs-mcp.py"  # grant-scoped readers need the pinned server
+    readfs.parent.mkdir(parents=True)
+    readfs.write_text(_readfs_mcp_content(), encoding="utf-8")
     run_interop(tmp_path / ".codex" / "agents", "goose", goose_dir)
     goose_agents_md = tmp_path / "g" / "AGENTS.md"
     assert goose_agents_md.is_file()
@@ -526,16 +553,18 @@ def test_acceptance_against_baseagent_copy(tmp_path: Path) -> None:
     instr = _BASEAGENT_AGENTS.parent / "copilot-instructions.md"
     if instr.is_file():
         shutil.copy2(instr, root / ".github" / "copilot-instructions.md")
-    before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+    log = _decision_log(root / ".codex" / "agents")  # where each cooperative opt-in is recorded
+    before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file() and p != log}
     expected = sorted(p.name[: -len(".agent.md")] for p in (root / ".github" / "agents").glob("*.agent.md"))
 
-    result = run_interop(root / ".github" / "agents", "codex", root / ".codex" / "agents", overwrite=True)
+    result = run_interop(root / ".github" / "agents", "codex", root / ".codex" / "agents", overwrite=True,
+                         allow_cooperative=expected)
     assert result.success
     tomls = sorted((root / ".codex" / "agents").glob("*.toml"))
     assert [p.stem for p in tomls] == expected
     for path, data in before.items():
         assert path.read_bytes() == data, f"{path} was modified"
-    new = {p for p in root.rglob("*") if p.is_file()} - set(before)
+    new = {p for p in root.rglob("*") if p.is_file()} - set(before) - {log}
     if (root / "AGENTS.md") in before:
         # Since 2026-10-01 an interop run also writes its team marker and control plane under
         # .codex/agents/references/ (projection_marker.mark_interop_projection), reported in marker_files.
@@ -592,7 +621,8 @@ def test_claude_skills_carry_into_codex_via_interop(tmp_path: Path) -> None:
     (skill / "SKILL.md").write_text("---\nname: recall\ndescription: \"Recall\"\n---\n\nQuery the index.\n",
                                     encoding="utf-8")
     out_root = tmp_path / "dst"
-    run_interop(claude_agents, "codex", out_root / ".codex" / "agents")
+    _decision_log(out_root / ".codex" / "agents")
+    run_interop(claude_agents, "codex", out_root / ".codex" / "agents", allow_cooperative="orchestrator")
     emitted = out_root / ".agents" / "skills" / "recall" / "SKILL.md"
     assert emitted.is_file()
     text = emitted.read_text(encoding="utf-8")

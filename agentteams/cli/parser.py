@@ -644,6 +644,19 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--interop-allow-cooperative",
+        metavar="SLUG[,SLUG...]",
+        dest="interop_allow_cooperative",
+        action="append",
+        default=None,
+        help=(
+            "With --interop-from: let the named agents project onto a surface that cannot enforce "
+            "their grant (codex outside its role gate, agents-md) although it is narrower than that "
+            "surface's default. Refused by default; each named agent gets a 'grant is cooperative on "
+            "this surface' banner and a NOT ENFORCED notice. Repeatable; no wildcard."
+        ),
+    )
+    parser.add_argument(
         "--bridge-from",
         metavar="DIR",
         dest="bridge_from",

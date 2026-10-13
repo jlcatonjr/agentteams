@@ -59,19 +59,36 @@ Returns CAI object with keys including:
 7. `references` — present only when the source team has a non-empty `references/` directory
 8. `framework_extensions` — present only when the source framework contributes project-level config (e.g., goose recipe parameters/response/retry)
 
-### `import_from_cai(cai, target_framework, target_dir, *, dry_run=False, overwrite=False, preserve_existing=False, skills_only=False, write_policy_fields=None)`
+### `import_from_cai(cai, target_framework, target_dir, *, dry_run=False, overwrite=False, preserve_existing=False, skills_only=False, write_policy_fields=None, projection=None)`
 
 Imports CAI payload into target framework files. With `preserve_existing=True` (used by pinned sync), an agent whose complete exported record already equals the canonical entry is left byte-for-byte untouched. This applies only to Markdown front-matter frameworks; codex and goose are always re-rendered. An existing instruction file is fence-merged rather than replaced. Agent and skill slugs must be safe single path components (`ValueError` otherwise). With `skills_only=True` (CLI `--interop-skills-only`), only the CAI `skills[]` are imported into the adapter's `skills_dir`. No agent, instructions, MCP or sidecar file is written, and a target without a skill concept (including `canonical`) raises `ValueError`.
 
 `write_policy_fields` (CLI `--description`) is `interop_write_policy.manifest_fields` of the target brief. Under `write_policy: "orchestrator-only"`, each non-orchestrator agent is narrowed, gets its write-policy section once, and must pass `AR_WRITE_POLICY` as rendered. Granted agents get the `agentteams_runner` block, and the pinned server is installed. An existing agent file left in place without `overwrite` is an error. See [`interop_write_policy`](interop-write-policy.md). Every front-matter scalar written into an imported agent is on one line: names, descriptions, restored `raw_front_matter` values and list items, and handoff label/agent/prompt strings, with line breaks collapsed and handoff quotes neutralised. A captured key that isn't a plain identifier is skipped with a notice (`interop_helpers.one_line`, `safe_fm_key`, `handoff_header_lines`). A raw `tools:` value is written as captured only when it maps to the agent's scopes, and one containing a line break never does (`interop_helpers.raw_scopes` returns `None`), so the canonical list is written instead. So no value can inject a front-matter key.
 
+`projection` is an [`interop_grant_check.ProjectionPolicy`](interop-grant-check.md). `run_interop` passes a strict
+one and `multi_sync` a non-strict one; a direct caller passing none is unchecked. With it, goose renders grant-scoped
+(`goose_tool_scoping: "grant"`, readers on `agentteams_readfs`) and refuses when that server's script is missing at
+the target root or doesn't match `READFS_SHA256`, and every agent is checked after rendering: no widening of its
+source grant and no unknown tool name the source doesn't declare, plus (strict) its enforcement class and the
+Copilot size limit. All refusals are collected and raised as one `ValueError`, and no agent file is written: agent
+files are written only after every agent has passed (also the case without `projection`). Each applied
+`--interop-allow-cooperative` opt-in is then recorded in the destination's `references/security-decisions.log.csv`
+before the agent files are written. The `tools:` line selection lives in `interop_grant_check.tools_line`.
+
+The goose `tools:` header line is always written (grant mode derives the recipe's extensions from it). The
+per-agent `capability_map.canonical_to_goose_extensions` union is gone: it added the whole `developer` builtin to
+read-only agents. A Codex target gets canonical tool tokens when the source names Claude tools (`Read, Grep, Glob`
+becomes `read`, `search`), so `sandbox_mode` and the "Reading on Codex" section render; bespoke names stay verbatim.
+
 Returns:
 
 - `InteropResult`
 
-### `run_interop(source_dir, target_framework, target_dir, *, source_framework=None, mode='direct', dry_run=False, overwrite=False, skills_only=False, write_policy_fields=None)`
+### `run_interop(source_dir, target_framework, target_dir, *, source_framework=None, mode='direct', dry_run=False, overwrite=False, skills_only=False, write_policy_fields=None, allow_cooperative=None)`
 
-End-to-end interop operation.
+End-to-end interop operation. Every run applies the [`interop_grant_check`](interop-grant-check.md) projection
+checks. `allow_cooperative` (CLI `--interop-allow-cooperative`, `SLUG[,SLUG...]` or a list of such strings) names
+the agents allowed onto a surface that can't enforce their narrower grant; a malformed slug raises `ValueError`.
 
 Modes:
 
@@ -96,4 +113,4 @@ adds an error and writes no marker. `write_projection_marker` is re-exported her
 1. CAI path is intended for deterministic cross-framework transport of the **agent body / instructions payload** — given the same source, the same target files are produced each run. It is not a round-trip-stable identity for metadata: an agent's `name`/title is taken from the body's front-matter `name:` key on export, falling back to the body's first heading only when no `name:` is present. Target filenames (and the instructions filename, e.g. `CLAUDE.md` vs `copilot-instructions.md`) are re-derived per target framework on import, so exporting and re-importing does not necessarily reproduce the original names.
 2. Bundle mode emits routing/instructions manifests for external consumers.
 3. Framework wrappers are normalized while preserving semantic markdown payload.
-4. `goose` **is** a supported interop target. The CAI's `agents[].handoffs` and `capabilities.tool_scopes` carry enough for the goose adapter to wire the target natively on import: handoffs render as `sub_recipes` delegation and tool scopes as `recipe_extensions`. Goose's instructions file (`AGENTS.md`) is placed at the project root, two directory levels above `.goose/recipes`, unlike other frameworks which place it beside the agents directory.
+4. `goose` **is** a supported interop target. The CAI's `agents[].handoffs` and `capabilities.tool_scopes` carry enough for the goose adapter to wire the target natively on import: handoffs render as `sub_recipes` delegation, and on the `run_interop` path tool scopes render grant-scoped (`goose_tool_scoping: "grant"`: `read`/`search` on `agentteams_readfs`, `edit`/`execute` on an allowlisted `developer`). Goose's instructions file (`AGENTS.md`) is placed at the project root, two directory levels above `.goose/recipes`, unlike other frameworks which place it beside the agents directory.
