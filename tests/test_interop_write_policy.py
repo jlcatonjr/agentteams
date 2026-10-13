@@ -57,6 +57,12 @@ def _import(tmp_path: Path, framework: str, brief: dict = BRIEF, **kw) -> tuple[
     src = _source(tmp_path, brief, **kw)
     project = tmp_path / "project"
     target = project / TARGETS[framework][0]
+    if framework == "goose":  # grant-scoped readers launch the protected readfs server; interop doesn't install it
+        from agentteams.frameworks.goose_docs import pinned_readfs_mcp_content
+        from agentteams.frameworks.goose_tool_scoping import READFS_PROTECTED_PATH
+
+        (project / READFS_PROTECTED_PATH).parent.mkdir(parents=True, exist_ok=True)
+        (project / READFS_PROTECTED_PATH).write_text(pinned_readfs_mcp_content(), encoding="utf-8")
     result = run_interop(src, framework, target, source_framework="copilot-vscode",
                          write_policy_fields=manifest_fields(brief, framework))
     assert result.success, result.errors

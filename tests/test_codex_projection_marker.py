@@ -33,8 +33,11 @@ _linux_bwrap = pytest.mark.skipif(
     not (sys.platform.startswith("linux") and shutil.which("bwrap")),
     reason="confine-run's Linux branch needs bwrap on PATH")
 
+#: A full-default grant: Codex can't enforce a narrower one, so a read-only agent would need
+#: --interop-allow-cooperative (interop_grant_check), which these marker tests are not about.
 _AGENT = (
-    "---\nname: Orchestrator\ndescription: \"demo\"\nuser-invocable: true\ntools: ['read']\n---\n\n"
+    "---\nname: Orchestrator\ndescription: \"demo\"\nuser-invocable: true\n"
+    "tools: ['read', 'edit', 'search', 'execute']\n---\n\n"
     "# Orchestrator\n\nBody.\n"
 )
 

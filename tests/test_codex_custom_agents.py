@@ -275,6 +275,11 @@ def test_adapter_layout() -> None:
 # Interop: canonical copilot-vscode team -> codex
 # ---------------------------------------------------------------------------
 
+#: Every agent of _source_team is narrower than Codex's default, which Codex can't enforce, so the
+#: operator opts each one in (interop_grant_check; refused otherwise).
+_COOP = "orchestrator,security,wasm-wat-expert"
+
+
 def _source_team(root: Path) -> Path:
     agents = root / ".github" / "agents"
     agents.mkdir(parents=True)
@@ -304,7 +309,7 @@ def test_interop_emits_toml_only_and_guards_shared_files(tmp_path: Path) -> None
     before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
 
     target = tmp_path / ".codex" / "agents"
-    result = run_interop(agents, "codex", target, overwrite=True)
+    result = run_interop(agents, "codex", target, overwrite=True, allow_cooperative=_COOP)
 
     assert result.success
     tomls = sorted(target.glob("*.toml"))
@@ -338,12 +343,12 @@ def test_interop_emits_toml_only_and_guards_shared_files(tmp_path: Path) -> None
 def test_interop_writes_agents_md_when_absent_and_refreshes_own(tmp_path: Path) -> None:
     agents = _source_team(tmp_path)
     target = tmp_path / ".codex" / "agents"
-    run_interop(agents, "codex", target)
+    run_interop(agents, "codex", target, allow_cooperative=_COOP)
     agents_md = tmp_path / "AGENTS.md"
     assert agents_md.is_file()
     assert agents_md_is_codex_owned(agents_md)
     # A second run may refresh a Codex-generated AGENTS.md.
-    result = run_interop(agents, "codex", target, overwrite=True)
+    result = run_interop(agents, "codex", target, overwrite=True, allow_cooperative=_COOP)
     assert str(agents_md) in result.converted
     assert not (tmp_path / "AGENTS.override.md").exists()
 
@@ -440,7 +445,8 @@ def test_symlinked_agents_md_is_never_written(tmp_path: Path) -> None:
     agents = _source_team(tmp_path / "proj")
     link = tmp_path / "proj" / "AGENTS.md"
     link.symlink_to(tmp_path / "outside.md")  # dangling, outside the project
-    result = run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", overwrite=True)
+    result = run_interop(agents, "codex", tmp_path / "proj" / ".codex" / "agents", overwrite=True,
+                         allow_cooperative=_COOP)
     assert str(link) in result.skipped
     assert not (tmp_path / "outside.md").exists()
     assert victim.read_text(encoding="utf-8") == "keep\n"
@@ -483,8 +489,11 @@ def test_block_list_tools_are_read() -> None:
 
 def test_codex_notice_not_carried_into_other_targets(tmp_path: Path) -> None:
     agents = _source_team(tmp_path)
-    run_interop(agents, "codex", tmp_path / ".codex" / "agents")
+    run_interop(agents, "codex", tmp_path / ".codex" / "agents", allow_cooperative=_COOP)
     goose_dir = tmp_path / "g" / ".goose" / "recipes"
+    readfs = tmp_path / "g" / "scripts" / "goose-readfs-mcp.py"  # grant-scoped readers need it installed
+    readfs.parent.mkdir(parents=True)
+    readfs.write_text("# installed by a native goose generation\n", encoding="utf-8")
     run_interop(tmp_path / ".codex" / "agents", "goose", goose_dir)
     goose_agents_md = tmp_path / "g" / "AGENTS.md"
     assert goose_agents_md.is_file()
@@ -529,7 +538,8 @@ def test_acceptance_against_baseagent_copy(tmp_path: Path) -> None:
     before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
     expected = sorted(p.name[: -len(".agent.md")] for p in (root / ".github" / "agents").glob("*.agent.md"))
 
-    result = run_interop(root / ".github" / "agents", "codex", root / ".codex" / "agents", overwrite=True)
+    result = run_interop(root / ".github" / "agents", "codex", root / ".codex" / "agents", overwrite=True,
+                         allow_cooperative=expected)
     assert result.success
     tomls = sorted((root / ".codex" / "agents").glob("*.toml"))
     assert [p.stem for p in tomls] == expected
@@ -592,7 +602,7 @@ def test_claude_skills_carry_into_codex_via_interop(tmp_path: Path) -> None:
     (skill / "SKILL.md").write_text("---\nname: recall\ndescription: \"Recall\"\n---\n\nQuery the index.\n",
                                     encoding="utf-8")
     out_root = tmp_path / "dst"
-    run_interop(claude_agents, "codex", out_root / ".codex" / "agents")
+    run_interop(claude_agents, "codex", out_root / ".codex" / "agents", allow_cooperative="orchestrator")
     emitted = out_root / ".agents" / "skills" / "recall" / "SKILL.md"
     assert emitted.is_file()
     text = emitted.read_text(encoding="utf-8")
