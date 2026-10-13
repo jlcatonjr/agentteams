@@ -34,7 +34,7 @@ still gets through.
 ```mermaid
 flowchart TD
     CMD[Bash cmd] --> H[hook]
-    H --> M{delete idiom?}
+    H --> M{delete idiom or outbound data send?}
     M -->|yes| ASK[ask operator]
     M -->|no| OK[allow]
     H -.crash.-> FC{fail-closed?}

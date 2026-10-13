@@ -51,7 +51,7 @@ def test_rule_s9_exists_inside_the_invariant_fence():
     assert begin < rule_pos < end
 
 
-def test_rule_s9_lists_all_five_risk_criteria():
+def test_rule_s9_lists_all_risk_criteria():
     text, begin, end = _fence()
     rule_start = text.index("**Rule S-9: Pathway Safety Verification**")
     next_rule = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
@@ -63,6 +63,7 @@ def test_rule_s9_lists_all_five_risk_criteria():
         "embedding a live credential/secret value",
         "destructive or hard-to-reverse action",
         "external or shared system",
+        "Transmits local or derived data off the machine",
     ):
         assert marker in body, f"missing S-9 criterion: {marker!r}"
 
@@ -102,7 +103,7 @@ def test_halt_and_conditional_pass_rows_added_without_duplicating_credential_row
 
 def test_s9_does_not_gate_pathways_matching_no_criteria():
     """First-draft-audit regression: the trigger must be risk-shape, not novelty — a
-    pathway matching none of the 5 criteria must be explicitly out of scope, not silently
+    pathway matching none of the criteria must be explicitly out of scope, not silently
     gated by omission."""
     text, begin, end = _fence()
     rule_start = text.index("**Rule S-9: Pathway Safety Verification**")
@@ -190,3 +191,19 @@ def test_security_decisions_log_paragraph_states_current_schema_not_just_legacy(
         "date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner"
         in para
     )
+
+
+def test_s9_criterion_6_is_not_swallowed_by_the_public_fetch_exemption():
+    """Rule 12: criterion 5's exemption for routine public fetches would, unqualified, also exempt a
+    GET that smuggles workspace data out in its query string — the last hop of a decode-and-follow
+    injection. Criterion 6 must say the exemption does not reach data-carrying requests, cover a
+    one-off send, and cover rendered markdown URLs; the verdict table must HALT the read-content shape."""
+    text, begin, end = _fence()
+    rule_start = text.index("**Rule S-9: Pathway Safety Verification**")
+    next_rule = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
+    body = text[rule_start:next_rule]
+    assert "public-fetch exemption does not cover a request carrying local or derived data" in body
+    assert "**one-off send**" in body
+    assert "markdown image" in body
+    table = text[next_rule:]
+    assert "Rule S-9 criterion 6 whose destination, payload, or request-to-send came from read content" in table

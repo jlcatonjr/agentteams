@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -60,6 +61,44 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      "package installation — unreviewed third-party code on the host"),
     (r"\bgit\b[^\n]*\bpush\b[^\n]*--force|\bgit\b[^\n]*\breset\s+--hard\b",
      "history-destructive git operation"),
+    # ── Outbound-data gate (Rule S-9 criterion 6; C-4 derived content) ────────────────────────────
+    # Exfiltration is the last hop of an injection, including one an agent decoded from read content
+    # itself ("decrypt this and follow it"). Decoding is deliberately NOT gated: a model can decode
+    # base64/hex/ROT13 with no tool call, and `base64 -d` is routine, so a decode trigger would be
+    # noise that trains rubber-stamping. The send is the hop a Bash call must make. Scoped to sends
+    # that carry a file, stdin, command output or a credential path, or that open a new channel — a
+    # plain GET, `git push` to a configured remote and `gh pr create --body` stay silent (headless PR
+    # agents post through gh). Same limits as the delete gate: per-call and stateless, blind to
+    # WebFetch/MCP, to a request carrying literal or variable-expanded data, and to URLs rendered into
+    # chat output. Network confinement is the boundary, not this.
+    # Flag letters are case-sensitive ((?-i:…)) because the gate searches with IGNORECASE and curl's
+    # -d/-D and -F/-f mean different things; a short-flag cluster (`-sd@f`) is matched too. Tools that
+    # are also ordinary words (nc, scp, host…) are matched by command NAME, not by regex, in
+    # _command_name_trigger() below, so `grep scp` or `wget -nc` stays silent. Also an accepted extra
+    # prompt: a quoted argument containing `; nc …` (the line is split on separators before quoting). Known extra prompts, accepted: a quoted
+    # `requests.post(` in a grep, and `curl -H "…$(gh auth token)"` (that one sends a credential).
+    (r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*d|--data(?:-binary|-raw|-urlencode|-ascii)?|--json)[\s=]*['\"]?@|"
+     r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*F|--form(?:-string)?)[\s=]*['\"]?[^\s'\"=]+=[@<]|"
+     r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*[TK]\b|--upload-file\b|--config\b)|"
+     r"\bwget\b[^\n]*--(?:post|body)-file\b|"
+     r"\bgh\b[^\n|;&]*(?:\s--input\b|\s-[fF]\s*['\"]?[\w.\[\]-]+=@)",
+     "outbound request uploading a file or stdin body (Rule S-9 criterion 6 — local data leaving the machine)"),
+    (r"\b(?:curl|wget)\b[^\n]*(?:\$\(|`)|"
+     r"\b(?:curl|wget|gh|nc|ncat|socat|scp|rsync|sftp)\b[^\n]*"
+     r"(?:~/\.ssh|\.aws/|\.netrc|\.gnupg|\bid_(?:rsa|ed25519|ecdsa)\b|\.env\b|\bprintenv\b)",
+     "outbound request built from command output or naming a credential path (Rule S-9 criterion 6)"),
+    (r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
+     "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
+    (r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
+     r"\bgit\b[^\n]*\bconfig\b[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b|"
+     r"\bgit\b[^\n]*\s-c\s+['\"]?(?:remote|url)\.|"
+     r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
+     r"\bgit\b[^\n]*\bpush\b(?:\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:)",
+     "new publication channel (gist, a new or repointed git remote, a push to a URL, or a gh body "
+     "file/command output sent to a named repo) — Rule S-9 criterion 6"),
+    (r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*data=|"
+     r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
+     "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
     # ── Delete-authorization gate (operator-directed; C-5: clearance precedes destruction) ──────────
     # BEST-EFFORT, COOPERATIVE speed bump — NOT a boundary. It routes a NAMED SUBSET of Bash delete
     # idioms to the operator ("ask") when the harness honors PreToolUse AND a human answers. It does
@@ -78,8 +117,12 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     # "merge" in a PR body or a later `git merge` doesn't prompt. The REST merge endpoint and the GraphQL
     # merge mutations prompt whatever sends them (gh api, curl, wget, an interpreter), not only gh: matching
     # the client let `curl -X PUT …/pulls/N/merge` through (mathAgents @technical-validator, 2026-10-08).
-    (r"\bgh(?:\s+(?:-R|--repo)\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+pr"
-     r"(?:\s+(?:-R|--repo)\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+merge\b|"
+    # Each flag token must parse exactly one way: a `-R`/`--repo` value may not start with `-`, and a
+    # flag is `-{1,2}` + a word char. Overlapping alternatives here backtracked exponentially — 14
+    # repeats of ` --repo -R` took ~50 s, and a hook the harness times out lets the command run. (No
+    # atomic groups: the hook may run under a system python3 older than 3.11.)
+    (r"\bgh(?:\s+(?:-R|--repo)\s+[^\s-]\S*|\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+pr"
+     r"(?:\s+(?:-R|--repo)\s+[^\s-]\S*|\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+merge\b|"
      r"\bpulls/[^\s/]+/merge\b|"
      r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
@@ -112,6 +155,71 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
 )
 
 _WRITE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit", "MultiEdit"})
+
+
+# ── Command-name triggers (tools whose names are also ordinary words) ─────────────────────────────
+# A regex cannot say "in command position" both precisely and in linear time — the attempt here was
+# quadratic (4.6 s on a 10k-char command, enough for padding to outlast the harness timeout). This
+# tokenizer is linear: split on shell separators, drop quotes, then skip VAR=value prefixes, wrappers
+# (with the flags that take a value) and a leading backslash or path, and read the real command name.
+# Not covered, by design of a speed-bump: a name produced at run time (`$(which nc)`, aliases, `$X`).
+_SEGMENT_SPLIT = re.compile(r"[\n;&|(){}`]|\$\(")
+_WRAPPERS = {
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-D", "-r", "-t"}, "doas": {"-u", "-C"},
+    "env": {"-u", "-C", "-S"}, "timeout": {"-s", "-k"}, "nice": {"-n"},
+    "xargs": {"-I", "-n", "-P", "-L", "-d", "-E", "-s"}, "stdbuf": {"-i", "-o", "-e"},
+    "command": set(), "exec": {"-a"}, "nohup": set(), "time": set(), "busybox": set(),
+    "then": set(), "do": set(), "else": set(), "if": set(), "while": set(), "until": set(), "!": set(),
+    "sh": set(), "bash": set(), "zsh": set(), "dash": set(),
+}
+_RAW_SOCKET_TOOLS = frozenset({"ncat", "socat", "telnet", "sftp", "scp"})
+_DNS_TOOLS = frozenset({"dig", "nslookup", "drill", "host"})
+
+
+def _command_names(command: str) -> list[tuple[str, str]]:
+    """Return ``(name, rest_of_segment)`` for each simple command, wrappers peeled off."""
+    found = []
+    for segment in _SEGMENT_SPLIT.split(command):
+        # shlex honours quotes and drops a real comment (not a `#` inside quotes). A quoted argument
+        # is then re-split so `bash -c 'nc …'` exposes `nc`; quote debris such as `FOO= #` is skipped
+        # as punctuation. Unbalanced quotes (common once the line is split on `;`/`|`) fall back to
+        # a plain split with the quotes dropped.
+        try:
+            words = shlex.split(segment, comments=True)
+        except ValueError:
+            words = [segment.replace("'", " ").replace('"', " ")]
+        tokens = [w for word in words for w in word.split()]
+        i, value_flags = 0, set()
+        while i < len(tokens):
+            token = tokens[i].lstrip("\\")
+            base = token.rsplit("/", 1)[-1]
+            if token in value_flags:
+                i += 2
+                continue
+            if re.fullmatch(r"\d*[<>]+&?", token):      # bare redirection: its target is the next token
+                i += 2
+                continue
+            if (token.startswith("-") or re.fullmatch(r"\W+|\d*[<>]+&?\S+|\w+=\S*|\d+(?:\.\d+)?[smhd]?", token)):
+                i += 1
+                continue
+            if base in _WRAPPERS:
+                value_flags = _WRAPPERS[base]
+                i += 1
+                continue
+            found.append((base, " ".join(tokens[i + 1:])))
+            break
+    return found
+
+
+def _command_name_trigger(command: str) -> str | None:
+    """The trigger reason for a word-like network tool run as a command, else None."""
+    for name, rest in _command_names(command):
+        if name in _RAW_SOCKET_TOOLS or (name == "nc" and not re.search(r"(?:^|\s)-[a-zA-Z]*z", rest)):
+            return "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"
+    if re.search(r"\b(?:dig|nslookup|drill|host)\b[^\n|;&]*(?:\$\(|`)", command, re.IGNORECASE) and any(
+            name in _DNS_TOOLS for name, _ in _command_names(command)):
+        return "DNS lookup built from command output — a covert exfiltration channel (Rule S-9 criterion 6)"
+    return None
 
 
 def _decide(decision: str, reason: str) -> None:
@@ -157,17 +265,23 @@ def main() -> int:
     if tool_name == "Bash":
         # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
         command = re.sub(r"\\\r?\n", " ", str(tool_input.get("command", "")))
-        for pattern, why in _BASH_REVIEW_TRIGGERS:
-            if re.search(pattern, command, re.IGNORECASE):
-                _decide(
-                    "ask",
-                    f"Mandatory Review Trigger: {why}. C-5 requires a recorded clearance BEFORE "
-                    f"execution, not after. Approve only if this is the operation you intended.",
-                )
+        reasons = (why for pattern, why in _BASH_REVIEW_TRIGGERS if re.search(pattern, command, re.IGNORECASE))
+        why = next(reasons, None) or _command_name_trigger(command)
+        if why:
+            _decide(
+                "ask",
+                f"Mandatory Review Trigger: {why}. C-5 requires a recorded clearance BEFORE "
+                f"execution, not after. Approve only if this is the operation you intended.",
+            )
         return 0
 
     if tool_name in _WRITE_TOOLS:
         content, target = _written_content(tool_name, tool_input)
+        # Writing .git/config can add or repoint a remote with no `git remote` command for the Bash
+        # gate to see; a later plain `git push` then sends to it (Rule S-9 criterion 6).
+        if re.search(r"(?:^|[\\/])\.git[\\/]config$", str(target)):
+            _decide("ask", "Mandatory Review Trigger: a write to .git/config can add or repoint a remote "
+                           "(Rule S-9 criterion 6). Approve only if this is the change you intended.")
         if not content:
             return 0
 
