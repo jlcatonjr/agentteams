@@ -99,52 +99,80 @@ def test_self_explicit_output_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert Path(seen["output"]) == out
 
 
-# --- fail closed: --self needs that surface's signing switch present and ON ---------------------
+# --- fail closed: --self refuses a surface weaker than the canonical .github/agents ------------
+
+
+def _canonical(root: Path) -> Path:
+    return root / ".github" / "agents"
+
+
+@pytest.mark.parametrize("framework", ["copilot-vscode", "claude"])
+def test_self_fresh_clone_both_missing_is_allowed(framework: str, tmp_path: Path,
+                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _run_self(monkeypatch, tmp_path, ["--self", "--framework", framework], switch_dirs=())
+    assert Path(seen["output"]) == tmp_path.joinpath(*_EXPECTED[framework])
 
 
 @pytest.mark.parametrize("value, state", [(None, "missing"), (False, "OFF")])
 @pytest.mark.parametrize("framework", ["goose", "codex", "agents-md", "claude"])
-def test_self_refuses_ungoverned_surface(
+def test_self_refuses_target_weaker_than_canonical(
     framework: str, value: bool | None, state: str, tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
     target = tmp_path.joinpath(*_EXPECTED[framework])
     _seed_switch(target, value)
     seen = _run_self(monkeypatch, tmp_path, ["--self", "--framework", framework],
-                     switch_dirs=(), rc=1)
+                     switch_dirs=(_canonical(tmp_path),), rc=1)
     assert seen == {}  # the pipeline never ran
     err = capsys.readouterr().err
-    assert "[SELF-GOVERNANCE] refused" in err and str(target) in err and state in err
+    assert "[SELF-GOVERNANCE] refused" in err
+    assert f"{target} (signing switch {state})" in err
+    assert f"{_canonical(tmp_path)} (signing switch ON)" in err
     assert "Render or seed that surface's governance first" in err
 
 
 def test_self_dry_run_refuses_too(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert _run_self(monkeypatch, tmp_path, ["--self", "--framework", "goose", "--dry-run"],
-                     switch_dirs=(), rc=1) == {}
+                     switch_dirs=(_canonical(tmp_path),), rc=1) == {}
 
 
-def test_self_refuses_malformed_switch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    refs = tmp_path / ".claude" / "agents" / "references"
-    refs.mkdir(parents=True)
-    (refs / "agent-privilege.json").write_text("{not json", encoding="utf-8")
+@pytest.mark.parametrize("side", ["target", "canonical"])
+def test_self_refuses_malformed_switch(side: str, tmp_path: Path,
+                                       monkeypatch: pytest.MonkeyPatch,
+                                       capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / ".claude" / "agents"
+    _seed_switch(target)
+    bad = (target if side == "target" else _canonical(tmp_path)) / "references"
+    bad.mkdir(parents=True, exist_ok=True)
+    (bad / "agent-privilege.json").write_text("{not json", encoding="utf-8")
     assert _run_self(monkeypatch, tmp_path, ["--self", "--framework", "claude"],
                      switch_dirs=(), rc=1) == {}
+    assert "cannot read a signing switch" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("framework", ["claude", "copilot-vscode"])
-def test_self_allows_governed_surface(framework: str, tmp_path: Path,
-                                      monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("framework", ["claude", "copilot-vscode", "goose"])
+def test_self_allows_both_on(framework: str, tmp_path: Path,
+                             monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path.joinpath(*_EXPECTED[framework])
     seen = _run_self(monkeypatch, tmp_path, ["--self", "--framework", framework],
-                     switch_dirs=(target,))
+                     switch_dirs=(target, _canonical(tmp_path)))
     assert Path(seen["output"]) == target
 
 
-@pytest.mark.parametrize("value, rc", [(None, 1), (False, 1), (True, 0)])
-def test_self_explicit_output_is_checked(value: bool | None, rc: int, tmp_path: Path,
-                                         monkeypatch: pytest.MonkeyPatch) -> None:
+def test_self_allows_canonical_off_target_missing(tmp_path: Path,
+                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_switch(_canonical(tmp_path), False)
+    _run_self(monkeypatch, tmp_path, ["--self", "--framework", "goose"], switch_dirs=())
+
+
+@pytest.mark.parametrize("canonical, value, rc", [
+    (True, None, 1), (True, False, 1), (True, True, 0), (None, None, 0), (None, True, 0),
+])
+def test_self_explicit_output_is_checked(canonical: bool | None, value: bool | None, rc: int,
+                                         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     out = tmp_path / "custom"
     _seed_switch(out, value)
+    _seed_switch(_canonical(tmp_path), canonical)
     _run_self(monkeypatch, tmp_path, ["--self", "--framework", "claude", "--output", str(out)],
               switch_dirs=(), rc=rc)
 

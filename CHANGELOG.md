@@ -37,13 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tasks and the documented `--self --update --merge --yes` are unchanged. The self-description is still read
   from `.github/agents/_build-description.json`. A `--self --framework claude` run now reads and writes its
   governance under `.claude/agents/references/`.
-- `--self` now fails closed on an ungoverned surface (@security): once the output directory is resolved (default
-  or explicit `--output`, any framework, `--dry-run` included) the run refuses unless
-  `<agents dir>/references/agent-privilege.json` exists with `"enforce_decision_signing": true`. Otherwise a
-  `--self --framework goose|codex|agents-md` run would read a missing switch as legacy unsigned and silently
-  relax the governance `--self` used to get from `.github/agents`. The check is
-  `signing_switch.self_governance_refusal`. The switch is gitignored, so a fresh clone seeds it before its first
-  `--self` run.
+- `--self` now fails closed on a weaker surface (@security): once the output directory is resolved (default or
+  explicit `--output`, any framework, `--dry-run` included) the run refuses when that directory's signing switch
+  (`references/agent-privilege.json`) is weaker than the canonical self surface's (`.github/agents`): ON there,
+  OFF or missing in the target. Otherwise a `--self --framework goose|codex|agents-md` run would read a missing
+  switch as legacy unsigned and silently relax the governance `--self` used to get. Both missing (a fresh
+  clone; the switch is gitignored) proceeds as before, and a malformed switch on either side refuses. The
+  check is `signing_switch.self_governance_refusal`.
 
 ### fix (the signing switch tracks the description on every surface; no project script is a default task)
 

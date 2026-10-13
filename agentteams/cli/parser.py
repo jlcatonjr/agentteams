@@ -481,8 +481,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Without --output it writes to the --framework's own agents directory ("
             + "; ".join(f"{fid}: {agents_dir_for(fid, Path()).as_posix()}" for fid in FRAMEWORKS)
             + "); the description is always read from .github/agents. Refused (fail closed, "
-            "--dry-run too) unless that directory's references/agent-privilege.json has "
-            "enforce_decision_signing: true."
+            "--dry-run too) when that directory's references/agent-privilege.json signing switch "
+            "is weaker than .github/agents' (ON there, OFF or missing in the target)."
         ),
     )
     parser.add_argument(

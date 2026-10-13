@@ -453,9 +453,10 @@ def _main_dispatch(
         self_fw = args.framework if args.framework in FRAMEWORKS else "copilot-vscode"
         if not args.output:
             args.output = str(agents_dir_for(self_fw, _SCRIPT_DIR))
-        # Fail closed: --self reads its governance from that surface's references/ (signing ON).
+        # Fail closed when that surface's governance is weaker than .github/agents' (signing_switch).
         refusal = self_governance_refusal(
-            FRAMEWORKS[self_fw]().normalize_output_path(Path(args.output).resolve()))
+            FRAMEWORKS[self_fw]().normalize_output_path(Path(args.output).resolve()),
+            _SCRIPT_DIR / ".github" / "agents")
         if refusal:
             print(f"[SELF-GOVERNANCE] refused: {refusal}", file=sys.stderr)
             return 1

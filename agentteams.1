@@ -145,7 +145,7 @@ AP\-2 blocking variant of \-\-check\-rank: exits non\-zero on any rank over\-gra
 P1\-3: verify an emitted workspace\-confinement sandbox block was actually merged into the live .claude/settings.json (it is inert until merged). Read\-only, output\-only; exits non\-zero when a confinement was emitted but is not live.
 .TP
 .B \-\-self
-Operate on the module's own agent team using .github/agents/_build\-description.json. Without \-\-output it writes to the \-\-framework's own agents directory (copilot\-vscode: .github/agents; copilot\-cli: .github/agents; claude: .claude/agents; goose: .goose/recipes; agents\-md: .agents; codex: .codex/agents); the description is always read from .github/agents. Refused (fail closed, \-\-dry\-run too) unless that directory's references/agent\-privilege.json has enforce_decision_signing: true.
+Operate on the module's own agent team using .github/agents/_build\-description.json. Without \-\-output it writes to the \-\-framework's own agents directory (copilot\-vscode: .github/agents; copilot\-cli: .github/agents; claude: .claude/agents; goose: .goose/recipes; agents\-md: .agents; codex: .codex/agents); the description is always read from .github/agents. Refused (fail closed, \-\-dry\-run too) when that directory's references/agent\-privilege.json signing switch is weaker than .github/agents' (ON there, OFF or missing in the target).
 .TP
 .B \-\-allow\-foreign\-output
 Permit a relative \-\-output that resolves onto a non\-empty, git\-tracked directory with no sign of being an agentteams\-generated tree. Without this the run refuses: a relative path resolves against the current working directory, which is how a scratch render once overwrote a real agent tree.
