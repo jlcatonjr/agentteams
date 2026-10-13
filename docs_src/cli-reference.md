@@ -543,6 +543,8 @@ Operate on the module's own agent team using `.github/agents/_build-description.
 
 Without `--output`, the run writes to the selected `--framework`'s own agents directory, resolved from the framework registry: `copilot-vscode` (the default) → `.github/agents`, `copilot-cli` → `.github/agents`, `claude` → `.claude/agents`, `goose` → `.goose/recipes`, `codex` → `.codex/agents`, `agents-md` → `.agents`. The description itself is always read from `.github/agents/_build-description.json`. So a `--self --framework claude` run reads and writes its governance under `.claude/agents/references/`, not `.github/agents/references/`. (Before this, every `--self` run defaulted to `.github/agents` whatever the framework, so `--framework claude` rendered Claude-format files into the Copilot directory.)
 
+**`--self` fails closed on an ungoverned surface.** After the output directory is resolved (default or explicit `--output`, for every framework), the run refuses (`[SELF-GOVERNANCE] refused`, exit 1, `--dry-run` included) unless `<agents dir>/references/agent-privilege.json` exists and has `"enforce_decision_signing": true`. A missing switch would make the gates fall back to legacy unsigned behaviour, silently relaxing what `--self` runs under. Render or seed that surface's governance first, or use a governed surface such as the default `.github/agents`. The switch is gitignored, so a fresh clone must seed it before its first `--self` run.
+
 ### `--allow-external-self-output`
 
 Permit `--self` to write self-maintenance artifacts to an `--output` path outside the AgentTeams module source tree. Required to prevent accidental writes into consumer repositories.

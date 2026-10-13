@@ -481,7 +481,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "Operate on the module's own agent team using .github/agents/_build-description.json. "
             "Without --output it writes to the --framework's own agents directory ("
             + "; ".join(f"{fid}: {agents_dir_for(fid, Path()).as_posix()}" for fid in FRAMEWORKS)
-            + "); the description is always read from .github/agents."
+            + "); the description is always read from .github/agents. Refused (fail closed, "
+            "--dry-run too) unless that directory's references/agent-privilege.json has "
+            "enforce_decision_signing: true."
         ),
     )
     parser.add_argument(

@@ -147,6 +147,41 @@ def read_switch(path: Path) -> bool | None:
     return _parse_switch(_read_regular_text(path), path)["enforce_decision_signing"]
 
 
+def self_governance_refusal(agents_dir: Path) -> str | None:
+    """Return why a ``--self`` run into ``agents_dir`` must refuse, or ``None`` when it may proceed.
+
+    ``--self`` reads its governance (this switch, the decision log, the Rule 15(d) cap) from the
+    target surface's ``references/``. An absent switch makes the gates fall back to legacy unsigned
+    behaviour, so a ``--self`` run into an ungoverned surface would silently relax what the module's
+    own team runs under. This fails closed instead: the switch must be present and ``true``.
+
+    Args:
+        agents_dir: The resolved ``--self`` agents directory.
+
+    Returns:
+        The refusal message, or ``None`` when the switch is present and ON.
+
+    Raises:
+        Nothing; an unreadable or malformed switch is reported as a refusal.
+    """
+    path = agents_dir / SWITCH_REL
+    try:
+        value = read_switch(path)
+    except ValueError as exc:
+        state = f"unusable ({exc})"
+    else:
+        if value is True:
+            return None
+        state = "missing" if value is None else "OFF (enforce_decision_signing: false)"
+    return (
+        f"--self targets {agents_dir}, whose signing switch {path.name} is {state}. --self "
+        "reads its governance from that surface, so it refuses rather than run with signing "
+        "relaxed. Render or seed that surface's governance first (references/agent-privilege.json "
+        'with "enforce_decision_signing": true), or use a framework whose surface is governed '
+        "(e.g. the default copilot-vscode, .github/agents)."
+    )
+
+
 def switch_payload(value: bool, note: str) -> str:
     """Render the switch file text.
 
