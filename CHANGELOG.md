@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (`--adopt-only SLUG[,SLUG...]`: adopt a named subset, touching only the orchestrator)
+
+- Adopting one bespoke agent used to need `--update --merge --adopt-orphans`: a full render and merge that
+  adopted every orphan and rewrote the team's other governed files. The new standalone mode
+  (`agentteams/cli/adopt_only.py`, dispatched from `cli/standalone_modes.py`) adopts exactly the named slugs:
+  - Each must be an adoptable orphan (`discover_orphans` with `adoption_exclusions`); any other slug refuses the
+    whole run and is named.
+  - Only the `*(adopted)*` rows of the orchestrator's `routing_table_rows` fence are rewritten, as
+    `format_adopted_routing_rows(previously_adopted ∪ named)` with the label `--update` uses. Every other row is
+    byte-identical, a second run is a no-op, and a later `--update --merge` carries the rows with zero diff, so
+    there are no manifest or build-log writes.
+  - A Copilot orchestrator's `agents:` list is extended with exactly the named slugs through the unchanged
+    `adopt-orphans-merge` gate (governed workspace, Ed25519-signed decision granting exactly `agents:<slug>`,
+    Rule 15(d) cap, record, backup). Claude has no `agents:` list, so only rows change and no decision is needed.
+  - `--dry-run --json` reports the row diff, the `agents:` additions with the gate's clearance status, and each
+    slug's `tools:` line, flagged when wider than Read/Grep/Glob.
+  - Mutually exclusive with `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`.
+
 ### fix (`--self` without `--output` writes to the chosen framework's agents directory)
 
 - `--self` used to default `--output` to `.github/agents` whatever `--framework` said, so

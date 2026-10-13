@@ -192,6 +192,22 @@ def _build_parser() -> argparse.ArgumentParser:
              "reports.",
     )
     parser.add_argument(
+        "--adopt-only",
+        metavar="SLUG[,SLUG...]",
+        dest="adopt_only",
+        default=None,
+        help="Adopt exactly the named orphan agents and nothing else: no render. Each slug must be "
+             "an adoptable orphan in the target agent directory, or the whole run refuses. Only the "
+             "adopted rows inside the orchestrator's routing_table_rows fence are rewritten (every "
+             "other row stays byte-identical; a second run is a no-op; a later --update carries "
+             "them forward). Where the orchestrator has an agents: list (Copilot) it is extended "
+             "with exactly the named slugs through the adopt-orphans-merge gate (governed "
+             "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
+             "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
+             "line, flagged when wider than Read/Grep/Glob. Mutually exclusive with --overwrite, "
+             "--migrate, --prune and --adopt-orphans.",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Check for template drift and structural changes without writing any files "

@@ -106,7 +106,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         _fleet_incompatible = [
             ("self", "--self"), ("prune", "--prune"), ("migrate", "--migrate"),
             ("revert_migration", "--revert-migration"), ("overwrite", "--overwrite"),
-            ("adopt_orphans", "--adopt-orphans"), ("bridge_from", "--bridge-from"),
+            ("adopt_orphans", "--adopt-orphans"), ("adopt_only", "--adopt-only"),
+            ("bridge_from", "--bridge-from"),
             ("bridge_refresh", "--bridge-refresh"), ("convert_from", "--convert-from"),
             ("interop_from", "--interop-from"), ("refresh_index", "--refresh-index"),
             ("query_index", "--query-index"), ("list_backups", "--list-backups"),
@@ -120,6 +121,14 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             val = getattr(args, attr, None)
             if val:
                 parser.error(f"--fleet cannot be combined with {flag} (it operates on many workspaces)")
+
+    if getattr(args, "adopt_only", None):
+        # --adopt-only is its own write scope (orchestrator rows, gated agents:); a render mode or
+        # a whole-orphan-set adoption alongside it would widen that scope (cli/adopt_only.py).
+        for attr, flag in (("overwrite", "--overwrite"), ("migrate", "--migrate"),
+                           ("prune", "--prune"), ("adopt_orphans", "--adopt-orphans")):
+            if getattr(args, attr, False):
+                parser.error(f"--adopt-only and {flag} are mutually exclusive")
 
     if getattr(args, "adopt_orphans", False):
         # Adoption extends the orchestrator's `agents:` roster. A full re-render (--overwrite /

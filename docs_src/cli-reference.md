@@ -13,7 +13,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--bridge-from DIR] [--bridge-source-framework NAME]
            [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills]
            [--dry-run] [--json] [--overwrite] [--merge] [--yes]
-           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--check]
+           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--adopt-only SLUG[,SLUG...]] [--check]
            [--refresh-index] [--agent-check] [--window-hours H] [--force]
            [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
            [--refresh-code-index] [--query-code TEXT] [--code-query-k N]
@@ -245,7 +245,7 @@ Global exclusions:
 - `--bridge-check`, `--bridge-refresh`, and `--bridge-merge` are mutually exclusive; at most one may be passed.
 - `--refresh-index` and `--query-index` are mutually exclusive.
 - `--query-k` must be `>= 1`.
-- `--fleet` requires `--update` and `--merge`, forbids `--shrink-policy=allow`, and is mutually exclusive with `--self`, `--project`, `--description`, `--output`, `--overwrite`, `--prune`, `--migrate`, `--revert-migration`, `--adopt-orphans`, `--bridge-from`, `--bridge-refresh`, `--convert-from`, `--interop-from`, `--refresh-index`, `--query-index`, `--list-backups`, `--restore-backup`, `--add-fence-markers`, `--capture-baseline`, and `--check-baseline` (it operates on many workspaces, each resolved independently).
+- `--fleet` requires `--update` and `--merge`, forbids `--shrink-policy=allow`, and is mutually exclusive with `--self`, `--project`, `--description`, `--output`, `--overwrite`, `--prune`, `--migrate`, `--revert-migration`, `--adopt-orphans`, `--adopt-only`, `--bridge-from`, `--bridge-refresh`, `--convert-from`, `--interop-from`, `--refresh-index`, `--query-index`, `--list-backups`, `--restore-backup`, `--add-fence-markers`, `--capture-baseline`, and `--check-baseline` (it operates on many workspaces, each resolved independently).
 
 Excluded with `--convert-from`, `--interop-from`, or `--bridge-from`:
 - `--description`, `--project`, `--self`, `--no-scan`, `--update`, `--prune`, `--check`, `--refresh-index`, `--query-index`, `--scan-security`, `--post-audit`, `--auto-correct`, `--enrich`, `--merge`, `--migrate`, `--revert-migration`, `--list-backups`, `--restore-backup`
@@ -299,6 +299,35 @@ Register pre-existing agent files that the generated taxonomy does not produce (
 `--overwrite` without `--adopt-orphans` rebuilds the routing fence from the brief alone), the run is refused
 (`[ADOPTED-ROWS] blocked`). Re-run with `--adopt-orphans`, or use `--update --merge`, which carries them. Delete
 an agent's file, or `--prune` it, to drop its row on purpose.
+
+### `--adopt-only`
+
+`--adopt-only SLUG[,SLUG...]` adopts exactly the named orphan agents and does nothing else: no render, no
+merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/adopt_only.py`), mutually
+exclusive with `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
+`--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
+
+- **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
+  build doesn't emit it, and it isn't a tool agent. Any other slug refuses the whole run (`[ADOPT-ONLY] refused`)
+  and is named.
+- **Routing rows.** In the orchestrator's `routing_table_rows` fence only the `*(adopted)*` rows are rewritten:
+  the rows already adopted on disk plus the named ones, rendered exactly as `--update` renders them. Every other
+  row, and everything outside the fence, stays byte-identical. A second run changes nothing, and a later
+  `--update --merge` carries the rows forward from the orchestrator itself with no diff.
+- **The `agents:` list.** Where the orchestrator's front matter has one (Copilot), it is extended with exactly the
+  named slugs it lacks, through the same `adopt-orphans-merge` gate as `--update --adopt-orphans`: a
+  signing-governed workspace, an Ed25519-signed decision with `scope=adopt-orphans-merge` and `effect_grants`
+  exactly `agents:<slug>` for those slugs (a superset or subset refuses), the Rule 15(d) cap, the
+  `references/adopt-orphans-merge.log.csv` record and a backup. Where there is none (Claude), only the rows
+  change and no decision is needed.
+- **Write set.** The orchestrator file, plus on the gated path the gate's own writes (the decision's consumption,
+  the record and the backup). Nothing else.
+- **`--dry-run --json`** prints one document: the adopted-row diff (`routing_rows.added` / `removed`), whether
+  there is an `agents:` list and what it would gain (`agents_to_add`, with the gate's clearance status under
+  `adopt_orphans_merge`), and each named slug's `tools:` line with `wider_than_read_only` set when it grants more
+  than Read/Grep/Glob, or has no `tools:` line at all. On Claude that line, not the routing row, is the real grant.
+
+Example: `agentteams --self --framework claude --adopt-only injection-test-designer --dry-run --json`.
 
 ### `--materialize-native`
 
