@@ -304,7 +304,7 @@ an agent's file, or `--prune` it, to drop its row on purpose.
 
 `--adopt-only SLUG[,SLUG...]` adopts exactly the named orphan agents and does nothing else: no render, no
 merge, no manifest or build-log write. It is a standalone mode (`agentteams/cli/adopt_only.py`), mutually
-exclusive with `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
+exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`, and it works with
 `--self` or `--description`, `--framework`, `--output`, `--dry-run`, `--json` and `--no-backup`.
 
 - **Validation.** Each slug must be an adoptable orphan in the target agent directory: its file is there, this
@@ -320,8 +320,10 @@ exclusive with `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--f
   exactly `agents:<slug>` for those slugs (a superset or subset refuses), the Rule 15(d) cap, the
   `references/adopt-orphans-merge.log.csv` record and a backup. Where there is none (Claude), only the rows
   change and no decision is needed.
-- **Write set.** The orchestrator file, plus on the gated path the gate's own writes (the decision's consumption,
-  the record and the backup). Nothing else.
+- **Write set.** The orchestrator file and its backup under the agents directory's `.agentteams-backups/`
+  (`--no-backup` skips it), plus on the gated path the gate's own writes (the decision's consumption, the record
+  and the backup). Nothing else. An adopted row whose agent file is gone is dropped, as `--update` drops it,
+  and reported under `removed`; the run prints `N added, M removed`.
 - **`--dry-run --json`** prints one document: the adopted-row diff (`routing_rows.added` / `removed`), whether
   there is an `agents:` list and what it would gain (`agents_to_add`, with the gate's clearance status under
   `adopt_orphans_merge`), and each named slug's `tools:` line with `wider_than_read_only` set when it grants more

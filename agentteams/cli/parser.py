@@ -10,6 +10,7 @@ namespace unchanged.
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from agentteams import __version__
@@ -23,8 +24,6 @@ from agentteams.mcp_servers import SERVERS as _MCP_SERVERS
 from agentteams.cli.agent_doc_sync_switch import add_agent_doc_sync_arguments
 from agentteams.cli.branch_switch import add_branch_arguments
 from agentteams.emit import DEFAULT_BACKUP_KEEP_LAST
-from pathlib import Path
-
 from agentteams.frameworks.registry import FRAMEWORKS, FRAMEWORK_IDS, agents_dir_for
 
 
@@ -204,8 +203,8 @@ def _build_parser() -> argparse.ArgumentParser:
              "with exactly the named slugs through the adopt-orphans-merge gate (governed "
              "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
              "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
-             "line, flagged when wider than Read/Grep/Glob. Mutually exclusive with --overwrite, "
-             "--migrate, --prune and --adopt-orphans.",
+             "line, flagged when wider than Read/Grep/Glob. Mutually exclusive with --update, "
+             "--overwrite, --migrate, --prune and --adopt-orphans.",
     )
     parser.add_argument(
         "--check",

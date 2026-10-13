@@ -97,5 +97,6 @@ orchestrator with an `agents:` list, the named slugs it lacks go through the mer
 | `tools_grant(path) -> dict` | An adopted file's `tools:` line, with `wider_than_read_only` when it grants more than Read/Grep/Glob or has none |
 | `run_adopt_only(args, manifest, description, output_dir) -> int` | The mode: validate, gate, splice; `--dry-run --json` prints the report |
 
-`AdoptOnlyError` is raised for a refusal. The mode writes the orchestrator only, plus the gate's own
-writes on the gated path. Operator reference: `docs_src/cli-reference.md` (`--adopt-only`).
+`AdoptOnlyError` is raised for a refusal. The mode writes the orchestrator and its backup (`--no-backup`
+skips it), plus the gate's own writes on the gated path. A row whose agent file is gone is dropped and
+reported under `removed`. Operator reference: `docs_src/cli-reference.md` (`--adopt-only`).

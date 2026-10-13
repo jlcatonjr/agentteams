@@ -126,7 +126,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         # --adopt-only is its own write scope (orchestrator rows, gated agents:); a render mode or
         # a whole-orphan-set adoption alongside it would widen that scope (cli/adopt_only.py).
         for attr, flag in (("overwrite", "--overwrite"), ("migrate", "--migrate"),
-                           ("prune", "--prune"), ("adopt_orphans", "--adopt-orphans")):
+                           ("prune", "--prune"), ("adopt_orphans", "--adopt-orphans"),
+                           ("update", "--update")):
             if getattr(args, attr, False):
                 parser.error(f"--adopt-only and {flag} are mutually exclusive")
 

@@ -22,7 +22,9 @@ standalone mode does the one action and nothing else:
   the adoption record and the backup. Without one (Claude), only rows change and no gate applies:
   the agent file's own ``tools:`` line is the real grant, which the dry run shows.
 
-The permitted write set is the orchestrator file, plus the gate's own writes on the gated path.
+The permitted write set is the orchestrator file and its backup (``--no-backup`` skips it; on the
+gated path the gate takes it), plus the gate's own writes on the gated path. An adopted row whose
+agent file is gone is dropped, as ``--update`` drops it, and reported under ``removed``.
 Nothing is rendered, so this lives with the standalone modes rather than in ``cli/generate.py``.
 """
 
@@ -45,6 +47,7 @@ from agentteams.adopted_agents import (
     read_adopted_agent_metadata,
 )
 from agentteams.atomicio import _atomic_write_text as atomic_write_text
+from agentteams.backup import backup_output_dir
 from agentteams.cli import adopt_merge_gate
 from agentteams.cli.json_mode import is_json_mode, json_stdout
 from agentteams.cli.output_target import resolve_output_dir
@@ -254,13 +257,18 @@ def run_adopt_only(
         current = orchestrator.read_text(encoding="utf-8")
         new = splice_adopted_rows(current, plan["block"])
         if new != current:
+            # The gated path's backup was taken by the gate; otherwise back the orchestrator up here
+            # (a gitignored team, such as agentteams' own .claude/, has no git copy to recover).
+            if not gated and not args.no_backup:
+                backup_output_dir(output_dir, files_to_backup=[orchestrator.name], reason="adopt-only",
+                                  framework=args.framework)
             atomic_write_text(orchestrator, new)
     except (AdoptOnlyError, OSError) as exc:
         print(f"[ADOPT-ONLY] failed writing {orchestrator.name}: {exc}", file=sys.stderr)
         return 1
-    added = len(diff["added"])
-    print(f"  ✓  adopt-only: {added} routing row(s) added to {orchestrator.name}"
-          if added or diff["removed"] else f"  adopt-only: {orchestrator.name} already current")
+    added, removed = len(diff["added"]), len(diff["removed"])
+    print(f"  ✓  adopt-only: {orchestrator.name} routing rows: {added} added, {removed} removed"
+          if added or removed else f"  adopt-only: {orchestrator.name} already current")
     return 0
 
 

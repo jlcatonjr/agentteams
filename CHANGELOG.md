@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Rule 15(d) cap, record, backup). Claude has no `agents:` list, so only rows change and no decision is needed.
   - `--dry-run --json` reports the row diff, the `agents:` additions with the gate's clearance status, and each
     slug's `tools:` line, flagged when wider than Read/Grep/Glob.
-  - Mutually exclusive with `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`.
+  - Mutually exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orphans` and `--fleet`.
+  - Writes only the orchestrator and its backup (`.agentteams-backups/`; `--no-backup` skips it), plus the gate's
+    own writes on the Copilot path. A row whose agent file is gone is dropped and reported under `removed`.
 
 ### fix (`--self` without `--output` writes to the chosen framework's agents directory)
 

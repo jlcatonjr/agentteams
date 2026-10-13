@@ -117,14 +117,43 @@ def test_adds_exactly_the_named_row_and_nothing_else(project) -> None:
     assert _adopt("claude", out, "alpha-agent") == 0
     after = _snapshot(root)
     orch = _orch_rel("claude")
-    # Every other path under the project is byte-unchanged; no decision, record or backup on Claude.
-    assert _changed(before, after) == {orch}
+    # Every other path under the project is byte-unchanged; no decision or record on Claude. The
+    # orchestrator's backup is the only extra write.
+    changed = _changed(before, after)
+    backups = {c for c in changed if "/.agentteams-backups/" in c}
+    assert changed - backups == {orch}
+    assert backups and all(c.startswith("/".join(_DIRS["claude"]) + "/.agentteams-backups/") for c in backups)
+    assert any("orchestrator" in c and after[c] == before[orch] for c in backups)
     old, new = before[orch].decode(), after[orch].decode()
     added = [ln for ln in new.splitlines(keepends=True) if ln not in old.splitlines(keepends=True)]
     assert len(added) == 1 and "`@alpha-agent` *(adopted)*" in added[0]
     # The rest of the orchestrator is byte-identical: removing the one row restores the original.
     assert new.replace(added[0], "", 1) == old
     assert "@beta-agent" not in new  # another orphan's row is NOT added
+
+
+def test_no_backup_writes_only_the_orchestrator(project) -> None:
+    root, out = project("claude")
+    before = _snapshot(root)
+    assert _adopt("claude", out, "alpha-agent", "--no-backup") == 0
+    assert _changed(before, _snapshot(root)) == {_orch_rel("claude")}
+
+
+def test_row_of_a_deleted_agent_is_dropped_and_reported(project, capsys) -> None:
+    root, out = project("claude")
+    assert _adopt("claude", out, "alpha-agent") == 0
+    alpha_row = next(ln for ln in (out / "orchestrator.md").read_text(encoding="utf-8").splitlines()
+                     if "`@alpha-agent` *(adopted)*" in ln)
+    (out / "alpha-agent.md").unlink()
+    capsys.readouterr()
+    assert _adopt("claude", out, "beta-agent", "--dry-run", "--json") == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["routing_rows"]["removed"] == [alpha_row.strip()]
+    assert len(report["routing_rows"]["added"]) == 1 and "@beta-agent" in report["routing_rows"]["added"][0]
+    assert _adopt("claude", out, "beta-agent") == 0
+    assert "1 added, 1 removed" in capsys.readouterr().out
+    text = (out / "orchestrator.md").read_text(encoding="utf-8")
+    assert "@alpha-agent" not in text and "`@beta-agent` *(adopted)*" in text
 
 
 def test_second_run_is_a_no_op(project) -> None:
@@ -168,7 +197,7 @@ def test_malformed_slug_refuses(project, capsys) -> None:
     assert _snapshot(root) == before
 
 
-@pytest.mark.parametrize("flag", ["--overwrite", "--migrate", "--prune", "--adopt-orphans"])
+@pytest.mark.parametrize("flag", ["--overwrite", "--migrate", "--prune", "--adopt-orphans", "--update"])
 def test_flag_exclusivity(flag: str, capsys) -> None:
     parser = _build_parser()
     argv = ["--description", str(BRIEF), "--adopt-only", "alpha-agent", flag]
@@ -196,12 +225,10 @@ def test_dry_run_json_reports_rows_and_tools_and_writes_nothing(project, capsys)
     assert report["tools"]["beta-agent"] == {"line": "tools: Read, Edit, Bash", "wider_than_read_only": True}
 
 
-def test_update_after_adopt_only_carries_the_rows_with_zero_diff(project, monkeypatch) -> None:
+def _seed_overwrite_pass(out: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace the decision log with one HMAC-signed ``overwrite`` PASS, as an ``--update`` needs."""
     from agentteams.cli.decision_log import sign_decision_row
 
-    root, out = project("claude")
-    assert _adopt("claude", out, "alpha-agent") == 0
-    adopted = (out / "orchestrator.md").read_bytes()
     key = "adopt-only-decision-key"
     monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", key)
     row = {"timestamp": "2026-05-03T00:00:00Z", "requesting_agent": "security",
@@ -211,10 +238,21 @@ def test_update_after_adopt_only_carries_the_rows_with_zero_diff(project, monkey
     cols = list(row)
     (out / "references" / "security-decisions.log.csv").write_text(
         ",".join(cols) + "\n" + ",".join(row[c] for c in cols) + "\n", encoding="utf-8")
-    assert build_team.main([
-        "--description", str(BRIEF), "--framework", "claude", "--output", str(out),
+
+
+def _update_merge(fw: str, out: Path) -> int:
+    return build_team.main([
+        "--description", str(BRIEF), "--framework", fw, "--output", str(out),
         "--update", "--merge", "--yes", "--no-scan", "--security-offline",
-    ]) == 0
+    ])
+
+
+def test_update_after_adopt_only_carries_the_rows_with_zero_diff(project, monkeypatch) -> None:
+    root, out = project("claude")
+    assert _adopt("claude", out, "alpha-agent") == 0
+    adopted = (out / "orchestrator.md").read_bytes()
+    _seed_overwrite_pass(out, monkeypatch)
+    assert _update_merge("claude", out) == 0
     assert (out / "orchestrator.md").read_bytes() == adopted
 
 
@@ -339,3 +377,16 @@ def test_copilot_dry_run_json_reports_agents_additions(project, capsys) -> None:
     assert report["agents_list"] is True and report["agents_to_add"] == ["alpha-agent"]
     assert report["adopt_orphans_merge"]["clearance"]["status"] == "cleared"
     assert len(report["routing_rows"]["added"]) == 1
+
+
+@pytest.mark.usefixtures("signing_preapproved")
+def test_copilot_update_after_gated_adopt_only_has_zero_diff(project, monkeypatch) -> None:
+    root, out = project("copilot-vscode")
+    _govern(out, "agents:alpha-agent")
+    assert _adopt("copilot-vscode", out, "alpha-agent") == 0
+    orch = out / "orchestrator.agent.md"
+    adopted = orch.read_bytes()
+    assert b"  - alpha-agent\n" in adopted and b"`@alpha-agent` *(adopted)*" in adopted
+    _seed_overwrite_pass(out, monkeypatch)
+    assert _update_merge("copilot-vscode", out) == 0
+    assert orch.read_bytes() == adopted
