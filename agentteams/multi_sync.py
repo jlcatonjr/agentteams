@@ -47,6 +47,7 @@ from agentteams.frameworks._sandbox_emit import (
 from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
 from agentteams.frameworks.registry import FRAMEWORK_IDS, FRAMEWORKS, agents_dir_for
 from agentteams.interop import export_to_cai, import_from_cai
+from agentteams.interop_grant_check import ProjectionPolicy
 from agentteams.sync_baseline import load_baseline, write_baseline
 from agentteams.sync_classifier import Action, Classification, classify_sync
 from agentteams.sync_pin import (
@@ -518,6 +519,13 @@ def _project_and_rebaseline(
         _check_projected_write_roots(root, privilege, frameworks, accepted_write_roots)
         for fw in frameworks:
             _emit_privilege_artifacts(root, fw, privilege, dry_run=True)
+    # A projection never widens a grant (interop_grant_check): goose renders grant-scoped and each agent is re-read
+    # and compared with the canonical one. Not strict: the enforcement-class / Copilot-size refusals are
+    # --interop-from's. A dry pass over every framework first, so a refusal aborts before any framework is written.
+    policy = ProjectionPolicy(strict=False)
+    for fw in frameworks if not dry_run else ():
+        import_from_cai(canonical_cai, fw, framework_agents_dir(root, fw), overwrite=True, dry_run=True,
+                        preserve_existing=True, projection=policy)
     projected: list[str] = []
     for fw in frameworks:
         agents_dir = framework_agents_dir(root, fw)
@@ -527,7 +535,7 @@ def _project_and_rebaseline(
         # (bespoke front matter survives) and an existing instruction file is fence-merged,
         # never replaced by another framework's instructions.
         res = import_from_cai(canonical_cai, fw, agents_dir, overwrite=True, dry_run=dry_run,
-                              preserve_existing=True)
+                              preserve_existing=True, projection=policy)
         if notices is not None:
             notices.extend(f"[{fw}] {n}" for n in res.notices)
         # C2: re-emit this framework's OS-boundary artifacts from the team-level privilege

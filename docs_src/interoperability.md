@@ -88,14 +88,21 @@ Bundle artifacts are written under `references/interop/<source>-to-<target>/` an
 
 ### Grants: a projection never widens one
 
-A source agent's tool grant is a binding capability declaration (C-3), so `--interop-from` checks every projected
-agent before anything is written ([`interop_grant_check`](api-reference/interop-grant-check.md)):
+A source agent's tool grant is a binding capability declaration (C-3), so every projection path checks each
+projected agent before anything is written ([`interop_grant_check`](api-reference/interop-grant-check.md)):
+`--interop-from`, the pinned sync (`multi_sync`, which first dry-runs every framework so a refusal aborts before
+any is written) and `--convert-from`. The no-widening check (1) and goose grant mode (3) apply to all three; the
+enforcement-class (2) and Copilot-size (5) refusals are `--interop-from`'s.
 
 1. **No widening.** Each agent is rendered, then re-read the way the target surface reads it, platform defaults
    included: Copilot adds `tools: ['read', 'edit', 'search']` to a header without one, Claude inherits every tool
    when `tools` is missing, and a goose recipe without `extensions` loads the user's configured extensions. The
-   re-read tool scopes must be a subset of the source's (`read` and `search` count as one read-only class), or the
-   run refuses, naming the agent and the surface.
+   re-read tool scopes must be a subset of the source's, or the run refuses, naming the agent and the surface. On
+   goose only, `read` and `search` count as one class, because its `agentteams_readfs` server serves both.
+   **An unknown tool name fails closed:** a projected name that maps to no canonical scope (Copilot's
+   `runCommands`, an MCP tool such as `mcp__github__create_issue`, an unrecognised goose extension) refuses the run
+   unless the source agent declares the same name. The only exception is what the *target's* own brief grants: the
+   `agentteams_runner` tools under `write_policy: "orchestrator-only"`.
 2. **Enforcement class.** Each surface either enforces the grant, declares it, or has no channel for it:
 
     | Surface | Class | Notes |
@@ -105,18 +112,27 @@ agent before anything is written ([`interop_grant_check`](api-reference/interop-
     | `codex` | declared | `sandbox_mode` and the tool list are self-imposed; enforced only under the `write_policy: "orchestrator-only"` role gate |
     | `agents-md` | none | no grant channel |
 
-    An agent whose grant is narrower than the surface default (any of read/search, edit, execute missing) is refused
-    on a declared or none surface. `--interop-allow-cooperative SLUG[,SLUG...]` lets the operator project named
-    agents anyway: each gets a "grant is cooperative on this surface" banner and a `NOT ENFORCED` notice.
+    An agent whose grant is narrower than the surface default (any of read, search, edit, execute missing) is
+    refused on a declared or none surface. `--interop-allow-cooperative SLUG[,SLUG...]` lets the operator project
+    named agents anyway: each gets a "grant is cooperative on this surface" banner and a `NOT ENFORCED` notice, and
+    each opt-in is **recorded** (Rule 15) as one row in the destination team's
+    `references/security-decisions.log.csv`: `action_reviewed` `interop-allow-cooperative:<framework>:<slug>`,
+    verdict `RECORDED` (not an authorizing verdict, so it clears nothing), written in that log's own schema through
+    `governance_logs.append_row`, with the `prev_digest` a hash-chained log requires. Without that log the opt-in
+    is refused, naming the missing file.
 3. **goose renders grant-scoped.** `read`/`search` map to the read-only `agentteams_readfs` server with an
-   `available_tools` allowlist, never to the `developer` builtin. Interop doesn't install the server: run a native
-   goose generation once so `scripts/goose-readfs-mcp.py` exists, or the projection refuses, naming the agents
-   that need it.
+   `available_tools` allowlist, never to the `developer` builtin. `--interop-from` and the pinned sync don't install
+   the server: run a native goose generation once so `scripts/goose-readfs-mcp.py` exists. It must match the pinned
+   `READFS_SHA256` (the hash the runner checks); a missing, linked or edited copy refuses the projection, naming the
+   agents that need it. `--convert-from` emits goose's own files, the server included.
 4. **codex** gets canonical tool tokens when the source names Claude tools (`Read, Grep, Glob` becomes
    `read`, `search`), so the agent carries `sandbox_mode = "read-only"` and the "Reading on Codex" shell allowlist.
    Bespoke tool names stay verbatim.
 5. **Copilot size.** A body over the platform's 30,000-character limit is refused on this path. Native generation
    only warns.
+
+Not covered: goose **bridge** recipes (`--bridge-from … --framework goose`: the entry recipe and the subagent stubs)
+still declare the whole `developer` builtin, because the stubs read their canonical agent through it.
 
 Projecting into a governed team never weakens its signing switch or rosters: the projection marker keeps a
 signing-governed switch on and writes rosters only when absent ([`projection_marker`](api-reference/projection-marker.md)).

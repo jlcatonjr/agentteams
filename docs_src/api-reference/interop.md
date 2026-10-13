@@ -65,12 +65,15 @@ Imports CAI payload into target framework files. With `preserve_existing=True` (
 
 `write_policy_fields` (CLI `--description`) is `interop_write_policy.manifest_fields` of the target brief. Under `write_policy: "orchestrator-only"`, each non-orchestrator agent is narrowed, gets its write-policy section once, and must pass `AR_WRITE_POLICY` as rendered. Granted agents get the `agentteams_runner` block, and the pinned server is installed. An existing agent file left in place without `overwrite` is an error. See [`interop_write_policy`](interop-write-policy.md). Every front-matter scalar written into an imported agent is on one line: names, descriptions, restored `raw_front_matter` values and list items, and handoff label/agent/prompt strings, with line breaks collapsed and handoff quotes neutralised. A captured key that isn't a plain identifier is skipped with a notice (`interop_helpers.one_line`, `safe_fm_key`, `handoff_header_lines`). A raw `tools:` value is written as captured only when it maps to the agent's scopes, and one containing a line break never does (`interop_helpers.raw_scopes` returns `None`), so the canonical list is written instead. So no value can inject a front-matter key.
 
-`projection` is an [`interop_grant_check.ProjectionPolicy`](interop-grant-check.md); `run_interop` always passes one,
-other callers (`multi_sync`) pass none. With it, goose renders grant-scoped (`goose_tool_scoping: "grant"`, readers
-on `agentteams_readfs`) and refuses when that server's script is missing at the target root, and every agent is
-checked after rendering: no widening of its source grant, its enforcement class, and the Copilot size limit. All
-refusals are collected and raised as one `ValueError`, and no agent file is written: agent files are written only
-after every agent has passed (also the case without `projection`).
+`projection` is an [`interop_grant_check.ProjectionPolicy`](interop-grant-check.md). `run_interop` passes a strict
+one and `multi_sync` a non-strict one; a direct caller passing none is unchecked. With it, goose renders grant-scoped
+(`goose_tool_scoping: "grant"`, readers on `agentteams_readfs`) and refuses when that server's script is missing at
+the target root or doesn't match `READFS_SHA256`, and every agent is checked after rendering: no widening of its
+source grant and no unknown tool name the source doesn't declare, plus (strict) its enforcement class and the
+Copilot size limit. All refusals are collected and raised as one `ValueError`, and no agent file is written: agent
+files are written only after every agent has passed (also the case without `projection`). Each applied
+`--interop-allow-cooperative` opt-in is then recorded in the destination's `references/security-decisions.log.csv`
+before the agent files are written. The `tools:` line selection lives in `interop_grant_check.tools_line`.
 
 The goose `tools:` header line is always written (grant mode derives the recipe's extensions from it). The
 per-agent `capability_map.canonical_to_goose_extensions` union is gone: it added the whole `developer` builtin to

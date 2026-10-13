@@ -405,8 +405,8 @@ def import_from_cai(
         write_policy_fields: ``interop_write_policy.manifest_fields`` of the target brief (``--description``):
             under the switch every non-orchestrator agent is narrowed and given its write-policy section once,
             granted agents get the agentteams_runner block, and the pinned server is installed.
-        projection: ``run_interop``'s checks (:mod:`interop_grant_check`): goose renders grant-scoped and every agent
-            is checked before any is written. ``None`` (multi_sync, direct callers) skips them.
+        projection: The projection checks (:mod:`interop_grant_check`; ``run_interop`` strict, ``multi_sync`` not):
+            goose renders grant-scoped and every agent is checked before any is written. ``None`` skips them.
 
     Returns:
         An :class:`InteropResult` listing converted, skipped and notice entries.
@@ -467,9 +467,8 @@ def import_from_cai(
     adapter.apply_framework_extensions(manifest, cai)
     # M6: the target brief's write_policy/mcp_grants, set last so no captured extension overrides them.
     _iwp.prepare(manifest, write_policy_fields, target_framework, target_dir, preserve_existing=preserve_existing)
-    if projection is not None:  # goose renders grant-scoped (its readers need agentteams_readfs installed)
-        result.notices += _igc.prepare(manifest, cai, target_framework, target_dir, projection)
-    refusals: list[str] = []
+    # goose renders grant-scoped (its readers need agentteams_readfs installed); every agent is checked below
+    run = _igc.prepare(manifest, cai, target_framework, target_dir, projection) if projection is not None else None
     pending: list[tuple[Path, str]] = []  # agent files are written only once every agent has passed
     # C.3: apply captured handoffs per the adapter's delivery mode. `native`
     # frameworks (copilot-vscode, goose) keep handoffs inline in the agent
@@ -552,36 +551,12 @@ def import_from_cai(
         if narrowed:
             cai_tool_scopes = _write_policy.narrow_scopes(cai_tool_scopes)
         body = _write_policy.ensure_section(body, slug, manifest, writer=not narrowed)  # unchanged without the switch
-        cai_tools_line: str | None = None
         cai_raw_caps = (agent.get("capabilities") or {}).get("raw") or {}
         source_scopes = cai_tool_scopes if (cai_tool_scopes or cai_raw_caps) else None  # None: no grant declared
-        if projection is not None:
-            body, notes = _igc.annotate(body, slug, source_scopes, target_framework, manifest, projection)
-            result.notices += notes
-        copilot_raw = next((str(v) for k, v in cai_raw_caps.items()
-                            if k in ("copilot-vscode", "copilot-cli") and str(v).strip()), "")
-        if copilot_raw and _raw_scopes(copilot_raw) != cai_tool_scopes:
-            # A stale raw string must never widen a (narrowed) canonical grant: C-3.
-            copilot_raw = ""
-        if copilot_raw and target_framework in ("copilot-vscode", "copilot-cli"):
-            # Same vocabulary: keep the declared tools verbatim (bespoke `runCommands` etc.).
-            cai_tools_line = f"tools: {copilot_raw}"
-        elif target_framework == "codex":
-            # codex states the declared tools as a self-imposed limit, so it takes the
-            # source's tools VERBATIM (capabilities.raw) — a bespoke tool outside the
-            # canonical vocabulary (e.g. runCommands) is neither dropped nor widened.
-            raw_tools = next((str(v) for v in cai_raw_caps.values() if str(v).strip()), "")
-            if raw_tools and (_raw_scopes(raw_tools) != cai_tool_scopes or _igc.maps_to_canonical(raw_tools)):
-                raw_tools = ""  # C-3: stale raw never wins; Claude names become tokens (sandbox_mode keys on them)
-            if raw_tools:
-                cai_tools_line = f"tools: {raw_tools}"
-            elif cai_tool_scopes:
-                cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
-        elif cai_tool_scopes and target_framework in ("copilot-vscode", "copilot-cli", "claude", "goose"):
-            # One VS Code-shaped bracket list for every adapter: claude.py's _map_allowed_tools turns it into
-            # Claude names (pre-translating to comma form once fell through its bracket-only _YAML_TOOLS_RE to the
-            # default grant), copilot-vscode keeps it as is, and goose's grant mode derives extensions from it.
-            cai_tools_line = "tools: [" + ", ".join(f"'{t}'" for t in cai_tool_scopes) + "]"
+        if run is not None:
+            body = run.annotate(body, slug, source_scopes)
+        # Raw tools only where they stay within the canonical scopes (C-3); see interop_grant_check.tools_line.
+        cai_tools_line = _igc.tools_line(target_framework, cai_tool_scopes, cai_raw_caps, _raw_scopes)
         if cai_name or cai_desc or cai_tools_line or (delivery == "native" and cai_handoffs):
             header = ["---"]
             if cai_name:
@@ -628,13 +603,13 @@ def import_from_cai(
         rendered = adapter.render_agent_file(body, slug, manifest)
         if narrowed:  # backstop: the rendered file must pass AR_WRITE_POLICY exactly as a native render does
             _iwp.check_rendered(slug, rel_name, rendered, target_framework, manifest)
-        if projection is not None:  # re-read as the surface reads it: no widening, enforcement class, size
-            refusals += _igc.check_agent(slug, source_scopes, target_framework, rendered, manifest, projection)
+        if run is not None:  # re-read as the surface reads it: no widening, enforcement class, size
+            run.check(slug, source_scopes, rendered, cai_raw_caps)
         pending.append((dest, rendered))
         result.converted.append(str(dest))
 
-    if refusals:
-        raise ValueError("projection refused, nothing written:\n  " + "\n  ".join(refusals))
+    if run is not None:  # refuses (nothing written) or records each cooperative opt-in in the decision log
+        result.notices += run.conclude(dry_run=dry_run)
     for dest, rendered in () if dry_run else pending:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(rendered, encoding="utf-8")

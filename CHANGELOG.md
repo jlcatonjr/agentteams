@@ -15,18 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interop path).
   - **No widening.** The rendered file is re-read the way its surface reads it, platform defaults included: Copilot's
     `tools: ['read', 'edit', 'search']` for a header without `tools`, Claude's inherit-all, a goose recipe without
-    `extensions`. Its tool scopes must be within the source's, with `read` and `search` as one read-only class.
+    `extensions`. Its tool scopes must be within the source's (on goose only, `read` and `search` count as one
+    class, because `agentteams_readfs` serves both). A projected tool name that maps to no canonical scope
+    (`runCommands`, an MCP tool, an unknown goose extension) fails closed unless the source declares the same name;
+    the target brief's own `agentteams_runner` grant is the only exception.
   - **goose** projects grant-scoped (`goose_tool_scoping: "grant"`). `read`/`search` map to the read-only
     `agentteams_readfs` server with its `available_tools` allowlist, never to `developer`. The per-agent
     `capability_map.canonical_to_goose_extensions` union that added `developer` is gone, and the `tools:` line is
     always written. The run refuses, naming the agents, when `scripts/goose-readfs-mcp.py` (under the switch,
-    `.agentteams/bin/goose-readfs-mcp.py`) is missing at the target root. Each recipe carries the #206 caveat: its
+    `.agentteams/bin/goose-readfs-mcp.py`) is missing at the target root, is a link, or doesn't match the pinned
+    `READFS_SHA256`. Each recipe carries the #206 caveat: its
     grant binds on a direct `goose run --recipe`, not as a `delegate`.
   - **Enforcement class.** claude, copilot-vscode, copilot-cli and goose enforce a grant. Codex only declares one,
     except under its `write_policy: "orchestrator-only"` role gate, and agents-md has no channel for it. An agent
-    narrower than the surface default (read/search, edit, execute) is refused on codex and agents-md unless named
+    narrower than the surface default (read, search, edit, execute) is refused on codex and agents-md unless named
     in the new `--interop-allow-cooperative SLUG[,SLUG...]`. Each named agent gets a "grant is cooperative on this
-    surface" banner and a `NOT ENFORCED` notice. There is no wildcard.
+    surface" banner and a `NOT ENFORCED` notice, and each opt-in is recorded (Rule 15) as a `RECORDED` row,
+    `interop-allow-cooperative:<framework>:<slug>`, in the destination team's
+    `references/security-decisions.log.csv` (`governance_logs.append_row`, the log's own schema, the `prev_digest`
+    a chained log needs). Without that log the opt-in is refused. There is no wildcard.
   - **Codex** gets canonical tool tokens when the source names Claude tools (`Read, Grep, Glob` becomes `read`,
     `search`), so `sandbox_mode = "read-only"` and the "Reading on Codex" allowlist render. Bespoke names such as
     `runCommands` stay verbatim.
@@ -35,8 +42,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The goose reader (`GooseAdapter.parse_agent_source`) now uses the new `capability_map.goose_grants_to_canonical`.
   It reads allowlists, maps `agentteams_readfs` to read/search and `summon` to `agent`, and reads a missing
   `extensions` key as the whole `developer`.
+- **The other projection paths get the no-widening check too** (not the enforcement-class or size refusals):
+  - the pinned sync (`multi_sync._project_and_rebaseline`) passes a non-strict `ProjectionPolicy`: goose renders
+    grant-scoped (the readfs server must be installed and pinned) and a dry pass over every framework runs first,
+    so a refusal aborts before any framework is written;
+  - `--convert-from` (`convert_team`) renders and checks every agent before writing, renders goose grant-scoped
+    (goose's own files then include the readfs server), and rewrites a Claude-named `tools:` line as canonical
+    tokens first, so adapters map it instead of falling back to their default grant (Claude's own adapter turned
+    `Read, Grep, Glob` into `Bash, Read, Write, Edit` on a Claude-to-Claude conversion).
+  - Not covered: goose bridge recipes (the entry recipe and the subagent stubs) still declare `developer`, which the
+    stubs use to read their canonical agent.
 - Behaviour change: a `--interop-from` projection of a narrow agent onto codex or agents-md that used to succeed
-  now refuses until the operator opts the agent in. `multi_sync` and direct `import_from_cai` calls are unchanged.
+  now refuses until the operator opts the agent in. A pinned sync to goose now needs the pinned readfs server at
+  the project root. Direct `import_from_cai` calls without a policy are unchanged.
 - Coverage: projecting into a signing-governed destination keeps its switch `true` and its rosters byte-identical
   (`tests/test_interop_grant_check.py`).
 
