@@ -534,9 +534,9 @@ def _run_template_write(path: str, content: str) -> dict | None:
     return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
 
 
-@pytest.mark.parametrize("path", ["/repo/.GIT/Config", "/home/u/.gitconfig", "/repo/.git/config.worktree",
+@pytest.mark.parametrize("path", ["/repo/.GIT/Config", "/home/user/.gitconfig", "/repo/.git/config.worktree",
                                   "/repo/.git/modules/sub/config",
-                                  "/repo/.git/worktrees/w/config", "/home/u/.config/git/config"])
+                                  "/repo/.git/worktrees/w/config", "/home/user/.config/git/config"])
 def test_every_git_config_file_write_is_gated(path: str) -> None:
     decision = _run_template_write(path, "[core]\n\tbare = false\n")
     assert decision is not None and decision["permissionDecision"] == "ask", path
