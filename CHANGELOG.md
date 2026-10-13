@@ -27,8 +27,13 @@ what an agent *reads*, not what it *derives*.
   write to `.git/config`) or a push to a URL, `gh -R … --body-file|$(…)`, DNS lookups built from command output,
   interpreter POSTs and sockets. Decoding is deliberately not gated. Word-like tools (`nc`, `scp`, `host`) are found
   by a linear command-name tokenizer, not by regex, so `grep scp` stays silent.
-- **Fixed a ReDoS in the PR-merge pattern:** overlapping flag alternatives took ~50 s on 14 repeats of
-  `--repo -R`, and a timed-out hook lets the command run. All patterns now take <10 ms on adversarial input.
+- **Fixed the gate's timeout bypass:** a hook the harness times out lets the command run, and several patterns
+  were superlinear: the PR-merge pattern took ~50 s on 14 repeats of `--repo -R`, the existing `git push`
+  delete/force patterns 89 s on `git push ` x2000. Multi-gap patterns are now single-anchor lookaheads, the
+  linear command-name tokenizer runs first, patterns are checked per line, and a command over 32 768
+  characters (or a line over 2 048) is routed to the operator unscanned. Worst case at the caps: ~1 s on python3 3.9.
+- **A write to any git config file** (`.git/config`, `.gitconfig`, worktree configs; case-insensitive) is asked,
+  after the content scan, so a credential in it is still denied.
 - **OCR proxy** fences image text with a per-call nonce and an untrusted-data label; marker look-alikes inside the
   image text are removed. **Memory/code-index results** (CLI and recall MCP) are labelled Tier-6.
 - **Threat model v3** §2a discloses transformation and persistence laundering as unrated, grades each control

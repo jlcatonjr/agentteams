@@ -52,7 +52,7 @@ What now addresses it, and how strongly (honest grading — none of this *preven
 | Layer | Control | Strength |
 |---|---|---|
 | Doctrine | C-4 *derived content stays data*; Tier-3 authority by cause of write; S-6 extension; S-9 criterion 6 | names the class and makes a violation identifiable; relies on judgment, which is what injection attacks |
-| Deterministic, one hop | `constitutional-gate.py` routes data-carrying sends (file/stdin/form uploads incl. `gh api --input`/`-F f=@file`, requests built from command output or naming a credential path, raw sockets, remote copy, gist, new or repointed git remote incl. `git config`/`git -c`/a `.git/config` write, push to a URL, `gh -R` with a body file or command output, DNS-from-output, interpreter POSTs) to `ask` | reduces the last hop for Bash sends plus a `.git/config` write; per-call, stateless; decoding itself deliberately ungated |
+| Deterministic, one hop | `constitutional-gate.py` routes data-carrying sends (file/stdin/form uploads incl. `gh api --input`/`-F f=@file`, requests built from command output or naming a credential path, raw sockets, remote copy, gist, new or repointed git remote incl. `git config`/`git -c`/a `.git/config` write, push to a URL, `gh -R` with a body file or command output, DNS-from-output, interpreter POSTs) to `ask` | reduces the last hop for Bash sends plus git-config file writes; bounded-time (oversized commands are asked, not scanned); per-call, stateless; decoding itself deliberately ungated |
 | Labelling | OCR text fenced with a per-call nonce; memory/code-index results stamped Tier-6 | reduces confusion; a model can still obey labelled text |
 
 Residual exposure — what stays open, and to whom:

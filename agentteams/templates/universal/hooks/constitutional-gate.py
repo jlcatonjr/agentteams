@@ -59,7 +59,7 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      "persistence mechanism — outlives the current session (Rule S-9 criterion 4)"),
     (r"\b(?:brew|apt|apt-get|dnf|yum)\s+install\b|\bpip\s+install\b|\bnpm\s+i(?:nstall)?\b",
      "package installation — unreviewed third-party code on the host"),
-    (r"\bgit\b[^\n]*\bpush\b[^\n]*--force|\bgit\b[^\n]*\breset\s+--hard\b",
+    (r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*--force)|\bgit\b[^\n]*\breset\s+--hard\b",
      "history-destructive git operation"),
     # ── Outbound-data gate (Rule S-9 criterion 6; C-4 derived content) ────────────────────────────
     # Exfiltration is the last hop of an injection, including one an agent decoded from read content
@@ -77,25 +77,28 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     # _command_name_trigger() below, so `grep scp` or `wget -nc` stays silent. Also an accepted extra
     # prompt: a quoted argument containing `; nc …` (the line is split on separators before quoting). Known extra prompts, accepted: a quoted
     # `requests.post(` in a grep, and `curl -H "…$(gh auth token)"` (that one sends a credential).
-    (r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*d|--data(?:-binary|-raw|-urlencode|-ascii)?|--json)[\s=]*['\"]?@|"
+    (r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*d|--data(?:-binary|-ascii)?|--json)[\s=]*['\"]?@|"
+     r"\bcurl\b[^\n|;&]*\s--data-urlencode[\s=]*['\"]?[^\s'\"@]*@|"
      r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*F|--form(?:-string)?)[\s=]*['\"]?[^\s'\"=]+=[@<]|"
      r"\bcurl\b[^\n|;&]*\s(?-i:-[a-zA-Z]*[TK]\b|--upload-file\b|--config\b)|"
      r"\bwget\b[^\n]*--(?:post|body)-file\b|"
-     r"\bgh\b[^\n|;&]*(?:\s--input\b|\s-[fF]\s*['\"]?[\w.\[\]-]+=@)",
+     r"\bgh\b[^\n|;&]*(?:\s--input\b|\s(?-i:-F|--field)[\s=]*['\"]?[\w.\[\]-]+=@)",
      "outbound request uploading a file or stdin body (Rule S-9 criterion 6 — local data leaving the machine)"),
-    (r"\b(?:curl|wget)\b[^\n]*(?:\$\(|`)|"
-     r"\b(?:curl|wget|gh|nc|ncat|socat|scp|rsync|sftp)\b[^\n]*"
-     r"(?:~/\.ssh|\.aws/|\.netrc|\.gnupg|\bid_(?:rsa|ed25519|ecdsa)\b|\.env\b|\bprintenv\b)",
+    (r"\b(?:curl|wget)\b[^\n;&|]*(?:\$\(|`)|"
+     r"\b(?:curl|wget|gh|nc|ncat|socat|scp|rsync|sftp)\b[^\n;&|]*"
+     r"(?:~/\.ssh|\.aws/|\.netrc|\.gnupg|\bid_(?:rsa|ed25519|ecdsa)\b|\.env(?![\w.])|\bprintenv\b)",
      "outbound request built from command output or naming a credential path (Rule S-9 criterion 6)"),
     (r"/dev/(?:tcp|udp)/|\brsync\b[^\n|;&]*\s(?:[\w.-]+@)?[\w.-]+:(?!//)",
      "raw socket or copy to a remote host — arbitrary data can leave the machine (Rule S-9 criterion 6)"),
     (r"\bgh\s+gist\s+(?:create|new|edit)\b|\bgit\b[^\n]*\bremote\s+(?:add|set-url)\b|"
-     r"\bgit\b[^\n]*\bconfig\b[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b|"
+     r"\bgit\b(?=[^\n]*\bconfig\b)(?=[^\n]*\b(?:remote\.\S+\.(?:url|pushurl)|url\.\S+\.(?:insteadof|pushinsteadof))\b)|"
      r"\bgit\b[^\n]*\s-c\s+['\"]?(?:remote|url)\.|"
      r"\bgh\b(?=[^\n|;&]*\s(?:-R|--repo)[\s=])(?=[^\n|;&]*(?:--body-file|\$\(|`))|"
-     r"\bgit\b[^\n]*\bpush\b(?:\s+-{1,2}\w[\w-]*(?:=\S+)?)*\s+(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:)",
-     "new publication channel (gist, a new or repointed git remote, a push to a URL, or a gh body "
-     "file/command output sent to a named repo) — Rule S-9 criterion 6"),
+     r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*\s['\"]?(?:[a-z][\w+.-]*://|[\w.-]+@[\w.-]+:))|"
+     r"(?:>>?|\btee\b(?:\s+-\S+)*)\s*['\"]?[^\s;&|'\"]*"
+     r"(?:\.git[\\/](?:config|worktrees[\\/][^\s/\\]+[\\/]config)|\.gitconfig|\.config[\\/]git[\\/]config)\b",
+     "new publication channel (gist, a new or repointed git remote or git config file, a push to a URL, "
+     "or a gh body file/command output sent to a named repo) — Rule S-9 criterion 6"),
     (r"\b(?:requests|httpx)\.(?:post|put|patch)\(|\burlopen\([^)\n]*data=|"
      r"\bsocket\.(?:socket|create_connection)\(|\bfetch\([^)\n]*method:\s*['\"](?:POST|PUT|PATCH)",
      "interpreter-mediated outbound send (Rule S-9 criterion 6)"),
@@ -126,15 +129,14 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
      r"\bpulls/[^\s/]+/merge\b|"
      r"\b(?:mergePullRequest|enablePullRequestAutoMerge)\b",
      "pull-request merge — human review decides; merges go through @git-operations' reviewed path"),
-    (r"\bgit\b[^\n]*\bpush\b[^\n]*(?:--delete|--mirror|--prune)|\bgit\b[^\n]*\bpush\b[^\n]*\s:\S",
+    (r"\bgit\b(?=[^\n]*\bpush\b)(?=[^\n]*(?:--delete|--mirror|--prune|\s:\S))",
      "remote branch/tag deletion or mirror/prune push — irreversible remote loss"),
     (r"\bgit\b[^\n]*\b(?:branch|tag)\s+(?:-[a-zA-Z]*[dD]\b|--delete\b)|"
      r"\bgit\b[^\n]*\bupdate-ref\s+-d\b|\bgit\b[^\n]*\bworktree\s+remove\b",
      "git branch/tag/ref/worktree deletion (any -C/--git-dir prefix)"),
     # argparse accepts unique prefixes (`--branch-c`, `--appl`), and the CLI is reachable as
     # `agentteams`, `python -m agentteams.cli.app` or `build_team.py`; the Python API too.
-    (r"\b(?:agentteams|build_team)\b[^\n]*--branch-[cp][\w-]*[^\n]*--appl[\w-]*|"
-     r"\b(?:agentteams|build_team)\b[^\n]*--appl[\w-]*[^\n]*--branch-[cp][\w-]*|"
+    (r"\b(?:agentteams|build_team)\b(?=[^\n]*--branch-[cp])(?=[^\n]*--appl)|"
      r"\bbranch_cleanup\b[^\n]*\b(?:run_cleanup|run_post_merge|execute_items)\b",
      "branch deletion through agentteams (its git deletes run inside the tool, unseen here)"),
     (r"\brm\s+\S|\b(?:unlink|srm|wipe|rmdir|shred|truncate)\b|\bfind\b[^\n]*\s-delete\b|"
@@ -156,6 +158,37 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
 
 _WRITE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit", "MultiEdit"})
 
+#: Bounds on what the regex triggers are asked to scan. Patterns with unbounded gaps are superlinear on
+#: pathological input (a line of `git push git push …` took 89 s on one pattern), and a hook the
+#: harness times out lets the command run. Every `[^\n]*` gap stops at a newline, so evaluating per
+#: line changes no verdict; a line or command beyond the caps is routed to the operator instead of
+#: being scanned slowly. Worst case at the caps is a few seconds on python3 3.9.
+_MAX_LINE = 2048
+_MAX_COMMAND = 32768
+_GIT_CONFIG_PATH = re.compile(
+    r"(?:^|[\\/])(?:\.git[\\/](?:config(?:\.worktree)?|worktrees[\\/][^\\/]+[\\/]config(?:\.worktree)?)"
+    r"|\.gitconfig|\.config[\\/]git[\\/]config)$",
+    re.IGNORECASE,
+)
+
+
+def _bash_trigger(command: str) -> str | None:
+    """The first Mandatory Review Trigger a Bash command matches, else None — in bounded time."""
+    # A trailing pipe or `&&`/`||` continues the pipeline on the next line; join it so per-line
+    # evaluation still sees `curl … |` and `sh` together.
+    command = re.sub(r"(\||&&)[ \t]*\r?\n", r"\1 ", command)
+    lines = command.splitlines() or [""]
+    if len(command) > _MAX_COMMAND or any(len(line) > _MAX_LINE for line in lines):
+        return (f"command too long to check reliably (over {_MAX_COMMAND} characters, or a line over "
+                f"{_MAX_LINE}) — the gate routes it to you rather than scanning it slowly")
+    why = _command_name_trigger(command)
+    if why:
+        return why
+    for pattern, reason in _BASH_REVIEW_TRIGGERS:
+        if any(re.search(pattern, line, re.IGNORECASE) for line in lines):
+            return reason
+    return None
+
 
 # ── Command-name triggers (tools whose names are also ordinary words) ─────────────────────────────
 # A regex cannot say "in command position" both precisely and in linear time — the attempt here was
@@ -165,13 +198,19 @@ _WRITE_TOOLS = frozenset({"Write", "Edit", "NotebookEdit", "MultiEdit"})
 # Not covered, by design of a speed-bump: a name produced at run time (`$(which nc)`, aliases, `$X`).
 _SEGMENT_SPLIT = re.compile(r"[\n;&|(){}`]|\$\(")
 _WRAPPERS = {
-    "sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-D", "-r", "-t"}, "doas": {"-u", "-C"},
-    "env": {"-u", "-C", "-S"}, "timeout": {"-s", "-k"}, "nice": {"-n"},
-    "xargs": {"-I", "-n", "-P", "-L", "-d", "-E", "-s"}, "stdbuf": {"-i", "-o", "-e"},
-    "command": set(), "exec": {"-a"}, "nohup": set(), "time": set(), "busybox": set(),
+    "sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-D", "-r", "-t", "--user", "--group", "--chdir"},
+    "doas": {"-u", "-C"}, "env": {"-u", "-C", "-S", "--unset", "--chdir", "--split-string"},
+    "timeout": {"-s", "-k", "--signal", "--kill-after"}, "nice": {"-n", "--adjustment"},
+    "xargs": {"-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--max-args", "--max-procs",
+              "--max-lines", "--delimiter", "--max-chars", "--eof"},
+    "stdbuf": {"-i", "-o", "-e"}, "watch": {"-n", "--interval", "-d"}, "ionice": {"-c", "-n"},
+    "flock": {"-w", "--timeout"}, "chrt": set(), "setsid": set(), "eval": set(), "unbuffer": set(),
+    "caffeinate": set(), "command": set(), "exec": {"-a"}, "nohup": set(), "time": set(), "busybox": set(),
     "then": set(), "do": set(), "else": set(), "if": set(), "while": set(), "until": set(), "!": set(),
     "sh": set(), "bash": set(), "zsh": set(), "dash": set(),
 }
+#: Wrappers whose first positional argument is not the command (a duration, lock file, priority).
+_WRAPPER_POSITIONALS = {"timeout": 1, "flock": 1, "chrt": 1}
 _RAW_SOCKET_TOOLS = frozenset({"ncat", "socat", "telnet", "sftp", "scp"})
 _DNS_TOOLS = frozenset({"dig", "nslookup", "drill", "host"})
 
@@ -189,7 +228,7 @@ def _command_names(command: str) -> list[tuple[str, str]]:
         except ValueError:
             words = [segment.replace("'", " ").replace('"', " ")]
         tokens = [w for word in words for w in word.split()]
-        i, value_flags = 0, set()
+        i, value_flags, positionals = 0, set(), 0
         while i < len(tokens):
             token = tokens[i].lstrip("\\")
             base = token.rsplit("/", 1)[-1]
@@ -200,10 +239,16 @@ def _command_names(command: str) -> list[tuple[str, str]]:
                 i += 2
                 continue
             if (token.startswith("-") or re.fullmatch(r"\W+|\d*[<>]+&?\S+|\w+=\S*|\d+(?:\.\d+)?[smhd]?", token)):
+                if positionals and re.fullmatch(r"\d+(?:\.\d+)?[smhd]?", token):
+                    positionals -= 1   # `timeout 5`: the duration fills the wrapper's positional
                 i += 1
                 continue
             if base in _WRAPPERS:
-                value_flags = _WRAPPERS[base]
+                value_flags, positionals = _WRAPPERS[base], _WRAPPER_POSITIONALS.get(base, 0)
+                i += 1
+                continue
+            if positionals:
+                positionals -= 1
                 i += 1
                 continue
             found.append((base, " ".join(tokens[i + 1:])))
@@ -265,8 +310,7 @@ def main() -> int:
     if tool_name == "Bash":
         # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
         command = re.sub(r"\\\r?\n", " ", str(tool_input.get("command", "")))
-        reasons = (why for pattern, why in _BASH_REVIEW_TRIGGERS if re.search(pattern, command, re.IGNORECASE))
-        why = next(reasons, None) or _command_name_trigger(command)
+        why = _bash_trigger(command)
         if why:
             _decide(
                 "ask",
@@ -277,12 +321,13 @@ def main() -> int:
 
     if tool_name in _WRITE_TOOLS:
         content, target = _written_content(tool_name, tool_input)
-        # Writing .git/config can add or repoint a remote with no `git remote` command for the Bash
-        # gate to see; a later plain `git push` then sends to it (Rule S-9 criterion 6).
-        if re.search(r"(?:^|[\\/])\.git[\\/]config$", str(target)):
-            _decide("ask", "Mandatory Review Trigger: a write to .git/config can add or repoint a remote "
-                           "(Rule S-9 criterion 6). Approve only if this is the change you intended.")
+        # Writing a git config file can add or repoint a remote with no `git remote` command for the
+        # Bash gate to see; a later plain `git push` then sends to it (Rule S-9 criterion 6). Asked
+        # only AFTER the content scan, so a credential in it still gets the deterministic deny.
+        git_config = bool(_GIT_CONFIG_PATH.search(str(target)))
         if not content:
+            if git_config:
+                _ask_git_config()
             return 0
 
         # Verify the scanner before trusting its verdict. Without this the hook faithfully asks
@@ -332,7 +377,15 @@ def main() -> int:
                 f"write: {detail}. Rule S-1/S-5/S-8 apply to any committed file. Remove the "
                 f"flagged content rather than re-issuing the write.",
             )
+        if git_config:
+            _ask_git_config()
     return 0
+
+
+def _ask_git_config() -> None:
+    """Route a write to a git config file to the operator (Rule S-9 criterion 6)."""
+    _decide("ask", "Mandatory Review Trigger: a write to a git config file can add or repoint a remote "
+                   "(Rule S-9 criterion 6). Approve only if this is the change you intended.")
 
 
 #: CC-2: agentteams flips this to True at emit time for a confined/exclusive
