@@ -40,11 +40,15 @@ Extracts the `tools:` (current key since 2026-08-06) or legacy `allowed-tools:` 
 
 ### `goose_extensions_to_canonical(extension_names)`
 
-Best-effort mapping from goose extension names to canonical tokens: `developer` implies `read`, `edit`, `search`, `execute`; `todo` implies `todo`. There is no goose extension for `agent` (handoffs travel through recipe structure) or `retrieval` (shell execution of `python -m agentteams.research` through developer tooling).
+Best-effort mapping from goose extension names to canonical tokens: `developer` implies `read`, `edit`, `search`, `execute`; `agentteams_readfs` implies `read`, `search`; `todo` implies `todo`. There is no goose extension for `retrieval` (shell execution of `python -m agentteams.research` through developer tooling). Allowlists are not seen; use `goose_grants_to_canonical` for those.
+
+### `goose_grants_to_canonical(grants)`
+
+Reverse-maps a recipe's parsed extensions (`goose_recipe_read.recipe_extension_grants` output), allowlists included. This is the reader behind `GooseAdapter.parse_agent_source` and the interop no-widening check ([`interop_grant_check`](interop-grant-check.md)). It errs wide wherever Goose would. A missing `extensions` key (`None`) loads the user's configured extensions, so it reads as the whole `developer`. An unscoped `developer`, or an entry the parser could not read, is the whole `developer`. A scoped one maps `write`/`edit` to `edit` and `shell` to `execute`, and `tree` alone to `search`. `agentteams_readfs` is `read` and `search`, and so is `analyze` unless its allowlist disables it. `summon` is `agent`, and `todo` is `todo`. Operator MCP servers, `agentteams_runner` and the coordination server map to nothing: the target team's own configuration grants them, not a tool scope.
 
 ### `canonical_to_goose_extensions(tokens)`
 
-Inverse coarse mapping: canonical tokens fold back into the goose extensions that provide them (`developer`, `todo`). Multiple tokens may map to the same extension; results are deduplicated and ordered.
+Inverse coarse mapping: canonical tokens fold back into the goose extensions that provide them (`developer`, `todo`). Multiple tokens may map to the same extension; results are deduplicated and ordered. Interop no longer calls it: it gave read-only agents the whole `developer` builtin, and goose projections now render grant-scoped instead.
 
 ### `capabilities_from_tokens(tokens, framework)`
 
@@ -56,7 +60,7 @@ Builds the CAI `capabilities` object: `{"tool_scopes": [...]}` when tokens are p
 
 - copilot-cli and agents-md have no native capability channel; their capabilities travel only via the CAI `raw` escape hatch.
 - All front-matter extraction delegates to the shared scanner `agentteams.yaml_frontmatter.parse_yaml_front_matter` (Phase B consolidation).
-- `export_to_cai` / `import_from_cai` in [`agentteams/interop.py`](interop.md) are the primary callers; `agentteams/frameworks/goose.py` also calls `goose_extensions_to_canonical` and `capabilities_from_tokens` directly when parsing a native goose recipe (`parse_agent_source`). Capabilities survive round-trips as typed CAI data.
+- `export_to_cai` / `import_from_cai` in [`agentteams/interop.py`](interop.md) are the primary callers; `agentteams/frameworks/goose.py` also calls `goose_grants_to_canonical` and `capabilities_from_tokens` directly when parsing a native goose recipe (`parse_agent_source`). Capabilities survive round-trips as typed CAI data.
 
 ---
 

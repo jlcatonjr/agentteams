@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (`--interop-from` never widens a grant; new `--interop-allow-cooperative SLUG[,SLUG...]`)
+
+- A scratch projection of a `Read, Grep, Glob` Claude agent (2026-10-13) widened or silently weakened its grant on
+  every other surface. Every `--interop-from` run (`interop.run_interop`) now checks each projected agent before any
+  is written, in the new `agentteams/interop_grant_check.py`. All refusals are reported together, naming agent and
+  surface, and no agent file is written (agent files are now written only after every agent has rendered, on every
+  interop path).
+  - **No widening.** The rendered file is re-read the way its surface reads it, platform defaults included: Copilot's
+    `tools: ['read', 'edit', 'search']` for a header without `tools`, Claude's inherit-all, a goose recipe without
+    `extensions`. Its tool scopes must be within the source's, with `read` and `search` as one read-only class.
+  - **goose** projects grant-scoped (`goose_tool_scoping: "grant"`). `read`/`search` map to the read-only
+    `agentteams_readfs` server with its `available_tools` allowlist, never to `developer`. The per-agent
+    `capability_map.canonical_to_goose_extensions` union that added `developer` is gone, and the `tools:` line is
+    always written. The run refuses, naming the agents, when `scripts/goose-readfs-mcp.py` (under the switch,
+    `.agentteams/bin/goose-readfs-mcp.py`) is missing at the target root. Each recipe carries the #206 caveat: its
+    grant binds on a direct `goose run --recipe`, not as a `delegate`.
+  - **Enforcement class.** claude, copilot-vscode, copilot-cli and goose enforce a grant. Codex only declares one,
+    except under its `write_policy: "orchestrator-only"` role gate, and agents-md has no channel for it. An agent
+    narrower than the surface default (read/search, edit, execute) is refused on codex and agents-md unless named
+    in the new `--interop-allow-cooperative SLUG[,SLUG...]`. Each named agent gets a "grant is cooperative on this
+    surface" banner and a `NOT ENFORCED` notice. There is no wildcard.
+  - **Codex** gets canonical tool tokens when the source names Claude tools (`Read, Grep, Glob` becomes `read`,
+    `search`), so `sandbox_mode = "read-only"` and the "Reading on Codex" allowlist render. Bespoke names such as
+    `runCommands` stay verbatim.
+  - **Copilot**: a body over the 30,000-character limit is refused on the interop path. Native generation keeps its
+    warning, because the orchestrator template renders at about 46.5k characters.
+- The goose reader (`GooseAdapter.parse_agent_source`) now uses the new `capability_map.goose_grants_to_canonical`.
+  It reads allowlists, maps `agentteams_readfs` to read/search and `summon` to `agent`, and reads a missing
+  `extensions` key as the whole `developer`.
+- Behaviour change: a `--interop-from` projection of a narrow agent onto codex or agents-md that used to succeed
+  now refuses until the operator opts the agent in. `multi_sync` and direct `import_from_cai` calls are unchanged.
+- Coverage: projecting into a signing-governed destination keeps its switch `true` and its rosters byte-identical
+  (`tests/test_interop_grant_check.py`).
+
 ### feat (`--adopt-only SLUG[,SLUG...]`: adopt a named subset, touching only the orchestrator)
 
 - Adopting one bespoke agent used to need `--update --merge --adopt-orphans`: a full render and merge that

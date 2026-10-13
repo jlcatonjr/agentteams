@@ -136,6 +136,10 @@ Run the CAI-based interop pipeline from an existing source team.
 - All six registered frameworks (`copilot-vscode`, `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`) are valid interop targets, as is `canonical` (the durable exploded CAI directory). `--framework canonical` is interop-only and requires `--interop-from`; bundle mode is refused for the canonical target.
 - Non-dry-run interop runs also enforce the live security freshness preflight before writing, with the same signed-waiver exception path.
 - With `--description BRIEF` (claude and goose targets), the import takes the brief's `write_policy` and `mcp_grants` (a goose target under the switch is refused, agentteams #204). Under `write_policy: "orchestrator-only"`, every non-orchestrator agent is narrowed and given its write-policy section once, agents named in `mcp_grants` get the `agentteams_runner` block and tools, and the pinned server is installed. The checks are the same as native generation's. See [`interop_write_policy`](api-reference/interop-write-policy.md). Without the switch, `--description` changes nothing.
+- **A projection never widens a grant.** Each agent is rendered, re-read the way the target reads it, and refused (naming the agent and the surface) if its tool scopes exceed the source's. Nothing is written until every agent passes. This includes the Copilot default `tools: ['read', 'edit', 'search']` added to a header with no `tools`, and Claude's inherit-all when `tools` is missing. See [`interop_grant_check`](api-reference/interop-grant-check.md).
+- **goose** projects grant-scoped (`goose_tool_scoping: "grant"`): `read`/`search` map to the read-only `agentteams_readfs` server, never to `developer`. The server script (`scripts/goose-readfs-mcp.py`, or `.agentteams/bin/goose-readfs-mcp.py` under the switch) must already be at the target root (a native goose generation installs it), or the run refuses, naming the agents that need it. Each recipe carries a banner saying its grant binds on a direct `goose run --recipe` but not as a `delegate`.
+- **codex** (outside its write-policy role gate) and **agents-md** can't enforce a grant. An agent narrower than the surface default (any of read/search, edit, execute missing) is refused there unless named in `--interop-allow-cooperative`.
+- **Copilot** (`copilot-vscode`, `copilot-cli`): a body over the platform's 30,000-character limit is refused. Native generation still only warns.
 
 ### `--interop-source-framework NAME`
 
@@ -168,6 +172,23 @@ agentteams --interop-from .claude/agents --framework codex --interop-skills-only
 
 Each skill keeps its own authored `name`/`description` front matter. The target must have a skill
 concept (`claude`, `codex`); `--interop-mode bundle` is refused.
+
+### `--interop-allow-cooperative SLUG[,SLUG...]`
+
+With `--interop-from`: lets the named agents project onto a surface that can't enforce their grant although
+it is narrower than that surface's default (read/search, edit and execute). Those surfaces are `codex` outside its
+`write_policy: "orchestrator-only"` role gate (a *declared* grant: `sandbox_mode` and the tool list are
+self-imposed) and `agents-md` (no grant channel). Without the flag such an agent is refused, by name.
+
+Each named agent gets a "grant is cooperative on this surface" banner in its body, and the run prints a
+`NOT ENFORCED` notice for it. The flag is repeatable and takes comma-separated slugs; there is no wildcard, and a
+slug the source team doesn't have is reported and ignored. Enforced surfaces (`claude`, `copilot-vscode`,
+`copilot-cli`, `goose`) ignore it.
+
+```bash
+agentteams --interop-from .claude/agents --interop-source-framework claude --framework codex \
+  --output . --interop-allow-cooperative injection-test-designer
+```
 
 ### `--bridge-from DIR`
 
