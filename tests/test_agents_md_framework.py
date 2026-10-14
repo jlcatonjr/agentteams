@@ -187,3 +187,89 @@ def test_agents_md_allows_interop_target(tmp_path):
     # F.2: agents-md is a valid CAI target — validation must NOT raise.
     build_team.main(["--framework", "agents-md", "--interop-from", str(tmp_path),
                      "--output", str(tmp_path / "o"), "--dry-run"])
+
+
+# --- D1: interop projection must not rewrite `.github/agents` paths ---------
+#
+# Reported by collector-management (2026-10-08 handoff, D1, HIGH). `render_agent_file`
+# rewrote `.github/agents` -> `.agents` unconditionally. Under `--sync`/interop
+# (`manifest["interop_source_framework"]` set) nothing is materialized at
+# `.agents/references/`, so every rewritten path dangled: 24 `.agents/*.md` files in the
+# reporting repo carried 88 `.agents/references/` paths against a directory that did not
+# exist, 11 of them `.agents/references/conflict-log.csv` — the safe-append target
+# `@conflict-auditor` hands to `@agent-updater`. That repo had already had governance rows
+# misfiled twice from a wrong log path, so this is governance integrity, not a dead link.
+# codex already skipped the rewrite under interop; agents-md now matches it.
+
+
+def _interop_manifest(**extra):
+    m = {"project_name": "InteropProject", "interop_source_framework": "copilot-vscode"}
+    m.update(extra)
+    return m
+
+
+def test_interop_import_leaves_github_agents_paths_pointing_at_the_source_tree(tmp_path):
+    """Acceptance test 1 from the D1 report: every path must resolve against the root.
+
+    The fixture root holds the real `.github/agents/references/x.md`. After an interop
+    projection the body must still point there, because interop copies no references into
+    `.agents/`.
+    """
+    root = tmp_path
+    (root / ".github" / "agents" / "references").mkdir(parents=True)
+    (root / ".github" / "agents" / "references" / "x.md").write_text("ref\n", encoding="utf-8")
+    (root / ".github" / "agents" / "foo.agent.md").write_text("# Foo\n", encoding="utf-8")
+
+    body = (
+        "# Conflict Auditor\n\nSee `.github/agents/references/x.md` and "
+        "`.github/agents/foo.agent.md` before auditing.\n"
+    )
+    out = AgentsMdAdapter().render_agent_file(body, "conflict-auditor", _interop_manifest())
+
+    assert ".github/agents/references/x.md" in out
+    assert ".github/agents/foo.agent.md" in out
+    assert ".agents/references/" not in out, "interop import must not invent .agents/references/"
+
+    # The operative property, not just the string: every referenced path exists on disk.
+    import re as _re
+
+    for rel in _re.findall(r"`([^`]+\.md)`", out):
+        assert (root / rel).exists(), f"{rel} does not resolve against the project root"
+
+
+def test_native_generation_still_rewrites_to_the_agents_dir():
+    """Acceptance test 2 from the D1 report: the native path is unchanged.
+
+    Native generation does materialize `.agents/references/`, so the rewrite is correct
+    there and must not be lost to the interop guard.
+    """
+    body = "# Conflict Auditor\n\nSee `.github/agents/references/x.md`.\n"
+    out = AgentsMdAdapter().render_agent_file(body, "conflict-auditor", {"project_name": "P"})
+
+    assert ".agents/references/x.md" in out
+    assert ".github/agents" not in out
+
+
+def test_native_generation_maps_agent_md_suffix_to_the_emitted_filename():
+    """This adapter writes `.agents/<slug>.md`, so a rewritten cross-reference must drop
+    the `.agent` infix — otherwise it names a file that is never emitted (5 such paths in
+    the reporting repo)."""
+    body = "# A\n\nSee `.github/agents/security.agent.md` and `.github/agents/orchestrator.agent.md`.\n"
+    out = AgentsMdAdapter().render_agent_file(body, "a", {"project_name": "P"})
+
+    assert ".agents/security.md" in out
+    assert ".agents/orchestrator.md" in out
+    assert ".agent.md" not in out
+
+
+def test_agent_md_suffix_mapping_does_not_touch_prose_outside_the_agents_dir():
+    """Scoped rewrite: a body discussing the copilot `.agent.md` convention, or a path
+    under some other directory, must survive untouched."""
+    body = (
+        "# A\n\nCopilot names its files `<slug>.agent.md`. "
+        "See `docs/legacy/orchestrator.agent.md` for the old layout.\n"
+    )
+    out = AgentsMdAdapter().render_agent_file(body, "a", {"project_name": "P"})
+
+    assert "`<slug>.agent.md`" in out
+    assert "docs/legacy/orchestrator.agent.md" in out
