@@ -525,6 +525,7 @@ def _main_dispatch(
             dry_run=args.dry_run,
             overwrite=args.overwrite,
             skills_only=getattr(args, "interop_skills_only", False),
+            allow_cooperative=getattr(args, "interop_allow_cooperative", None),
         )
 
     # -----------------------------------------------------------------------

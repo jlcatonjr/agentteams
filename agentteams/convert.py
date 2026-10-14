@@ -168,6 +168,11 @@ def convert_team(
     manifest["output_files"] = list(manifest.get("output_files", [])) + [
         {"path": f"{slug}.agent.md"} for slug in team_slugs
     ]
+    # A conversion never widens a grant (interop_grant_check): goose renders grant-scoped (its extra_output_files
+    # then install the readfs server), and every agent is rendered and checked BEFORE anything is written.
+    if target_framework == "goose":
+        manifest["goose_tool_scoping"] = "grant"
+    _refuse_widening(source_dir, target_framework, adapter, manifest)
 
     # Walk source directory shallowly first, then handle subdirs explicitly
     for entry in sorted(source_dir.iterdir()):
@@ -328,14 +333,7 @@ def _convert_file(
         return
 
     try:
-        content = source_path.read_text(encoding="utf-8")
-        slug = source_path.stem.replace(".agent", "")
-        if file_type == "builder":
-            # F5 — frameworks whose agent files are not plain markdown (goose recipes)
-            # wrap the builder differently from a specialist agent.
-            converted_content = adapter.render_builder_file(content, manifest)
-        else:
-            converted_content = adapter.render_agent_file(content, slug, manifest)
+        converted_content = _render(source_path, file_type, adapter, manifest)
     except Exception as exc:  # noqa: BLE001
         result.errors.append(f"{source_path}: {exc}")
         return
@@ -344,6 +342,71 @@ def _convert_file(
         target_dir.mkdir(parents=True, exist_ok=True)
         dest.write_text(converted_content, encoding="utf-8")
     result.converted.append(str(dest))
+
+
+def _render(source_path: Path, file_type: str, adapter: FrameworkAdapter, manifest: dict[str, Any]) -> str:
+    """Render one agent or builder source file for the target adapter.
+
+    A Claude-named ``tools:`` line becomes canonical tokens first (``interop_grant_check.canonical_tools_header``):
+    adapters read the canonical bracket form, and a Claude scalar used to fall back to their default grant.
+
+    Args:
+        source_path: The source file.
+        file_type: ``"agent"`` or ``"builder"``.
+        adapter: Target framework adapter.
+        manifest: Project manifest dict.
+
+    Returns:
+        The rendered file.
+
+    Raises:
+        OSError: The source can't be read; anything the adapter raises.
+    """
+    from agentteams.interop_grant_check import canonical_tools_header
+
+    content = canonical_tools_header(source_path.read_text(encoding="utf-8"))
+    if file_type == "builder":
+        # F5 — frameworks whose agent files are not plain markdown (goose recipes)
+        # wrap the builder differently from a specialist agent.
+        return adapter.render_builder_file(content, manifest)
+    return adapter.render_agent_file(content, source_path.stem.replace(".agent", ""), manifest)
+
+
+def _refuse_widening(source_dir: Path, target_framework: str, adapter: FrameworkAdapter,
+                     manifest: dict[str, Any]) -> None:
+    """Render every top-level agent and refuse the conversion if any would widen its source grant.
+
+    The no-widening check of ``interop_grant_check.check_agent`` (not the ``--interop-from``-only enforcement-class
+    and Copilot-size refusals). Runs before any write, so a refusal leaves the target untouched.
+
+    Args:
+        source_dir: The source agents directory.
+        target_framework: The target framework id.
+        adapter: Target framework adapter.
+        manifest: Project manifest dict.
+
+    Returns:
+        None.
+
+    Raises:
+        ValueError: One message per widening agent, naming it and the surface.
+    """
+    from agentteams.interop_grant_check import ProjectionPolicy, check_agent, source_grant
+
+    policy = ProjectionPolicy(strict=False)
+    refusals: list[str] = []
+    for entry in sorted(source_dir.iterdir()):
+        file_type = _classify_source_file(entry) if entry.is_file() else "skip"
+        if file_type not in ("agent", "builder"):
+            continue
+        grant = source_grant(entry.read_text(encoding="utf-8"))
+        if grant is None:
+            continue  # no declared grant: nothing to narrow or widen
+        slug = entry.stem.replace(".agent", "")
+        rendered = _render(entry, file_type, adapter, manifest)
+        refusals += check_agent(slug, grant[0], target_framework, rendered, manifest, policy, grant[1])
+    if refusals:
+        raise ValueError("--convert-from refused, nothing written:\n  " + "\n  ".join(refusals))
 
 
 def _convert_subdir(
