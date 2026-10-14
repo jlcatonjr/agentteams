@@ -132,8 +132,9 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                 parser.error(f"--adopt-only and {flag} are mutually exclusive")
 
     if getattr(args, "migrate_decision_log", False):
-        # A standalone header upgrade of one file (cli/decision_log_migrate.py): a render mode, another
-        # standalone mode (it would shadow or be shadowed in app.py) or skipping its backup is refused.
+        # A standalone header upgrade of one file (cli/decision_log_migrate.py): the render modes, the
+        # adopt modes and the standalone ops listed below are refused with it, as is skipping its backup.
+        # (Not every app.py standalone mode is listed; those not listed simply dispatch first.)
         for attr, flag in (("update", "--update"), ("overwrite", "--overwrite"), ("merge", "--merge"),
                            ("migrate", "--migrate"), ("prune", "--prune"), ("check", "--check"),
                            ("adopt_orphans", "--adopt-orphans"), ("adopt_only", "--adopt-only"),

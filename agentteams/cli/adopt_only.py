@@ -186,7 +186,8 @@ def tools_grant(path: Path, framework: str | None = None) -> dict[str, Any]:
 
     Returns:
         ``{"line": str | None, "wider_than_read_only": bool}``. An absent ``tools:`` key, or one
-        listing no tool, is flagged: on most harnesses it means every tool.
+        listing no tool, is flagged: on most harnesses it means every tool. More than one top-level
+        ``tools:`` key is flagged too: a YAML loader keeps the last, so the first can't be trusted.
 
     Raises:
         Nothing; an unreadable file reports as absent.
@@ -198,9 +199,12 @@ def tools_grant(path: Path, framework: str | None = None) -> dict[str, Any]:
     header = text
     if path.suffix == ".md":
         header = parse_yaml_front_matter(text)[0] or ""
-    match = _TOOLS_RE.search(header)
-    if match is None:
+    matches = list(_TOOLS_RE.finditer(header))
+    if not matches:
         return {"line": None, "wider_than_read_only": True}
+    if len(matches) > 1:  # a YAML loader keeps the LAST key; never report the first one as the grant
+        return {"line": f"{len(matches)} tools: keys", "wider_than_read_only": True}
+    match = matches[0]
     value = match.group("value").strip()
     if not value:  # a block list: the indented "- item" lines that follow
         items = []

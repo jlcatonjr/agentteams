@@ -38,10 +38,10 @@ from agentteams.cli.commands import (
     _run_issue_directive,
     _run_audit_exceptions,
     _run_list_exceptions,
-    _run_migrate_decision_log,
     _run_sign_decision,
 )
 
+from agentteams.cli.decision_log_migrate import run_migrate_decision_log as _run_migrate_decision_log
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
 # re-exported here so build_team's shim (from agentteams.cli.app import ...) and
 # tests resolve build_team._finalize_exit_code unchanged.

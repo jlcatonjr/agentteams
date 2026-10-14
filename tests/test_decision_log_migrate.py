@@ -213,6 +213,8 @@ def test_signed_row_appends_and_legacy_rows_read_as_unsigned(tmp_path: Path,
         append_signed_decision_row(out, signed)
 
     assert _run(out, "--yes") == 0
+    allowed, reason = check_clearance(out, action="prune")
+    assert not allowed                                        # the new signature column alone revokes it
     monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", _KEY)
     allowed, reason = check_clearance(out, action="prune")
     assert not allowed and "no signature" in reason           # the intended revocation

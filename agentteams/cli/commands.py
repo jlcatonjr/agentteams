@@ -20,7 +20,6 @@ from agentteams.cli import operator_signing  # pinned signing path (pin-signing-
 from agentteams.frameworks.registry import FRAMEWORKS
 from agentteams.cli.commands_output import _resolve_output_dir  # CH-07 carve; re-exported
 # --migrate-decision-log lives in its own module (decision_log.py is pinned); re-exported for app.py.
-from agentteams.cli.decision_log_migrate import run_migrate_decision_log as _run_migrate_decision_log
 
 
 def _run_verify_waivers(args: argparse.Namespace) -> int:

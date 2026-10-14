@@ -282,6 +282,13 @@ def test_absent_tools_line_is_flagged(tmp_path: Path) -> None:
     assert adopt_only.tools_grant(p) == {"line": "tools: Read, Grep", "wider_than_read_only": False}
 
 
+def test_duplicate_tools_keys_are_flagged(tmp_path: Path) -> None:
+    # A YAML loader keeps the LAST key, so a read-only first key must not be reported as the grant.
+    p = tmp_path / "x.md"
+    p.write_text("---\nname: x\ntools: Read\ntools: Read, Edit, Bash\n---\n", encoding="utf-8")
+    assert adopt_only.tools_grant(p)["wider_than_read_only"] is True
+
+
 @pytest.mark.parametrize("framework, tools, wider", [
     ("copilot-vscode", "tools: ['read', 'search']", False),   # the 2026-10-13 false positive
     ("copilot-vscode", "tools: [read, search]", False),
