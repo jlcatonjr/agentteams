@@ -365,7 +365,15 @@ def compute_structural_diff(
         report.team_membership_changed = True
         # Move copilot-instructions from unchanged → drifted
         framework = new_manifest.get("framework", "copilot-vscode")
-        instructions_path = "../CLAUDE.md" if framework == "claude" else "../copilot-instructions.md"
+        # The adapter owns the instructions location (CLAUDE.md, the repo-root AGENTS.md for
+        # goose/codex/grok, …); a hard-coded pair mis-tracked every AGENTS.md target.
+        from agentteams.frameworks.format_spec import COPILOT_INSTRUCTIONS_FILENAME
+        from agentteams.frameworks.registry import FRAMEWORKS
+
+        generic = f"../{COPILOT_INSTRUCTIONS_FILENAME}"
+        adapter_cls = FRAMEWORKS.get(framework)
+        instructions_path = (adapter_cls().finalize_output_path(generic, "instructions")
+                             if adapter_cls else generic)
         report.unchanged_files = [
             f for f in report.unchanged_files if f["path"] != instructions_path
         ]

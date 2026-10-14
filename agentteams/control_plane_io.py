@@ -48,7 +48,7 @@ def stubs_enabled(framework: str, manifest: dict[str, Any]) -> bool:
         A stub reads exactly like an absent file. False for every other framework (agents-md is
         out of scope).
     """
-    if framework in ("claude", "goose", "copilot-vscode", "copilot-cli", "codex"):
+    if framework in ("claude", "goose", "copilot-vscode", "copilot-cli", "codex", "grok"):
         from agentteams.frameworks._linux_sandbox_emit import _sandbox_confinement_requested
 
         return "enforce_decision_signing" in manifest or _sandbox_confinement_requested(manifest)

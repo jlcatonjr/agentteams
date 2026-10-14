@@ -303,11 +303,11 @@ def _sibling_permission_deny_rules() -> list[str]:
     agents dir: authoring copilot/codex agent files with the Edit tool stays possible.
     """
     rules: list[str] = []
-    for key in ("copilot", "codex", "goose"):
+    for key in ("copilot", "codex", "goose", "grok"):
         store = _verify_key_store_path(key)
         rules += [f"Edit(/{_AGENT_PRIVILEGE_SWITCH[key]})", f"Edit(/{store}/**)"]
         rules += [f"Edit(/{p})" for p in (*governed_roster_paths(key), team_marker_path(key))]
-    rules += ["Edit(/.goose/sandbox.sb)", f"Edit(/{CODEX_CONFIG_REL})"]
+    rules += ["Edit(/.goose/sandbox.sb)", f"Edit(/{CODEX_CONFIG_REL})", *(f"Edit(/{p})" for p in GROK_CONFIG_RELS)]
     return rules
 
 
@@ -477,15 +477,18 @@ _AGENT_PRIVILEGE_SWITCH: dict[str, str] = {
     # protect them. agents-md (``.agents``, shared with Codex skills) is out of scope.
     "copilot": ".github/agents/references/agent-privilege.json",
     "codex": ".codex/agents/references/agent-privilege.json",
+    # 2026-10-14: Grok Build loads .grok/agents without folder trust (plan §9 S4), so its trust roots are
+    # protected from the first release (@security step-6 ruling, plan §11 condition 4).
+    "grok": ".grok/agents/references/agent-privilege.json",
 }
 
 #: Every team key whose trust roots are protected, in launcher ``TEAM_DIRS_REL`` order.
-ALL_TEAM_FRAMEWORKS: tuple[str, ...] = ("claude", "goose", "copilot", "codex")
+ALL_TEAM_FRAMEWORKS: tuple[str, ...] = ("claude", "goose", "copilot", "codex", "grok")
 
 #: Framework id -> team key (the two copilot adapters share one team dir).
 TEAM_KEY_BY_FRAMEWORK: dict[str, str] = {
     "claude": "claude", "goose": "goose", "copilot-vscode": "copilot", "copilot-cli": "copilot",
-    "codex": "codex",
+    "codex": "codex", "grok": "grok",
 }
 
 #: Codex's project config (approval and sandbox policy; an upstream claim, unverified here).
@@ -493,6 +496,10 @@ TEAM_KEY_BY_FRAMEWORK: dict[str, str] = {
 #: (``codex_mcp_emit`` splices MCP tables into an EXISTING file and keeps its other keys), so a
 #: planted file can be carried forward: the launcher and ``--check`` warn on its security keys.
 CODEX_CONFIG_REL = ".codex/config.toml"
+#: Grok Build's project config (``[permission]`` / ``[mcp_servers]``) and sandbox profiles. Protect-if-present
+#: everywhere, with no stub, like Codex's: a confined agent must not relax the permission rules or the sandbox
+#: profile the next Grok session runs under (@security step-6 ruling, plan §11 condition 4).
+GROK_CONFIG_RELS: tuple[str, ...] = (".grok/config.toml", ".grok/sandbox.toml")
 _GATE_HOOK_PATH = ".claude/hooks/constitutional-gate.py"
 
 #: The verify-key store's name inside the team ``references/``. ``decision_log`` reads
@@ -675,7 +682,9 @@ def control_plane_ancestors(paths: tuple[str, ...] | list[str]) -> tuple[str, ..
 #: only, never ``.github`` (workflows, CODEOWNERS). Claude Code 2.1.251 self-binds each deny path's
 #: PARENT read-write (captured argv), so ``.github`` becomes a mount point and cannot be renamed
 #: while ``.github/workflows`` stays writable (product itest, RUN_CLAUDE_SANDBOX_ITEST=1).
-SIBLING_DENY_DIRS: dict[str, str] = {"codex": ".codex", "copilot": ".github/agents", "goose": ".goose"}
+SIBLING_DENY_DIRS: dict[str, str] = {
+    "codex": ".codex", "copilot": ".github/agents", "goose": ".goose", "grok": ".grok",
+}
 
 #: Transient manifest key carrying the COMPUTED sibling deny dirs (``cli.generate_helpers``). Never
 #: persisted (the ``_`` prefix keeps it out of the manifest fingerprint; the build log records named

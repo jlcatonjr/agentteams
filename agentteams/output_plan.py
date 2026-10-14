@@ -368,6 +368,7 @@ def _plan_output_files(
         # codex: same copilot-vscode builder source; CodexAdapter.render_builder_file
         # renders it as a .codex/agents/team-builder.toml custom agent.
         "codex": "builder/team-builder-copilot-vscode.template.md",
+        "grok": "builder/team-builder-grok.template.md",
     }
     if framework in builder_templates:
         files.append({

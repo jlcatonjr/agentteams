@@ -109,6 +109,7 @@ FRAMEWORK_REGISTRY = {
         "expert_ref": spec.expert_ref,
         "expected_keys": list(spec.expected_doc_tokens),
         "expected_locations": list(spec.expected_locations),
+        "pinned_version": spec.pinned_version,
     }
     for fid, spec in _FORMAT_SPECS.items()
 }

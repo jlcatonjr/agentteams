@@ -28,6 +28,7 @@
         "goose",
         "agents-md",
         "codex",
+        "grok",
         "canonical"
       ],
       "description": "Registry-derived (FRAMEWORK_IDS) plus 'canonical' for durable canonical directories loaded via load_canonical(). 'codex' registered at plan step F.4; emits custom-agent TOML (.codex/agents) since 2026-09-29."

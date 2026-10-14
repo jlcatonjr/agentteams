@@ -29,6 +29,9 @@ PROMPT_ROOT_FILES: tuple[str, ...] = (
 #: Directory prompt roots (project-relative), protected whole.
 PROMPT_ROOT_DIRS: tuple[str, ...] = (
     ".github/instructions", ".github/prompts", ".github/agents", ".codex", ".goose/recipes",
+    # Grok Build: agents, rules, hooks, skills and config all live under .grok; .agents/skills is read as
+    # skills by Grok and Codex (@security step-6 ruling, plan §11 condition 4).
+    ".grok", ".agents/skills",
 )
 #: Protected in every arm only when present at generation (the @security scope decision).
 PROMPT_ROOT_PRESENT_ONLY_DIRS: tuple[str, ...] = (".agentteams",)

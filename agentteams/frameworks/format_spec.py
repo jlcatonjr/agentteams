@@ -76,6 +76,10 @@ class FormatSpec:
             ``required_front_matter_keys()`` by the single-source guard test.
             Empty for frameworks whose agent files carry no front matter
             (goose recipes, codex custom-agent TOML, agents-md plain Markdown).
+        pinned_version: Upstream release the adapter's source-only facts were verified
+            against (e.g. ``"1.0.52"``); ``None`` where the published docs are the whole
+            contract. The one home for the version: adapters and docs must not restate it
+            as a literal (guarded by tests/test_grok_adapter.py).
     """
 
     research_id: str
@@ -88,6 +92,7 @@ class FormatSpec:
     emitted_front_matter_keys: tuple[str, ...] = ()
     extra_source_urls: tuple[str, ...] = ()
     toml_keys: bool = False
+    pinned_version: str | None = None
 
 
 #: Canonical Claude Code sub-agents doc URL (re-exported by ``framework_research``
@@ -180,6 +185,20 @@ FORMAT_SPECS: dict[str, FormatSpec] = {
         # Custom agents are TOML (name/description/developer_instructions), not Markdown
         # with front matter.
         emitted_front_matter_keys=(),
+    ),
+    "grok": FormatSpec(
+        research_id="grok",
+        adapter_id="grok",
+        label="xAI Grok Build",
+        source_url="https://docs.x.ai/build/settings/reference",
+        extra_source_urls=("https://docs.x.ai/build/overview",),
+        expert_ref="references/grok-agent-infrastructure-expert.md",
+        expected_doc_tokens=("mcp_servers", "permission", "plugins"),
+        expected_locations=(".grok/config.toml",),
+        toml_keys=True,
+        # tools (exact limit) + the two keys that stop Grok widening it (frameworks/grok.py).
+        emitted_front_matter_keys=("name", "description", "tools", "injectDefaultTools", "mcpInheritance"),
+        pinned_version="1.0.52",
     ),
 }
 

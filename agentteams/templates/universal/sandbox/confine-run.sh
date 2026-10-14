@@ -58,8 +58,8 @@
 #   disable the check. The approver/manager rosters are required only when that team's switch is
 #   present. A required entry that is absent is a DIE (a writable parent would let the process create
 #   it); anything else absent is skipped. The project-root references/security-approvers.txt (the
-#   grant roster) is protect-if-present only. Four team dirs are covered (TEAM_DIRS_REL): .claude/agents,
-#   .goose/recipes, .github/agents (copilot) and .codex/agents (codex); .codex/config.toml is
+#   grant roster) is protect-if-present only. Five team dirs are covered (TEAM_DIRS_REL): .claude/agents,
+#   .goose/recipes, .github/agents (copilot), .codex/agents (codex) and .grok/agents (grok); .codex/config.toml is
 #   protect-if-present. Only .github/agents/* maps to a team: .github/workflows is never protected,
 #   and its self-bound ancestor .github stays writable. --protect PATH (repeatable) ro-binds an extra path,
 #   e.g. a whole `.claude`; a missing --protect path is a die, never mkdir.
@@ -131,6 +131,9 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .codex/agents/references/agent-privilege.json .codex/agents/references/authorized-verify-keys
                     .codex/agents/references/security-approvers.txt .codex/agents/references/authorized-managers.txt
                     .codex/agents/references/management-authority.json .codex/config.toml
+                    .grok/agents/references/agent-privilege.json .grok/agents/references/authorized-verify-keys
+                    .grok/agents/references/security-approvers.txt .grok/agents/references/authorized-managers.txt
+                    .grok/agents/references/management-authority.json .grok/config.toml .grok/sandbox.toml
                     .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh
                     .codex/confined-run.example.sh )
 # Whole directories read-only wherever they exist under a writable root (follow-up #2, 2026-09-30):
@@ -142,11 +145,12 @@ CONTROL_PLANE_DIRS_REL=( .claude )
 # Locked by a test to agentteams' _prompt_root_protect PROMPT_ROOT_FILES + PROMPT_ROOT_DIRS +
 # PROMPT_ROOT_PRESENT_ONLY_DIRS. Never .github/workflows.
 PROMPT_ROOTS_REL=( .github/copilot-instructions.md AGENTS.md AGENTS.override.md .goosehints CLAUDE.md CLAUDE.local.md .mcp.json
-                   .github/instructions .github/prompts .github/agents .codex .goose/recipes .agentteams )
+                   .github/instructions .github/prompts .github/agents .codex .goose/recipes .grok .agents/skills
+                   .agentteams )
 PROTECT_PROMPT_ROOTS=0; PR_RO=()
 # The agentteams team marker, relative to an agents dir (locked to _sandbox_emit.TEAM_MARKER_REL).
 TEAM_MARKER_REL=references/build-log.json
-TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents )
+TEAM_DIRS_REL=( .claude/agents .goose/recipes .github/agents .codex/agents .grok/agents )
 CP_ANC=(); CP_RO=(); CP_ROOTS=()
 # DEFAULT-DENY ENV ALLOWLIST (the private-key non-leak residual). The guest inherits NONE of the
 # launcher's environment by default: only these benign vars (when set) plus any --env-allow name and
@@ -282,10 +286,12 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
     .codex/config.toml) return 0 ;;  # Codex's own config: protect-if-present (never stubbed)
     .goose/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
     .codex/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
+    .grok/config.toml|.grok/sandbox.toml) return 0 ;;  # Grok's permission/MCP config + sandbox profiles: protect-if-present
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
     .github/agents/*) team="$r/.github/agents" ;;   # never .github/* (workflows stay unprotected)
     .codex/agents/*) team="$r/.codex/agents" ;;
+    .grok/agents/*) team="$r/.grok/agents" ;;
     *) return 0 ;;                   # project-root grant roster: protect-if-present
   esac
   cp_present "$team/$TEAM_MARKER_REL" || return 0   # not an agentteams team (e.g. hand-written)
@@ -304,6 +310,7 @@ team_looks_planted(){   # team dir -> true when it holds no agent file of its fr
     */.goose/recipes) glob="*.yaml" ;;
     */.github/agents) glob="*.agent.md" ;;
     */.codex/agents) glob="*.toml" ;;
+    */.grok/agents) glob="*.md" ;;
     *) return 1 ;;
   esac
   cp_present "$t/references/agent-privilege.json" && return 1

@@ -56,14 +56,14 @@ _FORBIDDEN_CHARS = frozenset("\"'$`\\;&|<>*?[]{}()!#")
 
 #: Project-relative control-plane dirs a write root may not be at or inside.
 _PROJECT_PROTECTED: tuple[str, ...] = (
-    ".git", ".claude", ".goose", ".codex", ".github/agents", ".github/hooks", "sandbox", ".agentteams",
+    ".git", ".claude", ".goose", ".codex", ".grok", ".github/agents", ".github/hooks", "sandbox", ".agentteams",
 )
 
 #: Home persistence and credential paths (``~``-relative) a write root may not be at or inside.
 _HOME_PROTECTED: tuple[str, ...] = (
     "~/.ssh", "~/.gnupg", "~/.aws", "~/.bashrc", "~/.bash_profile", "~/.bash_login", "~/.profile",
     "~/.zshrc", "~/.zprofile", "~/.zshenv", "~/.gitconfig", "~/.local/bin", "~/.config/systemd",
-    "~/.config/autostart", "~/.config/git", "~/.config/gh", "~/.config/goose", "~/.claude",
+    "~/.config/autostart", "~/.config/git", "~/.config/gh", "~/.config/goose", "~/.claude", "~/.grok",
     "~/.config/fish", "~/.config/gcloud", "~/.kube", "~/.docker", "~/.azure", "~/.netrc",
     "~/.local/share/systemd", "~/.pki", "~/.password-store",
     _SIGNING_KEY_DIR,

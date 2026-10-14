@@ -801,7 +801,7 @@ def _matching_entry(argv: list[str], agent: str, policy: Policy) -> dict[str, An
 
 #: Control-plane locations watched during a command (``.git`` limited to its persistence vectors: git itself
 #: rewrites the index and objects during ``git status``).
-_WATCHED = (".agentteams", ".claude", ".goose", ".codex", ".github/agents", ".github/hooks", "sandbox")
+_WATCHED = (".agentteams", ".claude", ".goose", ".codex", ".grok", ".github/agents", ".github/hooks", "sandbox")
 #: git persistence vectors, resolved with ``git rev-parse --git-path`` (linked worktrees, ``core.hooksPath``).
 _GIT_WATCHED = ("hooks", "config", "config.worktree", "info")
 

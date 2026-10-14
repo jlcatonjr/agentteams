@@ -69,6 +69,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/mcp_direct_grants.py",  # R5: the only way an agent's writes skip the orchestrator's approval
     "agentteams/frameworks/goose_tool_scoping.py",  # C-3 on Goose: declared tools -> recipe grants;
                                                      # a silent widening here re-arms every recipe
+    "agentteams/frameworks/_grok_tool_scoping.py",  # C-3 on Grok: Claude tool names -> Grok agent tools:
+                                                     # (fail-closed); a silent widening re-arms every Grok agent
+    "agentteams/frameworks/_agents_md_ownership.py",  # who may modify the shared AGENTS.md; a silent edit
+                                                       # lets a render overwrite hand-written instructions
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a
     # silent edit to any of them turns a check that fires into one that cannot, which is the
     # F-1 defect applied to the machinery built to catch F-1. Registry is included because it

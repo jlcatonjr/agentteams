@@ -44,7 +44,7 @@ from agentteams.fences import _extract_fenced_regions
 #: agents dir (project-relative) -> agent-file glob of its framework.
 TEAM_AGENT_GLOBS: dict[str, str] = {
     ".claude/agents": "*.md", ".goose/recipes": "*.yaml",
-    ".github/agents": "*.agent.md", ".codex/agents": "*.toml",
+    ".github/agents": "*.agent.md", ".codex/agents": "*.toml", ".grok/agents": "*.md",
 }
 #: Single-file prompt roots shared by the project (tracked when agentteams emitted them).
 SHARED_ROOT_FILES: tuple[str, ...] = (

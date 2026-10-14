@@ -22,6 +22,7 @@ _EXPECTED = {
     "goose": (".goose", "recipes"),
     "agents-md": (".agents",),
     "codex": (".codex", "agents"),
+    "grok": (".grok", "agents"),
 }
 
 
