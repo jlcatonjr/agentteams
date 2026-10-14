@@ -71,6 +71,59 @@ Every template must have:
 
 ---
 
+## Refreshing the Golden Example Snapshots
+
+`examples/*/expected/` holds committed snapshots that `tests/test_integration.py::test_snapshot_comparison`
+asserts against for `software-project`, `research-project` and `data-pipeline`. **Any template edit
+breaks them until they are refreshed**, and the failure can be easy to miss: a `pytest -x` run that
+stops at an unrelated earlier failure never reaches them.
+
+**Do not refresh with `--output examples/<name>/expected`.** That path is one segment below its own
+conceptual project root, so `vscode_tasks_rel_path`'s fixed `../../.vscode/tasks.json` offset climbs
+a level too far and writes `examples/.vscode/tasks.json` — a sibling of every example rather than a
+child of any. A guard now refuses rather than guessing a corrected offset
+(`tests/test_vscode_tasks_output_shape.py` documents the measurement), but the command still is not
+the right one to reach for.
+
+**Refresh through the same render path the snapshot test uses**, and copy only the files your change
+actually touched:
+
+```python
+import sys, tempfile, shutil, filecmp
+from pathlib import Path
+sys.path.insert(0, "tests")
+from test_integration import _run_pipeline          # the same helper the snapshot test calls
+
+CHANGED = ["work-summarizer.agent.md", "references/work-summary-spec.reference.md"]
+
+for ex in ("software-project", "research-project", "data-pipeline", "project-repositories"):
+    brief, expected = Path("examples")/ex/"brief.json", Path("examples")/ex/"expected"
+    out = Path(tempfile.mkdtemp())
+    _run_pipeline(brief, out)
+    for rel in CHANGED:
+        src, dst = out/rel, expected/rel
+        if src.exists() and dst.exists():
+            print(ex, rel, "changed" if not filecmp.cmp(src, dst, shallow=False) else "same")
+            shutil.copy2(src, dst)
+```
+
+Why this shape:
+
+- **Same renderer as the test**, so the fixture cannot disagree with what the test will generate.
+- **No CLI flags**, so the `tasks.json` path is never computed and the trap cannot fire.
+- **Only changed files copied**, so an unrelated drift elsewhere in the tree does not ride along in
+  your diff.
+
+Then confirm: `pytest tests/test_integration.py -k snapshot`. Expect a uniform diff across all four
+examples — a per-example difference usually means the brief, not the template, moved.
+
+**Working in a worktree?** The `agentteams` import resolves to the editable install, i.e. the main
+checkout, so templates render from *there* and your edits are invisible. Set
+`PYTHONPATH=<worktree>` so the package resolves to the worktree copy, and verify with
+`python -c "import agentteams, pathlib; print(pathlib.Path(agentteams.__file__).parent)"`.
+
+---
+
 ## Registering a New Template
 
 1. Create the file in the appropriate subdirectory under `templates/`:

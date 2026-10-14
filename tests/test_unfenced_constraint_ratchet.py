@@ -26,6 +26,7 @@ from agentteams.fences import (
     is_trackable_constraint_line,
     unfenced_lines,
 )
+from agentteams.fences import _FENCE_BEGIN_RE as _BEGIN
 
 TEMPLATES = pathlib.Path(__file__).resolve().parents[1] / "agentteams/templates"
 
@@ -125,10 +126,34 @@ def test_no_template_gains_an_unfenced_constraint() -> None:
     regressions = {
         k: (v, _BASELINE.get(k, 0)) for k, v in current.items() if v > _BASELINE.get(k, 0)
     }
+    # The remedy differs by whether the file ALREADY has a fence, and getting it wrong makes
+    # the artifact worse while turning this test green. A fenceless template is wrapped whole
+    # in one `content` fence by emit._normalize_generated_content, so it is already 100%
+    # module-owned; adding a single fence SUPPRESSES that wrap and strands every other line.
+    # Measured 2026-10-08: a one-fence "fix" moved an emitted agent file from a whole-body
+    # fence spanning lines 26-248 to a single region at 89-120. See
+    # test_fence_coverage_policy.py's module docstring: "partial fencing is strictly weaker
+    # than none." So advise fencing only where a fence already exists.
+    advice: list[str] = []
+    for _name in sorted(regressions):
+        _fenced = bool(_BEGIN.search((TEMPLATES / _name).read_text(encoding="utf-8")))
+        if _fenced:
+            advice.append(
+                f"  - {_name}: ALREADY has a fence, so an unfenced line here really is "
+                "unreachable by --merge. Move it inside a fence."
+            )
+        else:
+            advice.append(
+                f"  - {_name}: has NO fence, so emit wraps its whole body in one `content` "
+                "fence and the line is already module-owned and restored on every "
+                "--update --merge. Do NOT add a fence here: partial fencing is strictly "
+                "weaker than none. Either keep the rule out of this file, or raise this "
+                "baseline deliberately and record why at the baseline (see the "
+                "copilot-instructions and instruction-authority entries above)."
+            )
     assert not regressions, (
         "template(s) gained constraint-bearing line(s) outside every fence "
-        f"(now, baseline): {regressions}. A constraint outside a fence is one a project "
-        "can delete and no --update --merge will restore. Put it inside a fence."
+        f"(now, baseline): {regressions}\n" + "\n".join(advice)
     )
 
 
