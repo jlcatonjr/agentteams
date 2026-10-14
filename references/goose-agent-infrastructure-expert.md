@@ -63,7 +63,7 @@ repo moved `block/goose` → `aaif-goose/goose`; docs moved to goose-docs.ai.
 
 ## Observed Upstream Tokens — `goose` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-09-11` from `https://goose-docs.ai/docs/guides/recipes/recipe-reference/`.
+Recorded by the daily pipeline on `2026-09-24` from `https://goose-docs.ai/docs/guides/recipes/recipe-reference/`.
 
 - Upstream tokens observed: —
 - Upstream locations observed: —
