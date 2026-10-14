@@ -463,7 +463,11 @@ def test_bridge_emits_recall_skill_for_claude_target(tmp_path: Path):
         overwrite=True,
         check_only=False,
     )
-    assert (out_root / ".claude" / "skills" / "recall" / "SKILL.md").exists()
+    skill = out_root / ".claude" / "skills" / "recall" / "SKILL.md"
+    assert skill.exists()
+    # `reliable` must not read as "authoritative": the index holds agent-written text that can quote
+    # fetched or decoded content, and retrieval does not raise its tier (C-4 derived content).
+    assert "Tier-6 read content (C-4)" in skill.read_text(encoding="utf-8")
 
 
 def test_every_emitted_claude_skill_matches_the_discovery_contract(tmp_path: Path):

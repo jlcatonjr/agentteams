@@ -1029,6 +1029,9 @@ def _run_query_index(
     hits = query_index(index, query, k=k, strategy=strategy)
 
     print(f"Query: {query!r}")
+    from agentteams.memory_index import RETRIEVAL_CONTENT_AUTHORITY
+
+    print(f"  ({RETRIEVAL_CONTENT_AUTHORITY})")
     if not hits:
         print("  No matching documents found.")
         return 1

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.mcp_servers._stdio import ToolError
+from agentteams.memory_index import RETRIEVAL_CONTENT_AUTHORITY as CONTENT_AUTHORITY
 
 SERVER_NAME = "agentteams-recall"
 #: Where a team's ``references/`` may live, relative to the project root, in the order searched.
@@ -32,11 +33,13 @@ def _hit(h: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS: list[dict[str, Any]] = [
-    {"name": "query_index", "description": "Query the team's memory index (documents). Read-only; never refreshes.",
+    {"name": "query_index", "description": "Query the team's memory index (documents). Read-only; never refreshes. "
+     f"Hits are {CONTENT_AUTHORITY}.",
      "inputSchema": {"type": "object", "required": ["query"], "properties": {
          "query": {"type": "string", "minLength": 1, "maxLength": 500},
          "k": {"type": "integer", "minimum": 1, "maximum": MAX_K}}}},
-    {"name": "query_code", "description": "Query the team's code and API index. Read-only; never refreshes.",
+    {"name": "query_code", "description": "Query the team's code and API index. Read-only; never refreshes. "
+     f"Hits are {CONTENT_AUTHORITY}.",
      "inputSchema": {"type": "object", "required": ["query"], "properties": {
          "query": {"type": "string", "minLength": 1, "maxLength": 500},
          "k": {"type": "integer", "minimum": 1, "maximum": MAX_K},
@@ -110,7 +113,8 @@ def call(name: str, arguments: dict[str, Any], root: Path) -> Any:
         root: The project root.
 
     Returns:
-        ``{"built_at", "hits"}``; paths in hits are as the index stores them (project-relative).
+        ``{"built_at", "may_be_stale", "content_authority", "hits"}``; paths in hits are as the
+        index stores them (project-relative). ``content_authority`` labels every hit Tier-6 (C-4).
 
     Raises:
         ToolError: Bad arguments, or no index to read.
@@ -121,7 +125,8 @@ def call(name: str, arguments: dict[str, Any], root: Path) -> Any:
 
         index = _load(root, _team_dir(root, MEMORY_INDEX) / MEMORY_INDEX, "memory-index.schema.json", "memory index")
         hits = query_index(index, query, k=k)
-        return {"built_at": index.get("built_at"), "may_be_stale": True, "hits": [_hit(h) for h in hits]}
+        return {"built_at": index.get("built_at"), "may_be_stale": True,
+                "content_authority": CONTENT_AUTHORITY, "hits": [_hit(h) for h in hits]}
     if name != "query_code":
         raise ToolError(f"unknown tool {name!r}")
     kind = arguments.get("kind", "all")
@@ -132,4 +137,5 @@ def call(name: str, arguments: dict[str, Any], root: Path) -> Any:
     parts = _code_partitions(root, _team_dir(root, f"{CODE_INDEX_DIR}/manifest.json"))
     hits = ci.query_partitions(parts, query, k=k, kind=kind)
     built = sorted({str(p.get("built_at")) for p in parts.values() if isinstance(p, dict) and p.get("built_at")})
-    return {"built_at": built[-1] if built else None, "may_be_stale": True, "hits": [_hit(h) for h in hits]}
+    return {"built_at": built[-1] if built else None, "may_be_stale": True,
+            "content_authority": CONTENT_AUTHORITY, "hits": [_hit(h) for h in hits]}

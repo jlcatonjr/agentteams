@@ -201,7 +201,8 @@ The hook returns one of two blocking verdicts, split by the kind of action:
   HALT**.
 - **`ask`** — for procedural **Bash** Mandatory-Review triggers (C-5): privilege
   escalation, piping remote content into a shell, recursive force-removal, persistence
-  mechanisms, package installs, and history-rewriting force-push. These require operator
+  mechanisms, package installs, history-rewriting force-push, and data-carrying outbound
+  sends (S-9 criterion 6: uploads, raw sockets, remote copies, gists, new git remotes). These require operator
   confirmation rather than an outright deny.
 
 ### Integrity check before scanning
