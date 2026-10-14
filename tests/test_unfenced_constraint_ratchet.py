@@ -61,7 +61,28 @@ _BASELINE: dict[str, int] = {
     "domain/style-guardian.template.md": 1,
     "domain/technical-validator.template.md": 1,
     "domain/visual-designer.template.md": 1,
-    "domain/work-summarizer.template.md": 8,
+    "domain/work-summarizer.template.md": 12,  # 8->12 (2026-10-08): the "Invocation context is not
+                                               # evidence" rule. A stop hook left its Stop-event JSON
+                                               # unread on stdin, the headless summarizer inherited
+                                               # the pipe, and `claude --print` merged it into the
+                                               # prompt -- so one repo's session report reached a
+                                               # DIFFERENT repo's summarizer and 45 sites of foreign
+                                               # work history were written into 9 daily summaries.
+                                               # Raised DELIBERATELY. Fencing was tried FIRST and
+                                               # MEASURED to be worse: this template is fenceless, so
+                                               # emit._normalize_generated_content wraps its whole
+                                               # body in one `content` fence (100% module-owned,
+                                               # restored on every --update --merge). Adding one fence
+                                               # suppressed that wrap -- the emitted agent file went
+                                               # from a whole-body fence at lines 26-248 to a single
+                                               # region at 89-120, leaving everything else
+                                               # preserved-but-never-restored (emit.py returns early
+                                               # when any fence exists). See
+                                               # test_fence_coverage_policy.py: "partial fencing is
+                                               # strictly weaker than none." Anyone who later fences
+                                               # this template must drop this to 0 in the same pass.
+    "universal/work-summary-spec.reference.template.md": 2,  # 0->2 (2026-10-08): same rule, same
+                                               # reason; also fenceless and whole-body wrapped.
     "universal/adversarial.template.md": 4,
     "universal/agent-refactor.template.md": 1,
     "universal/agent-updater.template.md": 2,

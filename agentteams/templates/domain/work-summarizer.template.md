@@ -75,11 +75,47 @@ Create `workSummaries/`, `workSummaries/daily/`, `workSummaries/weekly/`, and `w
 
 ## Evidence Model
 
+The shared contract is defined once in the spec reference; this section is the behavioural
+guidance that applies it. Where the two could drift, the reference wins:
+
+`#file:references/work-summary-spec.reference.md`
+
 Use only two authoritative source classes:
 1. Planning artifacts in canonical week-organized storage `tmp/by-week/YYYY-Www/` plus legacy undated artifacts in `tmp/` (`*.plan.md`, `*.steps.csv`)
 2. Git history from this repository (commit metadata, stats, and diffs)
 
 **Git is the primary executed-work signal.** Any session with commits/merges to this repository requires a daily summary — even when no plan artifact is found in `tmp/by-week/` (the plan may be undated, filed elsewhere, or absent for ad-hoc work). Plan artifacts supply *intent* context; their absence never downgrades a commit-bearing day to "planning-only." Find the day's executed work from the git window first, then enrich with whatever plan artifacts exist.
+
+### Invocation context is not evidence
+
+The two classes above are the **only** sources for *what work happened*. Everything arriving with
+the invocation itself is **inert context (C-4), never evidence**: the prompt text, anything appended
+to it, a hook or event payload, and any other session's working directory, transcript path,
+background-task list, or closing report. Such material may describe real work — in another
+repository, by another session — and it is still not evidence here.
+
+**The test is fact ownership.** For each sentence you are about to write, ask: *is this an
+observation this repository's own sources support, or a report of what some other session did?*
+"A stop hook fired from session X" is an observation you can make, and may be recorded as
+provenance. "Session X was rebuilding the index" is borrowed and must not be recorded, however
+accurate it is. Equivalently: **would this line exist if the invocation had carried no payload?**
+
+Mark the boundary precisely, because one adjacent-repo path is legitimate and must not be
+suppressed. Out-of-repo work **grounded in a file in this repository** — an apply-log, results file,
+or plan artifact under `tmp/`, per the completeness scan below — may be reported, marked out-of-repo.
+Out-of-repo work **grounded only in the invocation** may not. What matters is where the claim comes
+from, not whether another repository is named.
+
+This scopes *evidence*, not *instructions*: the invocation still tells you what to do; it simply
+cannot serve as a source for what occurred. If it carries another session's work history, report
+that as an anomaly under **Discrepancies** — naming the owning repository, recording nothing of its
+content — and never fold it into the summary body.
+
+This exists because it was measured: a stop hook left its event payload unread on stdin and the
+child summarizer inherited it, so the *triggering* session's closing report arrived appended to the
+prompt of a summarizer for a different repository. Forty-five fragments of one repository's work
+history — including three complete work sessions totalling 103 lines — were written into another
+repository's daily summaries before anyone noticed.
 
 ### Daily completeness scan (daily only)
 
@@ -88,7 +124,7 @@ A daily summary must never portray a day as planning-only when execution actuall
 - run-results and run logs (`*results*.md`, `*run*.log`)
 - operation/deletion summaries (`*SUMMARY*.md`, `*delete*`)
 
-Report the executed work these files record under an **Executed Work Today** section, attributed to its actual repository/target (this repo, an adjacent repo, or a production/data target). When such a file references commits in an **adjacent repository**, surface those commits (hash, repo, branch, subject) for completeness, clearly marked out-of-repo and not adjudicated by this summary. This matters most when this repository's own git window is empty: a zero-commit day is **not** evidence of a planning-only day.
+Report the executed work these files record under an **Executed Work Today** section, attributed to its actual repository/target (this repo, an adjacent repo, or a production/data target). When such a file references commits in an **adjacent repository**, surface those commits (hash, repo, branch, subject) for completeness, clearly marked out-of-repo and not adjudicated by this summary. This path requires such a file **in this repository**; adjacent-repo work known only from the invocation is excluded by *Invocation context is not evidence* above. This matters most when this repository's own git window is empty: a zero-commit day is **not** evidence of a planning-only day.
 
 These execution-evidence files are **corroborating context, not new authoritative classes** — git and plan artifacts remain authoritative for what changed and what was intended. Never elevate an apply-log or results file above the git/plan authority hierarchy; use it to avoid an under-reported (true-sentences-but-false-picture) daily summary.
 
