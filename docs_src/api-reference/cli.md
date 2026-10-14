@@ -38,6 +38,8 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `commands.py` | Sub-command runners for `--convert`, `--interop-*` and `--bridge-*`. |
 | `security_gate.py` | The destructive-action gate: requires a recorded PASS decision, or an explicit waiver, before a destructive operation proceeds. |
 | `decision_log.py` | Authenticates rows in the security-decisions log (HMAC signing/verification, chain-intactness checks); carved from `security_gate.py` at its own CH-07 ceiling. |
+| `decision_log_migrate.py` | `--migrate-decision-log`: appends the missing signing columns to a team's decisions-log header (never `prev_digest`), keeping data lines byte-identical, and lists the unsigned authorizing rows that signing revokes. A separate module because `decision_log.py` is integrity-pinned. See [below](#decision-log-migration). |
+| `adopt_only.py` | `--adopt-only`: adopts a named subset of orphan agents by rewriting only the orchestrator's adopted routing rows (and, gated, its `agents:` list). `tools_grant` reports each slug's `tools:` line, wider than read-only unless every tool is. |
 | `operator_signing.py` | The operator Ed25519 signing path for `--sign-decision` and `--sign-grant` (and the `--issue-grant` spec helpers): key read, payload construction, the pre-sign display, the pre-sign refusals, signing, verify-before-append and the append. Integrity-pinned (`integrity.ENFORCEMENT_MODULES`); the runners in `commands.py` / `grant_commands.py` are one-line delegators. See [below](#the-pinned-operator-signing-path). |
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
 | `goose_switch.py` | Glue for `--goose-source` / `--goose-model` / `--goose-show`. |
@@ -150,6 +152,40 @@ F-2: the refusal sentence when `output_dir` holds neither `references/agent-priv
 The grant spec helpers shared with the HMAC `--issue-grant` runner: read and shape-check a spec
 against `GRANT_SPEC_REQUIRED`, map it to minter keyword arguments (fresh `grant_id` and
 timestamp), and print the post-append summary.
+
+## Decision-log migration
+
+> *Source: `agentteams/cli/decision_log_migrate.py`*
+
+`decision_log.append_signed_decision_row` refuses a log whose header lacks a signing column, so a team
+generated before signing could not record a signed decision. This module upgrades the header and nothing
+else. It imports `decision_log` and never changes it (that module is pinned). Flag semantics:
+[CLI Reference](../cli-reference.md#--migrate-decision-log).
+
+### `missing_signing_columns(columns) -> list[str]`
+
+The `SIGNED_DECISION_COLUMNS` entries a header lacks, in that order, never `prev_digest`
+(`EXCLUDED_COLUMNS`): chaining is opt-in on that column, and the legacy rows were never chained.
+
+### `plan_migration(log_path) -> MigrationPlan`
+
+Works out the migration and writes nothing. The new bytes are the old header line, the appended columns,
+the old line ending and every data byte unchanged; they are re-read as the gate reads them, and must still
+classify (`_security_decision_schema_kind`) with every added cell empty. `plan.revoked` lists the live unsigned
+authorizing rows (unconsumed `PASS` / `CONDITIONAL PASS`, and every `HALT-RETRACTED`) by first line and action,
+when the migration adds `signature`. Raises `DecisionLogMigrationError` for a missing or symlinked log, a
+malformed or unknown header, malformed data rows, or a row with a value past the old header (no laundering).
+
+### `apply_migration(plan, team_dir, *, framework="") -> Path`
+
+Backs the log up (`backup.backup_output_dir`, reason `migrate-decision-log`), refuses if the log changed since
+it was planned, then replaces it atomically with the file's own mode. Returns the backup directory.
+
+### `run_migrate_decision_log(args) -> int`
+
+The CLI runner (re-exported by `commands.py` as `_run_migrate_decision_log`, dispatched by `app.py` after
+`--self` resolves the team dir). `resolve_team_dir(args)` resolves the agents dir as the generate pipeline does.
+Returns 0 for a migration, a no-op or a dry run, and 1 for a refusal or a real run without `--yes`.
 
 ## Related pages
 

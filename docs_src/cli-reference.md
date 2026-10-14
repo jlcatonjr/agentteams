@@ -13,7 +13,7 @@ agentteams [--description PATH] [--project PATH] [--framework NAME]
            [--bridge-from DIR] [--bridge-source-framework NAME]
            [--bridge-check] [--bridge-refresh] [--bridge-merge] [--bridge-no-skills]
            [--dry-run] [--json] [--overwrite] [--merge] [--yes]
-           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--adopt-only SLUG[,SLUG...]] [--check]
+           [--no-scan] [--cost-routing] [--update] [--prune] [--adopt-orphans] [--adopt-only SLUG[,SLUG...]] [--migrate-decision-log] [--check]
            [--refresh-index] [--agent-check] [--window-hours H] [--force]
            [--query-index TEXT] [--query-k N] [--query-strategy {lexical,vector}]
            [--refresh-code-index] [--query-code TEXT] [--code-query-k N]
@@ -351,9 +351,51 @@ exclusive with `--update`, `--overwrite`, `--migrate`, `--prune`, `--adopt-orpha
 - **`--dry-run --json`** prints one document: the adopted-row diff (`routing_rows.added` / `removed`), whether
   there is an `agents:` list and what it would gain (`agents_to_add`, with the gate's clearance status under
   `adopt_orphans_merge`), and each named slug's `tools:` line with `wider_than_read_only` set when it grants more
-  than Read/Grep/Glob, or has no `tools:` line at all. On Claude that line, not the routing row, is the real grant.
+  than read-only, or has no `tools:` line at all. On Claude that line, not the routing row, is the real grant.
+  The line is parsed in the framework's own syntax (Copilot's `['read', 'search']` or block list, Claude's
+  `Read, Grep, Glob`) and each tool is judged on its own: `read`, `search`, `Read`, `Grep` and `Glob` are
+  read-only, as is a tool the framework's `capability_map` reader maps only to the `read`/`search` scopes (goose's
+  `agentteams_readfs`). Any other tool, including one no reader recognises (`web`, `runCommands`), makes the grant
+  wider: `['read', 'search']` is read-only, `['read', 'web']` is not.
 
 Example: `agentteams --self --framework claude --adopt-only injection-test-designer --dry-run --json`.
+
+### `--migrate-decision-log`
+
+`--migrate-decision-log` upgrades the target team's `references/security-decisions.log.csv` header to the
+signing schema, then exits. A team generated before decision signing has the 7-column legacy header
+(`timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,consumed`), and
+`append_signed_decision_row` (so `--sign-decision`, and any Ed25519-signed decision such as
+`adopt-orphans-merge`) refuses a header without `signature`, `sig_scheme`, `key_id` and `derives_from`. It is a
+standalone mode (`agentteams/cli/decision_log_migrate.py`) that works with `--self` or `--description`,
+`--framework`, `--output`, `--dry-run` and `--json`, and is mutually exclusive with the render modes (`--update`,
+`--overwrite`, `--merge`, `--migrate`, `--prune`, `--check`), the adopt modes, the other standalone ops and
+`--no-backup`.
+
+- **Superset header.** Every existing column stays in place. Each column of
+  `decision_log.SIGNED_DECISION_COLUMNS` the header lacks is appended, in that order (for the legacy header:
+  `date`, `scope`, `evidence`, `author`, `derives_from`, the seven `effect_*` columns, `sig_scheme`, `key_id`,
+  `signature`), so no cell of a signed row is dropped. `prev_digest` is never added: hash chaining is opt-in on
+  that column, and the legacy rows were never chained. The migrated header still classifies as the same schema
+  kind.
+- **Byte-exact.** Only the header line is rewritten, as text (its line ending is kept). Every data line stays
+  byte-identical; nothing is round-tripped through a CSV writer.
+- **Refusals.** A missing log, a symlink, an empty, unknown or malformed header (byte-order mark, empty or
+  repeated column name) and a data row with a value past the old header (it would land in an added column,
+  such as `signature`) are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
+- **An intended revocation.** The `signature` column turns decision signing on for the log, so every live
+  unsigned authorizing row stops clearing: each unconsumed `PASS` or `CONDITIONAL PASS`, and each
+  `HALT-RETRACTED` (whose HALT is then in force again). The dry run lists them by line and action, the real
+  run prints the same list, and a real run without `--yes` refuses. Record new, signed clearances for what is
+  still needed.
+- **Write set.** A backup of the log under the agents directory's `.agentteams-backups/`, then an atomic
+  replace of the log. A header that already has every column is a no-op.
+
+Clearance: the run is a governance-file edit and needs an ordinary `@security` PASS. Record it in the
+repository's own log, not the team log being migrated (the migration revokes it).
+
+Example: `agentteams --self --framework copilot-vscode --migrate-decision-log --dry-run`, then the same with
+`--yes`.
 
 ### `--materialize-native`
 

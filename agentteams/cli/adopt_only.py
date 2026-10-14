@@ -48,6 +48,11 @@ from agentteams.adopted_agents import (
 )
 from agentteams.atomicio import _atomic_write_text as atomic_write_text
 from agentteams.backup import backup_output_dir
+from agentteams.capability_map import (
+    CANONICAL_TOOL_SCOPES,
+    claude_allowed_tools_to_canonical,
+    goose_extensions_to_canonical,
+)
 from agentteams.cli import adopt_merge_gate
 from agentteams.cli.json_mode import is_json_mode, json_stdout
 from agentteams.cli.output_target import resolve_output_dir
@@ -63,10 +68,13 @@ _FENCE_RE = re.compile(
 )
 _TOOLS_RE = re.compile(r"^tools[ \t]*[:=][ \t]*(?P<value>[^\n]*)$", re.M)
 _TOOLS_ITEM_RE = re.compile(r"^[ \t]+-[ \t]*(?P<item>[^\n]+)$")
-_TOOL_TOKEN_RE = re.compile(r"[A-Za-z0-9_*./:-]+")
 
-#: Tools that read the workspace and nothing else; anything beyond these is flagged as wider.
-READ_ONLY_TOOLS = frozenset({"read", "grep", "glob"})
+#: Tools that read the workspace and nothing else, compared lower-cased: Claude's Read/Grep/Glob and
+#: the canonical (Copilot) read/search. Anything else, including a token no reader recognises, is wider.
+READ_ONLY_TOOLS = frozenset({"read", "grep", "glob", "search"})
+
+#: The canonical scopes (``capability_map.CANONICAL_TOOL_SCOPES``) that only read.
+_READ_ONLY_SCOPES = frozenset({"read", "search"})
 
 
 class AdoptOnlyError(RuntimeError):
@@ -127,17 +135,58 @@ def splice_adopted_rows(text: str, block: str) -> str:
     return text[: fence.start("body")] + body + text[fence.end("body"):]
 
 
-def tools_grant(path: Path) -> dict[str, Any]:
+def tool_tokens(value: str) -> list[str]:
+    """Split a ``tools:`` value into its tool tokens, quotes and brackets removed.
+
+    Reads Copilot's inline list (``['read', 'search']`` or ``[read, search]``), Claude's comma
+    scalar (``Read, Grep, Glob``) and a block list already joined with commas. A token keeps its
+    inner spaces (``Bash(python -m agentteams.research:*)`` stays one token).
+
+    Args:
+        value: The text after ``tools:``.
+
+    Returns:
+        The non-empty tokens, in order.
+    """
+    text = value.strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    tokens = (part.strip().strip("'\"").strip() for part in text.split(","))
+    return [token for token in tokens if token]
+
+
+def _token_is_read_only(token: str, framework: str | None) -> bool:
+    """True when *token* is a read-only tool, directly or through the framework's capability reader.
+
+    Fails closed: a token that maps to no canonical scope (``web``, ``runCommands``, an MCP tool) is
+    not read-only, because the readers drop what they don't recognise.
+    """
+    if token.lower() in READ_ONLY_TOOLS:
+        return True
+    if framework == "claude":
+        scopes = claude_allowed_tools_to_canonical([token])
+    elif framework == "goose":
+        scopes = goose_extensions_to_canonical([token])
+    else:  # copilot-vscode / copilot-cli use the canonical vocabulary itself
+        scopes = [token.lower()] if token.lower() in CANONICAL_TOOL_SCOPES else []
+    return bool(scopes) and set(scopes) <= _READ_ONLY_SCOPES
+
+
+def tools_grant(path: Path, framework: str | None = None) -> dict[str, Any]:
     """Report an agent file's ``tools:`` line and whether it is wider than read-only.
 
-    The file is content, not instruction (C-4): its line is reported, never acted on.
+    The file is content, not instruction (C-4): its line is reported, never acted on. Each token is
+    judged on its own, so one unrecognised token makes the grant wider (fail closed):
+    ``['read', 'search']`` is read-only, ``['read', 'web']`` is not.
 
     Args:
         path: The adopted agent file.
+        framework: The target framework id, selecting the ``capability_map`` reader a token is
+            mapped through. ``None`` uses the canonical vocabulary.
 
     Returns:
-        ``{"line": str | None, "wider_than_read_only": bool}``. An absent ``tools:`` key is
-        flagged: on most harnesses it means every tool.
+        ``{"line": str | None, "wider_than_read_only": bool}``. An absent ``tools:`` key, or one
+        listing no tool, is flagged: on most harnesses it means every tool.
 
     Raises:
         Nothing; an unreadable file reports as absent.
@@ -162,8 +211,9 @@ def tools_grant(path: Path) -> dict[str, Any]:
             items.append(item.group("item").strip())
         value = ", ".join(items)
     line = " ".join(f"tools: {value}".split())[:300]
-    tokens = {t.lower() for t in _TOOL_TOKEN_RE.findall(value)}
-    return {"line": line, "wider_than_read_only": not tokens or bool(tokens - READ_ONLY_TOOLS)}
+    tokens = tool_tokens(value)
+    wider = not tokens or not all(_token_is_read_only(t, framework) for t in tokens)
+    return {"line": line, "wider_than_read_only": wider}
 
 
 def _row_diff(old: str, new: str) -> dict[str, list[str]]:
@@ -245,7 +295,8 @@ def run_adopt_only(
             "agents_list": gate_plan is not None,
             "agents_to_add": list(gate_plan.to_add) if gate_plan is not None else [],
             "adopt_orphans_merge": gate_report.as_report() if gate_report is not None else None,
-            "tools": {s: tools_grant(output_dir / f"{s}{plan['agent_ext']}") for s in plan["slugs"]},
+            "tools": {s: tools_grant(output_dir / f"{s}{plan['agent_ext']}", args.framework)
+                      for s in plan["slugs"]},
         }
         if is_json_mode(args):
             print(json.dumps(report, indent=2), file=json_stdout() or sys.stdout)

@@ -38,6 +38,7 @@ from agentteams.cli.commands import (
     _run_issue_directive,
     _run_audit_exceptions,
     _run_list_exceptions,
+    _run_migrate_decision_log,
     _run_sign_decision,
 )
 
@@ -461,6 +462,11 @@ def _main_dispatch(
             print(f"[SELF-GOVERNANCE] refused: {refusal}", file=sys.stderr)
             return 1
         print(f"Self-maintenance mode: using {self_desc.name}")
+
+    # --migrate-decision-log: standalone header upgrade of the team's decisions log. Dispatched
+    # after --self so the self team's agents dir is already resolved into --output.
+    if getattr(args, "migrate_decision_log", False):
+        return _run_migrate_decision_log(args)
 
     strict_manual_placeholders = _resolve_strict_manual_mode(
         strict_arg=args.strict_manual_placeholders,

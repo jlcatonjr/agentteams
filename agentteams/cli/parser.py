@@ -203,8 +203,23 @@ def _build_parser() -> argparse.ArgumentParser:
              "with exactly the named slugs through the adopt-orphans-merge gate (governed "
              "workspace, Ed25519-signed decision with effect_grants exactly agents:<slug>). "
              "--dry-run --json reports the row diff, the agents: additions and each slug's tools: "
-             "line, flagged when wider than Read/Grep/Glob. Mutually exclusive with --update, "
+             "line, flagged when wider than read-only (Read/Grep/Glob, read/search; any other or "
+             "unknown tool counts as wider). Mutually exclusive with --update, "
              "--overwrite, --migrate, --prune and --adopt-orphans.",
+    )
+    parser.add_argument(
+        "--migrate-decision-log",
+        action="store_true",
+        dest="migrate_decision_log",
+        help="Upgrade the target team's references/security-decisions.log.csv header to the signing "
+             "schema, then exit (no render). Existing columns stay in place; the missing columns of "
+             "decision_log.SIGNED_DECISION_COLUMNS are appended, except prev_digest (chaining stays "
+             "opt-in). Only the header line is rewritten: every data line stays byte-identical. Backed "
+             "up first, written atomically, idempotent; a malformed or unknown header is refused, as is "
+             "a row with a value past the old header. Adding the signature column activates signing, so "
+             "every live unsigned PASS, CONDITIONAL PASS or HALT-RETRACTED row stops clearing: --dry-run "
+             "lists them by line and action, and a real run prints them and requires --yes. Works with "
+             "--self or --description, --framework, --output, --dry-run and --json.",
     )
     parser.add_argument(
         "--check",
