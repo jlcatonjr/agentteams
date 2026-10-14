@@ -148,6 +148,16 @@ def test_guard_never_writes_hand_written_and_emits_example(tmp_path: Path) -> No
     assert any("hand-written" in n for n in notices)
 
 
+def test_guard_refuses_symlinked_examples_dir(tmp_path: Path) -> None:
+    root, agents = _project(tmp_path)
+    (root / "AGENTS.md").write_text("# Mine\n", encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (root / ".grok" / "examples").symlink_to(elsewhere, target_is_directory=True)
+    kept, notices = GrokAdapter().guard_rendered_files([("../../AGENTS.md", "full")], agents)
+    assert kept == [] and any("symlink" in n for n in notices)
+
+
 def test_guard_refuses_symlinked_grok_dir(tmp_path: Path) -> None:
     root = tmp_path / "proj"
     root.mkdir()

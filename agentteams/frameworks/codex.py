@@ -70,6 +70,7 @@ from ._agents_md_ownership import (
     CODEX_AGENTS_MD_MARKER,
     GROK as GROK_OWNED,
     classify_agents_md,
+    strip_agents_md_notice,
 )
 
 __all__ = [
@@ -85,7 +86,7 @@ __all__ = [
 
 # Codex-specific generated notice (HTML comment: invisible to Codex). Its first line doubles
 # as the ownership marker agents_md_is_codex_owned() checks before replacing AGENTS.md.
-_CODEX_AGENTS_MD_MARKER = CODEX_AGENTS_MD_MARKER  # shared home: _agents_md_ownership
+_CODEX_AGENTS_MD_MARKER = CODEX_AGENTS_MD_MARKER  # compatibility alias for existing importers (tests)
 _CODEX_AGENTS_MD_NOTICE = (
     f"{_CODEX_AGENTS_MD_MARKER} Codex loads "
     "applicable AGENTS.md files as it walks toward the working directory: this "
@@ -565,8 +566,8 @@ def strip_codex_notice(text: str) -> str:
         The content without the notice (unchanged when there is none).
     """
     stripped = text.lstrip()
-    if stripped.startswith(_CODEX_AGENTS_MD_MARKER) and "-->" in stripped:
-        return stripped.split("-->", 1)[1].lstrip()
+    if stripped.startswith(CODEX_AGENTS_MD_MARKER):
+        return strip_agents_md_notice(text)
     return text
 
 

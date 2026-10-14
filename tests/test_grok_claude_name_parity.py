@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.frameworks.grok import GrokAdapter, _front_matter_name
+from agentteams.frameworks.grok import GrokAdapter, front_matter_name
 
 
 def _render(framework: str, out: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
@@ -19,7 +19,7 @@ def _render(framework: str, out: Path, monkeypatch: pytest.MonkeyPatch) -> dict[
     from agentteams.cli import security_gate
 
     monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *a, **k: None)
-    brief = Path("examples/software-project/brief.json").resolve()
+    brief = Path(__file__).resolve().parents[1] / "examples" / "software-project" / "brief.json"
     assert build_team.main(["--description", str(brief), "--framework", framework, "--output", str(out),
                             "--yes", "--no-scan", "--security-offline"]) == 0
     from agentteams.frameworks.registry import FRAMEWORKS
@@ -27,7 +27,7 @@ def _render(framework: str, out: Path, monkeypatch: pytest.MonkeyPatch) -> dict[
     agents = FRAMEWORKS[framework]().normalize_output_path(out)
     names = {}
     for path in sorted(agents.glob("*.md")):
-        name = _front_matter_name(path.read_text(encoding="utf-8"))
+        name = front_matter_name(path.read_text(encoding="utf-8"))
         if name is not None:
             names[path.name] = name
     return names

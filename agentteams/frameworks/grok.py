@@ -54,10 +54,12 @@ from ._agents_md_ownership import (
     GROK_AGENTS_MD_MARKER,
     GROK_FENCE_ID,
     classify_agents_md,
+    fence_pattern,
     strip_agents_md_notice,
+    symlink_on_path,
     upsert_fenced_block,
 )
-from ._grok_tool_scoping import to_grok_tools
+from ._grok_tool_scoping import EXACT_TOOLSET_LINES, to_grok_tools
 from .format_spec import COPILOT_INSTRUCTIONS_FILENAME
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -72,9 +74,6 @@ GROK_EMITTED_KEYS = ("name", "description", "tools", "disallowedTools", "injectD
 #: Grok's built-in agent types; a project agent with the same name shadows the built-in.
 GROK_BUILTIN_AGENT_TYPES = frozenset({"general-purpose", "explore", "plan"})
 
-#: The fixed front-matter lines that make ``tools:`` an exact limit (see the module docstring).
-_EXACT_TOOLSET_LINES = ("injectDefaultTools: false", "mcpInheritance: none")
-
 GROK_AGENTS_MD_NOTICE = (
     f"{GROK_AGENTS_MD_MARKER} Grok Build loads AGENTS.md, CLAUDE.md, .claude/CLAUDE.md and "
     ".grok/rules/*.md from the repo root down to the working directory, in a trusted folder only. The "
@@ -84,7 +83,7 @@ GROK_AGENTS_MD_NOTICE = (
 
 _AGENTS_MD = "AGENTS.md"
 _EXAMPLE_BLOCK_REL = "../examples/AGENTS.grok-block.md"
-_NAME_RE = re.compile(r'^name:\s*"?([^"\n]+?)"?\s*$', re.MULTILINE)
+_NAME_RE = re.compile(r"""^name:\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\n]*?))\s*$""", re.MULTILINE)
 
 
 def grok_runtime_block() -> str:
@@ -121,7 +120,7 @@ def _front_matter(name: str, description: str, tools: str, disallowed: str | Non
     lines.append(f"tools: {tools}")
     if disallowed:
         lines.append(f"disallowedTools: {disallowed}")
-    lines.extend(_EXACT_TOOLSET_LINES)
+    lines.extend(EXACT_TOOLSET_LINES)
     lines.extend(["---", ""])
     return "\n".join(lines)
 
@@ -131,6 +130,7 @@ class GrokAdapter(ClaudeAdapter):
 
     @property
     def framework_id(self) -> str:
+        """Return ``"grok"``."""
         return "grok"
 
     def render_agent_file(self, content: str, agent_slug: str, manifest: dict[str, Any]) -> str:
@@ -180,10 +180,7 @@ class GrokAdapter(ClaudeAdapter):
         agents_dir = None if manifest.get("interop_source_framework") else ".grok/agents"
         body = _neutralize_instructions(body, agents_dir)
         body = strip_agents_md_notice(body)
-        body = re.sub(
-            rf"\n*<!--\s*AGENTTEAMS:BEGIN\s+{GROK_FENCE_ID}\s.*?<!--\s*AGENTTEAMS:END\s+{GROK_FENCE_ID}\s*-->\n*",
-            "\n\n", body, flags=re.DOTALL,
-        )
+        body = fence_pattern(GROK_FENCE_ID).sub("", body)
         return f"{GROK_AGENTS_MD_NOTICE}\n\n{body.strip()}\n\n{grok_runtime_block()}\n"
 
     def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
@@ -204,15 +201,30 @@ class GrokAdapter(ClaudeAdapter):
         if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
             raise ValueError("the Grok team-builder template needs a canonical `tools: [...]` front-matter line")
         head = content[: len(content) - len(body)]
-        replacement = "\n".join([f"tools: {to_grok_tools(_map_allowed_tools(content))}", *_EXACT_TOOLSET_LINES])
+        replacement = "\n".join([f"tools: {to_grok_tools(_map_allowed_tools(content))}", *EXACT_TOOLSET_LINES])
         head = _YAML_TOOLS_RE.sub(lambda _m: replacement, head, count=1)
         return head + body
 
     def framework_root_prefix(self) -> str:
+        """Return ``.grok``: tool docs render as skills under ``.grok/skills/<slug>/SKILL.md``.
+
+        Returns:
+            The project-relative framework root.
+
+        Raises:
+            Nothing.
+        """
         return ".grok"
 
     def required_front_matter_keys(self) -> tuple[str, ...]:
-        """``tools`` plus the two keys that make it an exact limit; omitting any of them widens the agent."""
+        """Return the keys every Grok agent must carry; omitting any of the last three widens the agent.
+
+        Returns:
+            ``name``, ``description``, ``tools`` and the two exact-toolset keys.
+
+        Raises:
+            Nothing.
+        """
         return ("name", "description", "tools", "injectDefaultTools", "mcpInheritance")
 
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
@@ -234,13 +246,42 @@ class GrokAdapter(ClaudeAdapter):
         return FrameworkAdapter.extra_output_files(self, manifest)
 
     def get_agents_dir(self, project_path: Path) -> Path:
+        """Return ``<project>/.grok/agents``.
+
+        Args:
+            project_path: The project root.
+
+        Returns:
+            The default agents directory.
+
+        Raises:
+            Nothing.
+        """
         return project_path / ".grok" / "agents"
 
     def vscode_tasks_rel_path(self) -> str | None:
+        """Return None: no ``.vscode/tasks.json`` for Grok teams (Claude's adapter emits one).
+
+        Returns:
+            None.
+
+        Raises:
+            Nothing.
+        """
         return None
 
     def normalize_output_path(self, output: Path) -> Path:
-        """Append ``.grok/agents`` to a project-root ``--output`` (mirrors codex)."""
+        """Append ``.grok/agents`` to a project-root ``--output`` (mirrors codex).
+
+        Args:
+            output: The ``--output`` path.
+
+        Returns:
+            The agents directory under *output*.
+
+        Raises:
+            Nothing.
+        """
         parts = output.parts
         if len(parts) >= 2 and parts[-2] == ".grok" and parts[-1] == "agents":
             return output
@@ -249,7 +290,19 @@ class GrokAdapter(ClaudeAdapter):
         return output / ".grok" / "agents"
 
     def finalize_output_path(self, rel_path: str, file_type: str) -> str:
-        """Place the instructions at the repo-root AGENTS.md (two levels above ``.grok/agents``)."""
+        """Place the instructions at the repo-root AGENTS.md (two levels above ``.grok/agents``).
+
+        Args:
+            rel_path: The planned path, relative to the agents dir.
+            file_type: The planned file's type.
+
+        Returns:
+            ``../../AGENTS.md`` for the instructions file; otherwise the base mapping (Claude's
+            ``CLAUDE.md`` mapping is deliberately skipped).
+
+        Raises:
+            Nothing.
+        """
         if file_type == "instructions" and rel_path.endswith(COPILOT_INSTRUCTIONS_FILENAME):
             return f"../../{_AGENTS_MD}"
         return FrameworkAdapter.finalize_output_path(self, rel_path, file_type)
@@ -280,8 +333,9 @@ class GrokAdapter(ClaudeAdapter):
         """
         kept: list[tuple[str, str]] = []
         notices: list[str] = []
-        root = Path(os.path.normpath(output_dir)).parent.parent
-        linked = _symlinked_below(Path(os.path.normpath(output_dir)), root)
+        out_dir = Path(os.path.normpath(output_dir))
+        root = out_dir.parent.parent
+        linked = symlink_on_path(out_dir, root)
         for rel_path, content in rendered_files:
             target = Path(os.path.normpath(output_dir / rel_path))
             if target.name != _AGENTS_MD or target.parent != root:
@@ -310,6 +364,11 @@ class GrokAdapter(ClaudeAdapter):
                 )
                 continue
             if owner == FOREIGN:
+                examples = Path(os.path.normpath(out_dir / _EXAMPLE_BLOCK_REL)).parent
+                if symlink_on_path(examples, root) is not None:
+                    notices.append(f"{target}: hand-written AGENTS.md left untouched; {examples} is a symlink, so "
+                                   "no example block was written.")
+                    continue
                 kept.append((_EXAMPLE_BLOCK_REL, grok_runtime_block() + "\n"))
                 notices.append(
                     f"{target}: hand-written AGENTS.md left untouched. To add the Grok notes, paste the block in "
@@ -320,48 +379,51 @@ class GrokAdapter(ClaudeAdapter):
                 f"{target}: AGENTS.md is a symlink, unreadable, outside the project, or has malformed AGENTTEAMS "
                 "fences; left untouched."
             )
-        if output_dir.name == "agents" and output_dir.parent.name == ".grok":
-            notices.extend(_parity_notices(kept, Path(os.path.normpath(output_dir)), root))
+        if out_dir.name == "agents" and out_dir.parent.name == ".grok":
+            notices.extend(_parity_notices(kept, out_dir, root))
         return kept, notices
 
 
-def _symlinked_below(path: Path, root: Path) -> Path | None:
-    """The first symlink on the lexical chain from *path* up to (not including) *root*, else None."""
-    current = path
-    while current != root and current.parent != current:
-        if current.is_symlink():
-            return current
-        current = current.parent
-    return None
+def front_matter_name(text: str) -> str | None:
+    """Return the ``name:`` value from an agent file's YAML front matter (quoted or bare).
 
+    Args:
+        text: The agent file text (only its front matter is read; it is data, never instructions).
 
-def _front_matter_name(text: str) -> str | None:
+    Returns:
+        The name, or None when there is no front matter or no ``name:`` key.
+
+    Raises:
+        Nothing.
+    """
     yaml_text, _ = _parse_yaml_front_matter(text)
     if yaml_text is None:
         return None
     m = _NAME_RE.search(yaml_text)
-    return m.group(1).strip() if m else None
+    if not m:
+        return None
+    return next(g for g in m.groups() if g is not None).strip() or None
 
 
 def _parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -> list[str]:
     """Advisories for D4: Grok/Claude name mismatches, unshadowed Claude agents, built-in shadowing, gitignore."""
     notices: list[str] = []
     claude_dir = root / ".claude" / "agents"
-    grok_names: set[str] = set()
+    grok_files: set[str] = set()
     for rel_path, content in kept:
         if "/" in rel_path or not rel_path.endswith(".md") or rel_path == "SETUP-REQUIRED.md":
             continue
-        name = _front_matter_name(content)
+        name = front_matter_name(content)
         if name is None:
             continue
-        grok_names.add(rel_path)
+        grok_files.add(rel_path)
         if Path(rel_path).stem in GROK_BUILTIN_AGENT_TYPES or name.lower() in GROK_BUILTIN_AGENT_TYPES:
             notices.append(f"{output_dir / rel_path}: name {name!r} shadows Grok Build's built-in agent type.")
         twin = claude_dir / rel_path
         if twin.is_file() and not twin.is_symlink():
             try:
                 with twin.open(encoding="utf-8") as fh:
-                    twin_name = _front_matter_name(fh.read(4096))
+                    twin_name = front_matter_name(fh.read(4096))
             except (OSError, UnicodeDecodeError):
                 twin_name = None
             if twin_name is not None and twin_name != name:
@@ -371,7 +433,7 @@ def _parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -
                 )
     if claude_dir.is_dir() and not claude_dir.is_symlink():
         orphans = sorted(p.name for p in claude_dir.glob("*.md")
-                         if p.name != "SETUP-REQUIRED.md" and p.name not in grok_names)
+                         if p.name != "SETUP-REQUIRED.md" and p.name not in grok_files)
         if orphans:
             notices.append(
                 f"{claude_dir}: {len(orphans)} Claude agent(s) have no Grok twin and Grok always loads them "

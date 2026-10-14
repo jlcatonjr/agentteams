@@ -37,16 +37,29 @@ ABSENT, GROK, CODEX, AGENTS_MD, FENCED, FOREIGN, UNSAFE = (
 _HEAD_CHARS = 512
 
 
-def _has_symlinked_component(path: Path, stop: Path) -> bool:
-    """Whether *path* or any parent up to (not including) *stop* is a symlink, judged lexically."""
+def symlink_on_path(path: Path, root: Path) -> Path | None:
+    """Return the first symlink on the lexical chain from *path* up to *root*, else None.
+
+    *root* itself is not checked (the project root may legitimately be reached through a link); every
+    component below it is, *path* included. Judged lexically (no resolution), so a link cannot hide itself.
+
+    Args:
+        path: The path to check.
+        root: The project root bounding the walk.
+
+    Returns:
+        The first symlinked component, or None.
+
+    Raises:
+        Nothing.
+    """
     current = Path(os.path.normpath(path))
-    stop = Path(os.path.normpath(stop))
-    while True:
+    root = Path(os.path.normpath(root))
+    while current != root and current.parent != current:
         if current.is_symlink():
-            return True
-        if current == stop or current.parent == current:
-            return False
+            return current
         current = current.parent
+    return None
 
 
 def classify_agents_md(path: Path, *, repo_root: Path | None = None) -> str:
@@ -69,7 +82,7 @@ def classify_agents_md(path: Path, *, repo_root: Path | None = None) -> str:
     if path.is_symlink():
         return UNSAFE  # dangling or not, a link would redirect the write
     if repo_root is not None:
-        if _has_symlinked_component(path.parent, repo_root):
+        if symlink_on_path(path.parent, repo_root) is not None:
             return UNSAFE
         try:
             if not path.parent.resolve().is_relative_to(Path(repo_root).resolve()):
@@ -99,7 +112,18 @@ def classify_agents_md(path: Path, *, repo_root: Path | None = None) -> str:
     return FENCED if regions else FOREIGN
 
 
-def _fence_re(fence_id: str) -> re.Pattern[str]:
+def fence_pattern(fence_id: str) -> re.Pattern[str]:
+    """Return the regex matching one complete ``fence_id`` fence (BEGIN with ``v=N`` through END).
+
+    Args:
+        fence_id: The fence's section id.
+
+    Returns:
+        A DOTALL pattern; the one definition every grok/AGENTS.md fence edit uses.
+
+    Raises:
+        Nothing.
+    """
     sid = re.escape(fence_id)
     return re.compile(
         rf"<!--\s*AGENTTEAMS:BEGIN\s+{sid}\s+v=\d+\s*-->.*?<!--\s*AGENTTEAMS:END\s+{sid}\s*-->",
@@ -123,12 +147,13 @@ def upsert_fenced_block(existing: str, fence_id: str, block: str) -> str:
         ValueError: *block* is not a single well-formed fence for *fence_id*, or *existing* holds the fence more
             than once or with an unmatched BEGIN/END.
     """
-    pattern = _fence_re(fence_id)
+    pattern = fence_pattern(fence_id)
     if not pattern.fullmatch(block.strip()):
         raise ValueError(f"block is not one well-formed {fence_id!r} fence")
     matches = list(pattern.finditer(existing))
-    begins = len(re.findall(rf"<!--\s*AGENTTEAMS:BEGIN\s+{re.escape(fence_id)}\s", existing))
-    ends = len(re.findall(rf"<!--\s*AGENTTEAMS:END\s+{re.escape(fence_id)}\s", existing))
+    sid = re.escape(fence_id)
+    begins = len(re.findall(rf"<!--\s*AGENTTEAMS:BEGIN\s+{sid}\s", existing))  # stray halves count too
+    ends = len(re.findall(rf"<!--\s*AGENTTEAMS:END\s+{sid}\s", existing))
     if len(matches) > 1 or begins != len(matches) or ends != len(matches):
         raise ValueError(f"existing text holds a duplicate or unbalanced {fence_id!r} fence; refusing to edit it")
     block = block.strip()

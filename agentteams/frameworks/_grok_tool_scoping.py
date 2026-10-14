@@ -27,6 +27,11 @@ import re
 #: Grok Build 1.0.52 tool names usable in agent ``tools:`` / ``disallowedTools:`` (bare or with a scope).
 GROK_TOOL_NAMES = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "MCPTool", "WebFetch", "WebSearch", "Agent"})
 
+#: Front-matter lines every Grok agent carries so ``tools:`` is the exact limit. Grok's defaults widen it:
+#: ``injectDefaultTools`` (default true) layers session tools on top of the list and ``mcpInheritance``
+#: (default ``all``) passes every parent MCP server (source-only: ``xai-grok-agent/src/config.rs``).
+EXACT_TOOLSET_LINES: tuple[str, ...] = ("injectDefaultTools: false", "mcpInheritance: none")
+
 #: Claude names with no identical Grok name. ``None`` means drop (allow-list only; a narrowing).
 _CLAUDE_TO_GROK = {"Task": "Agent", "TodoWrite": None}
 
