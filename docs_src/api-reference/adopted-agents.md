@@ -94,7 +94,8 @@ orchestrator with an `agents:` list, the named slugs it lacks go through the mer
 |---|---|
 | `parse_slugs(raw) -> list[str]` | Splits and validates the flag value (sorted, de-duplicated) |
 | `splice_adopted_rows(text, block) -> str` | Replaces only the adopted rows of the single `routing_table_rows` fence, keeping its indentation |
-| `tools_grant(path) -> dict` | An adopted file's `tools:` line, with `wider_than_read_only` when it grants more than Read/Grep/Glob or has none |
+| `tool_tokens(value) -> list[str]` | Splits a `tools:` value (Copilot `['read', 'search']`, Claude `Read, Grep, Glob`, a joined block list) into its tokens |
+| `tools_grant(path, framework=None) -> dict` | An adopted file's `tools:` line, with `wider_than_read_only` unless every tool is read-only (`READ_ONLY_TOOLS`: read, grep, glob, search, or a tool the framework's `capability_map` reader maps only to `read`/`search`). An unrecognised tool, an empty list or no `tools:` line counts as wider (fail closed) |
 | `run_adopt_only(args, manifest, description, output_dir) -> int` | The mode: validate, gate, splice; `--dry-run --json` prints the report |
 
 `AdoptOnlyError` is raised for a refusal. The mode writes the orchestrator and its backup (`--no-backup`

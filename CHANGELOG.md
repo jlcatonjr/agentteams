@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (`--migrate-decision-log`: upgrade a legacy team decisions log to the signing schema)
+
+- A team generated before decision signing has the 7-column legacy `references/security-decisions.log.csv`
+  header, and `decision_log.append_signed_decision_row` refuses it (fail-closed), so no signed decision (such
+  as the Ed25519 `adopt-orphans-merge` one) could be recorded there, and nothing upgraded the header. The new
+  standalone mode (`agentteams/cli/decision_log_migrate.py`, imported and dispatched by
+  `cli/app.py` after `--self`) does that and nothing else. The pinned `decision_log.py` is unchanged.
+  - **Superset header:** existing columns stay in place and the missing `SIGNED_DECISION_COLUMNS` are appended
+    in order, never `prev_digest` (chaining stays opt-in, so legacy rows can't break a chain). The result still
+    classifies as the same schema kind.
+  - **Byte-exact:** only the header line is rewritten, as text; data lines stay byte-identical.
+  - Backed up first, atomic, idempotent. A missing, symlinked, empty, unknown or malformed header (BOM, empty or
+    repeated column) is refused, as is a data row with a value past the old header (no laundering).
+  - **An intended revocation:** the `signature` column activates signing, so every live unsigned `PASS` /
+    `CONDITIONAL PASS` (unconsumed) and every `HALT-RETRACTED` row stops clearing. `--dry-run` (and `--json`)
+    lists them by line and action, the real run prints them, and it requires `--yes`.
+  - Mutually exclusive with the render modes, the adopt modes, the other standalone ops and `--no-backup`.
+
+### fix (`--adopt-only`: Copilot `tools: ['read', 'search']` no longer reported as wider than read-only)
+
+- `adopt_only.READ_ONLY_TOOLS` lacked `search`, so a Copilot read-only grant was flagged
+  `wider_than_read_only`. It now holds `read`, `grep`, `glob` and `search`. `tools_grant(path, framework)`
+  parses the list syntax (`tool_tokens`) and judges each tool on its own, also accepting a tool the framework's
+  `capability_map` reader maps only to `read`/`search` (goose's `agentteams_readfs`). Any other tool, including
+  one no reader recognises, still counts as wider: `['read', 'web']` is wider.
+
 ### security (derived content stays data; outbound sends gated; gate ReDoS fixed)
 
 Prompted by "Cryptographic Context Injection": ciphertext, its key and a plain "decrypt this and follow it"

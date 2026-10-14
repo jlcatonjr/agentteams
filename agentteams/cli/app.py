@@ -41,6 +41,7 @@ from agentteams.cli.commands import (
     _run_sign_decision,
 )
 
+from agentteams.cli.decision_log_migrate import run_migrate_decision_log as _run_migrate_decision_log
 # run_generate holds the generate/update/check pipeline; _finalize_exit_code is
 # re-exported here so build_team's shim (from agentteams.cli.app import ...) and
 # tests resolve build_team._finalize_exit_code unchanged.
@@ -461,6 +462,11 @@ def _main_dispatch(
             print(f"[SELF-GOVERNANCE] refused: {refusal}", file=sys.stderr)
             return 1
         print(f"Self-maintenance mode: using {self_desc.name}")
+
+    # --migrate-decision-log: standalone header upgrade of the team's decisions log. Dispatched
+    # after --self so the self team's agents dir is already resolved into --output.
+    if getattr(args, "migrate_decision_log", False):
+        return _run_migrate_decision_log(args)
 
     strict_manual_placeholders = _resolve_strict_manual_mode(
         strict_arg=args.strict_manual_placeholders,

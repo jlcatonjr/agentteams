@@ -282,6 +282,44 @@ def test_absent_tools_line_is_flagged(tmp_path: Path) -> None:
     assert adopt_only.tools_grant(p) == {"line": "tools: Read, Grep", "wider_than_read_only": False}
 
 
+def test_duplicate_tools_keys_are_flagged(tmp_path: Path) -> None:
+    # A YAML loader keeps the LAST key, so a read-only first key must not be reported as the grant.
+    p = tmp_path / "x.md"
+    p.write_text("---\nname: x\ntools: Read\ntools: Read, Edit, Bash\n---\n", encoding="utf-8")
+    assert adopt_only.tools_grant(p)["wider_than_read_only"] is True
+
+
+@pytest.mark.parametrize("framework, tools, wider", [
+    ("copilot-vscode", "tools: ['read', 'search']", False),   # the 2026-10-13 false positive
+    ("copilot-vscode", "tools: [read, search]", False),
+    ("copilot-vscode", "tools:\n  - 'read'\n  - 'search'", False),
+    ("copilot-vscode", "tools: ['read', 'web']", True),       # unknown token: fail closed
+    ("copilot-vscode", "tools: ['read', 'edit']", True),
+    ("copilot-vscode", "tools: []", True),
+    ("copilot-cli", "tools: ['read', 'search']", False),
+    ("copilot-cli", "tools: ['read', 'runCommands']", True),
+    ("claude", "tools: Read, Grep, Glob", False),
+    ("claude", "tools: Read, Grep, WebFetch", True),
+    ("claude", "tools: Read, Bash(python -m agentteams.research:*)", True),
+    ("goose", "tools: agentteams_readfs", False),
+    ("goose", "tools: developer", True),
+    (None, "tools: ['read', 'search']", False),
+    (None, "tools: ['read', 'web']", True),
+])
+def test_tools_grant_read_only_verdict_per_framework(tmp_path: Path, framework: str | None, tools: str,
+                                                     wider: bool) -> None:
+    p = tmp_path / "x.md"
+    p.write_text(f"---\nname: x\n{tools}\n---\nbody\n", encoding="utf-8")
+    assert adopt_only.tools_grant(p, framework)["wider_than_read_only"] is wider
+
+
+def test_tool_tokens_parses_list_and_scalar_syntax() -> None:
+    assert adopt_only.tool_tokens("['read', \"search\"]") == ["read", "search"]
+    assert adopt_only.tool_tokens("Read, Grep, Glob") == ["Read", "Grep", "Glob"]
+    assert adopt_only.tool_tokens("Bash(python -m x:*), Read") == ["Bash(python -m x:*)", "Read"]
+    assert adopt_only.tool_tokens("[]") == []
+
+
 # --- copilot: the agents: list goes through the gate with exactly the named slugs --------------
 
 

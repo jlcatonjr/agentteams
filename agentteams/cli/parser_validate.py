@@ -131,6 +131,22 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             if getattr(args, attr, False):
                 parser.error(f"--adopt-only and {flag} are mutually exclusive")
 
+    if getattr(args, "migrate_decision_log", False):
+        # A standalone header upgrade of one file (cli/decision_log_migrate.py): the render modes, the
+        # adopt modes and the standalone ops listed below are refused with it, as is skipping its backup.
+        # (Not every app.py standalone mode is listed; those not listed simply dispatch first.)
+        for attr, flag in (("update", "--update"), ("overwrite", "--overwrite"), ("merge", "--merge"),
+                           ("migrate", "--migrate"), ("prune", "--prune"), ("check", "--check"),
+                           ("adopt_orphans", "--adopt-orphans"), ("adopt_only", "--adopt-only"),
+                           ("no_backup", "--no-backup"), ("fleet", "--fleet"),
+                           ("sign_decision", "--sign-decision"), ("verify_waivers", "--verify-waivers"),
+                           ("verify_integrity", "--verify-integrity"), ("verify_backup", "--verify-backup"),
+                           ("prune_backups", "--prune-backups"), ("convert_from", "--convert-from"),
+                           ("interop_from", "--interop-from"), ("bridge_from", "--bridge-from"),
+                           ("package_team", "--package-team")):
+            if getattr(args, attr, None) not in (None, False):
+                parser.error(f"--migrate-decision-log and {flag} are mutually exclusive")
+
     if getattr(args, "adopt_orphans", False):
         # Adoption extends the orchestrator's `agents:` roster. A full re-render (--overwrite /
         # --migrate) does that through the `overwrite` clearance. Under --update's default merge,
