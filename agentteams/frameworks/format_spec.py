@@ -78,8 +78,8 @@ class FormatSpec:
             (goose recipes, codex custom-agent TOML, agents-md plain Markdown).
         pinned_version: Upstream release the adapter's source-only facts were verified
             against (e.g. ``"1.0.52"``); ``None`` where the published docs are the whole
-            contract. The one home for the version: adapters and docs must not restate it
-            as a literal (guarded by tests/test_grok_adapter.py).
+            contract. The only literal in code: adapters must not restate it (guarded by
+            tests/test_grok_adapter.py); the expert ref states it on purpose and must match.
     """
 
     research_id: str
@@ -194,9 +194,12 @@ FORMAT_SPECS: dict[str, FormatSpec] = {
         extra_source_urls=("https://docs.x.ai/build/overview",),
         expert_ref="references/grok-agent-infrastructure-expert.md",
         expected_doc_tokens=("mcp_servers", "permission", "plugins"),
+        # Only paths the two watched pages (settings reference + overview) actually name;
+        # .grok/agents is documented on the subagents page, which the watcher does not fetch.
         expected_locations=(".grok/config.toml",),
         toml_keys=True,
         # tools (exact limit) + the two keys that stop Grok widening it (frameworks/grok.py).
+        # disallowedTools is optional (emitted only when declared), so it is not listed: same as claude.
         emitted_front_matter_keys=("name", "description", "tools", "injectDefaultTools", "mcpInheritance"),
         pinned_version="1.0.52",
     ),

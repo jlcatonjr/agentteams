@@ -94,7 +94,8 @@ Core.
 Grok runs Claude-schema hooks from `.grok/hooks/*.json` and from Claude's `settings.json`. `PreToolUse` can
 block a call, with exit code 2 or `{"decision":"deny"}`. **Every hook failure is fail-open**: a timeout, a crash
 or malformed output lets the call through (confirmed live in the 2026-10-14 spike). Treat a Grok hook as an
-advisory control, never as enforcement. agentteams classifies it as declared, not enforced.
+advisory control, never as enforcement. (agentteams emits no Grok hook yet; when the Phase 2 hook gate lands it
+is classified as declared, not enforced.)
 
 ---
 
@@ -104,6 +105,8 @@ Sandbox profiles:
 - built-in: `off` (the default), `workspace`, `devbox`, `read-only`, `strict`
 - custom: `[profiles.<name>]` in `.grok/sandbox.toml`, with `extends`, `read_only`, `read_write`, `deny` and
   `restrict_network`
+
+Example profile (agentteams does not emit one yet; a generated profile is Phase 2):
 
 ```toml
 # .grok/sandbox.toml

@@ -107,7 +107,8 @@ def grok_runtime_block() -> str:
         "- Grok also loads `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/agents/`. A `.grok/agents/` file replaces\n"
         "  the `.claude/agents/` agent with the same `name:`; regenerate both teams together so the names stay\n"
         "  identical.\n"
-        "- Keep this file tracked in git: Grok documents that gitignored instruction files are skipped.\n"
+        "- Keep this file tracked in git: Grok documents that gitignored instruction files are skipped\n"
+        "  (behaviour on case-insensitive filesystems varies).\n"
         f"<!-- AGENTTEAMS:END {GROK_FENCE_ID} -->"
     )
 

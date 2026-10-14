@@ -33,7 +33,7 @@
     "agentteams/frameworks/_codex_role_gate_emit.py": "e5643ad71c6765c45d849b25ec539df1dd027f11603673eed9e45a41936bebf8",
     "agentteams/frameworks/_codex_sandbox_emit.py": "5249f453e689863786e7ef2d53e598235ece8b30ae2738427d5a1c45ace8cb35",
     "agentteams/frameworks/_goose_sandbox_emit.py": "d167048ea68119c8daee27de24aad8d6c4159126eb3fbc2a36056de787118ef7",
-    "agentteams/frameworks/_grok_tool_scoping.py": "26e70cf6f7771b646f422a2ca28606827a9d18d76db77e9d553c9db5a36f0f43",
+    "agentteams/frameworks/_grok_tool_scoping.py": "8ed71109c666ca92e6a637d8208005830112a9bcd48eab5a27a39c3ba80ac3e3",
     "agentteams/frameworks/_linux_sandbox_emit.py": "8e0ee80a14f16dc69840a605cd3f3917c90b5983aa001a34980feb9c048f1d7b",
     "agentteams/frameworks/_prompt_root_protect.py": "10a6041642fc54e2e0b8325a4dc711978b0dec0eb1ba5cb90e7b9391f6a7b487",
     "agentteams/frameworks/_sandbox_emit.py": "0bdd7341307e8c87f00037ccfda36eb7b22e2bd67027ed0b85942d0041ee28fc",

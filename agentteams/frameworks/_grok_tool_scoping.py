@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 
-#: Grok Build 1.0.52 tool names usable in agent ``tools:`` / ``disallowedTools:`` (bare or with a scope).
+#: Tool names (pinned Grok Build release, FORMAT_SPECS["grok"]) usable in agent ``tools:`` / ``disallowedTools:`` (bare or with a scope).
 GROK_TOOL_NAMES = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "MCPTool", "WebFetch", "WebSearch", "Agent"})
 
 #: Front-matter lines every Grok agent carries so ``tools:`` is the exact limit. Grok's defaults widen it:

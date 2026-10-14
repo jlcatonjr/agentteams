@@ -89,7 +89,7 @@ Return the default agent file directory for a given project path.
 
 #### `finalize_output_path(rel_path, file_type)`
 
-Adjust an output path's extension for this framework. **Default implementation:** when `file_type` is `agent` or `builder`, rewrites the extension to this framework's `get_file_extension(file_type)` if it differs — e.g. this is what turns `CopilotCLIAdapter`'s planned `.agent.md` paths into plain `.md`. Other file types pass through unchanged by default; `ClaudeAdapter`, `AgentsMdAdapter`, `CodexAdapter` (repo-root `AGENTS.md` two levels above `.codex/agents`), and `GooseAdapter` override this further to relocate the `instructions` file to their framework-native root file (`CLAUDE.md`, `AGENTS.md`).
+Adjust an output path's extension for this framework. **Default implementation:** when `file_type` is `agent` or `builder`, rewrites the extension to this framework's `get_file_extension(file_type)` if it differs — e.g. this is what turns `CopilotCLIAdapter`'s planned `.agent.md` paths into plain `.md`. Other file types pass through unchanged by default; `ClaudeAdapter`, `AgentsMdAdapter`, `CodexAdapter` (repo-root `AGENTS.md` two levels above `.codex/agents`), `GrokAdapter` (the same, above `.grok/agents`), and `GooseAdapter` override this further to relocate the `instructions` file to their framework-native root file (`CLAUDE.md`, `AGENTS.md`).
 
 **Args:**
 
@@ -121,7 +121,7 @@ Return additional `(rel_path, content)` files the framework emits that are not d
 
 #### `has_skill_concept()`
 
-Whether this framework has a first-class skill concept. **Default implementation: `False`.** `ClaudeAdapter` overrides it to return `True` (Claude Code's `skills/<slug>/SKILL.md` directories); every other framework emits operational tool docs as reference documents instead. `CodexAdapter` also returns `True` (Codex skills at `.agents/skills/<slug>/SKILL.md`). Skill placement comes from two hooks: `skill_output_rel_path(slug)` (agents-dir-relative emit path; default `../` + `tool_doc_rel_path`) and `skills_dir(agents_dir)` (the skills root; default the `skills` sibling of the agents dir, which Codex overrides to `<root>/.agents/skills`).
+Whether this framework has a first-class skill concept. **Default implementation: `False`.** `ClaudeAdapter` overrides it to return `True` (Claude Code's `skills/<slug>/SKILL.md` directories); every other framework emits operational tool docs as reference documents instead. `CodexAdapter` also returns `True` (Codex skills at `.agents/skills/<slug>/SKILL.md`), and `GrokAdapter` inherits Claude's `True` (`.grok/skills/<slug>/SKILL.md`). Skill placement comes from two hooks: `skill_output_rel_path(slug)` (agents-dir-relative emit path; default `../` + `tool_doc_rel_path`) and `skills_dir(agents_dir)` (the skills root; default the `skills` sibling of the agents dir, which Codex overrides to `<root>/.agents/skills`).
 
 **Returns:** `bool`
 
@@ -149,7 +149,7 @@ Project-root-relative placement path for an operational tool doc. **Default impl
 
 #### `framework_root_prefix()`
 
-Project-root-relative prefix of this framework's root dir. **Default implementation:** empty string (emitted paths are already project-root relative). `ClaudeAdapter` overrides it to `.claude`, used to build display paths like `.claude/skills/<slug>/SKILL.md` from `tool_doc_rel_path`.
+Project-root-relative prefix of this framework's root dir. **Default implementation:** empty string (emitted paths are already project-root relative). `ClaudeAdapter` overrides it to `.claude`, used to build display paths like `.claude/skills/<slug>/SKILL.md` from `tool_doc_rel_path`; `GrokAdapter` overrides it to `.grok`.
 
 **Returns:** `str`
 
