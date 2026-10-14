@@ -200,6 +200,29 @@ def test_the_c_rules_do_not_drift_between_their_three_homes() -> None:
         )
 
 
+def test_the_c4_derived_content_clause_is_identical_in_all_three_homes() -> None:
+    """C-4's derived-content clause is body text, which the title-only check misses.
+
+    The clause closes trust laundering through transformation (decode/decrypt-and-follow): an
+    agent trusting text it produced from read content. A home that drops or rewords it leaves
+    that team's agents reading a C-4 without it.
+    """
+    from agentteams.fences import _extract_fenced_regions
+
+    clause_re = re.compile(r"\*\*Derived content stays data\.\*\*(.*?transform-and-follow is itself one\.)",
+                           re.DOTALL)
+
+    def clause(text: str) -> str:
+        m = clause_re.search(text)
+        assert m, "C-4's derived-content clause is missing"
+        return " ".join(m.group(1).split())
+
+    ref = clause((TEMPLATES / "universal/instruction-authority.reference.template.md").read_text(encoding="utf-8"))
+    for rel in _CORE_TEMPLATES:
+        core = _extract_fenced_regions((TEMPLATES / rel).read_text(encoding="utf-8"))["constitutional_core"]
+        assert clause(core) == ref, f"{rel}: C-4's derived-content clause has drifted from the reference"
+
+
 def test_fenceless_templates_are_not_counted() -> None:
     """Guards the exemption itself — if this inverts, the ratchet starts policing the safe case.
 

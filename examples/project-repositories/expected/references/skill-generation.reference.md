@@ -78,7 +78,7 @@ durable-infrastructure plan depends on) against `security.template.md`'s Rule S-
 Safety Verification) risk criteria. This applies whether or not you intend to persist
 anything — a pathway can need this gate for a single, one-off use.
 
-- **Matches none of Rule S-9's 5 criteria** (the common case — an official-source install, a
+- **Matches none of Rule S-9's criteria** (the common case — an official-source install, a
   read-only lookup, a routine fetch of public data): proceed. This gate does not apply and
   does not require `@security` involvement.
 - **Matches one or more criteria**: request `@security` review under Rule S-9 before doing

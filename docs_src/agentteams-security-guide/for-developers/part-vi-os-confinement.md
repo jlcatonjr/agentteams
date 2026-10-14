@@ -131,7 +131,9 @@ way past it" (`agentteams/templates/universal/hooks/constitutional-gate.py:1-209
   injected override text, C-4). Its `deny` is the **runtime expression of a HALT**.
 - **`ask`** — procedural **Bash** Mandatory-Review triggers (C-5): privilege
   escalation, piping remote content into a shell, recursive force-removal,
-  persistence, package installs, history-rewriting force-push.
+  persistence, package installs, history-rewriting force-push; and data-carrying
+  outbound sends — uploads, raw sockets, remote copies, gists, new git remotes
+  (S-9 criterion 6).
 
 **Integrity check before scanning:** before scanning a write it **verifies the
 scanner against the integrity manifest** (S22); a tampered `scan.py` yields

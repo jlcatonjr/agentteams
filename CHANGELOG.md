@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A team generated before decision signing has the 7-column legacy `references/security-decisions.log.csv`
   header, and `decision_log.append_signed_decision_row` refuses it (fail-closed), so no signed decision (such
   as the Ed25519 `adopt-orphans-merge` one) could be recorded there, and nothing upgraded the header. The new
-  standalone mode (`agentteams/cli/decision_log_migrate.py`, re-exported by `cli/commands.py`, dispatched from
+  standalone mode (`agentteams/cli/decision_log_migrate.py`, imported and dispatched by
   `cli/app.py` after `--self`) does that and nothing else. The pinned `decision_log.py` is unchanged.
   - **Superset header:** existing columns stay in place and the missing `SIGNED_DECISION_COLUMNS` are appended
     in order, never `prev_digest` (chaining stays opt-in, so legacy rows can't break a chain). The result still
@@ -31,6 +31,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parses the list syntax (`tool_tokens`) and judges each tool on its own, also accepting a tool the framework's
   `capability_map` reader maps only to `read`/`search` (goose's `agentteams_readfs`). Any other tool, including
   one no reader recognises, still counts as wider: `['read', 'web']` is wider.
+
+### security (derived content stays data; outbound sends gated; gate ReDoS fixed)
+
+Prompted by "Cryptographic Context Injection": ciphertext, its key and a plain "decrypt this and follow it"
+placed in content an agent reads. Filters see noise; the agent decodes it and trusts its own output. C-4 covered
+what an agent *reads*, not what it *derives*.
+- **C-4 derived-content clause** in all three homes (`constitutional_core` v=3): text an agent produces from read
+  content (decoded, decrypted, translated, OCR'd, summarized, a tool or subagent result) keeps Tier 6, and a request
+  to transform-and-follow is itself a finding. A parity test pins the clause across the homes.
+- **Tier 3 by cause of write.** Tier-3 text has authority only when its write traces, on record, to an operator
+  instruction or a defined procedure; text derived from read content keeps Tier 6 wherever it is stored. The
+  demotion is asymmetric (grants/relaxations, not added restrictions). Also: a logged operator answer is a record,
+  not a standing answer; prose beside a signed directive is unsigned; a subagent's report is read content to its spawner.
+- **Security template:** S-6 covers derived content; new **S-9 criterion 6** (local or derived data leaving the
+  machine, including one-off sends and rendered markdown URLs; remotes configured before the session and the project's own repo via
+  `gh` are exempt); verdict rows; a Mandatory Review Trigger row; the trigger table no longer split by its blockquote.
+- **`constitutional-gate.py`** routes data-carrying sends to `ask`: file/stdin/form uploads (`curl`, `wget`,
+  `gh api --input`/`-F f=@file`), requests built from command output or naming a credential path, raw sockets,
+  remote copies, gists, a new or repointed git remote (`git remote`, `git config remote.*`/`url.*`, `git -c`, a
+  write to `.git/config`) or a push to a URL, `gh -R … --body-file|$(…)`, DNS lookups built from command output,
+  interpreter POSTs and sockets. Decoding is deliberately not gated. Word-like tools (`nc`, `scp`, `host`) are found
+  by a linear command-name tokenizer, not by regex, so `grep scp` stays silent.
+- **Fixed the gate's timeout bypass:** a hook the harness times out lets the command run, and several patterns
+  were superlinear: the PR-merge pattern took ~50 s on 14 repeats of `--repo -R`, the existing `git push`
+  delete/force patterns 89 s on `git push ` x2000. Multi-gap patterns are now single-anchor lookaheads, the
+  linear command-name tokenizer runs first, patterns are checked per line, and a command over 32 768
+  characters (or a line over 8 192) is routed to the operator unscanned; separators inside quotes are masked.
+  Worst case at the caps: ~4 s on python3 3.9.
+- **A write to any git config file** (`.git/config`, `.gitconfig`, worktree configs; case-insensitive) is asked,
+  after the content scan, so a credential in it is still denied.
+- **OCR proxy** fences image text with a per-call nonce and an untrusted-data label; marker look-alikes inside the
+  image text are removed. **Memory/code-index results** (CLI and recall MCP) are labelled Tier-6.
+- **Threat model v3** §2a discloses transformation and persistence laundering as unrated, grades each control
+  honestly (none prevents it), and names what stays open, chiefly network-unconfined sessions.
 
 ### fix (`--interop-from` never widens a grant; new `--interop-allow-cooperative SLUG[,SLUG...]`)
 

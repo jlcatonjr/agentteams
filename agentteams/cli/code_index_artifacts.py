@@ -388,6 +388,9 @@ def _run_query_code_index(
 
     hits = ci.query_partitions(partitions, query, k=k, strategy=strategy, kind=kind)
     print(f"Query: {query!r}  (kind={kind}, strategy={strategy})")
+    from agentteams.memory_index import RETRIEVAL_CONTENT_AUTHORITY
+
+    print(f"  ({RETRIEVAL_CONTENT_AUTHORITY})")
     if not hits:
         print("  No matching code found.")
         return 1

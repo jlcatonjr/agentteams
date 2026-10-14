@@ -138,7 +138,8 @@ edit on their way past it."
 expression of a HALT.** `ask` for procedural Bash Mandatory-Review triggers
 (C-5): privilege escalation, piping remote content into a shell, recursive
 force-removal, persistence mechanisms, package installs, history-rewriting
-force-push — requiring operator confirmation rather than an outright deny. Before
+force-push, and data-carrying outbound sends (S-9 criterion 6: uploads, raw
+sockets, remote copies, gists, new git remotes) — requiring operator confirmation rather than an outright deny. Before
 scanning a write it **verifies the scanner against the integrity manifest** (S22);
 a tampered scanner degrades to `ask`, not a silent allow.
 

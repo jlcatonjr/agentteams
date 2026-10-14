@@ -402,7 +402,9 @@ def test_recall_against_a_real_index_writes_nothing(tmp_path):
     before = _snapshot(tmp_path)
     out = recall.call("query_index", {"query": "widgets"}, tmp_path)
     assert out["may_be_stale"] is True
-    recall.call("query_code", {"query": "frobnicate"}, tmp_path)
+    assert out["content_authority"] == recall.CONTENT_AUTHORITY  # retrieval never raises a hit's tier (C-4)
+    code_out = recall.call("query_code", {"query": "frobnicate"}, tmp_path)
+    assert code_out["content_authority"] == recall.CONTENT_AUTHORITY
     assert _snapshot(tmp_path) == before
 
 
