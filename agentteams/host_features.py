@@ -25,6 +25,7 @@ _VALID_NAMESPACES = frozenset(
         "copilot-cli",
         "goose",
         "codex",
+        "grok",
         "bridge:copilot-vscode-to-claude",
         "bridge:copilot-vscode-to-copilot-cli",
         "bridge:copilot-cli-to-claude",
@@ -69,6 +70,12 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # Like goose:sandbox, the token records the REQUEST; generation cannot verify that
     # Codex is actually launched through the example.
     "codex": frozenset({"mcp", "sandbox"}),
+    # grok (Phase 2, 2026-10-14; plan tmp/by-week/2026-W42 §12): `mcp` splices operator-specified
+    # mcp_servers[] into the project .grok/config.toml (grok_mcp_emit.py). `sandbox`: confined/exclusive
+    # expand to `grok:sandbox` (see _sandbox_token_for), which gates the .grok/sandbox.toml profile, the
+    # [permission] deny block and the operator-run .grok/confined-run.example.sh. A project can define a
+    # profile but never activate one, so the token records the REQUEST; every Grok control is DECLARED.
+    "grok": frozenset({"mcp", "sandbox"}),
     # C-4 (2026-08-26): `sandbox` removed from the bridge namespaces. The bridge writes only
     # subagent stubs into a foreign repo and never emits a `sandbox` settings block (bridge.py
     # wires subagents/hooks/schedule/cache-split/… but not sandbox), so accepting a
@@ -180,6 +187,8 @@ def _sandbox_token_for(framework: str | None) -> str:
         return "goose:sandbox"
     if framework == "codex":
         return "codex:sandbox"
+    if framework == "grok":
+        return "grok:sandbox"
     return "claude:sandbox"
 
 

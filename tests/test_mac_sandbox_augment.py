@@ -46,7 +46,7 @@ from agentteams.host_features import MAC_RESOURCE_CAPS, is_sandbox_capable
 # The canonical macOS-augmented launcher sha256. Handed back to baseAgent for its re-pin
 # (tests/test_confine_run_parity.py). A LITERAL pin (not a recompute) so any drift — a NETNS
 # rename, a UTF-8 re-encode, an accidental edit — fails loudly here.
-EXPECTED_LAUNCHER_SHA256 = "b340661ece6281f0617ee2dde241792d6b1554e99fd7b1b9a0d232354fcf4240"  # 2026-10-14: .grok team dir + .grok/config.toml/sandbox.toml in the control plane
+EXPECTED_LAUNCHER_SHA256 = "6f7ecc61485e83b85b90ac120a78fd9578be0e074857da82e68cd25538735ff0"  # 2026-10-14 (Phase 2): .grok whole in CONTROL_PLANE_DIRS_REL + grok_config_warn
 
 _TEMPLATES_UNIVERSAL = Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "universal"
 _LAUNCHER_ASSET = _TEMPLATES_UNIVERSAL / _LAUNCHER_ASSET_REL

@@ -70,6 +70,21 @@ Modes are set by the user (`[ui] permission_mode`) or per run:
 A project can set a deny-by-default posture through Claude compatibility (`"defaultMode": "dontAsk"` in
 `.claude/settings.json`).
 
+**What agentteams emits.** With a confined or exclusive `privilege_profile` (host feature `grok:sandbox`),
+agentteams writes a managed block into `.grok/config.toml`. Its `[permission] deny` list covers every control-plane
+file: team switches, rosters, verify-key stores, team markers, `.grok/config.toml`, `.grok/sandbox.toml`,
+`.grok/hooks/**`, Claude's settings and hooks, and the operator key directory.
+- The rules are unrooted `**/` globs, because Grok resolves relative patterns against the session directory and
+  treats `~/` literally.
+- With `grok:mcp`, each wired MCP server's tools also get an `ask` rule.
+- If you already have a `[permission]` table, agentteams leaves it alone and tells you.
+- These rules stop Grok's edit tools, **not** shell writes, and they load only after folder trust. Treat them as
+  declared. The OS sandbox is what stops shell writes.
+
+User-only settings agentteams cannot emit but you may want in `~/.grok/config.toml`:
+- `[ui] permission_mode`
+- `[shell_environment_policy]`, which limits the environment variables passed to tool subprocesses
+
 ---
 
 ## Folder Trust
@@ -78,10 +93,14 @@ Grok loads a project's **instructions, hooks, MCP servers, LSP servers and skill
 trusted (`grok --trust`, or `/hooks-trust` in a session).
 
 **Before trusting a repository**, review:
-- `.grok/hooks/`
+- `.grok/hooks/`, `.grok/workflows/`, `.grok/plugins/` and `.grok/lsp*`
 - `.claude/settings.json` hooks
 - `.mcp.json`
 - `.grok/config.toml`
+
+The agentteams confinement launcher (`sandbox/confine-run.sh`) keeps the whole `.grok` folder read-only. On every
+run it also warns about `[permission]`/`[mcp_servers]`/`[plugins]` tables outside the agentteams block, and about
+hook, workflow, plugin or LSP files it did not emit.
 
 Custom agents are the exception. **`.grok/agents/` and `.claude/agents/` load even in an untrusted folder**, and
 those agents run without the project instructions. Generated agent bodies therefore carry their own Invariant

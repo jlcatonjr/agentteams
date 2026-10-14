@@ -71,6 +71,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                                      # a silent widening here re-arms every recipe
     "agentteams/frameworks/_grok_tool_scoping.py",  # C-3 on Grok: Claude tool names -> Grok agent tools:
                                                      # (fail-closed); a silent widening re-arms every Grok agent
+    "agentteams/grok_config_emit.py",  # Grok Phase 2: the [permission] control-plane denies + MCP wiring in
+                                       # .grok/config.toml; a silent edit drops a deny or wires an unvetted server
     "agentteams/frameworks/_agents_md_ownership.py",  # who may modify the shared AGENTS.md; a silent edit
                                                        # lets a render overwrite hand-written instructions
     # The standing red-team audit's phase-6 checks. These are controls, not reporters: a

@@ -359,7 +359,8 @@ def _build_seatbelt_profile(
     # R7 (@security C11): the recipes too, which carry each granted agent's agentteams_runner launch arguments.
     ledger = (".agentteams", ".agentteams-status", ".goose/recipes") if protect_ledger else ()
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
-        *control_plane, framework_config_dir("claude"), *sib["copilot"], *sib["codex"], *sib["grok"],
+        *control_plane, framework_config_dir("claude"), framework_config_dir("grok"),
+        *sib["copilot"], *sib["codex"], *sib["grok"],
         GRANT_ROSTER_PROJECT_REL, *ledger)) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",

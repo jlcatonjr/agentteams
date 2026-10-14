@@ -145,6 +145,10 @@ def _codex_wirable(server: dict[str, Any]) -> bool:
     return all(isinstance(t, dict) and t.get("side_effects") == "read" for t in tools)
 
 
+#: Public name for the shared auto-wire bar (the Grok config emitter uses it too).
+mcp_wirable = _codex_wirable
+
+
 def _codex_entry_for(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     """Map one mcp-server.schema.json entry to a Codex [mcp_servers.<id>] table.
 
@@ -203,14 +207,7 @@ def _codex_transport_fields(server: dict[str, Any]) -> tuple[dict[str, Any] | No
 
 def _strip_managed_block(text: str) -> str:
     """Remove a prior agentteams-managed mcp_servers block, if present."""
-    start = text.find(_MANAGED_HEADER)
-    if start == -1:
-        return text
-    end = text.find(_MANAGED_FOOTER, start)
-    if end == -1:
-        return text
-    end += len(_MANAGED_FOOTER)
-    return text[:start] + text[end:]
+    return _strip_block(text, _MANAGED_HEADER, _MANAGED_FOOTER)
 
 
 def _strip_unmanaged_mcp_tables(text: str) -> str:
@@ -218,6 +215,95 @@ def _strip_unmanaged_mcp_tables(text: str) -> str:
     hand-authored, or from a version of this module predating the managed-
     block marker) so a re-run replaces rather than duplicates them."""
     return _MCP_TABLE_BLOCK_RE.sub("", text)
+
+
+@dataclass
+class TomlSplice:
+    """Outcome of :func:`splice_managed_toml`."""
+
+    error: str | None = None
+    existing: dict[str, Any] = field(default_factory=dict)
+    new_text: str = ""
+    #: True when a pre-existing file parsed as TOML (False when absent or unparseable).
+    existing_parsed: bool = False
+
+
+def splice_managed_toml(
+    out_path: Path,
+    block_body: str,
+    *,
+    owned_keys: tuple[str, ...],
+    header: str,
+    footer: str,
+    strip_unmanaged: Any = None,
+    dry_run: bool = False,
+) -> TomlSplice:
+    """Replace one agentteams-managed block in a TOML config, leaving every other key untouched (or refusing).
+
+    Shared by the Codex (``.codex/config.toml``) and Grok (``.grok/config.toml``) MCP emitters. The prior
+    managed block (and, via *strip_unmanaged*, stray copies of the owned tables) is removed, the fresh block is
+    appended, and the result is re-parsed: every top-level key outside *owned_keys* must be identical to the
+    original, or nothing is written (closes the 2026-08-10 @security HALT on the quoting-unaware line splice).
+
+    Args:
+        out_path: The config file (may not exist yet).
+        block_body: The rendered TOML for the owned tables (no markers).
+        owned_keys: Top-level keys the block owns; excluded from the preservation comparison.
+        header: The managed block's opening marker line.
+        footer: The managed block's closing marker line.
+        strip_unmanaged: Optional ``text -> text`` removing unmanaged copies of the owned tables.
+        dry_run: When True, compute without writing.
+
+    Returns:
+        :class:`TomlSplice` with ``error`` set when the write was refused.
+
+    Raises:
+        OSError: The file cannot be read or written.
+    """
+    existing_text = ""
+    existing: dict[str, Any] = {}
+    if out_path.is_file():
+        existing_text = out_path.read_text(encoding="utf-8")
+        try:
+            existing = tomllib.loads(existing_text)
+        except tomllib.TOMLDecodeError as exc:
+            return TomlSplice(error=f"existing {out_path} is not valid TOML, refusing to splice: {exc}")
+    parsed = out_path.is_file()
+    base_text = _strip_block(existing_text, header, footer)
+    if strip_unmanaged is not None:
+        base_text = strip_unmanaged(base_text)
+    if base_text and not base_text.endswith("\n\n"):
+        base_text = base_text.rstrip("\n") + "\n\n" if base_text.strip() else ""
+    new_text = base_text + header + block_body + footer
+    try:
+        new_parsed = tomllib.loads(new_text)
+    except tomllib.TOMLDecodeError as exc:
+        return TomlSplice(error=f"splice produced invalid TOML, refusing to write {out_path}: {exc}", existing=existing,
+                          existing_parsed=parsed)
+    if ({k: v for k, v in existing.items() if k not in owned_keys}
+            != {k: v for k, v in new_parsed.items() if k not in owned_keys}):
+        owned = ", ".join(f"[{k}]" for k in owned_keys)
+        return TomlSplice(
+            error=(f"splice would alter content outside {owned} in {out_path} (likely a table-boundary-shaped "
+                   "line inside an existing string value confusing the line scan) — refusing to write"),
+            existing=existing, existing_parsed=parsed,
+        )
+    if not dry_run:
+        if out_path.is_file():
+            _atomic_copy(out_path, out_path.with_name(out_path.name + ".bak"))
+        _atomic_write_text(out_path, new_text)
+    return TomlSplice(existing=existing, new_text=new_text, existing_parsed=parsed)
+
+
+def _strip_block(text: str, header: str, footer: str) -> str:
+    """Remove one marker-delimited managed block, if present."""
+    start = text.find(header)
+    if start == -1:
+        return text
+    end = text.find(footer, start)
+    if end == -1:
+        return text
+    return text[:start] + text[end + len(footer):]
 
 
 def emit_codex_mcp_config(
@@ -272,63 +358,26 @@ def emit_codex_mcp_config(
     if not tables:
         return result
 
-    existing_text = ""
-    existing_parsed: dict[str, Any] = {}
-    if out_path.is_file():
-        existing_text = out_path.read_text(encoding="utf-8")
-        try:
-            existing_parsed = tomllib.loads(existing_text)
-        except tomllib.TOMLDecodeError as exc:
-            result.errors.append(f"existing {out_path} is not valid TOML, refusing to splice: {exc}")
-            return result
-        from agentteams.team_dir_advisories import codex_config_security_keys
+    from agentteams.team_dir_advisories import codex_config_security_keys
 
-        result.preserved_security_keys = [
-            k for k in codex_config_security_keys(Path(output_root)) if k not in ("[mcp_servers]", "<symlink>")]
-
-    # Surface (never silently drop) any pre-existing [mcp_servers.<id>] table —
-    # hand-authored or from a version of this module predating the managed-
-    # block marker — that this run is about to replace. The content-
-    # preservation check above deliberately excludes mcp_servers from
-    # comparison (that's the one table this function exists to rewrite), so
-    # without this, an operator's own manual entry could be lost with zero
-    # signal — worse than the corruption case above since it's silent by
-    # design, not a bug (2026-08-10 adversarial finding, step E.9).
-    existing_server_ids = set((existing_parsed.get("mcp_servers") or {}).keys())
+    # #11: read BEFORE the splice rewrites the file, so the keys reported are the ones carried forward.
+    security_keys = [k for k in codex_config_security_keys(Path(output_root)) if k not in ("[mcp_servers]", "<symlink>")]
+    splice = splice_managed_toml(
+        out_path, render_tables(tables), owned_keys=("mcp_servers",), header=_MANAGED_HEADER,
+        footer=_MANAGED_FOOTER, strip_unmanaged=_strip_unmanaged_mcp_tables, dry_run=dry_run,
+    )
+    if splice.existing_parsed:
+        result.preserved_security_keys = security_keys
+    # Surface (never silently drop) any pre-existing [mcp_servers.<id>] table — hand-authored or from a
+    # version of this module predating the managed-block marker — that this run replaces. The
+    # content-preservation check deliberately excludes mcp_servers (the one table this function rewrites),
+    # so without this an operator's own manual entry could be lost with zero signal (2026-08-10 adversarial
+    # finding, step E.9).
     this_run_ids = {name.split(".", 1)[1] for name in tables}
-    result.dropped_unmanaged = sorted(existing_server_ids - this_run_ids)
-
-    base_text = _strip_unmanaged_mcp_tables(_strip_managed_block(existing_text))
-    if base_text and not base_text.endswith("\n\n"):
-        base_text = base_text.rstrip("\n") + "\n\n" if base_text.strip() else ""
-    rendered = _MANAGED_HEADER + render_tables(tables) + _MANAGED_FOOTER
-    new_text = base_text + rendered
-
-    # Content-preservation check (closes the 2026-08-10 @security HALT): the
-    # line-scan splice above has no TOML string-quoting awareness, so verify
-    # its actual effect rather than trust its intent. Every key outside
-    # mcp_servers must be untouched, or refuse the write entirely.
-    try:
-        new_parsed = tomllib.loads(new_text)
-    except tomllib.TOMLDecodeError as exc:
-        result.errors.append(
-            f"splice produced invalid TOML, refusing to write {out_path}: {exc}"
-        )
+    result.dropped_unmanaged = sorted(set((splice.existing.get("mcp_servers") or {}).keys()) - this_run_ids)
+    if splice.error:
+        result.errors.append(splice.error)
         return result
-    existing_other = {k: v for k, v in existing_parsed.items() if k != "mcp_servers"}
-    new_other = {k: v for k, v in new_parsed.items() if k != "mcp_servers"}
-    if existing_other != new_other:
-        result.errors.append(
-            f"splice would alter content outside [mcp_servers.*] in {out_path} "
-            "(likely a table-boundary-shaped line inside an existing string value "
-            "confusing the line scan) — refusing to write"
-        )
-        return result
-
-    if not dry_run:
-        if out_path.is_file():
-            _atomic_copy(out_path, out_path.with_name(out_path.name + ".bak"))
-        _atomic_write_text(out_path, new_text)
     result.written.append(str(out_path))
     return result
 

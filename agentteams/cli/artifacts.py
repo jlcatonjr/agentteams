@@ -753,6 +753,40 @@ def _emit_host_mcp_artifacts_if_enabled(manifest: dict, project_root: Path) -> N
     emitter never means touching generate.py's 3 call sites again."""
     _emit_mcp_servers_if_enabled(manifest, project_root)
     _emit_codex_mcp_if_enabled(manifest, project_root)
+    _emit_grok_config_if_enabled(manifest, project_root)
+
+
+def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
+    """Write the agentteams-managed block of ``.grok/config.toml`` when ``grok:mcp`` or ``grok:sandbox`` is on.
+
+    Host-scoped like the Codex splice: fires on the feature tokens, whatever ``--framework`` renders. The block
+    carries wired ``[mcp_servers.*]`` (``grok:mcp``) and the control-plane ``[permission]`` deny rules
+    (``grok:sandbox``); see ``agentteams/grok_config_emit.py``.
+    """
+    from agentteams.grok_config_emit import emit_grok_config, grok_mcp_enabled, grok_sandbox_enabled
+
+    features = manifest.get("host_features", []) or []
+    if not (grok_sandbox_enabled(features) or (grok_mcp_enabled(features) and manifest.get("mcp_servers"))):
+        return
+    try:
+        res = emit_grok_config(servers=manifest.get("mcp_servers", []) or [], features=features,
+                               output_root=project_root)
+    except OSError as exc:
+        print(f"  !  Grok config write failed: {exc}", file=sys.stderr)
+        return
+    for path in res.written:
+        what = ", ".join(x for x, on in (("mcp_servers", bool(res.wired)), ("permission", res.permission_written)) if on)
+        print(f"  ✓  Wrote agentteams-managed Grok config ({what}): {path}")
+    if res.not_wired:
+        blocked = ", ".join(f"{sid} ({reason})" for sid, reason in res.not_wired.items())
+        print(f"  ⚠  MCP servers not auto-wired into .grok/config.toml: {blocked}")
+    if res.dropped_unmanaged:
+        print(f"  ⚠  Pre-existing [mcp_servers.*] entries not declared to agentteams were replaced: "
+              f"{', '.join(res.dropped_unmanaged)} (add them to mcp_servers[] to keep them)")
+    for note in res.notices:
+        print(f"  ⚠  {note}")
+    for err in res.errors:
+        print(f"  !  Grok config not written: {err}", file=sys.stderr)
 
 
 def _emit_codex_mcp_if_enabled(manifest: dict, project_root: Path) -> None:

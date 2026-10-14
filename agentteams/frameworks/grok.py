@@ -82,6 +82,16 @@ GROK_AGENTS_MD_NOTICE = (
 )
 
 _AGENTS_MD = "AGENTS.md"
+#: Emitted so ``.grok/hooks`` always exists: the launcher protects ``.grok`` present-only, and a missing dir is
+#: one a confined process could create and fill (@security step-12b, P2-A). Grok loads only ``*.json`` there.
+_HOOKS_README_REL = "../hooks/README.md"
+_HOOKS_README = (
+    "# .grok/hooks\n\n"
+    "Grok Build loads `*.json` hook files from this directory after the folder is trusted (`grok --trust`).\n"
+    "agentteams keeps the directory present so the confinement launcher protects it; any hook file here that\n"
+    "you did not write should be treated as suspect. Grok hooks fail open (a timeout or crash lets the call\n"
+    "through), so they are advisory, never enforcement.\n"
+)
 _EXAMPLE_BLOCK_REL = "../examples/AGENTS.grok-block.md"
 _NAME_RE = re.compile(r"""^name:\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\n]*?))\s*$""", re.MULTILINE)
 
@@ -99,9 +109,9 @@ def grok_runtime_block() -> str:
         f"<!-- AGENTTEAMS:BEGIN {GROK_FENCE_ID} v=1 -->\n"
         "## Grok Build Notes\n"
         "\n"
-        "- Grok Build loads this file only in a trusted folder. Review `.grok/hooks/`, `.mcp.json` and\n"
-        "  `.grok/config.toml` first, then run `grok --trust` once in this repository (trust also turns on\n"
-        "  project hooks, MCP servers and skills).\n"
+        "- Grok Build loads this file only in a trusted folder. Review `.grok/hooks/`, `.grok/workflows/`,\n"
+        "  `.grok/plugins/`, `.grok/lsp*`, `.mcp.json` and `.grok/config.toml` first, then run `grok --trust`\n"
+        "  once in this repository (trust also turns on project hooks, MCP and LSP servers, and skills).\n"
         "- The team's custom agents are in `.grok/agents/`. Subagents cannot spawn subagents (depth one), so run\n"
         "  the orchestrator as the session agent: `grok --agent \"<orchestrator name>\"`.\n"
         "- Grok also loads `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/agents/`. A `.grok/agents/` file replaces\n"
@@ -229,7 +239,7 @@ class GrokAdapter(ClaudeAdapter):
         return ("name", "description", "tools", "injectDefaultTools", "mcpInheritance")
 
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
-        """Return only the framework-neutral baseline (launcher + verify-key sentinel).
+        """Return the framework-neutral baseline (launcher + verify-key sentinel) plus ``.grok/hooks/README.md``.
 
         Deliberately skips :meth:`ClaudeAdapter.extra_output_files`: its constitutional hook, settings example
         and runner files are Claude Code artifacts Grok would never read from ``.grok/``. Grok's own sandbox
@@ -244,7 +254,7 @@ class GrokAdapter(ClaudeAdapter):
         Raises:
             Nothing.
         """
-        return FrameworkAdapter.extra_output_files(self, manifest)
+        return [*FrameworkAdapter.extra_output_files(self, manifest), (_HOOKS_README_REL, _HOOKS_README)]
 
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return ``<project>/.grok/agents``.
