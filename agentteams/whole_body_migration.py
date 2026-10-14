@@ -42,6 +42,13 @@ project-owned text every later merge keeps (C-4). The template's copy is used an
 whole-body branch always did; any other text that would survive only in a sidecar makes such a run skip the
 migration instead (the old fence stays, and the duplicate report names it) until a run with a backup dir.
 
+When a deployed section replaces the render's, the render's continuation of it after a fence is not
+re-added (it would repeat the deployed copy), except for a subsection with its own heading that the deployed
+copy lacks: that is a separate template block, and skipping it lost navigator's ``### Project Structure``,
+``### Workstream → Source File Mapping`` and ``### Team Topology Graph`` whenever the title section was kept
+(2026-10-13 fleet audit: portal, data-quality-monitor, vk-arcgis-map-tool, vk-infrastructure,
+vk-address-enrichment).
+
 Every kept, carried or unproven section is named in the migration notice, which ``fleet`` reads as REVIEW.
 
 **Rule 12.** What the predicate newly permits is retiring ``content`` beside other fences. The drop decision
@@ -67,8 +74,9 @@ from agentteams.user_regions import HEADINGS as _USER_HEADINGS
 #: The section id ``_normalize_generated_content`` uses when it wraps an entire unfenced body (single-sourced
 #: in :mod:`agentteams.fences`, which fence_twins imports first).
 WHOLE_BODY_FENCE = _WHOLE_BODY_FENCE
-#: Prefix of every duplicate-section notice. ``fleet`` files these as their own REVIEW class.
-DUPLICATE_PREFIX = "duplicate section"
+#: Prefix of every duplicate-section notice. ``fleet`` files these as their own REVIEW class (single-sourced in
+#: :mod:`agentteams.fence_twins`, whose twin pass emits them too).
+DUPLICATE_PREFIX = fence_twins.DUPLICATE_PREFIX
 
 _SPLIT_RE = re.compile(r"^[ \t]*#{1,2}[ \t]+\S")
 _HEADING_RE = re.compile(r"^[ \t]*(#{1,6})[ \t]+\S")
@@ -290,6 +298,32 @@ def _trim_blank_end(lines: list[str]) -> list[str]:
     return out
 
 
+def _new_subsections(lines: list[str], deployed: set[str]) -> list[str]:
+    """The headed subsections of a render continuation whose heading the deployed section does not carry.
+
+    The continuation is split at its top heading level only, so a deeper heading stays inside its block.
+    Text before the first heading, and every block whose heading the deployed copy already has, repeats the
+    deployed section and is left out. Leading blank lines are kept when anything
+    is returned, so the subsection stays separated from the fence above it.
+    """
+    levels: list[int | None] = []
+    in_code = False
+    for line in lines:
+        if _CODE_RE.match(line):
+            in_code = not in_code
+        m = None if in_code or _CODE_RE.match(line) else _HEADING_RE.match(line)
+        levels.append(len(m.group(1)) if m else None)
+    top = min((lv for lv in levels if lv is not None), default=None)
+    chunks: list[list[str]] = [[]]
+    for line, level in zip(lines, levels):
+        if level is not None and level <= (top or 0):
+            chunks.append([])        # a block at the continuation's top level; deeper headings stay inside it
+        chunks[-1].append(line)
+    lead, heads = chunks[0], chunks[1:]
+    kept = [x for chunk in heads if fence_twins.norm(chunk[0]) not in deployed for x in chunk]
+    return (lead if kept and not any(x.strip() for x in lead) else []) + kept
+
+
 def _rebuild(units: list[tuple[str, str, list[str]]], skip: set[str], pool: dict[str, list[list[str]]],
              source: Any, mig: Migration, *, intro: bool, present: set[str]) -> list[str]:
     """The render's units with on-disk fences cut out and edited unfenced sections taken from disk.
@@ -299,6 +333,9 @@ def _rebuild(units: list[tuple[str, str, list[str]]], skip: set[str], pool: dict
     every line the file already carries outside the old fence (*present*: a title above it) is skipped.
     Once a deployed section replaces the render's, the render's continuation of that section after a fence
     is skipped too: the deployed copy is the whole section, and adding the template's tail would repeat it.
+    A subsection of that continuation with a heading of its own that the deployed copy lacks is still added
+    (:func:`_new_subsections`): it is a separate template block (navigator's ``### Project Structure``),
+    not a repeat, and skipping it would lose it.
     """
     out: list[str] = []
     skip_space = False
@@ -318,8 +355,7 @@ def _rebuild(units: list[tuple[str, str, list[str]]], skip: set[str], pool: dict
             if not skip_space:
                 out += lines
         elif kind == "cont":
-            if key not in used:
-                out += lines
+            out += lines if key not in used else _new_subsections(lines, used[key])
         elif present and _covered(lines, present):
             continue
         else:

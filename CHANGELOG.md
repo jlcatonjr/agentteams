@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (merge: a dropped navigator `## Invariant Core` twin no longer takes `### Project Structure` with it)
+
+- The 2026-10-13 fleet audit found navigator's pre-fencing `## Invariant Core` twin dropped together with the
+  template's unfenced `### Project Structure` block and `### Workstream → Source File Mapping` heading (MarketForge,
+  the Tracers goose recipe, sc_collectors and vk-address-enrichment `.claude`, ProjectRepositories). The twin's span
+  ran to the next fence marker, and the merge never re-adds unfenced template text. Where hand-edited Project
+  Structure values made the whole twin unprovable, the twin was kept and navigator carried two Invariant Cores.
+- `fence_twins` now cuts each twin at its first subheading the fresh render carries outside every fence
+  (`outside_headings`, `twin_head`). The proof (fenced copy or lineage corpus, each past rendering cut the same way)
+  runs on that head, only the head is dropped to the `.lost` sidecar, and the tail is always kept: moved to just
+  below the fence when the twin sat directly above it (the template's position), otherwise left in place. The drop
+  notice names what was kept. A twin whose head is not proven is kept whole and flagged, as before; with no fresh
+  render to bound it, a twin is now kept. An operator acknowledgement (`fence-twin-acks.csv`) of a twin the cut would
+  newly split keeps it whole. A tail whose heading the file already carries elsewhere stays in place and gets a
+  `duplicate section` notice (REVIEW); `DUPLICATE_PREFIX` is now single-sourced in `fence_twins`.
+- `whole_body_migration`: when a deployed title replaced the render's, every continuation of that section after a
+  fence was skipped, so `### Project Structure`, `### Workstream → Source File Mapping` and `### Team Topology Graph`
+  were lost (portal, data-quality-monitor, vk-arcgis-map-tool, vk-infrastructure, vk-address-enrichment). A block
+  at the continuation's top heading level that the deployed copy lacks is now added, deeper headings included.
+- Both pinned modules re-pinned in `references/enforcement-integrity.json`. Tests: `tests/test_navigator_twin_head.py`
+  (real navigator template and shipped corpus; markdown, claude and goose; idempotent).
+
 ### feat (`--migrate-decision-log`: upgrade a legacy team decisions log to the signing schema)
 
 - A team generated before decision signing has the 7-column legacy `references/security-decisions.log.csv`
