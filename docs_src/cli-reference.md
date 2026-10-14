@@ -59,7 +59,7 @@ Existing project directory to scan. Overrides `existing_project_path` in the des
 
 ### `--framework NAME` / `-f NAME`
 
-Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
+Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, `grok`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
 
 | Value | Format | Description |
 |-------|--------|-------------|
@@ -69,6 +69,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar). **Beta** — see the feature-support matrix below |
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
 | `codex` | TOML `.toml` | OpenAI Codex CLI. Emits Codex custom agents as `.codex/agents/<slug>.toml` (`name`, `description`, `developer_instructions`, `sandbox_mode = "read-only"` for read-only roles; no model/provider/approval keys). The repo-root `AGENTS.md` is written only when absent or already Codex-generated; a shared or project-owned one is skipped with a notice. `config.toml` MCP server emission is opt-in via `--target-host-features codex:mcp` (see [`codex_mcp_emit`](api-reference/codex-mcp-emit.md)). Same generate-only convert/bridge posture as `agents-md`. |
+| `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the exact limit. `name:` values match the Claude render, so a `.grok/agents` file shadows its `.claude/agents` twin. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Generate-only: convert, bridge, interop and absorb refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
 | `canonical` | Exploded CAI directory | Durable on-disk canonical format (`team.cai.json` + `agents/<slug>.md` + `skills/<slug>/SKILL.md` + `references/**`), default `<project>/.agentteams/canonical/`. Interop-only: there is no generate/convert/bridge path for it. |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
@@ -85,6 +86,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `goose` **(beta)** | ✓ | ✓ <sup>1</sup> | ✓ <sup>2</sup> | ✓ |
 | `agents-md` | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
 | `codex` | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
+| `grok` **(beta)** | ✓ | ✗ <sup>5</sup> | ✗ <sup>5</sup> | ✗ <sup>5</sup> |
 | `canonical` | ✗ <sup>4</sup> | ✗ <sup>4</sup> | ✓ <sup>4</sup> | ✗ <sup>4</sup> |
 
 **✓** available · **✗** not a valid target (by design)
@@ -102,6 +104,8 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 
 <sup>3</sup> `agents-md` / `codex` are generate-only for the convert/bridge paths (their instructions-file emission would mislabel there), but the CAI interop path supports them as targets: `import_from_cai` writes the framework-owned `AGENTS.md` beside the target agents dir. Import from an agents-md source is best-effort by nature — no front matter means capabilities/handoffs land inferred-or-empty, surfaced via `compatibility-report.md` in bundle mode. A codex source (`.codex/agents/*.toml`) round-trips description, tools and handoffs through its `codex_translation` block.
 
+<sup>5</sup> `grok` is generate-only in this release: it co-owns the repo-root `AGENTS.md`, and the convert/bridge/interop/absorb flows are not yet vetted for that shared target. `grok` is also refused as `--interop-source-framework`, `--absorb-source-framework` and `--bridge-source-framework`.
+
 <sup>4</sup> `canonical` is an interop-only pseudo-framework — the durable exploded CAI directory (`team.cai.json` + `agents/` + `skills/` + `references/`). Export: `--interop-from <src> --framework canonical`. Import: `--interop-from <canonical dir> --interop-source-framework canonical --framework <target>`. Bundle mode is refused for the canonical target; its carried MCP servers re-validate against `mcp-server.schema.json` (security-review hard gates included) at import time.
 
 Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `--bridge-from` without an explicit `--*-source-framework`) are `copilot-vscode`, `copilot-cli`, `claude`, `goose` (`.goose/recipes`), `agents-md` (`.agents`), `codex` (`.codex/agents`), and `canonical` (any directory holding `team.cai.json`).
@@ -115,6 +119,8 @@ Output directory for generated agent files. Defaults by framework:
 - `claude`: `<project>/.claude/agents/`
 - `goose`: `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
 - `agents-md`: `<project>/.agents/` (canonical team brief written to repo-root `AGENTS.md`)
+- `codex`: `<project>/.codex/agents/` (team brief in repo-root `AGENTS.md`, written only when absent or Codex-generated)
+- `grok`: `<project>/.grok/agents/` (team brief in the co-owned repo-root `AGENTS.md`)
 
 ### `--convert-from DIR`
 

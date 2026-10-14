@@ -155,7 +155,7 @@ Project-root-relative prefix of this framework's root dir. **Default implementat
 
 #### `required_front_matter_keys()`
 
-Front-matter keys every agent file of this framework must declare. **Default implementation:** empty tuple — this framework asserts no front-matter contract. Every adapter overrides this explicitly so "examined, and the answer is none" is distinguishable from "not yet examined": `CopilotVSCodeAdapter` → `(name, description, user-invocable, tools, model)`; `ClaudeAdapter` → `(name, description, tools)`; `CopilotCLIAdapter`, `GooseAdapter`, and `AgentsMdAdapter` → `()` (no front matter at all). `CodexAdapter` inherits `AgentsMdAdapter`'s override.
+Front-matter keys every agent file of this framework must declare. **Default implementation:** empty tuple — this framework asserts no front-matter contract. Every adapter overrides this explicitly so "examined, and the answer is none" is distinguishable from "not yet examined": `CopilotVSCodeAdapter` → `(name, description, user-invocable, tools, model)`; `ClaudeAdapter` → `(name, description, tools)`; `CopilotCLIAdapter`, `GooseAdapter`, and `AgentsMdAdapter` → `()` (no front matter at all). `CodexAdapter` inherits `AgentsMdAdapter`'s override. `GrokAdapter` → `(name, description, tools, injectDefaultTools, mcpInheritance)`: the last two make `tools:` an exact limit.
 
 **Returns:** `tuple[str, ...]`
 
@@ -369,3 +369,46 @@ Adapter for the OpenAI Codex CLI. Emits each agent as a Codex **custom agent**, 
 - **Label.** This is harness-level, like Claude's tool grants. It holds while Codex runs the hook, which only the runner arranges, and it relies on Codex's undocumented hook input. Residual: Codex lets a call through when a hook times out (probed live), so the gate is kept fast (stdlib, capped stdin, no other I/O). The OS boundary is still the launcher.
 - **Derived outputs.** A checking command's generated outputs (for example `lean/.lake`, gate reports) are writable whenever the session, or the launcher's workspace root, is writable, and blocked for every agent in a read-only session. Codex 0.160 has no per-agent write grant, so these outputs can't be opened to one role only.
 - Nested-directory `AGENTS.md` placement (subdirectory-scoped refinements) is documented but not yet built.
+
+## `GrokAdapter`
+
+> *Source: `agentteams/frameworks/grok.py`* (helpers: `_grok_tool_scoping.py`, `_agents_md_ownership.py`, both integrity-pinned)
+
+Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because Grok Build reads Claude Code's agent format. **Beta, generate-only.**
+
+- **framework_id:** `'grok'`
+- **Output format:**
+  - Agent files: `.grok/agents/<slug>.md`, with YAML front matter `name`, `description`, `tools`, an optional `disallowedTools`, then `injectDefaultTools: false` and `mcpInheritance: none`, then the body with handoffs removed.
+  - Instructions: the shared repo-root `AGENTS.md`, with a Grok ownership notice and a fenced `grok_runtime` block.
+  - Builder: `.grok/agents/team-builder.md`, from `builder/team-builder-grok.template.md`.
+- **Handoffs:** `manifest` (inherited from Claude; `references/runtime-handoffs.json`).
+- **Agents dir:** `<project>/.grok/agents/` (`normalize_output_path` appends it to a project-root `--output`).
+- **Skills:** `.grok/skills/<slug>/SKILL.md`.
+
+**Current behavior notes:**
+
+- **Tools are translated fail-closed** (`_grok_tool_scoping.to_grok_tools`): Claude names pass through, `Task` becomes `Agent`, and `TodoWrite` is dropped. An unknown name, an allow-list that translates to nothing (Grok reads an empty list as "inherit every tool"), or an untranslatable `disallowedTools` entry raises `ValueError`. `model` and `permissionMode` are not emitted.
+- **`name:` values are byte-identical to the Claude render** (operator decision D4). Grok always loads `.claude/agents/` too, and a `.grok/agents` file shadows the Claude agent with the same `name:`. `guard_rendered_files` prints a notice for:
+  - a name mismatch with the on-disk Claude twin
+  - Claude agents with no Grok twin
+  - a slug that shadows a Grok built-in type (`general-purpose`, `explore`, `plan`)
+  - a gitignored `AGENTS.md`
+- **AGENTS.md co-ownership** (operator decision D2; `_agents_md_ownership.classify_agents_md`):
+
+  | Existing `AGENTS.md` | What Grok does |
+  |---|---|
+  | Absent, or Grok-generated | Keeps the full render |
+  | Codex, agents-md, or agentteams-fenced (goose) | Adds or refreshes only the `grok_runtime` fence, via `upsert_fenced_block`; every byte outside it is untouched |
+  | Hand-written, unfenced | Never written; the block is emitted to `.grok/examples/AGENTS.grok-block.md` instead |
+  | A symlink (itself or a parent such as `.grok`/`.grok/examples`), unreadable, malformed fences, or outside the project | Never written |
+
+  `CodexAdapter` uses the same classifier, and it leaves a Grok-generated `AGENTS.md` alone.
+- **`extra_output_files` returns only the framework-neutral baseline.** Claude's hook, settings example and runner files are not emitted under `.grok/`.
+- **Refused combinations:** `write_policy: "orchestrator-only"` (rendering a runner grant raises), and convert, bridge, interop and absorb, as either target or source (`cli/parser_validate`).
+- **Control plane:** `.grok` is protected alongside the other team dirs (team key `grok`):
+  - the write roots, plus `~/.grok` as a protected home path
+  - the prompt roots (`.grok`, `.agents/skills`)
+  - the Claude block's sibling `Edit` denies
+  - the goose Seatbelt profile and the launcher's `TEAM_DIRS_REL` and `CONTROL_PLANE_REL` (`.grok/config.toml` and `.grok/sandbox.toml` are protect-if-present)
+  - `signing_switch` and `projection_marker`
+- **Version pin:** `FORMAT_SPECS["grok"].pinned_version`, a new `FormatSpec` field. It is the only place the version appears.

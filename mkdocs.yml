@@ -161,6 +161,8 @@ nav:
       - Cloud Providers: goose-cloud-providers.md
       - Privileges: goose-privileges.md
       - Per-User Runtime Pattern: goose-runtime-pattern-guide.md
+  - Grok Build:
+      - Privileges: grok-privileges.md
   - API Reference:
       - Overview: api-reference/index.md
       - ingest: api-reference/ingest.md
