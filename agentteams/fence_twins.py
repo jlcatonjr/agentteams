@@ -19,6 +19,16 @@ after whitespace is collapsed (nothing else is normalised), the twin's text must
   the fresh fenced body — when a framework adapter or enrichment transforms the section, a
   historical render is not comparable and the twin is kept.
 
+**Only the twin's head is ever dropped.** A twin can outlive the fence's extent: navigator's
+pre-fencing ``## Invariant Core`` carried ``### Project Structure`` and ``### Workstream → Source File
+Mapping``, which today's template emits *after* the ``invariant_core`` fence, unfenced. The merge
+never re-adds unfenced template text, so dropping the whole span lost those blocks (2026-10-13
+fleet audit: MarketForge, Tracers goose, sc_collectors and vk-address-enrichment ``.claude``,
+ProjectRepositories). The twin is therefore cut at its first subheading the fresh render carries
+outside every fence (:func:`twin_head`); the equality proof runs on that head (each past rendering
+is cut the same way), and the tail is always kept: moved to just below the fence when the twin sat
+directly above it, which is where the template puts it, otherwise left in place.
+
 Anything else is kept, with a ``twin kept`` notice that ``fleet`` turns into REVIEW. Every error
 here is in the keeping direction: a placeholder value that changed, a renamed placeholder, a
 one-word edit, an extra table row (researchteam's hand-written CH-08..10) all fail the equality.
@@ -37,9 +47,15 @@ an ``AGENTTEAMS`` region marker of any kind (even quoted), ``USER-EDITABLE``, a 
 string delimiter; the fence is not in the current render; or dropping is disabled for the run
 (no backup dir).
 
-**Rule 12.** The corpus is deletion authority: text added to it becomes deletable from every
-deployed repository. It is therefore generated from git only, checked by regeneration, and pinned
-in ``references/enforcement-integrity.json`` together with this module. Placeholder substitution is
+**Rule 12.** The head cut newly permits dropping a head whose tail is not template text (an edited
+``### Project Structure`` used to keep the whole twin, and with it a second ``## Invariant Core``).
+What it deletes is still proven template text and the tail it exempts is kept, never dropped. Without
+a fresh render (``fresh=""``) the twin cannot be bounded, so it is kept. An operator acknowledgement
+of a twin a head cut would newly split keeps it whole, and a tail whose heading the file already
+carries elsewhere stays in place with a ``duplicate section`` notice (REVIEW). The corpus is deletion
+authority: text added to it becomes deletable from every deployed repository. It is therefore
+generated from git only, checked by regeneration, and pinned in
+``references/enforcement-integrity.json`` together with this module. Placeholder substitution is
 done here rather than through ``render.py``, so the equality test itself is pinned. Its INPUTS are not
 all pinned: the placeholder values and template path (``cli/render_pipeline.twin_sources``), the
 drop permission (``emit.py``), the current templates read by the adapter guard, and the Goose helpers
@@ -95,6 +111,9 @@ DROPPED_PREFIX = "twin dropped"
 ACKED_PREFIX = "twin kept (acknowledged)"
 #: Marks a drop that took a rule line the current template no longer carries (``fleet`` -> REVIEW).
 RETIRED_MARK = "retired by template"
+#: Prefix of every duplicate-section notice (``fleet`` files these as their own REVIEW class). Single-sourced
+#: here; :mod:`agentteams.whole_body_migration` re-exports it.
+DUPLICATE_PREFIX = "duplicate section"
 
 
 @dataclass(frozen=True)
@@ -295,8 +314,13 @@ def _template_section(source: TwinSource, sid: str, templates_dir: Path) -> str 
 
 
 def _lineage_match(twin: str, heading: str, sid: str, new_body: str, source: TwinSource | None,
-                   corpus: Mapping, templates_dir: Path) -> tuple[str | None, str]:
-    """Match *twin* against the lineage corpus. Returns ``(match label or None, why not)``."""
+                   corpus: Mapping, templates_dir: Path,
+                   outside: frozenset[str] = frozenset()) -> tuple[str | None, str]:
+    """Match *twin* against the lineage corpus. Returns ``(match label or None, why not)``.
+
+    Each past rendering is cut at its first *outside* subheading, exactly as the twin was, so the
+    comparison is prefix against prefix.
+    """
     if source is None:
         return None, "no template source for this file"
     current = _template_section(source, sid, templates_dir)
@@ -307,9 +331,62 @@ def _lineage_match(twin: str, heading: str, sid: str, new_body: str, source: Twi
         if resolve_placeholders(raw_heading, source.placeholders).strip() != heading:
             continue
         for entry in entries[raw_heading]:
-            if norm(resolve_placeholders(entry.get("text", ""), source.placeholders)) == norm(twin):
+            past = resolve_placeholders(entry.get("text", ""), source.placeholders)
+            if norm(twin_head(past, outside)) == norm(twin):
                 return f"template {entry.get('path', '?')}@{str(entry.get('commit', '?'))[:10]}", ""
     return None, "matches no past template rendering of this section"
+
+
+def outside_headings(rendered: str) -> frozenset[str]:
+    """The subheadings a fresh render carries OUTSIDE every fence (whitespace-collapsed).
+
+    A legacy twin can run past the point where its template now ends the fence: navigator's
+    pre-fencing ``## Invariant Core`` held ``### Project Structure`` and ``### Workstream → Source
+    File Mapping``, which today's template emits after the ``invariant_core`` fence, unfenced. Those
+    headings bound what a twin drop may take (:func:`twin_head`).
+
+    Args:
+        rendered: The fresh render (a Goose recipe is read through its dedented instructions).
+
+    Returns:
+        Each ``##``..``######`` heading line outside any fence and code block, whitespace-collapsed.
+
+    Raises:
+        Nothing.
+    """
+    lines = dedented_view(rendered).splitlines()
+    return frozenset(norm(line) for line, state in zip(lines, _line_states(lines))
+                     if state == ("open", False) and _TWIN_HEADING_RE.match(line))
+
+
+def twin_head(section: str, outside: frozenset[str]) -> str:
+    """The part of *section* before its first subheading the template now emits outside the fence.
+
+    The first line (the twin's own heading) is never a cut point; headings inside a code block are
+    not headings.
+
+    Args:
+        section: A twin's text, or a past template rendering of the same heading.
+        outside: :func:`outside_headings` of the fresh render.
+
+    Returns:
+        The leading part of *section*; all of it when no such subheading occurs.
+
+    Raises:
+        Nothing.
+    """
+    if not outside:
+        return section
+    lines = section.splitlines(keepends=True)
+    in_code = False
+    taken = len(lines[0]) if lines else 0
+    for line in lines[1:]:
+        if _CODE_FENCE_RE.match(line):
+            in_code = not in_code
+        elif not in_code and _TWIN_HEADING_RE.match(line) and norm(line) in outside:
+            return section[:taken]
+        taken += len(line)
+    return section
 
 
 def _retired_rules(twin: str, fresh: str) -> list[str]:
@@ -400,35 +477,101 @@ def _resolve_text(text: str, new_regions: Mapping[str, str], source: TwinSource 
     regions = _extract_fenced_regions(text)
     if not leads or not isinstance(regions, dict):
         return out
-    drops: list[tuple[int, int]] = []
+    outside = outside_headings(fresh)
+    edits: list[tuple[int, int, str]] = []
     for heading, (sid, span, reason) in _bounded_twins(text, leads, new_regions).items():
         out.handled.add(heading)
         if span is None:
             out.kept.append(heading)
             out.notices.append(_keep_notice(heading, sid, reason, text, source, out))
             continue
-        twin = text[span[0]:span[1]]
+        # Only the twin's head is a candidate: from the first subheading the template now emits
+        # outside the fence, the span is template text the merge never re-adds, so it stays.
+        twin = twin_head(text[span[0]:span[1]], outside)
+        cut = span[0] + len(twin)
         if norm(twin) == norm(_fence_body(regions[sid])):
             match, why = "an identical copy kept inside the fence", ""
         else:
             match, why = _lineage_match(twin, heading, sid, _fence_body(new_regions[sid]), source,
-                                        corpus, templates_dir)
-        if match is None or not allow_drop:
+                                        corpus, templates_dir, outside)
+        if match is not None:
+            if not allow_drop:
+                why = f"it matches {match}, but dropping is disabled (no backup dir)"
+            elif not fresh:
+                why = f"it matches {match}, but there is no fresh render to bound it with"
+            elif cut < span[1] and _acknowledged(text, heading, span, source):
+                why = f"its head matches {match}, but an operator acknowledgement keeps the whole twin"
+        if match is None or why:
             out.kept.append(heading)
-            out.notices.append(_keep_notice(
-                heading, sid, why if match is None else f"it matches {match}, but dropping is disabled (no backup dir)",
-                text, source, out))
+            out.notices.append(_keep_notice(heading, sid, why, text, source, out))
             continue
-        drops.append(span)
+        edits.append((span[0], cut, ""))
         out.dropped[sid] = twin
         retired = _retired_rules(twin, fresh)
+        tail_note, tail_edits = _keep_tail(text, (span[0], cut, span[1]), sid, edits)
+        edits += tail_edits
         out.notices.append(
             f"{DROPPED_PREFIX}: {heading!r} (unfenced copy beside fence '{sid}') matched {match}; its text is "
             f"saved to the .lost.unfenced-{sid}.md sidecar in the backup dir"
-            + (f"; {RETIRED_MARK}: {'; '.join(retired)}" if retired else ""))
-    for start, end in sorted(drops, reverse=True):
-        out.content = out.content[:start] + out.content[end:]
+            + (f"; {RETIRED_MARK}: {'; '.join(retired)}" if retired else "") + tail_note)
+        out.notices += _duplicate_tail_notices(text, (span[0], cut, span[1]))
+    for start, end, insert in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
+        out.content = out.content[:start] + insert + out.content[end:]
     return out
+
+
+def _acknowledged(text: str, heading: str, span: tuple[int, int], source: TwinSource | None) -> bool:
+    """Whether an operator acknowledgement on record matches the whole twin at *span*."""
+    if source is None or not source.rel_path:
+        return False
+    digest = ack_digest(source.rel_path, heading, text[span[0]:span[1]])
+    return any(a.file == source.rel_path and a.heading == heading and a.digest == digest for a in source.acks)
+
+
+def _elsewhere(text: str, bounds: tuple[int, int, int]) -> list[str]:
+    """Headings of the tail ``text[cut:end]`` that also appear unfenced outside the twin's span."""
+    start, cut, end = bounds
+    tail = {norm(line) for line in text[cut:end].splitlines() if _TWIN_HEADING_RE.match(line)}
+    rest = text[:start] + text[end:]
+    return sorted(tail & outside_headings(rest))
+
+
+def _duplicate_tail_notices(text: str, bounds: tuple[int, int, int]) -> list[str]:
+    """A ``duplicate section`` notice per tail heading the file already carries elsewhere (REVIEW)."""
+    return [f"{DUPLICATE_PREFIX} {h!r}: kept from a dropped twin although the file already carries it outside "
+            "every fence — compare the two copies, move any real additions to ## Project-Specific Notes, then "
+            "delete the stale one" for h in _elsewhere(text, bounds)]
+
+
+def _keep_tail(text: str, bounds: tuple[int, int, int], sid: str,
+               edits: list[tuple[int, int, str]]) -> tuple[str, list[tuple[int, int, str]]]:
+    """Plan how a dropped twin's tail (``text[cut:end]``) is kept; return ``(notice suffix, edits)``.
+
+    The tail is moved to just after fence *sid* when it ends where that fence begins (the layout a
+    merge leaves when it added the fence below the twin), which is where the template puts it. It
+    stays in place when it does not, when the move point falls inside one of *edits* (read, never
+    changed), or when the file already carries one of its headings elsewhere (the duplicate is
+    flagged by :func:`_duplicate_tail_notices` rather than moved next to its twin copy).
+    """
+    _start, cut, end = bounds
+    tail = text[cut:end]
+    if not tail.strip():
+        return "", []
+    headings = [line.strip() for line in tail.splitlines() if _TWIN_HEADING_RE.match(line)]
+    kept = (f"; kept {', '.join(repr(h) for h in headings)} from the twin (the template carries "
+            f"{'them' if len(headings) > 1 else 'it'} outside the fence)")
+    lines = text[end:].splitlines(keepends=True)
+    begin = _FENCE_BEGIN_RE.search(lines[0]) if lines else None
+    close = None
+    if begin is not None and begin.group("sid") == sid and not _elsewhere(text, bounds):
+        ends = (i for i, line in enumerate(lines) if (m := _FENCE_END_RE.search(line)) and m.group("sid") == sid)
+        close = next(ends, None)
+    if close is not None and lines[close].endswith("\n"):
+        at = end + sum(len(line) for line in lines[:close + 1])
+        if not any(s <= at <= e for s, e, _ in edits if e > s):
+            moved = [(cut, end, ""), (at, at, "\n" + tail.rstrip("\n") + "\n")]
+            return f"{kept}, moved below fence '{sid}' where the template puts it", moved
+    return f"{kept}, left in place (it now sits under the preceding section's heading)", []
 
 
 def _instructions_block(text: str) -> tuple[int, int, str] | None:
@@ -488,7 +631,8 @@ def resolve(merged: str, new_regions: Mapping[str, str], source: TwinSource | No
         new_regions: The fresh render's fenced regions (section_id -> block).
         source: The file's template and placeholder values; None limits proof to the fenced copy.
         allow_drop: False keeps every twin (the run has no backup dir to recover one from).
-        fresh: The fresh render, for the "retired by template" rule listing.
+        fresh: The fresh render: it bounds each twin (:func:`outside_headings`) and feeds the "retired by
+            template" rule listing. Empty keeps every twin.
         corpus: The lineage table (defaults to the shipped corpus).
         templates_dir: Where current templates live (defaults to the package's).
 
@@ -554,8 +698,10 @@ __all__ = [
     "fence_leading_headings",
     "load_corpus",
     "norm",
+    "outside_headings",
     "persist_dropped",
     "resolve",
     "resolve_placeholders",
+    "twin_head",
     "unfenced_section",
 ]
