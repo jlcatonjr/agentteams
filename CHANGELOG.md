@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **`conditions_verified`.** A CONDITIONAL PASS requires `conditions_verified` to be exactly `verified`. Put
     the evidence in `evidence`.
 - **Re-pinned:** `cli/decision_log.py`, `integrity.py`, and the new `cli/action_ids.py`.
+- **`--serve-requests` without `--description`** reports "requires --description BRIEF" instead of crashing with a `TypeError` (seen starting the M6 runner). `cli/proposal_commands.py` re-pinned.
 
 ### fix (1.0 must-fix set: decision-log chain and migration, stale intel, retrieval write, loadable sidecars)
 
