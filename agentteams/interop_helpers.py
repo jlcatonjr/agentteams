@@ -8,7 +8,9 @@ the 1000-line CH-07 module ceiling.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 import warnings
 from pathlib import Path
 from typing import Any
@@ -483,6 +485,36 @@ def capture_mcp_servers(source_dir: Path) -> list[dict[str, Any]]:
     return []
 
 
+#: Single path component -> framework, for directory-shape detection.
+_FRAMEWORK_DIR_NAMES = {".claude": "claude", ".goose": "goose", ".codex": "codex", ".grok": "grok",
+                        ".agents": "agents-md"}
+
+
+def framework_dirs(source_dir: Path) -> list[str]:
+    """Return the frameworks named by *source_dir*'s components, innermost first (``..`` folded first).
+
+    Detection uses the innermost one (@security/@adversarial Phase 3): ``.claude/worktrees/x/.grok/agents`` is a
+    grok team, not a claude one. ``copilot-cli`` needs two components (``.github`` above ``copilot``).
+
+    Args:
+        source_dir: The team directory.
+
+    Returns:
+        Framework ids in innermost-first order (may repeat; empty when no component names one).
+
+    Raises:
+        Nothing.
+    """
+    parts = Path(os.path.normpath(source_dir)).parts
+    found: list[str] = []
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i] in _FRAMEWORK_DIR_NAMES:
+            found.append(_FRAMEWORK_DIR_NAMES[parts[i]])
+        elif parts[i] == "copilot" and ".github" in parts[:i]:
+            found.append("copilot-cli")
+    return found
+
+
 # Carved from interop.py (CH-07, 2026-09-29); re-exported there unchanged.
 def detect_framework(source_dir: Path) -> str:
     """Best-effort framework detection from directory shape and file style."""
@@ -490,20 +522,16 @@ def detect_framework(source_dir: Path) -> str:
     # checked first because that file IS the format's identity (plan §5.6).
     if (source_dir / "team.cai.json").is_file():
         return "canonical"
-    parts = set(source_dir.parts)
-    if ".claude" in parts:
-        return "claude"
-    if ".goose" in parts:           # .goose/recipes — a Goose-native source team
-        return "goose"
-    if ".codex" in parts:           # .codex/agents/<name>.toml — Codex custom agents
-        return "codex"
-    if ".agents" in parts:          # .agents/<name>.md — an agents-md source team (F.1)
-        return "agents-md"
-    if ".github" in parts and "copilot" in parts:
-        return "copilot-cli"
+    found = framework_dirs(source_dir)
+    if found:
+        if len(set(found)) > 1:
+            print(f"  ·  {source_dir}: path holds several framework dirs ({', '.join(found)}); using the innermost, "
+                  f"{found[0]!r}.", file=sys.stderr)
+        return found[0]
 
     has_agent_ext = False
     has_claude_front_matter = False
+    has_grok_keys = False
     has_yaml_keys = False
     for p in source_dir.glob("*.md"):
         if p.name.endswith(".agent.md"):
@@ -513,6 +541,9 @@ def detect_framework(source_dir: Path) -> str:
         except OSError:
             continue
         if content.startswith("---\n"):
+            # Grok-only keys identify a Grok Build team even with no .grok dir in the path (Phase 3 cond. 4).
+            if re.search(r"^(injectDefaultTools|mcpInheritance)\s*:", content[:2000], re.M):
+                has_grok_keys = True
             # Accept BOTH capability keys. `tools:` is what a Claude subagent file carries
             # since 2026-08-06; `allowed-tools:` is what every previously generated team
             # still carries on disk, and detection must keep working on those. Matched at
@@ -529,6 +560,8 @@ def detect_framework(source_dir: Path) -> str:
             if "user-invocable:" in content or "handoffs:" in content:
                 has_yaml_keys = True
 
+    if has_grok_keys:
+        return "grok"
     if has_agent_ext or has_yaml_keys:
         return "copilot-vscode"
     if has_claude_front_matter:

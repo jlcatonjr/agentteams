@@ -187,6 +187,18 @@ Confidence marks:
   - the advisory hook gate behind `grok-gate-shim.py` (R5), only alongside the sandbox artifacts, DECLARED (D3)
   - hook commands like `./agentteams-gate-shim.py` resolve relative to the hook JSON's folder: spike R5 used
     `./r5-dump.sh` from `.grok/hooks/r5.json` and captured payloads (also 10-hooks "command")
+- **Phase 3 (codex posture, `feat/grok-phase3`):**
+  - interop target and source, and absorb source; convert and bridge refuse grok
+  - detection: the innermost framework dir wins (`.claude/worktrees/x/.grok/agents` is grok), or Grok-only
+    front-matter keys
+  - an agent without both exact-toolset keys exports as FULL capabilities, with a notice; only `disallowedTools`
+    travels in `raw_front_matter`
+  - import writes the repo-root `AGENTS.md` only through the co-ownership guard (`_interop_grok.py`), in direct
+    and bundle mode
+  - a CAI's ownership notices and Grok block are stripped before any target's `AGENTS.md` is written
+  - interop never writes `.grok/config.toml`, hooks or the sandbox profile
+  - fleet: `grok-direct` like codex, with a SKIP for interop projections and for a symlinked `.grok`
+  - native handoffs stay `manifest` (spawn depth is one)
 - `write_policy: "orchestrator-only"` is refused for grok (`write_policy.py`).
 
 ## Known Deltas vs Our Adapter (`agentteams/frameworks/grok.py`)
@@ -222,6 +234,7 @@ Confidence marks:
 2. **Phase 1 (step 8):** control-plane and protected-path registration of `.grok/`.
 3. **Phase 2 (done on `feat/grok-phase2`):** MCP and `[permission]` emission, the sandbox profile, the confined-run
    wrapper, the hook gate and shim, the launcher's whole-`.grok` protection and `grok_config_warn`.
-4. **Phase 3:** detect, convert, interop and absorb, fleet, the provider-docs register, and the bridge target.
+4. **Phase 3 (done on `feat/grok-phase3`):** detection, interop and absorb, fleet, agent-doc sync, learned blocks,
+   the provider-docs register. Convert and the bridge target stay refused (codex posture).
 5. **On every Grok Build upgrade:** diff `crates/codegen/xai-grok-shell/changelogs/` and `~/.grok/docs/user-guide/`,
    re-check G1–G17, then bump `FormatSpec.pinned_version` and the version at the top of this file together.

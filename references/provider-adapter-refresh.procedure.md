@@ -98,7 +98,7 @@ per provider and **fails the test suite when an entry is past its window**. That
 enforcement the prior system lacked; do not defeat it by bumping the date without opening the URL.
 
 **Reconciliation (Phase 3):** the automated watcher (`fetch_status` + `keys_diff`, per run) and the
-manual register (`last_verified`, per human check) are two views of the same six providers. The
+manual register (`last_verified`, per human check) are two views of the same seven providers (grok added 2026-10-14). The
 unified freshness view answers, in one place: *for each provider — when was it last fetched, what
 was its drift, and when did a human last verify it.*
 

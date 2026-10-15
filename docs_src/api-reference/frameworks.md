@@ -408,7 +408,7 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
   - when confinement is requested (`grok:sandbox`, or a confined/exclusive profile) on Linux/macOS: `_grok_sandbox_emit.grok_sandbox_output_files` adds `.grok/sandbox.toml`, `.grok/confined-run.example.sh` and the advisory hook gate (`agentteams-gate.json` + `agentteams-gate-shim.py` + `constitutional-gate.py`)
   - Claude's own hook, settings example and runner files are never emitted under `.grok/`
   - the guard refuses any of these through a symlink, and never overwrites an existing profile, runner, hook JSON or shim that lacks the `agentteams-managed` marker, or a gate copy that lacks the gate template's own opening docstring
-- **Refused combinations:** `write_policy: "orchestrator-only"` (rendering a runner grant raises), and convert, bridge, interop and absorb, as either target or source (`cli/parser_validate`).
+- **Refused combinations:** `write_policy: "orchestrator-only"` (rendering a runner grant raises), and convert and bridge (as target; grok is never a bridge source). Interop target/source and absorb source are supported (Phase 3, codex posture); interop writes the repo-root `AGENTS.md` only through `guard_rendered_files` (`agentteams/_interop_grok.py`).
 - **Control plane:** `.grok` is protected alongside the other team dirs (team key `grok`):
   - the write roots, plus `~/.grok` as a protected home path
   - the prompt roots (`.grok`, `.agents/skills`)

@@ -173,7 +173,9 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     # so capabilities/handoffs land inferred-or-empty (surfaced via
     # compatibility-report.md). codex emits custom-agent TOML but shares the
     # agents-md AGENTS.md rendering, so it shares this guard.
-    if getattr(args, "framework", None) in ("agents-md", "codex"):
+    # grok (Phase 3, Codex posture): interop target/source and absorb source are supported; convert and bridge stay
+    # refused for the same reason (its instructions live in the shared repo-root AGENTS.md).
+    if getattr(args, "framework", None) in ("agents-md", "codex", "grok"):
         for attr, flag in (
             ("convert_from", "--convert-from"),
             ("bridge_from", "--bridge-from"),
@@ -186,24 +188,6 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                     f"`--framework {fw} --description …`, or use the interop "
                     f"path (`--interop-from`), which supports {fw} targets."
                 )
-
-    # grok is generate-only in this release: it co-owns the repo-root AGENTS.md (frameworks/grok.py), and none of
-    # the convert / bridge / interop / absorb flows is vetted for that shared target yet (@security step-6
-    # ruling, plan §11 condition 3). Refuse it as a target and as a source.
-    if getattr(args, "framework", None) == "grok":
-        for attr, flag in (("convert_from", "--convert-from"), ("bridge_from", "--bridge-from"),
-                           ("interop_from", "--interop-from")):
-            if getattr(args, attr, None):
-                parser.error(
-                    f"--framework grok is generate-only in this release and cannot be a {flag} target "
-                    "(it co-owns the repo-root AGENTS.md). Generate the team with `--framework grok "
-                    "--description …` instead."
-                )
-    for attr, flag in (("interop_source_framework", "--interop-source-framework"),
-                       ("absorb_source_framework", "--absorb-source-framework"),
-                       ("bridge_source_framework", "--bridge-source-framework")):
-        if getattr(args, attr, None) == "grok":
-            parser.error(f"{flag} grok is not supported in this release (grok is generate-only).")
 
     # F.2: interop-to-goose is now supported — the old refusal predates C.3
     # (CAI captures handoffs and the goose adapter renders sub_recipes from

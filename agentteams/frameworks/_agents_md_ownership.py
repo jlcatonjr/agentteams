@@ -180,3 +180,45 @@ def strip_agents_md_notice(text: str) -> str:
         if stripped.startswith(marker) and "-->" in stripped:
             return stripped.split("-->", 1)[1].lstrip()
     return text
+
+
+def strip_all_ownership_notices(text: str) -> str:
+    """Remove EVERY leading generated ownership notice (Grok, Codex, neutral), however many are stacked.
+
+    Interop uses this before writing a CAI's instructions into another target: one strip would leave a second
+    stacked notice behind, and the target file would then classify as owned by a framework that never wrote it
+    (ownership spoofing; @security Phase 3 condition 2).
+
+    Args:
+        text: Instructions content from a CAI (data, possibly crafted).
+
+    Returns:
+        The content with all leading notices removed.
+
+    Raises:
+        Nothing.
+    """
+    markers = (GROK_AGENTS_MD_MARKER, CODEX_AGENTS_MD_MARKER, NEUTRAL_AGENTS_MD_MARKER)
+    while True:
+        stripped = text.lstrip()
+        marker = next((m for m in markers if stripped.startswith(m)), None)
+        if marker is None or "-->" not in stripped:
+            return text
+        text = stripped.split("-->", 1)[1]
+
+
+def strip_fence(text: str, fence_id: str) -> str:
+    """Remove every ``fence_id`` fenced block (BEGIN through END) from *text*.
+
+    Args:
+        text: The file or instructions text.
+        fence_id: The fence's section id (e.g. ``grok_runtime``).
+
+    Returns:
+        *text* without those blocks; surrounding blank lines collapsed to one.
+
+    Raises:
+        Nothing.
+    """
+    return re.sub(r"\n{3,}", "\n\n", fence_pattern(fence_id).sub("", text))
+

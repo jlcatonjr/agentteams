@@ -747,7 +747,7 @@ class TestFrontmatterValueEmbeddedDashes:
 
 from agentteams.canonical import load_canonical, materialize_canonical
 
-_MAP16_FRAMEWORKS = ("copilot-vscode", "copilot-cli", "claude", "goose", "agents-md", "codex")
+_MAP16_FRAMEWORKS = ("copilot-vscode", "copilot-cli", "claude", "goose", "agents-md", "codex", "grok")
 
 
 def _map16_goose_recipe(slug: str, title: str, body: str, sub_paths: list[str] | None = None) -> str:
@@ -814,6 +814,18 @@ def _build_map16_source(framework: str, root: Path) -> Path:
                 encoding="utf-8",
             )
         return agents_dir
+    if framework == "grok":
+        agents_dir = root / ".grok" / "agents"
+        agents_dir.mkdir(parents=True)
+        (root / "AGENTS.md").write_text("# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n", encoding="utf-8")
+        for slug, body in (
+            ("orchestrator", "# Orchestrator\n\nBody one. KEEP_BODY_TOKEN\n"),
+            ("worker", "# Worker\n\nBody two. KEEP_WORKER_TOKEN\n"),
+        ):
+            (agents_dir / f"{slug}.md").write_text(
+                f"---\nname: {slug.title()}\ndescription: \"{slug} agent\"\ntools: Read, Grep, Glob\n"
+                "injectDefaultTools: false\nmcpInheritance: none\n---\n\n" + body, encoding="utf-8")
+        return agents_dir
     agents_dir = root / ".agents"
     agents_dir.mkdir(parents=True)
     (root / "AGENTS.md").write_text("# Instructions\n\nKEEP_INSTRUCTIONS_TOKEN\n", encoding="utf-8")
@@ -833,6 +845,7 @@ def _map16_target_dir(framework: str, root: Path) -> Path:
         "goose": root / ".goose" / "recipes",
         "agents-md": root / ".agents",
         "codex": root / ".codex" / "agents",
+        "grok": root / ".grok" / "agents",
     }[framework]
 
 

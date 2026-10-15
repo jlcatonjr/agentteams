@@ -39,6 +39,7 @@ _FRAMEWORK_AGENTS_REL = {
     "goose": Path(".goose") / "recipes",
     "agents-md": Path(".agents"),
     "codex": Path(".codex") / "agents",
+    "grok": Path(".grok") / "agents",
 }
 
 

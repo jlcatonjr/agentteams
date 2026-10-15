@@ -80,6 +80,9 @@ _CLAUDE_TO_CANONICAL: dict[str, str] = {
     for token, claude_tools in _CANONICAL_TO_CLAUDE.items()
     for claude_tool in claude_tools
 }
+# `Agent` is the spawn tool's current name in Claude Code and its only name in Grok Build (grok.py writes it for
+# canonical `agent`); `Task` stays the forward spelling for Claude, so it is added to the reverse map only.
+_CLAUDE_TO_CANONICAL["Agent"] = "agent"
 
 # --- copilot-vscode front-matter parsing ------------------------------------
 
@@ -134,7 +137,10 @@ def claude_allowed_tools_to_canonical(claude_tools: Iterable[str]) -> list[str]:
     """
     mapped: set[str] = set()
     for tool in claude_tools:
-        token = _CLAUDE_TO_CANONICAL.get(str(tool).strip())
+        name = str(tool).strip()
+        if name.startswith("Agent(") and name.endswith(")"):
+            name = "Agent"  # Agent(type) restricts which agents may be spawned; still the agent capability
+        token = _CLAUDE_TO_CANONICAL.get(name)
         if token is not None:
             mapped.add(token)
     if "execute" in mapped and "retrieval" in mapped:
@@ -302,3 +308,32 @@ def capabilities_from_tokens(tokens: list[str] | None, framework: str) -> dict[s
     if not tokens:
         return {}
     return {"tool_scopes": list(tokens)}
+
+
+_GROK_EXACT_KEY_RE = re.compile(r"^(injectDefaultTools|mcpInheritance)\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
+
+
+def grok_exact_toolset(content: str) -> bool:
+    """Whether a Grok Build agent's ``tools:`` list is its exact limit.
+
+    Grok widens a declared list unless BOTH ``injectDefaultTools: false`` (default true: session tools are layered
+    on) and ``mcpInheritance: none`` (default all: every parent MCP server) are set. Parsed case-insensitively, as
+    Grok does; a duplicate key, a missing key or any other value means NOT exact (@security Phase 3 condition 3).
+
+    Args:
+        content: The agent file text.
+
+    Returns:
+        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``.
+
+    Raises:
+        Nothing.
+    """
+    yaml_text, _ = parse_yaml_front_matter(content)
+    if yaml_text is None:
+        return False
+    seen: dict[str, list[str]] = {}
+    for m in _GROK_EXACT_KEY_RE.finditer(yaml_text):
+        seen.setdefault(m.group(1).lower(), []).append(m.group(2).strip().strip("'\"").lower())
+    return seen.get("injectdefaulttools") == ["false"] and seen.get("mcpinheritance") == ["none"]
+

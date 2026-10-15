@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -145,6 +146,8 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
                     capabilities = _capability_map.capabilities_from_tokens(
                         _capability_map.canonical_tools_for_claude(content), framework
                     )
+                elif framework == "grok":
+                    capabilities = _grok_capabilities(content, slug)
                 else:
                     capabilities = {}
                 raw_handoffs = adapter.extract_handoffs(content)
@@ -159,6 +162,8 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
                 raw_front_matter, cap_raw, model_hint = _capture_escape_hatches(
                     content, framework
                 )
+                if framework == "grok":  # allow-list: Grok-only keys never reach another target
+                    raw_front_matter, model_hint = _grok_carried_front_matter(raw_front_matter), None
                 if cap_raw is not None:
                     capabilities = dict(capabilities)
                     capabilities["raw"] = {framework: cap_raw}
@@ -204,11 +209,13 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
         # AGENTS.md sits at the project root, TWO levels up; every other
         # framework keeps the single-parent lookup.
         parents = [source_dir.parent]
-        if framework in ("goose", "codex"):
+        if framework in ("goose", "codex", "grok"):
             parents.append(source_dir.parent.parent)
+        # grok co-owns the repo-root AGENTS.md; never pick up a sibling CLAUDE.md for it.
+        names = ["AGENTS.md"] if framework == "grok" else sorted(_INSTRUCTIONS_NAMES)
         for parent in parents:
             found = False
-            for candidate_name in sorted(_INSTRUCTIONS_NAMES):
+            for candidate_name in names:
                 candidate = parent / candidate_name
                 if candidate.exists():
                     instructions_name = candidate_name
@@ -217,6 +224,9 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
                     break
             if found:
                 break
+
+    if framework == "grok" and instructions_content:  # Grok's notice and block are wrapping, not the brief
+        instructions_content = _strip_fence(_strip_all_ownership_notices(instructions_content), _GROK_FENCE_ID)
 
     # A.4: Read the runtime-handoffs.json sidecar back for manifest-delivery
     # frameworks (claude, copilot-cli, agents-md) so handoffs survive
@@ -370,7 +380,7 @@ def _instructions_target_name(target_framework: str) -> str:
     """
     if target_framework == "claude":
         return "CLAUDE.md"
-    if target_framework in ("agents-md", "goose", "codex"):
+    if target_framework in ("agents-md", "goose", "codex", "grok"):
         return "AGENTS.md"
     return "copilot-instructions.md"
 
@@ -438,6 +448,8 @@ def import_from_cai(
 
     adapter = _ADAPTERS[target_framework]()
     result = InteropResult(dry_run=dry_run)
+    if target_framework == "grok" and _grok_symlink_refusal(adapter, target_dir, result):
+        return result
     if skills_only:
         # Early return: no agent, instructions, MCP, sidecar or bundle path can run (Rule 12).
         if not adapter.has_skill_concept():
@@ -613,6 +625,8 @@ def import_from_cai(
     for dest, rendered in () if dry_run else pending:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(rendered, encoding="utf-8")
+    if target_framework == "grok":
+        result.notices += _grok_import_parity(pending, target_dir)
     result.converted.extend(_iwp.install_server(manifest, target_framework, target_dir, dry_run=dry_run))
     instructions_content = str(cai.get("instructions_binding", {}).get("content", ""))
     if instructions_content:
@@ -620,10 +634,16 @@ def import_from_cai(
         # AGENTS.md lives at the PROJECT ROOT (two levels above .goose/recipes);
         # every other framework keeps it beside the agents dir.
         instructions_name = _instructions_target_name(target_framework)
-        if target_framework in ("goose", "codex"):
+        if target_framework in ("goose", "codex", "grok"):
             inst_dest = target_dir.parent.parent / instructions_name
         else:
             inst_dest = target_dir.parent / instructions_name
+        # A CAI is data: stacked/crafted ownership notices and Grok's block never reach a target (spoofing).
+        instructions_content = _strip_fence(_strip_all_ownership_notices(instructions_content), _GROK_FENCE_ID)
+    if instructions_content and target_framework == "grok":
+        _import_grok_instructions(adapter, instructions_content, inst_dest, target_dir, manifest, result,
+                                  dry_run=dry_run, overwrite=overwrite, preserve_existing=preserve_existing)
+    elif instructions_content:
         # The adapter's own shared-file guard (the same hook native generation runs):
         # codex never overwrites an AGENTS.md it did not generate — not even with
         # --overwrite. Every other adapter keeps the file (default no-op).
@@ -650,10 +670,6 @@ def import_from_cai(
         elif inst_dest.exists() and not overwrite:
             result.skipped.append(str(inst_dest))
         else:
-            if target_framework != "codex":
-                # Never carry the Codex ownership marker into another target's file:
-                # Codex would later treat that (e.g. goose-owned) AGENTS.md as its own.
-                instructions_content = _strip_codex_notice(instructions_content)
             if target_framework == "codex":
                 # Stamp the Codex ownership notice, so a later run recognizes the
                 # file as its own (agents_md_is_codex_owned) and may refresh it.
@@ -926,7 +942,18 @@ def _frontmatter_value(content: str, key: str) -> str:
 
 
 # A.3/A.4 helpers extracted to interop_helpers.py (CH-07 module-size compliance)
-from agentteams.frameworks.codex import strip_codex_notice as _strip_codex_notice
+from agentteams.frameworks._agents_md_ownership import (  # noqa: E402
+    GROK_FENCE_ID as _GROK_FENCE_ID,
+    strip_all_ownership_notices as _strip_all_ownership_notices,
+    strip_fence as _strip_fence,
+)
+from agentteams._interop_grok import (  # noqa: E402
+    grok_capabilities as _grok_capabilities,
+    grok_carried_front_matter as _grok_carried_front_matter,
+    grok_import_parity as _grok_import_parity,
+    grok_symlink_refusal as _grok_symlink_refusal,
+    import_grok_instructions as _import_grok_instructions,
+)
 from agentteams.interop_helpers import (
     agent_unchanged as _agent_unchanged,
     detect_framework,
