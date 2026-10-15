@@ -310,7 +310,9 @@ def capabilities_from_tokens(tokens: list[str] | None, framework: str) -> dict[s
     return {"tool_scopes": list(tokens)}
 
 
-_GROK_EXACT_KEY_RE = re.compile(r"^(injectDefaultTools|mcpInheritance)\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
+from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS  # noqa: E402
+
+_GROK_EXACT_KEY_RE = re.compile(rf"^({'|'.join(GROK_EXACT_TOOLSET_KEYS)})\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
 
 
 def grok_exact_toolset(content: str) -> bool:
@@ -335,5 +337,6 @@ def grok_exact_toolset(content: str) -> bool:
     seen: dict[str, list[str]] = {}
     for m in _GROK_EXACT_KEY_RE.finditer(yaml_text):
         seen.setdefault(m.group(1).lower(), []).append(m.group(2).strip().strip("'\"").lower())
-    return seen.get("injectdefaulttools") == ["false"] and seen.get("mcpinheritance") == ["none"]
+    inject, inherit = (k.lower() for k in GROK_EXACT_TOOLSET_KEYS)
+    return seen.get(inject) == ["false"] and seen.get(inherit) == ["none"]
 

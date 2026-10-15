@@ -14,7 +14,11 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # annotations only: interop imports this module
+    from agentteams.frameworks.base import FrameworkAdapter
+    from agentteams.interop import InteropResult
 
 from agentteams import capability_map as _capability_map
 from agentteams.frameworks._agents_md_ownership import ABSENT, GROK, classify_agents_md, symlink_on_path
@@ -52,7 +56,8 @@ def grok_capabilities(content: str, slug: str) -> dict[str, Any]:
 
 
 def import_grok_instructions(
-    adapter: Any, content: str, inst_dest: Path, target_dir: Path, manifest: dict[str, Any], result: Any,
+    adapter: FrameworkAdapter, content: str, inst_dest: Path, target_dir: Path, manifest: dict[str, Any],
+    result: InteropResult,
     *, dry_run: bool, overwrite: bool, preserve_existing: bool,
 ) -> None:
     """Write a CAI's instructions into a Grok target strictly through the AGENTS.md co-ownership guard.
@@ -120,13 +125,19 @@ def grok_carried_front_matter(raw_front_matter: dict[str, Any]) -> dict[str, Any
     return {k: v for k, v in raw_front_matter.items() if k in GROK_CARRIED_FM_KEYS}
 
 
-def grok_symlink_refusal(adapter: Any, target_dir: Path, result: Any) -> bool:
-    """Refuse an import into a Grok team whose ``.grok``, agents or skills dir is (under) a symlink.
+def grok_symlink_refusal(adapter: FrameworkAdapter, target_dir: Path, result: InteropResult,
+                         cai: dict[str, Any] | None = None) -> bool:
+    """Refuse an import into a Grok team when ANY destination it would write is (under) a symlink.
+
+    Checked up front, before anything is written (@security Phase 3 step 13d): ``.grok``, the agents dir, the skills
+    dir, every agent file the CAI names, the handoff sidecar (``.grok/references/runtime-handoffs.json``), the
+    team's ``references/`` (projection marker, control-plane stubs) and the bundle output under it.
 
     Args:
         adapter: The Grok adapter.
         target_dir: The Grok agents dir.
         result: The ``InteropResult`` (a notice is added when refusing).
+        cai: The CAI being imported (its agent slugs name the agent files).
 
     Returns:
         True when the import must stop (nothing is written).
@@ -136,7 +147,14 @@ def grok_symlink_refusal(adapter: Any, target_dir: Path, result: Any) -> bool:
     """
     agents = Path(os.path.normpath(target_dir))
     root = agents.parent.parent
-    for path in (agents, Path(os.path.normpath(adapter.skills_dir(target_dir)))):
+    ext = adapter.get_file_extension("agent")
+    slugs = [str(a.get("slug", "")).strip() for a in ((cai or {}).get("agents") or []) if isinstance(a, dict)]
+    candidates = [
+        agents, Path(os.path.normpath(adapter.skills_dir(target_dir))),
+        agents.parent / "references" / "runtime-handoffs.json", agents / "references" / "interop",
+        *(agents / f"{slug}{ext}" for slug in slugs if slug and "/" not in slug),
+    ]
+    for path in candidates:
         linked = symlink_on_path(path, root)
         if linked is not None:
             result.notices.append(f"{linked} is a symlink; nothing was imported into the Grok team.")
@@ -160,8 +178,8 @@ def grok_import_parity(pending: list[tuple[Path, str]], target_dir: Path) -> lis
     """
     if not pending:
         return []
-    from agentteams.frameworks.grok import _parity_notices
+    from agentteams.frameworks.grok import parity_notices
 
     agents = Path(os.path.normpath(target_dir))
-    return _parity_notices([(os.path.relpath(d, target_dir), r) for d, r in pending], agents, agents.parent.parent)
+    return parity_notices([(os.path.relpath(d, target_dir), r) for d, r in pending], agents, agents.parent.parent)
 

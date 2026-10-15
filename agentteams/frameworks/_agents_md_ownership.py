@@ -164,47 +164,58 @@ def upsert_fenced_block(existing: str, fence_id: str, block: str) -> str:
 
 
 def strip_agents_md_notice(text: str) -> str:
-    """Remove one leading Grok or Codex generated notice from *text*.
+    """Remove one leading Grok or Codex generated notice from *text* (an adapter re-stamping its own render).
 
     Args:
         text: Instructions content, possibly read back from a generated AGENTS.md.
 
     Returns:
-        The content without the notice; unchanged when it carries none.
+        The content without the notice (left-stripped); unchanged when it carries none.
 
     Raises:
         Nothing.
     """
-    stripped = text.lstrip()
-    for marker in (GROK_AGENTS_MD_MARKER, CODEX_AGENTS_MD_MARKER):
-        if stripped.startswith(marker) and "-->" in stripped:
-            return stripped.split("-->", 1)[1].lstrip()
-    return text
+    out = strip_all_ownership_notices(text, limit=1, markers=(GROK_AGENTS_MD_MARKER, CODEX_AGENTS_MD_MARKER))
+    return out if out is text else out.lstrip()
 
 
-def strip_all_ownership_notices(text: str) -> str:
+def strip_all_ownership_notices(
+    text: str,
+    *,
+    limit: int | None = None,
+    markers: tuple[str, ...] = (GROK_AGENTS_MD_MARKER, CODEX_AGENTS_MD_MARKER, NEUTRAL_AGENTS_MD_MARKER),
+) -> str:
     """Remove EVERY leading generated ownership notice (Grok, Codex, neutral), however many are stacked.
 
     Interop uses this before writing a CAI's instructions into another target: one strip would leave a second
     stacked notice behind, and the target file would then classify as owned by a framework that never wrote it
     (ownership spoofing; @security Phase 3 condition 2).
 
+    A marker with no closing ``-->`` still loses its whole first line: :func:`classify_agents_md` looks only at the
+    marker prefix, so a crafted unclosed notice must not survive into the target either.
+
     Args:
         text: Instructions content from a CAI (data, possibly crafted).
+        limit: Stop after this many notices (None: all).
+        markers: The markers to strip.
 
     Returns:
-        The content with all leading notices removed.
+        The content with the leading notices removed; the same object when there was none.
 
     Raises:
         Nothing.
     """
-    markers = (GROK_AGENTS_MD_MARKER, CODEX_AGENTS_MD_MARKER, NEUTRAL_AGENTS_MD_MARKER)
-    while True:
+    count = 0
+    while limit is None or count < limit:
         stripped = text.lstrip()
-        marker = next((m for m in markers if stripped.startswith(m)), None)
-        if marker is None or "-->" not in stripped:
+        if not any(stripped.startswith(m) for m in markers):
             return text
-        text = stripped.split("-->", 1)[1]
+        if "-->" in stripped:
+            text = stripped.split("-->", 1)[1]
+        else:
+            text = stripped.split("\n", 1)[1] if "\n" in stripped else ""
+        count += 1
+    return text
 
 
 def strip_fence(text: str, fence_id: str) -> str:
@@ -220,5 +231,5 @@ def strip_fence(text: str, fence_id: str) -> str:
     Raises:
         Nothing.
     """
-    return re.sub(r"\n{3,}", "\n\n", fence_pattern(fence_id).sub("", text))
+    return re.sub(rf"\n*{fence_pattern(fence_id).pattern}\n*", "\n\n", text, flags=re.DOTALL)
 

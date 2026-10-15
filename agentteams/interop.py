@@ -448,7 +448,7 @@ def import_from_cai(
 
     adapter = _ADAPTERS[target_framework]()
     result = InteropResult(dry_run=dry_run)
-    if target_framework == "grok" and _grok_symlink_refusal(adapter, target_dir, result):
+    if target_framework == "grok" and _grok_symlink_refusal(adapter, target_dir, result, cai):
         return result
     if skills_only:
         # Early return: no agent, instructions, MCP, sidecar or bundle path can run (Rule 12).

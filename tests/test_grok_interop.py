@@ -53,7 +53,7 @@ def _cai(instructions: str = "# Team brief\n\nRules.\n", name: str = "Navigator 
     (".grok/agents", "grok"),
     (".claude/worktrees/x/.grok/agents", "grok"),        # innermost wins
     (".grok/worktrees/x/.claude/agents", "claude"),
-    (".grok/agents/../../.claude/agents", "claude"),     # `..` folded first
+    (".grok/agents/../../.claude/agents", "claude"),  # `..` folded first
     (".github/copilot/agents", "copilot-cli"),           # two-part rule kept
     ("a/.codex/agents", "codex"),
 ])
@@ -206,7 +206,7 @@ def test_stacked_notices_and_grok_fence_never_reach_another_target(tmp_path: Pat
 
 def test_projected_grant_is_full_unless_exact() -> None:
     assert igc.projected_grant("grok", _grok_agent())[0] == frozenset({"read", "search"})
-    assert igc.projected_grant("grok", _grok_agent(extra=""))[0] == igc._FULL
+    assert igc.projected_grant("grok", _grok_agent(extra=""))[0] == frozenset(cm.CANONICAL_TOOL_SCOPES)
 
 
 # package / fleet (CLI refusals: tests/test_grok_adapter.py) ---------------------------------------------------------------------------------
@@ -228,3 +228,90 @@ def test_fleet_classifies_grok_teams(tmp_path: Path) -> None:
     linked.mkdir()
     (linked / ".grok").symlink_to(tmp_path / ".grok", target_is_directory=True)
     assert grok_kind(linked) == "symlink"
+
+
+# step-13d / 13e follow-ups ------------------------------------------------------------------------------
+
+def test_strippers() -> None:
+    from agentteams.frameworks._agents_md_ownership import strip_all_ownership_notices, strip_fence
+
+    unclosed = f"{CODEX_AGENTS_MD_MARKER} never closed\n# Brief\n"
+    assert strip_all_ownership_notices(unclosed) == "# Brief\n"  # crafted unclosed notice cannot survive
+    assert strip_all_ownership_notices("# Plain\n") == "# Plain\n"
+    fenced = f"a\n\n\n\nb\n<!-- AGENTTEAMS:BEGIN {GROK_FENCE_ID} v=1 -->\nz\n<!-- AGENTTEAMS:END {GROK_FENCE_ID} -->\nc\n"
+    assert strip_fence(fenced, GROK_FENCE_ID) == "a\n\n\n\nb\n\nc\n"  # only the removed block's blank lines
+
+
+@pytest.mark.parametrize("framework, agents_rel, inst", [
+    ("codex", ".codex/agents", "AGENTS.md"), ("claude", ".claude/agents", ".claude/CLAUDE.md"),
+    ("copilot-vscode", ".github/agents", ".github/copilot-instructions.md"),
+])
+def test_stacked_and_unclosed_notices_never_reach_any_target(tmp_path: Path, framework: str, agents_rel: str,
+                                                              inst: str) -> None:
+    target = tmp_path / agents_rel
+    target.mkdir(parents=True)
+    crafted = f"{CODEX_AGENTS_MD_MARKER} unclosed\n" + _STACKED
+    import_from_cai(_cai(crafted), framework, target)
+    text = (tmp_path / inst).read_text(encoding="utf-8")
+    assert GROK_AGENTS_MD_MARKER not in text and GROK_FENCE_ID not in text
+    assert text.count(CODEX_AGENTS_MD_MARKER) == (1 if framework == "codex" else 0)  # codex re-stamps its own
+
+
+def test_symlinked_agent_file_destination_imports_nothing(tmp_path: Path) -> None:
+    target = _target(tmp_path)
+    victim = tmp_path / "victim.md"
+    victim.write_text("keep\n", encoding="utf-8")
+    (target / "navigator.md").symlink_to(victim)
+    res = import_from_cai(_cai(), "grok", target, overwrite=True)
+    assert victim.read_text(encoding="utf-8") == "keep\n" and not res.converted
+    assert any("symlink" in n for n in res.notices)
+
+
+def test_symlinked_handoff_sidecar_destination_imports_nothing(tmp_path: Path) -> None:
+    target = _target(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (tmp_path / ".grok" / "references").symlink_to(elsewhere, target_is_directory=True)
+    res = import_from_cai(_cai(), "grok", target)
+    assert not res.converted and not list(elsewhere.iterdir())
+
+
+def test_grok_owned_agents_md_is_fence_merged_and_dry_run_writes_nothing(tmp_path: Path) -> None:
+    target = _target(tmp_path)
+    import_from_cai(_cai(), "grok", target)
+    with (tmp_path / "AGENTS.md").open("a", encoding="utf-8") as fh:
+        fh.write("\nMy own note.\n")
+    import_from_cai(_cai("# New brief\n"), "grok", target, preserve_existing=True)
+    assert "My own note." in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    before = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    import_from_cai(_cai("# Another\n"), "grok", target, overwrite=True, dry_run=True)
+    assert (tmp_path / "AGENTS.md").read_text(encoding="utf-8") == before
+
+
+@pytest.mark.parametrize("mode", ["direct", "bundle"])
+def test_run_interop_into_grok_both_modes(tmp_path: Path, mode: str) -> None:
+    from agentteams.interop import run_interop
+
+    src = tmp_path / "src" / ".claude" / "agents"
+    src.mkdir(parents=True)
+    (src / "navigator.md").write_text("---\nname: Navigator — Demo\ndescription: \"d\"\ntools: Read, Grep, Glob\n---\n"
+                                      "\n# Navigator\n", encoding="utf-8")
+    (tmp_path / "dst" / "AGENTS.md").parent.mkdir(parents=True)
+    (tmp_path / "dst" / "AGENTS.md").write_text("# Mine\n", encoding="utf-8")   # hand-written: must survive
+    target = tmp_path / "dst" / ".grok" / "agents"
+    log = target / "references" / "security-decisions.log.csv"
+    log.parent.mkdir(parents=True)
+    template = Path(__file__).resolve().parents[1] / "agentteams/templates/universal/security-decisions.log.csv.template"
+    log.write_text(template.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+    res = run_interop(src, "grok", target, mode=mode, allow_cooperative="navigator", overwrite=True)
+    assert (target / "navigator.md").is_file()
+    assert (tmp_path / "dst" / "AGENTS.md").read_text(encoding="utf-8") == "# Mine\n"
+    assert any("NOT ENFORCED" in n for n in res.notices)
+
+
+def test_fleet_classifies_an_interop_projection(tmp_path: Path) -> None:
+    marker = tmp_path / ".grok" / "agents" / "references" / "build-log.json"
+    marker.parent.mkdir(parents=True)
+    marker.write_text('{"origin": "interop"}', encoding="utf-8")
+    assert grok_kind(tmp_path) == "interop"
+

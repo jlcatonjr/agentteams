@@ -15,6 +15,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS
 from agentteams.yaml_frontmatter import (
     parse_yaml_front_matter as _parse_yaml_front_matter,
 )
@@ -542,7 +543,7 @@ def detect_framework(source_dir: Path) -> str:
             continue
         if content.startswith("---\n"):
             # Grok-only keys identify a Grok Build team even with no .grok dir in the path (Phase 3 cond. 4).
-            if re.search(r"^(injectDefaultTools|mcpInheritance)\s*:", content[:2000], re.M):
+            if re.search(rf"^({'|'.join(GROK_EXACT_TOOLSET_KEYS)})\s*:", content[:2000], re.M | re.I):
                 has_grok_keys = True
             # Accept BOTH capability keys. `tools:` is what a Claude subagent file carries
             # since 2026-08-06; `allowed-tools:` is what every previously generated team
