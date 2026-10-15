@@ -35,8 +35,28 @@ class ChainReport:
     """1-based numbers of HALT rows inside the legacy prefix (their deletion would be undetectable)."""
 
 
+def is_chained(fieldnames: list[str]) -> bool:
+    """True when a decisions-log header carries the ``prev_digest`` column (the log is hash-chained).
+
+    Args:
+        fieldnames: The log's header.
+
+    Returns:
+        Whether rows of this log must chain.
+    """
+    return "prev_digest" in {c.strip() for c in fieldnames}
+
+
 def row_chain_digest(row: dict[str, str]) -> str:
-    """Return the digest the row after *row* must carry as its ``prev_digest``."""
+    """Return the digest the row after *row* must carry as its ``prev_digest``.
+
+    Args:
+        row: A decisions-log row.
+
+    Returns:
+        The sha256 hex digest of the row's signed payload.
+    """
+    # Local import: decision_log imports this module, so a top-level import would be a cycle.
     from agentteams.cli.decision_log import _decision_signature_payload
 
     return hashlib.sha256(_decision_signature_payload(row).encode("utf-8")).hexdigest()
@@ -57,7 +77,7 @@ def verify_chain(rows: list[dict[str, str]], fieldnames: list[str], *, signing_a
     Raises:
         RuntimeError: A link is broken: a row was removed, reordered, or edited.
     """
-    if "prev_digest" not in {c.strip() for c in fieldnames}:
+    if not is_chained(fieldnames):
         return ChainReport(chained=False)
     previous = ""
     in_prefix = True
@@ -75,7 +95,7 @@ def verify_chain(rows: list[dict[str, str]], fieldnames: list[str], *, signing_a
             in_prefix = False
         previous = row_chain_digest(row)
     # Rows 1..prefix_rows+1 form the unchained run (row 1's empty link is legitimate on its own).
-    halts = [i + 1 for i in range(prefix_rows + 1) if prefix_rows and i < len(rows)
+    halts = [i + 1 for i in range(prefix_rows + 1) if prefix_rows
              and (rows[i].get("verdict") or rows[i].get("status") or "").strip().upper() == "HALT"]
     return ChainReport(chained=True, legacy_prefix=prefix_rows, halts_in_prefix=halts)
 
@@ -110,6 +130,7 @@ def describe_log_chain(team_dir: Path) -> tuple[list[str], bool]:
         ``(lines, broken)``: report lines, and True when the chain is broken (an integrity failure).
         A legacy prefix, and any HALT inside it, is reported but is not a failure.
     """
+    # Local import: decision_log imports this module, so a top-level import would be a cycle.
     from agentteams.cli.decision_log import _decision_signing_active, _read_decision_rows
 
     try:
@@ -131,4 +152,4 @@ def describe_log_chain(team_dir: Path) -> tuple[list[str], bool]:
     return lines, False
 
 
-__all__ = ["ChainReport", "chain_tip", "describe_log_chain", "row_chain_digest", "verify_chain"]
+__all__ = ["ChainReport", "chain_tip", "describe_log_chain", "is_chained", "row_chain_digest", "verify_chain"]

@@ -247,6 +247,18 @@ def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: 
     Only a row short by trailing signing columns (the run of *final*'s last columns that are
     :data:`~agentteams.cli.decision_log.SIGNED_DECISION_COLUMNS`) is padded; any other width is
     refused, so a torn or truncated row is never silently filled in.
+
+    Args:
+        rest: The log's bytes after the header line.
+        records: ``(first file line, last data line, fields)`` per row, from :func:`_records`.
+        final: The header the rows must match after migration.
+        log_path: The log, for messages.
+
+    Returns:
+        ``(padded bytes, first file line of each padded row)``.
+
+    Raises:
+        DecisionLogMigrationError: A row is narrower than any legacy width (torn or truncated).
     """
     signing = set(SIGNED_DECISION_COLUMNS)
     trailing = 0
@@ -273,7 +285,16 @@ def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: 
 
 
 def _assert_payloads_unchanged(old_bytes: bytes, new_bytes: bytes, log_path: Path) -> None:
-    """Every row's signed payload (and so the hash chain) must read back identically."""
+    """Refuse unless every row's signed payload (and so the hash chain) reads back identically.
+
+    Args:
+        old_bytes: The log before migration.
+        new_bytes: The migrated log.
+        log_path: The log, for messages.
+
+    Raises:
+        DecisionLogMigrationError: A row's signed payload would change.
+    """
     def payloads(raw: bytes) -> list[str]:
         reader = csv.DictReader(io.StringIO(raw.decode("utf-8"), newline=""))
         return [_decision_signature_payload({k: v or "" for k, v in row.items() if k}) for row in reader]

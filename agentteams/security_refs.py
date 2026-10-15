@@ -663,6 +663,12 @@ def _read_vuln_cache(cache_json: Path) -> dict | None:
     A cache that cannot be read, is not UTF-8 or JSON, is not an object, fails the schema check,
     or has no parseable ``generated_at`` is unusable. The caller reports it ``stale`` (row 433):
     without this, a corrupt cache under ``--security-offline`` fell through to "fresh".
+
+    Args:
+        cache_json: The ``references/security-vulnerability-watch.json`` cache.
+
+    Returns:
+        The payload, or None when the cache is unusable.
     """
     try:
         cached = json.loads(cache_json.read_text(encoding="utf-8"))

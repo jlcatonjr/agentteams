@@ -1492,7 +1492,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "manifest (references/enforcement-integrity.json); a MISSING manifest is a "
             "finding (exit 1) when the repository tracks one or the scanner runs from inside it. Also checks the "
             "governance CSV logs (security decisions, remediation, red-team findings, MCP needs, conflict log) and "
-            "exits 1 on a malformed one."
+            "exits 1 on a malformed one. Also reports the security-decisions log's hash chain: exits 1 on a "
+            "broken chain, and reports a pre-1.0 legacy prefix (rows with no link) and any HALT row inside it."
         ),
     )
     parser.add_argument(

@@ -18,6 +18,7 @@ import os
 import re
 from pathlib import Path
 
+from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
     non_eligibility_reason,
@@ -430,9 +431,7 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
             )
         # The operator confirmed a payload whose prev_digest was this log's tip; if the log changed
         # during confirmation, appending would break the chain (or bind the wrong row). Refuse.
-        if "prev_digest" in {c.strip() for c in fieldnames}:
-            from agentteams.cli.decision_chain import chain_tip
-
+        if is_chained(fieldnames):
             tip = chain_tip(rows, fieldnames, signing_active=True)
             if (row.get("prev_digest") or "").strip() != tip:
                 raise RuntimeError(
@@ -776,8 +775,6 @@ def _assert_decision_chain_intact(rows: list[dict[str, str]], fieldnames: list[s
     way signing is, so an existing log keeps working until it is migrated. The rule, including
     the pre-1.0 legacy prefix, lives in :mod:`agentteams.cli.decision_chain`.
     """
-    from agentteams.cli.decision_chain import verify_chain
-
     verify_chain(rows, fieldnames, signing_active=_decision_signing_active(fieldnames))
 
 

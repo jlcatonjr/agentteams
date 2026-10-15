@@ -464,13 +464,14 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     # prev_digest is a signed field: link the row to the log's chain tip BEFORE any signature value or
     # review digest is computed, so the operator confirms exactly what is signed. A spec cannot set it.
     row.pop("prev_digest", None)
+    # Imported with the other signing modules: this verb's imports stay local to the signing path.
+    from agentteams.cli.decision_chain import chain_tip, is_chained
+
     try:
         read = dl._read_decision_rows(output_dir)
         if read is None:
-            row["prev_digest"] = ""  # a new log is created with SIGNED_DECISION_COLUMNS, which chain
-        elif "prev_digest" in {c.strip() for c in read[1]}:
-            from agentteams.cli.decision_chain import chain_tip
-
+            row["prev_digest"] = ""  # the first row of a new (chained) log carries an empty link
+        elif is_chained(read[1]):
             row["prev_digest"] = chain_tip(read[0], read[1], signing_active=True)
     except RuntimeError as exc:
         print(f"Error: cannot extend the security-decisions log: {exc}", file=sys.stderr)

@@ -1194,9 +1194,15 @@ Classify every generated output file against the build-log `file_hashes` baselin
 | `MISSING` | A recorded file is absent (or unreadable). |
 | `FENCE-BROKEN` | Content changed **and** the file's `AGENTTEAMS` fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption signal. |
 
-**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, an enforcement-manifest mismatch, or a malformed governance log (below); `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` unless the enforcement or governance-log check failed (run `--update` to establish one).
+**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, an enforcement-manifest mismatch, a malformed governance log, or a broken decision-log hash chain (below); `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` unless the enforcement or governance-log check failed (run `--update` to establish one).
 
 **Enforcement manifest:** when `references/enforcement-integrity.json` exists at the resolved root, `--verify-integrity` also re-checks every enforcement module against it and exits non-zero on any mismatch — the CLI counterpart to [`--write-integrity-manifest`](#--write-integrity-manifest)'s "review the diff before regenerating" contract. (Before 2026-08-13 the only check of that manifest lived inside the red-team battery.) A **missing** manifest is itself a finding (exit non-zero) when the repository tracks it in git or the imported scanner sits inside the project (e.g. an in-project `.venv`); an ordinary consumer project without one is unaffected.
+
+**Decision-log chain:** when `references/security-decisions.log.csv` carries a `prev_digest` column, every row must
+link to the one before it (a deleted, reordered or edited row breaks the link), and a broken chain exits non-zero.
+Logs signed before 1.0 may start with a **legacy prefix**, a run of rows with no link (accepted only when signing is
+active). The report gives its length and lists any HALT row inside it: a deletion within the prefix, a HALT
+included, cannot be detected, so confirm those rows are still present as recorded.
 
 **Governance logs:** it also checks the append-only CSV logs (`security-decisions.log.csv`,
 `agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) found under

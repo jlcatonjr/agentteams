@@ -143,3 +143,24 @@ def test_legacy_lost_sidecars_are_neutralized(tmp_path):
     B.neutralize_legacy_backups(agents)
     assert not B.loadable_backup_files(agents)
     assert (legacy / "producer.md.lost.content.md.agentteams-bak").is_file()
+
+
+def test_a_live_file_named_like_a_sidecar_is_restored_not_deleted(tmp_path):
+    """@security M1: the manifest tells a real file apart from a sidecar; remove_extra never deletes it."""
+    agents = _team(tmp_path)
+    (agents / "release.lost.notes.md").write_text("real notes\n")
+    res = B.backup_output_dir(agents)
+    (agents / "release.lost.notes.md").write_text("edited\n")
+    B.restore_backup(res.backup_path, agents, remove_extra=True)
+    assert (agents / "release.lost.notes.md").read_text() == "real notes\n"
+
+
+def test_remove_extra_keeps_a_live_file_that_shares_a_skipped_sidecar_name(tmp_path):
+    from agentteams.fences import _write_lost_fence_sidecars
+
+    agents = _team(tmp_path)
+    res = B.backup_output_dir(agents)
+    _write_lost_fence_sidecars(res.backup_path, "producer.md", {"content": "lost body\n"})
+    (agents / "producer.md.lost.content.md").write_text("someone's live file\n")
+    B.restore_backup(res.backup_path, agents, remove_extra=True)
+    assert (agents / "producer.md.lost.content.md").read_text() == "someone's live file\n"

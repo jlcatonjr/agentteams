@@ -130,9 +130,37 @@ def lost_sidecar_name(rel: str, sid: str) -> str:
     return inert_backup_name(f"{rel}.lost.{sid}.md")
 
 
-def is_lost_sidecar(rel: Path) -> bool:
-    """True when *rel* (in-backup relative path) is a lost-fence sidecar, under either naming."""
-    return bool(re.search(r"\.lost\.[^/]+\.md$", _restored_rel(rel).name))
+#: The names :func:`lost_sidecar_name` writes (section ids and ``unfenced-<id>``), either naming.
+_LOST_SIDECAR_RE = re.compile(r"\.lost\.(?:unfenced-)?[A-Za-z0-9_-]+\.md$")
+
+
+def is_lost_sidecar(rel: Path, manifest_paths: frozenset[str] = frozenset()) -> bool:
+    """True when *rel* (an in-backup relative path) is a lost-fence sidecar.
+
+    A sidecar is never listed in the backup manifest, so a backed-up live file whose own name
+    happens to look like one (``release.lost.notes.md``) is recognised by its manifest entry.
+
+    Args:
+        rel: The path relative to the backup directory.
+        manifest_paths: The manifest's ``backup_path`` values (empty for a legacy backup).
+
+    Returns:
+        True for a sidecar under the inert or the pre-1.0 naming.
+    """
+    return str(rel) not in manifest_paths and bool(_LOST_SIDECAR_RE.search(_restored_rel(rel).name))
+
+
+def _manifest_backup_paths(backup_path: Path) -> frozenset[str]:
+    """The ``backup_path`` values listed in *backup_path*'s manifest (empty if absent or malformed)."""
+    import json as _json
+
+    try:
+        files = _json.loads((backup_path / BACKUP_MANIFEST_NAME).read_text(encoding="utf-8")).get("files")
+    except (OSError, ValueError, AttributeError):
+        return frozenset()
+    if not isinstance(files, list):
+        return frozenset()
+    return frozenset(e["backup_path"] for e in files if isinstance(e, dict) and isinstance(e.get("backup_path"), str))
 
 
 def loadable_backup_files(output_dir: Path) -> list[Path]:
@@ -590,14 +618,17 @@ def restore_backup(
     # sidecar manifest (_manifest.json) is metadata ABOUT the backup, not
     # restored content — exclude it from the restore set.
     backup_rels: set[Path] = set()
+    sidecar_rels: set[Path] = set()
+    manifest_paths = _manifest_backup_paths(backup_path)
     for src in backup_path.rglob("*"):
         if not src.is_file():
             continue
         rel = src.relative_to(backup_path)
         if rel == Path(BACKUP_MANIFEST_NAME):
             continue
-        if is_lost_sidecar(rel):
-            continue  # recovery material, never restored into a live (loadable) path (377)
+        if is_lost_sidecar(rel, manifest_paths):
+            sidecar_rels.add(_restored_rel(rel))  # recovery material, never restored live (377)
+            continue
         backup_rels.add(rel)
 
     # Restore all backed-up files
@@ -625,6 +656,11 @@ def restore_backup(
                 continue
             # Preserve build-log.json — it records run history, not agent content
             if rel == _skip_rel:
+                continue
+            if rel in sidecar_rels:
+                # A live file named like a skipped sidecar: keep it and say so, never delete it.
+                print(f"  ⚠  {rel}: kept (its name matches a lost-fence sidecar that was not restored)",
+                      file=sys.stderr)
                 continue
             if rel not in restored_rels:
                 candidate.unlink()

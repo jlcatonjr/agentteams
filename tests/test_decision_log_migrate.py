@@ -1,8 +1,9 @@
-"""``--migrate-decision-log``: a legacy team decisions log gains the signing columns, nothing else.
+"""``--migrate-decision-log``: a legacy team decisions log gains the signing columns and padded rows.
 
 Pins plan ``decision-log-migration`` Revision 1: the header becomes a superset (legacy columns in
 place, the missing ``SIGNED_DECISION_COLUMNS`` appended, never ``prev_digest``) that still classifies;
-data lines stay byte-identical; the run is backed up, idempotent and refuses malformed headers and
+each data line keeps its bytes as a prefix (short rows padded with empty cells,
+signed payloads unchanged); the run is backed up, idempotent and refuses malformed headers and
 laundering rows; the revocation of live unsigned authorizing rows is listed and needs ``--yes``; and
 afterwards a signed row appends while the gate reads the legacy rows as unsigned.
 """
@@ -89,7 +90,7 @@ def test_header_is_a_superset_that_still_classifies(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("ending", ["\n", "\r\n"])
-def test_data_lines_are_byte_identical(tmp_path: Path, ending: str) -> None:
+def test_data_lines_keep_their_bytes_as_a_prefix(tmp_path: Path, ending: str) -> None:
     before = _legacy_bytes(ending)
     out = _team(tmp_path, before)
     assert _run(out, "--yes") == 0
