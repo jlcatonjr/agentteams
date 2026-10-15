@@ -37,6 +37,17 @@ def test_seeded_cache_passes_the_real_gate(tmp_path):
     security_gate._assert_security_intelligence_fresh(placeholders, output_dir=out)
 
 
+def test_seeded_cache_is_schema_valid(tmp_path):
+    # Not just "reported fresh": offline, a rejected cache also reports fresh (GROK-FU-R7-SIDE), so a seed that
+    # drifted out of schema would keep these tests green for the wrong reason and break when that bug is fixed.
+    jsonschema = pytest.importorskip("jsonschema")
+    out = tmp_path / "agents"
+    seed_offline_intel(out, "claude")
+    payload = json.loads((out / "references" / "security-vulnerability-watch.json").read_text(encoding="utf-8"))
+    schema_path = Path(security_refs.__file__).parent / "schemas" / "security-vulnerability-watch.schema.json"
+    jsonschema.validate(payload, json.loads(schema_path.read_text(encoding="utf-8")))
+
+
 def test_seeded_cache_carries_no_advisories(tmp_path):
     out = tmp_path / "agents"
     seed_offline_intel(out, "claude")
