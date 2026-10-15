@@ -990,42 +990,37 @@ def _memory_index_schema_path() -> Path:
 
 
 def _validate_memory_index_bytes(
-    index: dict[str, object], index_bytes: bytes, output_dir: Path | None
+    index: dict[str, object], index_bytes: bytes | list[bytes], output_dir: Path | None
 ) -> None:
     """Validate *index* against the bundled schema, consulting the sidecar cache
     when *output_dir* is given. Central validator for both read and write paths;
     ``output_dir=None`` forces a full, uncached validation.
 
     ``index_bytes`` must be the exact bytes read from / to be written to disk so
-    the key matches on the next read (C5).
+    the key matches on the next read (C5); a sharded index passes its manifest
+    and part bytes as a list (``memory_index_store``).
     """
+    chunks = list(index_bytes) if isinstance(index_bytes, list) else [index_bytes]
     schema_bytes = _load_schema_bytes(
         _memory_index_schema_path(), MemoryIndexError, "memory index"
     )
     sidecar = (output_dir / MEMORY_INDEX_VCACHE_REL_PATH) if output_dir is not None else None
     _validate_cached(
-        index, [index_bytes], schema_bytes,
+        index, chunks, schema_bytes,
         error_cls=MemoryIndexError, label="memory index",
         sidecar_path=sidecar, artifact_type="memory-index-vcache",
     )
 
 
 def _read_memory_index(output_dir: Path) -> dict[str, object]:
-    """Load and parse references/memory-index.json from output_dir.
+    """Load and parse references/memory-index.json (single file or shards) from output_dir.
 
-    Raises RuntimeError when the file is missing or invalid.
+    Raises RuntimeError when the file, or any shard it lists, is missing or invalid.
     """
-    index_path = output_dir / MEMORY_INDEX_REL_PATH
-    if not index_path.exists():
-        raise MemoryIndexError(
-            f"memory index not found at {index_path}; run --refresh-index or --update first"
-        )
-    try:
-        raw = index_path.read_bytes()
-        index = json.loads(raw)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise MemoryIndexError(f"failed reading memory index at {index_path}: {exc}") from exc
-    _validate_memory_index_bytes(index, raw, output_dir)
+    from agentteams.memory_index_store import read_memory_index_payload
+
+    index, chunks = read_memory_index_payload(output_dir / MEMORY_INDEX_REL_PATH)
+    _validate_memory_index_bytes(index, chunks, output_dir)
     return index
 
 
@@ -1092,11 +1087,16 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
     """
     from agentteams.memory_index import build_memory_index
     from agentteams.memory_index_incremental import try_incremental_sed_update
+    from agentteams.memory_index_store import (
+        encode_memory_index, is_legacy_layout, write_encoded_index,
+    )
 
     index_path = output_dir / MEMORY_INDEX_REL_PATH
     incremental_enabled = os.getenv("AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED", "").strip() == "1"
 
-    if incremental_enabled and index_path.exists():
+    # The sed path patches the legacy indent=2 single-file layout line by line; it has
+    # no anchors in the compact or sharded layout, which take the full rebuild below.
+    if incremental_enabled and is_legacy_layout(index_path):
         try:
             current = _read_memory_index(output_dir)
             result = try_incremental_sed_update(
@@ -1127,15 +1127,12 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
         root=_memory_index_root(manifest, output_dir),
     )
 
-    serialized = json.dumps(index, indent=2) + "\n"
-    index_bytes = serialized.encode("utf-8")
-    _validate_memory_index_bytes(index, index_bytes, output_dir)
-
-    # Atomic write via the shared atomicio primitive (temp-in-same-dir + fsync +
-    # os.replace) — a crash never leaves a torn index for a concurrent
-    # --query-index to read+validate. Writes the exact bytes hashed above, so the
-    # next read hits the validation cache (C5).
-    _atomic_write_text(index_path, serialized)
+    # Compact line layout, sharded above the size cap (memory_index_store). Each file
+    # is written atomically, shards before the manifest; the bytes validated here are
+    # the bytes written, so the next read hits the validation cache (C5).
+    encoded = encode_memory_index(index)
+    _validate_memory_index_bytes(index, list(encoded.chunks), output_dir)
+    write_encoded_index(index_path, encoded)
     return index_path
 
 

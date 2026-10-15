@@ -357,6 +357,11 @@ _OPERATIONAL_JSON_NAMES = frozenset({
     "security-vulnerability-watch.json",
 })
 
+#: Shards of a size-capped memory index (``agentteams.memory_index_store``). Defined here, not
+#: imported: this module is integrity-pinned, and an exemption predicate living in an unpinned
+#: module could be widened without tripping the pin.
+_MEMORY_INDEX_PART_RE = re.compile(r"memory-index\.part-[0-9]{4}\.json")
+
 #: Directory, relative to the scanned agents dir, where the pipeline writes those files.
 #:
 #: The exemption was keyed on BASENAME and applied via `rglob`, so any file anywhere in the
@@ -372,8 +377,10 @@ def _is_operational_json(file_path: Path, agents_dir: Path) -> bool:
 
     Requires BOTH the known basename AND residence directly in the agents dir's
     ``references/`` directory. A file that satisfies only one is scanned normally.
+    A sharded memory index's parts (``memory-index.part-NNNN.json``, exact pattern) are
+    the same artifact split for size, so they take the same exemption on the same terms.
     """
-    if file_path.name not in _OPERATIONAL_JSON_NAMES:
+    if file_path.name not in _OPERATIONAL_JSON_NAMES and not _MEMORY_INDEX_PART_RE.fullmatch(file_path.name):
         return False
     try:
         return file_path.resolve().parent == (agents_dir / _OPERATIONAL_JSON_DIR).resolve()

@@ -104,6 +104,8 @@ _VOLATILE_SUFFIXES = (
     "security.agent.md",
     "SETUP-REQUIRED.md",
 )
+#: Shards of a size-capped memory index (agentteams.memory_index_store): as volatile as the index.
+_VOLATILE_PART_RE = re.compile(r"(?:^|/)references/memory-index\.part-[0-9]{4}\.json$")
 
 
 # ---------------------------------------------------------------------------
@@ -576,7 +578,7 @@ def _classify(ws: Path, ref: str, diff_text: str, update_output: str) -> dict:
     ue: list[str] = []
     volatile_tracked: list[str] = []
     for f in files:
-        if any(f.endswith(suf) for suf in _VOLATILE_SUFFIXES):
+        if any(f.endswith(suf) for suf in _VOLATILE_SUFFIXES) or _VOLATILE_PART_RE.search(f):
             # Volatile files are exempt from the UE-deletion audit (their churn is
             # expected). But if such a file is git-TRACKED here (not ignored), its
             # un-audited churn can be committed — flag it so it surfaces instead of
