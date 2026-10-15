@@ -283,3 +283,13 @@ def test_browser_fetch_absent_from_research_package_exports() -> None:
     assert "browser_fetch" not in dir(research_pkg)
     assert "browser_screenshot" not in dir(research_pkg)
     assert "browser" not in research_pkg.__all__
+
+
+def test_research_cli_has_no_file_writing_screenshot_flag(capsys) -> None:
+    """The read-only retrieval grant runs this CLI; no flag may turn it into a file write (378)."""
+    from agentteams.research.__main__ import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["browser", "https://example.invalid/", "--screenshot", "/tmp/x.png"])
+    assert exc.value.code == 2
+    assert "--screenshot" in capsys.readouterr().err

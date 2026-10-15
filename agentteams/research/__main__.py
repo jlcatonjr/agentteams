@@ -66,11 +66,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     browser_p.add_argument("--max-chars", type=int, default=4000)
     browser_p.add_argument("--timeout-s", type=float, default=20.0)
-    browser_p.add_argument(
-        "--screenshot",
-        metavar="PATH",
-        help="Also save a full-page screenshot to PATH (additive — text extraction still runs).",
-    )
+    # No --screenshot: this CLI is the read-only retrieval grant agents hold
+    # (Bash(python -m agentteams.research:*)), and a PATH argument made it a file write anywhere
+    # the caller named (1.0 must-fix 378). browser_screenshot stays available as a library call.
 
     scholar_p = sub.add_parser(
         "scholar",
@@ -152,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "browser":
         # Local import: keeps `python -m agentteams.research search|fetch` free of any Playwright
         # dependency — only the `browser` subcommand ever touches agentteams.research.browser.
-        from agentteams.research.browser import browser_fetch, browser_screenshot
+        from agentteams.research.browser import browser_fetch
 
         text = browser_fetch(
             args.url,
@@ -161,18 +159,8 @@ def main(argv: list[str] | None = None) -> int:
             timeout_s=args.timeout_s,
             max_chars=args.max_chars,
         )
-        screenshot_path = None
-        if args.screenshot:
-            ok = browser_screenshot(
-                args.url,
-                args.screenshot,
-                headed=args.headed,
-                wait_until=args.wait_until,
-                timeout_s=args.timeout_s,
-            )
-            screenshot_path = args.screenshot if ok else None
         json.dump(
-            {"url": args.url, "text": text, "screenshot": screenshot_path},
+            {"url": args.url, "text": text},
             sys.stdout,
             indent=2,
         )

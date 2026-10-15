@@ -16,7 +16,7 @@ scholarly lookup — is performed **through this package's own CLI**:
 ```
 python -m agentteams.research search  "<query>"
 python -m agentteams.research fetch   "<url>"
-python -m agentteams.research browser "<url>" [--headed] [--screenshot PATH]
+python -m agentteams.research browser "<url>" [--headed]
 python -m agentteams.research scholar "<query>" [--citations]
 ```
 
