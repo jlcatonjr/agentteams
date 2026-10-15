@@ -64,5 +64,6 @@ def test_the_offline_route_does_not_relabel_an_old_cache(tmp_path):
 def test_the_gate_is_not_patched_globally():
     # Hermeticity is per module (a seeded cache, or a module-scoped patch). A session-wide patch
     # would silently stop the gate's own tests from exercising it.
-    assert "_assert_security_intelligence_fresh" not in (TESTS / "conftest.py").read_text(encoding="utf-8")
+    for conftest in TESTS.rglob("conftest.py"):
+        assert "_assert_security_intelligence_fresh" not in conftest.read_text(encoding="utf-8"), conftest
     assert security_gate._assert_security_intelligence_fresh.__module__ == "agentteams.cli.security_gate"
