@@ -16,10 +16,21 @@ from pathlib import Path
 import pytest
 
 import build_team
+from agentteams.cli import security_gate
 from agentteams.convert import convert_team
 
 _BRIEF = "examples/data-pipeline/brief.json"
 pytestmark = pytest.mark.skipif(not Path(_BRIEF).exists(), reason="data-pipeline brief not found")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _fresh_intel_gate():
+    """These tests are about goose conversion, not intel freshness; convert forces a live fetch
+    (``--security-offline`` cannot apply), so offline runs errored on the gate. Patched for this
+    module only; the gate's own tests still exercise it."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
+        yield
 
 
 def _gen_source(root: Path, framework: str) -> Path:

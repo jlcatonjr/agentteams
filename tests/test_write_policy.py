@@ -18,6 +18,7 @@ import pytest
 from agentteams import analyze
 from agentteams.audit import run_post_audit
 from agentteams.audit_agent_contract import _check_write_policy
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
@@ -283,7 +284,8 @@ def generated_teams(tmp_path_factory):
     procs = {
         fw: subprocess.Popen(
             [sys.executable, str(REPO / "build_team.py"), "--description", str(brief_path), "--project",
-             str(root / fw), "--framework", fw, "--output", str(root / fw / "agents"), "--no-scan", "--yes"],
+             str(root / fw), "--framework", fw, "--output", str(root / fw / "agents"), "--no-scan", "--yes",
+             *seed_offline_intel(root / fw / "agents", fw)],
             cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
         for fw, _ in _FRAMEWORKS

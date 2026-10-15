@@ -18,6 +18,7 @@ import pytest
 
 from agentteams import runner_mcp
 from agentteams.audit_agent_contract import _check_write_policy
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parents[1]
 GRANTED = "primary-producer"
@@ -44,7 +45,8 @@ def _render(tmp_path: Path, framework: str, *, grants: bool) -> Path:
     project.mkdir()
     out = project / ".claude" / "agents" if framework == "claude" else project
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(_brief(tmp_path, grants=grants)),
-                           "--framework", framework, "--output", str(out), "--project", str(project), "--yes"],
+                           "--framework", framework, "--output", str(out), "--project", str(project), "--yes",
+                           *seed_offline_intel(out, framework)],
                           capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
     return project
