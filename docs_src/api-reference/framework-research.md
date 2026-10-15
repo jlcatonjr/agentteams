@@ -32,8 +32,8 @@ Dict[str, dict] keyed by framework id. Each entry declares:
 - `expected_locations` — allow-listed filesystem locations whose
   mention is scanned for.
 
-Six frameworks ship: `claude`, `copilot_vscode`, `copilot_cli`, `goose`,
-`agents_md`, `codex` — each with its own `expert_ref` file (split from a
+Seven frameworks ship: `claude`, `copilot_vscode`, `copilot_cli`, `goose`,
+`agents_md`, `codex`, `grok` — each with its own `expert_ref` file (split from a
 single shared `claude`/`copilot` pair on 2026-08-15, agent-doc-optimal-
 structure plan, so drift tracking and observation stanzas stay
 framework-specific instead of conflating surfaces with different

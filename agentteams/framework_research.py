@@ -305,7 +305,7 @@ def _scan_framework(entry: dict[str, Any], offline: bool) -> dict[str, Any]:
     a different host: the doc relocated) and ``empty`` (resolved but implausibly
     small) — as well as ``failed`` (network error) and ``skipped`` (offline). A
     per-framework ``keys_diff`` compares this framework's expected watch tokens
-    against what was observed, so drift is reported for all six frameworks, not
+    against what was observed, so drift is reported for all seven frameworks, not
     just Claude.
     """
     result: dict[str, Any] = {
@@ -595,7 +595,7 @@ def build_framework_placeholders(
 # Unified provider-freshness view (Phase 3): reconcile the automated watcher
 # (latest snapshot: last-fetched + fetch_status + drift) with the manual
 # verification register (references/agent-provider-docs.reference.md: when a human
-# last opened the doc). One view over all six frameworks so "is provider X fresh?"
+# last opened the doc). One view over all seven frameworks so "is provider X fresh?"
 # has a single answer, and coverage gaps (a framework we emit but never registered
 # for human verification) are visible instead of silent.
 # ---------------------------------------------------------------------------

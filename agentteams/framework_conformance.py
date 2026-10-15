@@ -249,7 +249,7 @@ def run_agent_conformance_check(
     _write_agent_check_ledger(repo_root, ledger)
 
     if not needs_action:
-        message = "no upstream drift or relocation observed across the six frameworks; no action."
+        message = "no upstream drift or relocation observed across the seven frameworks; no action."
     elif already_routed:
         message = f"drift already routed for signature {drift_signature}; no new routing needed."
     else:

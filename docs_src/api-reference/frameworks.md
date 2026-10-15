@@ -374,7 +374,7 @@ Adapter for the OpenAI Codex CLI. Emits each agent as a Codex **custom agent**, 
 
 > *Source: `agentteams/frameworks/grok.py`* (helpers: `_grok_tool_scoping.py`, `_agents_md_ownership.py`, both integrity-pinned)
 
-Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because Grok Build reads Claude Code's agent format. **Beta, generate-only.**
+Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because Grok Build reads Claude Code's agent format. **Beta.**
 
 - **framework_id:** `'grok'`
 - **Output format:**

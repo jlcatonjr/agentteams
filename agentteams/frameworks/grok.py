@@ -21,8 +21,9 @@ and tmp/by-week/2026-W42/grok-integration.plan.md §9 for evidence):
   ``.claude/CLAUDE.md`` together. The team brief goes in the shared ``AGENTS.md`` (operator decision D2), whose
   ownership rules live in :mod:`._agents_md_ownership`.
 
-Generate-only in this release: convert / bridge / interop / absorb flows refuse ``grok`` (``cli/parser_validate``),
-and ``write_policy: "orchestrator-only"`` is refused (``write_policy.py``).
+Codex posture (Phase 3): an interop target and source and an absorb source (``agentteams/_interop_grok.py``);
+convert and bridge refuse ``grok`` (``cli/parser_validate``), and ``write_policy: "orchestrator-only"`` is refused
+(``write_policy.py``).
 """
 
 from __future__ import annotations
