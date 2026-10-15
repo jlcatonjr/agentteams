@@ -252,7 +252,6 @@ def strip_fence(text: str, fence_id: str) -> str:
     return re.sub(rf"\n*{fence_pattern(fence_id).pattern}\n*", "\n\n", text, flags=re.DOTALL)
 
 
-
 #: Goose's opt-in for an AGENTS.md it does not own: there is no adopt flag (a standing way to relax the guard,
 #: @security step-10 ruling), the operator removes the file and re-renders.
 _GOOSE_OPT_IN = "To hand it to goose, remove AGENTS.md and re-render."

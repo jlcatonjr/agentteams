@@ -27,7 +27,8 @@ CODEX_TEXT = f"{own.CODEX_AGENTS_MD_MARKER} x -->\n\n# Codex brief\n"
 GROK_TEXT = f"{GROK_AGENTS_MD_NOTICE}\n\n# Grok brief\n\n{grok_runtime_block()}\n"
 NEUTRAL_TEXT = f"{own.NEUTRAL_AGENTS_MD_MARKER} x -->\n\n# Neutral brief\n"
 HAND_TEXT = "# Our project\n\nHand-written rules.\n"
-LEGACY_FENCED = "# Brief\n\n<!-- AGENTTEAMS:BEGIN constitutional_rules v=1 -->\nrules\n<!-- AGENTTEAMS:END constitutional_rules -->\n"
+LEGACY_FENCED = ("# Brief\n\n<!-- AGENTTEAMS:BEGIN constitutional_rules v=1 -->\nrules\n"
+                 "<!-- AGENTTEAMS:END constitutional_rules -->\n")
 
 
 def _recipes(root: Path) -> Path:
@@ -188,6 +189,18 @@ def test_convert_overwrite_never_replaces_a_file_goose_does_not_own(tmp_path: Pa
                        project_manifest={"project_name": "P"}, overwrite=True)
     assert (project / "AGENTS.md").read_text(encoding="utf-8") == text
     assert any("untouched" in s for s in res.skipped)
+
+
+@pytest.mark.parametrize("text", [GOOSE_TEXT, HAND_TEXT])
+def test_convert_overwrite_to_codex_never_replaces_a_file_codex_does_not_own(tmp_path: Path, text: str) -> None:
+    # Convert now runs every adapter's instructions guard, codex's included (CHANGELOG behaviour change).
+    project = tmp_path / "proj"
+    codex_out = project / ".codex" / "agents"
+    codex_out.mkdir(parents=True)
+    (project / "AGENTS.md").write_text(text, encoding="utf-8")
+    convert_team(_copilot_source(tmp_path), codex_out, "codex", project_manifest={"project_name": "P"},
+                 overwrite=True)
+    assert (project / "AGENTS.md").read_text(encoding="utf-8") == text
 
 
 def test_convert_writes_a_goose_owned_file(tmp_path: Path) -> None:

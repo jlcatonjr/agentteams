@@ -240,6 +240,9 @@ def _task_prompt(manifest: dict[str, Any],
     return f"{explicit}\n\n{runtime}" if explicit else runtime
 
 
+#: The repo-root AGENTS.md, relative to the recipes dir (``.goose/recipes``).
+_AGENTS_MD_REL = "../../AGENTS.md"
+
 #: Goose's AGENTS.md ownership notice; its first characters are the marker ``classify_agents_md`` checks.
 GOOSE_AGENTS_MD_NOTICE = (
     f"{GOOSE_AGENTS_MD_MARKER} Goose reads it (with .goosehints) from the repo root; the specialist agents are "
@@ -423,10 +426,10 @@ class GooseAdapter(FrameworkAdapter):
         notices: list[str] = []
         out_dir = Path(os.path.normpath(output_dir))
         for rel_path, content in rendered_files:
-            target = Path(os.path.normpath(out_dir / rel_path))
-            if target.name != "AGENTS.md" or rel_path != "../../AGENTS.md":
+            if rel_path != _AGENTS_MD_REL:
                 kept.append((rel_path, content))
                 continue
+            target = Path(os.path.normpath(out_dir / rel_path))
             linked = symlink_on_path(out_dir, target.parent)
             if linked is not None:
                 notices.append(f"{target}: left untouched; {linked} is a symlink, so the goose recipes dir may "
@@ -628,7 +631,7 @@ class GooseAdapter(FrameworkAdapter):
         repo root is two levels up.
         """
         if file_type == "instructions" and rel_path.endswith("copilot-instructions.md"):
-            return "../../AGENTS.md"
+            return _AGENTS_MD_REL
         return super().finalize_output_path(rel_path, file_type)
 
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
