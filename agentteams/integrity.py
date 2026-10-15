@@ -45,6 +45,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                          # imports its enforcement from here, so it carries the
                                          # same constitutional weight and must be tracked too.
     "agentteams/cli/decision_chain.py",  # the decisions log's hash chain (deletion detection)
+    "agentteams/cli/action_ids.py",      # C-2/C-5: which rows clear an action, which HALTs block it
     "agentteams/scan.py",                # C-4: the deterministic content scanner
     "agentteams/fences.py",              # C-1: fence restore, template-authoritative set
     "agentteams/unfenced.py",            # C-1: constraint ratchet

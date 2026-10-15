@@ -204,3 +204,66 @@ def test_authorizing_row_outside_its_scope_is_rejected(tmp_path):
         dl._assert_authorizing_row_is_authentic(
             row, output_dir=tmp_path, signing_active=False, action="prune"
         )
+
+
+# ---------------------------------------------------------------------------
+# A HALT blocks every action named in its id (1.0 must-fix, mathAgents M6)
+# ---------------------------------------------------------------------------
+
+def test_a_halt_named_for_an_instance_blocks_the_action(tmp_path):
+    """SENSITIVITY: a HALT recorded as m6-overwrite-render-x used to miss `overwrite` (prefix match only)."""
+    _write_decisions_log(tmp_path, [_row("m6-overwrite-render-1a2fad6", "HALT")])
+    with pytest.raises(RuntimeError, match="never been retracted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_prefix_halt_still_blocks(tmp_path):
+    _write_decisions_log(tmp_path, [_row("overwrite-replay-record-1", "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_token_is_matched_whole_not_as_a_substring(tmp_path):
+    """NEGATIVE CONTROL: `overwrites` and `overwritefoo` do not name `overwrite`."""
+    _write_decisions_log(tmp_path, [_row("m6-overwrites-x", "HALT"), _row("overwritefoo", "HALT")])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+def test_a_multi_token_action_must_appear_as_a_run(tmp_path):
+    _write_decisions_log(tmp_path, [_row("m6-fleet-update-r3", "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action="fleet-update")
+    dl._assert_no_unretracted_halt(tmp_path, action="update-fleet")  # wrong order: no match
+
+
+def test_an_instance_named_pass_still_does_not_clear_the_action():
+    """The clearing side stays strict: widening it would let a row named for one thing clear another."""
+    assert not dl._action_matches("m6-overwrite-render-1a2fad6", "overwrite")
+
+
+def test_a_family_retraction_does_not_clear_a_token_only_halt(tmp_path):
+    """Retracting plain `overwrite` must not silently retract an instance-specific HALT."""
+    _write_decisions_log(tmp_path, [
+        _row("m6-overwrite-render-1a2fad6", "HALT"),
+        _row("overwrite", "HALT-RETRACTED", conditions="unrelated retraction", timestamp="2026-02-01T00:00:00Z"),
+    ])
+    with pytest.raises(RuntimeError, match="never been retracted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_the_halts_own_id_retracts_it(tmp_path):
+    _write_decisions_log(tmp_path, [
+        _row("m6-overwrite-render-1a2fad6", "HALT"),
+        _row("m6-overwrite-render-1a2fad6", "HALT-RETRACTED", conditions="operator cleared in session",
+             timestamp="2026-02-01T00:00:00Z"),
+    ])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+def test_a_family_retraction_still_clears_prefix_halts(tmp_path):
+    """Unchanged behaviour: a retraction for the action clears HALTs that prefix-match it."""
+    _write_decisions_log(tmp_path, [
+        _row("overwrite-001", "HALT"),
+        _row("overwrite", "HALT-RETRACTED", conditions="no longer applies", timestamp="2026-02-01T00:00:00Z"),
+    ])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise

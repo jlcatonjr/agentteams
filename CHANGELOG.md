@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (a HALT blocks every action named in its id; 1.0 must-fix from the mathAgents M6 pilot)
+
+- **C-2 bypass by spelling.** The HALT scan used the clearing-side prefix match, so a HALT recorded for an
+  instance, such as `m6-overwrite-render-1a2fad6`, never blocked `overwrite`. In the M6 run, an older, unconsumed
+  `overwrite` PASS then cleared the action instead.
+- **The fix.** A HALT now also matches when the action id appears as a whole token run in the HALT's id. Tokens
+  are split on `- _ . : /` and whitespace. It errs wide, because a false match only blocks.
+  - A HALT matched only by token is retracted only by a `HALT-RETRACTED` row with that HALT's exact id. So
+    retracting plain `overwrite` does not clear an instance-specific HALT.
+  - Prefix-matched HALTs keep their existing retraction behaviour.
+  - The clearing side (`action_matches`) is unchanged and strict.
+- **New pinned module.** The matchers move to `agentteams/cli/action_ids.py`. `decision_log._action_matches`
+  stays as an alias.
+- **The refusal message** now says that a HALT blocks every action named in its id.
+- **Documented known limitations,** also from M6:
+  - **Clearance binding.** A clearance binds to the newest row whose id starts with the action id. So a
+    differently named clearance never binds, and an older, unconsumed single-use row can clear instead. Name
+    clearances `<action>-<instance>` and restrict them with the `scope` column; prose scope is not enforced.
+  - **`conditions_verified`.** A CONDITIONAL PASS requires `conditions_verified` to be exactly `verified`. Put
+    the evidence in `evidence`.
+- **Re-pinned:** `cli/decision_log.py`, `integrity.py`, and the new `cli/action_ids.py`.
+
 ### fix (1.0 must-fix set: decision-log chain and migration, stale intel, retrieval write, loadable sidecars)
 
 The five defects the 1.0 release triage classed must-fix (release-branch-adoption step 4).
