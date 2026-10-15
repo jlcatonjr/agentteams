@@ -434,7 +434,13 @@ Core; `agentteams/templates/universal/security.template.md`;
 4. **Honest ceiling (E4):** it does not escape a determined multi-file tamper — an attacker who edits
    `scan.py` can also edit the manifest and this hook; it **raises the cost from one edit to three,
    each visible in git**. The hook file is itself one of the `denyWrite`-protected paths (S18).
-**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+5. **Decision log (opt-in) is evidence, not a boundary.** `AGENTTEAMS_GATE_LOG` (an absolute path outside
+   the project, judged from the hook's working directory, and outside any git work tree) appends one JSON
+   line per call: ids, decision, a fixed `reason_id`, scanner categories and line numbers, `checked`, the
+   installed hook's sha256 and a `prev_sha` chain — never written content, free-text reasons or exception
+   text. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed `input_hmac`. A log failure never changes the decision; a
+   missing line is no evidence, never a pass.
+**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py`.
 **Dial.** R Full · D Full · S Core · E Light.
 
 ---

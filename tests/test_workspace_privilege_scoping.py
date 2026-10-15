@@ -10,6 +10,7 @@ Covers the opt-in ``claude:sandbox`` host feature and ``privilege_profile``:
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
@@ -779,7 +780,7 @@ def _load_hook_module():
     return mod
 
 
-def _boom():
+def _boom(_payload=None):
     raise RuntimeError("boom")
 
 
@@ -787,9 +788,10 @@ def test_cc2_hook_entrypoint_fail_closed_denies_on_crash(monkeypatch, capsys):
     mod = _load_hook_module()
     mod._FAIL_CLOSED_ON_ERROR = True
     monkeypatch.setattr(mod, "main", _boom)
+    monkeypatch.setattr(mod.sys, "stdin", io.StringIO("{}"))  # _entrypoint reads the payload
     with pytest.raises(SystemExit) as ei:
         mod._entrypoint()
-    assert ei.value.code == 0  # _decide emits a deny decision and exits 0 (the block contract)
+    assert ei.value.code == 0  # _emit writes the deny decision; the process exits 0 (the block contract)
     out = capsys.readouterr().out
     assert '"permissionDecision": "deny"' in out
     assert "failing closed" in out
@@ -799,6 +801,7 @@ def test_cc2_hook_entrypoint_fail_open_reraises_on_crash(monkeypatch):
     mod = _load_hook_module()
     mod._FAIL_CLOSED_ON_ERROR = False
     monkeypatch.setattr(mod, "main", _boom)
+    monkeypatch.setattr(mod.sys, "stdin", io.StringIO("{}"))
     with pytest.raises(RuntimeError):
         mod._entrypoint()  # fail-open: the error propagates (harness treats it as allow)
 

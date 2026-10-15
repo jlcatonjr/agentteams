@@ -23,8 +23,7 @@ past it (probe E4).
 internal error — an attacker who can make it crash gets an allow. That is accepted for a
 COOPERATIVE workspace, because a hook that can brick an operator's session gets deleted, and a
 deleted hook enforces nothing. The mitigation is `agentteams.integrity`, which pins the scanner
-it calls (this file itself is not in the manifest — a gap recorded 2026-08-16 in the remediation
-log). For a CONFINED/EXCLUSIVE `privilege_profile`, agentteams emits this hook with
+it calls and this file itself (both are in ``ENFORCEMENT_MODULES``). For a CONFINED/EXCLUSIVE `privilege_profile`, agentteams emits this hook with
 `_FAIL_CLOSED_ON_ERROR = True` (see the entry point), so a crash instead emits a `deny` rather
 than a silent allow — the operator opted into a boundary, so a gate crash must not drop it.
 `--allow-fallback-fail-open` restores the fail-open default even for those profiles.
@@ -33,7 +32,16 @@ The default fail-open is supplied by the HARNESS, not by a catch-all: a PreToolU
 with any code other than 0 or 2 is a non-blocking error and the action proceeds. The single
 `except` in `_entrypoint` is a process-boundary handler that ACTS (emits a deny) and reports —
 not a swallow (CH-24) — and runs only under the fail-closed policy. A verdict is expressed as
-JSON on stdout with exit 0; the fail-closed belt additionally uses exit code 2.
+JSON on stdout with exit 0, on the crash-deny path too.
+
+**Decision log (opt-in).** With ``AGENTTEAMS_GATE_LOG`` set to an absolute path outside the
+project and outside any git work tree, every invocation appends one JSON line: ids, tool name,
+decision, a fixed ``reason_id``, scanner categories and line numbers, what was ``checked``, and a
+``prev_sha`` hash chain. It never records written content, the free-text reason or an exception
+message. ``AGENTTEAMS_GATE_LOG_KEY``, when set, adds a keyed ``input_hmac`` of the canonical
+``tool_input``. The log is evidence, not the boundary: a failure to write it never changes the
+decision, and a missing line means "no evidence", never "pass". ``gate_sha256`` is the hash of
+this installed file, so it differs between the fail-open and fail-closed renders.
 
 Input:  a JSON tool-call payload on stdin (``tool_name``, ``tool_input``).
 Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when acting.
@@ -41,11 +49,21 @@ Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when actin
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
+import os
 import re
 import shlex
+import stat
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+try:  # POSIX only; without it the log is still written but not chained
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None  # type: ignore[assignment]
 
 HOOK_EVENT = "PreToolUse"
 
@@ -297,8 +315,24 @@ def _command_name_trigger(command: str) -> str | None:
     return None
 
 
-def _decide(decision: str, reason: str) -> None:
-    """Emit a hook decision and exit 0. Exit 0 + JSON is the structured-decision contract."""
+class _Verdict(Exception):
+    """A decision reached by :func:`main`; :func:`_entrypoint` emits and logs it once."""
+
+    def __init__(self, decision: str, reason: str, reason_id: str, checked: str,
+                 categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+        super().__init__(reason_id)
+        self.decision, self.reason, self.reason_id = decision, reason, reason_id
+        self.checked, self.categories, self.lines = checked, categories, lines
+
+
+def _decide(decision: str, reason: str, reason_id: str, checked: str,
+            categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+    """Stop the gate with a decision; :func:`_entrypoint` emits it on stdout and logs it."""
+    raise _Verdict(decision, reason, reason_id, checked, categories, lines)
+
+
+def _emit(decision: str, reason: str) -> None:
+    """Write a hook decision to stdout. Exit 0 + JSON is the structured-decision contract."""
     json.dump(
         {
             "hookSpecificOutput": {
@@ -310,7 +344,7 @@ def _decide(decision: str, reason: str) -> None:
         sys.stdout,
     )
     sys.stdout.write("\n")
-    raise SystemExit(0)
+    sys.stdout.flush()
 
 
 def _written_content(tool_name: str, tool_input: dict) -> tuple[str, str]:
@@ -327,15 +361,25 @@ def _written_content(tool_name: str, tool_input: dict) -> tuple[str, str]:
     return "", ""
 
 
-def main() -> int:
-    payload = json.load(sys.stdin)
+def main(payload: object) -> str:
+    """Evaluate one tool-call payload.
+
+    Args:
+        payload: The parsed PreToolUse JSON payload.
+
+    Returns:
+        What was checked when no decision was reached (``bash-triggers``, ``scan`` or ``none``).
+
+    Raises:
+        _Verdict: When the gate reaches a decision.
+    """
     if not isinstance(payload, dict):
-        return 0
+        return "none"
 
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input") or {}
     if not isinstance(tool_input, dict):
-        return 0
+        return "none"
 
     if tool_name == "Bash":
         # A backslash-newline is a line continuation to the shell; join it so no pattern is split by one.
@@ -346,8 +390,9 @@ def main() -> int:
                 "ask",
                 f"Mandatory Review Trigger: {why}. C-5 requires a recorded clearance BEFORE "
                 f"execution, not after. Approve only if this is the operation you intended.",
+                "bash-trigger", "bash-triggers",
             )
-        return 0
+        return "bash-triggers"
 
     if tool_name in _WRITE_TOOLS:
         content, target = _written_content(tool_name, tool_input)
@@ -357,8 +402,8 @@ def main() -> int:
         git_config = bool(_GIT_CONFIG_PATH.search(str(target)))
         if not content:
             if git_config:
-                _ask_git_config()
-            return 0
+                _ask_git_config("git-config")
+            return "none"
 
         # Verify the scanner before trusting its verdict. Without this the hook faithfully asks
         # a possibly-tampered module whether the write is safe, which is the E4 failure wearing
@@ -394,6 +439,7 @@ def main() -> int:
                 + "; ".join(f.describe() for f in tampered)
                 + "). Its verdict on this write cannot be trusted. Regenerate the manifest if "
                 "you changed scan.py deliberately, or investigate.",
+                "scanner-unverified", "none",
             )
 
         from agentteams.scan import scan_content, verdict_for_findings
@@ -406,16 +452,108 @@ def main() -> int:
                 f"agentteams.scan returned HALT ({verdict_for_findings(findings)}) for this "
                 f"write: {detail}. Rule S-1/S-5/S-8 apply to any committed file. Remove the "
                 f"flagged content rather than re-issuing the write.",
+                "scan-high", "scan",
+                tuple(str(f.category) for f in high[:3]), tuple(int(f.line) for f in high[:3]),
             )
         if git_config:
-            _ask_git_config()
-    return 0
+            _ask_git_config("scan")
+        return "scan"
+    return "none"
 
 
-def _ask_git_config() -> None:
+def _ask_git_config(checked: str) -> None:
     """Route a write to a git config file to the operator (Rule S-9 criterion 6)."""
     _decide("ask", "Mandatory Review Trigger: a write to a git config file can add or repoint a remote "
-                   "(Rule S-9 criterion 6). Approve only if this is the change you intended.")
+                   "(Rule S-9 criterion 6). Approve only if this is the change you intended.",
+            "git-config", checked)
+
+
+#: Bounds on what the decision log copies from the payload (ids are harness-generated, but bounded anyway).
+_LOG_ID_MAX = 200
+#: How far back from the end of the log to look for the previous line when chaining.
+_LOG_TAIL_BYTES = 65536
+
+
+def _log_target(raw: str) -> Path:
+    """Validate the ``AGENTTEAMS_GATE_LOG`` path; raise ValueError when it must not be used."""
+    path = Path(raw)
+    if not path.is_absolute():
+        raise ValueError("path is not absolute")
+    parent = path.parent.resolve()
+    project = Path.cwd().resolve()
+    if parent == project or project in parent.parents:
+        raise ValueError("path is inside the project")
+    for directory in (parent, *parent.parents):
+        if (directory / ".git").exists():
+            raise ValueError("path is inside a git work tree")
+    return parent / path.name
+
+
+def _input_hmac(tool_input: object) -> str | None:
+    """Keyed digest of the canonical ``tool_input``, or None when no key is configured."""
+    key = os.environ.get("AGENTTEAMS_GATE_LOG_KEY", "")
+    if not key:
+        return None
+    canonical = json.dumps(tool_input, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
+    return hmac.new(key.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _bounded_id(value: object) -> str | None:
+    return value[:_LOG_ID_MAX] if isinstance(value, str) else None
+
+
+def _append_chained(target: Path, record: dict) -> None:
+    """Append one record as a single line, chained to the previous line under an exclusive lock."""
+    flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(str(target), flags, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("log path is not a regular file")
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            size = os.lseek(fd, 0, os.SEEK_END)
+            start = max(0, size - _LOG_TAIL_BYTES)
+            os.lseek(fd, start, os.SEEK_SET)
+            tail = os.read(fd, size - start).rstrip(b"\n")
+            last = tail.rsplit(b"\n", 1)[-1] if tail else b""
+            record["prev_sha"] = hashlib.sha256(last).hexdigest() if last else None
+            record["chain"] = "ok"
+        else:
+            record["prev_sha"], record["chain"] = None, "unavailable"
+        line = json.dumps(record, sort_keys=True, ensure_ascii=True, default=str) + "\n"
+        os.write(fd, line.encode("ascii"))
+    finally:
+        os.close(fd)  # closing the descriptor releases the flock
+
+
+def _log_decision(payload: object, decision: str, reason_id: str | None, checked: str,
+                  categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
+    """Append this invocation's record when ``AGENTTEAMS_GATE_LOG`` is set; never raises OSError/ValueError."""
+    raw = os.environ.get("AGENTTEAMS_GATE_LOG", "")
+    if not raw:
+        return
+    fields = payload if isinstance(payload, dict) else {}
+    try:
+        target = _log_target(raw)
+        record = {
+            "v": 1,
+            "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            "session_id": _bounded_id(fields.get("session_id")),
+            "tool_use_id": _bounded_id(fields.get("tool_use_id")),
+            "tool_name": _bounded_id(fields.get("tool_name")),
+            "hook_event": HOOK_EVENT,
+            "decision": decision,
+            "reason_id": reason_id,
+            "checked": checked,
+            "categories": list(categories),
+            "lines": list(lines),
+            "fail_closed": _FAIL_CLOSED_ON_ERROR,
+            "gate_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+            "input_hmac": _input_hmac(fields.get("tool_input")),
+        }
+        _append_chained(target, record)
+    except (OSError, ValueError, RuntimeError) as exc:  # RuntimeError: resolve() on a symlink loop, py<3.13
+        sys.stderr.write(f"constitutional-gate: decision log not written ({type(exc).__name__}: {exc})\n")
 
 
 #: CC-2: agentteams flips this to True at emit time for a confined/exclusive
@@ -438,24 +576,37 @@ def _entrypoint() -> int:
     ``deny`` decision, so a gate crash cannot become a silent allow in a workspace that
     explicitly opted into a boundary.
 
+    Every path records exactly one decision-log line, after stdout is written (see the module
+    docstring; the log is opt-in and never changes the decision).
+
     Returns:
-        The exit code from :func:`main` on the normal path.
+        0 when no decision was reached. A decision (and a fail-closed crash) is written to stdout
+        and ends the process with ``SystemExit(0)``.
     """
+    payload: object = None
     try:
-        return main()
-    except SystemExit:
-        raise
+        payload = json.load(sys.stdin)
+        checked = main(payload)
+    except _Verdict as verdict:
+        _emit(verdict.decision, verdict.reason)
+        _log_decision(payload, verdict.decision, verdict.reason_id, verdict.checked,
+                      verdict.categories, verdict.lines)
+        raise SystemExit(0)
     except Exception as exc:  # process-boundary handler: acts (deny) + reports, never swallows
         if not _FAIL_CLOSED_ON_ERROR:
+            _log_decision(payload, "crash-open", "crash", "none")
             raise
-        _decide(
+        _emit(
             "deny",
             f"the constitutional gate crashed ({type(exc).__name__}: {exc}); failing closed "
             "because this workspace uses a confined/exclusive privilege_profile — a gate "
             "crash must not become a silent allow. Fix the gate, or regenerate with "
             "--allow-fallback-fail-open to restore the harness fail-open default.",
         )
-        raise SystemExit(2)  # belt: if _decide's exit-0 deny contract ever changes, still block
+        _log_decision(payload, "crash-deny", "crash", "none")
+        raise SystemExit(0)  # exit 0 + the deny JSON is the structured-decision contract
+    _log_decision(payload, "pass", None, checked)
+    return 0
 
 
 if __name__ == "__main__":

@@ -153,8 +153,15 @@ paths of S18 (a further, Linux-deny-tested obstacle to that third edit) — but 
 residual ceiling stands: composed layers raise cost and make tampering evident,
 they do not eliminate it.
 
+**Decision log (opt-in).** Set `AGENTTEAMS_GATE_LOG` to an absolute path outside the
+project and any git work tree, and the hook appends one JSON line per call (ids,
+decision, a fixed `reason_id`, scanner categories and line numbers, `checked`, the
+hook's sha256, a `prev_sha` chain). It never logs written content or reason text.
+`AGENTTEAMS_GATE_LOG_KEY` adds a keyed `input_hmac`. Logging never changes a decision;
+a missing line means no evidence, not a pass.
+
 **Source.**
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+`agentteams/templates/universal/hooks/constitutional-gate.py`.
 
 ---
 

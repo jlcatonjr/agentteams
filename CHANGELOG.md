@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (constitutional-gate hook: opt-in per-case decision log)
+
+- The PreToolUse constitutional-gate hook returned its decision on stdout and kept no record of its own, so an
+  injection evaluation could not tell a hook block from a model refusal, or show that the hook checked a call it
+  let through. With `AGENTTEAMS_GATE_LOG` set to an absolute path outside the project and any git work tree, the
+  hook now appends one JSON line per invocation: `tool_use_id`, tool name, decision (`pass`, `ask`, `deny`,
+  `crash-open`, `crash-deny`), a fixed `reason_id`, scanner categories and line numbers, `checked`
+  (`bash-triggers`, `scan`, `git-config` or `none`), `fail_closed`, the installed hook's sha256, and a `prev_sha`
+  chain written under `flock`. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed `input_hmac` of the canonical `tool_input`.
+- The log never holds written content, the free-text reason or exception text: the scanner's message embeds the
+  matched text, so only categories and line numbers are kept. Relative, in-project, in-work-tree, symlinked and
+  non-regular paths are refused with a stderr notice. The log is written after the stdout decision, and a failure
+  to write it never changes the decision. Unset, the hook behaves and prints exactly as before.
+- `main()` now returns what it checked and raises a decision record; `_entrypoint` emits and logs once on every
+  path, including the crash paths. The stale "this file itself is not in the manifest" docstring is corrected.
+- Template and both installed-copy pins re-pinned in `references/enforcement-integrity.json`. Tests:
+  `tests/test_gate_decision_log.py` (incl. a symlink loop in the log path, which raises `RuntimeError` from
+  `Path.resolve()` before Python 3.13 and must not turn a decision into an allow). The two in-process CC-2
+  entry-point tests now pass a payload on stdin, since `_entrypoint` reads it. Docs: `docs_src/cli-reference.md`;
+  security guide S19 in `SKELETON.md` and the reference, developers and researchers editions.
+
 ### fix (merge: a dropped navigator `## Invariant Core` twin no longer takes `### Project Structure` with it)
 
 - The 2026-10-13 fleet audit found navigator's pre-fencing `## Invariant Core` twin dropped together with the

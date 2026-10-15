@@ -611,6 +611,14 @@ environment variable or an `@file`.
 
 CC-2 opt-out. For a `confined`/`exclusive` `privilege_profile`, agentteams emits the constitutional-gate hook **fail-closed**: an unexpected crash in the gate emits a `deny` decision rather than letting the harness fail open (a crash → silent allow), because a workspace that opted into a boundary must not have it silently dropped by a gate error. This flag restores the historical **fail-open** behavior for those profiles — use it only when a buggy gate bricking the session is a worse risk than a missed block. Cooperative teams are unaffected (they are always fail-open) and remain byte-identical.
 
+**Hook decision log (environment, not a flag).** The emitted constitutional-gate hook reads two optional
+environment variables at run time. `AGENTTEAMS_GATE_LOG=<absolute path>` appends one JSON line per hook
+invocation (ids, decision, a fixed `reason_id`, scanner categories and line numbers, `checked`, the installed
+hook's sha256 and a `prev_sha` chain; never written content, free-text reasons or exception text). The path
+must be outside the project and outside any git work tree; otherwise the hook logs nothing and prints a
+notice to stderr. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed HMAC of the canonical `tool_input`. Neither variable
+changes any decision. See the security guide, S19.
+
 ### `--self`
 
 Operate on the module's own agent team using `.github/agents/_build-description.json`. Equivalent to running `agentteams` with the module's internal description file.

@@ -150,6 +150,20 @@ in the brief** — the defaulted `confined` profile does **not** trigger the fli
 the default posture stays fail-open; `--allow-fallback-fail-open` restores open under
 those profiles. Same emit-but-inert posture as S18.
 
+**Decision log (opt-in) — evidence, not a boundary.** With `AGENTTEAMS_GATE_LOG`
+set to an absolute path outside the project and outside any git work tree, the hook
+appends one JSON line per invocation: `tool_use_id`, tool name, decision
+(`pass`/`ask`/`deny`/`crash-open`/`crash-deny`), a fixed `reason_id`, scanner
+categories and line numbers, what it `checked`, the hash of the installed hook, and a
+`prev_sha` chain. It never records written content, the free-text reason or an
+exception message. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed `input_hmac` of the
+canonical `tool_input`. An unsafe path (relative, inside the project or a work tree,
+a symlink, not a regular file) is refused with a stderr notice; a failure to log
+never changes the decision. Read it conservatively: a missing line means no evidence,
+never a pass, and `checked=none` is not evidence the call was inspected. Changing the
+variable in a settings `env` block is a C-3 change; in an evaluation, keep the log
+path on the sandbox `denyWrite` list and under `permissions.deny` for Write/Edit.
+
 **Honest ceiling (E4) — cost, not impossibility.** This is the residual risk that
 sits at the center of the whole stack's honesty. The hook does **not** escape a
 determined multi-file tamper: an attacker who can edit the scanner can also edit
@@ -162,7 +176,7 @@ raise cost and make tampering evident; they do not eliminate it. Full mechanism:
 Edition R, S19.
 
 **Source.**
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+`agentteams/templates/universal/hooks/constitutional-gate.py`.
 
 ---
 
