@@ -17,7 +17,7 @@ from agentteams.memory_index import RETRIEVAL_CONTENT_AUTHORITY as CONTENT_AUTHO
 
 SERVER_NAME = "agentteams-recall"
 #: Where a team's ``references/`` may live, relative to the project root, in the order searched.
-TEAM_DIRS: tuple[str, ...] = (".", ".claude/agents", ".github/agents", ".goose", ".codex/agents")
+TEAM_DIRS: tuple[str, ...] = (".", ".claude/agents", ".github/agents", ".goose", ".codex/agents", ".grok/agents")
 MAX_K = 20
 _KINDS = ("all", "local", "api", "doc")
 #: Hit fields passed through (whatever the scorer returns beyond these is dropped); snippets are capped.

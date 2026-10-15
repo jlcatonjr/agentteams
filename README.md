@@ -128,6 +128,8 @@ Framework-specific default output directories:
 - `copilot-cli` → `<project>/.github/agents/` (same directory as `copilot-vscode` — see the caution below)
 - `claude` → `<project>/.claude/agents/`
 - `goose` → `<project>/.goose/recipes/` (team brief written to repo-root `AGENTS.md` + `.goosehints`)
+- `codex` → `<project>/.codex/agents/` (custom-agent TOML; team brief in repo-root `AGENTS.md`)
+- `grok` → `<project>/.grok/agents/` (Grok Build custom agents; team brief in repo-root `AGENTS.md`)
 
 ### 4. Review SETUP-REQUIRED.md
 
@@ -154,6 +156,10 @@ See the [Agent-Assisted Setup guide](https://jlcatonjr.github.io/agentteams/agen
 | `claude` | Claude Code front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | Claude Code system prompt |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Native inline (orchestrator `sub_recipes`; specialists `summon` `load`) | `team-builder.yaml` recipe |
 | `agents-md` | Cross-tool **AGENTS.md** standard (plain `.md`) | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
+| `codex` | Codex custom-agent TOML (`.codex/agents/*.toml`) + repo-root `AGENTS.md` | Native (translated into each agent's `developer_instructions`) | `.codex/agents/team-builder.toml` |
+| `grok` **(beta)** | Grok Build custom agents (`.grok/agents/*.md`, Claude-compatible front matter) + repo-root `AGENTS.md` | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | `.grok/agents/team-builder.md` |
+
+> **Grok support is in beta (generate-only).** `--framework grok` targets xAI's Grok Build CLI (`grok`). Every agent carries `injectDefaultTools: false` and `mcpInheritance: none`, so its `tools:` list is the exact limit. Agent `name:` values match the Claude render, so a `.grok/agents` file shadows its `.claude/agents` twin (Grok always loads `.claude/agents`). The repo-root `AGENTS.md` is shared: Grok writes it in full only when absent or its own, otherwise refreshes just its `grok_runtime` block, and never writes a hand-written one. Grok loads project instructions only in a trusted folder (`grok --trust`). Convert, bridge, interop and absorb flows do not accept `grok` yet. See [`references/grok-agent-infrastructure-expert.md`](references/grok-agent-infrastructure-expert.md).
 
 > **Goose support is in beta.** Generate, convert, and bridge are supported and validated against the Goose CLI; interop-to-Goose is not yet supported, and converting from `claude`/`copilot-cli` sources currently yields flat (un-delegated) recipes pending handoff-recovery work. The `goose` adapter API is not yet covered by the [stability policy](STABILITY.md).
 
@@ -171,6 +177,8 @@ Default framework locations:
 - `claude`: agents in `.claude/agents/`, instructions in `.claude/CLAUDE.md`
 - `goose`: recipes in `.goose/recipes/`, team brief in repo-root `AGENTS.md` (+ `.goosehints` integrator)
 - `agents-md`: repo-root `AGENTS.md` (the cross-tool standard) plus per-specialist detail under `.agents/`
+- `codex`: custom agents in `.codex/agents/*.toml`, team brief in repo-root `AGENTS.md` (written only when absent or Codex-generated)
+- `grok`: custom agents in `.grok/agents/*.md`, team brief in repo-root `AGENTS.md` (co-owned; see Framework Support)
 
 ## Three Build Paths
 
@@ -341,7 +349,7 @@ are always complete.
 Most-used options:
   --description PATH   Project description (.json or .md) [required]
   --project     PATH   Project directory to scan
-  --framework   NAME   copilot-vscode (default) | copilot-cli | claude | goose | agents-md
+  --framework   NAME   copilot-vscode (default) | copilot-cli | claude | goose | agents-md | codex | grok
   --output      DIR    Output directory (default: framework-specific agents dir under <project>)
   --convert-from DIR   Convert an existing team directory into the target --framework
   --interop-from DIR   Run CAI-based interop pipeline from an existing team directory
@@ -627,6 +635,9 @@ agentteams --description brief.json --project ~/code/myproject --framework copil
 
 # Goose recipes (.goose/recipes/*.yaml + repo-root AGENTS.md/.goosehints)
 agentteams --description brief.json --project ~/code/myproject --framework goose
+
+# xAI Grok Build custom agents (.grok/agents/*.md + repo-root AGENTS.md)
+agentteams --description brief.json --project ~/code/myproject --framework grok
 ```
 
 See [Framework Support](#framework-support) for output format differences.

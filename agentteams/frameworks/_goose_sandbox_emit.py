@@ -265,6 +265,7 @@ def _build_seatbelt_profile(
     """
     from agentteams.frameworks._sandbox_emit import (
         CODEX_CONFIG_REL,
+        GROK_CONFIG_RELS,
         GRANT_ROSTER_PROJECT_REL,
         assert_roots_clear_of_signing_keys,
         control_plane_ancestors,
@@ -346,9 +347,10 @@ def _build_seatbelt_profile(
     # Unconditional: a deny on a missing path also stops the agent creating it. Their ancestor
     # rename literals: `.codex` always (like `.claude`); `.github` only with a copilot team present.
     sib = {k: [*protected_write_paths(k), *governed_roster_paths(k), team_marker_path(k)]
-           for k in ("copilot", "codex")}
+           for k in ("copilot", "codex", "grok")}
     sib["codex"].append(CODEX_CONFIG_REL)
-    anc_paths = [*control_plane, *sib["codex"], *(sib["copilot"] if copilot_present else [])]
+    sib["grok"].extend(GROK_CONFIG_RELS)
+    anc_paths = [*control_plane, *sib["codex"], *sib["grok"], *(sib["copilot"] if copilot_present else [])]
     # 2026-09-30 (#87, found by the first macOS sandbox-exec run): the WHOLE `.claude` dir, as the
     # Linux launcher has ro-bound it since #86. Before this only the Claude gate hook was denied, so
     # a goose agent on macOS could flip the claude team's switch, plant a verify key or rewrite the
@@ -357,7 +359,7 @@ def _build_seatbelt_profile(
     # R7 (@security C11): the recipes too, which carry each granted agent's agentteams_runner launch arguments.
     ledger = (".agentteams", ".agentteams-status", ".goose/recipes") if protect_ledger else ()
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
-        *control_plane, framework_config_dir("claude"), *sib["copilot"], *sib["codex"],
+        *control_plane, framework_config_dir("claude"), *sib["copilot"], *sib["codex"], *sib["grok"],
         GRANT_ROSTER_PROJECT_REL, *ledger)) if e]
     lines += [
         ";; --- Control-plane protection (agent may not rewrite its own enforcement) ---",

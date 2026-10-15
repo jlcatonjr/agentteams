@@ -76,7 +76,7 @@ PROJECTION_NOTE = (
 PIPELINE_NOTES: frozenset[str] = frozenset({NATIVE_NOTE, PROJECTION_NOTE})
 
 #: Project-relative team dirs a native render may have projected siblings in.
-TEAM_DIRS: tuple[str, ...] = (".github/agents", ".claude/agents", ".goose/recipes", ".codex/agents")
+TEAM_DIRS: tuple[str, ...] = (".github/agents", ".claude/agents", ".goose/recipes", ".codex/agents", ".grok/agents")
 
 #: Unanchored: a caller may prefix the line (``[codex] ``, ``Notice:``); a false match only adds a
 #: REVIEW, a missed one would hide a relax.

@@ -103,8 +103,11 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         *_sibling_rules(".github/agents"),
         *_sibling_rules(".codex/agents"),
         *_sibling_rules(".goose/recipes"),
+        *_sibling_rules(".grok/agents"),  # 2026-10-14: grok team dir (plan §11 condition 4)
         "Edit(/.goose/sandbox.sb)",
         "Edit(/.codex/config.toml)",
+        "Edit(/.grok/config.toml)",
+        "Edit(/.grok/sandbox.toml)",
     ]
     assert "Edit(/.claude/**)" not in permission_deny_rules("claude")
 
@@ -151,6 +154,7 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
     from agentteams.frameworks._sandbox_emit import (
         ALL_TEAM_FRAMEWORKS,
         CODEX_CONFIG_REL,
+        GROK_CONFIG_RELS,
         OPERATOR_EXAMPLE_PATHS,
         framework_config_dir,
         team_agents_dir,
@@ -160,7 +164,7 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
     body = re.search(r"CONTROL_PLANE_REL=\(([^)]*)\)", text).group(1)
     expected = {*(p for fw in ALL_TEAM_FRAMEWORKS for p in protected_write_paths(fw)),
                 *(p for fw in ALL_TEAM_FRAMEWORKS for p in governed_roster_paths(fw)),
-                ".goose/sandbox.sb", CODEX_CONFIG_REL, GRANT_ROSTER_PROJECT_REL,
+                ".goose/sandbox.sb", CODEX_CONFIG_REL, *GROK_CONFIG_RELS, GRANT_ROSTER_PROJECT_REL,
                 *(p for p in OPERATOR_EXAMPLE_PATHS if not p.startswith(".claude/"))}
     assert set(body.split()) == expected
     dirs = re.search(r"CONTROL_PLANE_DIRS_REL=\(([^)]*)\)", text).group(1).split()
@@ -168,7 +172,7 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
     assert re.search(r"^TEAM_MARKER_REL=(\S+)$", text, re.M).group(1) == TEAM_MARKER_REL
     teams = re.search(r"TEAM_DIRS_REL=\(([^)]*)\)", text).group(1).split()
     assert teams == [team_agents_dir(fw) for fw in ALL_TEAM_FRAMEWORKS]
-    assert teams == [".claude/agents", ".goose/recipes", ".github/agents", ".codex/agents"]
+    assert teams == [".claude/agents", ".goose/recipes", ".github/agents", ".codex/agents", ".grok/agents"]
 
 
 # --- mechanism: raw bubblewrap ----------------------------------------------------------------

@@ -61,7 +61,7 @@ INTEROP_ORIGIN = "interop"
 
 #: Registry frameworks whose projection gets a marker. agents-md and canonical have no team-marker
 #: convention; claude is excluded (see the module docstring).
-MARKER_FRAMEWORKS: frozenset[str] = frozenset({"codex", "copilot-vscode", "copilot-cli", "goose"})
+MARKER_FRAMEWORKS: frozenset[str] = frozenset({"codex", "copilot-vscode", "copilot-cli", "goose", "grok"})
 
 
 @dataclass
@@ -154,8 +154,9 @@ def _unsafe_dir(path: Path) -> str:
 
 
 #: Repo-relative source dirs a refresh hint may name (security C4); anything else is ``<source>``.
-#: Every team dir but ``.codex/agents``, which is only ever a projection target.
-_KNOWN_SOURCE_DIRS: frozenset[str] = frozenset(_TEAM_DIRS) - {".codex/agents"}
+#: Every team dir but ``.codex/agents`` (only ever a projection target) and ``.grok/agents`` (grok is
+#: generate-only: never an interop source in this release).
+_KNOWN_SOURCE_DIRS: frozenset[str] = frozenset(_TEAM_DIRS) - {".codex/agents", ".grok/agents"}
 
 
 def safe_source_hint(value: Any) -> str:

@@ -50,7 +50,8 @@
         "claude",
         "goose",
         "agents-md",
-        "codex"
+        "codex",
+        "grok"
       ]
     },
     "primary_output_dir": {

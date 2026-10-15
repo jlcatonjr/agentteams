@@ -29,6 +29,9 @@ PROMPT_ROOT_FILES: tuple[str, ...] = (
 #: Directory prompt roots (project-relative), protected whole.
 PROMPT_ROOT_DIRS: tuple[str, ...] = (
     ".github/instructions", ".github/prompts", ".github/agents", ".codex", ".goose/recipes",
+    # Grok Build: agents, rules, hooks, skills and config all live under .grok; .agents/skills is read as
+    # skills by Grok and Codex (@security step-6 ruling, plan §11 condition 4).
+    ".grok", ".agents/skills",
 )
 #: Protected in every arm only when present at generation (the @security scope decision).
 PROMPT_ROOT_PRESENT_ONLY_DIRS: tuple[str, ...] = (".agentteams",)
@@ -39,8 +42,9 @@ PROMPT_ROOT_COMMENT_LINES: list[str] = [
     "Prompt-root protection (protect_prompt_roots: true, follow-up #8) — permissions.deny also",
     "carries Edit(...) rules for the files other harnesses read as instructions:",
     ".github/copilot-instructions.md, .github/instructions/**, .github/prompts/**,",
-    ".github/agents/**, AGENTS.md, .goosehints, .codex/**, .goose/recipes/**, CLAUDE.md,",
-    "CLAUDE.local.md, .mcp.json, and .agentteams/** when present. denyWrite names only those",
+    ".github/agents/**, AGENTS.md, .goosehints, .codex/**, .goose/recipes/**, .grok/**,",
+    ".agents/skills/**, CLAUDE.md, CLAUDE.local.md, .mcp.json, and .agentteams/** when present.",
+    "denyWrite names only those",
     "that EXISTED at generation (a missing deny path stops bwrap): regenerate after creating",
     "one. .github/workflows is NOT covered. This also stops Claude-sandboxed agents (and an",
     "in-sandbox agentteams --update) authoring Copilot, Codex or goose agents and instructions:",

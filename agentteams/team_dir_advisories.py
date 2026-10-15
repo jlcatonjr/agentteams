@@ -26,7 +26,7 @@ from pathlib import Path
 #: agents dir (project-relative) -> agent-file glob of its framework
 _TEAM_AGENT_GLOBS: dict[str, str] = {
     ".claude/agents": "*.md", ".goose/recipes": "*.yaml",
-    ".github/agents": "*.agent.md", ".codex/agents": "*.toml",
+    ".github/agents": "*.agent.md", ".codex/agents": "*.toml", ".grok/agents": "*.md",
 }
 _MARKER = "references/build-log.json"
 _SWITCH = "references/agent-privilege.json"

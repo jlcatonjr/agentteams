@@ -22,6 +22,7 @@ from agentteams.frameworks.codex import CodexAdapter
 from agentteams.frameworks.copilot_cli import CopilotCLIAdapter
 from agentteams.frameworks.copilot_vscode import CopilotVSCodeAdapter
 from agentteams.frameworks.goose import GooseAdapter
+from agentteams.frameworks.grok import GrokAdapter
 
 FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     "copilot-vscode": CopilotVSCodeAdapter,
@@ -34,6 +35,9 @@ FRAMEWORKS: dict[str, type[FrameworkAdapter]] = {
     # agentteams/codex_mcp_emit.py). The schema framework enums must carry
     # this id too — pinned by tests/test_framework_enum_consistency.py.
     "codex": CodexAdapter,
+    # xAI Grok Build custom agents (.grok/agents/<slug>.md) + a co-owned repo-root AGENTS.md
+    # (frameworks/grok.py, frameworks/_agents_md_ownership.py). Schema enums carry this id too.
+    "grok": GrokAdapter,
 }
 
 # Ordered framework-id list derived from FRAMEWORKS (insertion order).

@@ -456,6 +456,7 @@ _MODULE_OWNED_PATH_FRAGMENTS: tuple[str, ...] = (
     ".goose/recipes/",        # goose
     ".agents/",               # agents-md (and pre-2026-09-29 codex output)
     ".codex/agents/",         # codex custom agents + references
+    ".grok/agents/",          # grok custom agents + references
 )
 
 
