@@ -87,6 +87,37 @@ The five defects the 1.0 release triage classed must-fix (release-branch-adoptio
   `fences.py`, `fence_twins.py`, `shrink_allow.py`, `whole_body_migration.py` and `integrity.py`, plus the new
   `cli/decision_chain.py`.
 
+### feat (memory index: compact layout, and size-capped shards read without reassembly)
+
+- A downstream committed `references/memory-index.json` reached 56.1 MiB, past GitHub's 50 MB warning and
+  heading for its 100 MB rejection. Measured on it: postings were 74% of the file and `indent=2` whitespace about
+  51%; stored paragraph text was 12%. The layout was the problem, not the payload.
+- New `agentteams/memory_index_store.py` owns the on-disk bytes. The index is now written one line per top-level
+  key, document, stored paragraph and postings term: the same JSON object and schema, about half the size
+  (56.1 → 27.4 MiB on that index), still line-diffable. Above 20 MiB (`AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES`
+  overrides it) the documents and postings are packed in order into `memory-index.part-NNNN.json` files, each
+  valid JSON under the cap, and `memory-index.json` becomes a manifest (`artifact_type: memory-index-shards`)
+  recording each part's size and sha256. Indexes under the cap stay one file.
+- Every reader (`--query-index`, `--refresh-index`, the stale check, the recall MCP server) reads the parts
+  directly, so there is no reassembly after a pull and no git hook: hooks do not run in CI, on GitHub or in a fresh
+  clone. A missing, truncated, conflicted or edited part fails the read with `MemoryIndexError` naming it and
+  `--refresh-index`; a partial index is never returned. The manifest can name only exact part names in its own
+  directory; recall confines each part to the project. Hashes ignore `\r`, so Windows/autocrlf checkouts verify.
+- Legacy `indent=2` indexes read unchanged and are rewritten on the next rebuild; writing removes parts the new
+  manifest no longer lists. Readers older than this release reject the manifest (the index schema pins
+  `artifact_type`) instead of reading it as an empty index. The opt-in incremental `sed` path now runs only on a
+  legacy-layout file.
+- Once a repo's index is sharded, every agentteams that writes it should be on this release or later: an older
+  `--refresh-index` writes one large file and leaves the parts; this release warns about such unused parts on read
+  and removes them on its next write. A part that is a symlink out of its directory is refused. An invalid
+  `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES` fails the write. The skipped incremental `sed` path is announced.
+- The scanner's operational-JSON exemption is carved from `scan.py` (it sat at 975 of 1000 lines) into the new
+  integrity-pinned `agentteams/scan_operational.py` (added to `ENFORCEMENT_MODULES`). A shard is exempt from the
+  absolute-path/entropy/placeholder detectors only when it sits in the agents dir's `references/` and the sibling
+  manifest lists it with its current sha256 (Rule 12: the name pattern alone would hand out 9999 exempt names).
+  `scan.py`, `integrity.py` and the new module re-pinned in `references/enforcement-integrity.json`. Docs:
+  `docs_src/api-reference/memory-index-store.md`. Tests: `tests/test_memory_index_store.py`.
+
 ### fix (goose: the shared repo-root AGENTS.md gets an ownership marker and a guard)
 
 - **Behaviour change:** `--framework goose` no longer overwrites or re-fences a repo-root `AGENTS.md` it did not

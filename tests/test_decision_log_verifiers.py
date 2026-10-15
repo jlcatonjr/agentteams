@@ -332,6 +332,8 @@ def test_every_gate_call_site_is_listed():
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
     assert "branch-cleanup" in GATE_ACTIONS and dynamic
+    # A call shape the regex cannot parse would be skipped silently; the count makes such a miss fail.
+    assert sum(len(call.findall(t)) for t in sources.values()) >= 11
 
 
 def test_every_listed_gate_action_is_a_real_gate_call():
