@@ -106,3 +106,40 @@ def test_stale_fix_snapshots_store_agent_files_inert_and_restore(tmp_path):
     (agents / "producer.md").write_text("changed\n")
     assert SR.restore_snapshot(tmp_path, snap) == [".claude/agents/producer.md"]
     assert "tools: Read, Edit, Write" in (agents / "producer.md").read_text()
+
+
+# --- lost-fence sidecars (1.0 must-fix 377) ------------------------------------------------------
+
+
+def test_lost_fence_sidecars_are_inert(tmp_path):
+    from agentteams.fences import _write_lost_fence_sidecars
+
+    agents = _team(tmp_path)
+    res = B.backup_output_dir(agents)
+    body = "---\nname: Ghost\ntools: Read, Edit, Write\n---\nlost body\n"
+    written = _write_lost_fence_sidecars(res.backup_path, "producer.md", {"content": body})
+    assert Path(written["content"]).name == "producer.md.lost.content.md.agentteams-bak"
+    assert not B.loadable_backup_files(agents)
+
+
+def test_restore_never_copies_a_sidecar_into_a_live_path(tmp_path):
+    from agentteams.fences import _write_lost_fence_sidecars
+
+    agents = _team(tmp_path)
+    res = B.backup_output_dir(agents)
+    _write_lost_fence_sidecars(res.backup_path, "producer.md", {"content": "lost body\n"})
+    (res.backup_path / "producer.md.lost.legacy.md").write_text("pre-1.0 name\n")  # old naming too
+    B.restore_backup(res.backup_path, agents)
+    assert not list(agents.glob("*.lost.*"))
+    assert "tools: Read, Edit, Write" in (agents / "producer.md").read_text()
+
+
+def test_legacy_lost_sidecars_are_neutralized(tmp_path):
+    agents = _team(tmp_path)
+    legacy = agents / ".agentteams-backups" / "20260101-000000"
+    legacy.mkdir(parents=True)
+    (legacy / "producer.md.lost.content.md").write_text("old sidecar\n")
+    assert [p.name for p in B.loadable_backup_files(agents)] == ["producer.md.lost.content.md"]
+    B.neutralize_legacy_backups(agents)
+    assert not B.loadable_backup_files(agents)
+    assert (legacy / "producer.md.lost.content.md.agentteams-bak").is_file()

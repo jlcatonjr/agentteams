@@ -123,7 +123,7 @@ def build_report(result: Any, *, backup_path: str | None = None) -> str:
         lines.append("## Prior bodies set aside")
         lines.append("")
         for sid in lost:
-            lines.append(f"- PASS: `{sid}` written to a `.lost.{sid}.md` sidecar")
+            lines.append(f"- PASS: `{sid}` written to a `.lost.{sid}.md.agentteams-bak` sidecar")
         lines.append("")
 
     if skipped_legacy:

@@ -512,7 +512,7 @@ def _resolve_text(text: str, new_regions: Mapping[str, str], source: TwinSource 
         edits += tail_edits
         out.notices.append(
             f"{DROPPED_PREFIX}: {heading!r} (unfenced copy beside fence '{sid}') matched {match}; its text is "
-            f"saved to the .lost.unfenced-{sid}.md sidecar in the backup dir"
+            f"saved to the .lost.unfenced-{sid}.md.agentteams-bak sidecar in the backup dir"
             + (f"; {RETIRED_MARK}: {'; '.join(retired)}" if retired else "") + tail_note)
         out.notices += _duplicate_tail_notices(text, (span[0], cut, span[1]))
     for start, end, insert in sorted(edits, key=lambda e: (e[0], e[1]), reverse=True):
@@ -661,7 +661,7 @@ def resolve(merged: str, new_regions: Mapping[str, str], source: TwinSource | No
 
 
 def persist_dropped(rel_path: str, dropped: Mapping[str, str], backup_path: Path | None) -> list[str]:
-    """Write each dropped twin to ``<backup>/<rel_path>.lost.unfenced-<sid>.md``.
+    """Write each dropped twin to ``<backup>/<rel_path>.lost.unfenced-<sid>.md.agentteams-bak``.
 
     Args:
         rel_path: Output-relative path of the merged file.

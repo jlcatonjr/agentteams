@@ -273,7 +273,7 @@ def test_emit_reports_authoritative_replacement_and_writes_sidecar(tmp_path):
     assert "query_literature_library.py" in (out / rel).read_text(encoding="utf-8")
     notices = [n for n in result.notices if rel in n and "lost concrete refs" in n]
     assert notices and all("retained" not in n and "replaced" in n for n in notices)
-    sidecars = list(backup.rglob("*.lost.content.md"))
+    sidecars = list(backup.rglob("*.lost.content.md.agentteams-bak"))
     assert sidecars and "autosync_gate" in sidecars[0].read_text(encoding="utf-8")
 
 

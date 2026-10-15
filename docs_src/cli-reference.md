@@ -671,7 +671,7 @@ fence as the merge notice prints them, plus a 12-hex digest of the on-disk body 
 example `git-operations.agent.md:content@3f9c0a1b2d4e`. The override applies only while the
 on-disk body still matches that digest. So an entry left in an exported variable, a nested run or
 a CI job cannot release anything you did not review. The released section takes the template
-update, and its old body goes to a `.lost.<fence>.md` sidecar in the backup dir. Overrides are
+update, and its old body goes to a `.lost.<fence>.md.agentteams-bak` sidecar in the backup dir. Overrides are
 refused on a run with no backup dir (`--no-backup`).
 
 **Reviewing.** The guard can't tell a reference the template itself retired from a project's own
@@ -711,7 +711,7 @@ the on-disk fence body relative to the freshly rendered content.
   fences, `authority_hierarchy`/`source_repositories`, and the two retrieval
   references when the brief declares `retrieval_integration`) are never preserved:
   they are replaced, the notice says `replaced`, and the prior body is saved to a
-  `.lost.<sid>.md` sidecar in the backup dir (not saved under `--no-backup`).
+  `.lost.<sid>.md.agentteams-bak` sidecar in the backup dir (not saved under `--no-backup`).
 - `warn` (back-compatible): log the shrink notice into the
   emit notices stream and proceed with the smaller content. The
   notice is also appended to
@@ -735,7 +735,7 @@ is plumbed into both emit code paths (the `--update` branch and the
 post-emit main path).
 
 Under `warn`, the full pre-merge body of every shrunken fence is
-written to `<backup>/<rel_path>.lost.<sid>.md` (the backup is taken
+written to `<backup>/<rel_path>.lost.<sid>.md.agentteams-bak` (the backup is taken
 automatically before the merge) and the shrink Notice is annotated
 with `— recovery: <sidecar-path>` so the operator can recover
 dropped hand-edits without diffing the whole-file backup. The fence

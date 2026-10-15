@@ -68,7 +68,7 @@ protects operator-*enriched* content inside AGENTTEAMS fences from being silentl
 overwritten on `--update --merge`. The detector flags a regenerated body that is
 <50% of the existing length, drops ≥3 list items, or loses concrete file-paths or
 backticked identifiers. Levels: `preserve` (default — keep the enriched body +
-notice), `warn` (write the smaller body but save a `.lost.<sid>.md` recovery
+notice), `warn` (write the smaller body but save a `.lost.<sid>.md.agentteams-bak` recovery
 sidecar), `halt` (refuse the whole-file write), `allow` (write silently).
 
 The security-relevant twist is the **override**: template-authoritative fences

@@ -82,7 +82,7 @@ body that is **<50% of the existing length**, drops **≥3 list items**, or
 | Level | Behaviour on a detected shrink |
 |---|---|
 | **`preserve`** (default) | keeps the enriched body + writes a notice |
-| **`warn`** | writes the smaller body, saves a `.lost.<sid>.md` recovery sidecar |
+| **`warn`** | writes the smaller body, saves a `.lost.<sid>.md.agentteams-bak` recovery sidecar |
 | **`halt`** | refuses the whole-file write |
 | **`allow`** | writes the smaller body silently |
 

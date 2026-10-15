@@ -114,6 +114,27 @@ def inert_backup_name(name: str) -> str:
     return name + _INERT_BACKUP_SUFFIX if name.endswith(_LOADABLE_BACKUP_EXTENSIONS) else name
 
 
+def lost_sidecar_name(rel: str, sid: str) -> str:
+    """Return the in-backup name of the sidecar holding a lost fence body (always inert).
+
+    Backups live inside the agents directory, which agent runtimes load recursively, so a
+    ``<rel>.lost.<sid>.md`` sidecar was itself a loadable agent file (1.0 must-fix 377).
+
+    Args:
+        rel: The flattened, team-relative path of the file the body was lost from.
+        sid: The fence section id (``unfenced-<id>`` for a dropped twin).
+
+    Returns:
+        ``<rel>.lost.<sid>.md`` with the inert backup suffix.
+    """
+    return inert_backup_name(f"{rel}.lost.{sid}.md")
+
+
+def is_lost_sidecar(rel: Path) -> bool:
+    """True when *rel* (in-backup relative path) is a lost-fence sidecar, under either naming."""
+    return bool(re.search(r"\.lost\.[^/]+\.md$", _restored_rel(rel).name))
+
+
 def loadable_backup_files(output_dir: Path) -> list[Path]:
     """Backed-up files under *output_dir*'s backup tree that an agent runtime would still load.
 
@@ -575,6 +596,8 @@ def restore_backup(
         rel = src.relative_to(backup_path)
         if rel == Path(BACKUP_MANIFEST_NAME):
             continue
+        if is_lost_sidecar(rel):
+            continue  # recovery material, never restored into a live (loadable) path (377)
         backup_rels.add(rel)
 
     # Restore all backed-up files

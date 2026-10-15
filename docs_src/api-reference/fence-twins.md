@@ -66,7 +66,7 @@ Returns a Goose recipe's `instructions:` body at column 0. Any other text is ret
 
 ### `persist_dropped(rel_path, dropped, backup_path)`
 
-Writes the `.lost.unfenced-<id>.md` sidecars and returns one recovery notice per twin.
+Writes the `.lost.unfenced-<id>.md.agentteams-bak` sidecars and returns one recovery notice per twin.
 
 ### `norm(text)`, `resolve_placeholders(text, placeholders)`
 

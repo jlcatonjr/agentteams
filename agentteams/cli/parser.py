@@ -888,7 +888,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "template change reaches an enriched fence; content added UNDER an "
             "existing heading (e.g. a new bold block inside a kept section) is not "
             "spliced and falls back to preserve; 'warn' writes the smaller "
-            "body and saves a .lost.<sid>.md recovery sidecar; 'halt' refuses the "
+            "body and saves a .lost.<sid>.md.agentteams-bak recovery sidecar; 'halt' refuses the "
             "whole-file write and lists the blocked file; 'allow' writes silently. "
             "Plan: references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
         ),

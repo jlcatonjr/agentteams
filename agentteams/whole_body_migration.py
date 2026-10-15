@@ -38,7 +38,7 @@ edited it. Each heading section of the old body (``#``/``##``, with its subsecti
 Nothing holding a managed marker, a TOML string delimiter or a Rule S-5 instruction-override pattern is ever
 re-emitted outside the fence (:func:`_unsafe`): a marker would be forged, and injected text would become
 project-owned text every later merge keeps (C-4). The template's copy is used and the old text stays in the
-``.lost.content.md`` sidecar. Marker and injection text is overwritten even on a run without a backup dir, as the
+``.lost.content.md.agentteams-bak`` sidecar. Marker and injection text is overwritten even on a run without a backup dir, as the
 whole-body branch always did; any other text that would survive only in a sidecar makes such a run skip the
 migration instead (the old fence stays, and the duplicate report names it) until a run with a backup dir.
 
@@ -96,7 +96,7 @@ class Migration:
     Attributes:
         content: The rewritten file.
         added: Section ids the render's body brought in (absent from the file before).
-        old_body: The retired fence's body, for the ``.lost.content.md`` sidecar.
+        old_body: The retired fence's body, for the ``.lost.content.md.agentteams-bak`` sidecar.
         kept_deployed: Headings whose deployed copy replaced the template's unfenced copy.
         carried: Headings of user regions carried out of the old fence.
         unproven: Headings dropped from the file although not provably template (sidecar only).
