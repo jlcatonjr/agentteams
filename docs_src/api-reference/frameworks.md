@@ -299,6 +299,15 @@ Transforms each rendered Markdown agent into a recipe (`title`/`description`/`in
 
 - `supports_handoffs()` is `True`; `handoff_delivery_mode()` is `'native'`.
 - One delegation layer only (Goose constraint); deeper structure is preserved as in-context `summon` `load(...)` references, not nested delegations.
+- **AGENTS.md ownership** (`guard_rendered_files` → the pinned `_agents_md_ownership.goose_agents_md_decision`). `render_instructions_file` opens the file with a generated notice (`GOOSE_AGENTS_MD_MARKER`), so a later run classifies it as `goose`. Native generation, convert and interop all go through the guard:
+
+  | Existing `AGENTS.md` | What goose does |
+  |---|---|
+  | Absent, or goose-generated | Writes the render (through `--merge` / `--overwrite` as usual), carrying an existing `grok_runtime` fence over; a duplicated or unbalanced one makes it skip the file with a warning |
+  | agentteams-fenced with no marker and a fence other than `grok_runtime` (a legacy goose render) | Adopts it, with a notice |
+  | Hand-written, a legacy unfenced goose render (indistinguishable), or fenced only by `grok_runtime` | Never written; a warning says to remove `AGENTS.md` and re-render to hand it to goose |
+  | Codex, Grok or agents-md generated | Never written; same warning |
+  | A symlink (itself or `.goose`/`.goose/recipes`), unreadable, malformed fences, or outside the project | Never written |
 
 ---
 
@@ -322,6 +331,7 @@ Adapter for the cross-tool `AGENTS.md` standard.
 - `finalize_output_path` maps the planned instructions path to the repo-root `AGENTS.md`.
 - `required_front_matter_keys()` is `()`, stated explicitly rather than left as an unexamined default.
 - Shared-namespace note: `--framework goose` also writes a repo-root `AGENTS.md`; if a project uses both, the emitted file carries a one-line generated notice to that effect (see `references/bridge-refresh-safety.md`).
+- **No ownership guard (known gap):** `guard_rendered_files` is the base no-op, so this adapter overwrites a Codex-, Grok- or goose-generated `AGENTS.md`, unlike those three adapters (remediation `GROK-FU-R4-SIDE-B`).
 - Generate-only: not a `--convert-from` / `--interop-from` / `--bridge-from` target — the CLI rejects those combinations.
 
 ---
@@ -398,11 +408,11 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
   | Existing `AGENTS.md` | What Grok does |
   |---|---|
   | Absent, or Grok-generated | Keeps the full render |
-  | Codex, agents-md, or agentteams-fenced (goose) | Adds or refreshes only the `grok_runtime` fence, via `upsert_fenced_block`; every byte outside it is untouched |
+  | Codex, goose, agents-md, or agentteams-fenced | Adds or refreshes only the `grok_runtime` fence, via `upsert_fenced_block`; every byte outside it is untouched |
   | Hand-written, unfenced | Never written; the block is emitted to `.grok/examples/AGENTS.grok-block.md` instead |
   | A symlink (itself or a parent such as `.grok`/`.grok/examples`), unreadable, malformed fences, or outside the project | Never written |
 
-  `CodexAdapter` uses the same classifier, and it leaves a Grok-generated `AGENTS.md` alone.
+  `CodexAdapter` uses the same classifier, and it leaves a Grok- or goose-generated `AGENTS.md` alone.
 - **`extra_output_files`:**
   - always: the framework-neutral baseline plus `.grok/hooks/README.md`, which keeps the launcher-protected dir present
   - when confinement is requested (`grok:sandbox`, or a confined/exclusive profile) on Linux/macOS: `_grok_sandbox_emit.grok_sandbox_output_files` adds `.grok/sandbox.toml`, `.grok/confined-run.example.sh` and the advisory hook gate (`agentteams-gate.json` + `agentteams-gate-shim.py` + `constitutional-gate.py`)

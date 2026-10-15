@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from agentteams.cli.artifacts import _baseline_key, _compute_front_matter_baseline
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -46,7 +47,8 @@ def test_a_claude_render_with_skills_writes_no_absolute_path(tmp_path):
     out = tmp_path / ".claude" / "agents"
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description",
                            str(REPO / "examples" / "data-pipeline" / "brief.json"), "--project", str(tmp_path),
-                           "--framework", "claude", "--output", str(out), "--no-scan", "--yes"],
+                           "--framework", "claude", "--output", str(out), "--no-scan", "--yes",
+                           *seed_offline_intel(out, "claude")],
                           cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-800:] + proc.stderr[-800:]
     assert (tmp_path / ".claude" / "skills").is_dir()            # the case that leaked: skills exist
@@ -60,7 +62,8 @@ def test_files_written_is_relative_for_a_non_default_output_depth(tmp_path):
     out = tmp_path / "agents-out"                 # one level deep: project_root guess is tmp_path.parent
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description",
                            str(REPO / "examples" / "data-pipeline" / "brief.json"), "--project", str(tmp_path),
-                           "--framework", "claude", "--output", str(out), "--no-scan", "--yes"],
+                           "--framework", "claude", "--output", str(out), "--no-scan", "--yes",
+                           *seed_offline_intel(out, "claude")],
                           cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-800:] + proc.stderr[-800:]
     log = json.loads((out / "references" / "build-log.json").read_text())

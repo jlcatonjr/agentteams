@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests._fresh_intel import seed_offline_intel
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NAVIGATOR = REPO_ROOT / "agentteams/templates/universal/navigator.template.md"
 RETRIEVAL_INTEGRATOR = REPO_ROOT / "agentteams/templates/domain/retrieval-integrator.template.md"
@@ -67,7 +69,7 @@ def test_code_index_surfaced_in_rendered_copilot_team(tmp_path):
     out = tmp_path / ".github" / "agents"
     rc = build_team.main([
         "--description", str(desc), "--output", str(out), "--yes", "--no-scan",
-        "--no-git-hooks",
+        "--no-git-hooks", *seed_offline_intel(out, "copilot-vscode"),
     ])
     assert rc == 0, f"generate failed rc={rc}"
     agent_files = list(out.glob("*.agent.md"))

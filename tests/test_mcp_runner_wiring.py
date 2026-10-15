@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from agentteams import runner_mcp
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parents[1]
 MANIFEST = {"write_policy": "orchestrator-only", "mcp_grants": {"primary-producer": {"tools": ["write_file"]}}}
@@ -30,7 +31,8 @@ def rendered(tmp_path_factory):
     project = tmp / "proj"
     (project / ".claude" / "agents").mkdir(parents=True)
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(tmp / "brief.json"),
-                           "--framework", "claude", "--output", str(project / ".claude/agents"), "--yes"],
+                           "--framework", "claude", "--output", str(project / ".claude/agents"), "--yes",
+                           *seed_offline_intel(project / ".claude/agents", "claude")],
                           capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stderr[-2000:]
     return project
