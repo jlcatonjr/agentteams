@@ -58,7 +58,7 @@
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
     "agentteams/redteam/registry.py": "72e3916101ff0686e53bec5eba4eeea6103963a0d00e3e24febca88a22db0046",
     "agentteams/runner_mcp.py": "0692cccd07c927ba0bde7bc2f7cac0de0ef7b0178e11fc179b0c8a490a4c82cf",
-    "agentteams/scan.py": "33b7fdd6206a4b81a312f16380424369250fc5043feab31c55453bcbd3b9888d",
+    "agentteams/scan.py": "f32d8a566ba4dade0f1ef5fe3e29b51fb2a95bd6da035b0ff091667867e4d33d",
     "agentteams/sealed_result.py": "30c467f3551be3e888d0d2bbd24361f87ee02366704b4ed88fc8ee3f7b16a7cc",
     "agentteams/shrink_allow.py": "27ac50296e5898b110e64111d19194713945305e6232a0faad6811bc0af73c80",
     "agentteams/templates/universal/hooks/constitutional-gate.py": "c4df20eac90d17d03050e6b126afb637cb9e67413474f96c3e24affb72947da3",
