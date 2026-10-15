@@ -18,6 +18,7 @@ import os
 import re
 from pathlib import Path
 
+from agentteams.cli.action_ids import action_matches, halt_names_action
 from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
@@ -75,33 +76,8 @@ def _security_decision_schema_kind(actual_columns: list[str]) -> str:
     )
 
 
-def _action_matches(action_reviewed: str, action: str) -> bool:
-    """Return True for strict action-id style matches.
-
-    Accepted patterns:
-    - <action>
-    - <action>-<suffix>
-    - <action>_<suffix>
-    - <action>.<suffix>
-    - <action>:<suffix>
-
-    **The suffix decorates; it never narrows.** ``prune-001`` is an instance id, and matching
-    it to the ``prune`` action is the intended behaviour. But the same field gets written as a
-    *scope descriptor* — ``overwrite-single-readme-only`` — and this matcher cannot tell the
-    two readings apart, so a clearance that reads as narrow grants the unrestricted action
-    (audit W11 / probe A5). Expressing a real restriction requires the ``scope`` column, which
-    :func:`_scope_permits` enforces; this function deliberately stays a pure id match, because
-    inferring intent from a suffix is exactly the ambiguity that caused the finding.
-    """
-    action_norm = action.strip().lower()
-    reviewed_norm = action_reviewed.strip().lower()
-    if not action_norm:
-        return False
-    if reviewed_norm == action_norm:
-        return True
-    return reviewed_norm.startswith(
-        (f"{action_norm}-", f"{action_norm}_", f"{action_norm}.", f"{action_norm}:")
-    )
+#: The clearing-side match lives in action_ids (with the HALT-side one); the name stays for importers.
+_action_matches = action_matches
 
 
 #: An `action_reviewed` suffix that reads as an INSTANCE ID rather than a scope restriction:
@@ -875,25 +851,31 @@ def _open_halt_for(
     so the lineage-aware caller can run it for the requested action AND each ancestor without
     duplicating the retraction authentication or evidence requirement.
     """
-    open_halts: list[tuple[int, dict[str, str]]] = []
+    # (index, row, normalized id, matched by token only). A HALT blocks every action named in its id
+    # (halt_names_action); one matched only by token is retracted only by a row with its exact id.
+    open_halts: list[tuple[int, dict[str, str], str, bool]] = []
     for index, row in enumerate(rows):
         reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
-        if not _action_matches(reviewed, target):
-            continue
         verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
-        if verdict == "HALT":
-            open_halts.append((index, row))
-        elif verdict == _HALT_RETRACTION_VERDICT:
+        family = action_matches(reviewed, target)
+        if verdict == "HALT" and (family or halt_names_action(reviewed, target)):
+            open_halts.append((index, row, reviewed.lower(), not family))
+        elif verdict == _HALT_RETRACTION_VERDICT and (
+            family or any(norm == reviewed.lower() for _, _, norm, _ in open_halts)
+        ):
+            # A family retraction is scoped to the gate action; an exact-id one to the HALT it names.
             _assert_authorizing_row_is_authentic(
-                row, output_dir=output_dir, signing_active=signing_active, action=target
+                row, output_dir=output_dir, signing_active=signing_active,
+                action=target if family else reviewed,
             )
             if not (row.get("evidence") or row.get("conditions") or "").strip():
                 raise RuntimeError(
                     f"{_HALT_RETRACTION_VERDICT} row for '{target}' carries no evidence; a "
                     f"retraction must record why the HALT no longer applies"
                 )
-            open_halts.clear()
-    return open_halts[0] if open_halts else None
+            open_halts = [h for h in open_halts
+                          if not ((family and not h[3]) or h[2] == reviewed.lower())]
+    return (open_halts[0][0], open_halts[0][1]) if open_halts else None
 
 
 def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
@@ -960,5 +942,6 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
             f"(row {index + 1}, dated {(row.get('date') or row.get('timestamp') or '?').strip()}) "
             f"and has never been retracted. C-2: a HALT is cleared only by a "
             f"{_HALT_RETRACTION_VERDICT} row recording why it no longer applies — not by a "
-            f"later PASS, not by the `consumed` flag, and not by renaming the action."
+            f"later PASS, not by the `consumed` flag, and not by renaming the action: a HALT blocks "
+            f"every action named in its id, and one recorded for an instance id is retracted by that id."
         )
