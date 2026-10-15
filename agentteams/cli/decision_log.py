@@ -863,8 +863,10 @@ def _open_halt_for(
         elif verdict == _HALT_RETRACTION_VERDICT and (
             family or any(norm == reviewed.lower() for _, _, norm, _ in open_halts)
         ):
+            # A family retraction is scoped to the gate action; an exact-id one to the HALT it names.
             _assert_authorizing_row_is_authentic(
-                row, output_dir=output_dir, signing_active=signing_active, action=target
+                row, output_dir=output_dir, signing_active=signing_active,
+                action=target if family else reviewed,
             )
             if not (row.get("evidence") or row.get("conditions") or "").strip():
                 raise RuntimeError(

@@ -267,3 +267,52 @@ def test_a_family_retraction_still_clears_prefix_halts(tmp_path):
         _row("overwrite", "HALT-RETRACTED", conditions="no longer applies", timestamp="2026-02-01T00:00:00Z"),
     ])
     dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+@pytest.mark.parametrize("halt_id", ["m6OverwriteRender", "overwrite2", "(overwrite)", "overwrite, then render",
+                                     "overwrite post-render closing check (P5)"])
+def test_the_token_boundary_is_wide_on_the_halt_side(tmp_path, halt_id):
+    """@adversarial: camelCase, digits and punctuation must not let a HALT id dodge the match."""
+    _write_decisions_log(tmp_path, [_row(halt_id, "HALT")])
+    with pytest.raises(RuntimeError, match="HALT"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_scoped_exact_id_retraction_clears_its_halt(tmp_path):
+    """@adversarial 3: an exact-id retraction scoped to the HALT's own id must clear it, not raise."""
+    cols = _LEGACY_COLUMNS + ["scope"]
+    refs = tmp_path / "references"
+    refs.mkdir(parents=True)
+    with (refs / "security-decisions.log.csv").open("w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        w.writerow({**_row("m6-overwrite-render-x", "HALT"), "scope": ""})
+        w.writerow({**_row("m6-overwrite-render-x", "HALT-RETRACTED", conditions="settled",
+                           timestamp="2026-02-01T00:00:00Z"), "scope": "m6-overwrite-render-x"})
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
+
+
+def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
+    from agentteams.cli.action_ids import describe_newly_blocking_halts, newly_blocking_halts
+
+    rows = [_row("m6-overwrite-render-x", "HALT"), _row("overwrite", "HALT"),
+            _row("cross-repo-merge PR 105", "HALT"), _row("old-prune-x", "HALT"),
+            _row("old-prune-x", "HALT-RETRACTED", conditions="settled")]
+    assert newly_blocking_halts(rows) == [(1, "m6-overwrite-render-x", "overwrite")]
+    _write_decisions_log(tmp_path, rows)
+    text = "\n".join(describe_newly_blocking_halts(tmp_path))
+    assert "row 1: 'm6-overwrite-render-x' blocks 'overwrite'" in text
+    assert "row 3: 'cross-repo-merge PR 105'" in text  # custom-action blockers are listed too
+    assert "old-prune-x" not in text
+
+
+def test_every_listed_gate_action_is_a_real_gate_call():
+    """GATE_ACTIONS must stay in step with the code that calls the gate."""
+    from pathlib import Path as _P
+
+    from agentteams.cli.action_ids import GATE_ACTIONS
+
+    repo = _P(__file__).resolve().parents[1]
+    source = "\n".join(p.read_text(encoding="utf-8") for p in [*(repo / "agentteams").rglob("*.py"), repo / "build_team.py"])
+    for action in GATE_ACTIONS:
+        assert f'"{action}"' in source, action
