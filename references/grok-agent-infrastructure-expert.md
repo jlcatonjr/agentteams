@@ -219,7 +219,7 @@ Confidence marks:
 | G10 | Skill precedence between `.grok/skills` and `.claude/skills` for the same name | unverified | Spike item before Phase 2 |
 | G11 | A scoped `Bash(...)` in agent `tools:` may be honoured, widened to `Bash`, or dropped | unverified | Spike item |
 | G12 | The per-agent `agentsMd` key (source-only) may stop AGENTS.md being injected into subagents | source-only | Deferred (post-Phase 3) opportunity |
-| G13 | Goose writes `AGENTS.md` with no marker and no guard | code read 2026-10-14 | Deferred (post-Phase 3): route goose through `_agents_md_ownership` |
+| G13 | Goose wrote `AGENTS.md` with no marker and no guard | code read 2026-10-14 | Closed by GROK-RETRO-R4: goose stamps `GOOSE_AGENTS_MD_MARKER` and goes through `goose_agents_md_decision` (native, convert, interop); grok upserts only `grok_runtime` into a goose file |
 | G14 | Gitignore filtering of instruction files is unreliable on macOS | S16 | Advisory says "may be skipped"; keep AGENTS.md tracked |
 | G15 | Which body runs for a same-name agent has not been confirmed at runtime | R2-c inconclusive | Repeat at the validation gate |
 
