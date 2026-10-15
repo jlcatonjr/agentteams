@@ -82,6 +82,21 @@ def _load(root: Path, path: Path, schema: str, label: str) -> Any:
     return data
 
 
+def _load_memory_index(root: Path, path: Path) -> Any:
+    """Read and schema-validate the memory index, single-file or sharded; every shard is confined too."""
+    from agentteams.cli.schema_cache import _schema_path, _validate_against_schema
+    from agentteams.errors import MemoryIndexError
+    from agentteams.memory_index_store import read_memory_index_payload
+
+    try:
+        data, _ = read_memory_index_payload(_inside(root, path), confine=lambda p: _inside(root, p))
+        _validate_against_schema(data, _schema_path("memory-index.schema.json").read_bytes(),
+                                 error_cls=ToolError, label="memory index")
+    except (OSError, MemoryIndexError) as exc:
+        raise ToolError(f"cannot read memory index: {exc}") from exc
+    return data
+
+
 def _code_partitions(root: Path, team: Path) -> dict[str, Any]:
     cache = team / CODE_INDEX_DIR
     manifest = _load(root, cache / "manifest.json", "code-index.schema.json", "code index")
@@ -123,7 +138,7 @@ def call(name: str, arguments: dict[str, Any], root: Path) -> Any:
     if name == "query_index":
         from agentteams.memory_index import query_index
 
-        index = _load(root, _team_dir(root, MEMORY_INDEX) / MEMORY_INDEX, "memory-index.schema.json", "memory index")
+        index = _load_memory_index(root, _team_dir(root, MEMORY_INDEX) / MEMORY_INDEX)
         hits = query_index(index, query, k=k)
         return {"built_at": index.get("built_at"), "may_be_stale": True,
                 "content_authority": CONTENT_AUTHORITY, "hits": [_hit(h) for h in hits]}
