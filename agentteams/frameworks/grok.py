@@ -51,6 +51,7 @@ from ._agents_md_ownership import (
     CODEX,
     FENCED,
     FOREIGN,
+    GOOSE,
     GROK,
     GROK_AGENTS_MD_MARKER,
     GROK_FENCE_ID,
@@ -331,8 +332,8 @@ class GrokAdapter(ClaudeAdapter):
         AGENTS.md, by owner (:func:`._agents_md_ownership.classify_agents_md`):
 
         * absent / Grok-generated: kept as rendered;
-        * Codex / agents-md / agentteams-fenced: only the ``grok_runtime`` block is added or refreshed — every
-          byte outside it is the file's own;
+        * Codex / Goose / agents-md / agentteams-fenced: only the ``grok_runtime`` block is added or refreshed —
+          every byte outside it is the file's own;
         * hand-written without fences: never written; the block goes to ``.grok/examples/AGENTS.grok-block.md``
           for the operator to paste once;
         * unsafe (symlink, unreadable, malformed fences, escaping the project): never written.
@@ -369,8 +370,8 @@ class GrokAdapter(ClaudeAdapter):
             if owner in (ABSENT, GROK):
                 kept.append((rel_path, content))
                 continue
-            if owner in (CODEX, AGENTS_MD, FENCED):
-                label = {CODEX: "codex", AGENTS_MD: "agents-md", FENCED: "agentteams (fenced)"}[owner]
+            if owner in (CODEX, GOOSE, AGENTS_MD, FENCED):
+                label = {CODEX: "codex", GOOSE: "goose", AGENTS_MD: "agents-md", FENCED: "agentteams (fenced)"}[owner]
                 try:
                     merged = upsert_fenced_block(target.read_text(encoding="utf-8"), GROK_FENCE_ID,
                                                  grok_runtime_block())

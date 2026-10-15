@@ -318,6 +318,23 @@ def _convert_file(
         # F2 — render through the adapter (e.g. goose strips front matter for AGENTS.md)
         # instead of copying verbatim.
         content = adapter.render_instructions_file(content, manifest)
+        # The adapter's shared-file guard, as native generation runs it (GROK-RETRO-R4): goose and codex
+        # never overwrite an AGENTS.md they do not own, not even with --overwrite. It may also rewrite
+        # the content (goose carries an existing grok_runtime fence over).
+        kept, guard_notices = adapter.guard_rendered_files([(rel, content)], target_dir)
+        result.skipped.extend(guard_notices)
+        for side_rel, side_content in kept:  # a file the guard adds (grok: the paste-in example block)
+            side_dest = (target_dir / side_rel).resolve()
+            if side_rel == rel or (side_dest.exists() and not overwrite):
+                continue
+            if not dry_run:
+                side_dest.parent.mkdir(parents=True, exist_ok=True)
+                side_dest.write_text(side_content, encoding="utf-8")
+            result.converted.append(str(side_dest))
+        content = next((c for r, c in kept if r == rel), None)
+        if content is None:
+            result.skipped.append(str(source_path))
+            return
         if not dry_run:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(content, encoding="utf-8")
