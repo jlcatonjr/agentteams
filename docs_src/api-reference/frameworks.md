@@ -331,6 +331,7 @@ Adapter for the cross-tool `AGENTS.md` standard.
 - `finalize_output_path` maps the planned instructions path to the repo-root `AGENTS.md`.
 - `required_front_matter_keys()` is `()`, stated explicitly rather than left as an unexamined default.
 - Shared-namespace note: `--framework goose` also writes a repo-root `AGENTS.md`; if a project uses both, the emitted file carries a one-line generated notice to that effect (see `references/bridge-refresh-safety.md`).
+- **No ownership guard (known gap):** `guard_rendered_files` is the base no-op, so this adapter overwrites a Codex-, Grok- or goose-generated `AGENTS.md`, unlike those three adapters (remediation `GROK-FU-R4-SIDE-B`).
 - Generate-only: not a `--convert-from` / `--interop-from` / `--bridge-from` target — the CLI rejects those combinations.
 
 ---

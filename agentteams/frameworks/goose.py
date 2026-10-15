@@ -247,7 +247,7 @@ _AGENTS_MD_REL = "../../AGENTS.md"
 GOOSE_AGENTS_MD_NOTICE = (
     f"{GOOSE_AGENTS_MD_MARKER} Goose reads it (with .goosehints) from the repo root; the specialist agents are "
     "recipes under .goose/recipes/. Edit outside the AGENTTEAMS fences; goose never overwrites an AGENTS.md "
-    "generated for another framework or written by hand. -->"
+    "generated for another framework, or a hand-written one without AGENTTEAMS fences. -->"
 )
 
 

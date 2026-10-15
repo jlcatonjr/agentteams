@@ -594,7 +594,7 @@ def agents_md_is_codex_owned(path: Path) -> bool:
     """Whether the ``AGENTS.md`` at *path* may be (re)written by the Codex adapter.
 
     True when the file is absent or carries the Codex generated notice. Any other existing
-    ``AGENTS.md`` — the Goose bridge entry, an agents-md target, a hand-written file — is
+    ``AGENTS.md`` — goose-, grok- or agents-md-generated, the Goose bridge entry, a hand-written file — is
     shared or project-owned and must be skipped with a notice, never overwritten.
 
     Args:
