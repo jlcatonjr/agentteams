@@ -727,3 +727,63 @@ def test_offline_without_cache_is_stale(tmp_path: Path) -> None:
     assert payload["freshness"]["status"] == "stale"
     assert placeholders["SECURITY_DATA_FRESHNESS_STATUS"] == "stale"
 
+
+
+# ---------------------------------------------------------------------------
+# A corrupt cache is never "fresh" (1.0 must-fix 433)
+# ---------------------------------------------------------------------------
+
+_CORRUPT_CACHES = {
+    "not-json": b"{not json",
+    "not-utf8": b"\xff\xfe\x00garbage",
+    "not-an-object": b"[1, 2, 3]",
+    "no-generated-at": json.dumps({"sources": [], "vulnerabilities": []}).encode(),
+    "bad-generated-at": json.dumps({"generated_at": "yesterday", "sources": [], "vulnerabilities": []}).encode(),
+}
+
+
+def _freshness(placeholders: dict[str, str]) -> dict:
+    return json.loads(placeholders["SECURITY_VULNERABILITY_WATCH_JSON"])["freshness"]
+
+
+@pytest.mark.parametrize("shape", sorted(_CORRUPT_CACHES))
+def test_offline_corrupt_cache_is_stale(tmp_path: Path, shape: str) -> None:
+    output_dir = tmp_path / ".github" / "agents"
+    (output_dir / "references").mkdir(parents=True)
+    (output_dir / "references" / "security-vulnerability-watch.json").write_bytes(_CORRUPT_CACHES[shape])
+    placeholders = security_refs.build_security_placeholders(output_dir=output_dir, offline=True, max_items=5)
+    assert placeholders["SECURITY_DATA_FRESHNESS_STATUS"] == "stale"
+    assert _freshness(placeholders)["cache_corrupt"] is True
+
+
+def test_offline_corrupt_cache_is_stale_without_jsonschema(tmp_path: Path, monkeypatch) -> None:
+    """With jsonschema absent the schema check passes everything; the cache must still be judged."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _no_jsonschema(name, *args, **kwargs):
+        if name == "jsonschema":
+            raise ImportError(name)
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_jsonschema)
+    output_dir = tmp_path / ".github" / "agents"
+    (output_dir / "references").mkdir(parents=True)
+    (output_dir / "references" / "security-vulnerability-watch.json").write_bytes(_CORRUPT_CACHES["no-generated-at"])
+    placeholders = security_refs.build_security_placeholders(output_dir=output_dir, offline=True, max_items=5)
+    assert placeholders["SECURITY_DATA_FRESHNESS_STATUS"] == "stale"
+
+
+def test_online_fetch_failure_with_corrupt_cache_is_stale(tmp_path: Path, monkeypatch) -> None:
+    def _offline_network(*_args, **_kwargs):
+        raise OSError("network down")
+
+    monkeypatch.setattr(security_refs.urllib.request, "urlopen", _offline_network)
+    output_dir = tmp_path / ".github" / "agents"
+    (output_dir / "references").mkdir(parents=True)
+    (output_dir / "references" / "security-vulnerability-watch.json").write_bytes(_CORRUPT_CACHES["not-json"])
+    placeholders = security_refs.build_security_placeholders(output_dir=output_dir, offline=False, max_items=5,
+                                                             skip_nvd=True)
+    assert placeholders["SECURITY_DATA_FRESHNESS_STATUS"] == "stale"
+    assert _freshness(placeholders)["cache_corrupt"] is True

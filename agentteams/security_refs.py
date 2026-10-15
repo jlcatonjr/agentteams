@@ -657,6 +657,27 @@ def _format_source_registry(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _read_vuln_cache(cache_json: Path) -> dict | None:
+    """Return the cached vulnerability-watch payload when it is usable, else None.
+
+    A cache that cannot be read, is not UTF-8 or JSON, is not an object, fails the schema check,
+    or has no parseable ``generated_at`` is unusable. The caller reports it ``stale`` (row 433):
+    without this, a corrupt cache under ``--security-offline`` fell through to "fresh".
+    """
+    try:
+        cached = json.loads(cache_json.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):  # json.JSONDecodeError is a ValueError
+        return None
+    if not isinstance(cached, dict) or not _validate_vuln_watch_payload(cached, context=f"cache read ({cache_json})"):
+        return None
+    stamp = cached.get("generated_at")
+    try:
+        datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return cached if isinstance(stamp, str) else None
+
+
 def _validate_vuln_watch_payload(payload: dict, *, context: str) -> bool:
     """Validate *payload* against ``schemas/security-vulnerability-watch.schema.json``.
 
@@ -750,19 +771,19 @@ def build_security_placeholders(
     _used_stale_cache: bool = False
     _fetch_failed_without_cache: bool = False
     _offline_without_cache: bool = False
+    _cache_corrupt: bool = False
 
     if offline:
         if cache_json.exists():
-            try:
-                cached = json.loads(cache_json.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                cached = None
-            if cached is not None and _validate_vuln_watch_payload(cached, context=f"cache read ({cache_json})"):
+            cached = _read_vuln_cache(cache_json)
+            _cache_corrupt = cached is None
+            if cached is not None:
                 # Cached records are already canonical shape (that's the only shape this module
                 # ever persists) — no re-normalization needed. The `v.get("cve")` filter is a
                 # resilience guard against a cache degraded by a pre-fix version of this module
                 # (blank cve/vendor/name fields): drop those records rather than render them.
-                vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items] if v.get("cve")]
+                vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items]
+                                   if isinstance(v, dict) and v.get("cve")]
                 sources = _merge_static_sources(cached.get("sources", sources))
                 generated_at = cached.get("generated_at", generated_at)
                 osv_findings = cached.get("osv_packages", [])
@@ -800,12 +821,11 @@ def build_security_placeholders(
         except OSError:
             sources[0]["status"] = "unavailable"
             if cache_json.exists():
-                try:
-                    cached = json.loads(cache_json.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    cached = None
-                if cached is not None and _validate_vuln_watch_payload(cached, context=f"cache read ({cache_json})"):
-                    vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items] if v.get("cve")]
+                cached = _read_vuln_cache(cache_json)
+                _cache_corrupt = cached is None
+                if cached is not None:
+                    vulnerabilities = [v for v in cached.get("vulnerabilities", [])[:max_items]
+                                       if isinstance(v, dict) and v.get("cve")]
                     generated_at = cached.get("generated_at", generated_at)
                     osv_findings = cached.get("osv_packages", [])
                     _used_stale_cache = True
@@ -838,7 +858,8 @@ def build_security_placeholders(
         generated_dt = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
         freshness_age_hours_value = max((datetime.now(UTC) - generated_dt).total_seconds() / 3600.0, 0.0)
         freshness_age_hours = f"{freshness_age_hours_value:.2f}"
-        freshness_status = "stale" if (_used_stale_cache or _fetch_failed_without_cache or _offline_without_cache or freshness_age_hours_value > 24) else "fresh"
+        freshness_status = "stale" if (_used_stale_cache or _fetch_failed_without_cache or _offline_without_cache
+                                       or _cache_corrupt or freshness_age_hours_value > 24) else "fresh"
     except ValueError:
         freshness_status = "stale"
 
@@ -864,6 +885,7 @@ def build_security_placeholders(
             "age_hours": freshness_age_hours,
             "ttl_hours": 24,
             "used_stale_cache": _used_stale_cache,
+            "cache_corrupt": _cache_corrupt,
             "offline": offline,
         },
         "llm_threats": [
