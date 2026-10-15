@@ -30,7 +30,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentteams.codex_mcp_emit import _strip_block, _strip_unmanaged_mcp_tables, mcp_wirable, splice_managed_toml
+from agentteams.codex_mcp_emit import (
+    mcp_wirable,
+    splice_managed_toml,
+    strip_marked_block,
+    strip_unmanaged_mcp_tables,
+)
 from agentteams.frameworks._agents_md_ownership import symlink_on_path
 from agentteams.mcp_emit import _inert_problems
 from agentteams.toml_write import render_tables
@@ -166,6 +171,28 @@ def grok_permission_table(wired_ids: list[str]) -> dict[str, Any]:
     return table
 
 
+def _previous_block_keys(existing_text: str) -> set[str]:
+    """Return the top-level keys inside the existing managed block (empty when there is none).
+
+    Args:
+        existing_text: The current config file text.
+
+    Returns:
+        The keys the previous agentteams block held.
+
+    Raises:
+        ValueError: The managed block exists but does not parse as TOML.
+    """
+    start = existing_text.find(_MANAGED_HEADER)
+    end = existing_text.find(_MANAGED_FOOTER, start + 1) if start != -1 else -1
+    if start == -1 or end == -1:
+        return set()
+    try:
+        return set(tomllib.loads(existing_text[start + len(_MANAGED_HEADER):end]))
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(f"the agentteams-managed block in {GROK_CONFIG_REL} does not parse: {exc}") from exc
+
+
 def emit_grok_config(
     *,
     servers: list[dict[str, Any]],
@@ -193,6 +220,9 @@ def emit_grok_config(
     want_mcp = grok_mcp_enabled(features) and bool(servers)
     want_perm = grok_sandbox_enabled(features)
     if not (want_mcp or want_perm):
+        if out_path.is_file() and _MANAGED_HEADER in out_path.read_text(encoding="utf-8"):
+            result.notices.append(f"{out_path} still holds an agentteams-managed block from an earlier run (grok:mcp "
+                                  "and grok:sandbox are now off); it is left in place. Remove it by hand if unwanted.")
         return result
     linked = symlink_on_path(out_path, root)
     if linked is not None:
@@ -216,7 +246,7 @@ def emit_grok_config(
 
     existing_text = out_path.read_text(encoding="utf-8") if out_path.is_file() else ""
     try:
-        outside = tomllib.loads(_strip_block(existing_text, _MANAGED_HEADER, _MANAGED_FOOTER))
+        outside = tomllib.loads(strip_marked_block(existing_text, _MANAGED_HEADER, _MANAGED_FOOTER))
     except tomllib.TOMLDecodeError as exc:
         result.errors.append(f"existing {out_path} is not valid TOML, refusing to splice: {exc}")
         return result
@@ -228,13 +258,16 @@ def emit_grok_config(
         else:
             tables["permission"] = grok_permission_table(result.wired)
             result.permission_written = True
-    if not tables:
+    if not tables and not _previous_block_keys(existing_text):
         return result
 
-    owned = (("mcp_servers",) if want_mcp else ()) + (("permission",) if result.permission_written else ())
+    # The block owns what it writes now AND what the previous block held: turning a feature off on a later run
+    # removes its table from the block, which the preservation check must not read as an outside edit.
+    owned = tuple(sorted({*(k for k, on in (("mcp_servers", want_mcp), ("permission", result.permission_written))
+                            if on), *_previous_block_keys(existing_text)}))
     result.dropped_unmanaged = sorted(
         set((outside.get("mcp_servers") or {}).keys()) - set(result.wired)) if want_mcp else []
-    strip = _strip_unmanaged_mcp_tables if want_mcp else None
+    strip = strip_unmanaged_mcp_tables if want_mcp else None
     splice = splice_managed_toml(out_path, render_tables(tables), owned_keys=owned, header=_MANAGED_HEADER,
                                  footer=_MANAGED_FOOTER, strip_unmanaged=strip, dry_run=dry_run)
     if splice.error:

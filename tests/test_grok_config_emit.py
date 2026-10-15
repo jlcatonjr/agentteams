@@ -6,6 +6,7 @@ Plan tmp/by-week/2026-W42/grok-integration.plan.md §12 (P2-A..E) and the @secur
 from __future__ import annotations
 
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -103,6 +104,25 @@ def test_symlinked_grok_dir_is_refused(tmp_path: Path) -> None:
     assert res.errors and not (real / "config.toml").exists()
 
 
+def test_turning_a_feature_off_later_still_writes(tmp_path: Path) -> None:
+    """The previous block's tables are owned too, so dropping one is not read as an outside edit."""
+    (tmp_path / ".grok").mkdir()
+    (tmp_path / ".grok" / "config.toml").write_text('[plugins]\npaths = ["~/p"]\n', encoding="utf-8")
+    assert not emit_grok_config(servers=[_server()], features=["grok:mcp", "grok:sandbox"],
+                                output_root=tmp_path).errors
+    res = emit_grok_config(servers=[_server()], features=["grok:mcp"], output_root=tmp_path)
+    assert res.errors == [] and res.written
+    cfg = _cfg(tmp_path)
+    assert "permission" not in cfg and cfg["mcp_servers"]["pg"] and cfg["plugins"] == {"paths": ["~/p"]}
+
+
+def test_both_features_off_leaves_the_block_and_says_so(tmp_path: Path) -> None:
+    emit_grok_config(servers=[], features=["grok:sandbox"], output_root=tmp_path)
+    before = (tmp_path / ".grok" / "config.toml").read_text(encoding="utf-8")
+    res = emit_grok_config(servers=[], features=[], output_root=tmp_path)
+    assert res.notices and (tmp_path / ".grok" / "config.toml").read_text(encoding="utf-8") == before
+
+
 def test_gated_off_without_tokens(tmp_path: Path) -> None:
     res = emit_grok_config(servers=[_server()], features=[], output_root=tmp_path)
     assert not res.written and not (tmp_path / ".grok").exists()
@@ -115,11 +135,33 @@ def test_grok_grants_are_declared_not_enforced() -> None:
 
 
 def test_host_feature_tokens() -> None:
-    assert host_features._sandbox_token_for("grok") == "grok:sandbox"
-    assert {"mcp", "sandbox"} <= host_features._KNOWN_FEATURES["grok"]
+    assert "grok:sandbox" in host_features.expand_privilege_profile("confined", "grok")
+    for token in ("grok:mcp", "grok:sandbox"):
+        host_features.validate(token)  # raises on an unknown namespace or feature
 
 
 # P2-A: launcher ------------------------------------------------------------------------------------
+
+def _warn(root: Path) -> str:
+    fn = re.search(r"^grok_config_warn\(\)\{.*?^\}", _LAUNCHER.read_text(encoding="utf-8"), re.S | re.M).group(0)
+    script = f'SCRATCH={str(root)!r}; WRITABLES=(); {fn}\ngrok_config_warn'
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stderr
+
+
+def test_grok_config_warn_behaviour(tmp_path: Path) -> None:
+    (tmp_path / ".grok" / "hooks").mkdir(parents=True)
+    assert _warn(tmp_path) == ""
+    emit_grok_config(servers=[], features=["grok:sandbox"], output_root=tmp_path)  # our own block: silent
+    (tmp_path / ".grok" / "hooks" / "agentteams-gate.json").write_text('{"_comment": "agentteams-managed"}')
+    assert _warn(tmp_path) == ""
+    with (tmp_path / ".grok" / "config.toml").open("a", encoding="utf-8") as fh:
+        fh.write('\n[mcp_servers.planted]\ncommand = "x"\n')
+    (tmp_path / ".grok" / "hooks" / "planted.json").write_text("{}")
+    (tmp_path / ".grok" / "workflows").mkdir()
+    out = _warn(tmp_path)
+    assert "[mcp_servers]" in out and "planted.json" in out and ".grok/workflows" in out
+    assert "agentteams-gate.json" not in out
+
 
 def test_launcher_protects_grok_whole_and_warns() -> None:
     text = _LAUNCHER.read_text(encoding="utf-8")

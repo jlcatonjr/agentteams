@@ -66,9 +66,23 @@ def test_gate_json_points_at_the_shim() -> None:
     assert hooks == {"type": "command", "command": "./agentteams-gate-shim.py", "timeout": 10}
 
 
-def test_gate_copy_is_the_unmodified_template_unless_fail_closed() -> None:
-    gate = _files({"host_features": ["grok:sandbox"]})[gse.GROK_GATE_REL]
-    assert gate == (_HOOKS / "constitutional-gate.py").read_text(encoding="utf-8")
+def test_gate_copy_is_the_template_and_fail_closed_only_when_explicit() -> None:
+    template = (_HOOKS / "constitutional-gate.py").read_text(encoding="utf-8")
+    assert _files({"host_features": ["grok:sandbox"]})[gse.GROK_GATE_REL] == template
+    explicit = _files({"privilege_profile": "confined", "privilege_profile_explicit": True})[gse.GROK_GATE_REL]
+    assert explicit != template and "_FAIL_CLOSED_ON_ERROR = True" in explicit
+
+
+def test_shim_failure_denies_only_when_the_gate_is_fail_closed(hooks_dir: Path) -> None:
+    shim = hooks_dir / "agentteams-gate-shim.py"
+    for closed, rc in ((False, 0), (True, 2)):
+        gate = (_HOOKS / "constitutional-gate.py").read_text(encoding="utf-8")
+        if closed:
+            gate = gate.replace("_FAIL_CLOSED_ON_ERROR = False", "_FAIL_CLOSED_ON_ERROR = True", 1)
+        (hooks_dir / "constitutional-gate.py").write_text(gate, encoding="utf-8")
+        proc = subprocess.run([sys.executable, str(shim)], input="not json", text=True, capture_output=True,
+                              check=False)
+        assert proc.returncode == rc, (closed, proc.stderr)
 
 
 @pytest.fixture()
@@ -110,6 +124,17 @@ def test_shim_translation_keeps_other_keys() -> None:
     assert out["tool_name"] == out["toolName"] == "Read"
     assert out["tool_input"] == {"file_path": "a"} and out["cwd"] == "/w" and out["x"] == 1
     assert shim.translate({"tool_name": "mystery", "tool_input": {"k": 1}})["tool_name"] == "mystery"
+    # Claude's Grep/Glob take `path` themselves: only the file tools get `path` -> `file_path`.
+    assert shim.translate({"tool_name": "grep", "tool_input": {"path": "src"}})["tool_input"] == {"path": "src"}
+    assert shim.translate({"tool_name": "write", "tool_input": {"path": "a", "contents": "c"}})["tool_input"] == {
+        "file_path": "a", "content": "c"}
+
+
+def test_operator_gate_copy_is_left_alone(tmp_path: Path) -> None:
+    (tmp_path / ".grok" / "hooks").mkdir(parents=True)
+    (tmp_path / ".grok" / "hooks" / "constitutional-gate.py").write_text("# my own gate\n", encoding="utf-8")
+    kept, notices = _guard(tmp_path, gse.GROK_GATE_REL)
+    assert kept == [] and "not agentteams-managed" in notices[0]
 
 
 # guard: never overwrite an operator's own file, never through a symlink ------------------------------

@@ -403,14 +403,25 @@ class GrokAdapter(ClaudeAdapter):
 
 
 def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
-    """Why an emitted ``.grok/`` file outside the agents dir must not be written, else None.
+    """Return why an emitted file outside the agents dir must not be written, else None.
 
-    Never through a symlink; and the profile, runner and hook JSON/shim are never written over an existing file
-    that lacks the ``agentteams-managed`` marker (an operator's own file).
+    Args:
+        rel_path: The emitted path, relative to the agents dir.
+        target: The lexically normalised destination.
+        root: The project root.
+
+    Returns:
+        A notice when the destination (or a parent) is a symlink, or when it is an existing profile, runner,
+        hook JSON, shim or gate copy that agentteams did not write; otherwise None.
+
+    Raises:
+        Nothing.
     """
     from agentteams.frameworks._grok_sandbox_emit import (
         GROK_GATE_JSON_REL,
+        GROK_GATE_REL,
         GROK_GATE_SHIM_REL,
+        GROK_GATE_SIGNATURE,
         GROK_OWNED_MARKER,
         GROK_RUNNER_REL,
         GROK_SANDBOX_PROFILE_REL,
@@ -421,14 +432,16 @@ def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
     linked = symlink_on_path(target, root)
     if linked is not None:
         return f"{target}: left untouched; {linked} is a symlink."
-    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL)
+    # The gate copy is the unmodified Claude template, so it is recognised by its own docstring, not the marker.
+    signature = {GROK_GATE_REL: GROK_GATE_SIGNATURE}
+    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL)
     if rel_path in marked and target.is_file():
         try:
             with target.open(encoding="utf-8") as fh:
                 head = fh.read(400)
         except (OSError, UnicodeDecodeError):
             head = ""
-        if GROK_OWNED_MARKER not in head:
+        if signature.get(rel_path, GROK_OWNED_MARKER) not in head:
             return (f"{target}: existing file is not agentteams-managed; left untouched (remove it, or add "
                     f"'{GROK_OWNED_MARKER}' to its first lines, to let agentteams regenerate it).")
     return None

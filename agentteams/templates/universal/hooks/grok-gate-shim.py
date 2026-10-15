@@ -15,10 +15,17 @@ profile), a shim-internal failure denies (exit 2) instead of allowing.
 
 from __future__ import annotations
 
-import json
-import subprocess
 import sys
-from pathlib import Path
+
+# Drop this script's own directory from the import path BEFORE any other import: Grok runs the shim from the
+# repo's .grok/hooks, where a planted json.py or subprocess.py would otherwise shadow the stdlib (@security
+# step 12e). `sys` is built in, so importing it first is safe.
+sys.path[:] = [p for p in sys.path if p not in ("", sys.path[0])]
+
+import json  # noqa: E402
+import re  # noqa: E402
+import subprocess  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 #: Grok tool name -> Claude tool name (Grok's own alias table, user guide 10-hooks "Tool Name Aliases").
 TOOL_NAMES = {
@@ -32,39 +39,61 @@ TOOL_NAMES = {
     "web_fetch": "WebFetch",
     "spawn_subagent": "Task",
 }
-#: Grok input field -> Claude input field.
+#: Grok input field -> Claude input field, for the file tools only: Claude's Grep and Glob take `path` themselves.
+FILE_TOOLS = frozenset({"Read", "Edit", "Write"})
 FIELD_NAMES = {"target_file": "file_path", "path": "file_path", "filePath": "file_path", "contents": "content"}
 
 _GATE = Path(__file__).resolve().with_name("constitutional-gate.py")
 
 
-def translate(payload: dict) -> dict:
-    """Return *payload* with Grok tool names and input fields rewritten to Claude's (other keys untouched)."""
+def translate(payload: dict[str, object]) -> dict[str, object]:
+    """Rewrite Grok tool names and file-tool input fields to Claude's.
+
+    Args:
+        payload: The hook payload Grok sent.
+
+    Returns:
+        A copy with ``tool_name``/``toolName`` and ``tool_input``/``toolInput`` translated; every other key kept.
+
+    Raises:
+        Nothing.
+    """
     out = dict(payload)
     name = payload.get("tool_name", payload.get("toolName"))
     raw = payload.get("tool_input", payload.get("toolInput"))
+    claude = TOOL_NAMES.get(name, name) if isinstance(name, str) else name
     if isinstance(name, str):
-        out["tool_name"] = out["toolName"] = TOOL_NAMES.get(name, name)
+        out["tool_name"] = out["toolName"] = claude
     if isinstance(raw, dict):
-        tool_input = {FIELD_NAMES.get(k, k): v for k, v in raw.items()}
+        fields = FIELD_NAMES if claude in FILE_TOOLS else {}
+        tool_input = {fields.get(k, k): v for k, v in raw.items()}
         out["tool_input"] = out["toolInput"] = tool_input
     return out
 
 
 def _fail_closed() -> bool:
+    """Whether the sibling gate copy was emitted fail-closed: its sentinel ASSIGNMENT line, not the docstring
+    that mentions it."""
     try:
-        return "_FAIL_CLOSED_ON_ERROR = True" in _GATE.read_text(encoding="utf-8")
+        return re.search(r"^_FAIL_CLOSED_ON_ERROR = True\s*$", _GATE.read_text(encoding="utf-8"), re.M) is not None
     except OSError:
         return False
 
 
 def main() -> int:
-    """Translate stdin, run the gate, relay its result."""
+    """Translate the stdin payload, run the sibling gate isolated (``-I``), relay its output and exit code.
+
+    Returns:
+        The gate's exit code; on a shim-internal failure 2 when the gate copy is fail-closed, else 0.
+
+    Raises:
+        Nothing.
+    """
     try:
         payload = json.loads(sys.stdin.read() or "{}")
         if not isinstance(payload, dict):
             raise ValueError("hook payload is not a JSON object")
-        proc = subprocess.run([sys.executable, str(_GATE)], input=json.dumps(translate(payload)),
+        proc = subprocess.run([sys.executable, "-I", str(_GATE)], input=json.dumps(translate(payload)),
                               capture_output=True, text=True, timeout=9, check=False)
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"agentteams gate shim: {exc}", file=sys.stderr)

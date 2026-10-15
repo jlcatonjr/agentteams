@@ -76,7 +76,7 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from agentteams.atomicio import _atomic_copy, _atomic_write_text
 from agentteams.mcp_emit import _inert_problems
@@ -128,7 +128,7 @@ def codex_mcp_enabled(features: list[str]) -> bool:
     return _CODEX_MCP_TOKEN in set(features or [])
 
 
-def _codex_wirable(server: dict[str, Any]) -> bool:
+def mcp_wirable(server: dict[str, Any]) -> bool:
     """Stricter-than-inert bar: safe to make Codex actually launch this server.
 
     first-party AND every tool read-only AND no security review required —
@@ -145,8 +145,8 @@ def _codex_wirable(server: dict[str, Any]) -> bool:
     return all(isinstance(t, dict) and t.get("side_effects") == "read" for t in tools)
 
 
-#: Public name for the shared auto-wire bar (the Grok config emitter uses it too).
-mcp_wirable = _codex_wirable
+#: Pre-2026-10-14 name, kept for existing importers.
+_codex_wirable = mcp_wirable
 
 
 def _codex_entry_for(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
@@ -166,7 +166,7 @@ def _codex_entry_for(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str
 
 def _codex_transport_fields(server: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     """Transport/auth fields for one server (the body of :func:`_codex_entry_for`)."""
-    if not _codex_wirable(server):
+    if not mcp_wirable(server):
         return None, "needs operator authorization (not first-party read-only)"
 
     auth = server.get("auth") or {}
@@ -207,10 +207,10 @@ def _codex_transport_fields(server: dict[str, Any]) -> tuple[dict[str, Any] | No
 
 def _strip_managed_block(text: str) -> str:
     """Remove a prior agentteams-managed mcp_servers block, if present."""
-    return _strip_block(text, _MANAGED_HEADER, _MANAGED_FOOTER)
+    return strip_marked_block(text, _MANAGED_HEADER, _MANAGED_FOOTER)
 
 
-def _strip_unmanaged_mcp_tables(text: str) -> str:
+def strip_unmanaged_mcp_tables(text: str) -> str:
     """Remove any [mcp_servers.*] tables left outside a managed block (e.g.
     hand-authored, or from a version of this module predating the managed-
     block marker) so a re-run replaces rather than duplicates them."""
@@ -235,7 +235,7 @@ def splice_managed_toml(
     owned_keys: tuple[str, ...],
     header: str,
     footer: str,
-    strip_unmanaged: Any = None,
+    strip_unmanaged: Callable[[str], str] | None = None,
     dry_run: bool = False,
 ) -> TomlSplice:
     """Replace one agentteams-managed block in a TOML config, leaving every other key untouched (or refusing).
@@ -269,7 +269,7 @@ def splice_managed_toml(
         except tomllib.TOMLDecodeError as exc:
             return TomlSplice(error=f"existing {out_path} is not valid TOML, refusing to splice: {exc}")
     parsed = out_path.is_file()
-    base_text = _strip_block(existing_text, header, footer)
+    base_text = strip_marked_block(existing_text, header, footer)
     if strip_unmanaged is not None:
         base_text = strip_unmanaged(base_text)
     if base_text and not base_text.endswith("\n\n"):
@@ -295,8 +295,20 @@ def splice_managed_toml(
     return TomlSplice(existing=existing, new_text=new_text, existing_parsed=parsed)
 
 
-def _strip_block(text: str, header: str, footer: str) -> str:
-    """Remove one marker-delimited managed block, if present."""
+def strip_marked_block(text: str, header: str, footer: str) -> str:
+    """Remove one marker-delimited managed block, if present.
+
+    Args:
+        text: The file text.
+        header: The block's opening marker line.
+        footer: The block's closing marker line.
+
+    Returns:
+        *text* without the block (unchanged when the markers are absent or unbalanced).
+
+    Raises:
+        Nothing.
+    """
     start = text.find(header)
     if start == -1:
         return text
@@ -364,7 +376,7 @@ def emit_codex_mcp_config(
     security_keys = [k for k in codex_config_security_keys(Path(output_root)) if k not in ("[mcp_servers]", "<symlink>")]
     splice = splice_managed_toml(
         out_path, render_tables(tables), owned_keys=("mcp_servers",), header=_MANAGED_HEADER,
-        footer=_MANAGED_FOOTER, strip_unmanaged=_strip_unmanaged_mcp_tables, dry_run=dry_run,
+        footer=_MANAGED_FOOTER, strip_unmanaged=strip_unmanaged_mcp_tables, dry_run=dry_run,
     )
     if splice.existing_parsed:
         result.preserved_security_keys = security_keys
@@ -384,6 +396,14 @@ def emit_codex_mcp_config(
 
 __all__ = [
     "CodexMCPEmissionResult",
+    "TomlSplice",
     "codex_mcp_enabled",
     "emit_codex_mcp_config",
+    "mcp_wirable",
+    "splice_managed_toml",
+    "strip_marked_block",
+    "strip_unmanaged_mcp_tables",
 ]
+
+#: Pre-2026-10-14 private name, kept for existing importers.
+_strip_unmanaged_mcp_tables = strip_unmanaged_mcp_tables

@@ -380,7 +380,12 @@ grok_config_warn(){
     extra=()
     for d in hooks workflows plugins lsp; do
       case "$d" in
-        hooks) compgen -G "$r/.grok/hooks/*.json" >/dev/null && extra+=( ".grok/hooks/*.json" ) ;;
+        hooks)   # agentteams' own gate file carries the marker; any other hook JSON is reported (best-effort:
+                 # a planted file could copy the marker, but inside this launcher .grok is read-only anyway)
+          local h; for h in "$r"/.grok/hooks/*.json; do
+            [ -f "$h" ] || continue
+            head -c 200 "$h" | grep -q "agentteams-managed" || { extra+=( ".grok/hooks/${h##*/}" ); }
+          done ;;
         *) [ -e "$r/.grok/$d" ] && extra+=( ".grok/$d" ) ;;
       esac
     done

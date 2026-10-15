@@ -184,6 +184,50 @@ def _runner_gate_block() -> str:
     )
 
 
+def confined_home_bash(var: str, subdir: str, override_env: str) -> str:
+    """Return the bash that places and validates a writable tool home for a launcher-run agent CLI.
+
+    Shared by the Codex and Grok runners (``CODEX_HOME`` / ``GROK_HOME``). Defines ``refuse`` and
+    ``check_home``, sets ``$var`` to ``$override_env`` or ``~/.config/agentteams/<subdir>/<project>-<hash>``,
+    and refuses (before anything is created, then again with symlinks resolved) a relative path, ``/``, ``//``,
+    ``.``/``..`` segments, anywhere in ``~/.config/agentteams`` outside ``<subdir>/``, ``$HOME`` or a parent of
+    it, the project or a parent of it, and anything inside the project.
+
+    Args:
+        var: The environment variable naming the home (e.g. ``CODEX_HOME``).
+        subdir: Its allowed directory under ``~/.config/agentteams`` (e.g. ``codex-home``).
+        override_env: The variable an operator sets to choose another home.
+
+    Returns:
+        The bash text (newline-terminated lines).
+
+    Raises:
+        Nothing.
+    """
+    return (
+        f'refuse(){{ echo "REFUSING {var}=$1: $2" >&2; exit 2; }}\n'
+        f'check_home(){{   # path home cfg root -> refuse unless an allowed {var} placement\n'
+        '  case "$1" in /*) ;; *) refuse "$1" "it must be an absolute path" ;; esac\n'
+        '  case "$1" in /|*//*) refuse "$1" "it must not be / or contain //" ;; esac\n'
+        '  case "/$1/" in */../*|*/./*) refuse "$1" "it must not contain . or .. segments" ;; esac\n'
+        '  case "$1/" in\n'
+        f'    "$3/{subdir}/"?*) ;;\n'
+        f'    "$3"/*) refuse "$1" "inside ~/.config/agentteams it must be under {subdir}/ (the keys and operator files stay out of reach)" ;;\n'
+        '  esac\n'
+        '  case "$2/" in "$1"/*) refuse "$1" "it is \\$HOME or one of its parents" ;; esac\n'
+        '  case "$4/" in "$1"/*) refuse "$1" "it is this project or one of its parents" ;; esac\n'
+        '  case "$1/" in "$4"/*) refuse "$1" "it is inside this project; keep it outside the repo" ;; esac\n'
+        '}\n'
+        'HASH="$(printf %s "$ROOT" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)"\n'
+        f'{var}="${{{override_env}:-$HOME/.config/agentteams/{subdir}/$(basename "$ROOT")-$HASH}}"\n'
+        f'check_home "${{{var}%/}}" "$HOME" "$HOME/.config/agentteams" "$ROOT"   # BEFORE anything is created\n'
+        f'mkdir -p "${var}"; {var}="$(cd "${var}" && pwd -P)"\n'
+        'HOME_P="$(cd "$HOME" && pwd -P)"; CFG_P="$HOME_P/.config/agentteams"\n'
+        '[ -d "$CFG_P" ] && CFG_P="$(cd "$CFG_P" && pwd -P)"\n'
+        f'check_home "${var}" "$HOME_P" "$CFG_P" "$ROOT"   # again with symlinks resolved\n'
+    )
+
+
 def _build_codex_runner(manifest: dict[str, Any]) -> str:
     """Build the INERT ``.codex/confined-run.example.sh`` text.
 
@@ -249,26 +293,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         '[ -x "$LAUNCHER" ] || { echo "neutral launcher missing at $LAUNCHER (is confinement emitted for this team?)" >&2; exit 1; }\n'
         '[ "$(id -u)" -ne 0 ] || echo "WARNING: running as root; run as the workspace user." >&2\n'
         'command -v codex >/dev/null 2>&1 || { echo "codex not found on PATH" >&2; exit 1; }\n'
-        'refuse(){ echo "REFUSING CODEX_HOME=$1: $2" >&2; exit 2; }\n'
-        'check_home(){   # path home cfg root -> refuse unless an allowed CODEX_HOME placement\n'
-        '  case "$1" in /*) ;; *) refuse "$1" "it must be an absolute path" ;; esac\n'
-        '  case "$1" in /|*//*) refuse "$1" "it must not be / or contain //" ;; esac\n'
-        '  case "/$1/" in */../*|*/./*) refuse "$1" "it must not contain . or .. segments" ;; esac\n'
-        '  case "$1/" in\n'
-        '    "$3/codex-home/"?*) ;;\n'
-        '    "$3"/*) refuse "$1" "inside ~/.config/agentteams it must be under codex-home/ (the keys and operator files stay out of reach)" ;;\n'
-        '  esac\n'
-        '  case "$2/" in "$1"/*) refuse "$1" "it is \\$HOME or one of its parents" ;; esac\n'
-        '  case "$4/" in "$1"/*) refuse "$1" "it is this project or one of its parents" ;; esac\n'
-        '  case "$1/" in "$4"/*) refuse "$1" "it is inside this project; keep it outside the repo" ;; esac\n'
-        '}\n'
-        'HASH="$(printf %s "$ROOT" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)"\n'
-        'CODEX_HOME="${AGENTTEAMS_CODEX_HOME:-$HOME/.config/agentteams/codex-home/$(basename "$ROOT")-$HASH}"\n'
-        'check_home "${CODEX_HOME%/}" "$HOME" "$HOME/.config/agentteams" "$ROOT"   # BEFORE anything is created\n'
-        'mkdir -p "$CODEX_HOME"; CODEX_HOME="$(cd "$CODEX_HOME" && pwd -P)"\n'
-        'HOME_P="$(cd "$HOME" && pwd -P)"; CFG_P="$HOME_P/.config/agentteams"\n'
-        '[ -d "$CFG_P" ] && CFG_P="$(cd "$CFG_P" && pwd -P)"\n'
-        'check_home "$CODEX_HOME" "$HOME_P" "$CFG_P" "$ROOT"   # again with symlinks resolved\n'
+        + confined_home_bash("CODEX_HOME", "codex-home", "AGENTTEAMS_CODEX_HOME") +
         '# Config Codex trusts on its next run: create empty if absent, then protect, so it cannot be planted.\n'
         'for d in rules prompts skills plugins; do mkdir -p "$CODEX_HOME/$d"; done\n'
         '[ -e "$CODEX_HOME/config.toml" ] || : > "$CODEX_HOME/config.toml"\n'

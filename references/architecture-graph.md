@@ -5,7 +5,7 @@
 
 - Modules mapped: **259**
 - Packages: **9**
-- Internal import edges: **751**
+- Internal import edges: **752**
 - Distinct external dependencies: **11**
 
 ---
@@ -164,9 +164,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks._agents_md_ownership` | `agentteams.fences` | `agentteams.frameworks.codex`, `agentteams.frameworks.grok`, `agentteams.grok_config_emit` |
 | `agentteams.frameworks._agents_md_rules` | `agentteams.render` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.frameworks.structural_merge` |
 | `agentteams.frameworks._codex_role_gate_emit` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.write_policy` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.codex`, `agentteams.interop_grant_check` |
-| `agentteams.frameworks._codex_sandbox_emit` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.codex` |
+| `agentteams.frameworks._codex_sandbox_emit` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks.codex` |
 | `agentteams.frameworks._goose_sandbox_emit` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.host_features` | `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks.goose` |
-| `agentteams.frameworks._grok_sandbox_emit` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude` | `agentteams.frameworks.grok` |
+| `agentteams.frameworks._grok_sandbox_emit` | `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude` | `agentteams.frameworks.grok` |
 | `agentteams.frameworks._grok_tool_scoping` | — | `agentteams.frameworks.grok` |
 | `agentteams.frameworks._linux_sandbox_emit` | — | `agentteams.cli.generate_helpers`, `agentteams.control_plane_io`, `agentteams.frameworks.base`, `agentteams.frameworks.codex` |
 | `agentteams.frameworks._prompt_root_protect` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude` |
@@ -1920,6 +1920,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/frameworks/_grok_sandbox_emit.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.frameworks._codex_sandbox_emit",
         "agentteams.frameworks._goose_sandbox_emit",
         "agentteams.frameworks._write_roots",
         "agentteams.frameworks.claude"
@@ -5286,6 +5287,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks._goose_sandbox_emit",
       "target": "agentteams.host_features"
+    },
+    {
+      "source": "agentteams.frameworks._grok_sandbox_emit",
+      "target": "agentteams.frameworks._codex_sandbox_emit"
     },
     {
       "source": "agentteams.frameworks._grok_sandbox_emit",

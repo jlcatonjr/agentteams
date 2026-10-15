@@ -172,6 +172,18 @@ Things to know:
 
 ---
 
+### Known limits of the confined setup
+
+- **The launcher's warning is best-effort.** It reports Grok config tables and hook, workflow, plugin or LSP files
+  outside the agentteams-managed markers. A planted file that copies those markers is not reported. Inside the
+  launcher `.grok` is read-only, so this matters only for Grok run *outside* it.
+- **Your API key is readable inside the sandbox.** Launcher mode passes `XAI_API_KEY` through, so every agent
+  command can read it, as with Codex's auth. Prefer a key with a low spending limit, used only for this project.
+- **The hook gate runs code from the repository.** After you trust the folder, Grok runs
+  `.grok/hooks/agentteams-gate-shim.py` and the gate beside it. Anyone who can write `.grok/hooks` can already run
+  code after trust, which is why the launcher keeps `.grok` read-only. The shim ignores modules planted next to it
+  and runs the gate with `python -I`.
+
 ## Isolating Automated Runs
 
 Grok also imports **your user-level Claude configuration**: permission rules, hooks and skills from

@@ -37,6 +37,8 @@ GROK_GATE_REL = "../hooks/constitutional-gate.py"
 
 #: First line of every agentteams-owned file here; an existing file without it is never overwritten.
 GROK_OWNED_MARKER = "agentteams-managed"
+#: How the (unmodified) gate copy is recognised as agentteams': the template's own opening docstring.
+GROK_GATE_SIGNATURE = "constitutional-gate.py — PreToolUse hook enforcing"
 
 _TEMPLATES = Path(__file__).resolve().parents[1] / "templates" / "universal"
 
@@ -87,11 +89,13 @@ def grok_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
 
 
 def _read_template(rel: str) -> str:
+    """Return a shipped template under ``templates/universal`` (raises OSError when missing)."""
     return (_TEMPLATES / rel).read_text(encoding="utf-8")
 
 
 def _build_runner(manifest: dict[str, Any]) -> str:
     """Build the INERT ``.grok/confined-run.example.sh`` text (brief values only via the validated helpers)."""
+    from agentteams.frameworks._codex_sandbox_emit import confined_home_bash
     from agentteams.frameworks._goose_sandbox_emit import _runner_root_expr
     from agentteams.frameworks._write_roots import runner_exclude_flags, validate_write_roots
 
@@ -150,26 +154,7 @@ def _build_runner(manifest: dict[str, Any]) -> str:
         'LAUNCHER="$ROOT/sandbox/confine-run.sh"\n'
         '[ -x "$LAUNCHER" ] || { echo "neutral launcher missing at $LAUNCHER (is confinement emitted for this team?)" >&2; exit 1; }\n'
         '[ "$(id -u)" -ne 0 ] || echo "WARNING: running as root; run as the workspace user." >&2\n'
-        'refuse(){ echo "REFUSING GROK_HOME=$1: $2" >&2; exit 2; }\n'
-        'check_home(){   # path home cfg root -> refuse unless an allowed GROK_HOME placement\n'
-        '  case "$1" in /*) ;; *) refuse "$1" "it must be an absolute path" ;; esac\n'
-        '  case "$1" in /|*//*) refuse "$1" "it must not be / or contain //" ;; esac\n'
-        '  case "/$1/" in */../*|*/./*) refuse "$1" "it must not contain . or .. segments" ;; esac\n'
-        '  case "$1/" in\n'
-        '    "$3/grok-home/"?*) ;;\n'
-        '    "$3"/*) refuse "$1" "inside ~/.config/agentteams it must be under grok-home/" ;;\n'
-        '  esac\n'
-        '  case "$2/" in "$1"/*) refuse "$1" "it is \\$HOME or one of its parents" ;; esac\n'
-        '  case "$4/" in "$1"/*) refuse "$1" "it is this project or one of its parents" ;; esac\n'
-        '  case "$1/" in "$4"/*) refuse "$1" "it is inside this project; keep it outside the repo" ;; esac\n'
-        '}\n'
-        'HASH="$(printf %s "$ROOT" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-12)"\n'
-        'GROK_HOME="${AGENTTEAMS_GROK_HOME:-$HOME/.config/agentteams/grok-home/$(basename "$ROOT")-$HASH}"\n'
-        'check_home "${GROK_HOME%/}" "$HOME" "$HOME/.config/agentteams" "$ROOT"\n'
-        'mkdir -p "$GROK_HOME"; GROK_HOME="$(cd "$GROK_HOME" && pwd -P)"\n'
-        'HOME_P="$(cd "$HOME" && pwd -P)"; CFG_P="$HOME_P/.config/agentteams"\n'
-        '[ -d "$CFG_P" ] && CFG_P="$(cd "$CFG_P" && pwd -P)"\n'
-        'check_home "$GROK_HOME" "$HOME_P" "$CFG_P" "$ROOT"   # again with symlinks resolved\n'
+        + confined_home_bash("GROK_HOME", "grok-home", "AGENTTEAMS_GROK_HOME") +
         '# User-level config Grok trusts on its next run: create empty if absent, then protect.\n'
         'for d in agents rules skills hooks plugins personas; do mkdir -p "$GROK_HOME/$d"; done\n'
         'for f in config.toml sandbox.toml requirements.toml managed_config.toml trusted_folders.toml; do\n'
