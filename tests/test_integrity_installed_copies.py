@@ -48,8 +48,7 @@ def test_absent_copies_keep_their_recorded_digest(recorded: Path, capsys) -> Non
     after = _modules(recorded)
     assert after[CLAUDE_COPY] == before[CLAUDE_COPY] != ""
     assert after[GITHUB_COPY] == before[GITHUB_COPY] != ""
-    err = capsys.readouterr().err
-    assert err.count("kept its recorded digest") == 2 and "probably stale" not in err
+    assert capsys.readouterr().err.count("kept its recorded digest") == 2
 
 
 def test_present_copies_are_rehashed(recorded: Path, capsys) -> None:
@@ -72,15 +71,57 @@ def test_first_manifest_records_empty_with_a_notice(tmp_path: Path, capsys) -> N
     integrity.write_manifest(_tree(tmp_path, skip=tuple(integrity.INSTALLED_COPIES)))
     modules = _modules(tmp_path)
     assert modules[CLAUDE_COPY] == modules[GITHUB_COPY] == ""
-    assert capsys.readouterr().err.count("has no prior digest") == 2
+    assert capsys.readouterr().err.count("has no well-formed prior digest") == 2
 
 
-def test_a_changed_template_warns_the_kept_digest_is_stale(recorded: Path, capsys) -> None:
-    (recorded / CLAUDE_COPY).unlink()
-    (recorded / TEMPLATE).write_text("new gate template", encoding="utf-8")
-    integrity.write_manifest(recorded)
+@pytest.fixture
+def installed(tmp_path: Path) -> Path:
+    """A recorded tree whose copies are byte-identical to the template, as a real install is."""
+    _tree(tmp_path)
+    for rel in integrity.INSTALLED_COPIES:
+        (tmp_path / rel).write_bytes((tmp_path / TEMPLATE).read_bytes())
+    integrity.write_manifest(tmp_path)
+    for rel in integrity.INSTALLED_COPIES:
+        (tmp_path / rel).unlink()
+    return tmp_path
+
+
+def test_a_kept_digest_matching_the_template_is_quiet(installed: Path, capsys) -> None:
+    integrity.write_manifest(installed)
     err = capsys.readouterr().err
-    assert "kept its recorded digest" in err and "probably stale" in err and CLAUDE_COPY in err
+    assert err.count("kept its recorded digest") == 2 and "WARNING" not in err
+
+
+def test_a_changed_template_warns_for_each_kept_digest(installed: Path, capsys) -> None:
+    (installed / TEMPLATE).write_text("new gate template", encoding="utf-8")
+    integrity.write_manifest(installed)
+    err = capsys.readouterr().err
+    assert err.count("probably stale") == 2 and CLAUDE_COPY in err and GITHUB_COPY in err
+
+
+def test_a_planted_digest_is_kept_but_warned_about(installed: Path, capsys) -> None:
+    path = installed / integrity.MANIFEST_REL_PATH
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["modules"][CLAUDE_COPY] = "ab" * 32
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    integrity.write_manifest(installed)
+    err = capsys.readouterr().err
+    assert _modules(installed)[CLAUDE_COPY] == "ab" * 32
+    assert "WARNING" in err and CLAUDE_COPY in err.split("WARNING")[1]
+
+
+@pytest.mark.parametrize("junk", ["not-a-digest", "AB" * 32, "ab" * 31])
+def test_a_malformed_prior_digest_is_not_carried(installed: Path, junk: str) -> None:
+    path = installed / integrity.MANIFEST_REL_PATH
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["modules"][CLAUDE_COPY] = junk
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    integrity.write_manifest(installed)
+    assert _modules(installed)[CLAUDE_COPY] == ""
+
+
+def test_the_template_constant_is_a_pinned_module() -> None:
+    assert TEMPLATE in integrity.ENFORCEMENT_MODULES
 
 
 @pytest.mark.parametrize("corrupt", ["{not json", '{"modules": ["a"]}', '["x"]', '{"modules": {"a": 1}}'])

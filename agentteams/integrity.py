@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -309,6 +310,10 @@ def compute_digests(repo_root: Path) -> dict[str, str]:
 #: The authoritative template of the two :data:`INSTALLED_COPIES`. When it changes, a copy
 #: digest carried over by :func:`write_manifest` probably describes the superseded bytes.
 _GATE_TEMPLATE = "agentteams/templates/universal/hooks/constitutional-gate.py"
+if _GATE_TEMPLATE not in ENFORCEMENT_MODULES:  # a drifted path would silently drop the stale warning
+    raise RuntimeError(f"integrity: {_GATE_TEMPLATE} is not a pinned enforcement module")
+
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def _notice(message: str) -> None:
@@ -320,9 +325,10 @@ def _previous_modules(manifest_path: Path) -> dict[str, str] | None:
     if not manifest_path.exists():
         return {}
     try:
-        modules = json.loads(manifest_path.read_text(encoding="utf-8")).get("modules")
-    except (OSError, ValueError, AttributeError):
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return None
+    modules = payload.get("modules") if isinstance(payload, dict) else None
     if not isinstance(modules, dict) or not all(isinstance(v, str) for v in modules.values()):
         return None
     return modules
@@ -337,9 +343,11 @@ def _carry_over_installed_copies(digests: dict[str, str], previous: dict[str, st
     ``exists()``, never by an empty digest: :func:`_digest` also returns ``""`` for a present
     but unreadable file, and that file must not inherit the old pin.
 
-    Rule-12, named: keeping an old digest can keep a stale one. Each carry-over is announced, and
-    a change to the gate template in the same re-record is warned about, rather than narrowing
-    the carry-over.
+    Rule-12, named: keeping an old digest can keep a stale or planted one alive across a
+    re-record, outside that re-record's diff. Each carry-over is announced, only a well-formed
+    SHA-256 is carried, and a kept digest that differs from the current gate template's (the
+    copies are installed byte-for-byte from it) is warned about, rather than narrowing the
+    carry-over.
     """
     absent = sorted(rel for rel in INSTALLED_COPIES if not (repo_root / rel).exists())
     if not absent:
@@ -348,17 +356,16 @@ def _carry_over_installed_copies(digests: dict[str, str], previous: dict[str, st
         _notice("the existing manifest is unreadable, so no installed-copy digest is preserved; "
                 f"recording '' for {', '.join(absent)}.")
         return
-    template_changed = bool(previous.get(_GATE_TEMPLATE)) and previous[_GATE_TEMPLATE] != digests.get(_GATE_TEMPLATE)
     for rel in absent:
         kept = previous.get(rel, "")
-        if not kept:
-            _notice(f"{rel} is absent here and has no prior digest; recording ''.")
+        if not _SHA256_RE.fullmatch(kept):
+            _notice(f"{rel} is absent here and has no well-formed prior digest; recording ''.")
             continue
         digests[rel] = kept
         _notice(f"{rel} is absent here (gitignored install); kept its recorded digest {kept[:12]}.")
-        if template_changed:
-            _notice(f"WARNING: {_GATE_TEMPLATE} changed in this re-record, so the kept digest of {rel} "
-                    "is probably stale. Re-record from a checkout where the hook is installed.")
+        if kept != digests.get(_GATE_TEMPLATE):
+            _notice(f"WARNING: the kept digest of {rel} differs from the current {_GATE_TEMPLATE}, so it is "
+                    "probably stale. Re-record from a checkout where the hook is installed.")
 
 
 def write_manifest(repo_root: Path) -> Path:
