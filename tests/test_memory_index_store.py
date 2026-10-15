@@ -379,7 +379,13 @@ def test_scanner_exempts_only_listed_unmodified_shards(tmp_path, monkeypatch):
 
 
 def test_scanner_and_store_agree_on_part_names():
+    import inspect
+
+    from agentteams import scan_operational
     from agentteams.scan_operational import _MEMORY_INDEX_PART_RE
+
+    source = inspect.getsource(scan_operational._is_listed_memory_index_part)
+    assert f'"{st.INDEX_FILE_NAME}"' in source and f'"{st.SHARDS_ARTIFACT_TYPE}"' in source
 
     for name in ("memory-index.part-0001.json", "memory-index.part-9999.json",
                  "memory-index.part-1.json", "memory-index.part-٠٠٠١.json",

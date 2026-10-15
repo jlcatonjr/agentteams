@@ -26,6 +26,10 @@ The manifest requirement is Rule 12: exempting the shard name pattern alone woul
 9999 new exempt names to anyone who can write to `references/`. A file that only matches the
 pattern, or a listed shard edited after the index was written, is scanned normally.
 
+Accepted residue: whoever can write `references/` can also write a manifest that lists a planted
+shard with its correct hash. That adds nothing they lacked, since `memory-index.json` itself is
+exempt by name and could carry the same payload. Injection and credential checks run either way.
+
 ## API
 
 ### `_is_operational_json(file_path, agents_dir)`

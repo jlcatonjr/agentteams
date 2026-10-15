@@ -29,6 +29,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+# Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
+# placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
+from agentteams.scan_operational import (  # noqa: F401  (re-exported)
+    _OPERATIONAL_JSON_DIR,
+    _OPERATIONAL_JSON_NAMES,
+    _is_operational_json,
+)
 
 # ---------------------------------------------------------------------------
 # Patterns
@@ -342,15 +349,6 @@ def print_scan_report(report: ScanReport) -> None:
 # ---------------------------------------------------------------------------
 # Internal scanning logic
 # ---------------------------------------------------------------------------
-
-# Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
-# placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
-from agentteams.scan_operational import (  # noqa: E402,F401
-    _OPERATIONAL_JSON_DIR,
-    _OPERATIONAL_JSON_NAMES,
-    _is_operational_json,
-)
-
 
 #: Unicode categories stripped before pattern matching. `Cf` is the format-character class —
 #: zero-width space, zero-width joiner, the bidi overrides, the TAG block. None of them render,

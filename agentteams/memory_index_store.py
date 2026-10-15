@@ -139,14 +139,13 @@ def max_shard_bytes_from_env() -> int:
     raw = os.environ.get(MAX_SHARD_BYTES_ENV, "").strip()
     if not raw:
         return DEFAULT_MAX_SHARD_BYTES
+    message = f"{MAX_SHARD_BYTES_ENV}={raw!r} is not an integer >= {MIN_MAX_SHARD_BYTES}"
     try:
         value = int(raw)
-    except ValueError:
-        value = 0
+    except ValueError as exc:
+        raise MemoryIndexError(message) from exc
     if value < MIN_MAX_SHARD_BYTES:
-        raise MemoryIndexError(
-            f"{MAX_SHARD_BYTES_ENV}={raw!r} is not an integer >= {MIN_MAX_SHARD_BYTES}"
-        )
+        raise MemoryIndexError(message)
     return value
 
 
