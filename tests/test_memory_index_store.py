@@ -121,11 +121,27 @@ def test_encoding_is_deterministic(tmp_path):
 def test_cap_from_env(monkeypatch):
     monkeypatch.delenv(st.MAX_SHARD_BYTES_ENV, raising=False)
     assert st.max_shard_bytes_from_env() == st.DEFAULT_MAX_SHARD_BYTES
-    monkeypatch.setenv(st.MAX_SHARD_BYTES_ENV, "5")
-    assert st.max_shard_bytes_from_env() == st.MIN_MAX_SHARD_BYTES
-    monkeypatch.setenv(st.MAX_SHARD_BYTES_ENV, "not-a-number")
-    assert st.max_shard_bytes_from_env() == st.DEFAULT_MAX_SHARD_BYTES
     assert st.DEFAULT_MAX_SHARD_BYTES < 50_000_000  # under GitHub's warning threshold
+    monkeypatch.setenv(st.MAX_SHARD_BYTES_ENV, "65536")
+    assert st.max_shard_bytes_from_env() == 65536
+    for bad in ("5", "not-a-number", "-1"):  # a misconfigured cap fails loudly, never silently
+        monkeypatch.setenv(st.MAX_SHARD_BYTES_ENV, bad)
+        with pytest.raises(MemoryIndexError, match=st.MAX_SHARD_BYTES_ENV):
+            st.max_shard_bytes_from_env()
+
+
+@pytest.mark.parametrize("cap", [0, -5, True, 1023, "4096"])
+def test_encode_rejects_bad_caps(tmp_path, cap):
+    with pytest.raises(ValueError):
+        st.encode_memory_index(_index(tmp_path, n_docs=2), max_shard_bytes=cap)
+
+
+def test_encode_and_part_names_reject_bad_input():
+    with pytest.raises(TypeError):
+        st.encode_memory_index([], max_shard_bytes=4096)  # type: ignore[arg-type]
+    for bad in (True, 0, 10_000):
+        with pytest.raises(ValueError):
+            st.part_file_name(bad)
 
 
 # --- fail-safe reads -------------------------------------------------------------------
@@ -173,6 +189,42 @@ def test_manifest_cannot_name_other_files(tmp_path, bad_file):
     path.write_text(json.dumps(manifest))
     with pytest.raises(MemoryIndexError, match="entry 1 is malformed"):
         st.read_memory_index_payload(path)
+
+
+def test_symlinked_shard_is_refused_on_the_cli_path(tmp_path):
+    """A committed shard that is a symlink out of the index directory is never followed,
+    even when its target's bytes match the manifest."""
+    path = _sharded(tmp_path)
+    part = _parts(path.parent)[0]
+    outside = tmp_path / "outside.json"
+    outside.write_bytes(part.read_bytes())
+    part.unlink()
+    part.symlink_to(outside)
+    with pytest.raises(MemoryIndexError, match="resolves outside the index directory"):
+        st.read_memory_index_payload(path)
+
+
+def test_stale_cleanup_skips_directories(tmp_path):
+    path = _sharded(tmp_path)
+    squatter = path.parent / st.part_file_name(9999)
+    squatter.mkdir()
+    st.write_encoded_index(path, st.encode_memory_index(_index(tmp_path / "again"),
+                                                         max_shard_bytes=4096))
+    assert squatter.is_dir()
+
+
+def test_orphan_parts_are_reported(tmp_path, monkeypatch, capsys):
+    _, agents, manifest = _project(tmp_path)
+    monkeypatch.setenv(st.MAX_SHARD_BYTES_ENV, "4096")
+    artifacts._write_memory_index(manifest, agents)
+    index_path = agents / INDEX_REL
+    assert st.orphan_part_files(index_path) == []
+    # An older writer replaces the manifest with a single file and leaves the parts.
+    index = artifacts._read_memory_index(agents)
+    index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+    assert len(st.orphan_part_files(index_path)) >= 3
+    artifacts._read_memory_index(agents)
+    assert "unused memory-index.part-" in capsys.readouterr().err
 
 
 def test_crlf_checkout_still_verifies(tmp_path):
@@ -301,23 +353,55 @@ def test_incremental_sed_path_only_runs_on_legacy_layout(tmp_path, monkeypatch):
 # --- scanner, fleet, recall ------------------------------------------------------------
 
 
-def test_scanner_exempts_only_anchored_exact_shard_names(tmp_path):
+def test_scanner_exempts_only_listed_unmodified_shards(tmp_path, monkeypatch):
+    """Rule 12: the shard exemption must not hand out 9999 exempt names. Only a part the
+    sibling manifest lists, with its current sha256, skips the path/entropy detectors."""
     from agentteams.scan import _is_operational_json
 
-    agents = tmp_path / "agents"
+    _, agents, manifest = _project(tmp_path)
+    monkeypatch.setenv(st.MAX_SHARD_BYTES_ENV, "4096")
+    artifacts._write_memory_index(manifest, agents)
     refs = agents / "references"
-    refs.mkdir(parents=True)
-    assert _is_operational_json(refs / "memory-index.part-0001.json", agents)
+    listed = _parts(refs)
+    assert listed and all(_is_operational_json(p, agents) for p in listed)
+
+    planted = refs / st.part_file_name(9000)  # matches the pattern, not in the manifest
+    planted.write_text("{}")
+    assert not _is_operational_json(planted, agents)
+    listed[0].write_bytes(listed[0].read_bytes() + b"\n")  # edited after the write
+    assert not _is_operational_json(listed[0], agents)
     assert not _is_operational_json(refs / "memory-index.part-1.json", agents)
-    assert not _is_operational_json(refs / "memory-index.part-0001.json.bak", agents)
-    assert not _is_operational_json(agents / "elsewhere" / "memory-index.part-0001.json", agents)
+    elsewhere = agents / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "memory-index.json").write_bytes((refs / "memory-index.json").read_bytes())
+    (elsewhere / listed[1].name).write_bytes(listed[1].read_bytes())
+    assert not _is_operational_json(elsewhere / listed[1].name, agents)
 
 
-def test_fleet_treats_shards_as_volatile():
-    from agentteams.fleet import _VOLATILE_PART_RE
+def test_scanner_and_store_agree_on_part_names():
+    from agentteams.scan_operational import _MEMORY_INDEX_PART_RE
 
-    assert _VOLATILE_PART_RE.search(".github/agents/references/memory-index.part-0003.json")
-    assert not _VOLATILE_PART_RE.search(".github/agents/references/memory-index.part-0003.json.orig")
+    for name in ("memory-index.part-0001.json", "memory-index.part-9999.json",
+                 "memory-index.part-1.json", "memory-index.part-٠٠٠١.json",
+                 "memory-index.part-0001.json.orig", "xmemory-index.part-0001.json"):
+        assert bool(_MEMORY_INDEX_PART_RE.fullmatch(name)) == st.is_part_file_name(name), name
+
+
+def test_incremental_sed_skip_is_announced(tmp_path, monkeypatch, capsys):
+    _, agents, manifest = _project(tmp_path, n_docs=3)
+    artifacts._write_memory_index(manifest, agents)
+    monkeypatch.setenv("AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED", "1")
+    artifacts._write_memory_index(manifest, agents)
+    assert "Incremental memory-index update skipped (compact/sharded layout)" in capsys.readouterr().out
+
+
+def test_fleet_volatile_flag_already_covers_a_sharded_index():
+    """Fleet needs no shard rule: every sharded write rewrites memory-index.json too, and that
+    file's volatile-tracked REVIEW flag already surfaces the change; non-.md files get no
+    user-editable audit either way."""
+    from agentteams.fleet import _VOLATILE_SUFFIXES
+
+    assert "references/memory-index.json" in _VOLATILE_SUFFIXES
 
 
 def test_recall_mcp_reads_sharded_index_and_confines_parts(tmp_path, monkeypatch):
@@ -335,5 +419,5 @@ def test_recall_mcp_reads_sharded_index_and_confines_parts(tmp_path, monkeypatch
     outside.write_bytes(part.read_bytes())
     part.unlink()
     part.symlink_to(outside)
-    with pytest.raises(ToolError, match="outside the project"):
+    with pytest.raises(ToolError, match="outside"):
         recall.call("query_index", {"query": "deploy", "k": 3}, root)

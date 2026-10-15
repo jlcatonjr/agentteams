@@ -374,6 +374,8 @@ _REFACTOR_MODULES = (
     "agentteams/output_plan.py",
     "agentteams/cli/schema_cache.py",
     "agentteams/cli/operator_signing.py",
+    "agentteams/memory_index_store.py",
+    "agentteams/scan_operational.py",
 )
 
 

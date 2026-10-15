@@ -1017,10 +1017,13 @@ def _read_memory_index(output_dir: Path) -> dict[str, object]:
 
     Raises RuntimeError when the file, or any shard it lists, is missing or invalid.
     """
-    from agentteams.memory_index_store import read_memory_index_payload
+    from agentteams.memory_index_store import orphan_part_files, read_memory_index_payload
 
     index, chunks = read_memory_index_payload(output_dir / MEMORY_INDEX_REL_PATH)
     _validate_memory_index_bytes(index, chunks, output_dir)
+    if orphans := orphan_part_files(output_dir / MEMORY_INDEX_REL_PATH):  # older writer left them
+        print(f"  !  {len(orphans)} unused memory-index.part-*.json file(s) beside a single-file "
+              "index (an older agentteams rewrote it?); --refresh-index removes them.", file=sys.stderr)
     return index
 
 
@@ -1096,7 +1099,9 @@ def _write_memory_index(manifest: dict, output_dir: Path) -> Path:
 
     # The sed path patches the legacy indent=2 single-file layout line by line; it has
     # no anchors in the compact or sharded layout, which take the full rebuild below.
-    if incremental_enabled and is_legacy_layout(index_path):
+    if incremental_enabled and index_path.exists() and not is_legacy_layout(index_path):
+        print("  !  Incremental memory-index update skipped (compact/sharded layout); full rebuild.")
+    elif incremental_enabled and index_path.exists():
         try:
             current = _read_memory_index(output_dir)
             result = try_incremental_sed_update(

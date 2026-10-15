@@ -27,7 +27,8 @@ The payload was not the problem; the layout was. Each posting entry took six ind
   the index above), and still line-diffable. Paragraphs keep one line each, so the line-based
   content scanner sees the same units as before.
 - **Shards** (`encode_memory_index`). When the compact text is larger than the cap (default
-  20 MiB; set `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES` to change it, minimum 1024),
+  20 MiB; set `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES` to change it; a value that is not an
+  integer of at least 1024 fails the write rather than being ignored),
   the documents and then the postings terms are packed, in order, into
   `references/memory-index.part-0001.json`, `…-0002.json`, … Each part is a valid JSON object
   (`artifact_type: "memory-index-part"`) under the cap. `references/memory-index.json` becomes a
@@ -56,8 +57,8 @@ merge-conflicted or edited part raises `MemoryIndexError` naming the part and th
 (`run agentteams --refresh-index to rebuild it`). It never returns a partial index, which would
 quietly answer from a subset of the corpus. The manifest can name only
 `memory-index.part-NNNN.json` files in its own directory, numbered 1..N in order, so it cannot
-point a reader at another file. The recall MCP server also passes its project-confinement check
-for each part.
+point a reader at another file, and a part that is a symlink resolving outside that directory is
+refused. The recall MCP server also applies its project-confinement check to each part.
 
 A reader that loads the manifest between a writer's shard writes and its manifest write sees a
 sha256 mismatch. The read is retried once from a fresh manifest before it fails.
@@ -76,19 +77,25 @@ by Windows or `core.autocrlf`, and a Windows checkout still verifies.
 - **Readers that predate sharding** (older agentteams installs, ad-hoc scripts) see the
   manifest at `memory-index.json`. The index schema pins `artifact_type` to `memory-index`, so
   they reject it with a schema error instead of treating it as an empty index. Upgrade them,
-  or raise the cap to keep the file whole.
+  or raise the cap to keep the file whole. Once an index is sharded, every agentteams that
+  writes it should be on this release or later: an older `--refresh-index` rewrites one large
+  `indent=2` file and leaves the parts behind. The next read by this release warns about those
+  unused parts (`orphan_part_files`), and its next write removes them.
 - **Incremental `sed` updates** (`AGENTTEAMS_MEMORY_INDEX_INCREMENTAL_SED=1`,
   [`memory_index_incremental`](memory-index-incremental.md)) patch the `indent=2` layout line
-  by line. They run only on a legacy-layout file; the compact and sharded layouts take the full
-  rebuild, which is always correct.
+  by line. They run only on a legacy-layout file; on the compact and sharded layouts the refresh
+  prints that it skipped them and takes the full rebuild, which is always correct.
 - **Merge conflicts.** Do not hand-merge the index. Take either side and run
   `agentteams --refresh-index`. A conflicted part fails its sha256 check, so a hand-merge that
   goes wrong is caught.
 
-The content scanner exempts parts from its absolute-path and entropy checks on the same terms
-as `memory-index.json`: the exact name pattern, directly in the agents directory's
-`references/`. Injection and credential-pattern checks still run on them. Fleet runs treat the
-parts as volatile, like the index itself.
+The content scanner exempts a part from its absolute-path, entropy and placeholder checks only
+when it sits directly in the agents directory's `references/` **and** the manifest beside it
+lists it with the sha256 of its current bytes (`agentteams/scan_operational.py`, integrity-pinned).
+A file that only matches the name pattern, or a listed part edited after the write, is scanned
+like any other file. Injection and credential-pattern checks always run. Fleet runs need no
+shard rule: every sharded write also rewrites `memory-index.json`, which fleet already flags as
+a tracked volatile file.
 
 ## API
 
@@ -134,7 +141,8 @@ match the manifest.
 - `part_file_name(number)` → `memory-index.part-NNNN.json` (raises `ValueError` outside 1..9999).
 - `is_part_file_name(name)` → whether a bare name is a part name.
 - `is_legacy_layout(index_path)` → whether the file is a single-file `indent=2` index.
-- `max_shard_bytes_from_env()` → the cap in bytes.
+- `max_shard_bytes_from_env()` → the cap in bytes (raises `MemoryIndexError` on an invalid value).
+- `orphan_part_files(index_path)` → part files beside a single-file index, which no reader uses.
 
 ## See also
 

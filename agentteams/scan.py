@@ -343,49 +343,13 @@ def print_scan_report(report: ScanReport) -> None:
 # Internal scanning logic
 # ---------------------------------------------------------------------------
 
-# T3a.2 v2: operational-metadata JSON files written by the build
-# pipeline legitimately carry absolute paths into the working tree
-# (delivery receipts, memory index, build log, etc.). Suppress the
-# absolute-path PII detector for these specific files. Other
-# detectors (credentials, entropy) still apply.
-_OPERATIONAL_JSON_NAMES = frozenset({
-    "build-log.json",
-    "delivery-receipt.json",
-    "memory-index.json",
-    "eval-suite.json",
-    "doc-hashes.json",
-    "security-vulnerability-watch.json",
-})
-
-#: Shards of a size-capped memory index (``agentteams.memory_index_store``). Defined here, not
-#: imported: this module is integrity-pinned, and an exemption predicate living in an unpinned
-#: module could be widened without tripping the pin.
-_MEMORY_INDEX_PART_RE = re.compile(r"memory-index\.part-[0-9]{4}\.json")
-
-#: Directory, relative to the scanned agents dir, where the pipeline writes those files.
-#:
-#: The exemption was keyed on BASENAME and applied via `rglob`, so any file anywhere in the
-#: tree named `memory-index.json` inherited it — an agent with write access could pre-blind the
-#: scanner to its own payload simply by choosing the filename (probe B9, the LLM08
-#: retrieval-poisoning path). Anchoring to the one directory the pipeline actually writes them
-#: to makes the exemption a statement about provenance rather than about spelling.
-_OPERATIONAL_JSON_DIR = "references"
-
-
-def _is_operational_json(file_path: Path, agents_dir: Path) -> bool:
-    """True when *file_path* is a pipeline-written operational JSON file.
-
-    Requires BOTH the known basename AND residence directly in the agents dir's
-    ``references/`` directory. A file that satisfies only one is scanned normally.
-    A sharded memory index's parts (``memory-index.part-NNNN.json``, exact pattern) are
-    the same artifact split for size, so they take the same exemption on the same terms.
-    """
-    if file_path.name not in _OPERATIONAL_JSON_NAMES and not _MEMORY_INDEX_PART_RE.fullmatch(file_path.name):
-        return False
-    try:
-        return file_path.resolve().parent == (agents_dir / _OPERATIONAL_JSON_DIR).resolve()
-    except OSError:
-        return False
+# Operational-JSON exemption (which pipeline-written JSON skips the absolute-path / entropy /
+# placeholder detectors): carved to the integrity-pinned ``scan_operational`` module.
+from agentteams.scan_operational import (  # noqa: E402,F401
+    _OPERATIONAL_JSON_DIR,
+    _OPERATIONAL_JSON_NAMES,
+    _is_operational_json,
+)
 
 
 #: Unicode categories stripped before pattern matching. `Cf` is the format-character class —

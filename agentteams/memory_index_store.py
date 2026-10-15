@@ -1,7 +1,7 @@
 """On-disk layout of the committed memory index: compact lines, size-capped native shards.
 
 The memory index (:mod:`agentteams.memory_index`) is a **committed** artifact, and it outgrew
-GitHub's limits: a downstream index reached 56.1 MB (GitHub warns above 50 MB and rejects files
+GitHub's limits: a downstream index reached 56.1 MiB (GitHub warns above 50 MB and rejects files
 above 100 MB). Measured on that index, 74% of the bytes were the ``postings`` map and about half
 of the whole file was ``indent=2`` whitespace, one line per ``{"doc_id", "tf"}`` field. Stored
 paragraph text was 12%. So the payload is not the problem; the layout is.
@@ -108,7 +108,7 @@ def part_file_name(number: int) -> str:
     Raises:
         ValueError: If *number* is out of range.
     """
-    if not 1 <= number <= MAX_PARTS:
+    if isinstance(number, bool) or not isinstance(number, int) or not 1 <= number <= MAX_PARTS:
         raise ValueError(f"shard number {number} outside 1..{MAX_PARTS}")
     return f"memory-index.part-{number:04d}.json"
 
@@ -129,8 +129,12 @@ def max_shard_bytes_from_env() -> int:
     """Return the shard size cap: :data:`MAX_SHARD_BYTES_ENV` when set and valid, else the default.
 
     Returns:
-        The cap in bytes, never below :data:`MIN_MAX_SHARD_BYTES`. An unparseable value falls
-        back to the default rather than failing a build.
+        The cap in bytes.
+
+    Raises:
+        MemoryIndexError: If the variable is set but is not an integer of at least
+            :data:`MIN_MAX_SHARD_BYTES` (a misconfigured cap fails the write, never silently
+            changes it).
     """
     raw = os.environ.get(MAX_SHARD_BYTES_ENV, "").strip()
     if not raw:
@@ -138,8 +142,12 @@ def max_shard_bytes_from_env() -> int:
     try:
         value = int(raw)
     except ValueError:
-        return DEFAULT_MAX_SHARD_BYTES
-    return max(value, MIN_MAX_SHARD_BYTES)
+        value = 0
+    if value < MIN_MAX_SHARD_BYTES:
+        raise MemoryIndexError(
+            f"{MAX_SHARD_BYTES_ENV}={raw!r} is not an integer >= {MIN_MAX_SHARD_BYTES}"
+        )
+    return value
 
 
 def _dump(value: Any) -> str:
@@ -184,8 +192,10 @@ def _render(obj: dict[str, Any], rendered_bulk: dict[str, str]) -> str:
 def serialize_index(index: dict[str, Any]) -> str:
     """Render *index* in the compact line layout (same object, same schema, about half the bytes).
 
-    Deterministic: equal indexes always render to identical text, so a rebuild over unchanged
-    sources changes only the fields that record the build itself.
+    Deterministic in its input: equal indexes always render to identical text. The index itself
+    is not stable across rebuilds (``built_at``; ``source_mtime`` from the local checkout;
+    ``doc_id`` and ``vector_norm_sq`` shift when a source is added), so a rebuild still rewrites
+    most lines whatever the layout. That churn predates this module.
 
     Args:
         index: A memory index payload.
@@ -253,9 +263,16 @@ def encode_memory_index(index: dict[str, Any], *, max_shard_bytes: int | None = 
         so small indexes keep the one-file layout every existing reader expects.
 
     Raises:
-        MemoryIndexError: If the index would need more than :data:`MAX_PARTS` shards.
+        TypeError: If *index* is not a dict.
+        ValueError: If *max_shard_bytes* is not an integer of at least :data:`MIN_MAX_SHARD_BYTES`.
+        MemoryIndexError: If the index would need more than :data:`MAX_PARTS` shards, or the
+            environment cap is invalid.
     """
+    if not isinstance(index, dict):
+        raise TypeError(f"index must be a dict, not {type(index).__name__}")
     cap = max_shard_bytes if max_shard_bytes is not None else max_shard_bytes_from_env()
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < MIN_MAX_SHARD_BYTES:
+        raise ValueError(f"max_shard_bytes must be an integer >= {MIN_MAX_SHARD_BYTES}, got {cap!r}")
     single = serialize_index(index)
     if len(single) <= cap:
         return EncodedIndex(files=((INDEX_FILE_NAME, single),), chunks=(single.encode("ascii"),))
@@ -320,7 +337,9 @@ def write_encoded_index(index_path: Path, encoded: EncodedIndex) -> list[Path]:
         written.append(target)
     keep = {name for name, _ in encoded.files}
     for stale in sorted(directory.glob("memory-index.part-*.json")):
-        if is_part_file_name(stale.name) and stale.name not in keep:
+        if not is_part_file_name(stale.name) or stale.name in keep:
+            continue
+        if stale.is_symlink() or stale.is_file():  # never a directory; a symlink, not its target
             stale.unlink(missing_ok=True)
     return written
 
@@ -342,6 +361,29 @@ def is_legacy_layout(index_path: Path) -> bool:
             return handle.read(5) == b'{\n  "'
     except OSError:
         return False
+
+
+def orphan_part_files(index_path: Path) -> list[Path]:
+    """Shard files beside a *single-file* index, which no reader uses.
+
+    They appear when an agentteams release older than sharding rewrites a sharded index as one
+    file and leaves the parts behind. The next write by this release removes them.
+
+    Args:
+        index_path: Path of ``memory-index.json``.
+
+    Returns:
+        The orphaned part paths; empty when the index is sharded, absent, or has none.
+    """
+    try:
+        with index_path.open("rb") as handle:
+            head = handle.read(256)
+    except OSError:
+        return []
+    if f'"{SHARDS_ARTIFACT_TYPE}"'.encode("ascii") in head:
+        return []
+    return sorted(p for p in index_path.parent.glob("memory-index.part-*.json")
+                  if is_part_file_name(p.name))
 
 
 def _fail(message: str) -> MemoryIndexError:
@@ -380,6 +422,12 @@ def _assemble(
     chunks: list[bytes] = []
     for number, part in enumerate(parts, start=1):
         path = index_path.parent / part["file"]
+        try:
+            inside = path.resolve().parent == index_path.parent.resolve()
+        except (OSError, RuntimeError):  # RuntimeError: a symlink loop on Python < 3.13
+            inside = False
+        if not inside:
+            raise _fail(f"memory index shard {part['file']} resolves outside the index directory")
         if confine is not None:
             path = confine(path)
         try:
@@ -469,6 +517,7 @@ __all__ = [
     "encode_memory_index",
     "is_legacy_layout",
     "is_part_file_name",
+    "orphan_part_files",
     "max_shard_bytes_from_env",
     "part_file_name",
     "read_memory_index_payload",

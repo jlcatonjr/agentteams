@@ -26,9 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manifest no longer lists. Readers older than this release reject the manifest (the index schema pins
   `artifact_type`) instead of reading it as an empty index. The opt-in incremental `sed` path now runs only on a
   legacy-layout file.
-- `scan.py` gives exact-named parts in the agents dir's `references/` the same absolute-path/entropy exemption as
-  `memory-index.json` (pattern defined in the pinned module, not imported; re-pinned in
-  `references/enforcement-integrity.json`). `fleet.py` treats parts as volatile. Docs:
+- Once a repo's index is sharded, every agentteams that writes it should be on this release or later: an older
+  `--refresh-index` writes one large file and leaves the parts; this release warns about such unused parts on read
+  and removes them on its next write. A part that is a symlink out of its directory is refused. An invalid
+  `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES` fails the write. The skipped incremental `sed` path is announced.
+- The scanner's operational-JSON exemption is carved from `scan.py` (it sat at 975 of 1000 lines) into the new
+  integrity-pinned `agentteams/scan_operational.py` (added to `ENFORCEMENT_MODULES`). A shard is exempt from the
+  absolute-path/entropy/placeholder detectors only when it sits in the agents dir's `references/` and the sibling
+  manifest lists it with its current sha256 (Rule 12: the name pattern alone would hand out 9999 exempt names).
+  `scan.py`, `integrity.py` and the new module re-pinned in `references/enforcement-integrity.json`. Docs:
   `docs_src/api-reference/memory-index-store.md`. Tests: `tests/test_memory_index_store.py`.
 
 ### fix (merge: a dropped navigator `## Invariant Core` twin no longer takes `### Project Structure` with it)
