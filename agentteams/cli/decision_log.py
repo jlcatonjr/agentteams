@@ -428,15 +428,27 @@ def append_signed_decision_row(output_dir: Path, row: dict[str, str]) -> None:
                 f"refusing to append a signed row that would be silently truncated. Migrate the log "
                 f"header to include {sorted(required)} first (fail-closed)."
             )
+        # The operator confirmed a payload whose prev_digest was this log's tip; if the log changed
+        # during confirmation, appending would break the chain (or bind the wrong row). Refuse.
+        if "prev_digest" in {c.strip() for c in fieldnames}:
+            from agentteams.cli.decision_chain import chain_tip
+
+            tip = chain_tip(rows, fieldnames, signing_active=True)
+            if (row.get("prev_digest") or "").strip() != tip:
+                raise RuntimeError(
+                    f"security-decisions log at {log_path} changed while the decision was being "
+                    "confirmed (its chain tip moved); nothing appended. Re-run the signing command."
+                )
         columns = list(fieldnames)
         rows = rows + [row]
         atomic_rewrite_csv_rows(log_path, rows, columns)
     else:
-        columns = list(SIGNED_DECISION_COLUMNS)
+        # The legacy required columns lead, so the new log is readable (_security_decision_schema_kind).
+        columns = ["timestamp", "requesting_agent", *SIGNED_DECISION_COLUMNS]
         _atomic_write_text(log_path, ",".join(columns) + "\n")
         with log_path.open("a", encoding="utf-8", newline="") as fh:
             _csv.DictWriter(fh, fieldnames=columns, extrasaction="ignore").writerow(
-                {c: row.get(c, "") for c in columns}
+                {c: row.get(c) or (row.get("date", "") if c == "timestamp" else "") for c in columns}
             )
 
 
@@ -761,22 +773,12 @@ def _assert_decision_chain_intact(rows: list[dict[str, str]], fieldnames: list[s
     disappears and every remaining signature still verifies.
 
     A log with no ``prev_digest`` column is unchained and passes: chaining is opt-in the same
-    way signing is, so an existing log keeps working until it is migrated.
+    way signing is, so an existing log keeps working until it is migrated. The rule, including
+    the pre-1.0 legacy prefix, lives in :mod:`agentteams.cli.decision_chain`.
     """
-    if "prev_digest" not in {c.strip() for c in fieldnames}:
-        return
-    previous = ""
-    for index, row in enumerate(rows):
-        declared = (row.get("prev_digest") or "").strip()
-        if declared != previous:
-            raise RuntimeError(
-                f"security decision log chain broken at row {index + 1}: prev_digest is "
-                f"{declared!r}, expected {previous!r}. A row has been removed, reordered, or "
-                f"edited."
-            )
-        previous = hashlib.sha256(
-            _decision_signature_payload(row).encode("utf-8")
-        ).hexdigest()
+    from agentteams.cli.decision_chain import verify_chain
+
+    verify_chain(rows, fieldnames, signing_active=_decision_signing_active(fieldnames))
 
 
 def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[str]] | None:

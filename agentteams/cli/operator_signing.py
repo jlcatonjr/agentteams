@@ -461,6 +461,20 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     row = {k: str(v) for k, v in spec.items()}
     row["sig_scheme"] = sl.SIG_SCHEME_ED25519
     row.setdefault("verdict", "PASS")
+    # prev_digest is a signed field: link the row to the log's chain tip BEFORE any signature value or
+    # review digest is computed, so the operator confirms exactly what is signed. A spec cannot set it.
+    row.pop("prev_digest", None)
+    try:
+        read = dl._read_decision_rows(output_dir)
+        if read is None:
+            row["prev_digest"] = ""  # a new log is created with SIGNED_DECISION_COLUMNS, which chain
+        elif "prev_digest" in {c.strip() for c in read[1]}:
+            from agentteams.cli.decision_chain import chain_tip
+
+            row["prev_digest"] = chain_tip(read[0], read[1], signing_active=True)
+    except RuntimeError as exc:
+        print(f"Error: cannot extend the security-decisions log: {exc}", file=sys.stderr)
+        return 1
 
     # Classify the row up front. derive_effect_class / requires_operator_signature raise
     # EffectClassifierError on a dangerous self-declared effect_class divergence — catch it here so

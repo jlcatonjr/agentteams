@@ -114,6 +114,28 @@ def test_request_security_clearance_records_request_not_grant(mod, refs):
     assert rows[1][5] == "no"
 
 
+def test_clearance_request_keeps_a_wider_header(mod, refs):
+    """An existing decisions header is the schema of record; it is never rewritten to the legacy six."""
+    wide = ["timestamp", "requesting_agent", "action_reviewed", "verdict", "conditions",
+            "conditions_verified", "consumed", "signature"]
+    log = refs / "security-decisions.log.csv"
+    log.write_text(",".join(wide) + "\n", encoding="utf-8")
+    resp = _call(mod, refs, "request_security_clearance", {"requesting_agent": "repo-liaison", "action": "x"})
+    assert resp["result"]["isError"] is False
+    rows = list(csv.reader(log.open(encoding="utf-8")))
+    assert rows[0] == wide and len(rows[1]) == len(wide) and rows[1][3] == "REQUESTED"
+
+
+def test_clearance_request_refuses_a_hash_chained_log(mod, refs):
+    """This server cannot compute prev_digest, so it must not append to (or rewrite) a chained log."""
+    log = refs / "security-decisions.log.csv"
+    before = "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,prev_digest\n"
+    log.write_text(before, encoding="utf-8")
+    resp = _call(mod, refs, "request_security_clearance", {"requesting_agent": "repo-liaison", "action": "x"})
+    assert resp["result"]["isError"] is True
+    assert log.read_text(encoding="utf-8") == before
+
+
 def test_read_adjacent_registry_reads_when_present(mod, refs):
     (refs / "adjacent-repos.md").write_text("# Adjacent\n- vk-api-utils\n", encoding="utf-8")
     resp = _call(mod, refs, "read_adjacent_registry", {})

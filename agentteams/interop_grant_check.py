@@ -653,14 +653,16 @@ def prepare(manifest: dict[str, Any], cai: dict[str, Any], framework: str, targe
 
 def _chain_tip(team_dir: Path) -> str:
     """The ``prev_digest`` the next row of a hash-chained decision log must carry (``cli.decision_log``'s chain)."""
-    from agentteams.cli.decision_log import _decision_signature_payload, _read_decision_rows
+    from agentteams.cli.decision_chain import chain_tip
+    from agentteams.cli.decision_log import _decision_signing_active, _read_decision_rows
 
     try:
         read = _read_decision_rows(team_dir)
-    except RuntimeError as exc:  # an unreadable or unrecognised log: refuse rather than break its chain
+        if read is None:
+            return ""
+        return chain_tip(read[0], read[1], signing_active=_decision_signing_active(read[1]))
+    except RuntimeError as exc:  # an unreadable log or a broken chain: refuse rather than extend it
         raise ValueError(f"--interop-allow-cooperative: cannot extend the decision log's hash chain: {exc}") from exc
-    rows = read[0] if read is not None else []
-    return hashlib.sha256(_decision_signature_payload(rows[-1]).encode("utf-8")).hexdigest() if rows else ""
 
 
 def record_opt_ins(team_dir: Path, framework: str, entries: list[tuple[str, list[str]]],
