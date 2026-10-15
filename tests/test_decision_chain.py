@@ -137,3 +137,23 @@ def test_appending_to_a_pre_fix_log_starts_the_chain(tmp_path):
     read = dl._read_decision_rows(tmp_path)
     assert read is not None
     dl._assert_decision_chain_intact(*read)  # the legacy prefix plus a correctly bound row
+
+
+def test_verify_integrity_report_names_the_prefix_and_its_halts(tmp_path):
+    from agentteams.cli.decision_chain import describe_log_chain
+
+    _write_log(tmp_path, _legacy(3, halt_at=2))
+    lines, broken = describe_log_chain(tmp_path)
+    assert not broken
+    assert any("legacy prefix: 2 row(s)" in line for line in lines)
+    assert any("HALT row(s) inside the prefix: [2]" in line for line in lines)
+
+
+def test_verify_integrity_report_fails_on_a_broken_chain(tmp_path):
+    from agentteams.cli.decision_chain import describe_log_chain
+
+    rows = _chained(_legacy(3))
+    del rows[1]
+    _write_log(tmp_path, rows)
+    lines, broken = describe_log_chain(tmp_path)
+    assert broken and "BROKEN" in lines[0]

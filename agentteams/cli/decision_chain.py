@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -99,4 +100,35 @@ def chain_tip(rows: list[dict[str, str]], fieldnames: list[str], *, signing_acti
     return row_chain_digest(rows[-1]) if rows else ""
 
 
-__all__ = ["ChainReport", "chain_tip", "row_chain_digest", "verify_chain"]
+def describe_log_chain(team_dir: Path) -> tuple[list[str], bool]:
+    """Report the decisions log's chain for ``--verify-integrity``.
+
+    Args:
+        team_dir: The team root (the log is ``references/security-decisions.log.csv``).
+
+    Returns:
+        ``(lines, broken)``: report lines, and True when the chain is broken (an integrity failure).
+        A legacy prefix, and any HALT inside it, is reported but is not a failure.
+    """
+    from agentteams.cli.decision_log import _decision_signing_active, _read_decision_rows
+
+    try:
+        read = _read_decision_rows(team_dir)
+        if read is None:
+            return [], False
+        report = verify_chain(read[0], read[1], signing_active=_decision_signing_active(read[1]))
+    except RuntimeError as exc:
+        return [f"Decision log chain: BROKEN — {exc}"], True
+    if not report.chained:
+        return ["Decision log chain: none (no prev_digest column)"], False
+    lines = ["Decision log chain: OK"]
+    if report.legacy_prefix:
+        lines.append(f"  legacy prefix: {report.legacy_prefix} row(s) after row 1 carry no link (pre-1.0 "
+                     f"signer); a deletion within rows 1-{report.legacy_prefix + 1} is undetectable")
+    if report.halts_in_prefix:
+        lines.append(f"  HALT row(s) inside the prefix: {report.halts_in_prefix}; their deletion would be "
+                     "undetectable, so confirm they are still present as recorded")
+    return lines, False
+
+
+__all__ = ["ChainReport", "chain_tip", "describe_log_chain", "row_chain_digest", "verify_chain"]
