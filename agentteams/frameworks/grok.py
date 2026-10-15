@@ -21,8 +21,9 @@ and tmp/by-week/2026-W42/grok-integration.plan.md §9 for evidence):
   ``.claude/CLAUDE.md`` together. The team brief goes in the shared ``AGENTS.md`` (operator decision D2), whose
   ownership rules live in :mod:`._agents_md_ownership`.
 
-Generate-only in this release: convert / bridge / interop / absorb flows refuse ``grok`` (``cli/parser_validate``),
-and ``write_policy: "orchestrator-only"`` is refused (``write_policy.py``).
+Codex posture (Phase 3): an interop target and source and an absorb source (``agentteams/_interop_grok.py``);
+convert and bridge refuse ``grok`` (``cli/parser_validate``), and ``write_policy: "orchestrator-only"`` is refused
+(``write_policy.py``).
 """
 
 from __future__ import annotations
@@ -399,7 +400,7 @@ class GrokAdapter(ClaudeAdapter):
                 "fences; left untouched."
             )
         if out_dir.name == "agents" and out_dir.parent.name == ".grok":
-            notices.extend(_parity_notices(kept, out_dir, root))
+            notices.extend(parity_notices(kept, out_dir, root))
         return kept, notices
 
 
@@ -469,8 +470,8 @@ def front_matter_name(text: str) -> str | None:
     return next(g for g in m.groups() if g is not None).strip() or None
 
 
-def _parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -> list[str]:
-    """Advisories for D4: Grok/Claude name mismatches, unshadowed Claude agents, built-in shadowing, gitignore."""
+def parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -> list[str]:
+    """Return the D4 advisories: Grok/Claude name mismatches, unshadowed Claude agents, built-in shadowing, gitignore."""
     notices: list[str] = []
     claude_dir = root / ".claude" / "agents"
     grok_files: set[str] = set()

@@ -205,11 +205,10 @@ def test_builder_without_canonical_tools_refuses() -> None:
 
 # 13: CLI refusals --------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("argv", [
+@pytest.mark.parametrize("argv", [  # Phase 3 (Codex posture): interop/absorb accept grok; convert/bridge never do
     ["--framework", "grok", "--convert-from", "x"],
     ["--framework", "grok", "--bridge-from", "x"],
-    ["--framework", "grok", "--interop-from", "x"],
-    ["--framework", "claude", "--interop-from", "x", "--interop-source-framework", "grok"],
+    ["--framework", "claude", "--bridge-from", "x", "--bridge-source-framework", "grok"],
 ])
 def test_cli_refuses_unvetted_flows(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
     import build_team

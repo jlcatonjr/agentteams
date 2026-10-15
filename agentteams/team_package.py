@@ -106,6 +106,11 @@ def package_team(
             "<canonical dir> --bridge-source-framework canonical --framework "
             "generic directly for that case."
         )
+    if src_fw == "grok":
+        # The bundled generic bridge needs a bridge-capable source, and grok is not one (Codex posture, plan §13);
+        # refuse before exporting anything rather than failing in bridge.py afterwards.
+        raise ValueError("package_team does not support a grok source (grok is not a bridge source); export it with "
+                         "--interop-from <.grok/agents> --framework canonical instead.")
 
     if dry_run:
         return PackageResult(

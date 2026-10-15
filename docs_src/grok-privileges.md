@@ -188,6 +188,18 @@ Things to know:
 - **Permission rules wait for trust.** The emitted `[permission]` deny rules apply only once the folder is trusted.
   In an untrusted folder they are ignored (spike R4).
 
+## Interop and Absorb
+
+A Grok team can be an interop source or target (`--interop-from`) and an absorb source; convert and bridge refuse
+it.
+- **Grants:** Grok does not enforce grants (declared), so projecting a narrowed agent into Grok needs
+  `--interop-allow-cooperative <slug>`, recorded in the destination team's decision log. Without both, the import
+  refuses: it fails closed.
+- **Shared `AGENTS.md`:** written only through Grok's co-ownership guard. A file another framework owns gets the
+  Grok block only (with `--merge` or `--overwrite`); a hand-written file is never written.
+- **Hand-written agents:** a Grok agent without both exact-toolset keys exports as full capabilities, with a
+  warning.
+
 ## Isolating Automated Runs
 
 Grok also imports **your user-level Claude configuration**: permission rules, hooks and skills from

@@ -55,7 +55,7 @@ _REAL_NATIVE_SOURCE: dict[str, Path] = {
 }
 
 _ALL_FRAMEWORKS = (
-    "copilot-vscode", "copilot-cli", "claude", "goose", "agents-md", "codex",
+    "copilot-vscode", "copilot-cli", "claude", "goose", "agents-md", "codex", "grok",
 )
 
 _AGENTS_REL: dict[str, Path] = {
@@ -65,6 +65,7 @@ _AGENTS_REL: dict[str, Path] = {
     "goose": Path(".goose/recipes"),
     "agents-md": Path(".agents"),
     "codex": Path(".codex/agents"),
+    "grok": Path(".grok/agents"),
 }
 
 _AGENT_EXT: dict[str, str] = {"copilot-vscode": ".agent.md", "goose": ".yaml", "codex": ".toml"}

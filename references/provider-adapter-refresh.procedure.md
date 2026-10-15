@@ -61,7 +61,7 @@ agreeing with the specs, or if the watcher's `claude.py` constant-name regex sto
 
 `refresh_snapshot` fetches each provider's `source_url`, strips HTML to text, scans for the
 provider's `expected_doc_tokens` / `expected_locations`, and computes a **per-framework**
-`keys_diff` (all six, not just Claude). Each `frameworks[id]` entry carries a `fetch_status`:
+`keys_diff` (all seven, not just Claude). Each `frameworks[id]` entry carries a `fetch_status`:
 
 | `fetch_status` | Meaning | What it must NOT be read as |
 |---|---|---|
@@ -98,7 +98,7 @@ per provider and **fails the test suite when an entry is past its window**. That
 enforcement the prior system lacked; do not defeat it by bumping the date without opening the URL.
 
 **Reconciliation (Phase 3):** the automated watcher (`fetch_status` + `keys_diff`, per run) and the
-manual register (`last_verified`, per human check) are two views of the same six providers. The
+manual register (`last_verified`, per human check) are two views of the same seven providers (grok added 2026-10-14). The
 unified freshness view answers, in one place: *for each provider — when was it last fetched, what
 was its drift, and when did a human last verify it.*
 
@@ -169,7 +169,7 @@ ever touches `references/*-expert.md` observation stanzas — never `agentteams/
   server-side HTML strips to little text. Such a page returns `fetch_status: empty` on every run —
   the token scan cannot observe drift there, but it also cannot report a false "no drift": `empty`
   is surfaced, not swallowed. `agents_md` is `expected_doc_tokens=()` by design (the standard has no
-  schema). So across the six, the *token-drift* guarantee is real only for the frameworks whose docs
+  schema). So across the seven, the *token-drift* guarantee is real only for the frameworks whose docs
   are server-rendered; for the rest the guarantee is reachability + relocation detection. Genuine
   drift on an SPA-served provider needs the Phase-3 live-behavior check or a human read, not this scan.
 

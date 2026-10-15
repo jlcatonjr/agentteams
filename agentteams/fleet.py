@@ -61,7 +61,7 @@ _FLEET_OUTPUT_DIR_NAME = ".agentteams-fleet"
 # artifact would be mis-discovered as its own workspace).
 _PRUNE_DIRS = {
     "node_modules", ".git", _BACKUP_DIR_NAME, "__pycache__", ".venv", "venv",
-    ".github", ".claude", ".goose", ".codex", "tmp",
+    ".github", ".claude", ".goose", ".codex", ".grok", "tmp",
     # The fleet's OWN output/backup tree. The default --fleet-report root is
     # ``<parent>/.agentteams-fleet/`` (see run_fleet), which holds per-run reports
     # AND operator backup snapshots (e.g. manual-backup-*/). Walking it would
@@ -212,7 +212,7 @@ def _agent_paths(ws: Path) -> list[str]:
         "CLAUDE.md",
         ".goose/recipes",
         ".goosehints",
-        ".codex/agents",
+        ".codex/agents", ".grok/agents",
         "AGENTS.md",
     ):
         if (ws / rel).exists():
@@ -350,6 +350,8 @@ def _goose_kind(ws: Path) -> str:
     return "none"
 
 
+from agentteams._fleet_grok import GROK_SKIP_DETAIL, grok_direct_argv, grok_kind as _grok_kind  # noqa: E402
+
 _CODEX_MARKER = Path(".codex") / "agents" / "references" / "build-log.json"
 
 
@@ -402,7 +404,7 @@ def discover_workspaces(
             gh = (dirpath / ".github" / "agents").is_dir()
             cl = (dirpath / ".claude").is_dir()
             gs = (dirpath / ".goose" / "recipes").is_dir()
-            cx = _codex_kind(dirpath) != "none"   # an agentteams .codex/agents team (marker)
+            cx, gk = _codex_kind(dirpath) != "none", _grok_kind(dirpath) != "none"  # team markers (grok: + symlink)
         except (PermissionError, OSError):
             continue  # unreadable dir (e.g. mode 000) — skip, never fatal
         # Never treat a git LINKED worktree (or submodule) as its own workspace:
@@ -411,19 +413,19 @@ def discover_workspaces(
         # (2026-09-08 @security HALT, finding 4). The parent itself is exempt —
         # the operator pointed the run at it deliberately.
         if dirpath != parent and _is_linked_worktree(dirpath):
-            if (gh or cl or gs or cx) and skipped_worktrees is not None:
+            if (gh or cl or gs or cx or gk) and skipped_worktrees is not None:
                 skipped_worktrees.append(dirpath)  # record for a visible SKIP row
             continue
         if frameworks == "github":
-            cl = gs = cx = False
+            cl = gs = cx = gk = False
         elif frameworks == "claude":
-            gh = gs = cx = False
+            gh = gs = cx = gk = False
         elif frameworks == "goose":
-            gh = cl = cx = False
+            gh = cl = cx = gk = False
         elif frameworks == "both":   # legacy: copilot + claude only
-            gs = cx = False
-        # "all" includes every framework (copilot, claude, goose and codex)
-        if gh or cl or gs or cx:
+            gs = cx = gk = False
+        # "all" includes every framework (copilot, claude, goose, codex and grok)
+        if gh or cl or gs or cx or gk:
             found.add(dirpath)
     return sorted(found)
 
@@ -705,6 +707,9 @@ def _target_argv(target: str, ws: Path, descriptor: Path | None, dry_run: bool,
         ]
         if descriptor.name == "brief.json":
             argv.append("--no-scan")
+    elif target == "grok-direct":
+        if (argv := grok_direct_argv(ws, descriptor, shrink_policy)) is None:
+            return None
     elif target == "goose-bridge":
         argv = [
             "--bridge-from", str(ws / _BRIDGE_SOURCE_DIRS[bridge_source]),
@@ -747,6 +752,8 @@ def _plan_targets(ws: Path, frameworks: str) -> list[str]:
         kind = _codex_kind(ws)
         if kind != "none":
             targets.append(f"codex-{kind}")
+        if (kind := _grok_kind(ws)) != "none":
+            targets.append(f"grok-{kind}")
     return targets
 
 
@@ -815,6 +822,11 @@ def run_fleet(args, parser) -> int:
                     detail="ambiguous .claude (no bridge signal, no resolvable descriptor) — manual review",
                 ))
                 print("    claude: SKIP (ambiguous — manual review)")
+                continue
+
+            if (skip := GROK_SKIP_DETAIL.get(target)) is not None:  # projection or symlinked .grok: never updated
+                wr.targets.append(TargetResult(workspace=str(ws), target="grok", status="SKIP", detail=skip))
+                print(f"    grok: SKIP ({skip})")
                 continue
 
             if target == "codex-interop":   # never a native --update over a projection
