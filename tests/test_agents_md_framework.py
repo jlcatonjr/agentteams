@@ -14,6 +14,7 @@ import pytest
 import build_team
 from agentteams.frameworks.agents_md import AgentsMdAdapter, _strip_leading_synthesized_header
 from agentteams.frameworks.registry import FRAMEWORKS
+from tests._fresh_intel import seed_offline_intel
 
 _BRIEF = "examples/data-pipeline/brief.json"
 
@@ -141,7 +142,7 @@ class TestAgentsMdGenerate:
         out = tmp_path / ".agents"
         rc = build_team.main([
             "--description", _BRIEF, "--framework", "agents-md",
-            "--output", str(out), "--yes", "--no-scan",
+            "--output", str(out), "--yes", "--no-scan", *seed_offline_intel(out, "agents-md"),
         ])
         assert rc == 0
         return tmp_path

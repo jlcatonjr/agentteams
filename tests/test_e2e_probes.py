@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parents[1]
 BRIEF = REPO / ".github/agents/_build-description.json"
@@ -48,7 +49,7 @@ def test_cli_generates_a_usable_team_into_an_empty_tree(tmp_path, brief_availabl
     proc = _cli(
         "--description", str(brief_available), "--project", str(tmp_path),
         "--framework", "claude", "--output", str(out), "--no-scan", "--yes",
-        cwd=tmp_path,
+        *seed_offline_intel(out, "claude"), cwd=tmp_path,
     )
     assert proc.returncode == 0, f"generate failed:\n{proc.stdout[-1500:]}\n{proc.stderr[-1500:]}"
 
