@@ -96,7 +96,11 @@ def test_data_lines_are_byte_identical(tmp_path: Path, ending: str) -> None:
     after = _log(out)
     old_header, old_rest = before.split(ending.encode(), 1)
     new_header, new_rest = after.split(ending.encode(), 1)
-    assert new_rest == old_rest
+    # Each data line keeps its bytes as a prefix; padding appends only empty cells (399/406).
+    old_lines, new_lines = old_rest.split(ending.encode()), new_rest.split(ending.encode())
+    assert len(old_lines) == len(new_lines)
+    for old, new in zip(old_lines, new_lines):
+        assert new.startswith(old) and set(new[len(old):]) <= {ord(",")}
     assert new_header.startswith(old_header + b",")
     assert b"\r" not in new_header
 
@@ -224,3 +228,55 @@ def test_signed_row_appends_and_legacy_rows_read_as_unsigned(tmp_path: Path,
     assert allowed, reason
     read = _read_decision_rows(out)
     assert read is not None and read[0][-1]["signature"] == signed["signature"]
+
+
+# --- row padding (1.0 must-fix 399/406) ----------------------------------------------------------
+
+
+def test_migrated_log_accepts_a_governance_append(tmp_path: Path) -> None:
+    """Before 1.0 the migrated log's short legacy rows made governance_logs refuse every append."""
+    from agentteams.governance_logs import append_row, check_log
+
+    out = _team(tmp_path, _legacy_bytes())
+    assert _run(out, "--yes") == 0
+    log = out / dlm.DECISION_LOG_REL
+    assert check_log(log) == []
+    append_row(log, {"timestamp": "2026-10-15T00:00:00Z", "requesting_agent": "orchestrator",
+                     "action_reviewed": "after-migration", "verdict": "REQUESTED"})
+
+
+def test_header_current_log_with_short_rows_is_padded_then_a_no_op(tmp_path: Path) -> None:
+    """A log migrated by the pre-padding tool (full header, short rows) is padded by a re-run."""
+    out = _team(tmp_path, _legacy_bytes())
+    plan = dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    header, rest = _legacy_bytes().split(b"\n", 1)
+    unpadded = header + ("," + ",".join(plan.added_columns)).encode() + b"\n" + rest
+    (out / dlm.DECISION_LOG_REL).write_bytes(unpadded)
+    repad = dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert not repad.current and not repad.added_columns and repad.padded_lines
+    assert _run(out, "--yes") == 0
+    assert dlm.plan_migration(out / dlm.DECISION_LOG_REL).current
+
+
+def test_a_torn_row_is_refused_not_padded(tmp_path: Path) -> None:
+    torn = _legacy_bytes() + b"2026-10-15T00:00:00Z,orchestrator\n"
+    out = _team(tmp_path, torn)
+    with pytest.raises(dlm.DecisionLogMigrationError, match="torn or truncated"):
+        dlm.plan_migration(out / dlm.DECISION_LOG_REL)
+    assert _log(out) == torn
+
+
+def test_padding_keeps_every_signed_payload(tmp_path: Path) -> None:
+    """Padding changes no row's signed payload, so signatures and the hash chain still verify."""
+    import csv
+    import io
+
+    from agentteams.cli.decision_log import _decision_signature_payload
+
+    out = _team(tmp_path, _legacy_bytes())
+    before = [_decision_signature_payload({k: v or "" for k, v in r.items() if k})
+              for r in csv.DictReader(io.StringIO(_legacy_bytes().decode()))]
+    assert _run(out, "--yes") == 0
+    after = [_decision_signature_payload({k: v or "" for k, v in r.items() if k})
+             for r in csv.DictReader(io.StringIO(_log(out).decode()))]
+    assert before == after

@@ -38,7 +38,7 @@ doc that hard-codes them goes stale the way this paragraph did. Run
 | `commands.py` | Sub-command runners for `--convert`, `--interop-*` and `--bridge-*`. |
 | `security_gate.py` | The destructive-action gate: requires a recorded PASS decision, or an explicit waiver, before a destructive operation proceeds. |
 | `decision_log.py` | Authenticates rows in the security-decisions log (HMAC signing/verification, chain-intactness checks); carved from `security_gate.py` at its own CH-07 ceiling. |
-| `decision_log_migrate.py` | `--migrate-decision-log`: appends the missing signing columns to a team's decisions-log header (never `prev_digest`), keeping data lines byte-identical, and lists the unsigned authorizing rows that signing revokes. A separate module because `decision_log.py` is integrity-pinned. See [below](#decision-log-migration). |
+| `decision_log_migrate.py` | `--migrate-decision-log`: appends the missing signing columns to a team's decisions-log header (never `prev_digest`), padding short legacy rows with empty cells (signed payloads unchanged), and lists the unsigned authorizing rows that signing revokes. A separate module because `decision_log.py` is integrity-pinned. See [below](#decision-log-migration). |
 | `adopt_only.py` | `--adopt-only`: adopts a named subset of orphan agents by rewriting only the orchestrator's adopted routing rows (and, gated, its `agents:` list). `tools_grant` reports each slug's `tools:` line, wider than read-only unless every tool is. |
 | `operator_signing.py` | The operator Ed25519 signing path for `--sign-decision` and `--sign-grant` (and the `--issue-grant` spec helpers): key read, payload construction, the pre-sign display, the pre-sign refusals, signing, verify-before-append and the append. Integrity-pinned (`integrity.ENFORCEMENT_MODULES`); the runners in `commands.py` / `grant_commands.py` are one-line delegators. See [below](#the-pinned-operator-signing-path). |
 | `schema_cache.py` | Shared JSON-Schema validation plus a content-hash cache, so re-validating unchanged bytes is free. |
@@ -169,12 +169,15 @@ The `SIGNED_DECISION_COLUMNS` entries a header lacks, in that order, never `prev
 
 ### `plan_migration(log_path) -> MigrationPlan`
 
-Works out the migration and writes nothing. The new bytes are the old header line, the appended columns,
-the old line ending and every data byte unchanged; they are re-read as the gate reads them, and must still
-classify (`_security_decision_schema_kind`) with every added cell empty. `plan.revoked` lists the live unsigned
+Works out the migration and writes nothing. The new bytes are the old header line, the appended columns, the
+old line ending, and every data line with its bytes kept as a prefix and empty cells appended to rows narrower
+than the new header (`plan.padded_lines`). They are re-read as the gate reads them, must still classify
+(`_security_decision_schema_kind`) with every added cell empty, and must leave every row's signed payload
+unchanged. A header-current log with short rows yields a pad-only plan. `plan.revoked` lists the live unsigned
 authorizing rows (unconsumed `PASS` / `CONDITIONAL PASS`, and every `HALT-RETRACTED`) by first line and action,
 when the migration adds `signature`. Raises `DecisionLogMigrationError` for a missing or symlinked log, a
-malformed or unknown header, malformed data rows, or a row with a value past the old header (no laundering).
+malformed or unknown header, malformed data rows, a row with a value past the old header (no laundering), or a
+row too short to be a legacy row (never padded).
 
 ### `apply_migration(plan, team_dir, *, framework="") -> Path`
 

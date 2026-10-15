@@ -384,18 +384,22 @@ standalone mode (`agentteams/cli/decision_log_migrate.py`) that works with `--se
   `signature`), so no cell of a signed row is dropped. `prev_digest` is never added: hash chaining is opt-in on
   that column, and the legacy rows were never chained. The migrated header still classifies as the same schema
   kind.
-- **Byte-exact.** Only the header line is rewritten, as text (its line ending is kept). Every data line stays
-  byte-identical; nothing is round-tripped through a CSV writer.
+- **Byte-preserving, rows padded.** The header line is rewritten as text (its line ending is kept). Each data
+  line keeps its bytes as a prefix; a row narrower than the new header gets empty cells (`,`) appended at its
+  end, so `governance_logs.append_row` accepts the migrated log. Only rows short by trailing signing columns are
+  padded; a torn or truncated row is refused. Padding changes no row's signed payload, and the migration checks
+  that. Nothing is round-tripped through a CSV writer.
 - **Refusals.** A missing log, a symlink, an empty, unknown or malformed header (byte-order mark, empty or
-  repeated column name) and a data row with a value past the old header (it would land in an added column,
-  such as `signature`) are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
+  repeated column name), a data row with a value past the old header (it would land in an added column,
+  such as `signature`) and a row too short to be a legacy row are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
 - **An intended revocation.** The `signature` column turns decision signing on for the log, so every live
   unsigned authorizing row stops clearing: each unconsumed `PASS` or `CONDITIONAL PASS`, and each
   `HALT-RETRACTED` (whose HALT is then in force again). The dry run lists them by line and action, the real
   run prints the same list, and a real run without `--yes` refuses. Record new, signed clearances for what is
   still needed.
 - **Write set.** A backup of the log under the agents directory's `.agentteams-backups/`, then an atomic
-  replace of the log. A header that already has every column is a no-op.
+  replace of the log. A header that already has every column, with every row at full width, is a no-op; a log
+  migrated before 1.0 (full header, short rows) is padded by a re-run.
 
 Clearance: the run is a governance-file edit and needs an ordinary `@security` PASS. Record it in the
 repository's own log, not the team log being migrated (the migration revokes it).
