@@ -78,6 +78,15 @@ Return `{rel_path: sha256}` for every enforcement module. A module that does not
 
 Write (or refresh) the manifest and return its path. Regenerating is deliberately a separate, explicit act: it is what an operator does after an intentional change to a control, and what an attacker must additionally do after an unintentional one. An auto-refreshed manifest verifies nothing, which is why this is not wired into the normal build.
 
+**Installed hook copies.** The two `INSTALLED_COPIES` are gitignored, so they are absent in every worktree and fresh clone. When one does not exist, it keeps the digest that the existing manifest records for it; a re-record from a worktree no longer blanks it. Absence is judged with `exists()`, so a present but unreadable copy still records `""`. The function prints an `[INTEGRITY]` notice on stderr whenever:
+
+- it keeps a digest;
+- a kept digest differs from the current gate template's (a `WARNING`, because the kept digest is probably stale or planted);
+- there is no well-formed prior digest to keep (it records `""`);
+- the existing manifest is unreadable or corrupt (nothing is preserved).
+
+Every other module is re-hashed, and a missing one still records `""`.
+
 ### `verify(repo_root: Path) -> list[IntegrityFinding]`
 
 Compare enforcement modules against the manifest; empty when everything matches.
