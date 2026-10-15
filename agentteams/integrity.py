@@ -45,6 +45,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
                                          # imports its enforcement from here, so it carries the
                                          # same constitutional weight and must be tracked too.
     "agentteams/scan.py",                # C-4: the deterministic content scanner
+    "agentteams/scan_operational.py",    # C-4: which pipeline-written JSON the scanner exempts
     "agentteams/fences.py",              # C-1: fence restore, template-authoritative set
     "agentteams/unfenced.py",            # C-1: constraint ratchet
     "agentteams/front_matter_merge.py",  # C-3: capability comparison

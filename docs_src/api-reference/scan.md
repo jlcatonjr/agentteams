@@ -103,7 +103,10 @@ security issues.
   indexed copies of documentation. Pattern-based credential
   detection (`sk_live_*`, `xoxb-*`, etc.) still applies. The
   exemption additionally requires the file to reside directly in
-  the agents dir's `references/` subdirectory (`_is_operational_json`)
+  the agents dir's `references/` subdirectory (`_is_operational_json`, carved to the
+  integrity-pinned `agentteams/scan_operational.py`). Memory-index shards
+  (`memory-index.part-NNNN.json`) take the same exemption only when the sibling shard
+  manifest lists them with their current sha256 (see [`memory_index_store`](memory-index-store.md))
   — a basename match alone is not enough. This is a deliberate
   anti-spoofing design point: keying the exemption on basename
   alone would let an agent with write access pre-blind the scanner
