@@ -58,7 +58,7 @@ ask prompts, then allow.
 ```toml
 # .grok/config.toml
 [permission]
-deny  = ["Edit(.grok/**)", "Bash(git push *)"]
+deny  = ["Edit(**/.grok/**)", "Bash(git push *)"]
 ask   = ["Bash(rm *)"]
 allow = ["Bash(pytest *)"]
 ```
@@ -70,6 +70,21 @@ Modes are set by the user (`[ui] permission_mode`) or per run:
 A project can set a deny-by-default posture through Claude compatibility (`"defaultMode": "dontAsk"` in
 `.claude/settings.json`).
 
+**What agentteams emits.** With a confined or exclusive `privilege_profile` (host feature `grok:sandbox`),
+agentteams writes a managed block into `.grok/config.toml`. Its `[permission] deny` list covers every control-plane
+file: team switches, rosters, verify-key stores, team markers, `.grok/config.toml`, `.grok/sandbox.toml`,
+`.grok/hooks/**`, Claude's settings and hooks, and the operator key directory.
+- The rules are unrooted `**/` globs, because Grok resolves relative patterns against the session directory and
+  treats `~/` literally.
+- With `grok:mcp`, each wired MCP server's tools also get an `ask` rule.
+- If you already have a `[permission]` table, agentteams leaves it alone and tells you.
+- These rules stop Grok's edit tools, **not** shell writes, and they load only after folder trust. Treat them as
+  declared. The OS sandbox is what stops shell writes.
+
+User-only settings agentteams cannot emit but you may want in `~/.grok/config.toml`:
+- `[ui] permission_mode`
+- `[shell_environment_policy]`, which limits the environment variables passed to tool subprocesses
+
 ---
 
 ## Folder Trust
@@ -78,10 +93,14 @@ Grok loads a project's **instructions, hooks, MCP servers, LSP servers and skill
 trusted (`grok --trust`, or `/hooks-trust` in a session).
 
 **Before trusting a repository**, review:
-- `.grok/hooks/`
+- `.grok/hooks/`, `.grok/workflows/`, `.grok/plugins/` and `.grok/lsp*`
 - `.claude/settings.json` hooks
 - `.mcp.json`
 - `.grok/config.toml`
+
+The agentteams confinement launcher (`sandbox/confine-run.sh`) keeps the whole `.grok` folder read-only. On every
+run it also warns about `[permission]`/`[mcp_servers]`/`[plugins]` tables outside the agentteams block, and about
+hook, workflow, plugin or LSP files it did not emit.
 
 Custom agents are the exception. **`.grok/agents/` and `.claude/agents/` load even in an untrusted folder**, and
 those agents run without the project instructions. Generated agent bodies therefore carry their own Invariant
@@ -94,8 +113,17 @@ Core.
 Grok runs Claude-schema hooks from `.grok/hooks/*.json` and from Claude's `settings.json`. `PreToolUse` can
 block a call, with exit code 2 or `{"decision":"deny"}`. **Every hook failure is fail-open**: a timeout, a crash
 or malformed output lets the call through (confirmed live in the 2026-10-14 spike). Treat a Grok hook as an
-advisory control, never as enforcement. (agentteams emits no Grok hook yet; when the Phase 2 hook gate lands it
-is classified as declared, not enforced.)
+advisory control, never as enforcement.
+
+**What agentteams emits.** With a confined or exclusive profile, agentteams emits a hook gate made of three files:
+- `.grok/hooks/agentteams-gate.json`, which runs the shim
+- `.grok/hooks/agentteams-gate-shim.py`, the shim
+- `.grok/hooks/constitutional-gate.py`, the same gate Claude teams use
+
+Grok sends hooks its own tool names (`run_terminal_command`, `read_file`, `search_replace`), so the shim translates
+them to Claude's before running the gate. Without it, the gate would not recognise a Grok shell command or file
+write. The gate asks before `sudo`, pipe-to-shell, force-push and similar commands, and denies writes that contain
+credentials. It only runs after folder trust, and it fails open, so it is classified as declared, not enforced.
 
 ---
 
@@ -106,14 +134,31 @@ Sandbox profiles:
 - custom: `[profiles.<name>]` in `.grok/sandbox.toml`, with `extends`, `read_only`, `read_write`, `deny` and
   `restrict_network`
 
-Example profile (agentteams does not emit one yet; a generated profile is Phase 2):
+With a confined or exclusive profile, agentteams emits this profile as `.grok/sandbox.toml`. It never overwrites a
+file of yours that lacks its `agentteams-managed` first line:
 
 ```toml
 # .grok/sandbox.toml
 [profiles.agentteams]
 extends = "workspace"
-deny = ["**/.env*", "**/*.pem"]
+deny = ["**/*.pem", "**/*.key", "**/.config/agentteams/keys/**"]   # workspace-only globs
 ```
+
+**Grok's own sandbox cannot protect your agent team.** Tested on 2026-10-14:
+- A `read_only` entry did **not** stop writes inside the workspace, from the shell or from Grok's edit tool.
+- A `deny` entry blocks reads too, so it can't be used on files Grok must read.
+- A relative `deny` glob matches only inside the workspace, so the keys entry above does not protect
+  `~/.config/agentteams/keys`.
+
+The real boundary is the agentteams launcher. The emitted `.grok/confined-run.example.sh` runs Grok inside
+`sandbox/confine-run.sh`, which:
+- keeps the `.grok` and `.claude` folders, the control plane, `.agentteams` and the prompt roots read-only
+- masks credential folders
+- protects the user-level config in a dedicated `GROK_HOME`, including the folder-trust store
+
+Grok's own sandbox is switched off there (`--sandbox off`), because it can't run nested. The profile above is
+used only by `GROK_CONFINE_MODE=profile`, which first refuses if your `~/.grok/sandbox.toml` defines a profile with
+the same name or a `requirements.toml` pins sandbox settings.
 
 Things to know:
 - **A project can define a profile but cannot switch it on.** Start Grok with `grok --sandbox agentteams` (or
@@ -127,6 +172,22 @@ Things to know:
 
 ---
 
+### Known limits of the confined setup
+
+- **The launcher's warning is best-effort.** It reports Grok config tables and hook, workflow, plugin or LSP files
+  outside the agentteams-managed markers. A planted file that copies those markers is not reported. Inside the
+  launcher `.grok` is read-only, so this matters only for Grok run *outside* it.
+- **Your API key is readable inside the sandbox.** Launcher mode passes `XAI_API_KEY` through, so every agent
+  command can read it, as with Codex's auth. Prefer a key with a low spending limit, used only for this project.
+- **The hook gate runs code from the repository.** After you trust the folder, Grok runs
+  `.grok/hooks/agentteams-gate-shim.py` and the gate beside it. Anyone who can write `.grok/hooks` can already run
+  code after trust, which is why the launcher keeps `.grok` read-only. The shim ignores modules planted next to it
+  and runs the gate with `python -I`.
+- **If the shim or the gate fails, the call goes ahead.** Grok hooks fail open. The exception is an explicitly
+  confined or exclusive profile, where the gate copy is emitted fail-closed and a shim failure denies instead.
+- **Permission rules wait for trust.** The emitted `[permission]` deny rules apply only once the folder is trusted.
+  In an untrusted folder they are ignored (spike R4).
+
 ## Isolating Automated Runs
 
 Grok also imports **your user-level Claude configuration**: permission rules, hooks and skills from
@@ -135,9 +196,12 @@ process:
 
 ```bash
 GROK_CLAUDE_HOOKS_ENABLED=false GROK_CLAUDE_SKILLS_ENABLED=false \
-GROK_CLAUDE_MCPS_ENABLED=false GROK_CLAUDE_RULES_ENABLED=false \
+GROK_CLAUDE_MCPS_ENABLED=false GROK_CLAUDE_RULES_ENABLED=false GROK_CLAUDE_AGENTS_ENABLED=false \
 grok -p "…" --output-format json
 ```
+
+`GROK_CLAUDE_AGENTS_ENABLED` covers Claude's `CLAUDE*.md` files under `.claude/` and `~/.claude/` only. No switch
+turns off `.claude/agents/`, which Grok always loads. The emitted confined-run launcher sets all five.
 
 Headless exit codes:
 - `0`: success

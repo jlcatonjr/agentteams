@@ -135,12 +135,14 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .grok/agents/references/security-approvers.txt .grok/agents/references/authorized-managers.txt
                     .grok/agents/references/management-authority.json .grok/config.toml .grok/sandbox.toml
                     .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh
-                    .codex/confined-run.example.sh )
+                    .codex/confined-run.example.sh .grok/confined-run.example.sh )
 # Whole directories read-only wherever they exist under a writable root (follow-up #2, 2026-09-30):
 # .claude holds the live settings.json whose allowWrite is the operator-accepted write baseline and
 # the settings/hooks the next Claude session trusts. Mirrors Claude's own `.claude` denyWrite, so a
 # confined goose/copilot/codex agent cannot rewrite them either. A mount point cannot be renamed.
-CONTROL_PLANE_DIRS_REL=( .claude )
+# .grok (2026-10-14, @security step-12b): everything in a project .grok is config or something Grok runs
+# (hooks, workflows/*.rhai, plugins, lsp, skills, agents, sandbox profiles); Grok keeps runtime state in ~/.grok.
+CONTROL_PLANE_DIRS_REL=( .claude .grok )
 # Prompt roots (follow-up #8 phase 2), read-only only with --protect-prompt-roots, protect-if-present.
 # Locked by a test to agentteams' _prompt_root_protect PROMPT_ROOT_FILES + PROMPT_ROOT_DIRS +
 # PROMPT_ROOT_PRESENT_ONLY_DIRS. Never .github/workflows.
@@ -286,6 +288,7 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
     .codex/config.toml) return 0 ;;  # Codex's own config: protect-if-present (never stubbed)
     .goose/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
     .codex/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
+    .grok/confined-run.example.sh) return 0 ;;   # operator-run example: protect-if-present
     .grok/config.toml|.grok/sandbox.toml) return 0 ;;  # Grok's permission/MCP config + sandbox profiles: protect-if-present
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
@@ -350,6 +353,47 @@ codex_config_warn(){
     [ "${#keys[@]}" -gt 0 ] || continue
     echo "confine-run: WARNING $(printf %q "$f") sets security-relevant Codex keys (${keys[*]}). It is read-only in this sandbox, but Codex run OUTSIDE this launcher honours it: review it, and confirm you (not a confined process) wrote it." >&2
   done
+}
+# Grok analog of #11 (2026-10-14, @security step-12b): .grok is read-only in here, but Grok run OUTSIDE this
+# launcher honours whatever a confined process planted there before the dir existed. Warn every run on the
+# security-relevant config tables and on executable/config dirs agentteams never emits. Never a die.
+# BEST-EFFORT like codex_config_warn: `[table]` headers and plain `table.key =` lines only.
+grok_config_warn(){
+  local r f line keys=() d extra=()
+  for r in "$SCRATCH" ${WRITABLES[@]+"${WRITABLES[@]}"}; do
+    f="$r/.grok/config.toml"
+    if [ -L "$f" ] || [ -L "$r/.grok" ]; then
+      echo "confine-run: WARNING $(printf %q "$r/.grok") or its config.toml is a symlink; Grok run OUTSIDE this launcher reads the target. Review it." >&2
+      continue
+    fi
+    keys=()
+    if [ -f "$f" ]; then
+      local managed=0
+      while IFS= read -r line || [ -n "$line" ]; do
+        # agentteams' own managed blocks are expected; warn only on tables outside them.
+        case "$line" in "# --- BEGIN agentteams-managed"*) managed=1; continue ;; "# --- END agentteams-managed"*) managed=0; continue ;; esac
+        [ "$managed" -eq 1 ] && continue
+        if [[ "$line" =~ ^[[:space:]]*\[(permission|mcp_servers|plugins)[].] ]]; then keys+=( "[${BASH_REMATCH[1]}]" )
+        elif [[ "$line" =~ ^[[:space:]]*(permission|mcp_servers|plugins)\. ]]; then keys+=( "${BASH_REMATCH[1]}.*" )
+        fi
+      done < "$f"
+    fi
+    extra=()
+    for d in hooks workflows plugins lsp; do
+      case "$d" in
+        hooks)   # agentteams' own gate file carries the marker; any other hook JSON is reported (best-effort:
+                 # a planted file could copy the marker, but inside this launcher .grok is read-only anyway)
+          local h; for h in "$r"/.grok/hooks/*.json; do
+            [ -f "$h" ] || continue
+            head -c 200 "$h" | grep -q "agentteams-managed" || { extra+=( ".grok/hooks/${h##*/}" ); }
+          done ;;
+        *) [ -e "$r/.grok/$d" ] && extra+=( ".grok/$d" ) ;;
+      esac
+    done
+    [ "${#keys[@]}" -gt 0 ] && echo "confine-run: WARNING $(printf %q "$f") sets security-relevant Grok tables (${keys[*]}). Grok run OUTSIDE this launcher honours them once the folder is trusted: review it, and confirm you (not a confined process) wrote it." >&2
+    [ "${#extra[@]}" -gt 0 ] && echo "confine-run: WARNING $(printf %q "$r") holds ${extra[*]}, which Grok loads or runs after folder trust. Confirm you (not a confined process) created them before running grok --trust." >&2
+  done
+  return 0
 }
 control_plane_collect() {   # -> CP_RO[] (protected paths) + CP_ANC[] (their ancestors below a root); both OSes
   local roots=() prot=() anc=() r rel p a under t team
@@ -600,6 +644,7 @@ case "$OS" in
 esac
 
 codex_config_warn
+grok_config_warn
 if [ "$CHECK" -eq 1 ]; then
   echo "== confine-run --check (inert; nothing runs) =="
   echo "  os                : $OS"

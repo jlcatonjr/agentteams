@@ -88,7 +88,9 @@ def test_no_claude_artifacts_under_grok() -> None:
     a = GrokAdapter()
     manifest = {"project_name": "Demo"}
     files = a.extra_output_files(manifest)
-    assert files == FrameworkAdapter.extra_output_files(a, manifest)
+    # The neutral baseline plus the .grok/hooks stub that keeps the dir launcher-protected (Phase 2, P2-A).
+    assert files[:-1] == FrameworkAdapter.extra_output_files(a, manifest)
+    assert files[-1][0] == "../hooks/README.md" and "fail open" in files[-1][1]
     joined = " ".join(p for p, _ in files)
     for forbidden in ("constitutional-gate", "settings.hooks", "runner"):
         assert forbidden not in joined

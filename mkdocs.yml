@@ -269,6 +269,7 @@ nav:
       - research: api-reference/research.md
       - toml-write: api-reference/toml-write.md
       - codex-mcp-emit: api-reference/codex-mcp-emit.md
+      - grok-config-emit: api-reference/grok-config-emit.md
       - team-package: api-reference/team-package.md
       - sync-baseline: api-reference/sync-baseline.md
       - sync-classifier: api-reference/sync-classifier.md

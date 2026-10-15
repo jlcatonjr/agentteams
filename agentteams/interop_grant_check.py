@@ -127,6 +127,10 @@ def enforcement_class(framework: str, manifest: dict[str, Any]) -> str:
         from agentteams.frameworks._codex_role_gate_emit import codex_role_gate_enabled
 
         return ENFORCED if codex_role_gate_enabled(manifest) else DECLARED
+    if framework == "grok":
+        # Grok honours tools: (with injectDefaultTools false), but no live negative test has shown a Read-only
+        # agent's Edit blocked yet; hooks fail open and the sandbox is operator-activated (@security step 6/12b).
+        return DECLARED
     return ENFORCED
 
 

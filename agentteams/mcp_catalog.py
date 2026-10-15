@@ -112,6 +112,10 @@ def _mcp_on(features: list[str], framework_id: str) -> bool:
         from agentteams.codex_mcp_emit import codex_mcp_enabled
 
         return codex_mcp_enabled(features)
+    if framework_id == "grok":
+        from agentteams.grok_config_emit import grok_mcp_enabled
+
+        return grok_mcp_enabled(features)
     from agentteams.mcp_emit import mcp_enabled
 
     return mcp_enabled(features)
@@ -157,10 +161,11 @@ def expand(manifest: dict[str, Any], framework_id: str) -> list[str]:
     chosen: list[str] = []
     if mcp_on:
         defaults = [i for i, e in catalog.items() if e.get("catalog_default") is True]
-        if framework_id == "codex":
+        if framework_id in ("codex", "grok"):
             held = [i for i in defaults if i not in opt_ins]
             if held:
-                notices.append(f"Codex applies MCP servers to the whole project (it ignores scope), so the default "
+                host = "Codex" if framework_id == "codex" else "Grok Build"
+                notices.append(f"{host} applies MCP servers to the whole project (it ignores scope), so the default "
                                f"server(s) {', '.join(held)} are withheld; add them to mcp_catalog to opt in.")
             defaults = [i for i in defaults if i in opt_ins]
         chosen.extend(defaults)

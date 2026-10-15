@@ -403,12 +403,16 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
   | A symlink (itself or a parent such as `.grok`/`.grok/examples`), unreadable, malformed fences, or outside the project | Never written |
 
   `CodexAdapter` uses the same classifier, and it leaves a Grok-generated `AGENTS.md` alone.
-- **`extra_output_files` returns only the framework-neutral baseline.** Claude's hook, settings example and runner files are not emitted under `.grok/`.
+- **`extra_output_files`:**
+  - always: the framework-neutral baseline plus `.grok/hooks/README.md`, which keeps the launcher-protected dir present
+  - when confinement is requested (`grok:sandbox`, or a confined/exclusive profile) on Linux/macOS: `_grok_sandbox_emit.grok_sandbox_output_files` adds `.grok/sandbox.toml`, `.grok/confined-run.example.sh` and the advisory hook gate (`agentteams-gate.json` + `agentteams-gate-shim.py` + `constitutional-gate.py`)
+  - Claude's own hook, settings example and runner files are never emitted under `.grok/`
+  - the guard refuses any of these through a symlink, and never overwrites an existing profile, runner, hook JSON or shim that lacks the `agentteams-managed` marker, or a gate copy that lacks the gate template's own opening docstring
 - **Refused combinations:** `write_policy: "orchestrator-only"` (rendering a runner grant raises), and convert, bridge, interop and absorb, as either target or source (`cli/parser_validate`).
 - **Control plane:** `.grok` is protected alongside the other team dirs (team key `grok`):
   - the write roots, plus `~/.grok` as a protected home path
   - the prompt roots (`.grok`, `.agents/skills`)
   - the Claude block's sibling `Edit` denies
-  - the goose Seatbelt profile and the launcher's `TEAM_DIRS_REL` and `CONTROL_PLANE_REL` (`.grok/config.toml` and `.grok/sandbox.toml` are protect-if-present)
+  - the goose Seatbelt profile and the launcher's `TEAM_DIRS_REL`, `CONTROL_PLANE_REL` (`.grok/config.toml`, `.grok/sandbox.toml` and `.grok/confined-run.example.sh` are protect-if-present) and `CONTROL_PLANE_DIRS_REL` (the whole `.grok` dir, Phase 2)
   - `signing_switch` and `projection_marker`
 - **Version pin:** `FORMAT_SPECS["grok"].pinned_version`, a new `FormatSpec` field. It is the only place the version appears.
