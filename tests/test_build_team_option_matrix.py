@@ -342,7 +342,9 @@ def test_main_rejects_incompatible_option_pairs_stderr(
 
 
 @pytest.mark.parametrize("interop_mode", ["direct", "bundle"])
-def test_main_accepts_interop_pipeline_modes(tmp_path: Path, interop_mode: str):
+def test_main_accepts_interop_pipeline_modes(tmp_path: Path, interop_mode: str, monkeypatch):
+    # Interop forces a live intel fetch; this test is about option parsing (GROK-RETRO-R7).
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     source_dir = tmp_path / "src" / ".github" / "agents"
     source_dir.mkdir(parents=True)
     (source_dir / "orchestrator.agent.md").write_text(
@@ -386,7 +388,9 @@ def test_main_accepts_interop_pipeline_modes(tmp_path: Path, interop_mode: str):
 
 
 @pytest.mark.parametrize("bridge_check", [False, True])
-def test_main_accepts_bridge_pipeline(tmp_path: Path, bridge_check: bool):
+def test_main_accepts_bridge_pipeline(tmp_path: Path, bridge_check: bool, monkeypatch):
+    # Bridge forces a live intel fetch; this test is about option parsing (GROK-RETRO-R7).
+    monkeypatch.setattr(security_gate, "_assert_security_intelligence_fresh", lambda *_a, **_k: None)
     source_dir = tmp_path / "src" / ".github" / "agents"
     source_dir.mkdir(parents=True)
     (source_dir / "orchestrator.agent.md").write_text(

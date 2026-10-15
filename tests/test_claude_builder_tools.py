@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from agentteams.frameworks.claude import ClaudeAdapter
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -22,7 +23,8 @@ def _render(tmp_path: Path, **brief_extra) -> str:
     out = tmp_path / ".claude" / "agents"
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(tmp_path / "brief.json"),
                            "--project", str(tmp_path), "--framework", "claude", "--output", str(out),
-                           "--no-scan", "--yes"], cwd=tmp_path, capture_output=True, text=True, timeout=300)
+                           "--no-scan", "--yes", *seed_offline_intel(out, "claude")],
+                          cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-800:] + proc.stderr[-800:]
     return (out / "team-builder.md").read_text()
 

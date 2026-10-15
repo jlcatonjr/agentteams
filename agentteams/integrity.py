@@ -28,7 +28,9 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -306,6 +308,67 @@ def compute_digests(repo_root: Path) -> dict[str, str]:
     return {rel: _digest(repo_root / rel) for rel in ENFORCEMENT_MODULES}
 
 
+#: The authoritative template of the two :data:`INSTALLED_COPIES`. When it changes, a copy
+#: digest carried over by :func:`write_manifest` probably describes the superseded bytes.
+_GATE_TEMPLATE = "agentteams/templates/universal/hooks/constitutional-gate.py"
+if _GATE_TEMPLATE not in ENFORCEMENT_MODULES:  # a drifted path would silently drop the stale warning
+    raise RuntimeError(f"integrity: {_GATE_TEMPLATE} is not a pinned enforcement module")
+
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def _notice(message: str) -> None:
+    print(f"[INTEGRITY] {message}", file=sys.stderr)
+
+
+def _previous_modules(manifest_path: Path) -> dict[str, str] | None:
+    """Return the ``modules`` of an existing manifest: ``{}`` when there is none, ``None`` when unreadable."""
+    if not manifest_path.exists():
+        return {}
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    modules = payload.get("modules") if isinstance(payload, dict) else None
+    if not isinstance(modules, dict) or not all(isinstance(v, str) for v in modules.values()):
+        return None
+    return modules
+
+
+def _carry_over_installed_copies(digests: dict[str, str], previous: dict[str, str] | None,
+                                 repo_root: Path) -> None:
+    """Keep the recorded digest of an installed copy that is absent from *repo_root*.
+
+    The copies are gitignored, so they are absent in every worktree and fresh clone; recording
+    ``""`` there blanked the main checkout's pins (GROK-RETRO-R2). Absence is judged by
+    ``exists()``, never by an empty digest: :func:`_digest` also returns ``""`` for a present
+    but unreadable file, and that file must not inherit the old pin.
+
+    Rule-12, named: keeping an old digest can keep a stale or planted one alive across a
+    re-record, outside that re-record's diff. Each carry-over is announced, only a well-formed
+    SHA-256 is carried, and a kept digest that differs from the current gate template's (the
+    copies are installed byte-for-byte from it) is warned about, rather than narrowing the
+    carry-over.
+    """
+    absent = sorted(rel for rel in INSTALLED_COPIES if not (repo_root / rel).exists())
+    if not absent:
+        return
+    if previous is None:
+        _notice("the existing manifest is unreadable, so no installed-copy digest is preserved; "
+                f"recording '' for {', '.join(absent)}.")
+        return
+    for rel in absent:
+        kept = previous.get(rel, "")
+        if not _SHA256_RE.fullmatch(kept):
+            _notice(f"{rel} is absent here and has no well-formed prior digest; recording ''.")
+            continue
+        digests[rel] = kept
+        _notice(f"{rel} is absent here (gitignored install); kept its recorded digest {kept[:12]}.")
+        if kept != digests.get(_GATE_TEMPLATE):
+            _notice(f"WARNING: the kept digest of {rel} differs from the current {_GATE_TEMPLATE}, so it is "
+                    "probably stale. Re-record from a checkout where the hook is installed.")
+
+
 def write_manifest(repo_root: Path) -> Path:
     """Write (or refresh) the integrity manifest and return its path.
 
@@ -313,8 +376,20 @@ def write_manifest(repo_root: Path) -> Path:
     intentional change to a control, and what an attacker must additionally do after an
     unintentional one. Keeping it out of the normal build is the point — an auto-refreshed
     manifest verifies nothing.
+
+    An :data:`INSTALLED_COPIES` path that does not exist keeps the digest the existing manifest
+    records for it (see :func:`_carry_over_installed_copies`); every other module is re-hashed,
+    and a missing one is still recorded as ``""``.
+
+    Args:
+        repo_root: Repository root.
+
+    Returns:
+        The path of the written manifest.
     """
     manifest_path = repo_root / MANIFEST_REL_PATH
+    digests = compute_digests(repo_root)
+    _carry_over_installed_copies(digests, _previous_modules(manifest_path), repo_root)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": _MANIFEST_VERSION,
@@ -323,7 +398,7 @@ def write_manifest(repo_root: Path) -> Path:
             "`agentteams --write-integrity-manifest`, only after an intended change to a "
             "control. See agentteams/integrity.py for what this does and does not guarantee."
         ),
-        "modules": compute_digests(repo_root),
+        "modules": digests,
     }
     manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest_path

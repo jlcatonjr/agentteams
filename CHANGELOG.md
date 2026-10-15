@@ -37,6 +37,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scan.py`, `integrity.py` and the new module re-pinned in `references/enforcement-integrity.json`. Docs:
   `docs_src/api-reference/memory-index-store.md`. Tests: `tests/test_memory_index_store.py`.
 
+### fix (goose: the shared repo-root AGENTS.md gets an ownership marker and a guard)
+
+- **Behaviour change:** `--framework goose` no longer overwrites or re-fences a repo-root `AGENTS.md` it did not
+  write (Codex, Grok, agents-md or hand-written). It leaves the file untouched and prints a warning. To hand the
+  file to goose, delete `AGENTS.md` and re-render; there is deliberately no adopt flag. Legacy goose renders that
+  carry AGENTTEAMS fences are adopted automatically, with a notice. Legacy renders without fences (from convert or
+  interop) cannot be told apart from a hand-written file and are now left untouched. A file fenced only by
+  `grok_runtime` (a hand file the operator pasted Grok's block into) is treated as hand-written.
+- Goose's `AGENTS.md` now opens with a generated notice (`GOOSE_AGENTS_MD_MARKER`), so `classify_agents_md`
+  recognises it as `goose`. The rule lives in the pinned `_agents_md_ownership.goose_agents_md_decision`. A goose
+  re-render carries an existing `grok_runtime` fence over, so a goose→grok→goose cycle keeps it. A duplicated or
+  unbalanced `grok_runtime` fence makes goose skip the file with a warning rather than drop the fence.
+- Grok treats a goose file like a fenced one (it upserts only `grok_runtime`). Codex skips it and names Goose.
+- `--convert-from` now runs the target adapter's instructions guard, so goose and codex never overwrite an
+  `AGENTS.md` they do not own, even with `--overwrite`. Interop writes the content the guard returns, so the goose
+  notice and the carried-over `grok_runtime` fence survive.
+- Known gap, unchanged: `--framework agents-md` has no AGENTS.md guard and still overwrites any owner's file.
+- `_agents_md_ownership.py` re-pinned in `references/enforcement-integrity.json`. Tests:
+  `tests/test_goose_agents_md_ownership.py`. GROK-RETRO-R4 (expert reference G13).
+
 ### fix (merge: a dropped navigator `## Invariant Core` twin no longer takes `### Project Structure` with it)
 
 - The 2026-10-13 fleet audit found navigator's pre-fencing `## Invariant Core` twin dropped together with the

@@ -17,6 +17,7 @@ import yaml
 
 from agentteams import emit, user_regions as U
 from agentteams.fences import PROJECT_NOTES_SECTION
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
@@ -122,7 +123,8 @@ def test_golden_overwrite_keeps_orchestrator_notes_and_instruction_rules(tmp_pat
     out = tmp_path / ".claude" / "agents"
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(brief_path),
                            "--project", str(tmp_path), "--framework", "claude", "--output", str(out),
-                           "--no-scan", "--yes"], cwd=tmp_path, capture_output=True, text=True, timeout=300)
+                           "--no-scan", "--yes", *seed_offline_intel(out, "claude")],
+                          cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-1000:] + proc.stderr[-1000:]
     rendered = {p: p.read_text(encoding="utf-8") for p in out.parent.rglob("*.md") if p.is_file()}
     orch = out / "orchestrator.md"
@@ -156,7 +158,8 @@ def test_generated_goose_recipes_carry_a_notes_region(tmp_path):
     out = tmp_path / "agents"
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(tmp_path / "brief.json"),
                            "--project", str(tmp_path), "--framework", "goose", "--output", str(out), "--no-scan",
-                           "--yes"], cwd=tmp_path, capture_output=True, text=True, timeout=300)
+                           "--yes", *seed_offline_intel(out, "goose")],
+                          cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-1000:]
     orch = next(out.rglob("orchestrator.yaml"))
     assert "## Project-Specific Notes" in yaml.safe_load(orch.read_text())["instructions"]
