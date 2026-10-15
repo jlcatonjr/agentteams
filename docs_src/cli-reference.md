@@ -436,6 +436,8 @@ change). See [`prompt_roots`](api-reference/prompt-roots.md).
 
 Rebuild only `references/memory-index.json` in the output directory. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
 
+The index is written in a compact one-line-per-entry layout. When it is larger than 20 MiB (override with `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES`), it is split into `references/memory-index.part-NNNN.json` shards, each under the cap, and `memory-index.json` becomes a manifest recording each shard's size and sha256. Commit the shards with the manifest. Every reader loads the shards directly, so nothing has to be reassembled after a pull and no git hook is needed. A missing or corrupt shard fails the read with a pointer back to this flag. See [`memory_index_store`](api-reference/memory-index-store.md).
+
 ### `--query-index TEXT`
 
 Query an existing `references/memory-index.json` and print ranked hits (title, path, score, snippet). Exits `0` when at least one hit is found and `1` when no matches are found.

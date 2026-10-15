@@ -62,6 +62,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`enrich`](enrich.md) | Default-value audit and context-aware placeholder enrichment |
 | [`memory-index`](memory-index.md) | Lexical (BM25) search index for work summaries and documentation |
 | [`memory-index-incremental`](memory-index-incremental.md) | In-place single-document index patching; declines conservatively to a full rebuild |
+| [`memory-index-store`](memory-index-store.md) | On-disk layout of the committed index: compact lines, size-capped native shards read without reassembly |
 | [`fence-inject`](fence-inject.md) | Inject and extract fenced-region content from agent files |
 | [`code-index`](code-index.md) | Code & API index over repository scripts and the external APIs they use (gitignored local cache) |
 | [`code-sources`](code-sources.md) | Source resolution and partitioning for the code & API index |

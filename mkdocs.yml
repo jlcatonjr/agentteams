@@ -200,6 +200,7 @@ nav:
       - enrich: api-reference/enrich.md
       - memory-index: api-reference/memory-index.md
       - memory-index-incremental: api-reference/memory-index-incremental.md
+      - memory-index-store: api-reference/memory-index-store.md
       - output-plan: api-reference/output-plan.md
       - update-report: api-reference/update-report.md
       - living-doc: api-reference/living-doc.md

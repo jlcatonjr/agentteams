@@ -363,4 +363,5 @@ Always check `memory_index_schema_version` before consuming an index artifact.
 
 ## See also
 
+- [`memory_index_store`](memory-index-store.md) — how the index is laid out on disk: compact lines, and size-capped shards above 20 MiB that `--query-index` reads directly.
 - [`code_index`](code-index.md) — the parallel retrieval index over repository scripts and the external APIs they call.
