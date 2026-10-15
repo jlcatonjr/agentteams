@@ -100,7 +100,8 @@ def test_a_sidecar_for_a_path_above_the_team_dir_stays_in_the_backup(tmp_path: P
     written = _write_lost_fence_sidecars(backup, "../../.goosehints", {"content": "body"})
     path = Path(written["content"])
     assert path.resolve().is_relative_to(backup.resolve())
-    assert not (tmp_path / ".goose" / "recipes" / ".goosehints.lost.content.md").exists()
+    assert path.name == ".goosehints.lost.content.md.agentteams-bak"
+    assert not list((tmp_path / ".goose" / "recipes").glob(".goosehints.lost.*"))
 
 
 WIDE = '''version: "1.0.0"

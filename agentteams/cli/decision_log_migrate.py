@@ -13,17 +13,23 @@ The rules (plan ``decision-log-migration``, Revision 1):
   lacks are appended in that order. ``prev_digest`` is the one exception: hash chaining is opt-in
   on that column (``_assert_decision_chain_intact``), and adding it to a log whose rows were never
   chained would break the chain at row 1. A chain needs its own genesis design.
-* **Byte-exact.** Only the header line is rewritten, as text. Every data line is written back
-  byte-for-byte (no CSV round trip), the header's own bytes and line ending are kept, and the
-  result must still classify as a schema ``_read_decision_rows`` accepts.
+* **Byte-preserving, rows padded.** The header line is rewritten as text, keeping its own bytes
+  and line ending. Each data row keeps its bytes as a prefix: a row narrower than the new header
+  gets empty cells (``,``) appended at the end of its last line, so ``governance_logs.append_row``
+  accepts the log (1.0 must-fix 399/406). Only rows short by trailing signing columns are padded;
+  any other width is refused, so a torn row stays visible. Padding is payload-neutral (empty
+  optional fields are not signed), and the migration asserts every row's signed payload, and so the
+  hash chain, is unchanged. The result must still classify as a schema ``_read_decision_rows``
+  accepts.
 * **No laundering.** A data row carrying more fields than the old header would have those values
   land in an added column (a ``signature`` nobody minted). The migration refuses that.
 * **An intended revocation.** A ``signature`` column turns signing on
   (``_decision_signing_active``), so every live unsigned authorizing row stops clearing. Those rows
   are listed by line and action in ``--dry-run`` and in the real run, and a real run needs ``--yes``.
 * **Backed up, atomic, idempotent.** The log is backed up with ``backup.backup_output_dir`` first
-  and replaced atomically; a header that already has every column is a no-op; a malformed or
-  unknown header is refused.
+  and replaced atomically; a header that already has every column, with every row at full width,
+  is a no-op (a header-current log with short rows is padded); a malformed or unknown header is
+  refused.
 """
 
 from __future__ import annotations
@@ -43,6 +49,7 @@ from agentteams.backup import backup_output_dir
 from agentteams.cli.decision_log import (
     _HALT_RETRACTION_VERDICT,
     SIGNED_DECISION_COLUMNS,
+    _decision_signature_payload,
     _security_decision_schema_kind,
 )
 from agentteams.cli.json_mode import is_json_mode, json_stdout
@@ -91,6 +98,7 @@ class MigrationPlan:
         revoked: Live unsigned authorizing rows the migration stops from clearing.
         source_bytes: The log's bytes when planned (the write refuses if they changed).
         new_bytes: The migrated bytes, or None when the header is already current.
+        padded_lines: First file line of each row that gets empty cells appended.
     """
 
     log_path: Path
@@ -100,23 +108,25 @@ class MigrationPlan:
     revoked: list[RevokedRow] = field(default_factory=list)
     source_bytes: bytes = b""
     new_bytes: bytes | None = None
+    padded_lines: list[int] = field(default_factory=list)
 
     @property
     def current(self) -> bool:
-        """True when the header already carries every column the migration would add."""
-        return not self.added_columns
+        """True when the header carries every column the migration would add and no row is short."""
+        return not self.added_columns and not self.padded_lines
 
     def as_report(self) -> dict[str, Any]:
         """Return the plan as a JSON-serialisable report.
 
         Returns:
             ``log``, ``schema_kind``, ``current``, ``header_before``, ``header_after``,
-            ``added_columns`` and ``revoked`` (each ``{"line", "action", "verdict"}``).
+            ``added_columns``, ``padded_lines`` and ``revoked`` (each ``{"line", "action", "verdict"}``).
         """
         return {
             "log": str(self.log_path),
             "schema_kind": self.schema_kind,
             "current": self.current,
+            "padded_lines": list(self.padded_lines),
             "header_before": list(self.columns),
             "header_after": list(self.columns) + list(self.added_columns),
             "added_columns": list(self.added_columns),
@@ -172,30 +182,33 @@ def _parse_header(header: bytes, log_path: Path) -> list[str]:
     return columns
 
 
-def _records(rest: bytes, log_path: Path) -> list[tuple[int, list[str]]]:
-    """Parse the data lines into ``(first file line, fields)`` pairs; blank lines are skipped."""
+def _records(rest: bytes, log_path: Path) -> list[tuple[int, int, list[str]]]:
+    """Parse the data lines into ``(first file line, last data line, fields)``; blank lines are skipped.
+
+    The last data line is 1-based within *rest* (the line whose end the record ends on).
+    """
     try:
         reader = csv.reader(io.StringIO(rest.decode("utf-8"), newline=""))
-        records: list[tuple[int, list[str]]] = []
+        records: list[tuple[int, int, list[str]]] = []
         previous = 0
         for fields in reader:
             start = previous + 2  # the header is line 1
             previous = reader.line_num
             if fields:
-                records.append((start, fields))
+                records.append((start, previous, fields))
     except (UnicodeDecodeError, csv.Error) as exc:
         raise DecisionLogMigrationError(f"{log_path} has malformed data rows: {exc}") from exc
     return records
 
 
-def _revoked_rows(columns: list[str], records: list[tuple[int, list[str]]]) -> list[RevokedRow]:
+def _revoked_rows(columns: list[str], records: list[tuple[int, int, list[str]]]) -> list[RevokedRow]:
     """Live unsigned authorizing rows: unconsumed PASS / CONDITIONAL PASS, and every HALT-RETRACTED.
 
     A HALT-RETRACTED row ignores ``consumed`` (``_assert_no_unretracted_halt``), so once it stops
     authenticating the HALT it retracted is in force again; it is listed whatever its ``consumed``.
     """
     revoked: list[RevokedRow] = []
-    for line, fields in records:
+    for line, _end, fields in records:
         row = dict(zip(columns, (f.strip() for f in fields)))
         verdict = (row.get("verdict") or row.get("status") or "").upper()
         consumed = (row.get("consumed") or "").lower() in _CONSUMED_VALUES
@@ -227,6 +240,69 @@ def _assert_migrated(new_bytes: bytes, columns: list[str], added: list[str], log
             )
 
 
+def _pad_records(rest: bytes, records: list[tuple[int, int, list[str]]], final: list[str],
+                 log_path: Path) -> tuple[bytes, list[int]]:
+    """Append empty cells to rows narrower than *final*, at the end of each row's last line.
+
+    Only a row short by trailing signing columns (the run of *final*'s last columns that are
+    :data:`~agentteams.cli.decision_log.SIGNED_DECISION_COLUMNS`) is padded; any other width is
+    refused, so a torn or truncated row is never silently filled in.
+
+    Args:
+        rest: The log's bytes after the header line.
+        records: ``(first file line, last data line, fields)`` per row, from :func:`_records`.
+        final: The header the rows must match after migration.
+        log_path: The log, for messages.
+
+    Returns:
+        ``(padded bytes, first file line of each padded row)``.
+
+    Raises:
+        DecisionLogMigrationError: A row is narrower than any legacy width (torn or truncated).
+    """
+    signing = set(SIGNED_DECISION_COLUMNS)
+    trailing = 0
+    for column in reversed(final):
+        if column not in signing:
+            break
+        trailing += 1
+    narrowest = len(final) - trailing
+    lines = io.StringIO(rest.decode("utf-8"), newline="").readlines()
+    padded: list[int] = []
+    for start, end, fields in records:
+        if len(fields) >= len(final):
+            continue
+        if len(fields) < narrowest:
+            raise DecisionLogMigrationError(
+                f"{log_path} line {start} has {len(fields)} fields; a row of this log has at least "
+                f"{narrowest}. Refusing to pad a torn or truncated row: fix it first"
+            )
+        line = lines[end - 1]
+        body = line.rstrip("\r\n")
+        lines[end - 1] = body + "," * (len(final) - len(fields)) + line[len(body):]
+        padded.append(start)
+    return "".join(lines).encode("utf-8"), padded
+
+
+def _assert_payloads_unchanged(old_bytes: bytes, new_bytes: bytes, log_path: Path) -> None:
+    """Refuse unless every row's signed payload (and so the hash chain) reads back identically.
+
+    Args:
+        old_bytes: The log before migration.
+        new_bytes: The migrated log.
+        log_path: The log, for messages.
+
+    Raises:
+        DecisionLogMigrationError: A row's signed payload would change.
+    """
+    def payloads(raw: bytes) -> list[str]:
+        reader = csv.DictReader(io.StringIO(raw.decode("utf-8"), newline=""))
+        return [_decision_signature_payload({k: v or "" for k, v in row.items() if k}) for row in reader]
+
+    if payloads(old_bytes) != payloads(new_bytes):
+        raise DecisionLogMigrationError(f"migrating {log_path} would change a row's signed payload; refusing")
+
+
 def plan_migration(log_path: Path) -> MigrationPlan:
     """Work out the migration of one decisions log, writing nothing.
 
@@ -254,10 +330,15 @@ def plan_migration(log_path: Path) -> MigrationPlan:
     except RuntimeError as exc:
         raise DecisionLogMigrationError(f"{log_path}: unknown header schema; {exc}") from exc
     added = missing_signing_columns(columns)
-    if not added:
-        return MigrationPlan(log_path, kind, columns, [], [], raw, None)
     records = _records(rest, log_path)
-    for line, fields in records:
+    if not added:
+        padded_rest, padded = _pad_records(rest, records, columns, log_path)
+        if not padded:
+            return MigrationPlan(log_path, kind, columns, [], [], raw, None)
+        new_bytes = header + ending + padded_rest
+        _assert_payloads_unchanged(raw, new_bytes, log_path)
+        return MigrationPlan(log_path, kind, columns, [], [], raw, new_bytes, padded)
+    for line, _end, fields in records:
         overflow = [f for f in fields[len(columns):] if f.strip()]
         if overflow:
             raise DecisionLogMigrationError(
@@ -266,9 +347,11 @@ def plan_migration(log_path: Path) -> MigrationPlan:
                 "Refusing (no laundering): fix the row first"
             )
     revoked = _revoked_rows(columns, records) if "signature" in added else []
-    new_bytes = header + ("," + ",".join(added)).encode("utf-8") + ending + rest
+    padded_rest, padded = _pad_records(rest, records, columns + added, log_path)
+    new_bytes = header + ("," + ",".join(added)).encode("utf-8") + ending + padded_rest
     _assert_migrated(new_bytes, columns, added, log_path)
-    return MigrationPlan(log_path, kind, columns, added, revoked, raw, new_bytes)
+    _assert_payloads_unchanged(raw, new_bytes, log_path)
+    return MigrationPlan(log_path, kind, columns, added, revoked, raw, new_bytes, padded)
 
 
 def apply_migration(plan: MigrationPlan, team_dir: Path, *, framework: str = "") -> Path:
@@ -334,7 +417,10 @@ def _print_plan(plan: MigrationPlan, *, dry_run: bool) -> None:
     """Print the header change and the revocation list."""
     tag = "[DRY RUN] " if dry_run else ""
     print(f"  {tag}migrate-decision-log → {plan.log_path} ({plan.schema_kind} header)")
-    print(f"    header: + {', '.join(plan.added_columns)}  (prev_digest is never added)")
+    if plan.added_columns:
+        print(f"    header: + {', '.join(plan.added_columns)}  (prev_digest is never added)")
+    if plan.padded_lines:
+        print(f"    pads {len(plan.padded_lines)} short row(s) with empty cells (signed payloads unchanged)")
     if not plan.revoked:
         print("    revokes: none (no live unsigned authorizing row)")
         return
@@ -377,14 +463,15 @@ def run_migrate_decision_log(args: argparse.Namespace) -> int:
         return 0
     _print_plan(plan, dry_run=False)
     if not args.yes:
-        print("[MIGRATE-DECISION-LOG] refused: the migration activates signing and revokes the rows "
-              "listed above; review a --dry-run, then re-run with --yes", file=sys.stderr)
+        print("[MIGRATE-DECISION-LOG] refused: the migration rewrites the decisions log (and may activate "
+              "signing and revoke the rows listed above); review a --dry-run, then re-run with --yes",
+              file=sys.stderr)
         return 1
     try:
         backup = apply_migration(plan, team_dir, framework=args.framework)
     except (DecisionLogMigrationError, OSError) as exc:
         print(f"[MIGRATE-DECISION-LOG] failed: {exc}", file=sys.stderr)
         return 1
-    print(f"  ✓  migrate-decision-log: {len(plan.added_columns)} column(s) added to {plan.log_path} "
-          f"(backup: {backup})")
+    print(f"  ✓  migrate-decision-log: {len(plan.added_columns)} column(s) added and "
+          f"{len(plan.padded_lines)} row(s) padded in {plan.log_path} (backup: {backup})")
     return 0

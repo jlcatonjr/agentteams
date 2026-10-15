@@ -87,7 +87,7 @@ def test_dropped_twin_goes_to_a_lost_sidecar_through_emit(tmp_path):
     result = emit.emit_all([("x.agent.md", RENDER)], output_dir=out, merge=True, yes=True,
                            backup_path=backup, twin_sources={"x.agent.md": SOURCE})
     assert "Old rule for Acme" not in (out / "x.agent.md").read_text(encoding="utf-8")
-    sidecar = backup / "x.agent.md.lost.unfenced-rules.md"
+    sidecar = backup / "x.agent.md.lost.unfenced-rules.md.agentteams-bak"
     assert sidecar.exists() and "Old rule for Acme" in sidecar.read_text(encoding="utf-8")
     assert any("recovery:" in n and "unfenced-rules" in n for n in result.notices)
 

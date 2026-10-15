@@ -384,18 +384,22 @@ standalone mode (`agentteams/cli/decision_log_migrate.py`) that works with `--se
   `signature`), so no cell of a signed row is dropped. `prev_digest` is never added: hash chaining is opt-in on
   that column, and the legacy rows were never chained. The migrated header still classifies as the same schema
   kind.
-- **Byte-exact.** Only the header line is rewritten, as text (its line ending is kept). Every data line stays
-  byte-identical; nothing is round-tripped through a CSV writer.
+- **Byte-preserving, rows padded.** The header line is rewritten as text (its line ending is kept). Each data
+  line keeps its bytes as a prefix; a row narrower than the new header gets empty cells (`,`) appended at its
+  end, so `governance_logs.append_row` accepts the migrated log. Only rows short by trailing signing columns are
+  padded; a torn or truncated row is refused. Padding changes no row's signed payload, and the migration checks
+  that. Nothing is round-tripped through a CSV writer.
 - **Refusals.** A missing log, a symlink, an empty, unknown or malformed header (byte-order mark, empty or
-  repeated column name) and a data row with a value past the old header (it would land in an added column,
-  such as `signature`) are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
+  repeated column name), a data row with a value past the old header (it would land in an added column,
+  such as `signature`) and a row too short to be a legacy row are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
 - **An intended revocation.** The `signature` column turns decision signing on for the log, so every live
   unsigned authorizing row stops clearing: each unconsumed `PASS` or `CONDITIONAL PASS`, and each
   `HALT-RETRACTED` (whose HALT is then in force again). The dry run lists them by line and action, the real
   run prints the same list, and a real run without `--yes` refuses. Record new, signed clearances for what is
   still needed.
 - **Write set.** A backup of the log under the agents directory's `.agentteams-backups/`, then an atomic
-  replace of the log. A header that already has every column is a no-op.
+  replace of the log. A header that already has every column, with every row at full width, is a no-op; a log
+  migrated before 1.0 (full header, short rows) is padded by a re-run.
 
 Clearance: the run is a governance-file edit and needs an ordinary `@security` PASS. Record it in the
 repository's own log, not the team log being migrated (the migration revokes it).
@@ -669,7 +673,7 @@ fence as the merge notice prints them, plus a 12-hex digest of the on-disk body 
 example `git-operations.agent.md:content@3f9c0a1b2d4e`. The override applies only while the
 on-disk body still matches that digest. So an entry left in an exported variable, a nested run or
 a CI job cannot release anything you did not review. The released section takes the template
-update, and its old body goes to a `.lost.<fence>.md` sidecar in the backup dir. Overrides are
+update, and its old body goes to a `.lost.<fence>.md.agentteams-bak` sidecar in the backup dir. Overrides are
 refused on a run with no backup dir (`--no-backup`).
 
 **Reviewing.** The guard can't tell a reference the template itself retired from a project's own
@@ -709,7 +713,7 @@ the on-disk fence body relative to the freshly rendered content.
   fences, `authority_hierarchy`/`source_repositories`, and the two retrieval
   references when the brief declares `retrieval_integration`) are never preserved:
   they are replaced, the notice says `replaced`, and the prior body is saved to a
-  `.lost.<sid>.md` sidecar in the backup dir (not saved under `--no-backup`).
+  `.lost.<sid>.md.agentteams-bak` sidecar in the backup dir (not saved under `--no-backup`).
 - `warn` (back-compatible): log the shrink notice into the
   emit notices stream and proceed with the smaller content. The
   notice is also appended to
@@ -733,7 +737,7 @@ is plumbed into both emit code paths (the `--update` branch and the
 post-emit main path).
 
 Under `warn`, the full pre-merge body of every shrunken fence is
-written to `<backup>/<rel_path>.lost.<sid>.md` (the backup is taken
+written to `<backup>/<rel_path>.lost.<sid>.md.agentteams-bak` (the backup is taken
 automatically before the merge) and the shrink Notice is annotated
 with `— recovery: <sidecar-path>` so the operator can recover
 dropped hand-edits without diffing the whole-file backup. The fence
@@ -1192,9 +1196,15 @@ Classify every generated output file against the build-log `file_hashes` baselin
 | `MISSING` | A recorded file is absent (or unreadable). |
 | `FENCE-BROKEN` | Content changed **and** the file's `AGENTTEAMS` fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption signal. |
 
-**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, an enforcement-manifest mismatch, or a malformed governance log (below); `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` unless the enforcement or governance-log check failed (run `--update` to establish one).
+**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, an enforcement-manifest mismatch, a malformed governance log, or a broken decision-log hash chain (below); `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` unless the enforcement or governance-log check failed (run `--update` to establish one).
 
 **Enforcement manifest:** when `references/enforcement-integrity.json` exists at the resolved root, `--verify-integrity` also re-checks every enforcement module against it and exits non-zero on any mismatch — the CLI counterpart to [`--write-integrity-manifest`](#--write-integrity-manifest)'s "review the diff before regenerating" contract. (Before 2026-08-13 the only check of that manifest lived inside the red-team battery.) A **missing** manifest is itself a finding (exit non-zero) when the repository tracks it in git or the imported scanner sits inside the project (e.g. an in-project `.venv`); an ordinary consumer project without one is unaffected.
+
+**Decision-log chain:** when `references/security-decisions.log.csv` carries a `prev_digest` column, every row must
+link to the one before it (a deleted, reordered or edited row breaks the link), and a broken chain exits non-zero.
+Logs signed before 1.0 may start with a **legacy prefix**, a run of rows with no link (accepted only when signing is
+active). The report gives its length and lists any HALT row inside it: a deletion within the prefix, a HALT
+included, cannot be detected, so confirm those rows are still present as recorded.
 
 **Governance logs:** it also checks the append-only CSV logs (`security-decisions.log.csv`,
 `agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) found under

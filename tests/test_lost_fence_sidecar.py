@@ -87,7 +87,7 @@ def test_emit_all_writes_lost_fence_sidecar(tmp_path):
         shrink_policy="warn",
     )
 
-    sidecar = backup_dir / f"{rel}.lost.content.md"
+    sidecar = backup_dir / f"{rel}.lost.content.md.agentteams-bak"
     assert sidecar.exists(), f"expected sidecar at {sidecar}"
     saved = sidecar.read_text(encoding="utf-8")
     assert "example-collector" in saved
@@ -139,7 +139,7 @@ def test_emit_all_no_sidecar_under_allow_policy(tmp_path):
 
     # allow policy: no notices, no sidecar.
     assert result.notices == []
-    assert not (backup_dir / f"{rel}.lost.content.md").exists()
+    assert not list(backup_dir.rglob("*.lost.*"))  # under either naming
 
 
 def test_shrink_notice_sid_helper():

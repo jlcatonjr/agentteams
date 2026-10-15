@@ -88,7 +88,7 @@ or **loses concrete file-paths or backticked identifiers**
 | Level | Behaviour on a detected shrink |
 |---|---|
 | **`preserve`** (default) | Keeps the enriched body + writes a notice |
-| **`warn`** | Writes the smaller body, but saves a `.lost.<sid>.md` recovery sidecar |
+| **`warn`** | Writes the smaller body, but saves a `.lost.<sid>.md.agentteams-bak` recovery sidecar |
 | **`halt`** | Refuses the whole-file write |
 | **`allow`** | Writes the smaller body silently |
 

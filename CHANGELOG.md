@@ -6,6 +6,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (1.0 must-fix set: decision-log chain and migration, stale intel, retrieval write, loadable sidecars)
+
+The five defects the 1.0 release triage classed must-fix (release-branch-adoption step 4).
+
+- **Signed decision logs chain again (338).**
+  - `--sign-decision` never filled `prev_digest`, so the second signed row broke the hash chain and the gate
+    refused every action. The signer now links each row to the chain tip before any signature value or review
+    digest is computed. `append_signed_decision_row` refuses if the tip moved during confirmation.
+  - The chain rule has one home, `agentteams/cli/decision_chain.py`, which is newly integrity-pinned.
+  - **Logs already broken by the bug verify again through a legacy prefix.** When signing is active, a leading
+    run of rows with empty links is accepted. The running digest is kept through it, so the first real link
+    must bind the row before it, and every later row must chain.
+  - **Disclosure:** deletions inside that prefix, HALT rows included, can't be detected. That is the same as a
+    log with no `prev_digest` column. `--verify-integrity` now reports the prefix length and any HALT inside it,
+    and exits 1 on a broken chain. The chain is unkeyed, so rows cut from the tail aren't detected either.
+  - A log created by the first signed row used to match neither accepted schema, so its next read failed as
+    "malformed". New logs now lead with the legacy required columns.
+  - The goose coordination MCP server rewrote any decisions-log header to its own six columns, which dropped
+    the signing and chain columns. It now writes in the existing header and refuses a hash-chained log.
+- **`--migrate-decision-log` pads short legacy rows (399/406),** so `governance_logs.append_row` accepts a migrated
+  log.
+  - Each data line keeps its old bytes as a prefix, with empty cells appended.
+  - Only rows short by trailing signing columns are padded. A torn row is refused.
+  - Every row's signed payload is asserted unchanged.
+  - A log migrated before this fix is padded by a re-run.
+  - **The "every data line stays byte-identical" promise is replaced.**
+- **A corrupt vulnerability cache is never "fresh" (433).** Under `--security-offline`, and in the online fallback,
+  the following caches now report `stale`, with a new optional `freshness.cache_corrupt` flag:
+  - a cache that can't be read;
+  - one that isn't UTF-8, JSON or an object;
+  - one that fails the schema check;
+  - one with no parseable `generated_at`.
+
+  Before, such a cache defaulted to "fresh" and the stale-intelligence gate failed open.
+- **BREAKING: `python -m agentteams.research browser --screenshot` is removed (378).**
+  - The read-only retrieval grant (`Bash(python -m agentteams.research:*)`) runs this CLI. The flag wrote a file
+    anywhere the caller named, a C-3 widening.
+  - `browser_screenshot()` stays as a library call.
+  - **Known residual:** the research cache still writes under `references/research-cache`.
+- **Lost-fence sidecars are inert (377).** Backups live inside the agents directory, which runtimes load
+  recursively, so `<rel>.lost.<sid>.md` was itself a loadable agent file.
+  - Sidecars are now `….lost.<sid>.md.agentteams-bak`. `restore_backup` never copies one back into a live path.
+  - Existing sidecars are renamed by the legacy-backup neutralizer.
+- **Re-pinned** in `references/enforcement-integrity.json`: `cli/decision_log.py`, `cli/operator_signing.py`,
+  `fences.py`, `fence_twins.py`, `shrink_allow.py`, `whole_body_migration.py` and `integrity.py`, plus the new
+  `cli/decision_chain.py`.
+
 ### feat (memory index: compact layout, and size-capped shards read without reassembly)
 
 - A downstream committed `references/memory-index.json` reached 56.1 MiB, past GitHub's 50 MB warning and
