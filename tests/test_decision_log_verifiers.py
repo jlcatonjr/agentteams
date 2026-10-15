@@ -269,7 +269,7 @@ def test_a_family_retraction_still_clears_prefix_halts(tmp_path):
     dl._assert_no_unretracted_halt(tmp_path, action="overwrite")  # must not raise
 
 
-@pytest.mark.parametrize("halt_id", ["m6OverwriteRender", "overwrite2", "(overwrite)", "overwrite, then render",
+@pytest.mark.parametrize("halt_id", ["m6OverwriteRender", "XMLOverwrite", "overwrite2", "(overwrite)", "overwrite, then render",
                                      "overwrite post-render closing check (P5)"])
 def test_the_token_boundary_is_wide_on_the_halt_side(tmp_path, halt_id):
     """@adversarial: camelCase, digits and punctuation must not let a HALT id dodge the match."""
@@ -304,6 +304,34 @@ def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
     assert "row 1: 'm6-overwrite-render-x' blocks 'overwrite'" in text
     assert "row 3: 'cross-repo-merge PR 105'" in text  # custom-action blockers are listed too
     assert "old-prune-x" not in text
+
+
+def test_every_gate_call_site_is_listed():
+    """@adversarial: the reverse direction. Every literal or constant action passed to a gate is in
+    GATE_ACTIONS, and a variable action appears only at the one dynamic site (branch-cleanup:<sha>)."""
+    import re as _re
+    from pathlib import Path as _P
+
+    from agentteams.cli.action_ids import GATE_ACTIONS
+
+    repo = _P(__file__).resolve().parents[1]
+    files = [*(repo / "agentteams").rglob("*.py"), repo / "build_team.py"]
+    sources = {f: f.read_text(encoding="utf-8") for f in files}
+    constants = dict(_re.findall(r'^([A-Z_]+)\s*=\s*"([a-z][a-z-]*)"', "\n".join(sources.values()), _re.M))
+    call = _re.compile(r"(?:_assert_destructive_action_allowed|check_clearance|_assert_no_unretracted_halt)"
+                       r"\([^)]*?action=(\"[^\"]+\"|[A-Za-z_]+)")
+    dynamic = []
+    for path, text in sources.items():
+        for arg in call.findall(text):
+            if arg.startswith('"'):
+                assert arg.strip('"') in GATE_ACTIONS, (path.name, arg)
+            elif arg.isupper() or arg in constants:
+                assert constants[arg] in GATE_ACTIONS, (path.name, arg)
+            elif arg == "action" and path.name in {"branch_cleanup.py", "security_gate.py"}:
+                dynamic.append(path.name)
+            else:
+                raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")
+    assert "branch-cleanup" in GATE_ACTIONS and dynamic
 
 
 def test_every_listed_gate_action_is_a_real_gate_call():

@@ -19,13 +19,15 @@ from pathlib import Path
 #: Token boundaries for the HALT-side match: any non-alphanumeric run, after camelCase and
 #: letter/digit boundaries are split (``m6OverwriteRender``, ``overwrite2``, ``(prune)``, ``overwrite,``).
 #: Wide on purpose: on the HALT side a false match only blocks.
-_CAMEL = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")
+_CAMEL = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")
 _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 
-#: The action ids the destructive-action gate is called with (``_assert_destructive_action_allowed``
-#: and the gated modes). The pre-upgrade report checks old HALTs against these; a test keeps the list
-#: in step with the code.
-GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete")
+#: The action ids agentteams' own gates are called with (``_assert_destructive_action_allowed``,
+#: ``check_clearance``, ``_assert_no_unretracted_halt``); ``branch-cleanup`` is the family of the
+#: per-plan ``branch-cleanup:<sha256>`` id. The pre-upgrade report checks old HALTs against these; a
+#: test checks both directions against the call sites.
+GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
+                                 "branch-cleanup")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:
