@@ -138,6 +138,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`mcp_detect`](mcp-detect.md) | Detect MCP server configuration available to the target host |
 | [`mcp_emit`](mcp-emit.md) | Emit MCP server wiring into generated teams |
 | [`codex_mcp_emit`](codex-mcp-emit.md) | MCP server emission into Codex's `.codex/config.toml` |
+| [`grok_config_emit`](grok-config-emit.md) | The agentteams-managed block in Grok Build's `.grok/config.toml` (`[mcp_servers]`, control-plane `[permission]`) |
 | [`toml_write`](toml-write.md) | Minimal hand-rolled TOML serializer bounded to what Codex's MCP config tables need |
 | [`bridge_pair_docs`](bridge-pair-docs.md) | Prose renderers for the bridge's framework-agnostic pair-dir artifacts (carved out of `bridge`) |
 | [`bridge_skills`](bridge-skills.md) | Claude skill bodies emitted by the bridge (carved out of `bridge`) |

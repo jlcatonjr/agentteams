@@ -403,7 +403,11 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
   | A symlink (itself or a parent such as `.grok`/`.grok/examples`), unreadable, malformed fences, or outside the project | Never written |
 
   `CodexAdapter` uses the same classifier, and it leaves a Grok-generated `AGENTS.md` alone.
-- **`extra_output_files` returns only the framework-neutral baseline.** Claude's hook, settings example and runner files are not emitted under `.grok/`.
+- **`extra_output_files`:**
+  - always: the framework-neutral baseline plus `.grok/hooks/README.md`, which keeps the launcher-protected dir present
+  - when confinement is requested (`grok:sandbox`, or a confined/exclusive profile) on Linux/macOS: `_grok_sandbox_emit.grok_sandbox_output_files` adds `.grok/sandbox.toml`, `.grok/confined-run.example.sh` and the advisory hook gate (`agentteams-gate.json` + `agentteams-gate-shim.py` + `constitutional-gate.py`)
+  - Claude's own hook, settings example and runner files are never emitted under `.grok/`
+  - the guard refuses any of these through a symlink, and never overwrites an existing profile, runner or hook file that lacks the `agentteams-managed` marker
 - **Refused combinations:** `write_policy: "orchestrator-only"` (rendering a runner grant raises), and convert, bridge, interop and absorb, as either target or source (`cli/parser_validate`).
 - **Control plane:** `.grok` is protected alongside the other team dirs (team key `grok`):
   - the write roots, plus `~/.grok` as a protected home path

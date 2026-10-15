@@ -113,8 +113,17 @@ Core.
 Grok runs Claude-schema hooks from `.grok/hooks/*.json` and from Claude's `settings.json`. `PreToolUse` can
 block a call, with exit code 2 or `{"decision":"deny"}`. **Every hook failure is fail-open**: a timeout, a crash
 or malformed output lets the call through (confirmed live in the 2026-10-14 spike). Treat a Grok hook as an
-advisory control, never as enforcement. (agentteams emits no Grok hook yet; when the Phase 2 hook gate lands it
-is classified as declared, not enforced.)
+advisory control, never as enforcement.
+
+**What agentteams emits.** With a confined or exclusive profile, agentteams emits a hook gate made of three files:
+- `.grok/hooks/agentteams-gate.json`, which runs the shim
+- `.grok/hooks/agentteams-gate-shim.py`, the shim
+- `.grok/hooks/constitutional-gate.py`, the same gate Claude teams use
+
+Grok sends hooks its own tool names (`run_terminal_command`, `read_file`, `search_replace`), so the shim translates
+them to Claude's before running the gate. Without it, the gate would not recognise a Grok shell command or file
+write. The gate asks before `sudo`, pipe-to-shell, force-push and similar commands, and denies writes that contain
+credentials. It only runs after folder trust, and it fails open, so it is classified as declared, not enforced.
 
 ---
 
@@ -125,14 +134,31 @@ Sandbox profiles:
 - custom: `[profiles.<name>]` in `.grok/sandbox.toml`, with `extends`, `read_only`, `read_write`, `deny` and
   `restrict_network`
 
-Example profile (agentteams does not emit one yet; a generated profile is Phase 2):
+With a confined or exclusive profile, agentteams emits this profile as `.grok/sandbox.toml`. It never overwrites a
+file of yours that lacks its `agentteams-managed` first line:
 
 ```toml
 # .grok/sandbox.toml
 [profiles.agentteams]
 extends = "workspace"
-deny = ["**/.env*", "**/*.pem"]
+deny = ["**/*.pem", "**/*.key", "**/.config/agentteams/keys/**"]   # workspace-only globs
 ```
+
+**Grok's own sandbox cannot protect your agent team.** Tested on 2026-10-14:
+- A `read_only` entry did **not** stop writes inside the workspace, from the shell or from Grok's edit tool.
+- A `deny` entry blocks reads too, so it can't be used on files Grok must read.
+- A relative `deny` glob matches only inside the workspace, so the keys entry above does not protect
+  `~/.config/agentteams/keys`.
+
+The real boundary is the agentteams launcher. The emitted `.grok/confined-run.example.sh` runs Grok inside
+`sandbox/confine-run.sh`, which:
+- keeps the `.grok` and `.claude` folders, the control plane, `.agentteams` and the prompt roots read-only
+- masks credential folders
+- protects the user-level config in a dedicated `GROK_HOME`, including the folder-trust store
+
+Grok's own sandbox is switched off there (`--sandbox off`), because it can't run nested. The profile above is
+used only by `GROK_CONFINE_MODE=profile`, which first refuses if your `~/.grok/sandbox.toml` defines a profile with
+the same name or a `requirements.toml` pins sandbox settings.
 
 Things to know:
 - **A project can define a profile but cannot switch it on.** Start Grok with `grok --sandbox agentteams` (or

@@ -254,7 +254,10 @@ class GrokAdapter(ClaudeAdapter):
         Raises:
             Nothing.
         """
-        return [*FrameworkAdapter.extra_output_files(self, manifest), (_HOOKS_README_REL, _HOOKS_README)]
+        from agentteams.frameworks._grok_sandbox_emit import grok_sandbox_output_files
+
+        return [*FrameworkAdapter.extra_output_files(self, manifest), (_HOOKS_README_REL, _HOOKS_README),
+                *grok_sandbox_output_files(manifest)]
 
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return ``<project>/.grok/agents``.
@@ -350,7 +353,11 @@ class GrokAdapter(ClaudeAdapter):
         for rel_path, content in rendered_files:
             target = Path(os.path.normpath(output_dir / rel_path))
             if target.name != _AGENTS_MD or target.parent != root:
-                kept.append((rel_path, content))
+                refusal = _owned_file_refusal(rel_path, target, root)
+                if refusal:
+                    notices.append(refusal)
+                else:
+                    kept.append((rel_path, content))
                 continue
             if linked is not None:
                 notices.append(f"{target}: left untouched; {linked} is a symlink, so the Grok team dir may not "
@@ -393,6 +400,38 @@ class GrokAdapter(ClaudeAdapter):
         if out_dir.name == "agents" and out_dir.parent.name == ".grok":
             notices.extend(_parity_notices(kept, out_dir, root))
         return kept, notices
+
+
+def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
+    """Why an emitted ``.grok/`` file outside the agents dir must not be written, else None.
+
+    Never through a symlink; and the profile, runner and hook JSON/shim are never written over an existing file
+    that lacks the ``agentteams-managed`` marker (an operator's own file).
+    """
+    from agentteams.frameworks._grok_sandbox_emit import (
+        GROK_GATE_JSON_REL,
+        GROK_GATE_SHIM_REL,
+        GROK_OWNED_MARKER,
+        GROK_RUNNER_REL,
+        GROK_SANDBOX_PROFILE_REL,
+    )
+
+    if not rel_path.startswith("../"):
+        return None
+    linked = symlink_on_path(target, root)
+    if linked is not None:
+        return f"{target}: left untouched; {linked} is a symlink."
+    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL)
+    if rel_path in marked and target.is_file():
+        try:
+            with target.open(encoding="utf-8") as fh:
+                head = fh.read(400)
+        except (OSError, UnicodeDecodeError):
+            head = ""
+        if GROK_OWNED_MARKER not in head:
+            return (f"{target}: existing file is not agentteams-managed; left untouched (remove it, or add "
+                    f"'{GROK_OWNED_MARKER}' to its first lines, to let agentteams regenerate it).")
+    return None
 
 
 def front_matter_name(text: str) -> str | None:

@@ -191,12 +191,14 @@ Confidence marks:
 | G1 | A repo with a Claude team loads `CLAUDE.md`, `.claude/CLAUDE.md` and `AGENTS.md` together, and the project cannot switch this off | docs + S3 | Advisory. The `grok_runtime` block carries only Grok notes. |
 | G2 | `.claude/agents/*.md` always load, so agents with different names load twice | S1, S2 | Name parity (D4), plus a guard notice on mismatch |
 | G3 | Hooks fail open | docs + S10 | The gate is DECLARED. Enforcement comes from the sandbox and `[permission] deny` (Phase 2). |
-| G4 | The built-in `workspace` sandbox does not protect agent dirs | S11 | Phase 2 profile; R3 decides how |
+| G4 | The built-in `workspace` sandbox does not protect agent dirs, and **`read_only` does not write-protect inside the workspace either** | S11, R3 (2026-10-14: relative, absolute and Edit-tool writes all got through) | Protection comes from the agentteams launcher (`.grok/confined-run.example.sh` → `sandbox/confine-run.sh`, Grok's sandbox off inside); the emitted profile denies only secret-shaped workspace files |
 | G5 | A user-defined profile with the same name overrides the project profile | `18-sandbox.md:95` | Phase 2 advisory; `--verify` reports it |
 | G6 | User `~/.claude` config leaks into Grok sessions | S5 | Advisory. Eval and validation runs set `GROK_CLAUDE_*_ENABLED=false`. |
 | G7 | Subagent depth is one | `16-subagents.md:401` | Stated in the `grok_runtime` block |
 | G8 | Headless delegation needs an approval mode | S14, R2-a | Documented for eval and redteam adapters |
-| G9 | A sandbox `deny` blocks reads too | R2-b (T5d) | Never deny readable control-plane paths. Write-only protection waits on R3. |
+| G9 | A sandbox `deny` blocks reads too | R2-b (T5d) | Never deny readable control-plane paths; write-only protection is impossible in the profile (R3), so it comes from the launcher |
+| G16 | Project `[permission]` rules load only after folder trust | R4 (2026-10-14: untrusted, not applied; trusted, applied) | The emitted `[permission]` deny block is DECLARED and trust-dependent |
+| G17 | Hooks receive a Claude-shaped envelope with Grok tool names (`run_terminal_command{command}`, `read_file{target_file}`, `search_replace{file_path,old_string,new_string}`); Grok accepts the Claude reply format | R5 (2026-10-14) | The gate runs behind `grok-gate-shim.py` (input translation only); the gate is unmodified |
 | G10 | Skill precedence between `.grok/skills` and `.claude/skills` for the same name | unverified | Spike item before Phase 2 |
 | G11 | A scoped `Bash(...)` in agent `tools:` may be honoured, widened to `Bash`, or dropped | unverified | Spike item |
 | G12 | The per-agent `agentsMd` key (source-only) may stop AGENTS.md being injected into subagents | source-only | Phase 3 opportunity |
