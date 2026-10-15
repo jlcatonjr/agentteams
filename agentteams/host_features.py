@@ -25,6 +25,7 @@ _VALID_NAMESPACES = frozenset(
         "copilot-cli",
         "goose",
         "codex",
+        "grok",
         "bridge:copilot-vscode-to-claude",
         "bridge:copilot-vscode-to-copilot-cli",
         "bridge:copilot-cli-to-claude",
@@ -69,6 +70,12 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # Like goose:sandbox, the token records the REQUEST; generation cannot verify that
     # Codex is actually launched through the example.
     "codex": frozenset({"mcp", "sandbox"}),
+    # grok (Phase 2, 2026-10-14; plan tmp/by-week/2026-W42 §12): `mcp` splices operator-specified
+    # mcp_servers[] into the project .grok/config.toml (grok_config_emit.py). `sandbox`: confined/exclusive
+    # expand to `grok:sandbox` (see _sandbox_token_for), which gates the .grok/sandbox.toml profile, the
+    # [permission] deny block, the operator-run .grok/confined-run.example.sh and the advisory hook gate (shim). A project can define a
+    # profile but never activate one, so the token records the REQUEST; every Grok control is DECLARED.
+    "grok": frozenset({"mcp", "sandbox"}),
     # C-4 (2026-08-26): `sandbox` removed from the bridge namespaces. The bridge writes only
     # subagent stubs into a foreign repo and never emits a `sandbox` settings block (bridge.py
     # wires subagents/hooks/schedule/cache-split/… but not sandbox), so accepting a
@@ -160,6 +167,10 @@ _PROFILE_FEATURE_TOKENS: dict[str, tuple[str, ...]] = {
 }
 
 
+#: Frameworks whose confinement request is their own ``<framework>:sandbox`` token (all others: ``claude:sandbox``).
+_OWN_SANDBOX_TOKEN = frozenset({"goose", "codex", "grok"})
+
+
 def _sandbox_token_for(framework: str | None) -> str:
     """Return the sandbox host-feature token a confined/exclusive profile expands to.
 
@@ -169,18 +180,16 @@ def _sandbox_token_for(framework: str | None) -> str:
     ``goose:sandbox`` token (macOS Seatbelt via ``GOOSE_SANDBOX``, emitted by
     ``frameworks/_goose_sandbox_emit.py``), and ``codex`` (Phase 1a, 2026-10-08) maps to
     ``codex:sandbox`` (the operator-run ``.codex/confined-run.example.sh``, which runs Codex
-    inside the neutral launcher). Every other framework (and a missing
+    inside the neutral launcher), and ``grok`` (Phase 2, 2026-10-14) maps to ``grok:sandbox`` (the
+    ``.grok/sandbox.toml`` profile, the ``[permission]`` block, ``.grok/confined-run.example.sh`` and the
+    advisory hook gate). Every other framework (and a missing
     framework) keeps ``claude:sandbox`` — preserving the historical framework-agnostic
     behavior: the token is harmless on a framework whose emitter never reads it, and the
     unenforceable-host request is surfaced by :func:`privilege_profile_advisory` either
     way. Note this is platform-INDEPENDENT: the token records the confinement REQUEST;
     :func:`is_sandbox_capable` decides whether the current OS can ENFORCE it.
     """
-    if framework == "goose":
-        return "goose:sandbox"
-    if framework == "codex":
-        return "codex:sandbox"
-    return "claude:sandbox"
+    return f"{framework}:sandbox" if framework in _OWN_SANDBOX_TOKEN else "claude:sandbox"
 
 
 #: The privilege_profile values the schema accepts. ``None`` is not in the set because a

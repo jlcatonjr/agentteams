@@ -254,7 +254,7 @@ mode of its own.
 
 ## Directional Coverage
 
-All six registered frameworks are valid CAI interop **sources and targets**
+All seven registered frameworks are valid CAI interop **sources and targets**
 (durable-canonical-agent-format plan, Phase F):
 
 1. `copilot-vscode`
@@ -263,6 +263,9 @@ All six registered frameworks are valid CAI interop **sources and targets**
 4. `goose`
 5. `agents-md`
 6. `codex` (custom agents as `.codex/agents/<slug>.toml`; AGENTS.md rendering shared with agents-md)
+7. `grok` (Grok Build custom agents as `.grok/agents/<slug>.md`; the repo-root AGENTS.md is written only through
+   Grok's co-ownership guard, and a narrowed agent needs `--interop-allow-cooperative` because Grok does not enforce
+   grants)
 
 Round-trip fidelity is exact where a target has an equivalent concept and honestly
 degraded where it doesn't — surfaced via `compatibility-report.md` in bundle mode, never

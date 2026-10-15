@@ -21,8 +21,9 @@ and tmp/by-week/2026-W42/grok-integration.plan.md §9 for evidence):
   ``.claude/CLAUDE.md`` together. The team brief goes in the shared ``AGENTS.md`` (operator decision D2), whose
   ownership rules live in :mod:`._agents_md_ownership`.
 
-Generate-only in this release: convert / bridge / interop / absorb flows refuse ``grok`` (``cli/parser_validate``),
-and ``write_policy: "orchestrator-only"`` is refused (``write_policy.py``).
+Codex posture (Phase 3): an interop target and source and an absorb source (``agentteams/_interop_grok.py``);
+convert and bridge refuse ``grok`` (``cli/parser_validate``), and ``write_policy: "orchestrator-only"`` is refused
+(``write_policy.py``).
 """
 
 from __future__ import annotations
@@ -82,6 +83,16 @@ GROK_AGENTS_MD_NOTICE = (
 )
 
 _AGENTS_MD = "AGENTS.md"
+#: Emitted so ``.grok/hooks`` always exists: the launcher protects ``.grok`` present-only, and a missing dir is
+#: one a confined process could create and fill (@security step-12b, P2-A). Grok loads only ``*.json`` there.
+_HOOKS_README_REL = "../hooks/README.md"
+_HOOKS_README = (
+    "# .grok/hooks\n\n"
+    "Grok Build loads `*.json` hook files from this directory after the folder is trusted (`grok --trust`).\n"
+    "agentteams keeps the directory present so the confinement launcher protects it; any hook file here that\n"
+    "you did not write should be treated as suspect. Grok hooks fail open (a timeout or crash lets the call\n"
+    "through), so they are advisory, never enforcement.\n"
+)
 _EXAMPLE_BLOCK_REL = "../examples/AGENTS.grok-block.md"
 _NAME_RE = re.compile(r"""^name:\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^\n]*?))\s*$""", re.MULTILINE)
 
@@ -99,9 +110,9 @@ def grok_runtime_block() -> str:
         f"<!-- AGENTTEAMS:BEGIN {GROK_FENCE_ID} v=1 -->\n"
         "## Grok Build Notes\n"
         "\n"
-        "- Grok Build loads this file only in a trusted folder. Review `.grok/hooks/`, `.mcp.json` and\n"
-        "  `.grok/config.toml` first, then run `grok --trust` once in this repository (trust also turns on\n"
-        "  project hooks, MCP servers and skills).\n"
+        "- Grok Build loads this file only in a trusted folder. Review `.grok/hooks/`, `.grok/workflows/`,\n"
+        "  `.grok/plugins/`, `.grok/lsp*`, `.mcp.json` and `.grok/config.toml` first, then run `grok --trust`\n"
+        "  once in this repository (trust also turns on project hooks, MCP and LSP servers, and skills).\n"
         "- The team's custom agents are in `.grok/agents/`. Subagents cannot spawn subagents (depth one), so run\n"
         "  the orchestrator as the session agent: `grok --agent \"<orchestrator name>\"`.\n"
         "- Grok also loads `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/agents/`. A `.grok/agents/` file replaces\n"
@@ -229,11 +240,12 @@ class GrokAdapter(ClaudeAdapter):
         return ("name", "description", "tools", "injectDefaultTools", "mcpInheritance")
 
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:
-        """Return only the framework-neutral baseline (launcher + verify-key sentinel).
+        """Return the framework-neutral baseline (launcher + verify-key sentinel) plus ``.grok/hooks/README.md``.
 
         Deliberately skips :meth:`ClaudeAdapter.extra_output_files`: its constitutional hook, settings example
-        and runner files are Claude Code artifacts Grok would never read from ``.grok/``. Grok's own sandbox
-        profile and hook gate arrive in Phase 2, after @security.
+        and runner files are Claude Code artifacts Grok would never read from ``.grok/``. When confinement is
+        requested, :func:`._grok_sandbox_emit.grok_sandbox_output_files` adds the Grok sandbox profile, the
+        confined-run launcher wrapper and the advisory hook gate (shim + gate + hook JSON).
 
         Args:
             manifest: The team manifest.
@@ -244,7 +256,10 @@ class GrokAdapter(ClaudeAdapter):
         Raises:
             Nothing.
         """
-        return FrameworkAdapter.extra_output_files(self, manifest)
+        from agentteams.frameworks._grok_sandbox_emit import grok_sandbox_output_files
+
+        return [*FrameworkAdapter.extra_output_files(self, manifest), (_HOOKS_README_REL, _HOOKS_README),
+                *grok_sandbox_output_files(manifest)]
 
     def get_agents_dir(self, project_path: Path) -> Path:
         """Return ``<project>/.grok/agents``.
@@ -340,7 +355,11 @@ class GrokAdapter(ClaudeAdapter):
         for rel_path, content in rendered_files:
             target = Path(os.path.normpath(output_dir / rel_path))
             if target.name != _AGENTS_MD or target.parent != root:
-                kept.append((rel_path, content))
+                refusal = _owned_file_refusal(rel_path, target, root)
+                if refusal:
+                    notices.append(refusal)
+                else:
+                    kept.append((rel_path, content))
                 continue
             if linked is not None:
                 notices.append(f"{target}: left untouched; {linked} is a symlink, so the Grok team dir may not "
@@ -381,8 +400,53 @@ class GrokAdapter(ClaudeAdapter):
                 "fences; left untouched."
             )
         if out_dir.name == "agents" and out_dir.parent.name == ".grok":
-            notices.extend(_parity_notices(kept, out_dir, root))
+            notices.extend(parity_notices(kept, out_dir, root))
         return kept, notices
+
+
+def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
+    """Return why an emitted file outside the agents dir must not be written, else None.
+
+    Args:
+        rel_path: The emitted path, relative to the agents dir.
+        target: The lexically normalised destination.
+        root: The project root.
+
+    Returns:
+        A notice when the destination (or a parent) is a symlink, or when it is an existing profile, runner,
+        hook JSON, shim or gate copy that agentteams did not write; otherwise None.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.frameworks._grok_sandbox_emit import (
+        GROK_GATE_JSON_REL,
+        GROK_GATE_REL,
+        GROK_GATE_SHIM_REL,
+        GROK_GATE_SIGNATURE,
+        GROK_OWNED_MARKER,
+        GROK_RUNNER_REL,
+        GROK_SANDBOX_PROFILE_REL,
+    )
+
+    if not rel_path.startswith("../"):
+        return None
+    linked = symlink_on_path(target, root)
+    if linked is not None:
+        return f"{target}: left untouched; {linked} is a symlink."
+    # The gate copy is the unmodified Claude template, so it is recognised by its own docstring, not the marker.
+    signature = {GROK_GATE_REL: GROK_GATE_SIGNATURE}
+    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL)
+    if rel_path in marked and target.is_file():
+        try:
+            with target.open(encoding="utf-8") as fh:
+                head = fh.read(400)
+        except (OSError, UnicodeDecodeError):
+            head = ""
+        if signature.get(rel_path, GROK_OWNED_MARKER) not in head:
+            return (f"{target}: existing file is not agentteams-managed; left untouched (remove it, or add "
+                    f"'{GROK_OWNED_MARKER}' to its first lines, to let agentteams regenerate it).")
+    return None
 
 
 def front_matter_name(text: str) -> str | None:
@@ -406,8 +470,8 @@ def front_matter_name(text: str) -> str | None:
     return next(g for g in m.groups() if g is not None).strip() or None
 
 
-def _parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -> list[str]:
-    """Advisories for D4: Grok/Claude name mismatches, unshadowed Claude agents, built-in shadowing, gitignore."""
+def parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -> list[str]:
+    """Return the D4 advisories: Grok/Claude name mismatches, unshadowed Claude agents, built-in shadowing, gitignore."""
     notices: list[str] = []
     claude_dir = root / ".claude" / "agents"
     grok_files: set[str] = set()

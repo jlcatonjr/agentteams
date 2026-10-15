@@ -72,6 +72,7 @@ FRAMEWORK_DIRS: tuple[tuple[str, str, str, str], ...] = (
     ("claude", ".claude/agents", ".md", lb.MARKDOWN),
     ("goose", ".goose/recipes", ".yaml", lb.RECIPE),
     ("codex", ".codex/agents", ".toml", lb.TOML),
+    ("grok", ".grok/agents", ".md", lb.MARKDOWN),
 )
 #: The framework whose targets are never written without ``--include-claude``.
 CLAUDE = "claude"

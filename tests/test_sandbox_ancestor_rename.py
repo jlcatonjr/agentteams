@@ -98,6 +98,7 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(/.claude/settings.hooks.example.json)",
         "Edit(/.goose/confined-run.example.sh)",
         "Edit(/.codex/confined-run.example.sh)",
+        "Edit(/.grok/confined-run.example.sh)",  # Grok Phase 2 runner (2026-10-14)
         "Edit(/.claude/hooks/**)",
         # 2026-09-30: the sibling teams' trust-root files (never a whole agents dir).
         *_sibling_rules(".github/agents"),
@@ -168,7 +169,8 @@ def test_launcher_control_plane_list_is_locked_to_the_python_source():
                 *(p for p in OPERATOR_EXAMPLE_PATHS if not p.startswith(".claude/"))}
     assert set(body.split()) == expected
     dirs = re.search(r"CONTROL_PLANE_DIRS_REL=\(([^)]*)\)", text).group(1).split()
-    assert dirs == [framework_config_dir("claude")]  # .claude/* examples are covered by the dir
+    # .claude/* examples are covered by the dir; .grok whole since 2026-10-14 (@security step-12b, P2-A).
+    assert dirs == [framework_config_dir("claude"), framework_config_dir("grok")]
     assert re.search(r"^TEAM_MARKER_REL=(\S+)$", text, re.M).group(1) == TEAM_MARKER_REL
     teams = re.search(r"TEAM_DIRS_REL=\(([^)]*)\)", text).group(1).split()
     assert teams == [team_agents_dir(fw) for fw in ALL_TEAM_FRAMEWORKS]

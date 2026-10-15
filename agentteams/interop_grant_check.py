@@ -127,6 +127,10 @@ def enforcement_class(framework: str, manifest: dict[str, Any]) -> str:
         from agentteams.frameworks._codex_role_gate_emit import codex_role_gate_enabled
 
         return ENFORCED if codex_role_gate_enabled(manifest) else DECLARED
+    if framework == "grok":
+        # Grok honours tools: (with injectDefaultTools false), but no live negative test has shown a Read-only
+        # agent's Edit blocked yet; hooks fail open and the sandbox is operator-activated (@security step 6/12b).
+        return DECLARED
     return ENFORCED
 
 
@@ -221,7 +225,7 @@ def tools_line(framework: str, scopes: list[str], raw_caps: dict[str, Any], raw_
         if raw and (raw_scopes(raw) != scopes or maps_to_canonical(raw)):
             raw = ""
         return f"tools: {raw}" if raw else (_flow(scopes) if scopes else None)
-    if scopes and framework in ("copilot-vscode", "copilot-cli", "claude", "goose"):
+    if scopes and framework in ("copilot-vscode", "copilot-cli", "claude", "goose", "grok"):
         return _flow(scopes)
     return None
 
@@ -356,6 +360,11 @@ def projected_grant(framework: str, rendered: str) -> tuple[frozenset[str], froz
         return _FULL, frozenset()
     if framework == "claude":
         return _claude_grant(_items(values[0])) if values else (_FULL, frozenset())
+    if framework == "grok":
+        # Grok widens a declared list unless both exact-toolset keys are set (Phase 3 cond. 3): read it as full then.
+        if not values or not _cm.grok_exact_toolset(rendered):
+            return _FULL, frozenset()
+        return _claude_grant(_items(values[0]))
     if not values:
         return _copilot_default(), frozenset()
     items = _items(values[0])

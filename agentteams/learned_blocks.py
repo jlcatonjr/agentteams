@@ -632,6 +632,7 @@ _AGENT_FILE_HOMES: tuple[tuple[str, str, str], ...] = (
     (".claude", "agents", ".md"),
     (".goose", "recipes", ".yaml"),
     (".codex", "agents", ".toml"),
+    (".grok", "agents", ".md"),
 )
 
 

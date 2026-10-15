@@ -1,0 +1,148 @@
+{
+ "http_bearer": {
+  "dropped_unmanaged": [],
+  "errors": [],
+  "existing": null,
+  "not_wired": {},
+  "output": "# --- BEGIN agentteams-managed mcp_servers (do not hand-edit this block; re-running agentteams will replace it) ---\n[mcp_servers.api]\nurl = \"https://mcp.example.com/mcp\"\nbearer_token_env_var = \"API_TOKEN\"\ndefault_tools_approval_mode = \"prompt\"\n# --- END agentteams-managed mcp_servers ---\n",
+  "servers": [
+   {
+    "artifact_type": "mcp-server",
+    "auth": {
+     "credential_ref": "API_TOKEN",
+     "mechanism": "env",
+     "url": "https://mcp.example.com/mcp"
+    },
+    "domain": "data-access",
+    "mcp_server_schema_version": "1.0",
+    "progressive_disclosure": "lazy",
+    "scope": [
+     "x"
+    ],
+    "security_review": {
+     "required": false
+    },
+    "server_id": "api",
+    "tools": [
+     {
+      "name": "q",
+      "side_effects": "read"
+     }
+    ],
+    "transport": "http",
+    "trust_tier": "first-party"
+   }
+  ],
+  "wired": [
+   "api"
+  ]
+ },
+ "mixed_existing": {
+  "dropped_unmanaged": [
+   "handmade"
+  ],
+  "errors": [],
+  "existing": "# operator config\nmodel = \"o4\"\n\n[mcp_servers.handmade]\ncommand = \"x\"\n\n[profiles.p]\nsandbox_mode = \"read-only\"\n",
+  "not_wired": {
+   "w": "needs operator authorization (not first-party read-only)"
+  },
+  "output": "# operator config\nmodel = \"o4\"\n\n[profiles.p]\nsandbox_mode = \"read-only\"\n\n# --- BEGIN agentteams-managed mcp_servers (do not hand-edit this block; re-running agentteams will replace it) ---\n[mcp_servers.example-pg]\ncommand = \"npx\"\ndefault_tools_approval_mode = \"prompt\"\n# --- END agentteams-managed mcp_servers ---\n",
+  "servers": [
+   {
+    "artifact_type": "mcp-server",
+    "auth": {
+     "mechanism": "none"
+    },
+    "command": "npx",
+    "domain": "data-access",
+    "mcp_server_schema_version": "1.0",
+    "progressive_disclosure": "lazy",
+    "scope": [
+     "x"
+    ],
+    "security_review": {
+     "required": false
+    },
+    "server_id": "example-pg",
+    "tools": [
+     {
+      "name": "q",
+      "side_effects": "read"
+     }
+    ],
+    "transport": "stdio",
+    "trust_tier": "first-party"
+   },
+   {
+    "artifact_type": "mcp-server",
+    "auth": {
+     "mechanism": "none"
+    },
+    "command": "npx",
+    "domain": "data-access",
+    "mcp_server_schema_version": "1.0",
+    "progressive_disclosure": "lazy",
+    "scope": [
+     "x"
+    ],
+    "security_review": {
+     "required": false
+    },
+    "server_id": "w",
+    "tools": [
+     {
+      "name": "w",
+      "side_effects": "write"
+     }
+    ],
+    "transport": "stdio",
+    "trust_tier": "first-party"
+   }
+  ],
+  "wired": [
+   "example-pg"
+  ]
+ },
+ "stdio_env": {
+  "dropped_unmanaged": [],
+  "errors": [],
+  "existing": null,
+  "not_wired": {},
+  "output": "# --- BEGIN agentteams-managed mcp_servers (do not hand-edit this block; re-running agentteams will replace it) ---\n[mcp_servers.example-pg]\ncommand = \"npx\"\nargs = [\"-y\", \"pg\"]\nenv_vars = [\"PG_URL\"]\ndefault_tools_approval_mode = \"prompt\"\n# --- END agentteams-managed mcp_servers ---\n",
+  "servers": [
+   {
+    "args": [
+     "-y",
+     "pg"
+    ],
+    "artifact_type": "mcp-server",
+    "auth": {
+     "credential_ref": "PG_URL",
+     "mechanism": "env"
+    },
+    "command": "npx",
+    "domain": "data-access",
+    "mcp_server_schema_version": "1.0",
+    "progressive_disclosure": "lazy",
+    "scope": [
+     "x"
+    ],
+    "security_review": {
+     "required": false
+    },
+    "server_id": "example-pg",
+    "tools": [
+     {
+      "name": "q",
+      "side_effects": "read"
+     }
+    ],
+    "transport": "stdio",
+    "trust_tier": "first-party"
+   }
+  ],
+  "wired": [
+   "example-pg"
+  ]
+ }
+}
