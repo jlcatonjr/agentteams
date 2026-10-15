@@ -588,10 +588,10 @@ TEAM_MARKER_REL = "references/build-log.json"
 _CLAUDE_SETTINGS_PATHS: tuple[str, ...] = (".claude/settings.json", ".claude/settings.local.json")
 
 #: Operator-merged / operator-run examples an agent must not edit (follow-up #2, 2026-09-30; the
-#: Codex runner added in Phase 1a, 2026-10-08).
+#: Codex runner added in Phase 1a, 2026-10-08; the Grok runner in Grok Phase 2, 2026-10-14).
 OPERATOR_EXAMPLE_PATHS: tuple[str, ...] = (
     ".claude/settings.hooks.example.json", ".goose/confined-run.example.sh",
-    ".codex/confined-run.example.sh",
+    ".codex/confined-run.example.sh", ".grok/confined-run.example.sh",
 )
 
 #: FROZEN comment-only stub texts, written write-if-absent (never overwritten) for a sandboxed team

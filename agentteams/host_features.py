@@ -73,7 +73,7 @@ _KNOWN_FEATURES: dict[str, frozenset[str]] = {
     # grok (Phase 2, 2026-10-14; plan tmp/by-week/2026-W42 §12): `mcp` splices operator-specified
     # mcp_servers[] into the project .grok/config.toml (grok_config_emit.py). `sandbox`: confined/exclusive
     # expand to `grok:sandbox` (see _sandbox_token_for), which gates the .grok/sandbox.toml profile, the
-    # [permission] deny block and the operator-run .grok/confined-run.example.sh. A project can define a
+    # [permission] deny block, the operator-run .grok/confined-run.example.sh and the advisory hook gate (shim). A project can define a
     # profile but never activate one, so the token records the REQUEST; every Grok control is DECLARED.
     "grok": frozenset({"mcp", "sandbox"}),
     # C-4 (2026-08-26): `sandbox` removed from the bridge namespaces. The bridge writes only
@@ -181,7 +181,8 @@ def _sandbox_token_for(framework: str | None) -> str:
     ``frameworks/_goose_sandbox_emit.py``), and ``codex`` (Phase 1a, 2026-10-08) maps to
     ``codex:sandbox`` (the operator-run ``.codex/confined-run.example.sh``, which runs Codex
     inside the neutral launcher), and ``grok`` (Phase 2, 2026-10-14) maps to ``grok:sandbox`` (the
-    ``.grok/sandbox.toml`` profile, the ``[permission]`` block and ``.grok/confined-run.example.sh``). Every other framework (and a missing
+    ``.grok/sandbox.toml`` profile, the ``[permission]`` block, ``.grok/confined-run.example.sh`` and the
+    advisory hook gate). Every other framework (and a missing
     framework) keeps ``claude:sandbox`` — preserving the historical framework-agnostic
     behavior: the token is harmless on a framework whose emitter never reads it, and the
     unenforceable-host request is surfaced by :func:`privilege_profile_advisory` either

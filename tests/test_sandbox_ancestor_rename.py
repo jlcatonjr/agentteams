@@ -98,6 +98,7 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(/.claude/settings.hooks.example.json)",
         "Edit(/.goose/confined-run.example.sh)",
         "Edit(/.codex/confined-run.example.sh)",
+        "Edit(/.grok/confined-run.example.sh)",  # Grok Phase 2 runner (2026-10-14)
         "Edit(/.claude/hooks/**)",
         # 2026-09-30: the sibling teams' trust-root files (never a whole agents dir).
         *_sibling_rules(".github/agents"),

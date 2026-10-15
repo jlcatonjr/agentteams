@@ -56,8 +56,9 @@ allows one table. That covers a `[permission]` header, dotted `permission.*` key
 all detected with `tomllib`.
 
 **Enforcement class: DECLARED.** The rules govern Grok's Read/Edit/Write tools, not shell writes. Grok also loads
-project rules only after folder trust. The OS boundary for shell writes is the sandbox profile (Phase 2, pending
-spike R3).
+project rules only after folder trust (spike R4). The OS boundary for shell writes is the agentteams launcher
+(`.grok/confined-run.example.sh` → `sandbox/confine-run.sh`), not Grok's sandbox profile: spike R3 showed `read_only`
+does not write-protect inside the workspace.
 
 ## API
 

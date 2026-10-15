@@ -142,8 +142,9 @@ Confidence marks:
   - it also blocked reads (T5d)
   - **so never deny paths that Grok or its agents must read** (agent dirs, instruction files,
     `.claude/settings.json`)
-- `read_only` and `read_write` take literal directory grants, not globs. Whether `read_only` removes write access
-  from a folder inside the writable workspace is **unverified (open item R3)**.
+- `read_only` and `read_write` take literal directory grants, not globs. **`read_only` does NOT remove write access
+  from a folder inside the writable workspace** (spike R3, 2026-10-14: relative, absolute and Edit-tool writes all
+  got through; reads worked).
 - The built-in `workspace` profile **did not protect `.claude/agents/`** (spike S11). It protects only hook-source
   and trust files.
 - If a user profile and a project profile share a name but differ, **the user profile wins**, with a startup warning
@@ -163,7 +164,7 @@ Confidence marks:
   - `130` / `143`: SIGINT / SIGTERM
 - A trivial call used about 19k input tokens (≈ $0.024) of instruction and agent context (spike S15).
 
-## Canonical Output Conventions (ours: the Phase 1 target, not yet implemented on 2026-10-14)
+## Canonical Output Conventions (ours, as implemented: Phase 1 in PR #214, Phase 2 on `feat/grok-phase2`)
 
 - **Agents:** `.grok/agents/<slug>.md`, with YAML front matter `name`, `description` and `tools`. Tools use the
   Claude vocabulary, with `Task` mapped to `Agent` and `TodoWrite` dropped. `disallowedTools` is emitted when the
@@ -178,10 +179,14 @@ Confidence marks:
 - **Skills:** `.grok/skills/<slug>/SKILL.md`.
 - **Builder:** `.grok/agents/team-builder.md`, with the same `name:` as the Claude builder.
 - **Handoffs:** `manifest` delivery, as for Claude.
-- **Phase 2 (pending `@security`):**
-  - `.grok/config.toml` `[mcp_servers]` and `[permission]`, inside agentteams fences
-  - `.grok/sandbox.toml` profile `agentteams`
-  - the hook gate, emitted only alongside the sandbox profile and classed DECLARED (decision D3)
+- **Phase 2 (implemented; @security step 12e CONDITIONAL PASS):**
+  - `.grok/config.toml` agentteams-managed block (`grok_config_emit`): `[mcp_servers]` (`grok:mcp`) and the
+    control-plane `[permission]` deny rules (`grok:sandbox`); DECLARED and trust-dependent (R4)
+  - `.grok/sandbox.toml` profile `agentteams`: secret-shaped workspace files only (R3)
+  - `.grok/confined-run.example.sh`: Grok inside `sandbox/confine-run.sh` (the boundary), or `profile` mode
+  - the advisory hook gate behind `grok-gate-shim.py` (R5), only alongside the sandbox artifacts, DECLARED (D3)
+  - hook commands like `./agentteams-gate-shim.py` resolve relative to the hook JSON's folder: spike R5 used
+    `./r5-dump.sh` from `.grok/hooks/r5.json` and captured payloads (also 10-hooks "command")
 - `write_policy: "orchestrator-only"` is refused for grok (`write_policy.py`).
 
 ## Known Deltas vs Our Adapter (`agentteams/frameworks/grok.py`)
@@ -190,9 +195,9 @@ Confidence marks:
 |----|-------|--------------|-------------|
 | G1 | A repo with a Claude team loads `CLAUDE.md`, `.claude/CLAUDE.md` and `AGENTS.md` together, and the project cannot switch this off | docs + S3 | Advisory. The `grok_runtime` block carries only Grok notes. |
 | G2 | `.claude/agents/*.md` always load, so agents with different names load twice | S1, S2 | Name parity (D4), plus a guard notice on mismatch |
-| G3 | Hooks fail open | docs + S10 | The gate is DECLARED. Enforcement comes from the sandbox and `[permission] deny` (Phase 2). |
+| G3 | Hooks fail open | docs + S10 | The gate is DECLARED. The enforcing boundary is the agentteams launcher; `[permission] deny` is DECLARED too (tool-only, trust-dependent) |
 | G4 | The built-in `workspace` sandbox does not protect agent dirs, and **`read_only` does not write-protect inside the workspace either** | S11, R3 (2026-10-14: relative, absolute and Edit-tool writes all got through) | Protection comes from the agentteams launcher (`.grok/confined-run.example.sh` → `sandbox/confine-run.sh`, Grok's sandbox off inside); the emitted profile denies only secret-shaped workspace files |
-| G5 | A user-defined profile with the same name overrides the project profile | `18-sandbox.md:95` | Phase 2 advisory; `--verify` reports it |
+| G5 | A user-defined profile with the same name overrides the project profile | `18-sandbox.md:95` | `.grok/confined-run.example.sh` profile mode refuses a shadowing user profile or a `requirements.toml` sandbox pin |
 | G6 | User `~/.claude` config leaks into Grok sessions | S5 | Advisory. Eval and validation runs set `GROK_CLAUDE_*_ENABLED=false`. |
 | G7 | Subagent depth is one | `16-subagents.md:401` | Stated in the `grok_runtime` block |
 | G8 | Headless delegation needs an approval mode | S14, R2-a | Documented for eval and redteam adapters |
@@ -215,8 +220,8 @@ Confidence marks:
    - CLI refusal of convert/bridge/interop/absorb for grok
    - tests
 2. **Phase 1 (step 8):** control-plane and protected-path registration of `.grok/`.
-3. **Phase 2 (after `@security` and R3):** MCP and `[permission]` emission, the sandbox profile, the hook gate, and
-   the advisories.
+3. **Phase 2 (done on `feat/grok-phase2`):** MCP and `[permission]` emission, the sandbox profile, the confined-run
+   wrapper, the hook gate and shim, the launcher's whole-`.grok` protection and `grok_config_warn`.
 4. **Phase 3:** detect, convert, interop and absorb, fleet, the provider-docs register, and the bridge target.
 5. **On every Grok Build upgrade:** diff `crates/codegen/xai-grok-shell/changelogs/` and `~/.grok/docs/user-guide/`,
-   re-check G1–G15, then bump `FormatSpec.pinned_version` and the version at the top of this file together.
+   re-check G1–G17, then bump `FormatSpec.pinned_version` and the version at the top of this file together.

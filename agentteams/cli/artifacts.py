@@ -766,7 +766,9 @@ def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
     from agentteams.grok_config_emit import emit_grok_config, grok_mcp_enabled, grok_sandbox_enabled
 
     features = manifest.get("host_features", []) or []
-    if not (grok_sandbox_enabled(features) or (grok_mcp_enabled(features) and manifest.get("mcp_servers"))):
+    on = grok_sandbox_enabled(features) or (grok_mcp_enabled(features) and manifest.get("mcp_servers"))
+    # With both features off, still call through when a config exists, so a stale managed block is reported.
+    if not on and not (project_root / ".grok" / "config.toml").is_file():
         return
     try:
         res = emit_grok_config(servers=manifest.get("mcp_servers", []) or [], features=features,

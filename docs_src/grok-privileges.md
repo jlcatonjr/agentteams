@@ -58,7 +58,7 @@ ask prompts, then allow.
 ```toml
 # .grok/config.toml
 [permission]
-deny  = ["Edit(.grok/**)", "Bash(git push *)"]
+deny  = ["Edit(**/.grok/**)", "Bash(git push *)"]
 ask   = ["Bash(rm *)"]
 allow = ["Bash(pytest *)"]
 ```
@@ -183,6 +183,10 @@ Things to know:
   `.grok/hooks/agentteams-gate-shim.py` and the gate beside it. Anyone who can write `.grok/hooks` can already run
   code after trust, which is why the launcher keeps `.grok` read-only. The shim ignores modules planted next to it
   and runs the gate with `python -I`.
+- **If the shim or the gate fails, the call goes ahead.** Grok hooks fail open. The exception is an explicitly
+  confined or exclusive profile, where the gate copy is emitted fail-closed and a shim failure denies instead.
+- **Permission rules wait for trust.** The emitted `[permission]` deny rules apply only once the folder is trusted.
+  In an untrusted folder they are ignored (spike R4).
 
 ## Isolating Automated Runs
 
@@ -192,9 +196,12 @@ process:
 
 ```bash
 GROK_CLAUDE_HOOKS_ENABLED=false GROK_CLAUDE_SKILLS_ENABLED=false \
-GROK_CLAUDE_MCPS_ENABLED=false GROK_CLAUDE_RULES_ENABLED=false \
+GROK_CLAUDE_MCPS_ENABLED=false GROK_CLAUDE_RULES_ENABLED=false GROK_CLAUDE_AGENTS_ENABLED=false \
 grok -p "…" --output-format json
 ```
+
+`GROK_CLAUDE_AGENTS_ENABLED` covers Claude's `CLAUDE*.md` files under `.claude/` and `~/.claude/` only. No switch
+turns off `.claude/agents/`, which Grok always loads. The emitted confined-run launcher sets all five.
 
 Headless exit codes:
 - `0`: success

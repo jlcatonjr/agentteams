@@ -242,8 +242,9 @@ class GrokAdapter(ClaudeAdapter):
         """Return the framework-neutral baseline (launcher + verify-key sentinel) plus ``.grok/hooks/README.md``.
 
         Deliberately skips :meth:`ClaudeAdapter.extra_output_files`: its constitutional hook, settings example
-        and runner files are Claude Code artifacts Grok would never read from ``.grok/``. Grok's own sandbox
-        profile and hook gate arrive in Phase 2, after @security.
+        and runner files are Claude Code artifacts Grok would never read from ``.grok/``. When confinement is
+        requested, :func:`._grok_sandbox_emit.grok_sandbox_output_files` adds the Grok sandbox profile, the
+        confined-run launcher wrapper and the advisory hook gate (shim + gate + hook JSON).
 
         Args:
             manifest: The team manifest.

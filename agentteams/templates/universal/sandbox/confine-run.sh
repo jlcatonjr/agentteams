@@ -135,7 +135,7 @@ CONTROL_PLANE_REL=( .claude/agents/references/agent-privilege.json .claude/hooks
                     .grok/agents/references/security-approvers.txt .grok/agents/references/authorized-managers.txt
                     .grok/agents/references/management-authority.json .grok/config.toml .grok/sandbox.toml
                     .goose/sandbox.sb references/security-approvers.txt .goose/confined-run.example.sh
-                    .codex/confined-run.example.sh )
+                    .codex/confined-run.example.sh .grok/confined-run.example.sh )
 # Whole directories read-only wherever they exist under a writable root (follow-up #2, 2026-09-30):
 # .claude holds the live settings.json whose allowWrite is the operator-accepted write baseline and
 # the settings/hooks the next Claude session trusts. Mirrors Claude's own `.claude` denyWrite, so a
@@ -288,6 +288,7 @@ cp_required(){   # root rel -> prints the owning agentteams team dir when rel MU
     .codex/config.toml) return 0 ;;  # Codex's own config: protect-if-present (never stubbed)
     .goose/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
     .codex/confined-run.example.sh) return 0 ;;  # operator-run example: protect-if-present
+    .grok/confined-run.example.sh) return 0 ;;   # operator-run example: protect-if-present
     .grok/config.toml|.grok/sandbox.toml) return 0 ;;  # Grok's permission/MCP config + sandbox profiles: protect-if-present
     .claude/*) team="$r/.claude/agents" ;;
     .goose/*) team="$r/.goose/recipes" ;;
