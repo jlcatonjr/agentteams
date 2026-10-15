@@ -16,10 +16,10 @@ import re
 from pathlib import Path
 
 # T3a.2 v2: operational-metadata JSON files written by the build
-# pipeline legitimately carry absolute paths into the working tree
-# (delivery receipts, memory index, build log, etc.). Suppress the
-# absolute-path PII detector for these specific files. Other
-# detectors (credentials, entropy) still apply.
+# pipeline legitimately carry absolute paths and content hashes (delivery
+# receipts, memory index, build log, etc.). The scanner skips its
+# absolute-path, entropy and unresolved-placeholder detectors for these
+# files; injection and pattern-based credential checks still apply.
 _OPERATIONAL_JSON_NAMES = frozenset({
     "build-log.json",
     "delivery-receipt.json",

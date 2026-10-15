@@ -431,6 +431,8 @@ def _assemble(
         if confine is not None:
             path = confine(path)
         try:
+            if path.stat().st_size > 2 * part["bytes"] + 1:  # CRLF at most doubles it; skip reading junk
+                raise _fail(f"memory index shard {part['file']} does not match its recorded size")
             raw = _normalized(path.read_bytes())
         except FileNotFoundError:
             raise _fail(f"memory index shard {part['file']} is missing") from None

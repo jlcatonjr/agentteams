@@ -42,6 +42,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
+| [`scan-operational`](scan-operational.md) | Which pipeline-written JSON (incl. listed memory-index shards) the scanner exempts; integrity-pinned |
 | [`env_hygiene`](env-hygiene.md) | `.env` files are gitignored and kept out of Docker build contexts (audit + append-only `--fix`) |
 | [`redteam`](redteam.md) | The `agentteams/redteam/` package — audit internals + corpus coverage/density (F2). The model-scoring + attack-generation *scripts* are in the [Red-Team Model Scoring & Attack Generation](../redteam-model-scoring-guide.md) guide |
 | [`session_scan`](session_scan.md) | Repo at-large issue scan (CHANGELOG Known Issues, plan-steps pending/blocked, git status) for orchestrator closeout |
