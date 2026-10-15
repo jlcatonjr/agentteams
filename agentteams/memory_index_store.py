@@ -339,7 +339,7 @@ def is_legacy_layout(index_path: Path) -> bool:
     """
     try:
         with index_path.open("rb") as handle:
-            return handle.read(4) == b'{\n  "'
+            return handle.read(5) == b'{\n  "'
     except OSError:
         return False
 
