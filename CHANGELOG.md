@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (grok close-out: the export check and the stale-file warning catch every widening shape)
+
+- The PR #227 close-out audit found that the export check (`capability_map.grok_exact_toolset`) and the stale-file
+  warning (`grok.stale_scope_notices`) looked only for scoped entries. A grok team rendered before the fix can also
+  carry two other widening shapes:
+  - `MCPTool` in `tools:` (grok discards the list);
+  - a tool listed in both `tools:` and `disallowedTools:` (grok ignores the deny).
+
+  The new shared check `grok_widening_entries` covers all three. Such an agent exports as FULL, and `--update`
+  names it.
+- An allow list whose only entries grant nothing on grok is refused (`Write`, `WebFetch`, `WebSearch` and MCP
+  entries), with or without a deny list. The refusal message now says so.
+- Stale text removed: the expert reference's same-name shadowing claim, "can be spawned", the `Agent(...)`
+  restriction, and "scopes unverified"; the `grok.py` module docstring; and the `cli-reference` row (goose added
+  to the `grok_runtime` upsert list).
+
 ### fix (grok, security: a scoped tool entry no longer widens an agent; working run instructions)
 
 - **Security fix (C-3), behaviour change.** Grok Build 1.0.52 ignores a scoped entry in an agent's `tools:`. In a
