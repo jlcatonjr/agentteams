@@ -97,6 +97,8 @@ def _translate(entry: str, *, deny: bool, changes: list[str]) -> str | None:
                     f"disallowedTools entry {entry!r} has no Grok Build equivalent; dropping a deny would widen "
                     "the agent, so the render is refused"
                 )
+            if scope:
+                changes.append(f"dropped {entry!r} (no Grok Build equivalent; grok does not honour scopes either)")
             return None
         name = mapped
     if name not in GROK_TOOL_NAMES:
@@ -162,18 +164,22 @@ def to_grok_tools(value: str, *, deny: bool = False) -> str:
 
 
 def effective_grok_tools(tools: str, disallowed: str | None) -> list[str]:
-    """Return the allow-list entries a deny-list does not remove (bare names, as emitted).
+    """Return the built-in tools an allow-list keeps after a deny-list (bare names, as emitted).
+
+    Only names in :data:`GROK_TOOL_NAMES` count. An ``mcp__`` entry does not: under ``mcpInheritance: none`` the agent
+    has no MCP servers, so an allow-list of only MCP tools (or one whose MCP entries a wildcard deny removes) leaves
+    nothing usable (@security grok-scope-fix step 5, condition 1).
 
     Args:
         tools: The translated Grok ``tools:`` value.
         disallowed: The translated Grok ``disallowedTools:`` value, or None.
 
     Returns:
-        The surviving entries, in order. Empty means the agent's effective toolset is empty, which Grok may read as
-        "inherit every tool" (untested), so callers refuse that render.
+        The surviving built-in tools, in order. Empty means the agent's effective toolset is empty, which Grok may read
+        as "inherit every tool" (untested), so callers refuse that render.
 
     Raises:
         Nothing.
     """
     denied = set(split_tool_list(disallowed)) if disallowed else set()
-    return [t for t in split_tool_list(tools) if t not in denied]
+    return [t for t in split_tool_list(tools) if t in GROK_TOOL_NAMES and t not in denied]

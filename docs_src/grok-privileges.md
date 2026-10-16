@@ -42,10 +42,14 @@ Why all three:
   fail-closed instead:
   - `Task` becomes `Agent`
   - `TodoWrite` is dropped (a narrowing)
-  - any other unrecognised name, or an untranslatable `disallowedTools` entry, stops the render
+  - a **scoped** entry (`Bash(git diff:*)`, `Agent(plan)`, any `Name(...)`) is never emitted, because Grok Build
+    ignores the scope and widens the agent (a full shell plus an edit tool, in a live test): a scoped allow entry is
+    dropped, and a scoped `disallowedTools` entry becomes the whole tool, each with a `[GROK-SCOPE]` notice
+  - any other unrecognised name, an untranslatable `disallowedTools` entry, or a deny list that removes every
+    allowed built-in tool stops the render
 
 Recognised tool names: `Bash`, `Read`, `Edit` (and `Write`), `Grep` (and `Glob`), `MCPTool`, `WebFetch`,
-`WebSearch`, `Agent`. Each may take a scope, e.g. `Bash(git diff:*)`.
+`WebSearch`, `Agent`, emitted bare (never with a scope).
 
 ---
 

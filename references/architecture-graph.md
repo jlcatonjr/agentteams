@@ -5,7 +5,7 @@
 
 - Modules mapped: **265**
 - Packages: **9**
-- Internal import edges: **781**
+- Internal import edges: **783**
 - Distinct external dependencies: **11**
 
 ---
@@ -80,7 +80,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.budget` | — | `agentteams.cli.standalone_modes` |
 | `agentteams.canonical` | `agentteams.atomicio`, `agentteams.interop`, `agentteams.yaml_frontmatter` | `agentteams.bridge`, `agentteams.bridge_pair_docs`, `agentteams.bridge_sources`, `agentteams.cli.commands`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.multi_sync`, `agentteams.team_package` |
 | `agentteams.capability_hints` | `agentteams` | `agentteams.bridge`, `agentteams.cli.commands`, `agentteams.cli.parser`, `agentteams.cli.signed_ledger`, `agentteams.frameworks.goose_docs` |
-| `agentteams.capability_map` | `agentteams.frameworks._grok_tool_scoping`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.adopt_only`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.rank_conformance` |
+| `agentteams.capability_map` | `agentteams.frameworks._grok_tool_scoping`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.adopt_only`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.rank_conformance` |
 | `agentteams.cli` | — | — |
 | `agentteams.cli.action_ids` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.decision_log_migrate` |
 | `agentteams.cli.adopt_merge_gate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.security_gate` | `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step` |
@@ -192,7 +192,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.goose_recipe_read` | — | `agentteams.audit_agent_contract`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.interop_grant_check` |
 | `agentteams.frameworks.goose_recipe_validate` | `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` |
 | `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_read` | `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop_grant_check`, `agentteams.proposal_runner` |
-| `agentteams.frameworks.grok` | `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._grok_tool_scoping`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.frameworks.registry` |
+| `agentteams.frameworks.grok` | `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._grok_tool_scoping`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.frameworks.registry`, `agentteams.interop` |
 | `agentteams.frameworks.registry` | `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok` | `agentteams.audit_types`, `agentteams.cli.adopt_only`, `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate`, `agentteams.cli.grant_commands`, `agentteams.cli.parser`, `agentteams.convert`, `agentteams.drift`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.manifest_format`, `agentteams.multi_sync`, `agentteams.output_plan`, `agentteams.redteam.instantiate`, `agentteams.redteam.sweep`, `agentteams.render`, `agentteams.stale_detector` |
 | `agentteams.frameworks.structural_merge` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.learned_blocks` | `agentteams.emit` |
 | `agentteams.front_matter_baseline` | `agentteams.drift`, `agentteams.front_matter_merge` | `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.fleet` |
@@ -211,7 +211,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.ingest` | `agentteams._utils`, `agentteams.tool_version_source` | `agentteams.cli.app`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate`, `agentteams.cli.mcp_grant_commands`, `agentteams.cli.proposal_commands` |
 | `agentteams.instructions_split` | — | `agentteams.bridge` |
 | `agentteams.integrity` | `agentteams.git_exec` | `agentteams.cli.commands`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.redteam.checks_static`, `agentteams.redteam.runner` |
-| `agentteams.interop` | `agentteams._interop_grok`, `agentteams.backup`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.interop_write_policy`, `agentteams.mcp_emit`, `agentteams.projection_marker`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.bridge`, `agentteams.canonical`, `agentteams.cli.commands`, `agentteams.multi_sync`, `agentteams.team_package` |
+| `agentteams.interop` | `agentteams._interop_grok`, `agentteams.backup`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.interop_write_policy`, `agentteams.mcp_emit`, `agentteams.projection_marker`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.bridge`, `agentteams.canonical`, `agentteams.cli.commands`, `agentteams.multi_sync`, `agentteams.team_package` |
 | `agentteams.interop_grant_check` | `agentteams.capability_map`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.frameworks.registry`, `agentteams.governance_logs`, `agentteams.runner_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.convert`, `agentteams.interop`, `agentteams.multi_sync` |
 | `agentteams.interop_helpers` | `agentteams.canonical`, `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._grok_tool_scoping`, `agentteams.mcp_emit`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.interop` |
 | `agentteams.interop_write_policy` | `agentteams.atomicio`, `agentteams.audit_agent_contract`, `agentteams.proposal_policy`, `agentteams.runner_mcp`, `agentteams.write_policy` | `agentteams.bridge`, `agentteams.cli.app`, `agentteams.convert`, `agentteams.interop` |
@@ -2240,6 +2240,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/frameworks/grok.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.capability_map",
         "agentteams.frameworks._agents_md_ownership",
         "agentteams.frameworks._agents_md_rules",
         "agentteams.frameworks._grok_sandbox_emit",
@@ -2455,6 +2456,7 @@ digraph "agentteams architecture" {
         "agentteams.fences",
         "agentteams.frameworks._agents_md_ownership",
         "agentteams.frameworks.base",
+        "agentteams.frameworks.grok",
         "agentteams.frameworks.registry",
         "agentteams.interop_grant_check",
         "agentteams.interop_helpers",
@@ -5722,6 +5724,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.frameworks.grok",
+      "target": "agentteams.capability_map"
+    },
+    {
+      "source": "agentteams.frameworks.grok",
       "target": "agentteams.frameworks._agents_md_ownership"
     },
     {
@@ -5915,6 +5921,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.interop",
       "target": "agentteams.frameworks.base"
+    },
+    {
+      "source": "agentteams.interop",
+      "target": "agentteams.frameworks.grok"
     },
     {
       "source": "agentteams.interop",

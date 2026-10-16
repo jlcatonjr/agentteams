@@ -63,6 +63,7 @@ from ._agents_md_ownership import (
     upsert_fenced_block,
 )
 from ._grok_tool_scoping import EXACT_TOOLSET_LINES, effective_grok_tools, translate_grok_tools
+from agentteams.capability_map import _RETRIEVAL_CLI_SCOPE
 from .format_spec import COPILOT_INSTRUCTIONS_FILENAME, FORMAT_SPECS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -151,7 +152,7 @@ def _record_tool_changes(manifest: dict[str, Any], slug: str, changes: list[str]
     """
     seen = manifest.setdefault(GROK_TOOL_NOTICES_KEY, [])
     for change in changes:
-        effect = "; the agent loses the retrieval CLI on grok" if "agentteams.research" in change else ""
+        effect = "; the agent loses the retrieval CLI on grok" if _RETRIEVAL_CLI_SCOPE in change else ""
         notice = f"{slug}: {change}{effect}"
         if notice not in seen:
             seen.append(notice)
@@ -559,11 +560,12 @@ def stale_scope_notices(agents_dir: Path) -> list[str]:
         if path.is_symlink() or not path.is_file():
             continue
         try:
-            head = path.read_text(encoding="utf-8")[:4000]
-        except (OSError, UnicodeDecodeError):
+            yaml_text, _ = _parse_yaml_front_matter(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as exc:
+            found.append(f"[GROK-SCOPE] {path}: could not be read to check for scoped tool entries ({exc}).")
             continue
-        line = next((ln.strip() for ln in head.splitlines()
-                     if ln.startswith(("tools:", "disallowedTools:")) and "(" in ln), None)
+        line = next((ln.strip() for ln in (yaml_text or "").splitlines()
+                     if ln.strip().startswith(("tools:", "disallowedTools:")) and "(" in ln), None)
         if line:
             found.append(
                 f"[GROK-SCOPE] {path}: existing grok agent still has a scoped entry ({line}); grok ignores the scope "

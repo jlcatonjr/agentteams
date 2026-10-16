@@ -184,3 +184,45 @@ def test_the_runtime_block_names_the_working_route() -> None:
 def test_the_team_builder_usage_uses_the_path_form() -> None:
     text = (REPO / "agentteams/templates/builder/team-builder-grok.template.md").read_text(encoding="utf-8")
     assert "grok --agent .grok/agents/team-builder.md" in text and 'grok --agent "' not in text
+
+
+# Review follow-ups (@security step 5 conditions 1-2; @code-hygiene step 4 item 7) ------------------------------
+
+def test_mcp_entries_do_not_count_toward_a_non_empty_toolset() -> None:
+    # Under mcpInheritance: none the agent has no MCP servers, so MCP-only (or wildcard-denied MCP) is empty.
+    assert gts.effective_grok_tools("mcp__s__t", None) == []
+    assert gts.effective_grok_tools("Read, mcp__s__t", "mcp__s__*") == ["Read"]
+    with pytest.raises(ValueError, match="empty effective toolset"):
+        GrokAdapter().render_agent_file(_agent("['read']", "disallowedTools: Read\n"), "x", {})
+
+
+def test_a_scoped_todowrite_is_reported() -> None:
+    out, changes = gts.translate_grok_tools("TodoWrite(x), Read")
+    assert out == "Read" and "TodoWrite(x)" in changes[0]
+
+
+def test_the_builder_render_reports_a_dropped_scope(capsys) -> None:
+    content = "---\nname: Team Builder\ndescription: \"b\"\ntools: ['read', 'retrieval']\n---\n\n# Builder\n"
+    manifest: dict = {}
+    out = GrokAdapter().render_builder_file(content, manifest)
+    assert "tools: Read\n" in out and "Bash(" not in out
+    assert "[GROK-SCOPE] team-builder: dropped" in capsys.readouterr().err
+
+
+def test_a_deployed_agent_with_only_a_scoped_deny_is_named(tmp_path) -> None:
+    agents = tmp_path / ".grok" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "deny.md").write_text(_agent("Read, Bash", "disallowedTools: Bash(rm:*)\n"), encoding="utf-8")
+    (agents / "body.md").write_text(_agent("Read") + "\ntools: Bash(x:*) is mentioned in the body only\n",
+                                    encoding="utf-8")
+    notices = stale_scope_notices(agents)
+    assert len(notices) == 1 and "deny.md" in notices[0]   # a body line is not front matter
+
+
+def test_a_scoped_deny_also_exports_as_not_exact() -> None:
+    exact = "injectDefaultTools: false\nmcpInheritance: none\n"
+    assert not cm.grok_exact_toolset(_agent("Read, Bash", "disallowedTools: Bash(rm:*)\n" + exact))
+
+
+def test_the_runtime_block_forbids_an_untyped_retry() -> None:
+    assert "never\n  retry it without a type" in grok_runtime_block()

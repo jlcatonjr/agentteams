@@ -322,16 +322,16 @@ def grok_exact_toolset(content: str) -> bool:
     on) and ``mcpInheritance: none`` (default all: every parent MCP server) are set. Parsed case-insensitively, as
     Grok does; a duplicate key, a missing key or any other value means NOT exact (@security Phase 3 condition 3).
 
+    A ``tools:`` or ``disallowedTools:`` line holding a scoped entry (``Bash(cmd:*)``) is also NOT exact: grok 1.0.52
+    ignores the scope (an allow scope widens to a full shell plus an edit tool; a deny scope is not a reliable limit;
+    GROK-FU-R8-SCOPE). Teams rendered before the fix can carry one, and must export as FULL.
+
     Args:
         content: The agent file text.
 
-    A ``tools:`` line holding a scoped entry (``Bash(cmd:*)``) is also NOT exact: grok 1.0.52 ignores the scope and
-    offers far more than the list (a full shell plus an edit tool; GROK-FU-R8-SCOPE). Teams rendered before the fix
-    can carry one, and must export as FULL rather than as their declared tools.
-
     Returns:
-        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, and an unscoped
-        ``tools:`` line.
+        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, and unscoped
+        ``tools:`` / ``disallowedTools:`` lines.
 
     Raises:
         Nothing.
@@ -339,7 +339,7 @@ def grok_exact_toolset(content: str) -> bool:
     yaml_text, _ = parse_yaml_front_matter(content)
     if yaml_text is None:
         return False
-    if any(line.lstrip().startswith("tools:") and "(" in line for line in yaml_text.splitlines()):
+    if any(line.lstrip().startswith(("tools:", "disallowedTools:")) and "(" in line for line in yaml_text.splitlines()):
         return False
     seen: dict[str, list[str]] = {}
     for m in _GROK_EXACT_KEY_RE.finditer(yaml_text):
