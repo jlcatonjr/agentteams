@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.12] - 2026-10-16
+
+### release notes (rc12)
+
+Two fixes found while the four repositories moved to rc.11. rc.12 replaces rc.11 as the soak base for the
+coordinated v1.0.0. It adds no new dependencies, and logs migrated or rows signed on rc.11 carry over unchanged.
+
+- **The decision log's HALT scan no longer wedges on an unauthenticated retraction.**
+  - A `HALT-RETRACTED` row that fails authentication or has no evidence is skipped. It retracts nothing, so the
+    HALT stays open until a valid retraction.
+  - The error names each skipped row and why it was not accepted.
+  - Before this fix, one unsigned retraction written before `--migrate-decision-log` blocked the action forever,
+    even after a valid operator Ed25519 retraction (found by mathAgents).
+  - The signing closure now includes `action_ids`, `decision_chain` and the new `decision_lineage` module.
+- **Every native Codex agent renders a Project-Specific Notes region.**
+  - Agents from section-fenced templates (the orchestrator, security, the governance agents and the experts) had
+    none, so `--update --overwrite` refused to carry their notes (found by baseAgent).
+  - That broke the documented way to narrow `sandbox_mode`.
+
 ### fix (codex: every native agent renders a Project-Specific Notes region)
 
 - **The bug** (found by baseAgent on rc.11). A natively rendered Codex agent whose template already has section
