@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `write_policy` interop supports claude and goose imports only, so a team with adopted agents keeps its Codex surface
   frozen for 1.0. The shared release policy says the same. A Codex interop backport is planned for 1.0.x.
 
+### docs (1.0 known limitation: `AGENTS.md` is not classed as a governance trust root)
+
+- A clearance targeting `AGENTS.md` is classed by its other effects. Review such rows as you would a `CLAUDE.md` one.
+  The fix is planned for 1.0.x, with the operator-applied render mode (found by baseAgent's @security).
+
 ### docs (SECURITY.md: why a signer installed under `$HOME` can be refused)
 
 - If a repository has no `.claude/settings.json`, the signer's write-root search reaches
