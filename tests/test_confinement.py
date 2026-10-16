@@ -94,7 +94,7 @@ def test_bwrap_argv_shape(tmp_path):
 
 @pytest.fixture
 def project(tmp_path, monkeypatch):
-    monkeypatch.setenv(P.KEY_ENV[0], "test-key")
+    monkeypatch.setenv(P.KEY_ENV[0], "test-key-0123456789abcdef0123456")
     root = tmp_path / "proj"
     (root / "out").mkdir(parents=True)
     (root / "out" / ".keep").write_text("")
@@ -209,7 +209,7 @@ def test_gate_runs_confined(project):
 
 def _claim(args):
     root, nonce = args
-    os.environ[P.KEY_ENV[0]] = "test-key"
+    os.environ[P.KEY_ENV[0]] = "test-key-0123456789abcdef0123456"
     try:
         P.agent_for(Path(root), nonce)
         return True
@@ -233,7 +233,7 @@ _TOOLCHAINS = sorted((_ELAN / "toolchains").glob("leanprover--lean4---v*")) if (
 @live
 @pytest.mark.skipif(not _TOOLCHAINS or SANDBOX != "seatbelt", reason="needs elan with a Lean 4 toolchain, on macOS")
 def test_lake_build_inside_the_sandbox(tmp_path, monkeypatch):
-    monkeypatch.setenv(P.KEY_ENV[0], "test-key")
+    monkeypatch.setenv(P.KEY_ENV[0], "test-key-0123456789abcdef0123456")
     root = tmp_path / "leanproj"
     root.mkdir()
     version = _TOOLCHAINS[-1].name.split("---")[-1]

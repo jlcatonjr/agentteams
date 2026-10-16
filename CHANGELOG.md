@@ -21,7 +21,8 @@ and logs migrated on rc.11, carry over unchanged.
   - A placeholder key such as `...` once signed a decision that read as verified, so anyone who knew the
     placeholder could forge it.
   - Signing and verifying now refuse keys under 32 bytes, known placeholders, and a single repeated character.
-  - This covers decision rows, waivers and the signed ledger.
+  - This covers decision rows, waivers, grants, management directives and the runner's proposal-ledger key
+    (file or environment). A weak key raises the module's own error, so commands refuse with a message.
 - **The decision log's HALT scan no longer wedges on an unauthenticated retraction.**
   - A `HALT-RETRACTED` row that fails authentication or has no evidence is skipped. It retracts nothing, the HALT
     stays open until a valid retraction, and the error names each skipped row and why.
@@ -68,16 +69,27 @@ and logs migrated on rc.11, carry over unchanged.
   character.
   - `hmac_sign` and `hmac_verify` call it, as do both the sign and verify sides of decision rows
     (`decision_log._hmac_decision_row`) and of security waivers (`security_gate`).
+  - The proposal ledger's key is checked too, whether it comes from the key file or the environment
+    (`AGENTTEAMS_PROPOSAL_LEDGER_KEY`, falling back to `AGENTTEAMS_DECISION_SIGNING_KEY`). Dispatch rows signed
+    with it authorize writes.
+  - Each module raises its own error type (`require_strong_hmac_key` takes an `error` class), so callers that
+    catch it keep working: `ProposalError` from `proposals._key()`, `GrantError` from grant signing and
+    verification, and `MgmtDirectiveError` from directive signing. `validate_directive` keeps its contract and
+    returns `(False, reason)` for a weak key.
   - A weak key fails closed: signing raises and writes nothing, and verification refuses rather than passes.
   - There is no bypass or environment override.
-- **Breaking** for anyone using a short or placeholder key (`AGENTTEAMS_DECISION_SIGNING_KEY`,
-  `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY`). Rows already signed with
-  such a key no longer verify, so the gate refuses them.
+- **Breaking** for anyone using a short or placeholder key: `AGENTTEAMS_DECISION_SIGNING_KEY`,
+  `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY`,
+  `AGENTTEAMS_PROPOSAL_LEDGER_KEY`, or the ledger key file (`~/.config/agentteams/keys/proposal-ledger.key`).
+  Rows already signed with such a key no longer verify, so the gate refuses them. Every proposal-ledger
+  operation (issuing a dispatch, staging, applying) refuses while the ledger key is weak.
   - **Remedy:** generate a 32-byte secret, `python -c 'import secrets; print(secrets.token_hex(32))'`, and
-    re-sign every outstanding decision, waiver, directive and grant under it.
+    re-sign every outstanding decision, waiver, directive and grant under it. For the ledger, write the new
+    secret to the key file (mode 0600) and issue fresh dispatch nonces.
 - **Also:** the waiver example in `docs_src/security-hardening-guide.md` no longer exports the placeholder
   `"your-hmac-key"`, and the guide states the key-strength rule. The integrity digests of `signed_ledger.py`,
-  `decision_log.py` and `security_gate.py` are re-recorded.
+  `decision_log.py`, `security_gate.py`, `proposals.py`, `grants.py` and `management_directives.py` are
+  re-recorded.
 
 ## [1.0.0-rc.11] - 2026-10-16
 

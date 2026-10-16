@@ -134,3 +134,69 @@ def test_the_waiver_path_accepts_a_strong_waiver_signing_key(tmp_path, monkeypat
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", strong)
     (report,) = verify_waivers(tmp_path)
     assert report["status"] == "valid", report
+
+
+# --- grants, management directives and the proposal ledger raise their own error types ----------
+
+_STRONG = "strong-0123456789abcdef0123456789abcdef"
+
+
+@pytest.mark.parametrize("weak", ["...", "changeme", "short"])
+def test_a_weak_grant_key_raises_grant_error_on_sign_and_verify(monkeypatch, weak):
+    from agentteams.cli import grants as G
+    record = {"grant_id": "g-1", "agent": "producer", "permitted_ops": "read"}
+    with pytest.raises(G.GrantError, match="grant signing key is too weak"):
+        G.sign_grant(record, key=weak)
+    record["signature"] = G.sign_grant(record, key=_STRONG)
+    with pytest.raises(G.GrantError, match="grant signing key is too weak"):
+        G.verify_grant_signature(record, key=weak)
+    monkeypatch.setenv(G.GRANT_KEY_ENV, weak)  # the env key is held to the same floor
+    with pytest.raises(G.GrantError, match="too weak"):
+        G.verify_grant_signature(record)
+    assert G.verify_grant_signature(record, key=_STRONG)
+
+
+@pytest.mark.parametrize("weak", ["...", "secret", "z" * 40])
+def test_validate_directive_returns_false_not_raise_on_a_weak_key(tmp_path, monkeypatch, weak):
+    from agentteams.cli import management_directives as md
+    record = {"directive_id": "d-1", "manager_team": "mgr", "task_scope": "draft-weekly-report",
+              "expires_at": "2099-01-01T00:00:00Z", "max_uses": "5", "uses": "0"}
+    record["signature"] = md.sign_directive(record, key=_STRONG)
+    with pytest.raises(md.MgmtDirectiveError, match="management signing key is too weak"):
+        md.sign_directive(record, key=weak)
+    ok, reason = md.validate_directive(record, tmp_path, key=weak)
+    assert ok is False and "too weak" in reason
+    monkeypatch.setenv(md.MGMT_KEY_ENV, weak)
+    ok, reason = md.validate_directive(record, tmp_path)
+    assert ok is False and "too weak" in reason
+
+
+@pytest.mark.parametrize("weak", ["...", "test-ledger-key", "k" * 64])
+def test_a_weak_proposal_ledger_env_key_raises_proposal_error(monkeypatch, weak):
+    from agentteams import proposals as P
+    monkeypatch.setattr(P, "_FILE_KEY", None)
+    monkeypatch.delenv(P.KEY_ENV[0], raising=False)
+    monkeypatch.setenv(P.KEY_ENV[1], weak)  # the decision-key fallback is checked too
+    with pytest.raises(P.ProposalError, match="ledger key is too weak"):
+        P._key()
+    monkeypatch.setenv(P.KEY_ENV[0], weak)
+    with pytest.raises(P.ProposalError, match="ledger key is too weak"):
+        P._key()
+    monkeypatch.setenv(P.KEY_ENV[0], _STRONG)
+    assert P._key() == _STRONG.encode()
+
+
+def test_a_weak_proposal_ledger_key_file_raises_proposal_error(tmp_path, monkeypatch):
+    from agentteams import proposals as P
+    monkeypatch.setattr(P, "_FILE_KEY", None)
+    monkeypatch.setattr(P, "KEY_DIR", str(tmp_path))
+    key_file = tmp_path / "proposal-ledger.key"
+    key_file.write_text("...\n")
+    key_file.chmod(0o600)
+    monkeypatch.setenv(P.KEY_ENV[0], _STRONG)  # file custody ignores the (strong) env key
+    P.use_key_file(str(key_file))
+    with pytest.raises(P.ProposalError, match="ledger key is too weak"):
+        P._key()
+    key_file.write_text(secrets.token_hex(32) + "\n")
+    P.use_key_file(str(key_file))
+    assert len(P._key()) == 64

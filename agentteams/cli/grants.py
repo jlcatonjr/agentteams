@@ -65,6 +65,7 @@ from agentteams.cli.signed_ledger import (
     ed25519_sign,
     hmac_sign,
     hmac_verify,
+    require_strong_hmac_key,
     is_expired,
     path_within,
     verify_by_scheme,
@@ -228,7 +229,7 @@ def sign_grant(record: dict[str, str], *, key: str | None = None) -> str:
     Returns:
         The hex signature.
     """
-    signing_key = key or _signing_key()
+    signing_key = require_strong_hmac_key(key or _signing_key(), "grant signing key", GrantError)
     return hmac_sign(signing_key, _signed_values(record))
 
 
@@ -273,7 +274,7 @@ def verify_grant_signature(
             ) from exc
     if scheme != SIG_SCHEME_HMAC:
         raise GrantError(f"grant {record.get('grant_id')!r} declares unknown sig_scheme {scheme!r}")
-    signing_key = key or _signing_key()
+    signing_key = require_strong_hmac_key(key or _signing_key(), "grant signing key", GrantError)
     return hmac_verify(
         signing_key,
         _signed_values(record),

@@ -52,6 +52,7 @@ from agentteams.cli.signed_ledger import (
     canonical_payload,
     hmac_sign,
     hmac_verify,
+    require_strong_hmac_key,
     is_expired,
 )
 
@@ -117,6 +118,14 @@ class MgmtDirectiveError(RuntimeError):
     """Raised when a directive is malformed, invalid, denylisted, off-roster, or unsigned."""
 
 
+def _strong_key(key: str) -> str:
+    """Return *key* if it is a strong HMAC secret; raise :class:`MgmtDirectiveError` otherwise."""
+    try:
+        return require_strong_hmac_key(key, "management signing key")
+    except RuntimeError as exc:
+        raise MgmtDirectiveError(str(exc)) from exc
+
+
 def _signing_key() -> str:
     """Return the management-directive signing key from the environment, or fail closed.
 
@@ -170,7 +179,7 @@ def sign_directive(record: dict[str, str], *, key: str | None = None) -> str:
     Raises:
         MgmtDirectiveError: No key was supplied and the env var is unset (fail-closed).
     """
-    signing_key = key or _signing_key()
+    signing_key = _strong_key(key or _signing_key())
     return hmac_sign(signing_key, _signed_values(record))
 
 
@@ -187,7 +196,7 @@ def verify_directive_signature(record: dict[str, str], *, key: str | None = None
     Raises:
         MgmtDirectiveError: No key was supplied and the env var is unset (fail-closed).
     """
-    signing_key = key or _signing_key()
+    signing_key = _strong_key(key or _signing_key())
     return hmac_verify(signing_key, _signed_values(record), record.get("signature", ""))
 
 
