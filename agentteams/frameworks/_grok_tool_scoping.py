@@ -32,7 +32,14 @@ import re
 
 #: Tool names (pinned Grok Build release, FORMAT_SPECS["grok"]) usable in agent ``tools:`` / ``disallowedTools:``. Only the
 #: bare name is emitted: grok does not honour a ``Name(scope)`` form in an agent's tool list (see the module docstring).
-GROK_TOOL_NAMES = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "MCPTool", "WebFetch", "WebSearch", "Agent"})
+#: Live mapping (grok-scope-verify, 2026-10-15): Read->read_file, Grep->grep, Glob->list_dir, Edit->search_replace,
+#: Bash->run_terminal_command, Agent->the spawn tools; Write, WebFetch and WebSearch are accepted but grant nothing.
+GROK_TOOL_NAMES = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "WebFetch", "WebSearch", "Agent"})
+
+#: Names grok does NOT accept in an agent's list: like a scoped entry, one discards the whole list and the agent gets a
+#: preset with a shell and an edit tool (`Read, MCPTool` -> grep, list_dir, monitor, run_terminal_command,
+#: search_replace, todo_write, workflow; grok-scope-verify h-mcptool). Dropped, with a notice, never emitted.
+_GROK_LIST_BREAKERS = frozenset({"MCPTool"})
 
 #: Front-matter lines every Grok agent carries so ``tools:`` is the exact limit. Grok's defaults widen it:
 #: ``injectDefaultTools`` (default true) layers session tools on top of the list and ``mcpInheritance``
@@ -101,6 +108,10 @@ def _translate(entry: str, *, deny: bool, changes: list[str]) -> str | None:
                 changes.append(f"dropped {entry!r} (no Grok Build equivalent; grok does not honour scopes either)")
             return None
         name = mapped
+    if name in _GROK_LIST_BREAKERS:
+        changes.append(f"dropped {entry!r} (grok does not accept it: one such entry discards the whole list and "
+                       "grants a shell and an edit tool)")
+        return None
     if name not in GROK_TOOL_NAMES:
         raise ValueError(
             f"tool {entry!r} is not in Grok Build's tool vocabulary ({', '.join(sorted(GROK_TOOL_NAMES))}); Grok "

@@ -45,11 +45,14 @@ Why all three:
   - a **scoped** entry (`Bash(git diff:*)`, `Agent(plan)`, any `Name(...)`) is never emitted, because Grok Build
     ignores the scope and widens the agent (a full shell plus an edit tool, in a live test): a scoped allow entry is
     dropped, and a scoped `disallowedTools` entry becomes the whole tool, each with a `[GROK-SCOPE]` notice
+  - `MCPTool` is dropped too: grok does not accept it, and one such entry discards the whole list
+  - Grok ignores `disallowedTools`, so every denied tool is left out of `tools:` instead (absence is the only limit
+    it honours); the `disallowedTools:` line is kept as a record
   - any other unrecognised name, an untranslatable `disallowedTools` entry, or a deny list that removes every
     allowed built-in tool stops the render
 
-Recognised tool names: `Bash`, `Read`, `Edit` (and `Write`), `Grep` (and `Glob`), `MCPTool`, `WebFetch`,
-`WebSearch`, `Agent`, emitted bare (never with a scope).
+Recognised tool names: `Bash`, `Read`, `Edit` (and `Write`), `Grep` (and `Glob`), `WebFetch`, `WebSearch`,
+`Agent`, emitted bare (never with a scope). On the pinned release `Write`, `WebFetch` and `WebSearch` grant nothing.
 
 ---
 

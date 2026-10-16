@@ -15,7 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A scoped allow entry (any `Name(...)`, including `Agent(type)`) is now **dropped** for grok. These agents lose
     the retrieval CLI on grok.
   - A scoped `disallowedTools` entry becomes the **whole tool**.
-  - A deny list that removes every allowed tool is refused.
+  - **Grok ignores `disallowedTools`** (live check), so every deny is applied by **leaving the tool out of `tools:`**.
+    The `disallowedTools:` line stays only as a record.
+  - **`MCPTool` is dropped as well.** Like a scope, it makes grok discard the whole list and grant a shell plus an edit
+    tool. `Write`, `WebFetch` and `WebSearch` are accepted but grant nothing on grok.
+  - A deny list that leaves no built-in tool is refused (MCP entries don't count).
   - Each change prints a `[GROK-SCOPE]` notice on stderr, is added to interop notices, and is recorded in the build
     log as `grok_tool_notices`.
   - An exported grok agent that still carries a scope counts as not exact-toolset, so it exports as FULL.

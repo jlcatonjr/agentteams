@@ -62,7 +62,7 @@ from ._agents_md_ownership import (
     symlink_on_path,
     upsert_fenced_block,
 )
-from ._grok_tool_scoping import EXACT_TOOLSET_LINES, effective_grok_tools, translate_grok_tools
+from ._grok_tool_scoping import EXACT_TOOLSET_LINES, effective_grok_tools, split_tool_list, translate_grok_tools
 from agentteams.capability_map import _RETRIEVAL_CLI_SCOPE
 from .format_spec import COPILOT_INSTRUCTIONS_FILENAME, FORMAT_SPECS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
@@ -160,7 +160,11 @@ def _record_tool_changes(manifest: dict[str, Any], slug: str, changes: list[str]
 
 
 def _translate_agent_tools(manifest: dict[str, Any], slug: str, allow: str, deny: str | None) -> tuple[str, str | None]:
-    """Translate an agent's allow and deny lists for grok, refusing an empty effective toolset.
+    """Translate an agent's allow and deny lists for grok, applying the deny by subtraction.
+
+    The pinned Grok Build release ignores ``disallowedTools`` (grok-scope-verify d/d2: ``Read, Bash`` with ``disallowedTools: Bash``
+    was still offered the shell). The only limit it honours is absence from ``tools:``, so every denied tool is left
+    out of the emitted allow-list; the ``disallowedTools:`` line is kept as a record of intent, not as enforcement.
 
     Args:
         manifest: The team manifest (notices are recorded on it).
@@ -169,11 +173,11 @@ def _translate_agent_tools(manifest: dict[str, Any], slug: str, allow: str, deny
         deny: The Claude-style ``disallowedTools`` value, or None.
 
     Returns:
-        ``(tools, disallowed)`` in grok's vocabulary.
+        ``(tools, disallowed)`` in grok's vocabulary; ``tools`` already excludes every denied entry.
 
     Raises:
-        ValueError: A list cannot be translated, or the deny-list removes every allowed tool (grok's handling of an
-            empty effective toolset is untested and may inherit every tool; @security grok-scope-fix C2).
+        ValueError: A list cannot be translated, or the deny-list leaves no built-in tool (an empty ``tools:`` list
+            inherits every tool; @security grok-scope-fix C2).
     """
     tools, changes = translate_grok_tools(allow)
     disallowed = None
@@ -182,9 +186,17 @@ def _translate_agent_tools(manifest: dict[str, Any], slug: str, allow: str, deny
         changes = changes + deny_changes
     if not effective_grok_tools(tools, disallowed):
         raise ValueError(
-            f"{slug}: disallowedTools ({disallowed}) removes every allowed tool ({tools}) for grok; an empty effective "
-            "toolset may inherit every tool, so the render is refused"
+            f"{slug}: disallowedTools ({disallowed}) leaves no built-in tool in ({tools}) for grok: an empty effective "
+            "toolset (an empty tools: list inherits every tool), so the render is refused"
         )
+    if disallowed:
+        denied = set(split_tool_list(disallowed))
+        kept = [t for t in split_tool_list(tools) if t not in denied]
+        removed = [t for t in split_tool_list(tools) if t in denied]
+        if removed:
+            changes.append(f"left {', '.join(removed)} out of tools: (grok ignores disallowedTools, so the deny is applied "
+                           "by absence)")
+            tools = ", ".join(kept)
     _record_tool_changes(manifest, slug, changes)
     return tools, disallowed
 

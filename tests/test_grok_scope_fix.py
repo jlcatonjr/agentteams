@@ -77,8 +77,10 @@ def test_an_empty_effective_toolset_is_refused() -> None:
 def test_a_widened_deny_is_rendered_and_reported(capsys) -> None:
     manifest: dict = {}
     out = GrokAdapter().render_agent_file(_agent("['read', 'execute']", "disallowedTools: Bash(rm:*)\n"), "x", manifest)
-    assert _line(out, "disallowedTools") == "Bash" and _line(out, "tools") == "Read, Bash"
-    assert "[GROK-SCOPE] x: widened deny 'Bash(rm:*)'" in capsys.readouterr().err
+    # Grok ignores disallowedTools (grok-scope-verify d/d2), so the deny is applied by leaving Bash out of tools:.
+    assert _line(out, "disallowedTools") == "Bash" and _line(out, "tools") == "Read"
+    err = capsys.readouterr().err
+    assert "[GROK-SCOPE] x: widened deny 'Bash(rm:*)'" in err and "left Bash out of tools:" in err
     assert any("widened deny" in n for n in manifest["_grok_tool_notices"])
 
 
@@ -226,3 +228,17 @@ def test_a_scoped_deny_also_exports_as_not_exact() -> None:
 
 def test_the_runtime_block_forbids_an_untyped_retry() -> None:
     assert "never\n  retry it without a type" in grok_runtime_block()
+
+
+# grok-scope-verify findings: MCPTool breaks the list; disallowedTools is ignored -----------------------------
+
+@pytest.mark.parametrize("value", ["Read, MCPTool", "MCPTool, Grep"])
+def test_mcptool_is_dropped_because_it_widens_the_whole_list(value: str) -> None:
+    out, changes = gts.translate_grok_tools(value)
+    assert "MCPTool" not in out and changes and "discards the whole list" in changes[0]
+
+
+def test_an_unscoped_deny_is_applied_by_absence(capsys) -> None:
+    out = GrokAdapter().render_agent_file(_agent("['read', 'edit']", "disallowedTools: Edit\n"), "x", {})
+    assert "Edit" not in _line(out, "tools").split(", ") and _line(out, "disallowedTools") == "Edit"
+    assert "left Edit out of tools:" in capsys.readouterr().err
