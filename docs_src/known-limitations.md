@@ -139,6 +139,18 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
   operator and prints the diff is planned for 1.0.x.
 
+### `AGENTS.md` is not classed as a governance trust root
+
+- **What:** the effect classifier treats `CLAUDE.md` and `copilot-instructions` as governance trust roots, but not
+  `AGENTS.md`, which is the instruction file for Codex, goose, Grok and agents-md. A clearance whose targets include
+  `AGENTS.md` is therefore classed by its other effects, and an ordinary HMAC-signed clearance can authorize a write
+  to it.
+- **Who:** signing-governed teams on those surfaces.
+- **Workaround:** review any decision row whose `effect_targets` include `AGENTS.md` as you would a `CLAUDE.md` one,
+  and sign it with Ed25519.
+- **Tracking:** 1.0 known limitation (found by baseAgent's @security). The fix is planned for 1.0.x, together with
+  the render mode that leaves governance files to the operator, so renders stay signable.
+
 ### Installing an existing operator key into a second team needs a manual step
 
 - **What:** `references/authorized-verify-keys/provision-operator-signing-key.sh` refuses when the private key
@@ -224,6 +236,18 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Workaround:** run `--migrate-decision-log` on the team before the first signed row (see
   [Upgrading to 1.0, Step 2](migration-guide.md#step-2-upgrade-or-re-pad-a-legacy-log-migrate-decision-log)).
 - **Tracking:** 1.0 known limitation. Seeding the current header is planned for 1.0.x.
+
+### Adopted agents can't be put under orchestrator-only on Codex
+
+- **What:** `write_policy` interop (`--interop-from … --framework codex` with the switch on) is refused. 1.0 supports
+  it for claude and goose imports only. So adopted (bespoke) agents can't be narrowed on Codex, and their earlier
+  projected TOMLs keep `sandbox_mode = "workspace-write"`. Under the launcher, the role gate still denies writes from
+  every spawned agent, but the write-policy audit flags those files.
+- **Who:** Codex teams whose roster includes adopted or projected agents.
+- **Workaround:** keep the Codex surface frozen (don't render or project it) for 1.0, or run Codex only through
+  `.codex/confined-run.example.sh`.
+- **Tracking:** 1.0 known limitation. Codex `write_policy` interop is planned as a 1.0.x backport (found by
+  mathAgents).
 
 ### The Codex role gate is not pinned to a codex-cli version
 

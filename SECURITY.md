@@ -139,6 +139,11 @@ Code an agent can edit must therefore never run that process. The minters check 
 default (#10); every in-process check is a speed bump only, because tampered code can skip it.
 
 1. Clone a release tag into a directory outside every agent write root.
+   - The signer counts as write roots the current directory and the nearest ancestor of the team directory that
+     holds `.claude/settings.json`.
+   - If the repository has no `.claude/settings.json` of its own, that search reaches `~/.claude/settings.json`,
+     which makes your whole home directory a write root. An install anywhere under `$HOME` is then refused.
+   - In that case, install outside your home directory, for example under `/opt`.
 2. Verify the tag with repository config neutralised:
    ```
    git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \

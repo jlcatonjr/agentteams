@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (1.0 known limitation: adopted agents can't be put under orchestrator-only on Codex)
+
+- `write_policy` interop supports claude and goose imports only, so a team with adopted agents keeps its Codex surface
+  frozen for 1.0. The shared release policy says the same. A Codex interop backport is planned for 1.0.x.
+
+### docs (1.0 known limitation: `AGENTS.md` is not classed as a governance trust root)
+
+- A clearance targeting `AGENTS.md` is classed by its other effects. Review such rows as you would a `CLAUDE.md` one.
+  The fix is planned for 1.0.x, with the operator-applied render mode (found by baseAgent's @security).
+
+### docs (migration guide: a release checkout records its pin only when pip-installed)
+
+- A source-path install (`.pth` or `PYTHONPATH`) reports `0.0.0+local` and records no pin in `build-log.json`.
+  Install the verified checkout with `pip install` or `pipx install` (found by baseAgent).
+
+### docs (SECURITY.md: why a signer installed under `$HOME` can be refused)
+
+- If a repository has no `.claude/settings.json`, the signer's write-root search reaches
+  `~/.claude/settings.json`, which makes the home directory a write root. Install the signer outside it, for
+  example under `/opt` (found by baseAgent).
+
 ## [1.0.0-rc.12] - 2026-10-16
 
 ### release notes (rc12)
