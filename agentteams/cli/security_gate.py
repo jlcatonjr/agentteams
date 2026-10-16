@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from agentteams.atomicio import atomic_rewrite_csv_rows
+from agentteams.cli.signed_ledger import require_strong_hmac_key
 
 # --- migrate destructive-gate exemption -----------------------------------
 #
@@ -449,6 +450,7 @@ def _consume_security_waiver_use(output_dir: Path, waiver: dict[str, str], *, ac
     signing_key = os.getenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "")
     if not signing_key:
         raise RuntimeError("waiver signing key is not configured")
+    require_strong_hmac_key(signing_key, "waiver signing key")
 
     updated = False
     for row in reversed(rows):
@@ -570,6 +572,7 @@ def _validate_security_waiver(
     signing_key = os.getenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "")
     if not signing_key:
         raise RuntimeError("waiver signing key is not configured")
+    require_strong_hmac_key(signing_key, "waiver signing key")
 
     payload = "|".join(waiver.get(f, "").strip() for f in _WAIVER_SIGNATURE_FIELDS)
     expected_signature = hmac.new(

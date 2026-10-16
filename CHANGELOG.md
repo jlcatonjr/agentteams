@@ -31,6 +31,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Also:** the `derives_from` lineage helpers move to the new pinned module `agentteams/cli/decision_lineage.py`.
   `decision_log` re-exports them and stays under the module ceiling.
 
+### fix (security: HMAC signing keys must be strong; placeholders are refused)
+
+- **The bug** (masterTeacher ticket 4.1). Any non-empty HMAC key was accepted. A placeholder key such as `...`
+  signed a decision that then read as verified, and anyone who knows the placeholder can forge that signature.
+- **The fix.** The new `signed_ledger.require_strong_hmac_key` refuses a key under 32 bytes
+  (`MIN_HMAC_KEY_BYTES`), a known placeholder (`...`, `changeme`, `secret`, `password`, …), or one repeated
+  character.
+  - `hmac_sign` and `hmac_verify` call it, as do both the sign and verify sides of decision rows
+    (`decision_log._hmac_decision_row`) and of security waivers (`security_gate`).
+  - A weak key fails closed: signing raises and writes nothing, and verification refuses rather than passes.
+  - There is no bypass or environment override.
+- **Breaking** for anyone using a short or placeholder key (`AGENTTEAMS_DECISION_SIGNING_KEY`,
+  `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY`). Rows already signed with
+  such a key no longer verify, so the gate refuses them.
+  - **Remedy:** generate a 32-byte secret, `python -c 'import secrets; print(secrets.token_hex(32))'`, and
+    re-sign every outstanding decision, waiver, directive and grant under it.
+- **Also:** the waiver example in `docs_src/security-hardening-guide.md` no longer exports the placeholder
+  `"your-hmac-key"`, and the guide states the key-strength rule. The integrity digests of `signed_ledger.py`,
+  `decision_log.py` and `security_gate.py` are re-recorded.
+
 ## [1.0.0-rc.11] - 2026-10-16
 
 ### release notes (rc11)

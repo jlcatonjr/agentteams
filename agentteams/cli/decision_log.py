@@ -36,6 +36,7 @@ from agentteams.cli.effect_classifier import (
 from agentteams.cli.signed_ledger import (
     SIG_SCHEME_ED25519,
     path_within,
+    require_strong_hmac_key,
     verify_by_scheme,
 )
 
@@ -372,6 +373,7 @@ def _hmac_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     signing_key = key if key is not None else os.getenv("AGENTTEAMS_DECISION_SIGNING_KEY", "")
     if not signing_key:
         raise RuntimeError("decision signing key is not configured")
+    require_strong_hmac_key(signing_key, "decision signing key")
     return hmac.new(
         signing_key.encode("utf-8"),
         _decision_signature_payload(row).encode("utf-8"),

@@ -38,7 +38,7 @@ def _schema() -> dict:
 def _seed_waiver_and_decision(output_dir: Path, monkeypatch, *, ticket: str) -> None:
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": f"waiver-{ticket}",

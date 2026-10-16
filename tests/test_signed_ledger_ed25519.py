@@ -87,9 +87,9 @@ def test_ed25519_signs_same_payload_as_hmac():
 
 
 def test_verify_by_scheme_hmac():
-    sig = sl.hmac_sign("k", _FIELDS)
-    assert sl.verify_by_scheme("hmac", _FIELDS, sig, hmac_key="k") is True
-    assert sl.verify_by_scheme("", _FIELDS, sig, hmac_key="k") is True  # empty ⇒ hmac default
+    sig = sl.hmac_sign("k-0123456789abcdef0123456789abcdef", _FIELDS)
+    assert sl.verify_by_scheme("hmac", _FIELDS, sig, hmac_key="k-0123456789abcdef0123456789abcdef") is True
+    assert sl.verify_by_scheme("", _FIELDS, sig, hmac_key="k-0123456789abcdef0123456789abcdef") is True  # empty ⇒ hmac default
 
 
 def test_verify_by_scheme_ed25519():
@@ -100,7 +100,7 @@ def test_verify_by_scheme_ed25519():
 
 def test_verify_by_scheme_unknown_raises():
     with pytest.raises(ValueError, match="unknown signature scheme"):
-        sl.verify_by_scheme("rot13", _FIELDS, "00", hmac_key="k")
+        sl.verify_by_scheme("rot13", _FIELDS, "00", hmac_key="k-0123456789abcdef0123456789abcdef")
 
 
 def test_verify_by_scheme_missing_key_raises():

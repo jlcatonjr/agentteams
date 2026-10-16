@@ -617,7 +617,7 @@ def test_hmac_branch_delete_grant_is_refused(repo):
             repo.work, team_dir=team, issuer_team="widget", holder_team="widget",
             target_path=str(repo.work), permitted_ops=grants.BRANCH_DELETE_OP,
             expires_at="2099-01-01T00:00:00Z", max_uses=1, approver="jim", ticket_id="T",
-            reason_code="r", grant_id="h-1", timestamp="2026-10-04T00:00:00Z", key="k")
+            reason_code="r", grant_id="h-1", timestamp="2026-10-04T00:00:00Z", key="k-0123456789abcdef0123456789abcdef")
 
 
 # ---------------------------------------------------------------------------
@@ -783,7 +783,7 @@ def test_cleanup_authorized_by_signed_waiver_with_signing_enforced(repo, tmp_pat
     team = _team(repo)
     (team / "references" / "agent-privilege.json").write_text(
         json.dumps({"enforce_decision_signing": True}))
-    key = "session-only-key"
+    key = "session-only-key-0123456789abcde"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", key)
     row = {"timestamp": "2026-10-04T00:00:00Z", "waiver_id": "w-1",
            "action_reviewed": bc.clearance_action(plan),

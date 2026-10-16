@@ -95,7 +95,7 @@ def test_relaxing_row_with_hmac_is_insufficient(tmp_path):
     _log_with_ancestor(tmp_path)
     row = _relaxing_row(sig_scheme="hmac")
     # even a genuinely valid HMAC is refused for a relaxing row
-    row["signature"] = dl.sign_decision_row(row, key="k")
+    row["signature"] = dl.sign_decision_row(row, key="k-0123456789abcdef0123456789abcdef")
     with pytest.raises(RuntimeError, match="REQUIRES ed25519|valid-but-INSUFFICIENT"):
         dl._assert_authorizing_row_is_authentic(
             row, output_dir=tmp_path, signing_active=True, action="grant-cross-repo-write"
@@ -143,7 +143,7 @@ def test_missing_verify_key_makes_relaxing_path_unavailable(tmp_path):
 
 
 def test_nonrelaxing_row_keeps_hmac_path_when_governed(tmp_path, monkeypatch):
-    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "k")
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "k-0123456789abcdef0123456789abcdef")
     _govern_with_key(tmp_path)
     # a benign action stays on the HMAC path even in a governed workspace
     row = {
@@ -213,8 +213,8 @@ def test_clearing_a_signed_scope_breaks_hmac_verification():
     """Clearing scope (which widens a narrow clearance) changes the HMAC payload too."""
     row = {"date": "2026-10-05", "action_reviewed": "overwrite", "verdict": "PASS",
            "conditions_verified": "verified", "author": "security", "scope": "overwrite"}
-    sig = dl.sign_decision_row(row, key="k")
-    assert dl.sign_decision_row(dict(row, scope=""), key="k") != sig
+    sig = dl.sign_decision_row(row, key="k-0123456789abcdef0123456789abcdef")
+    assert dl.sign_decision_row(dict(row, scope=""), key="k-0123456789abcdef0123456789abcdef") != sig
 
 
 def test_rows_without_new_axes_sign_exactly_as_before():
@@ -233,6 +233,6 @@ def test_pipe_in_an_axis_value_cannot_forge_a_token_boundary():
     with pytest.raises(RuntimeError, match="payload delimiter"):
         dl._decision_signature_values(forged)
     with pytest.raises(RuntimeError, match="payload delimiter"):
-        dl.sign_decision_row(forged, key="k")
+        dl.sign_decision_row(forged, key="k-0123456789abcdef0123456789abcdef")
     # The honest row still signs.
-    assert dl.sign_decision_row(signed, key="k")
+    assert dl.sign_decision_row(signed, key="k-0123456789abcdef0123456789abcdef")

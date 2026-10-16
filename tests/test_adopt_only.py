@@ -25,7 +25,7 @@ from agentteams.cli.parser_validate import _validate_option_combinations
 
 REPO_ROOT = Path(__file__).parent.parent
 BRIEF = REPO_ROOT / "examples" / "data-pipeline" / "brief.json"
-_WAIVER_KEY = "adopt-only-waiver-key"
+_WAIVER_KEY = "adopt-only-waiver-key-0123456789"
 _DIRS = {"claude": (".claude", "agents"), "copilot-vscode": (".github", "agents")}
 _EXT = {"claude": ".md", "copilot-vscode": ".agent.md"}
 _ORPHANS = {
@@ -229,7 +229,7 @@ def _seed_overwrite_pass(out: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace the decision log with one HMAC-signed ``overwrite`` PASS, as an ``--update`` needs."""
     from agentteams.cli.decision_log import sign_decision_row
 
-    key = "adopt-only-decision-key"
+    key = "adopt-only-decision-key-01234567"
     monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", key)
     row = {"timestamp": "2026-05-03T00:00:00Z", "requesting_agent": "security",
            "action_reviewed": "overwrite", "verdict": "PASS", "conditions": "",

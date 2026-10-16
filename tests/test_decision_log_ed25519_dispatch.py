@@ -30,7 +30,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey 
 from agentteams.cli import signed_ledger as sl  # noqa: E402
 
 _KEY_ID = "op-rc11"
-_HMAC_KEY = "rc11-hmac-key"
+_HMAC_KEY = "rc11-hmac-key-0123456789abcdef01"
 _COLUMNS = ["timestamp", "requesting_agent", "action_reviewed", "verdict", "conditions",
             "conditions_verified", "evidence", "author", "derives_from", "effect_grants", "sig_scheme",
             "key_id", "signature"]

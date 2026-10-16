@@ -124,7 +124,7 @@ def test_an_edit_that_would_break_validation_is_rolled_back(monkeypatch) -> None
 # --------------------------------------------------------------------------------------
 
 
-_WAIVER_KEY = "goose-sub-recipes-waiver-key"
+_WAIVER_KEY = "goose-sub-recipes-waiver-key-0123"
 
 
 def _seed_offline_waiver(output_dir: Path) -> None:

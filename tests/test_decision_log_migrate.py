@@ -28,7 +28,7 @@ from agentteams.cli.parser import _build_parser
 from agentteams.cli.parser_validate import _validate_option_combinations
 from agentteams.cli.security_gate import check_clearance
 
-_KEY = "decision-log-migrate-test-key"
+_KEY = "decision-log-migrate-test-key-0123"
 _LEGACY = "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,consumed"
 _ROWS = [
     "2026-05-21T00:00:00Z,security,prune,PASS,,verified,no",                          # line 2: revoked
