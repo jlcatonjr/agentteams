@@ -16,6 +16,7 @@ import pytest
 
 from agentteams import analyze, liaison_logs, mcp_need, write_policy
 from agentteams.audit import run_post_audit
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
@@ -137,7 +138,7 @@ def test_switching_on_an_existing_team(tmp_path):
     brief_path, out = tmp_path / "brief.json", tmp_path / "agents"
     brief_path.write_text(json.dumps(brief), encoding="utf-8")
     base = ("--description", str(brief_path), "--project", str(tmp_path), "--framework", "claude",
-            "--output", str(out), "--no-scan", "--yes")
+            "--output", str(out), "--no-scan", "--yes", *seed_offline_intel(out, "claude"))
     assert _cli(*base, cwd=tmp_path).returncode == 0
     # The MCP-need procedure and register ship only under the switch.
     assert not (out / "references" / "mcp-need.reference.md").exists()
@@ -196,7 +197,7 @@ def test_switching_on_an_existing_goose_team_narrows_its_recipes_on_update(tmp_p
     procs = {}
     for fw in ("goose",):  # codex: the switch is refused (P4a key custody)
         args = ("--project", str(tmp_path / fw), "--framework", fw, "--output", str(tmp_path / fw / "agents"),
-                "--no-scan", "--yes")
+                "--no-scan", "--yes", *seed_offline_intel(tmp_path / fw / "agents", fw))
         procs[fw] = subprocess.Popen(
             f"{sys.executable} {REPO / 'build_team.py'} --description {off} {' '.join(args)} && "
             f"{sys.executable} {REPO / 'build_team.py'} --description {on} {' '.join(args)} --update --merge",

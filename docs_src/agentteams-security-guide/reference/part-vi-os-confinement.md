@@ -220,6 +220,17 @@ flip, so the default posture stays fail-open; the operator can restore fail-open
 those profiles with `--allow-fallback-fail-open`. This is the same emit-but-inert posture
 as S18: the strong runtime behaviour is tied to an explicitly-selected profile.
 
+**One crash is no longer fail-open: a missing `agentteams` import (1.0 must-fix).** The
+harness runs the hook as plain `python3`, and the write path imports `agentteams`. When that
+interpreter lacks it, the hook re-runs itself under the interpreter named in
+`agentteams-python` beside it — the absolute interpreter that rendered the team, written to
+an **untracked** file (a `.gitignore` beside it ignores exactly that file, Rule S-8). The pin
+is used only when it is absolute, an executable `python*`, and outside the project tree; the
+re-run gets a scrubbed `PYTHONPATH`/`PYTHONSTARTUP`/`PYTHONHOME` and a loop guard. With no
+interpreter that can import `agentteams`, a content-bearing write gets **`ask`** (cooperative)
+or **`deny`** (fail-closed) naming the fix, never a silent allow. `--check-wiring` reports the
+pin and fails when neither it nor `python3` can import `agentteams`.
+
 ### Honest ceiling (E4) — cost, not impossibility (fact 4)
 
 **The hook does not escape a determined multi-file tamper.** An attacker who can edit

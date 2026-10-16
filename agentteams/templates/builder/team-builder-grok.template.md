@@ -142,7 +142,8 @@ This builder is installed as the Grok Build custom agent `.grok/agents/team-buil
 
 1. Review `.grok/hooks/`, `.mcp.json` and `.grok/config.toml` (if present), then run `grok --trust` once in the
    project so Grok loads the project instructions.
-2. Start Grok with the builder as the session agent: `grok --agent "Team Builder — Agent Teams Module"`.
+2. Start Grok with the builder as the session agent, by its file path: `grok --agent .grok/agents/team-builder.md`
+   (in the TUI, pick it with `/agents`). Grok Build 1.0.52 does not apply an agent named by its `name:` here.
 3. Say: "Build the agent team for this project", then follow the intake interview.
 
 ---

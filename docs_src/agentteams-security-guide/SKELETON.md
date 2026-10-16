@@ -301,7 +301,7 @@ Core; `agentteams/templates/universal/security.template.md`;
    flags a regenerated body that is <50% of the existing length, drops ≥3 list items, or loses concrete
    file-paths/backticked identifiers.
 2. **`preserve`** (default) keeps the enriched body + notice; **`warn`** writes the smaller body but
-   saves a `.lost.<sid>.md` recovery sidecar; **`halt`** refuses the whole-file write; **`allow`**
+   saves a `.lost.<sid>.md.agentteams-bak` recovery sidecar; **`halt`** refuses the whole-file write; **`allow`**
    writes silently.
 3. **Security override:** template-authoritative fences (`invariant_core`, `security_authority`,
    `security_rules_invariant`, `security_verdict_contract`), brief-derived fences, and whole

@@ -780,7 +780,7 @@ def _load_hook_module():
     return mod
 
 
-def _boom(_payload=None):
+def _boom(*_args):
     raise RuntimeError("boom")
 
 

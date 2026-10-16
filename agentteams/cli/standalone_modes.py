@@ -258,6 +258,10 @@ def run_standalone_modes(
                 "nothing to verify. Confine such targets from OUTSIDE the process (container "
                 "+ seccomp-bpf + Landlock on Linux, plus egress filtering)."
             ]
+        from agentteams.frameworks.claude import verify_gate_interpreter  # 1.0 must-fix: the gate can import agentteams
+
+        gate_ok, gate_messages = verify_gate_interpreter(wiring_root, framework)
+        ok, messages = ok and gate_ok, [*messages, *gate_messages]
         from agentteams import runner_mcp  # R7: MCP-mediated agent writes need the server and agent files protected
 
         runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)

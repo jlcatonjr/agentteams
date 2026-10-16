@@ -131,8 +131,14 @@ def _append_csv_row(refs_dir: Path, filename: str, headers: list[str], row: dict
     reader never sees a half-written file. Missing fields are written empty; unknown keys
     are ignored (the header is the schema of record).
 
+    An existing file's header is never rewritten: the row is written in that header's columns. A
+    log carrying ``prev_digest`` (a hash-chained decision log) is refused, because this server cannot
+    compute the chain link, and rewriting such a header would silently drop its signing and chain
+    columns (1.0 must-fix, @security C2).
+
     Raises:
-        ValueError: if the resolved target escapes ``refs_dir`` (path containment).
+        ValueError: if the resolved target escapes ``refs_dir`` (path containment), or the existing
+            log is hash-chained.
     """
     target = refs_dir / filename
     if not _contained(refs_dir, target):
@@ -143,17 +149,15 @@ def _append_csv_row(refs_dir: Path, filename: str, headers: list[str], row: dict
         with target.open("r", encoding="utf-8", newline="") as fh:
             existing = [r for r in csv.reader(fh) if r]
 
+    header = [h.strip() for h in existing[0]] if existing else list(headers)
+    if "prev_digest" in header:
+        raise ValueError(f"refused: {filename} is a hash-chained log; append through the agentteams CLI")
     buf = io.StringIO()
     w = csv.writer(buf)
-    if not existing or existing[0] != headers:
-        w.writerow(headers)
-        # If the file existed with a different/legacy header, preserve its data rows as-is.
-        data_rows = existing[1:] if existing else []
-    else:
-        data_rows = existing[1:]
-    for r in data_rows:
+    w.writerow(existing[0] if existing else headers)
+    for r in existing[1:]:
         w.writerow(r)
-    w.writerow([row.get(h, "") for h in headers])
+    w.writerow([row.get(h, "") for h in header])
 
     tmp = target.with_suffix(target.suffix + ".tmp")
     tmp.write_text(buf.getvalue(), encoding="utf-8")

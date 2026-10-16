@@ -69,7 +69,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) | Block / AAIF Goose recipes; orchestrator delegates via `sub_recipes`, deeper edges become `summon` `load(...)`; team brief written to repo-root `AGENTS.md` + `.goosehints`. Handoffs are encoded natively in the recipes (no `runtime-handoffs.json` sidecar). **Beta** — see the feature-support matrix below |
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
 | `codex` | TOML `.toml` | OpenAI Codex CLI. Emits Codex custom agents as `.codex/agents/<slug>.toml` (`name`, `description`, `developer_instructions`, `sandbox_mode = "read-only"` for read-only roles; no model/provider/approval keys). The repo-root `AGENTS.md` is written only when absent or already Codex-generated; a shared or project-owned one is skipped with a notice. `config.toml` MCP server emission is opt-in via `--target-host-features codex:mcp` (see [`codex_mcp_emit`](api-reference/codex-mcp-emit.md)). Same generate-only convert/bridge posture as `agents-md`. |
-| `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the exact limit. `name:` values match the Claude render, so a `.grok/agents` file shadows its `.claude/agents` twin. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Codex posture: an interop target and source and an absorb source; convert and bridge refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
+| `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the exact limit. `name:` values match the Claude render (whether a `.grok/agents` file shadows its `.claude/agents` twin is not confirmed). A scoped tool entry is dropped (or, in `disallowedTools`, widened to the whole tool) because Grok Build ignores the scope; a `[GROK-SCOPE]` notice names each. Run an agent as `grok --agent .grok/agents/<slug>.md`: custom agents are not resolved by name and cannot be spawned as subagents in the pinned release. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Codex posture: an interop target and source and an absorb source; convert and bridge refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
 | `canonical` | Exploded CAI directory | Durable on-disk canonical format (`team.cai.json` + `agents/<slug>.md` + `skills/<slug>/SKILL.md` + `references/**`), default `<project>/.agentteams/canonical/`. Interop-only: there is no generate/convert/bridge path for it. |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
@@ -384,18 +384,22 @@ standalone mode (`agentteams/cli/decision_log_migrate.py`) that works with `--se
   `signature`), so no cell of a signed row is dropped. `prev_digest` is never added: hash chaining is opt-in on
   that column, and the legacy rows were never chained. The migrated header still classifies as the same schema
   kind.
-- **Byte-exact.** Only the header line is rewritten, as text (its line ending is kept). Every data line stays
-  byte-identical; nothing is round-tripped through a CSV writer.
+- **Byte-preserving, rows padded.** The header line is rewritten as text (its line ending is kept). Each data
+  line keeps its bytes as a prefix; a row narrower than the new header gets empty cells (`,`) appended at its
+  end, so `governance_logs.append_row` accepts the migrated log. Only rows short by trailing signing columns are
+  padded; a torn or truncated row is refused. Padding changes no row's signed payload, and the migration checks
+  that. Nothing is round-tripped through a CSV writer.
 - **Refusals.** A missing log, a symlink, an empty, unknown or malformed header (byte-order mark, empty or
-  repeated column name) and a data row with a value past the old header (it would land in an added column,
-  such as `signature`) are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
+  repeated column name), a data row with a value past the old header (it would land in an added column,
+  such as `signature`) and a row too short to be a legacy row are refused, and nothing is written (`[MIGRATE-DECISION-LOG] refused`).
 - **An intended revocation.** The `signature` column turns decision signing on for the log, so every live
   unsigned authorizing row stops clearing: each unconsumed `PASS` or `CONDITIONAL PASS`, and each
   `HALT-RETRACTED` (whose HALT is then in force again). The dry run lists them by line and action, the real
   run prints the same list, and a real run without `--yes` refuses. Record new, signed clearances for what is
   still needed.
 - **Write set.** A backup of the log under the agents directory's `.agentteams-backups/`, then an atomic
-  replace of the log. A header that already has every column is a no-op.
+  replace of the log. A header that already has every column, with every row at full width, is a no-op; a log
+  migrated before 1.0 (full header, short rows) is padded by a re-run.
 
 Clearance: the run is a governance-file edit and needs an ordinary `@security` PASS. Record it in the
 repository's own log, not the team log being migrated (the migration revokes it).
@@ -435,6 +439,8 @@ change). See [`prompt_roots`](api-reference/prompt-roots.md).
 ### `--refresh-index`
 
 Rebuild only `references/memory-index.json` in the output directory. This mode does not emit/update agent templates and is intended for fast memory-index refresh after editing source history documents (for example `workSummaries/`, `CHANGELOG.md`, `README.md`, `docs_src/*.md`, or `references/*.md`).
+
+The index is written in a compact one-line-per-entry layout. When it is larger than 20 MiB (override with `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES`), it is split into `references/memory-index.part-NNNN.json` shards, each under the cap, and `memory-index.json` becomes a manifest recording each shard's size and sha256. Commit the shards with the manifest. Every reader loads the shards directly, so nothing has to be reassembled after a pull and no git hook is needed. A missing or corrupt shard fails the read with a pointer back to this flag. See [`memory_index_store`](api-reference/memory-index-store.md).
 
 ### `--query-index TEXT`
 
@@ -581,6 +587,18 @@ The blocking (opt-in) disposition of `--check-rank`: runs the identical rank-con
 
 P1-3 verification that an emitted workspace-confinement `sandbox` block was actually **merged into the live `.claude/settings.json`** — the emitted block is inert until the operator merges it, and nothing else confirms the boundary took effect. Read-only and **output-only** (it reports booleans and the expected write roots, never echoes values from the operator's live settings, which may hold secrets). Exits non-zero when a confinement was emitted but is not live (missing, disabled, an open `allowUnsandboxedCommands` escape hatch, or mismatched write roots); exits `0` when the boundary is merged and enabled, or when no confinement was requested.
 
+It also checks the **constitutional gate's interpreter** wherever the framework installs the gate
+(`.claude/hooks/`, `.grok/hooks/`, `.github/hooks/`). The hook command is plain `python3`, and the
+gate's write path imports `agentteams`; when that interpreter lacks it, the gate re-runs under the
+**pin** `<hooks>/agentteams-python`, the absolute interpreter that rendered the team. The pin is
+written to an untracked file, ignored by the `.gitignore` emitted beside it, because a machine path
+must never be committed (Rule S-8). `--check-wiring` prints the pin's value and resolved target, says
+whether the gate would refuse it (relative, not a `python*` executable, or inside the project tree),
+runs `<pin> -c "import agentteams"` and the plain `python3`, and **exits non-zero when neither can
+import agentteams**, printing the fix: `<python-with-agentteams> -c "import sys; print(sys.executable)" > <hooks>/agentteams-python`,
+or re-render from that environment. Without a working interpreter the gate asks (cooperative) or
+denies (fail-closed) every content-bearing write instead of checking it.
+
 ### `--allow-unenforced-confinement`
 
 Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
@@ -675,7 +693,7 @@ fence as the merge notice prints them, plus a 12-hex digest of the on-disk body 
 example `git-operations.agent.md:content@3f9c0a1b2d4e`. The override applies only while the
 on-disk body still matches that digest. So an entry left in an exported variable, a nested run or
 a CI job cannot release anything you did not review. The released section takes the template
-update, and its old body goes to a `.lost.<fence>.md` sidecar in the backup dir. Overrides are
+update, and its old body goes to a `.lost.<fence>.md.agentteams-bak` sidecar in the backup dir. Overrides are
 refused on a run with no backup dir (`--no-backup`).
 
 **Reviewing.** The guard can't tell a reference the template itself retired from a project's own
@@ -715,7 +733,7 @@ the on-disk fence body relative to the freshly rendered content.
   fences, `authority_hierarchy`/`source_repositories`, and the two retrieval
   references when the brief declares `retrieval_integration`) are never preserved:
   they are replaced, the notice says `replaced`, and the prior body is saved to a
-  `.lost.<sid>.md` sidecar in the backup dir (not saved under `--no-backup`).
+  `.lost.<sid>.md.agentteams-bak` sidecar in the backup dir (not saved under `--no-backup`).
 - `warn` (back-compatible): log the shrink notice into the
   emit notices stream and proceed with the smaller content. The
   notice is also appended to
@@ -739,7 +757,7 @@ is plumbed into both emit code paths (the `--update` branch and the
 post-emit main path).
 
 Under `warn`, the full pre-merge body of every shrunken fence is
-written to `<backup>/<rel_path>.lost.<sid>.md` (the backup is taken
+written to `<backup>/<rel_path>.lost.<sid>.md.agentteams-bak` (the backup is taken
 automatically before the merge) and the shrink Notice is annotated
 with `— recovery: <sidecar-path>` so the operator can recover
 dropped hand-edits without diffing the whole-file backup. The fence
@@ -1198,9 +1216,20 @@ Classify every generated output file against the build-log `file_hashes` baselin
 | `MISSING` | A recorded file is absent (or unreadable). |
 | `FENCE-BROKEN` | Content changed **and** the file's `AGENTTEAMS` fences no longer parse (unclosed/duplicate/mismatched) — a strong corruption signal. |
 
-**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, an enforcement-manifest mismatch, or a malformed governance log (below); `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` unless the enforcement or governance-log check failed (run `--update` to establish one).
+**Exit code:** non-zero on any `TRUNCATED` / `MISSING` / `FENCE-BROKEN`, an enforcement-manifest mismatch, a malformed governance log, or a broken decision-log hash chain (below); `0` otherwise (`MODIFIED` does not fail). Unlike `--update` — where a non-zero exit can be a benign post-merge attestation crash — **`--verify-integrity`'s exit code IS the integrity verdict and must be heeded.** If no build-log baseline exists yet, it reports "cannot verify" and exits `0` unless the enforcement or governance-log check failed (run `--update` to establish one).
 
 **Enforcement manifest:** when `references/enforcement-integrity.json` exists at the resolved root, `--verify-integrity` also re-checks every enforcement module against it and exits non-zero on any mismatch — the CLI counterpart to [`--write-integrity-manifest`](#--write-integrity-manifest)'s "review the diff before regenerating" contract. (Before 2026-08-13 the only check of that manifest lived inside the red-team battery.) A **missing** manifest is itself a finding (exit non-zero) when the repository tracks it in git or the imported scanner sits inside the project (e.g. an in-project `.venv`); an ordinary consumer project without one is unaffected.
+
+**Decision-log chain:** when `references/security-decisions.log.csv` carries a `prev_digest` column, every row must
+link to the one before it (a deleted, reordered or edited row breaks the link), and a broken chain exits non-zero.
+Logs signed before 1.0 may start with a **legacy prefix**, a run of rows with no link (accepted only when signing is
+active). The report gives its length and lists any HALT row inside it: a deletion within the prefix, a HALT
+included, cannot be detected, so confirm those rows are still present as recorded.
+
+**HALTs that block by token (1.0):** a HALT blocks every action whose id appears as a token in the HALT's id.
+`--verify-integrity` (and `--migrate-decision-log --dry-run`) lists each unretracted HALT that newly blocks an
+agentteams gate action this way, with the exact id to retract it by, and every other unretracted HALT, which blocks any
+action your own `check_clearance` gates use whose id appears in it. Advisory: it does not change the exit code.
 
 **Governance logs:** it also checks the append-only CSV logs (`security-decisions.log.csv`,
 `agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) found under

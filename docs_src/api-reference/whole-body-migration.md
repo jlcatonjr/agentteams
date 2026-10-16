@@ -39,7 +39,7 @@ Each heading section of the old body is matched to the render:
 On a run without a backup dir, text that would survive only in the sidecar makes `migrate` return `None`, so the old fence stays and the duplicate report names it; marker and injection text is the exception and is overwritten, as before.
 
 `migration_notice` names every kept, carried, dropped-as-retired and not-kept section. The notice is a
-`fence 'content':` shrink notice, so the old body goes to the `.lost.content.md` sidecar (also under
+`fence 'content':` shrink notice, so the old body goes to the `.lost.content.md.agentteams-bak` sidecar (also under
 `--shrink-policy allow`) and `fleet` reports REVIEW.
 
 ## The duplicate report

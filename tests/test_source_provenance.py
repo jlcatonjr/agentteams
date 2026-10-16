@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from agentteams import source_provenance as sp
+from tests._fresh_intel import seed_offline_intel
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -81,7 +82,8 @@ def test_build_log_records_the_source_without_paths(tmp_path):
     out = tmp_path / ".claude" / "agents"
     proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(brief),
                            "--project", str(tmp_path), "--framework", "claude", "--output", str(out),
-                           "--no-scan", "--yes"], cwd=tmp_path, capture_output=True, text=True, timeout=300)
+                           "--no-scan", "--yes", *seed_offline_intel(out, "claude")],
+                          cwd=tmp_path, capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout[-800:] + proc.stderr[-800:]
     log = json.loads((out / "references" / "build-log.json").read_text())
     source = log["agentteams_source"]

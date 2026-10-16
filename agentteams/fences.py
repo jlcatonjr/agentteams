@@ -94,7 +94,7 @@ class MergeResult:
     merged_content: str = ""
     shrink_notices: list[str] = field(default_factory=list)
     # W22 data-loss recovery: full pre-merge body of every fence that fired
-    # a shrink notice, keyed by section_id. Persisted as a .lost.<sid>.md
+    # a shrink notice, keyed by section_id. Persisted as a .lost.<sid>.md.agentteams-bak
     # sidecar inside the backup dir by emit_all when backup_path is provided.
     lost_fence_bodies: dict[str, str] = field(default_factory=dict)
     #: True when the merge was a whole-body structural migration (see _is_whole_body_migration).
@@ -120,7 +120,7 @@ class MergeResult:
     # see `_detect_deleted_constraints` for why `_detect_unfenced_drift` cannot cover this.
     deleted_constraint_notices: list[str] = field(default_factory=list)
     # Pre-fencing twins (see agentteams.fence_twins): section_id -> the unfenced copy removed because it
-    # was provably template text (its text goes to a .lost.unfenced-<sid>.md sidecar), and the headings of
+    # was provably template text (its text goes to a .lost.unfenced-<sid>.md.agentteams-bak sidecar), and the headings of
     # twins kept because they were not. Their notices ride in duplicate_section_notices.
     twins_dropped: dict[str, str] = field(default_factory=dict)
     twins_kept: list[str] = field(default_factory=list)
@@ -256,7 +256,7 @@ _LIVE_DATA_FENCES: frozenset[str] = frozenset([
 # these fences ARE consulted via _is_template_authoritative below, on
 # purpose. A first version of this fix short-circuited _detect_fence_shrink
 # itself for these two sids, the same way _LIVE_DATA_FENCES does — that
-# silently disabled the shrink NOTICE and the .lost.<sid>.md sidecar recovery
+# silently disabled the shrink NOTICE and the .lost.<sid>.md.agentteams-bak sidecar recovery
 # too, not just the preserve decision, which also weakens
 # --shrink-policy=halt (scripts/run_daily_security_maintenance.sh runs with
 # halt specifically so a real content loss stops the run) for a fence that
@@ -340,7 +340,7 @@ _CONSTITUTIONAL_FILES: frozenset[str] = frozenset([
 #: declared the literature-library entrypoints.
 #:
 #: What this newly permits (Rule 12): an in-fence hand edit to either file is replaced by the brief
-#: render. It stays visible — the shrink notice and the `.lost.content.md` sidecar still fire, as
+#: render. It stays visible — the shrink notice and the `.lost.content.md.agentteams-bak` sidecar still fire, as
 #: for every template-authoritative fence — and the durable home for that content is the brief.
 _BRIEF_DERIVED_FILES: frozenset[str] = frozenset([
     "retrieval-integration.reference.md",
@@ -360,7 +360,7 @@ def _is_template_authoritative(
     — kept as a separate, distinctly-commented set for that documentation
     value, but wired through the same never-preserve decision. Unlike
     :data:`_LIVE_DATA_FENCES`, membership here does NOT suppress
-    `_detect_fence_shrink` itself — the notice and `.lost.<sid>.md` sidecar
+    `_detect_fence_shrink` itself — the notice and `.lost.<sid>.md.agentteams-bak` sidecar
     still fire on a real shrink; only the preserve-on-shrink outcome is
     refused, exactly like every other template-authoritative fence.
 
@@ -482,7 +482,7 @@ def _detect_fence_shrink(sid: str, existing_block: str, new_block: str) -> str |
     brief-driven shrink is rare, and the notice is exactly the useful signal
     an operator (or --shrink-policy=halt) needs; they are instead routed
     through `_is_template_authoritative` at the call site, so detection,
-    the notice, and the `.lost.<sid>.md` sidecar all still fire — only the
+    the notice, and the `.lost.<sid>.md.agentteams-bak` sidecar all still fire — only the
     preserve-on-shrink outcome is refused.
     """
     if sid in _LIVE_DATA_FENCES:
@@ -1202,7 +1202,7 @@ def _merge_fenced_content(
                         # Respectful update: the new render would drop enriched
                         # content. Keep the existing body verbatim; surface a
                         # notice so the suppression is visible. No data lost, so
-                        # no .lost.<sid>.md sidecar is needed.
+                        # no .lost.<sid>.md.agentteams-bak sidecar is needed.
                         output_lines.append(existing_regions[sid])
                         result.sections_preserved.append(sid)
                         result.shrink_pinned[sid] = (existing_regions[sid], new_regions[sid])
@@ -1216,7 +1216,7 @@ def _merge_fenced_content(
                                           "applied; old body saved to the .lost sidecar)"
                                           if overridden else ""))
                             # W22 data-loss recovery: capture the pre-merge body
-                            # so emit_all can write a .lost.<sid>.md sidecar.
+                            # so emit_all can write a .lost.<sid>.md.agentteams-bak sidecar.
                             result.lost_fence_bodies[sid] = _fence_body(
                                 existing_regions.get(sid, "")
                             )
@@ -1293,7 +1293,10 @@ def _write_lost_fence_sidecars(
     rel_path: str,
     lost_bodies: dict[str, str],
 ) -> dict[str, str]:
-    """Persist each lost fence body as ``<backup>/<rel_path>.lost.<sid>.md``.
+    """Persist each lost fence body as ``<backup>/<rel_path>.lost.<sid>.md.agentteams-bak``.
+
+    The name is inert (:func:`agentteams.backup.lost_sidecar_name`): backups live inside the agents
+    directory, which agent runtimes load recursively (1.0 must-fix 377).
 
     Returns a mapping of section_id → sidecar path (string, relative to repo
     root when possible, else absolute) so the caller can annotate Notices.
@@ -1311,12 +1314,14 @@ def _write_lost_fence_sidecars(
         if not body.strip():
             continue
         # Flatten the rel_path into the filename so sibling files never collide:
-        # references/foo.md + sid=content → references/foo.md.lost.content.md. A path above the team dir
+        # references/foo.md + sid=content → references/foo.md.lost.content.md(.agentteams-bak). A path above the team dir
         # (goose's ``../../.goosehints``) keeps its ``..`` segments as ``_up_`` so the sidecar stays inside
         # the backup dir instead of resolving back into the live agents dir.
         safe_rel = "/".join("_up_" if part == ".." else part for part in Path(rel_path).parts
                             if part not in ("", ".", "/"))
-        sidecar = backup_path / f"{safe_rel}.lost.{sid}.md"
+        from agentteams.backup import lost_sidecar_name  # local: backup imports nothing from fences
+
+        sidecar = backup_path / lost_sidecar_name(safe_rel, sid)
         if not sidecar.resolve().is_relative_to(backup_path.resolve()):
             print(f"  ⚠  lost-fence sidecar for {rel_path} ({sid}) refused: it would land outside the backup dir",
                   file=sys.stderr)

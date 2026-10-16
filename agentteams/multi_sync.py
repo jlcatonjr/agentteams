@@ -168,6 +168,7 @@ def _reject_directory_collisions(root: Path, frameworks: list[str]) -> None:
 _PRIVILEGE_ARTIFACT_BASENAMES: frozenset[str] = frozenset({
     "sandbox.sb", "config.yaml.agentteams.example",          # goose Seatbelt
     "settings.hooks.example.json", "constitutional-gate.py",  # claude sandbox block + gate
+    "agentteams-python",                                      # the gate's (untracked) interpreter pin
     "confine-run.sh", "mac-escape-tests.sh",                  # neutral launcher + mac deny-test
 })
 
@@ -265,12 +266,20 @@ def _emit_privilege_artifacts(
     agents_dir = framework_agents_dir(root, framework)
     adapter = FRAMEWORKS[framework]()
     written: list[str] = []
-    for rel_path, content in adapter.extra_output_files(manifest):
+    from agentteams.frameworks.claude import guard_gate_pin_files
+
+    # Never project a pin over/without its ignore rule (an operator-owned .gitignore is left alone).
+    extras, pin_notices = guard_gate_pin_files(list(adapter.extra_output_files(manifest)), agents_dir)
+    for notice in pin_notices:
+        print(f"  note: {notice}", file=sys.stderr)
+    for rel_path, content in extras:
         base = rel_path.rsplit("/", 1)[-1]
         # The verify-key store sentinel is matched by its full path (a bare ``README.md`` basename
         # is far too generic): the deny it backs is projected, so it must be too (bwrap cannot
         # start on a missing deny path).
-        if base not in _PRIVILEGE_ARTIFACT_BASENAMES and rel_path != VERIFY_KEY_STORE_SENTINEL_REL:
+        # The gate's pin travels with its ignore file (matched by full path: `.gitignore` is generic).
+        if (base not in _PRIVILEGE_ARTIFACT_BASENAMES and rel_path != VERIFY_KEY_STORE_SENTINEL_REL
+                and rel_path != "../hooks/.gitignore"):
             continue  # skip .goosehints / capability refs / etc. — privilege set only
         target = (agents_dir / rel_path).resolve()
         written.append(str(target))

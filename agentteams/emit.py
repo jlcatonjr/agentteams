@@ -271,12 +271,12 @@ def emit_all(
                                 Respectful, non-destructive — no content lost,
                                 no whole-file block.
                         "warn": log notice, write smaller content (recoverable
-                                via .lost.<sid>.md sidecar).
+                                via .lost.<sid>.md.agentteams-bak sidecar).
                         "halt": log notice, SKIP write, append to
                                 result.shrink_blocked.
                         "allow": suppress notice, write smaller content.
                         Plan: references/plans/T2-D5-shrink-policy-2026-05-25.plan.md
-        backup_path:    If provided, write per-fence ``.lost.<sid>.md`` sidecars
+        backup_path:    If provided, write per-fence ``.lost.<sid>.md.agentteams-bak`` sidecars
                         inside this directory whenever a merge fires a shrink
                         notice — capturing the full pre-merge fence body so the
                         operator can recover dropped hand-edits even under the
@@ -444,7 +444,7 @@ def emit_all(
                         why = ("structural migration" if mr.migrated and _shrink_notice_sid(notice) == "content" else "operator --shrink-allow"
                                if _shrink_notice_sid(notice) in mr.shrink_overridden
                                else "template-/brief-authoritative fence")
-                        suffix = f" ({why}: the real run will replace it and keep the prior body in a .lost.<sid>.md sidecar in the backup dir)"
+                        suffix = f" ({why}: the real run will replace it and keep the prior body in a .lost.<sid>.md.agentteams-bak sidecar in the backup dir)"
                     elif shrink_policy == "preserve":
                         suffix = " (existing enriched body will be retained; template update suppressed for this fence — use --shrink-policy=allow to force)"
                     elif shrink_policy == "additive":
@@ -453,7 +453,7 @@ def emit_all(
                         # sidecar/allow suffix applies.
                         suffix = ""
                     else:
-                        suffix = " (prior body will be preserved in a .lost.<sid>.md sidecar in the backup dir on the real run)"
+                        suffix = " (prior body will be preserved in a .lost.<sid>.md.agentteams-bak sidecar in the backup dir on the real run)"
                     annotated = f"{rel_path}: {notice}{suffix}"
                     result.notices.append(annotated)
                     if result.dry_run_report is not None:

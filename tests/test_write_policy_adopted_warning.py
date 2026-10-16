@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._fresh_intel import seed_offline_intel
+
 REPO = Path(__file__).resolve().parent.parent
 _BESPOKE = ("---\nname: bespoke-writer\ndescription: Project-owned agent\ntools: Read, Write, Edit\nmodel: sonnet\n"
             "user-invocable: false\n---\n# Bespoke writer\n\n## 🛑 Invariant Core\nx\n")
@@ -17,7 +19,8 @@ _BESPOKE = ("---\nname: bespoke-writer\ndescription: Project-owned agent\ntools:
 def _render(project: Path, *extra: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(project / "brief.json"),
                            "--project", str(project), "--framework", "claude", "--output",
-                           str(project / ".claude" / "agents"), "--no-scan", "--yes", *extra],
+                           str(project / ".claude" / "agents"), "--no-scan", "--yes",
+                           *seed_offline_intel(project / ".claude" / "agents", "claude"), *extra],
                           cwd=project, capture_output=True, text=True, timeout=300)
 
 

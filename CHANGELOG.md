@@ -27,6 +27,201 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entry-point tests now pass a payload on stdin, since `_entrypoint` reads it. Docs: `docs_src/cli-reference.md`;
   security guide S19 in `SKELETON.md` and the reference, developers and researchers editions.
 
+### fix (grok, security: a scoped tool entry no longer widens an agent; working run instructions)
+
+- **Security fix (C-3), behaviour change.** Grok Build 1.0.52 ignores a scoped entry in an agent's `tools:`. In a
+  live test, an agent declared `Read, Bash(echo:*)` was offered a full shell plus `search_replace` (an edit tool),
+  `monitor` and `workflow`. The default team's read-only `tool-doc-researcher`, and any `retrieval` agent such as
+  `reference-manager`, carried `Bash(python -m agentteams.research:*)`, so on grok they ran with shell and edit.
+  - A scoped allow entry (any `Name(...)`, including `Agent(type)`) is now **dropped** for grok. These agents lose
+    the retrieval CLI on grok.
+  - A scoped `disallowedTools` entry becomes the **whole tool**.
+  - **Grok ignores `disallowedTools`** (live check), so every deny is applied by **leaving the tool out of `tools:`**.
+    The `disallowedTools:` line stays only as a record.
+  - **`MCPTool` is dropped as well.** Like a scope, it makes grok discard the whole list and grant a shell plus an edit
+    tool. `Write`, `WebFetch` and `WebSearch` are accepted but grant nothing on grok.
+  - A deny list that leaves no built-in tool is refused (MCP entries don't count).
+  - Each change prints a `[GROK-SCOPE]` notice on stderr, is added to interop notices, and is recorded in the build
+    log as `grok_tool_notices`.
+  - An exported grok agent that still carries a scope counts as not exact-toolset, so it exports as FULL.
+  - Remediation GROK-FU-R8-SCOPE; @security ruled it a 1.0 MUST-FIX.
+- **Operators of existing grok teams must act.** `--update --merge` keeps an edited file's front matter and never
+  applies a deny change automatically. The grok guard therefore names every existing `.grok/agents` file that still
+  carries a scoped entry: re-check it after the update, or run `--reconcile-front-matter --reconcile-apply`.
+- **Run instructions corrected.** The generated `grok_runtime` block (now `v=2`) and the grok team-builder said
+  `grok --agent "<name>"`. In grok 1.0.52 that form silently runs the default agent. They now say to run an agent by
+  its path, `grok --agent .grok/agents/<slug>.md` (or `/agents` in the TUI).
+- **Known limit in grok 1.0.52 (documented, not fixable here).** Custom agents cannot be spawned as subagents
+  ("Unknown subagent type"), so a grok orchestrator cannot delegate to its specialists. Run each one directly. Never
+  retry a failed spawn without a type: an untyped spawn starts an agent with every tool. Remediation GROK-FU-R8-TYPE.
+- The expert reference is corrected: G8, G10 (`.grok/skills` shadows `.claude/skills`), G11, G15. Round 2's
+  "delegation works" (R2-a) is withdrawn. The docs no longer claim same-name shadowing. `_grok_tool_scoping.py` is
+  re-pinned. Tests: `tests/test_grok_scope_fix.py`.
+### fix (1.0 must-fix: the constitutional gate runs under an interpreter that can import agentteams)
+
+The emitted hook command is `python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/constitutional-gate.py"`, and the gate's
+write path imports `agentteams`. When PATH's `python3` lacked it, every Write/Edit check crashed. A confined profile
+then denied everything. The default cooperative profile silently allowed everything, so the gate was off unnoticed.
+Found in the mathAgents M6 pilot.
+
+- **Interpreter pin.** Rendering a Claude team (and a confined Grok team) now writes `agentteams-python` beside each
+  gate copy: one line, the rendering interpreter's absolute `sys.executable`. A `.gitignore` beside it ignores
+  exactly that file. The machine path appears in no other emitted file (Rule S-8), and a test checks that.
+  `--sync` projection carries the pin and its ignore file with the gate.
+- **The gate re-executes under the pin** when `import agentteams` fails with `ModuleNotFoundError` for `agentteams`
+  itself. It forwards the original stdin bytes and relays the child's output and exit code.
+  - The pin is used only when it is absolute, names an executable `python*` file, and lies outside the project tree,
+    both as written and resolved, with no in-project `pyvenv.cfg` above it.
+  - `PYTHONPATH`, `PYTHONSTARTUP` and `PYTHONHOME` are scrubbed for the child, and `AGENTTEAMS_GATE_REEXEC=1`
+    stops a second hop.
+  - A child that exits with anything but a verdict (0 or 2) counts as no interpreter.
+  - An isolated parent (`-I`, as Grok's shim runs the gate) re-executes an isolated child, so a module planted
+    beside the hook cannot shadow the stdlib there (@security M1).
+- **No pin without its ignore rule (@security M2/M3).** An existing hooks `.gitignore` without the
+  `agentteams-managed` marker, or a symlink, belongs to the operator and is left untouched. Claude used to overwrite it.
+  In that case the pin is not written either, with a notice. This holds for Claude, Grok and `--sync` projection.
+  - The hook stays stdlib-only and Python 3.9-compatible. Grok's shim runs the same gate, so the fix applies there.
+- **No silent allow.** With no interpreter that can import agentteams, a content-bearing Write/Edit/MultiEdit/
+  NotebookEdit gets `ask` (cooperative) or `deny` (fail-closed). The reason names the fix, and a line goes to stderr.
+- **`--check-wiring` checks the gate's interpreter.** It prints the pin's value and resolved target, and runs
+  `<pin> -c "import agentteams"` and the plain `python3`. It exits 1 with the exact fix when neither works.
+- Not changed: agentteams emits no SessionStart toolchain command, so there is nothing of that kind to fix. Copilot's
+  `.github/hooks` gate is not emitted by agentteams. A hand-installed copy reads a pin beside it, and `--check-wiring`
+  checks it.
+- Re-pinned in `references/enforcement-integrity.json`: the gate template (and this repo's installed copies) and `frameworks/_grok_sandbox_emit.py`.
+
+### fix (a HALT blocks every action named in its id; 1.0 must-fix from the mathAgents M6 pilot)
+
+- **C-2 bypass by spelling.** The HALT scan used the clearing-side prefix match, so a HALT recorded for an
+  instance, such as `m6-overwrite-render-1a2fad6`, never blocked `overwrite`. In the M6 run, an older, unconsumed
+  `overwrite` PASS then cleared the action instead.
+- **The fix.** A HALT now also matches when the action id appears as a whole token run in the HALT's id. Tokens
+  are split on `- _ . : /` and whitespace. It errs wide, because a false match only blocks.
+  - A HALT matched only by token is retracted only by a `HALT-RETRACTED` row with that HALT's exact id. So
+    retracting plain `overwrite` does not clear an instance-specific HALT.
+  - Prefix-matched HALTs keep their existing retraction behaviour.
+  - The clearing side (`action_matches`) is unchanged and strict.
+- **New pinned module.** The matchers move to `agentteams/cli/action_ids.py`. `decision_log._action_matches`
+  stays as an alias.
+- **The refusal message** now says that a HALT blocks every action named in its id.
+- **The token boundary errs wide.** It splits on every non-alphanumeric character and on camelCase and
+  letter/digit boundaries, so `m6OverwriteRender`, `overwrite2`, `(prune)` and `overwrite,` all name their
+  action.
+- **An exact-id retraction is scope-checked against the HALT's own id,** so it clears the HALT instead of raising.
+- **Upgrade impact.** Older unretracted HALTs whose ids contain a gate action as a token, including prose ids such
+  as `overwrite post-render closing check`, start blocking that action. **Before upgrading, run
+  `agentteams --verify-integrity` or `--migrate-decision-log --dry-run`.** Both list each newly blocking HALT with
+  the exact id to retract it by. They also list every other unretracted HALT, because one blocks any action your
+  own gates check through `check_clearance` when that action's id appears in it.
+- **Disclosed, unchanged:** a family retraction such as `overwrite-001` still clears every prefix-matched HALT of
+  the action, `overwrite-999` included.
+- **Documented known limitations,** also from M6:
+  - **Clearance binding.** A clearance binds to the newest row whose id starts with the action id. So a
+    differently named clearance never binds, and an older, unconsumed single-use row can clear instead. Name
+    clearances `<action>-<instance>` and restrict them with the `scope` column; prose scope is not enforced.
+  - **`conditions_verified`.** A CONDITIONAL PASS requires `conditions_verified` to be exactly `verified`. Put
+    the evidence in `evidence`.
+- **Re-pinned:** `cli/decision_log.py`, `integrity.py`, and the new `cli/action_ids.py`.
+- **`--serve-requests` without `--description`** reports "requires --description BRIEF" instead of crashing with a `TypeError` (seen starting the M6 runner). `cli/proposal_commands.py` re-pinned.
+
+### fix (1.0 must-fix set: decision-log chain and migration, stale intel, retrieval write, loadable sidecars)
+
+The five defects the 1.0 release triage classed must-fix (release-branch-adoption step 4).
+
+- **Signed decision logs chain again (338).**
+  - `--sign-decision` never filled `prev_digest`, so the second signed row broke the hash chain and the gate
+    refused every action. The signer now links each row to the chain tip before any signature value or review
+    digest is computed. `append_signed_decision_row` refuses if the tip moved during confirmation.
+  - The chain rule has one home, `agentteams/cli/decision_chain.py`, which is newly integrity-pinned.
+  - **Logs already broken by the bug verify again through a legacy prefix.** When signing is active, a leading
+    run of rows with empty links is accepted. The running digest is kept through it, so the first real link
+    must bind the row before it, and every later row must chain.
+  - **Disclosure:** deletions inside that prefix, HALT rows included, can't be detected. That is the same as a
+    log with no `prev_digest` column. `--verify-integrity` now reports the prefix length and any HALT inside it,
+    and exits 1 on a broken chain. The chain is unkeyed, so rows cut from the tail aren't detected either.
+  - A log created by the first signed row used to match neither accepted schema, so its next read failed as
+    "malformed". New logs now lead with the legacy required columns.
+  - The goose coordination MCP server rewrote any decisions-log header to its own six columns, which dropped
+    the signing and chain columns. It now writes in the existing header and refuses a hash-chained log.
+- **`--migrate-decision-log` pads short legacy rows (399/406),** so `governance_logs.append_row` accepts a migrated
+  log.
+  - Each data line keeps its old bytes as a prefix, with empty cells appended.
+  - Only rows short by trailing signing columns are padded. A torn row is refused.
+  - Every row's signed payload is asserted unchanged.
+  - A log migrated before this fix is padded by a re-run.
+  - **The "every data line stays byte-identical" promise is replaced.**
+- **A corrupt vulnerability cache is never "fresh" (433).** Under `--security-offline`, and in the online fallback,
+  the following caches now report `stale`, with a new optional `freshness.cache_corrupt` flag:
+  - a cache that can't be read;
+  - one that isn't UTF-8, JSON or an object;
+  - one that fails the schema check;
+  - one with no parseable `generated_at`.
+
+  Before, such a cache defaulted to "fresh" and the stale-intelligence gate failed open.
+- **BREAKING: `python -m agentteams.research browser --screenshot` is removed (378).**
+  - The read-only retrieval grant (`Bash(python -m agentteams.research:*)`) runs this CLI. The flag wrote a file
+    anywhere the caller named, a C-3 widening.
+  - `browser_screenshot()` stays as a library call.
+  - **Known residual:** the research cache still writes under `references/research-cache`.
+- **Lost-fence sidecars are inert (377).** Backups live inside the agents directory, which runtimes load
+  recursively, so `<rel>.lost.<sid>.md` was itself a loadable agent file.
+  - Sidecars are now `….lost.<sid>.md.agentteams-bak`. `restore_backup` never copies one back into a live path.
+  - Existing sidecars are renamed by the legacy-backup neutralizer.
+- **Re-pinned** in `references/enforcement-integrity.json`: `cli/decision_log.py`, `cli/operator_signing.py`,
+  `fences.py`, `fence_twins.py`, `shrink_allow.py`, `whole_body_migration.py` and `integrity.py`, plus the new
+  `cli/decision_chain.py`.
+
+### feat (memory index: compact layout, and size-capped shards read without reassembly)
+
+- A downstream committed `references/memory-index.json` reached 56.1 MiB, past GitHub's 50 MB warning and
+  heading for its 100 MB rejection. Measured on it: postings were 74% of the file and `indent=2` whitespace about
+  51%; stored paragraph text was 12%. The layout was the problem, not the payload.
+- New `agentteams/memory_index_store.py` owns the on-disk bytes. The index is now written one line per top-level
+  key, document, stored paragraph and postings term: the same JSON object and schema, about half the size
+  (56.1 → 27.4 MiB on that index), still line-diffable. Above 20 MiB (`AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES`
+  overrides it) the documents and postings are packed in order into `memory-index.part-NNNN.json` files, each
+  valid JSON under the cap, and `memory-index.json` becomes a manifest (`artifact_type: memory-index-shards`)
+  recording each part's size and sha256. Indexes under the cap stay one file.
+- Every reader (`--query-index`, `--refresh-index`, the stale check, the recall MCP server) reads the parts
+  directly, so there is no reassembly after a pull and no git hook: hooks do not run in CI, on GitHub or in a fresh
+  clone. A missing, truncated, conflicted or edited part fails the read with `MemoryIndexError` naming it and
+  `--refresh-index`; a partial index is never returned. The manifest can name only exact part names in its own
+  directory; recall confines each part to the project. Hashes ignore `\r`, so Windows/autocrlf checkouts verify.
+- Legacy `indent=2` indexes read unchanged and are rewritten on the next rebuild; writing removes parts the new
+  manifest no longer lists. Readers older than this release reject the manifest (the index schema pins
+  `artifact_type`) instead of reading it as an empty index. The opt-in incremental `sed` path now runs only on a
+  legacy-layout file.
+- Once a repo's index is sharded, every agentteams that writes it should be on this release or later: an older
+  `--refresh-index` writes one large file and leaves the parts; this release warns about such unused parts on read
+  and removes them on its next write. A part that is a symlink out of its directory is refused. An invalid
+  `AGENTTEAMS_MEMORY_INDEX_SHARD_MAX_BYTES` fails the write. The skipped incremental `sed` path is announced.
+- The scanner's operational-JSON exemption is carved from `scan.py` (it sat at 975 of 1000 lines) into the new
+  integrity-pinned `agentteams/scan_operational.py` (added to `ENFORCEMENT_MODULES`). A shard is exempt from the
+  absolute-path/entropy/placeholder detectors only when it sits in the agents dir's `references/` and the sibling
+  manifest lists it with its current sha256 (Rule 12: the name pattern alone would hand out 9999 exempt names).
+  `scan.py`, `integrity.py` and the new module re-pinned in `references/enforcement-integrity.json`. Docs:
+  `docs_src/api-reference/memory-index-store.md`. Tests: `tests/test_memory_index_store.py`.
+
+### fix (goose: the shared repo-root AGENTS.md gets an ownership marker and a guard)
+
+- **Behaviour change:** `--framework goose` no longer overwrites or re-fences a repo-root `AGENTS.md` it did not
+  write (Codex, Grok, agents-md or hand-written). It leaves the file untouched and prints a warning. To hand the
+  file to goose, delete `AGENTS.md` and re-render; there is deliberately no adopt flag. Legacy goose renders that
+  carry AGENTTEAMS fences are adopted automatically, with a notice. Legacy renders without fences (from convert or
+  interop) cannot be told apart from a hand-written file and are now left untouched. A file fenced only by
+  `grok_runtime` (a hand file the operator pasted Grok's block into) is treated as hand-written.
+- Goose's `AGENTS.md` now opens with a generated notice (`GOOSE_AGENTS_MD_MARKER`), so `classify_agents_md`
+  recognises it as `goose`. The rule lives in the pinned `_agents_md_ownership.goose_agents_md_decision`. A goose
+  re-render carries an existing `grok_runtime` fence over, so a goose→grok→goose cycle keeps it. A duplicated or
+  unbalanced `grok_runtime` fence makes goose skip the file with a warning rather than drop the fence.
+- Grok treats a goose file like a fenced one (it upserts only `grok_runtime`). Codex skips it and names Goose.
+- `--convert-from` now runs the target adapter's instructions guard, so goose and codex never overwrite an
+  `AGENTS.md` they do not own, even with `--overwrite`. Interop writes the content the guard returns, so the goose
+  notice and the carried-over `grok_runtime` fence survive.
+- Known gap, unchanged: `--framework agents-md` has no AGENTS.md guard and still overwrites any owner's file.
+- `_agents_md_ownership.py` re-pinned in `references/enforcement-integrity.json`. Tests:
+  `tests/test_goose_agents_md_ownership.py`. GROK-RETRO-R4 (expert reference G13).
+
 ### fix (merge: a dropped navigator `## Invariant Core` twin no longer takes `### Project Structure` with it)
 
 - The 2026-10-13 fleet audit found navigator's pre-fencing `## Invariant Core` twin dropped together with the

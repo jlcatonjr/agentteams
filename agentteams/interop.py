@@ -620,6 +620,10 @@ def import_from_cai(
         pending.append((dest, rendered))
         result.converted.append(str(dest))
 
+    if target_framework == "grok":  # scoped entries the grok render dropped or widened (GROK-FU-R8-SCOPE)
+        from agentteams.frameworks.grok import GROK_TOOL_NOTICES_KEY
+
+        result.notices.extend(f"[GROK-SCOPE] {n}" for n in manifest.get(GROK_TOOL_NOTICES_KEY, []))
     if run is not None:  # refuses (nothing written) or records each cooperative opt-in in the decision log
         result.notices += run.conclude(dry_run=dry_run)
     for dest, rendered in () if dry_run else pending:
@@ -644,21 +648,21 @@ def import_from_cai(
         _import_grok_instructions(adapter, instructions_content, inst_dest, target_dir, manifest, result,
                                   dry_run=dry_run, overwrite=overwrite, preserve_existing=preserve_existing)
     elif instructions_content:
-        # The adapter's own shared-file guard (the same hook native generation runs):
-        # codex never overwrites an AGENTS.md it did not generate — not even with
-        # --overwrite. Every other adapter keeps the file (default no-op).
-        _kept, _guard_notices = adapter.guard_rendered_files(
-            [(os.path.relpath(inst_dest, target_dir), "")], target_dir
-        )
-        if not _kept:
+        # The adapter's own shared-file guard (the same hook native generation runs): codex and goose
+        # never overwrite an AGENTS.md they did not generate — not even with --overwrite. Every other
+        # adapter keeps the file (default no-op). Codex and goose render first, so the file carries
+        # their ownership notice and a later run recognises it; the guard may rewrite the content
+        # (goose carries an existing grok_runtime fence over), so its output is what is written.
+        if target_framework in ("codex", "goose"):
+            instructions_content = adapter.render_instructions_file(instructions_content, manifest)
+        inst_rel = os.path.relpath(inst_dest, target_dir)
+        _kept, _guard_notices = adapter.guard_rendered_files([(inst_rel, instructions_content)], target_dir)
+        result.notices.extend(_guard_notices)
+        guarded = next((c for r, c in _kept if r == inst_rel), None)
+        if guarded is None:
             result.skipped.append(str(inst_dest))
-            result.notices.extend(_guard_notices)
         elif inst_dest.exists() and preserve_existing:
-            merged, notice = _merge_instruction_file(
-                adapter.render_instructions_file(instructions_content, manifest)
-                if target_framework == "codex" else instructions_content,
-                inst_dest.read_text(encoding="utf-8"),
-            )
+            merged, notice = _merge_instruction_file(guarded, inst_dest.read_text(encoding="utf-8"))
             if notice:
                 result.notices.append(f"{inst_dest}: {notice}")
             if merged is None:
@@ -670,13 +674,9 @@ def import_from_cai(
         elif inst_dest.exists() and not overwrite:
             result.skipped.append(str(inst_dest))
         else:
-            if target_framework == "codex":
-                # Stamp the Codex ownership notice, so a later run recognizes the
-                # file as its own (agents_md_is_codex_owned) and may refresh it.
-                instructions_content = adapter.render_instructions_file(instructions_content, manifest)
             if not dry_run:
                 inst_dest.parent.mkdir(parents=True, exist_ok=True)
-                inst_dest.write_text(instructions_content, encoding="utf-8")
+                inst_dest.write_text(guarded, encoding="utf-8")
             result.converted.append(str(inst_dest))
 
     # D.1: re-emit captured skills through the adapter's skill hook.

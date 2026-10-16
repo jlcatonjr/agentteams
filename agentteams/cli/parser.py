@@ -214,7 +214,9 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Upgrade the target team's references/security-decisions.log.csv header to the signing "
              "schema, then exit (no render). Existing columns stay in place; the missing columns of "
              "decision_log.SIGNED_DECISION_COLUMNS are appended, except prev_digest (chaining stays "
-             "opt-in). Only the header line is rewritten: every data line stays byte-identical. Backed "
+             "opt-in). The header line is rewritten; each data line keeps its bytes as a prefix, and a row "
+             "narrower than the new header gets empty cells appended (signed payloads unchanged; a torn "
+             "row is refused). Backed "
              "up first, written atomically, idempotent; a malformed or unknown header is refused, as is "
              "a row with a value past the old header. Adding the signature column activates signing, so "
              "every live unsigned PASS, CONDITIONAL PASS or HALT-RETRACTED row stops clearing: --dry-run "
@@ -485,7 +487,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="check_wiring",
         help="P1-3: verify an emitted workspace-confinement sandbox block was actually "
         "merged into the live .claude/settings.json (it is inert until merged). Read-only, "
-        "output-only; exits non-zero when a confinement was emitted but is not live.",
+        "output-only; exits non-zero when a confinement was emitted but is not live. Also "
+        "checks that the constitutional gate's interpreter pin (<hooks>/agentteams-python) or "
+        "plain python3 can import agentteams, and fails with the fix when neither can.",
     )
     parser.add_argument(
         "--self",
@@ -886,7 +890,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "template change reaches an enriched fence; content added UNDER an "
             "existing heading (e.g. a new bold block inside a kept section) is not "
             "spliced and falls back to preserve; 'warn' writes the smaller "
-            "body and saves a .lost.<sid>.md recovery sidecar; 'halt' refuses the "
+            "body and saves a .lost.<sid>.md.agentteams-bak recovery sidecar; 'halt' refuses the "
             "whole-file write and lists the blocked file; 'allow' writes silently. "
             "Plan: references/plans/T2-D5-shrink-policy-2026-05-25.plan.md"
         ),
@@ -1490,7 +1494,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "manifest (references/enforcement-integrity.json); a MISSING manifest is a "
             "finding (exit 1) when the repository tracks one or the scanner runs from inside it. Also checks the "
             "governance CSV logs (security decisions, remediation, red-team findings, MCP needs, conflict log) and "
-            "exits 1 on a malformed one."
+            "exits 1 on a malformed one. Also reports the security-decisions log's hash chain: exits 1 on a "
+            "broken chain, and reports a pre-1.0 legacy prefix (rows with no link) and any HALT row inside it."
         ),
     )
     parser.add_argument(

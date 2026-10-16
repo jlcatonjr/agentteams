@@ -9,6 +9,11 @@ changed, instead of rebuilding the whole index — an optimisation of the full
 path (see the [CLI reference](../cli-reference.md) for `--refresh-index` /
 `--query-index`).
 
+**Legacy layout only.** The patch addresses the `indent=2` single-file layout line by line.
+Since the compact and sharded layouts ([`memory_index_store`](memory-index-store.md)), the
+refresh path calls it only when the on-disk file is still in that layout, i.e. at most once
+before the first full rebuild rewrites it.
+
 **Deliberately conservative: it declines far more often than it applies.** Every
 decline falls back to a full rebuild, which is always correct, so the failure direction
 is slow rather than wrong.

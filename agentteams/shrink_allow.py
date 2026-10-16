@@ -19,7 +19,7 @@ cannot release anything that was not reviewed. Sources: repeated ``--shrink-allo
 ``AGENTTEAMS_SHRINK_ALLOW`` (``;``-separated; for wrappers such as ``researchteam update``).
 
 **Recovery.** An overridden section takes the replace path, so its old body goes to a
-``.lost.<fence>.md`` sidecar in the run's backup dir. ``emit_all`` refuses every override when
+``.lost.<fence>.md.agentteams-bak`` sidecar in the run's backup dir. ``emit_all`` refuses every override when
 there is no backup dir (``--no-backup``), rather than release a section it cannot recover.
 """
 

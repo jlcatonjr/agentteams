@@ -42,10 +42,17 @@ Why all three:
   fail-closed instead:
   - `Task` becomes `Agent`
   - `TodoWrite` is dropped (a narrowing)
-  - any other unrecognised name, or an untranslatable `disallowedTools` entry, stops the render
+  - a **scoped** entry (`Bash(git diff:*)`, `Agent(plan)`, any `Name(...)`) is never emitted, because Grok Build
+    ignores the scope and widens the agent (a full shell plus an edit tool, in a live test): a scoped allow entry is
+    dropped, and a scoped `disallowedTools` entry becomes the whole tool, each with a `[GROK-SCOPE]` notice
+  - `MCPTool` is dropped too: grok does not accept it, and one such entry discards the whole list
+  - Grok ignores `disallowedTools`, so every denied tool is left out of `tools:` instead (absence is the only limit
+    it honours); the `disallowedTools:` line is kept as a record
+  - any other unrecognised name, an untranslatable `disallowedTools` entry, or a deny list that removes every
+    allowed built-in tool stops the render
 
-Recognised tool names: `Bash`, `Read`, `Edit` (and `Write`), `Grep` (and `Glob`), `MCPTool`, `WebFetch`,
-`WebSearch`, `Agent`. Each may take a scope, e.g. `Bash(git diff:*)`.
+Recognised tool names: `Bash`, `Read`, `Edit` (and `Write`), `Grep` (and `Glob`), `WebFetch`, `WebSearch`,
+`Agent`, emitted bare (never with a scope). On the pinned release `Write`, `WebFetch` and `WebSearch` grant nothing.
 
 ---
 
@@ -220,7 +227,10 @@ Headless exit codes:
 - `1`: a configuration error or hitting the turn limit
 - `130` / `143`: a signal
 
-Headless delegation to a subagent needs an approval mode, or the call is cancelled.
+Headless delegation to a subagent needs an approval mode, or the call is cancelled. In Grok Build 1.0.52 a custom
+agent also cannot be spawned as a subagent at all ("Unknown subagent type"); run each agent as the session agent by
+its path (`grok --agent .grok/agents/<slug>.md`), and never retry a failed spawn without a type: an untyped spawn
+starts a general-purpose agent that has every tool.
 
 ---
 

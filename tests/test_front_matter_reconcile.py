@@ -23,6 +23,7 @@ from agentteams.front_matter_reconcile import (
     find_divergences,
     format_report,
 )
+from tests._fresh_intel import seed_offline_intel
 
 RENDERED = (
     "---\n"
@@ -227,7 +228,7 @@ def test_cli_report_never_writes_even_with_divergence(tmp_path: Path) -> None:
     repo = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
         [sys.executable, "build_team.py", "--description", str(brief), "--framework", "claude",
-         "--output", str(out), "--reconcile-front-matter", "--yes"],
+         "--output", str(out), "--reconcile-front-matter", "--yes", *seed_offline_intel(out, "claude")],
         cwd=repo, capture_output=True, text=True, timeout=600,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
@@ -253,7 +254,8 @@ def test_cli_apply_changes_only_the_diverging_key(tmp_path: Path) -> None:
     repo = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
         [sys.executable, "build_team.py", "--description", str(brief), "--framework", "claude",
-         "--output", str(out), "--reconcile-front-matter", "--reconcile-apply", "--yes"],
+         "--output", str(out), "--reconcile-front-matter", "--reconcile-apply", "--yes",
+         *seed_offline_intel(out, "claude")],
         cwd=repo, capture_output=True, text=True, timeout=600,
     )
     assert proc.returncode == 0, proc.stderr[-2000:]

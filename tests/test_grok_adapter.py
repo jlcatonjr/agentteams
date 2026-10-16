@@ -111,9 +111,16 @@ def test_task_maps_to_agent_and_todowrite_is_dropped() -> None:
     assert _value(out, "tools") == "Read, Agent"
 
 
-def test_scoped_retrieval_is_kept_verbatim() -> None:
-    out = GrokAdapter().render_agent_file(_agent("['read', 'retrieval']"), "researcher", {})
-    assert _value(out, "tools") == "Read, Bash(python -m agentteams.research:*)"
+def test_scoped_retrieval_is_dropped_with_a_notice(capsys) -> None:
+    # Grok 1.0.52 ignores the scope and widens the agent to a full shell plus an edit tool (GROK-FU-R8-SCOPE), so the
+    # scoped retrieval grant is dropped, and the operator is told on stderr and in the manifest (-> build log).
+    manifest: dict = {}
+    out = GrokAdapter().render_agent_file(_agent("['read', 'retrieval']"), "researcher", manifest)
+    assert _value(out, "tools") == "Read"
+    err = capsys.readouterr().err
+    assert "[GROK-SCOPE] researcher: dropped 'Bash(python -m agentteams.research:*)'" in err
+    assert "loses the retrieval CLI on grok" in err
+    assert manifest["_grok_tool_notices"] and manifest["_grok_tool_notices"][0].startswith("researcher: dropped")
 
 
 def test_todo_only_refuses_rather_than_widening() -> None:
@@ -158,7 +165,7 @@ def test_every_template_renders_within_the_grok_vocabulary(path: Path) -> None:
 
 @pytest.mark.parametrize("value, expected", [
     ("Read, Grep, Glob", "Read, Grep, Glob"),
-    ("Bash(git diff:*), Read", "Bash(git diff:*), Read"),
+    ("Bash(git diff:*), Read", "Read"),  # a scoped allow entry is dropped: grok does not honour scopes
     ("Task, Read, Read", "Agent, Read"),
     ("mcp__github__get_issue", "mcp__github__get_issue"),
 ])

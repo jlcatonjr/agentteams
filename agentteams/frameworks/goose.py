@@ -33,6 +33,7 @@ intentionally avoids a YAML dependency and parses front matter with regex).
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -40,6 +41,12 @@ from typing import Any
 
 from .base import FrameworkAdapter
 from ._agents_md_rules import apply_constitutional_rules_baseline
+from ._agents_md_ownership import (
+    GOOSE_AGENTS_MD_MARKER,
+    goose_agents_md_decision,
+    strip_agents_md_notice,
+    symlink_on_path,
+)
 from agentteams import capability_map as _capability_map
 
 # 2026-08-12 A.1: Strip a pre-existing "## Delegation & references (Goose)" block
@@ -233,6 +240,17 @@ def _task_prompt(manifest: dict[str, Any],
     return f"{explicit}\n\n{runtime}" if explicit else runtime
 
 
+#: The repo-root AGENTS.md, relative to the recipes dir (``.goose/recipes``).
+_AGENTS_MD_REL = "../../AGENTS.md"
+
+#: Goose's AGENTS.md ownership notice; its first characters are the marker ``classify_agents_md`` checks.
+GOOSE_AGENTS_MD_NOTICE = (
+    f"{GOOSE_AGENTS_MD_MARKER} Goose reads it (with .goosehints) from the repo root; the specialist agents are "
+    "recipes under .goose/recipes/. Edit outside the AGENTTEAMS fences; goose never overwrites an AGENTS.md "
+    "generated for another framework, or a hand-written one without AGENTTEAMS fences. -->"
+)
+
+
 class GooseAdapter(FrameworkAdapter):
 
     @property
@@ -383,7 +401,46 @@ class GooseAdapter(FrameworkAdapter):
         if source_instructions:
             hierarchy = _extract_authority_hierarchy(source_instructions)
             body = _substitute_authority_hierarchy(body, hierarchy)
-        return body
+        body = strip_agents_md_notice(body)  # goose -> goose re-render: never stack a second notice
+        return f"{GOOSE_AGENTS_MD_NOTICE}\n\n{body.strip()}\n"
+
+    def guard_rendered_files(
+        self, rendered_files: list[tuple[str, str]], output_dir: Path
+    ) -> tuple[list[tuple[str, str]], list[str]]:
+        """Apply goose's repo-root AGENTS.md rule (:func:`._agents_md_ownership.goose_agents_md_decision`).
+
+        Goose writes only an AGENTS.md that is absent, its own, or a legacy fenced goose render; anything else is
+        left untouched with a notice. Every other rendered file is kept.
+
+        Args:
+            rendered_files: ``(rel_path, content)`` pairs relative to *output_dir*.
+            output_dir: The agents output directory.
+
+        Returns:
+            ``(kept_files, notices)``.
+
+        Raises:
+            Nothing.
+        """
+        kept: list[tuple[str, str]] = []
+        notices: list[str] = []
+        out_dir = Path(os.path.normpath(output_dir))
+        for rel_path, content in rendered_files:
+            if rel_path != _AGENTS_MD_REL:
+                kept.append((rel_path, content))
+                continue
+            target = Path(os.path.normpath(out_dir / rel_path))
+            linked = symlink_on_path(out_dir, target.parent)
+            if linked is not None:
+                notices.append(f"{target}: left untouched; {linked} is a symlink, so the goose recipes dir may "
+                               "not be what it appears.")
+                continue
+            decided, notice = goose_agents_md_decision(target, content, repo_root=target.parent)
+            if notice:
+                notices.append(notice)
+            if decided is not None:
+                kept.append((rel_path, decided))
+        return kept, notices
 
     def render_builder_file(self, content: str, manifest: dict[str, Any]) -> str:
         """Wrap the team-builder meta-agent as a runnable Goose recipe.
@@ -574,7 +631,7 @@ class GooseAdapter(FrameworkAdapter):
         repo root is two levels up.
         """
         if file_type == "instructions" and rel_path.endswith("copilot-instructions.md"):
-            return "../../AGENTS.md"
+            return _AGENTS_MD_REL
         return super().finalize_output_path(rel_path, file_type)
 
     def extra_output_files(self, manifest: dict[str, Any]) -> list[tuple[str, str]]:

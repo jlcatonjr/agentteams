@@ -573,3 +573,14 @@ def test_expired_records_are_purged_on_listing(runner):
     path.write_text(json.dumps(record))
     assert _roundtrip_on(runner, {"kind": "list-staged"}, "orchestrator")["result"]["staged"] == []
     assert not path.exists() and "expire-staged" in (runner.root / P.LEDGER_REL).read_text()
+
+
+def test_serve_requests_without_a_brief_reports_instead_of_crashing(tmp_path, capsys) -> None:
+    """--serve-requests with no --description used to raise TypeError (Path(None)) before the guard ran."""
+    import argparse
+
+    from agentteams.cli.proposal_commands import run_serve_requests
+
+    args = argparse.Namespace(description=None, project=str(tmp_path), output=None, once=True)
+    assert run_serve_requests(args) == 1
+    assert "requires --description" in capsys.readouterr().err

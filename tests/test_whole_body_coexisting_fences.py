@@ -272,7 +272,7 @@ def test_shrink_policy_allow_still_reports_the_migration_and_writes_the_sidecar(
     result = _merge(_render(), _deployed())
     lines = _shrink_notice_lines("quality-auditor.agent.md", result, "allow", tmp_path)
     assert any("predates its template" in line for line in lines)
-    assert (tmp_path / "quality-auditor.agent.md.lost.content.md").is_file()
+    assert (tmp_path / "quality-auditor.agent.md.lost.content.md.agentteams-bak").is_file()
 
 
 # --- inside-fence duplicates are reported, accurately ---------------------------------------------------
