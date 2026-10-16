@@ -404,7 +404,10 @@ def _reexec_under_pin(raw: bytes) -> str:
     env = {k: v for k, v in os.environ.items() if k not in _SCRUBBED_ENV}
     env[_REEXEC_ENV] = "1"
     try:
-        proc = subprocess.run([pin, str(Path(__file__).resolve())], input=raw, capture_output=True,
+        # Keep isolation: the Grok shim runs this hook with -I (no script dir on sys.path, so a planted
+        # json.py beside it cannot shadow the stdlib). The child keeps its own site-packages under -I.
+        flags = ["-I"] if sys.flags.isolated else []
+        proc = subprocess.run([pin, *flags, str(Path(__file__).resolve())], input=raw, capture_output=True,
                               env=env, timeout=_REEXEC_TIMEOUT, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         return f"the pinned interpreter could not run the gate ({type(exc).__name__})"

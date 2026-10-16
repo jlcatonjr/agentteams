@@ -266,7 +266,13 @@ def _emit_privilege_artifacts(
     agents_dir = framework_agents_dir(root, framework)
     adapter = FRAMEWORKS[framework]()
     written: list[str] = []
-    for rel_path, content in adapter.extra_output_files(manifest):
+    from agentteams.frameworks.claude import guard_gate_pin_files
+
+    # Never project a pin over/without its ignore rule (an operator-owned .gitignore is left alone).
+    extras, pin_notices = guard_gate_pin_files(list(adapter.extra_output_files(manifest)), agents_dir)
+    for notice in pin_notices:
+        print(f"  note: {notice}", file=sys.stderr)
+    for rel_path, content in extras:
         base = rel_path.rsplit("/", 1)[-1]
         # The verify-key store sentinel is matched by its full path (a bare ``README.md`` basename
         # is far too generic): the deny it backs is projected, so it must be too (bwrap cannot

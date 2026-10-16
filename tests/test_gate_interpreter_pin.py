@@ -230,6 +230,31 @@ def test_check_wiring_reports_a_bad_pin_and_the_fix(env: dict, monkeypatch: pyte
     assert "ERROR" in text and f"> {env['hooks'] / GATE_PIN_NAME}" in text
 
 
+@pytest.mark.parametrize("kind", ["relative", "inside-project", "missing", "not-python", "in-project-venv"])
+def test_check_wiring_refuses_the_same_pins_as_the_hook(env: dict, monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
+    """@code-hygiene: the hook and --check-wiring validate pins separately; keep them in parity."""
+    monkeypatch.setenv("PATH", env["environ"]["PATH"])
+    body = f'exec "{sys.executable}" "$@"\n'
+    if kind == "relative":
+        value = "bin/python3"
+    elif kind == "inside-project":
+        value = str(_wrapper(env["project"] / "tools" / "python3", body))
+    elif kind == "missing":
+        value = str(env["tmp"] / "nowhere" / "python3")
+    elif kind == "not-python":
+        value = str(_wrapper(env["tmp"] / "pinbin2" / "sh-ish", body))
+    else:
+        venv = env["project"] / ".venv"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text("home = /usr/bin\n")
+        outside = _wrapper(env["tmp"] / "pinbin2" / "python3", body)
+        (venv / "bin" / "python3").symlink_to(outside)
+        value = str(venv / "bin" / "python3")
+    _pin(env, value)
+    ok, messages = verify_gate_interpreter(env["project"], "claude")
+    assert not ok and "REFUSED" in "\n".join(messages), (kind, messages)
+
+
 def test_check_wiring_passes_with_a_working_pin(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", env["environ"]["PATH"])
     _pin(env, sys.executable)
@@ -250,3 +275,105 @@ def test_check_wiring_cli_exits_nonzero_on_a_bad_pin(env: dict) -> None:
                           env={**env["environ"], "PATH": env["environ"]["PATH"]})
     assert proc.returncode == 1, proc.stdout[-2000:] + proc.stderr[-2000:]
     assert "gate interpreter pin" in proc.stdout and "existing executable" in proc.stdout
+
+
+# ── @security implementation-audit mitigations M1-M3 ─────────────────────────────────────────────
+
+
+def test_m1_isolated_parent_reexecs_an_isolated_child(env: dict) -> None:
+    """M1: the Grok shim runs the gate with -I; the re-executed child must stay isolated, so a json.py planted
+    beside the hook cannot shadow the stdlib there — while agentteams still imports from the pin's site-packages."""
+    marker = env["tmp"] / "planted-json-ran"
+    (env["hooks"] / "json.py").write_text(f"open({str(marker)!r}, 'w').write('x')\nraise ImportError('planted')\n")
+    _pin(env, sys.executable)
+    proc = subprocess.run([str(env["fake"]), "-I", str(env["hooks"] / "constitutional-gate.py")],
+                          input=json.dumps(CREDENTIAL), capture_output=True, text=True, timeout=60,
+                          cwd=str(env["project"]), env=env["environ"])
+    assert not marker.exists(), "the planted json.py ran in the re-executed child"
+    decision = json.loads(proc.stdout)["hookSpecificOutput"]
+    assert proc.returncode == 0 and decision["permissionDecision"] == "deny", decision
+
+
+def _guarded(adapter, project: Path, agents_rel: str, files: list[tuple[str, str]]):
+    out = project / agents_rel
+    out.mkdir(parents=True, exist_ok=True)
+    kept, notices = adapter.guard_rendered_files(files, out)
+    return dict(kept), "\n".join(notices)
+
+
+def test_m2_grok_refused_ignore_file_means_no_pin(tmp_path: Path) -> None:
+    """M2: an operator's unmarked .grok/hooks/.gitignore is left alone, so the pin is not written either."""
+    from agentteams.frameworks._grok_sandbox_emit import grok_sandbox_output_files
+    from agentteams.frameworks.grok import GrokAdapter
+
+    files = grok_sandbox_output_files({"privilege_profile": "confined"}, platform="linux")
+    (tmp_path / ".grok/hooks").mkdir(parents=True)
+    (tmp_path / ".grok/hooks/.gitignore").write_text("*.log\n")
+    kept, notices = _guarded(GrokAdapter(), tmp_path, ".grok/agents", files)
+    assert "../hooks/.gitignore" not in kept and f"../hooks/{GATE_PIN_NAME}" not in kept
+    assert "interpreter pin NOT written" in notices
+    assert "../hooks/constitutional-gate.py" in kept, "the gate itself is still emitted"
+    (tmp_path / ".grok/hooks/.gitignore").write_text("# agentteams-managed: old\n/agentteams-python\n")
+    kept, _ = _guarded(GrokAdapter(), tmp_path, ".grok/agents", files)
+    assert f"../hooks/{GATE_PIN_NAME}" in kept and "../hooks/.gitignore" in kept
+
+
+@pytest.mark.parametrize("existing", ["unmarked", "symlink"])
+def test_m3_claude_leaves_an_operator_gitignore_and_drops_the_pin(tmp_path: Path, existing: str) -> None:
+    """M3: Claude no longer overwrites an operator-owned .claude/hooks/.gitignore, and then emits no pin."""
+    from agentteams.frameworks.claude import ClaudeAdapter
+
+    hooks = tmp_path / ".claude/hooks"
+    hooks.mkdir(parents=True)
+    if existing == "unmarked":
+        (hooks / ".gitignore").write_text("*.log\n")
+    else:
+        (tmp_path / "elsewhere").write_text("# agentteams-managed\n")
+        (hooks / ".gitignore").symlink_to(tmp_path / "elsewhere")
+    files = ClaudeAdapter().extra_output_files({"privilege_profile": "cooperative"})
+    kept, notices = _guarded(ClaudeAdapter(), tmp_path, ".claude/agents", files)
+    assert "../hooks/.gitignore" not in kept and f"../hooks/{GATE_PIN_NAME}" not in kept
+    assert "not agentteams-managed" in notices and "interpreter pin NOT written" in notices
+    assert "../hooks/constitutional-gate.py" in kept
+    if existing == "unmarked":
+        assert (hooks / ".gitignore").read_text() == "*.log\n"
+
+
+def test_m3_claude_regenerates_its_own_marked_gitignore(tmp_path: Path) -> None:
+    from agentteams.frameworks.claude import GATE_PIN_GITIGNORE, ClaudeAdapter
+
+    (tmp_path / ".claude/hooks").mkdir(parents=True)
+    (tmp_path / ".claude/hooks/.gitignore").write_text(GATE_PIN_GITIGNORE)
+    files = ClaudeAdapter().extra_output_files({"privilege_profile": "cooperative"})
+    kept, notices = _guarded(ClaudeAdapter(), tmp_path, ".claude/agents", files)
+    assert kept[f"../hooks/{GATE_PIN_NAME}"] == sys.executable + "\n" and "../hooks/.gitignore" in kept
+    assert "interpreter pin NOT written" not in notices
+
+
+def test_m3_other_emitted_gitignores_are_not_this_guards_business(tmp_path: Path) -> None:
+    from agentteams.frameworks.claude import guard_gate_pin_files
+
+    (tmp_path / "x").mkdir()
+    (tmp_path / "x/.gitignore").write_text("*\n")
+    kept, notices = guard_gate_pin_files([("x/.gitignore", "*\n!.gitignore\n")], tmp_path)
+    assert kept == [("x/.gitignore", "*\n!.gitignore\n")] and notices == []
+
+
+def test_m3_render_with_an_operator_gitignore_writes_no_pin(tmp_path: Path) -> None:
+    """End to end: a real Claude render over an operator-owned hooks .gitignore leaves it and writes no pin."""
+    from tests._fresh_intel import seed_offline_intel
+
+    project = tmp_path / "proj"
+    out = project / ".claude" / "agents"
+    (project / ".claude/hooks").mkdir(parents=True)
+    (project / ".claude/hooks/.gitignore").write_text("*.log\n")
+    brief = tmp_path / "brief.json"
+    brief.write_text((REPO / "examples/software-project/brief.json").read_text())
+    proc = subprocess.run([sys.executable, str(REPO / "build_team.py"), "--description", str(brief),
+                           "--framework", "claude", "--output", str(out), "--project", str(project), "--yes",
+                           *seed_offline_intel(out, "claude")], capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, proc.stdout[-2000:] + proc.stderr[-2000:]
+    assert (project / ".claude/hooks/.gitignore").read_text() == "*.log\n"
+    assert not (project / ".claude/hooks" / GATE_PIN_NAME).exists()
+    assert (project / ".claude/hooks/constitutional-gate.py").is_file()
+    assert "interpreter pin NOT written" in proc.stdout + proc.stderr

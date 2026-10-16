@@ -244,6 +244,24 @@ class ClaudeAdapter(FrameworkAdapter):
         """
         return ("name", "description", "tools")
 
+    def guard_rendered_files(
+        self, rendered_files: list[tuple[str, str]], output_dir: Path
+    ) -> tuple[list[tuple[str, str]], list[str]]:
+        """Leave an operator's ``.claude/hooks/.gitignore`` alone, and then emit no interpreter pin.
+
+        See :func:`guard_gate_pin_files`.
+
+        Args:
+            rendered_files: ``(rel_path, content)`` pairs relative to *output_dir*.
+            output_dir: The agents output directory.
+
+        Returns:
+            ``(kept_files, notices)``.
+        """
+        kept, notices = super().guard_rendered_files(rendered_files, output_dir)
+        kept, pin_notices = guard_gate_pin_files(list(kept), output_dir)
+        return kept, [*notices, *pin_notices]
+
     def handoff_delivery_mode(self) -> str:
         return "manifest"
 
@@ -375,6 +393,60 @@ def gate_interpreter_pin_files(hooks_rel: str) -> list[tuple[str, str]]:
     if not os.path.isabs(executable):
         return []
     return [(f"{hooks_rel}/{GATE_PIN_NAME}", executable + "\n"), (f"{hooks_rel}/.gitignore", GATE_PIN_GITIGNORE)]
+
+
+def guard_gate_pin_files(
+    files: list[tuple[str, str]], output_dir: Path
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Never emit an interpreter pin without the ignore rule that keeps it out of git (Rule S-8).
+
+    The hooks-dir ``.gitignore`` has a generic name, so an existing one without the
+    ``agentteams-managed`` marker (or a symlink) is the operator's and is left untouched. Its pin is
+    then dropped too, as is any pin whose sibling ``.gitignore`` is not among *files* (refused by an
+    earlier guard): a pin with no ignore rule could be committed. ``--check-wiring`` then reports
+    the missing pin.
+
+    Args:
+        files: ``(rel_path, content)`` pairs relative to *output_dir*.
+        output_dir: The agents output directory.
+
+    Returns:
+        ``(kept_files, notices)``.
+
+    Raises:
+        Nothing.
+    """
+    notices: list[str] = []
+    refused: set[str] = set()
+    pin_dirs = {r.rsplit("/", 1)[0] for r, _ in files if r.endswith("/" + GATE_PIN_NAME)}
+    for rel_path, _ in files:
+        if not rel_path.endswith("/.gitignore") or rel_path.rsplit("/", 1)[0] not in pin_dirs:
+            continue  # only the ignore file beside a pin (other emitted .gitignore files are not this guard's)
+        target = Path(os.path.normpath(output_dir / rel_path))
+        if target.is_symlink():
+            refused.add(rel_path)
+        elif target.is_file():
+            try:
+                head = target.read_text(encoding="utf-8")[:400]
+            except (OSError, UnicodeDecodeError):
+                head = ""
+            if "agentteams-managed" not in head:
+                refused.add(rel_path)
+        if rel_path in refused:
+            notices.append(f"{target}: existing file is not agentteams-managed; left untouched (add "
+                           "'agentteams-managed' to its first line, or add the rule "
+                           f"'/{GATE_PIN_NAME}' yourself and remove it, to let agentteams regenerate it).")
+    kept = [(r, c) for r, c in files if r not in refused]
+    present = {r for r, _ in kept}
+    out: list[tuple[str, str]] = []
+    for rel_path, content in kept:
+        if rel_path.endswith("/" + GATE_PIN_NAME) and rel_path.rsplit("/", 1)[0] + "/.gitignore" not in present:
+            notices.append(f"{Path(os.path.normpath(output_dir / rel_path))}: interpreter pin NOT written — its "
+                           "ignore file was not written, and a machine path must never be committed (Rule S-8). "
+                           "The gate falls back to python3; run `agentteams --check-wiring`.")
+            continue
+        out.append((rel_path, content))
+    return out, notices
 
 
 #: The sentinel line in the emitted constitutional-gate hook that

@@ -24,6 +24,11 @@ Found in the mathAgents M6 pilot.
   - `PYTHONPATH`, `PYTHONSTARTUP` and `PYTHONHOME` are scrubbed for the child, and `AGENTTEAMS_GATE_REEXEC=1`
     stops a second hop.
   - A child that exits with anything but a verdict (0 or 2) counts as no interpreter.
+  - An isolated parent (`-I`, as Grok's shim runs the gate) re-executes an isolated child, so a module planted
+    beside the hook cannot shadow the stdlib there (@security M1).
+- **No pin without its ignore rule (@security M2/M3).** An existing hooks `.gitignore` without the
+  `agentteams-managed` marker, or a symlink, belongs to the operator and is left untouched. Claude used to overwrite it.
+  In that case the pin is not written either, with a notice. This holds for Claude, Grok and `--sync` projection.
   - The hook stays stdlib-only and Python 3.9-compatible. Grok's shim runs the same gate, so the fix applies there.
 - **No silent allow.** With no interpreter that can import agentteams, a content-bearing Write/Edit/MultiEdit/
   NotebookEdit gets `ask` (cooperative) or `deny` (fail-closed). The reason names the fix, and a line goes to stderr.
@@ -32,7 +37,7 @@ Found in the mathAgents M6 pilot.
 - Not changed: agentteams emits no SessionStart toolchain command, so there is nothing of that kind to fix. Copilot's
   `.github/hooks` gate is not emitted by agentteams. A hand-installed copy reads a pin beside it, and `--check-wiring`
   checks it.
-- `references/enforcement-integrity.json` needs a re-pin for the changed gate template.
+- Re-pinned in `references/enforcement-integrity.json`: the gate template (and this repo's installed copies) and `frameworks/_grok_sandbox_emit.py`.
 
 ### fix (a HALT blocks every action named in its id; 1.0 must-fix from the mathAgents M6 pilot)
 

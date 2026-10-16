@@ -402,7 +402,11 @@ class GrokAdapter(ClaudeAdapter):
             )
         if out_dir.name == "agents" and out_dir.parent.name == ".grok":
             notices.extend(parity_notices(kept, out_dir, root))
-        return kept, notices
+        # A refused (operator-owned) hooks .gitignore means no pin either: the machine path would be committable.
+        from agentteams.frameworks.claude import guard_gate_pin_files
+
+        kept, pin_notices = guard_gate_pin_files(kept, output_dir)
+        return kept, [*notices, *pin_notices]
 
 
 def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
