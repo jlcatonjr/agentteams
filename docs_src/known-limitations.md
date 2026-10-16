@@ -128,6 +128,17 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   does not see these rows.
 - **Tracking:** remediation log row 337.
 
+### A full render can't be covered by a signed `overwrite` row, because it writes CLAUDE.md
+
+- **What:** every render writes the managed block of `.claude/CLAUDE.md`, and the effect classifier treats
+  CLAUDE.md as a governance trust root. In a workspace where signing is active, a signed `overwrite` row whose effect
+  includes that write is refused as non-eligible, so no honest signed row covers a full render.
+- **Who:** teams with decision signing active that re-render a Claude team.
+- **Workaround:** discard the render's change to `.claude/CLAUDE.md` and have the operator apply the managed-block
+  diff by hand. Sign the `overwrite` row for the remaining files.
+- **Tracking:** 1.0 known limitation (found by mathAgents, 2026-10-16). A render mode that leaves CLAUDE.md to the
+  operator and prints the diff is planned for 1.0.x.
+
 ### Installing an existing operator key into a second team needs a manual step
 
 - **What:** `references/authorized-verify-keys/provision-operator-signing-key.sh` refuses when the private key
