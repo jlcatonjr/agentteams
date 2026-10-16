@@ -85,3 +85,27 @@ def test_release_tag_mapping() -> None:
 
     assert release_tag("1.0.0rc7") == "v1.0.0-rc.7"
     assert release_tag("1.2.0") == "v1.2.0"
+
+
+def test_unpublished_versions_map_to_the_last_release_tag() -> None:
+    """A dev, local or post build has no tag of its own: its install hint pins the newest published one."""
+    from agentteams.capability_hints import LAST_RELEASE_TAG, release_tag
+
+    for version in ("1.1.0.dev0", "1.1.0.dev3", "0.0.0+local", "1.0.0+g1a2b3c", "1.0.0.post1", "1.0.0rc10.dev1"):
+        assert release_tag(version) == LAST_RELEASE_TAG, version
+
+
+def test_last_release_tag_matches_a_release_version() -> None:
+    """A release PR sets the version and LAST_RELEASE_TAG together; between releases the tag is left alone."""
+    import re
+    import tomllib
+    from pathlib import Path
+
+    from agentteams.capability_hints import LAST_RELEASE_TAG, release_tag
+
+    assert re.fullmatch(r"v\d+\.\d+\.\d+(-rc\.\d+)?", LAST_RELEASE_TAG)
+    root = Path(__file__).resolve().parents[1]
+    version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    if re.fullmatch(r"\d+\.\d+\.\d+(rc\d+)?", version):
+        assert release_tag(version) == LAST_RELEASE_TAG, (
+            f"pyproject version {version} is a release: set LAST_RELEASE_TAG to {release_tag(version)}")

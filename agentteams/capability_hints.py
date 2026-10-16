@@ -27,18 +27,32 @@ from __future__ import annotations
 AGENTTEAMS_GIT_SOURCE = "git+https://github.com/jlcatonjr/agentteams.git"
 
 
+#: The newest tag this project has published. A release PR updates it, and only a release PR does.
+#: A dev or local build (``1.1.0.dev0`` on ``main``, ``0.0.0+local`` from a plain checkout) has no
+#: tag of its own, so its install hints pin this one instead of a tag that never exists.
+#: ``tests/test_install_source_guard.py`` keeps it equal to the tag of a release or pre-release
+#: version in ``pyproject.toml``.
+LAST_RELEASE_TAG = "v1.0.0-rc.10"
+
+
 def release_tag(version: str) -> str:
     """Map a package version to this project's release tag (``1.0.0rc7`` -> ``v1.0.0-rc.7``).
+
+    A release (``X.Y.Z``) or pre-release (``X.Y.ZrcN``) maps to its own tag. Any other version (a
+    dev, local or post build) has no published tag and maps to :data:`LAST_RELEASE_TAG`.
 
     Args:
         version: A PEP 440 version string as in ``agentteams.__version__``.
 
     Returns:
-        The git tag the project publishes for that version.
+        The git tag the project publishes for that version, or the newest published tag.
     """
     import re
 
-    return "v" + re.sub(r"rc(\d+)$", r"-rc.\1", version)
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)(?:rc(\d+))?", version.strip())
+    if not match:
+        return LAST_RELEASE_TAG
+    return "v" + match.group(1) + (f"-rc.{match.group(2)}" if match.group(2) else "")
 
 
 def agentteams_install_command(extra: str) -> str:
@@ -83,4 +97,5 @@ RESEARCH_CAPABILITY_BULLET = (
     "  `python -m agentteams.research fetch \"<url>\"`.\n"
 )
 
-__all__ = ["AGENTTEAMS_GIT_SOURCE", "RESEARCH_CAPABILITY_BULLET", "agentteams_install_command", "release_tag"]
+__all__ = ["AGENTTEAMS_GIT_SOURCE", "LAST_RELEASE_TAG", "RESEARCH_CAPABILITY_BULLET", "agentteams_install_command",
+           "release_tag"]
