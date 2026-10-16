@@ -95,6 +95,15 @@ def test_unpublished_versions_map_to_the_last_release_tag() -> None:
         assert release_tag(version) == LAST_RELEASE_TAG, version
 
 
+def test_release_tag_refuses_a_non_string() -> None:
+    import pytest
+
+    from agentteams.capability_hints import release_tag
+
+    with pytest.raises(ValueError):
+        release_tag(None)  # type: ignore[arg-type]
+
+
 def test_last_release_tag_matches_a_release_version() -> None:
     """A release PR sets the version and LAST_RELEASE_TAG together; between releases the tag is left alone."""
     import re

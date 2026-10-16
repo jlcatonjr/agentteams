@@ -46,9 +46,14 @@ def release_tag(version: str) -> str:
 
     Returns:
         The git tag the project publishes for that version, or the newest published tag.
+
+    Raises:
+        ValueError: If *version* is not a string.
     """
     import re
 
+    if not isinstance(version, str):
+        raise ValueError(f"invalid version {version!r}")
     match = re.fullmatch(r"(\d+\.\d+\.\d+)(?:rc(\d+))?", version.strip())
     if not match:
         return LAST_RELEASE_TAG
