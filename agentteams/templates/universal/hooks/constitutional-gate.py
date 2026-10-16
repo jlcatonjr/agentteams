@@ -35,6 +35,16 @@ with any code other than 0 or 2 is a non-blocking error and the action proceeds.
 not a swallow (CH-24) — and runs only under the fail-closed policy. A verdict is expressed as
 JSON on stdout with exit 0; the fail-closed belt additionally uses exit code 2.
 
+**Interpreter pin (1.0 must-fix, 2026-10-15).** The harness runs this hook as plain ``python3``, and
+the write path imports ``agentteams``. When PATH's ``python3`` cannot import it, the hook re-runs
+itself under the interpreter named in ``agentteams-python`` beside it (the absolute
+``sys.executable`` that rendered the team; untracked, because a machine path must never be
+committed — Rule S-8), forwarding the original stdin bytes and relaying the child's verdict. The pin
+is used only when it is absolute, an executable ``python*`` file, and outside the project tree
+(as found and resolved); ``AGENTTEAMS_GATE_REEXEC`` stops a second hop. With no interpreter
+that can import agentteams, a content-bearing write gets ``ask`` (cooperative) or ``deny``
+(fail-closed) naming the fix — never the silent allow a crash used to be.
+
 Input:  a JSON tool-call payload on stdin (``tool_name``, ``tool_input``).
 Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when acting.
 """
@@ -42,8 +52,10 @@ Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when actin
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -327,8 +339,123 @@ def _written_content(tool_name: str, tool_input: dict) -> tuple[str, str]:
     return "", ""
 
 
+#: The untracked file beside this hook naming the interpreter that rendered the team (one line).
+_PIN_NAME = "agentteams-python"
+#: Set on the re-executed child so it never re-executes again (loop guard).
+_REEXEC_ENV = "AGENTTEAMS_GATE_REEXEC"
+#: Variables that could redirect what the pinned interpreter imports or runs at startup.
+_SCRUBBED_ENV = ("PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME")
+#: Below Claude Code's 60 s hook timeout; a timed-out child is treated as no interpreter.
+_REEXEC_TIMEOUT = 30
+
+
+def _project_roots() -> list[Path]:
+    """The project tree(s) this hook guards: ``<project>/.claude/hooks/<this>`` and ``$CLAUDE_PROJECT_DIR``."""
+    parents = Path(__file__).resolve().parents
+    roots = [parents[2]] if len(parents) > 2 else []
+    env_root = os.environ.get("CLAUDE_PROJECT_DIR")
+    if env_root:
+        roots.append(Path(env_root).resolve())
+    return [r for r in roots if r != Path(r.anchor)]
+
+
+def _inside(path: Path, roots: list[Path]) -> bool:
+    return any(path == r or r in path.parents for r in roots)
+
+
+def _pinned_interpreter() -> tuple[str | None, str]:
+    """Return ``(interpreter, "")`` for a usable pin, else ``(None, why)``.
+
+    Usable: an absolute path to an executable ``python*`` file that lies outside the project tree,
+    judged both as written and resolved, with no ``pyvenv.cfg`` inside the project above it (an
+    agent-writable virtualenv could swap what the interpreter loads).
+    """
+    pin_file = Path(__file__).resolve().parent / _PIN_NAME
+    try:
+        lines = pin_file.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None, f"no readable interpreter pin at {pin_file}"
+    value = lines[0].strip() if lines else ""
+    if not value or not os.path.isabs(value):
+        return None, f"the interpreter pin {pin_file} is not an absolute path"
+    if not os.path.basename(value).lower().startswith("python"):
+        return None, f"the interpreter pin {pin_file} does not name a python interpreter"
+    if not os.path.isfile(value) or not os.access(value, os.X_OK):
+        return None, f"the interpreter pin {pin_file} does not name an existing executable"
+    roots = _project_roots()
+    found, resolved = Path(os.path.abspath(value)), Path(os.path.realpath(value))
+    venv_inside = any((p / "pyvenv.cfg").is_file() and _inside(p, roots) for p in found.parents)
+    if _inside(found, roots) or _inside(resolved, roots) or venv_inside:
+        return None, f"the interpreter pin {pin_file} points inside the project tree, which agents can write"
+    return value, ""
+
+
+def _reexec_under_pin(raw: bytes) -> str:
+    """Re-run this hook under the pinned interpreter with the original stdin bytes; relay its verdict.
+
+    Exits with the child's exit code when the child produced a verdict (exit 0 or 2). Otherwise
+    returns why no pinned interpreter could run the gate, so the caller fails visibly.
+    """
+    if os.environ.get(_REEXEC_ENV) == "1":
+        return "already re-executed once under the pinned interpreter, which cannot import agentteams either"
+    pin, why = _pinned_interpreter()
+    if pin is None:
+        return why
+    env = {k: v for k, v in os.environ.items() if k not in _SCRUBBED_ENV}
+    env[_REEXEC_ENV] = "1"
+    try:
+        # Keep isolation: the Grok shim runs this hook with -I (no script dir on sys.path, so a planted
+        # json.py beside it cannot shadow the stdlib). The child keeps its own site-packages under -I.
+        flags = ["-I"] if sys.flags.isolated else []
+        proc = subprocess.run([pin, *flags, str(Path(__file__).resolve())], input=raw, capture_output=True,
+                              env=env, timeout=_REEXEC_TIMEOUT, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"the pinned interpreter could not run the gate ({type(exc).__name__})"
+    sys.stderr.buffer.write(proc.stderr)
+    sys.stderr.flush()
+    if proc.returncode not in (0, 2):
+        return f"the pinned interpreter failed running the gate (exit {proc.returncode})"
+    sys.stdout.buffer.write(proc.stdout)
+    sys.stdout.flush()
+    raise SystemExit(proc.returncode)
+
+
+def _import_integrity(raw: bytes):
+    """Import ``agentteams.integrity``, re-executing under the pin when ``agentteams`` is missing.
+
+    Never returns without the module: with no interpreter that can import agentteams it emits
+    ``deny`` (fail-closed) or ``ask`` (cooperative) — a crash here used to be a silent allow.
+    """
+    try:
+        from agentteams import integrity
+        return integrity
+    except ModuleNotFoundError as exc:
+        if exc.name != "agentteams":
+            raise
+    why = _reexec_under_pin(raw)
+    # agentteams' own checkout: the interpreter puts this script's directory on sys.path, not the
+    # repo root, so derive the root from this file's location (parents[2]) rather than trusting cwd.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    try:
+        from agentteams import integrity
+        return integrity
+    except ModuleNotFoundError as exc:
+        if exc.name != "agentteams":
+            raise
+    message = (
+        f"the constitutional gate found no Python interpreter that can import agentteams ({why}), so "
+        "this write's content was NOT checked. Fix: run `agentteams --check-wiring` in this project, or "
+        "re-render the team from an environment where agentteams is installed so "
+        f"{Path(__file__).resolve().parent / _PIN_NAME} names that interpreter."
+    )
+    print(f"agentteams constitutional gate: {message}", file=sys.stderr)
+    _decide("deny" if _FAIL_CLOSED_ON_ERROR else "ask", message)
+    raise SystemExit(2)  # unreachable: _decide exits
+
+
 def main() -> int:
-    payload = json.load(sys.stdin)
+    raw = sys.stdin.buffer.read()
+    payload = json.loads(raw)
     if not isinstance(payload, dict):
         return 0
 
@@ -368,16 +495,10 @@ def main() -> int:
         #
         # This does NOT escape E4. An attacker who can edit scan.py can edit the manifest and
         # this file. It raises the cost from one edit to three and makes each visible in git.
-        try:
-            from agentteams import integrity
-        except ModuleNotFoundError:
-            # The interpreter puts this script's own directory on sys.path, not the repo
-            # root, so on a checkout where agentteams isn't pip-installed these imports
-            # crash — and a crash is a silent allow (any exit other than 0/2 is a
-            # non-blocking error), disabling the gate exactly where it matters. Derive
-            # the repo root from this file's location rather than trusting cwd.
-            sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-            from agentteams import integrity
+        # Without agentteams these imports crash, and a crash is a silent allow (any exit other
+        # than 0/2 is a non-blocking error), so _import_integrity re-runs under the pinned
+        # interpreter, falls back to this checkout's root, or fails visibly.
+        integrity = _import_integrity(raw)
 
         integrity_findings = integrity.verify(Path.cwd())
         tampered = [f for f in integrity_findings if f.rel_path.endswith("scan.py")]

@@ -402,7 +402,11 @@ class GrokAdapter(ClaudeAdapter):
             )
         if out_dir.name == "agents" and out_dir.parent.name == ".grok":
             notices.extend(parity_notices(kept, out_dir, root))
-        return kept, notices
+        # A refused (operator-owned) hooks .gitignore means no pin either: the machine path would be committable.
+        from agentteams.frameworks.claude import guard_gate_pin_files
+
+        kept, pin_notices = guard_gate_pin_files(kept, output_dir)
+        return kept, [*notices, *pin_notices]
 
 
 def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
@@ -422,6 +426,7 @@ def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
     """
     from agentteams.frameworks._grok_sandbox_emit import (
         GROK_GATE_JSON_REL,
+        GROK_GATE_PIN_IGNORE_REL,
         GROK_GATE_REL,
         GROK_GATE_SHIM_REL,
         GROK_GATE_SIGNATURE,
@@ -437,7 +442,8 @@ def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
         return f"{target}: left untouched; {linked} is a symlink."
     # The gate copy is the unmodified Claude template, so it is recognised by its own docstring, not the marker.
     signature = {GROK_GATE_REL: GROK_GATE_SIGNATURE}
-    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL)
+    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL,
+              GROK_GATE_PIN_IGNORE_REL)
     if rel_path in marked and target.is_file():
         try:
             with target.open(encoding="utf-8") as fh:

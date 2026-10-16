@@ -36,7 +36,9 @@ def test_emitted_only_when_confined_on_linux_or_macos() -> None:
     assert _files({"privilege_profile": "cooperative"}) == {}
     assert _files(_CONFINED, platform="win32") == {}
     assert set(_files(_CONFINED)) == {gse.GROK_SANDBOX_PROFILE_REL, gse.GROK_RUNNER_REL, gse.GROK_GATE_JSON_REL,
-                                      gse.GROK_GATE_SHIM_REL, gse.GROK_GATE_REL}
+                                      gse.GROK_GATE_SHIM_REL, gse.GROK_GATE_REL,
+                                      # the gate's interpreter pin + its ignore file (1.0 must-fix)
+                                      "../hooks/agentteams-python", gse.GROK_GATE_PIN_IGNORE_REL}
     assert set(_files({"host_features": ["grok:sandbox"]}, platform="darwin")) == set(_files(_CONFINED))
 
 
