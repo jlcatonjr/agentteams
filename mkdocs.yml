@@ -49,6 +49,7 @@ nav:
       - Update Compatibility Maintenance: update-compatibility-maintenance-guide.md
       - Delivery Procedure: delivery-procedure.md
       - Migration Guide: migration-guide.md
+      - Known Limitations in 1.0: known-limitations.md
       - Interoperability Patterns: interoperability-patterns-guide.md
       - Bridge CI Automation: bridge-ci-automation-guide.md
       - Enrichment Pipeline: enrichment-pipeline-guide.md
