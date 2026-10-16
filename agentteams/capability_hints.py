@@ -32,7 +32,7 @@ AGENTTEAMS_GIT_SOURCE = "git+https://github.com/jlcatonjr/agentteams.git"
 #: tag of its own, so its install hints pin this one instead of a tag that never exists.
 #: ``tests/test_install_source_guard.py`` keeps it equal to the tag of a release or pre-release
 #: version in ``pyproject.toml``.
-LAST_RELEASE_TAG = "v1.0.0-rc.11"
+LAST_RELEASE_TAG = "v1.0.0-rc.12"
 
 
 def release_tag(version: str) -> str:

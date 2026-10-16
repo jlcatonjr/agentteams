@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.12] - 2026-10-16
+
+### release notes (rc12)
+
+Three fixes found while the four repositories moved to rc.11. rc.12 replaces rc.11 as the soak base for the
+coordinated v1.0.0, and adds no new dependencies.
+
+**BREAKING for weak HMAC keys:** HMAC signing keys must now be at least 32 bytes and not a placeholder. Rows signed
+with a weaker key no longer verify, so re-sign them with a 32-byte secret (`secrets.token_hex(32)`). Ed25519 rows,
+and logs migrated on rc.11, carry over unchanged.
+
+- **Security: strong HMAC keys** (found by masterTeacher).
+  - A placeholder key such as `...` once signed a decision that read as verified, so anyone who knew the
+    placeholder could forge it.
+  - Signing and verifying now refuse keys under 32 bytes, known placeholders, and a single repeated character.
+  - This covers decision rows, waivers, grants, management directives and the runner's proposal-ledger key
+    (file or environment). A weak key raises the module's own error, so commands refuse with a message.
+- **The decision log's HALT scan no longer wedges on an unauthenticated retraction.**
+  - A `HALT-RETRACTED` row that fails authentication or has no evidence is skipped. It retracts nothing, the HALT
+    stays open until a valid retraction, and the error names each skipped row and why.
+  - Before this fix, one unsigned retraction written before migration blocked the action forever (found by
+    mathAgents).
+- **Every native Codex agent renders a Project-Specific Notes region,** so `--update --overwrite` can carry notes
+  when narrowing `sandbox_mode` (found by baseAgent).
+- **New known limitations:**
+  - the copilot-vscode body-size limit for the orchestrator and security agents;
+  - the Codex role gate has no codex-cli version pin;
+  - repository scanning with `--project` can change the roster.
+
 ### fix (codex: every native agent renders a Project-Specific Notes region)
 
 - **The bug** (found by baseAgent on rc.11). A natively rendered Codex agent whose template already has section
