@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (install hints on dev and local builds pin a tag that exists)
+
+- `capability_hints.release_tag()` turned any version into a tag name, so a dev build (`1.1.0.dev0`, as `main`
+  becomes after the 1.0 cut) or a plain checkout (`0.0.0+local`) emitted install hints pinned to `v1.1.0.dev0` or
+  `v0.0.0+local`, tags that never exist.
+- A release (`X.Y.Z`) or pre-release (`X.Y.ZrcN`) still maps to its own tag. Every other version now maps to the new
+  `LAST_RELEASE_TAG` constant (currently `v1.0.0-rc.10`).
+- A release PR updates the constant together with `pyproject.toml`. `tests/test_install_source_guard.py` fails
+  when a release version and the constant disagree.
+
 ## [1.0.0-rc.10] - 2026-10-15
 
 ### release notes (rc10)
