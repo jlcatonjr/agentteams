@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.11] - 2026-10-16
+
+### release notes (rc11)
+
+The 1.0 fixes found while the four repositories prepared their release candidates on rc.10: #230 merges five
+reviewed branches. rc.11 replaces rc.10 as the soak base for the coordinated v1.0.0 (agentteams, researchteam,
+mathAgents, baseAgent). rc.11 adds no new dependencies.
+
+**Before you upgrade:** run `agentteams --verify-integrity` in each team and review its HALT report, as for rc.10.
+Then run `--migrate-decision-log` so the log gains the new `text_digest` column. Its report now names any HALT that
+blocks again because its unsigned retraction is revoked. Re-issue such retractions as signed rows.
+
+- **Security: the gate hook.** The hook never imports agentteams from the project tree or from its own hooks
+  directory:
+  - it removes the `parents[2]` fallback;
+  - it drops `sys.path[0]` before any import;
+  - it no longer has a `from __future__` import.
+
+  Re-render, or copy the template hook, so the installed copies match their pins.
+- **Security: signed decision rows.**
+  - A signed row now binds its `conditions` and `evidence` (`text_digest`).
+  - An Ed25519-signed row is verified as Ed25519 for every authorizing verdict, `HALT-RETRACTED` included, whatever
+    `enforce_decision_signing` is. The operator's signed retractions therefore clear, and no HMAC secret is needed
+    where an agent runs a render.
+  - `--sign-decision` refuses a constraint-relaxing row when the log has no `text_digest` column.
+- **Codex:**
+  - `--update --merge` never writes an agent TOML that does not parse. Every Codex write path parse-checks.
+  - With `write_policy` on, a goose-owned root `AGENTS.md` gets Codex's orchestrator-only block.
+  - Example files are symlink-checked, on Grok as well.
+- **Install hints:** dev and local builds pin `LAST_RELEASE_TAG` (now `v1.0.0-rc.11`).
+- **Docs:**
+  - `STABILITY.md` has the 1.0 framework statuses and the `write_policy` section;
+  - new: `docs_src/known-limitations.md`;
+  - new: "Upgrading to 1.0" in the migration guide.
+- **New known limitations** (see `docs_src/known-limitations.md`):
+  - a Codex merge doesn't narrow `sandbox_mode`;
+  - a project's own `.codex/hooks.json` keeps the role gate out;
+  - new teams start a legacy six-column decision log;
+  - a signed `overwrite` row can't cover a render's CLAUDE.md write;
+  - in an unconfined session, anything that can write the verify-key store can plant a key.
+
 ### fix (install hints on dev and local builds pin a tag that exists)
 
 - `capability_hints.release_tag()` turned any version into a tag name, so a dev build (`1.1.0.dev0`, as `main`
