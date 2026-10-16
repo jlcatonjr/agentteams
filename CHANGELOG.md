@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (1.0 known limitation: adopted agents can't be put under orchestrator-only on Codex)
+
+- `write_policy` interop supports claude and goose imports only, so a team with adopted agents keeps its Codex surface
+  frozen for 1.0. The shared release policy says the same. A Codex interop backport is planned for 1.0.x.
+
 ## [1.0.0-rc.12] - 2026-10-16
 
 ### release notes (rc12)
