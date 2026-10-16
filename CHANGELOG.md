@@ -39,7 +39,7 @@ injection evaluation.
   - derived content (decoded, translated, summarized) stays data under C-4, and outbound sends are gated (#211);
   - an `--interop-from` projection never widens a grant (#210);
   - the signing switch and task defaults (#208);
-  - backups live outside agent directories (#207);
+  - backed-up agent files are stored inert, so they can't be loaded as agents (#207);
   - Goose delegate narrowing (#206);
   - the sandboxed-orchestrator status channel (#203);
   - the dispatch nonce (#204).
@@ -81,6 +81,32 @@ injection evaluation.
   `Path.resolve()` before Python 3.13 and must not turn a decision into an allow). The two in-process CC-2
   entry-point tests now pass a payload on stdin, since `_entrypoint` reads it. Docs: `docs_src/cli-reference.md`;
   security guide S19 in `SKELETON.md` and the reference, developers and researchers editions.
+
+### feat (grok: xAI Grok Build framework adapter, beta)
+
+`--framework grok` (#214, #216, #218) renders Grok Build 1.0.52 custom agents.
+- **The render (#214).** Agents go to `.grok/agents/<slug>.md`.
+  - Names are byte-identical to the Claude render, so a `.grok` agent shadows its `.claude` twin.
+  - Every agent carries `injectDefaultTools: false` and `mcpInheritance: none`, so `tools:` is the exact limit.
+  - The repository-root `AGENTS.md` is co-owned: agentteams adds only its `grok_runtime` fence to files it owns, and
+    never writes a hand-written one.
+  - The pinned `_grok_tool_scoping.py` translates Claude tools to Grok and fails closed.
+- **The control plane (#214, #216).**
+  - `.grok/` is protected as a whole.
+  - `.grok/config.toml` gets a managed block that keeps the operator's own content.
+  - `.grok/sandbox.toml` denies secret-shaped workspace files and states what it cannot protect.
+  - There is an inert `.grok/confined-run.example.sh` launcher.
+  - The enforcement class is DECLARED.
+- **The hook gate is advisory (#216).** The pinned `grok-gate-shim.py` translates Grok's hook input and runs the
+  unmodified constitutional gate. It fails open.
+- **Interop (#218).** grok works as an `--interop-from`/`--interop-to` source and target, and with `--absorb`, fleet and
+  framework detection, following the Codex posture. `convert` and `bridge` refuse grok.
+- **Docs.** `docs_src/grok-privileges.md` covers tool limits, permissions, folder trust, fail-open hooks, the
+  sandbox and isolating automated runs.
+- **Known limits.**
+  - Project `[permission]` rules apply only after folder trust.
+  - Custom subagents can't be spawned in grok 1.0.52.
+  - See the fixes below for how scoped entries and denies are handled.
 
 ### fix (grok close-out: the export check and the stale-file warning catch every widening shape)
 
@@ -167,7 +193,8 @@ Found in the mathAgents M6 pilot.
   instance, such as `m6-overwrite-render-1a2fad6`, never blocked `overwrite`. In the M6 run, an older, unconsumed
   `overwrite` PASS then cleared the action instead.
 - **The fix.** A HALT now also matches when the action id appears as a whole token run in the HALT's id. Tokens
-  are split on `- _ . : /` and whitespace. It errs wide, because a false match only blocks.
+  are split on every non-alphanumeric character and on camelCase and letter/digit boundaries. It errs wide,
+  because a false match only blocks.
   - A HALT matched only by token is retracted only by a `HALT-RETRACTED` row with that HALT's exact id. So
     retracting plain `overwrite` does not clear an instance-specific HALT.
   - Prefix-matched HALTs keep their existing retraction behaviour.
