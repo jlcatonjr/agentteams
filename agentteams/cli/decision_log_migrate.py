@@ -21,6 +21,10 @@ The rules (plan ``decision-log-migration``, Revision 1):
   optional fields are not signed), and the migration asserts every row's signed payload, and so the
   hash chain, is unchanged. The result must still classify as a schema ``_read_decision_rows``
   accepts.
+* **``text_digest`` is added, never filled.** It binds a signed row's ``conditions``/``evidence``
+  (:mod:`agentteams.cli.decision_text`). Filling it on an existing row would change that row's signed
+  payload and void its signature, so the column is added empty; ``--sign-decision`` fills it on each
+  new row, and ``--verify-integrity`` counts the signed rows that still do not bind their text.
 * **No laundering.** A data row carrying more fields than the old header would have those values
   land in an added column (a ``signature`` nobody minted). The migration refuses that.
 * **An intended revocation.** A ``signature`` column turns signing on
@@ -79,11 +83,17 @@ class RevokedRow:
         line: The row's first physical line in the file (the header is line 1).
         action: The row's ``action_reviewed`` (or ``decision``) value.
         verdict: The row's verdict, upper-cased.
+        reactivates_halt: (property) the row is a ``HALT-RETRACTED``, so its HALT blocks again.
     """
 
     line: int
     action: str
     verdict: str
+
+    @property
+    def reactivates_halt(self) -> bool:
+        """True for a ``HALT-RETRACTED`` row: once it stops clearing, the HALT it retracted blocks again."""
+        return self.verdict == _HALT_RETRACTION_VERDICT
 
 
 @dataclass(frozen=True)
@@ -120,7 +130,8 @@ class MigrationPlan:
 
         Returns:
             ``log``, ``schema_kind``, ``current``, ``header_before``, ``header_after``,
-            ``added_columns``, ``padded_lines`` and ``revoked`` (each ``{"line", "action", "verdict"}``).
+            ``added_columns``, ``padded_lines`` and ``revoked`` (each ``{"line", "action", "verdict",
+            "reactivates_halt"}``).
         """
         return {
             "log": str(self.log_path),
@@ -130,7 +141,8 @@ class MigrationPlan:
             "header_before": list(self.columns),
             "header_after": list(self.columns) + list(self.added_columns),
             "added_columns": list(self.added_columns),
-            "revoked": [{"line": r.line, "action": r.action, "verdict": r.verdict} for r in self.revoked],
+            "revoked": [{"line": r.line, "action": r.action, "verdict": r.verdict,
+                         "reactivates_halt": r.reactivates_halt} for r in self.revoked],
         }
 
 
@@ -428,6 +440,9 @@ def _print_plan(plan: MigrationPlan, *, dry_run: bool) -> None:
           "exists they no longer clear:")
     for row in plan.revoked:
         print(f"      line {row.line}: {row.verdict} {row.action}")
+        if row.reactivates_halt:
+            print(f"        the HALT it retracted ({row.action}) blocks again after migration; re-issue the "
+                  "retraction as a signed row")
 
 
 def run_migrate_decision_log(args: argparse.Namespace) -> int:

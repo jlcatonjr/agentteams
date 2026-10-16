@@ -97,6 +97,9 @@ _TWIN_HEADING_RE = re.compile(r"^#{2,6}[ \t]+\S")
 _CODE_FENCE_RE = re.compile(r"^[ \t]*(?:```|~~~)")
 _PLACEHOLDER_RE = re.compile(r"\{([A-Z][A-Z0-9_]*)\}")
 _INSTRUCTIONS_RE = re.compile(r"^instructions:[ \t]*\|[^\n]*\n", re.MULTILINE)
+#: The line that opens a Codex agent TOML's body (``frameworks.codex._INSTRUCTIONS_OPEN``): the agent body is the
+#: ``'''`` string after it, so everything above it (comments, ``name``, ``description``) is the TOML header.
+_TOML_BODY_RE = re.compile(r"^developer_instructions[ \t]*=[ \t]*'''[ \t]*$", re.MULTILINE)
 #: Text whose presence in a twin's span refuses a drop: a user region or a TOML string delimiter (a span
 #: crossing one would corrupt a Codex agent) ...
 _REFUSE_IN_SPAN = ("USER-EDITABLE", "Project-Specific", "'''", '"""')

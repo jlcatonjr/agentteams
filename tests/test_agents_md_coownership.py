@@ -233,3 +233,18 @@ def test_codex_then_grok_then_codex_keeps_codex_owner(tmp_path: Path) -> None:
     assert text.startswith(own.CODEX_AGENTS_MD_MARKER) and grok_runtime_block() in text
     assert agents_md_is_codex_owned(root / "AGENTS.md")
     assert os.path.exists(root / "AGENTS.md")
+
+
+def test_guard_refuses_a_symlinked_example_file(tmp_path: Path) -> None:
+    """@security (2026-10-16): the example FILE is checked too; emit resolves links and would overwrite the target."""
+    root, agents = _project(tmp_path)
+    (root / "AGENTS.md").write_text("# Mine\n", encoding="utf-8")
+    victim = root / "src" / "settings.py"
+    victim.parent.mkdir()
+    victim.write_text("SECRET = 1\n", encoding="utf-8")
+    (root / ".grok" / "examples").mkdir()
+    (root / ".grok" / "examples" / "AGENTS.grok-block.md").symlink_to(victim)
+    _emit(agents, [("../../AGENTS.md", GrokAdapter().render_instructions_file("# T\n", {}))], overwrite=True)
+    kept, notices = GrokAdapter().guard_rendered_files([("../../AGENTS.md", "full")], agents)
+    assert victim.read_text(encoding="utf-8") == "SECRET = 1\n"
+    assert kept == [] and any("is a symlink" in n for n in notices)

@@ -473,8 +473,9 @@ class GrokAdapter(ClaudeAdapter):
                 )
                 continue
             if owner == FOREIGN:
-                examples = Path(os.path.normpath(out_dir / _EXAMPLE_BLOCK_REL)).parent
-                if symlink_on_path(examples, root) is not None:
+                # The file itself too: emit resolves links, so a planted one would redirect the write.
+                examples = symlink_on_path(Path(os.path.normpath(out_dir / _EXAMPLE_BLOCK_REL)), root)
+                if examples is not None:
                     notices.append(f"{target}: hand-written AGENTS.md left untouched; {examples} is a symlink, so "
                                    "no example block was written.")
                     continue

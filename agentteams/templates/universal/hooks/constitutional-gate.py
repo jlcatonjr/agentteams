@@ -57,9 +57,18 @@ Input:  a JSON tool-call payload on stdin (``tool_name``, ``tool_input``).
 Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when acting.
 """
 
-from __future__ import annotations
+import sys
 
-import hashlib
+# Drop this script's own directory from the import path BEFORE any other import. Run as
+# `python3 .../hooks/constitutional-gate.py`, Python puts the hooks directory first on sys.path, so a
+# planted agentteams/, json.py or subprocess.py beside the hook would be imported ahead of the real
+# one even where agentteams is installed (1.0 must-fix, @security 2026-10-16). Under -I or
+# PYTHONSAFEPATH, sys.path[0] is not the script directory and nothing is removed; nor when imported (tests).
+# `sys` is built in.
+if __name__ == "__main__" and not sys.flags.isolated and not getattr(sys.flags, "safe_path", False):
+    sys.path[:] = [p for p in sys.path[1:] if p != ""]
+
+import hashlib  # noqa: E402
 import hmac
 import json
 import os
@@ -67,7 +76,6 @@ import re
 import shlex
 import stat
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -229,7 +237,7 @@ def _mask_quoted_separators(command: str) -> str:
     return "".join(out)
 
 
-def _bash_trigger(command: str) -> str | None:
+def _bash_trigger(command: str) -> "str | None":
     """The first Mandatory Review Trigger a Bash command matches, else None — in bounded time."""
     # A trailing pipe or `&&`/`||` continues the pipeline on the next line; join it so per-line
     # evaluation still sees `curl … |` and `sh` together.
@@ -315,7 +323,7 @@ def _command_names(command: str) -> list[tuple[str, str]]:
     return found
 
 
-def _command_name_trigger(command: str) -> str | None:
+def _command_name_trigger(command: str) -> "str | None":
     """The trigger reason for a word-like network tool run as a command, else None."""
     for name, rest in _command_names(command):
         if name in _RAW_SOCKET_TOOLS or (name == "nc" and not re.search(r"(?:^|\s)-[a-zA-Z]*z", rest)):
@@ -396,7 +404,7 @@ def _inside(path: Path, roots: list[Path]) -> bool:
     return any(path == r or r in path.parents for r in roots)
 
 
-def _pinned_interpreter() -> tuple[str | None, str]:
+def _pinned_interpreter() -> "tuple[str | None, str]":
     """Return ``(interpreter, "")`` for a usable pin, else ``(None, why)``.
 
     Usable: an absolute path to an executable ``python*`` file that lies outside the project tree,
@@ -466,15 +474,11 @@ def _import_integrity(raw: bytes):
         if exc.name != "agentteams":
             raise
     why = _reexec_under_pin(raw)
-    # agentteams' own checkout: the interpreter puts this script's directory on sys.path, not the
-    # repo root, so derive the root from this file's location (parents[2]) rather than trusting cwd.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    try:
-        from agentteams import integrity
-        return integrity
-    except ModuleNotFoundError as exc:
-        if exc.name != "agentteams":
-            raise
+    # No import from the project tree. An earlier fallback put this file's repository root
+    # (parents[2]) on sys.path, so in a project whose python3 lacks agentteams, an agent that
+    # planted an `agentteams/` package there (or broke the pin to reach the fallback) chose the
+    # gate's verdict, and --verify-integrity could not see it (1.0 must-fix, @security 2026-10-16).
+    # agentteams' own checkout gets its interpreter from the pin like any other project.
     message = (
         f"the constitutional gate found no Python interpreter that can import agentteams ({why}), so "
         "this write's content was NOT checked. Fix: run `agentteams --check-wiring` in this project, or "
@@ -609,7 +613,7 @@ def _log_target(raw: str) -> Path:
     return parent / path.name
 
 
-def _input_hmac(tool_input: object) -> str | None:
+def _input_hmac(tool_input: object) -> "str | None":
     """Keyed digest of the canonical ``tool_input``, or None when no key is configured."""
     key = os.environ.get("AGENTTEAMS_GATE_LOG_KEY", "")
     if not key:
@@ -618,7 +622,7 @@ def _input_hmac(tool_input: object) -> str | None:
     return hmac.new(key.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def _bounded_id(value: object) -> str | None:
+def _bounded_id(value: object) -> "str | None":
     return value[:_LOG_ID_MAX] if isinstance(value, str) else None
 
 
@@ -646,7 +650,7 @@ def _append_chained(target: Path, record: dict) -> None:
         os.close(fd)  # closing the descriptor releases the flock
 
 
-def _log_decision(payload: object, decision: str, reason_id: str | None, checked: str,
+def _log_decision(payload: object, decision: str, reason_id: "str | None", checked: str,
                   categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
     """Append this invocation's record when ``AGENTTEAMS_GATE_LOG`` is set; never raises OSError/ValueError."""
     raw = os.environ.get("AGENTTEAMS_GATE_LOG", "")

@@ -289,7 +289,10 @@ Two properties matter for the privilege model:
   variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` are inherited by
   Claude-sandboxed commands (the launcher scrubs its environment; Claude Code does not). No
   relaxing or elevated authorization accepts an HMAC-only signature, which is what keeps an
-  inherited HMAC key a residual rather than a bypass.
+  inherited HMAC key a residual rather than a bypass. Since rc.11 a decision row whose signed `sig_scheme`
+  is `ed25519` (a `HALT-RETRACTED` included) is verified only against the team's verify key, never by
+  HMAC, so a team whose clearances are all operator-signed needs no `AGENTTEAMS_DECISION_SIGNING_KEY` in
+  any render or agent environment.
 - **`permissions.deny` binds the built-in tools.** Claude Code's `sandbox.filesystem` applies
   only to Bash and its child processes; the built-in Read, Edit and Write tools obey
   `permissions` instead (measured: the Write tool overwrote a `denyWrite` path outside
