@@ -58,6 +58,7 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 # Backup subsystem extracted to agentteams/backup.py (CH-07); re-exported so
 # cli/, build_team, drift, and tests resolve emit.<symbol> unchanged.
 from agentteams.frameworks.structural_merge import post_merge_structural
+from agentteams.frameworks.codex import write_checked
 from agentteams.learned_blocks import carry_learned_block
 from agentteams.fence_twins import persist_dropped as _persist_twins
 from agentteams.front_matter_baseline import (
@@ -718,8 +719,8 @@ def emit_all(
                         result.unchanged.append(str(target))
                     else:
                         try:
-                            _atomic_write_text(target, normalized_content)
-                            result.merged.append(str(target))
+                            if write_checked(_atomic_write_text, target, rel_path, normalized_content, result.errors):
+                                result.merged.append(str(target))
                         except OSError as exc:
                             result.errors.append(f"Failed to write {target}: {exc}")
                 else:
@@ -742,10 +743,11 @@ def emit_all(
                 ):
                     result.unchanged.append(str(target))
                 else:
-                    try:
-                        _atomic_write_text(target, migrated)
-                        result.merged.append(str(target))
-                        if merge_result.sections_orphaned:
+                    try:  # a TOML that won't parse is refused, and this run's retrofit undone (write_checked)
+                        if _ok := write_checked(_atomic_write_text, target, rel_path, migrated, result.errors,
+                                                restore=_pre_text if auto_fenced_now else None):
+                            result.merged.append(str(target))
+                        if _ok and merge_result.sections_orphaned:
                             print(
                                 f"  ⚠  {target.name}: {len(merge_result.sections_orphaned)} "
                                 f"orphaned section(s) left in place: "
@@ -771,8 +773,7 @@ def emit_all(
                     continue
             if existing == normalized_content:
                 result.unchanged.append(str(target))
-            else:
-                _atomic_write_text(target, normalized_content)
+            elif write_checked(_atomic_write_text, target, rel_path, normalized_content, result.errors):
                 result.written.append(str(target))
         except OSError as exc:
             result.errors.append(f"Failed to write {target}: {exc}")

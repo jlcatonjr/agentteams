@@ -6,6 +6,183 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.11] - 2026-10-16
+
+### release notes (rc11)
+
+The 1.0 fixes found while the four repositories prepared their release candidates on rc.10: #230 merges five
+reviewed branches. rc.11 replaces rc.10 as the soak base for the coordinated v1.0.0 (agentteams, researchteam,
+mathAgents, baseAgent). rc.11 adds no new dependencies.
+
+**Before you upgrade:** run `agentteams --verify-integrity` in each team and review its HALT report, as for rc.10.
+Then run `--migrate-decision-log` so the log gains the new `text_digest` column. Its report now names any HALT that
+blocks again because its unsigned retraction is revoked. Re-issue such retractions as signed rows.
+
+- **Security: the gate hook.** The hook never imports agentteams from the project tree or from its own hooks
+  directory:
+  - it removes the `parents[2]` fallback;
+  - it drops `sys.path[0]` before any import;
+  - it no longer has a `from __future__` import.
+
+  Re-render, or copy the template hook, so the installed copies match their pins.
+- **Security: signed decision rows.**
+  - A signed row now binds its `conditions` and `evidence` (`text_digest`).
+  - An Ed25519-signed row is verified as Ed25519 for every authorizing verdict, `HALT-RETRACTED` included, whatever
+    `enforce_decision_signing` is. The operator's signed retractions therefore clear, and no HMAC secret is needed
+    where an agent runs a render.
+  - `--sign-decision` refuses a constraint-relaxing row when the log has no `text_digest` column.
+- **Codex:**
+  - `--update --merge` never writes an agent TOML that does not parse. Every Codex write path parse-checks.
+  - With `write_policy` on, a goose-owned root `AGENTS.md` gets Codex's orchestrator-only block.
+  - Example files are symlink-checked, on Grok as well.
+- **Install hints:** dev and local builds pin `LAST_RELEASE_TAG` (now `v1.0.0-rc.11`).
+- **Docs:**
+  - `STABILITY.md` has the 1.0 framework statuses and the `write_policy` section;
+  - new: `docs_src/known-limitations.md`;
+  - new: "Upgrading to 1.0" in the migration guide.
+- **New known limitations** (see `docs_src/known-limitations.md`):
+  - a Codex merge doesn't narrow `sandbox_mode`;
+  - a project's own `.codex/hooks.json` keeps the role gate out;
+  - new teams start a legacy six-column decision log;
+  - a signed `overwrite` row can't cover a render's CLAUDE.md write;
+  - in an unconfined session, anything that can write the verify-key store can plant a key.
+
+### fix (install hints on dev and local builds pin a tag that exists)
+
+- `capability_hints.release_tag()` turned any version into a tag name, so a dev build (`1.1.0.dev0`, as `main`
+  becomes after the 1.0 cut) or a plain checkout (`0.0.0+local`) emitted install hints pinned to `v1.1.0.dev0` or
+  `v0.0.0+local`, tags that never exist.
+- A release (`X.Y.Z`) or pre-release (`X.Y.ZrcN`) still maps to its own tag. Every other version now maps to the new
+  `LAST_RELEASE_TAG` constant (currently `v1.0.0-rc.10`).
+- A release PR updates the constant together with `pyproject.toml`. `tests/test_install_source_guard.py` fails
+  when a release version and the constant disagree.
+
+### fix (security: the gate hook never imports agentteams from the project tree)
+
+- **The bug.** When no interpreter could import agentteams, the gate hook put its own repository root
+  (`parents[2]`) on `sys.path` and imported agentteams from there.
+  - This happened after any pin failure: a missing pin, a pin refused for pointing inside the project tree, or a
+    re-run that exited with a code other than 0 or 2.
+  - In a project whose `python3` lacks agentteams, an agent that planted an `agentteams/` package at the project
+    root (or broke the pin, which sits in the agent-writable hooks directory) could choose the gate's verdict.
+    `--verify-integrity` could not detect it, because the checker itself was replaced.
+  - Found by @security in the 1.0 docs review (2026-10-16).
+- **A second path, found in review.** Run as `python3 .claude/hooks/constitutional-gate.py`, Python puts the hooks
+  directory first on `sys.path`. So a planted `.claude/hooks/agentteams/`, `json.py` or `subprocess.py` was imported
+  ahead of the real module, even where agentteams is installed. The gate now drops its own directory from
+  `sys.path` before any other import. It does not do this under `-I`, where that entry isn't the script directory.
+  The gate and the Grok shim also drop `from __future__ import annotations`: it is an import that ran before the
+  scrub, so on Python 3.9 a planted `__future__.py` beside the hook ran. The few `X | None` annotations are quoted
+  instead, so the hooks stay 3.9-compatible.
+- **The fix.** The fallback is removed. With no working interpreter, the gate denies (confined) or asks
+  (cooperative) and names `agentteams --check-wiring`, as it already did when the fallback found nothing.
+  Tests plant a package and a `json.py` beside the hook, and an `agentteams/` package in the project root.
+  agentteams' own checkout gets its interpreter from the pin, like any other project.
+- **Operator action:** re-render, or copy the template hook into `.claude/hooks/` and `.github/hooks/`, so the
+  installed copies match the new pin. `--verify-integrity` flags them until then.
+
+### fix (rc.11 must-fix: an Ed25519-signed decision row is verified as Ed25519 everywhere)
+
+- **The bug.** `_assert_authorizing_row_is_authentic` took the Ed25519 path only for a governed, constraint-relaxing,
+  non-retraction row. Every other row fell through to the HMAC check, which raises "decision signing key is not
+  configured" without `AGENTTEAMS_DECISION_SIGNING_KEY`. Found by mathAgents at rc.10:
+  - an operator Ed25519-signed `HALT-RETRACTED` row could never clear a HALT, contradicting the shared policy
+    that requires Ed25519 retractions;
+  - with `enforce_decision_signing: false`, even an Ed25519 relaxing PASS was HMAC-checked;
+  - consumers had to put the symmetric secret in the environment of every render, agent sessions included.
+- **The fix.** The gate dispatches on the row's signed `sig_scheme`. A row declaring `ed25519` is verified against
+  the team's `references/authorized-verify-keys/<key_id>.pub.pem` with the existing verifier, for every
+  authorizing verdict, whether or not `enforce_decision_signing` is on. A failed check fails closed and never
+  falls back to HMAC; `text_digest` is still checked afterwards. `sig_scheme` and `key_id` are signed axes, so a
+  keyless writer cannot switch a row between the schemes.
+- **Unchanged:** HMAC rows; the elevated path (a governed relaxing row still requires Ed25519, so HMAC is refused
+  there, and still needs traceable lineage); the retraction evidence requirement; the author and roster checks.
+- **Re-pinned:** `cli/decision_log.py`.
+
+### fix (security: a signed decision row now binds its conditions and evidence text)
+
+- **The bug.** A decision row's signature, and the hash chain, covered the fixed fields and the optional signed
+  axes, but not the free-text `conditions` and `evidence` columns. A keyless writer could rewrite a signed row's
+  stated limits ("only these repos, expires 2027-01-16") while its HMAC or Ed25519 signature still verified. That
+  matters most on a Rule 15 constraint-relaxing row, whose conditions are often all that narrows it.
+- **The fix.** A new optional signed column, `text_digest`, holds `sha256:` plus the hex digest of a
+  length-prefixed encoding, `f"{len(c)}:{c}{len(e)}:{e}"` over the stripped texts (lengths in UTF-8 bytes), so
+  no split of the text between the two columns collides. A text holding `\x1f` is refused.
+  - It is the last entry of `_OPTIONAL_SIGNED_AXES` and is signed and chained only when non-empty, like the other
+    axes. Every existing signature still verifies byte-for-byte, and a `|` in it is refused.
+  - Wherever a row's signature is verified (the HMAC path and the Ed25519 relaxing path), a non-empty
+    `text_digest` that no longer matches the row's text fails exactly like a bad signature, so the row stops
+    clearing. A row without `text_digest` behaves as before.
+- **Signing: bind, then sign.** `decision_text.bind_text_digest(row)` sets the digest before any signature is
+  computed. `--sign-decision` uses it whenever the log has the column (a spec can't supply a digest; a new log is
+  created with the column), and `sign_decision_row` binds a row that has a `text_digest` key. The gate verifies
+  HMAC rows with a non-binding helper, so legacy rows are untouched.
+- **No downgrade.** Into a log without the column, `--sign-decision` refuses a constraint-relaxing row (anything
+  the effect classifier does not derive as non-relaxing), naming `--migrate-decision-log`, so deleting the column
+  from a migrated log cannot yield an unbound relaxing row. Other rows sign as before, with a one-line notice.
+- **Migration.** `--migrate-decision-log` adds the `text_digest` column, empty. It never fills existing rows:
+  that would change their signed payloads and void their signatures. Re-sign a row to bind its text.
+- **Migration report.** For each revoked `HALT-RETRACTED` row, `--migrate-decision-log` now says that the HALT
+  it retracted blocks again after migration and to re-issue the retraction as a signed row
+  (`"reactivates_halt": true` in `--json`). Found by mathAgents.
+- **Reporting.** `--verify-integrity` reports how many signed rows bind their text, how many don't, and any row
+  whose text was edited after signing. Advisory only: exit codes are unchanged.
+- **New pinned module** `agentteams/cli/decision_text.py` (`text_digest_for`, `bind_text_digest`,
+  `assert_text_bound`, `describe_text_binding`), in `ENFORCEMENT_MODULES` and the signing closure. **Re-pinned:**
+  `cli/decision_log.py`, `cli/operator_signing.py`, `integrity.py`.
+
+### fix (codex: `--update --merge` no longer writes an agent TOML that does not parse)
+
+- A Codex agent (`.codex/agents/*.toml`) whose body was one legacy `content` fence, or unfenced (the
+  pre-2026-10-04 adapter format, which the merge wraps in a `content` fence in the same run), got a whole-body
+  migration once its template gained named sections. `whole_body_migration._body_start` recognised YAML front
+  matter and Goose's `instructions: |` but not Codex's `developer_instructions = '''`, so it returned 0 and the
+  render's whole TOML header (a second `name = …` and `developer_instructions = '''`) was pasted inside the
+  string. The merge exited 0 and Codex could no longer load the agent (quality-auditor, conflict-resolution,
+  repo-liaison and tool-doc-researcher in the 2026-10-16 reproduction).
+- The TOML body opener is now `fence_twins._TOML_BODY_RE`, beside Goose's `_INSTRUCTIONS_RE`, and
+  `_body_start` honours it. The migrated file parses and keeps its Project-Specific Notes.
+- Defence in depth: `emit_all` parses every merged `.toml` with `tomllib` before writing it
+  (`frameworks.codex.toml_write_error`). One that does not parse is refused with an error naming the file, the
+  on-disk file is left as it was (a legacy retrofit made earlier in the same run is undone), and the run exits
+  non-zero. `retrofit_legacy_toml` returns nothing rather than a retrofit that does not parse.
+- `fence_twins.py` and `whole_body_migration.py` re-pinned in `references/enforcement-integrity.json`. Tests:
+  `tests/test_codex_toml_merge_guard.py` (both triggers, and the guard refusing a broken merge result).
+
+### fix (codex: a goose-owned `AGENTS.md` gets the write-policy block under `write_policy: "orchestrator-only"`)
+
+- Under the switch, the top-level Codex session reads its dispatch and proposal instructions ("Write Policy: You Are
+  the Orchestrator") from the repo-root `AGENTS.md`. When goose had written that file (goose renders without the
+  switch), Codex left it untouched, so the session never saw them. Deleting the file to let Codex write it lost
+  goose's content, and goose then refused the file.
+- With the switch on for Codex (in `write_policy_frameworks`, or unscoped) and a goose-generated `AGENTS.md`, Codex
+  now adds or refreshes only a `codex_write_policy` fence holding that section (with `--merge` or `--overwrite`),
+  the way Grok upserts `grok_runtime`. Every byte outside it stays goose's. Goose's re-render carries the fence
+  over, as it does `grok_runtime` (both are now `_agents_md_ownership.CO_OWNER_FENCE_IDS`, kept in on-disk order),
+  and a file fenced only by co-owner fences is still treated as hand-written.
+- A hand-written `AGENTS.md` (or one Grok, agents-md or a legacy fenced render owns) is still never written. Under
+  the switch a `MISSING` notice names the absent section, and the block is written to
+  `.codex/examples/AGENTS.codex-write-policy-block.md` to paste in (not when `.codex/examples` is a symlink).
+- With the switch off, nothing changes; a stale `codex_write_policy` block in a goose file is named in the notice.
+- The rule is the pinned `_agents_md_ownership.codex_write_policy_decision`, re-pinned in
+  `references/enforcement-integrity.json`. Tests: `tests/test_codex_agents_md_write_policy.py`.
+
+### docs (1.0: stability statuses, known limitations, upgrading and rolling back)
+
+- **`STABILITY.md`:**
+  - a status table for all seven frameworks. Goose, agents-md, Codex and Grok are Beta, outside SemVer. Grok's
+    hook gate is advisory;
+  - a new section on `write_policy: orchestrator-only` with the per-framework 1.0 status;
+  - corrected rc wording: rcs may add features or remove surfaces no final release has shipped;
+  - the `agentteams/schemas/` link is fixed.
+- **New `docs_src/known-limitations.md`:** what each 1.0 limitation is, who it affects, the workaround and its
+  tracking, including the Codex merge, project-hooks and legacy decision-log limitations.
+- **`docs_src/migration-guide.md`:** a new section, "Upgrading to 1.0". It covers the pre-upgrade
+  `--verify-integrity` HALT review, `--migrate-decision-log`, the interpreter pin, the release-checkout model, and
+  rolling back by turning `write_policy` off or by returning to rc.9.
+- **The stale claim that interop into Goose is unsupported** is removed from the README, `index.md`,
+  `getting-started.md` and `how-it-works.md`.
+
 ## [1.0.0-rc.10] - 2026-10-15
 
 ### release notes (rc10)

@@ -109,7 +109,7 @@ Framework-specific defaults:
 - `goose` **(beta)** -> `/path/to/your/project/.goose/recipes/`
 
 !!! note "Goose is in beta"
-    The `goose` framework supports generate, convert, and bridge (interop is not yet supported) and its adapter API is not yet covered by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md). See the [feature-support matrix](cli-reference.md#feature-support-by-framework).
+    The `goose` framework supports generate, convert, bridge and interop, and its adapter is **Beta** under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md). See the [feature-support matrix](cli-reference.md#feature-support-by-framework).
 
 Instructions file defaults:
 

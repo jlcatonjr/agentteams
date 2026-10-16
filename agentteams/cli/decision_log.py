@@ -20,6 +20,7 @@ from pathlib import Path
 
 from agentteams.cli.action_ids import action_matches, halt_names_action
 from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
+from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, assert_text_bound, bind_text_digest
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
     non_eligibility_reason,
@@ -280,8 +281,10 @@ def _decision_signature_payload(row: dict[str, str]) -> str:
 #: ``_scope_permits`` narrows a clearance by ``scope``, and the effect columns derive the Rule 15
 #: class (``effect_classifier``), so leaving them unsigned let a keyless writer clear a narrow
 #: scope (widening the grant) or rewrite a signed row's granted capabilities while its signature
-#: still verified (security review of merge-mode adopt, condition 1, 2026-10-05). Rows without
-#: these columns sign exactly as before.
+#: still verified (security review of merge-mode adopt, condition 1, 2026-10-05). ``text_digest``
+#: (last, so earlier ordering is unchanged) binds the free-text ``conditions``/``evidence``; a
+#: mismatch fails like a bad signature (:mod:`agentteams.cli.decision_text`). Rows without these
+#: columns sign exactly as before.
 _OPTIONAL_SIGNED_AXES: tuple[str, ...] = (
     _DERIVES_FROM_FIELD,
     "sig_scheme",
@@ -294,6 +297,7 @@ _OPTIONAL_SIGNED_AXES: tuple[str, ...] = (
     "effect_destructive",
     "effect_cross_repo",
     "effect_bulk",
+    TEXT_DIGEST_FIELD,
 )
 
 
@@ -336,7 +340,10 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     """Return the HMAC-SHA256 signature for a decision row.
 
     Public because minting a signed row is an operator task, and a documented helper is
-    better than a procedure the docs describe and nothing pins.
+    better than a procedure the docs describe and nothing pins. **Bind, then sign:** when ``row`` has
+    a ``text_digest`` key (a row built from a log header that carries the column), it is first set from
+    the row's ``conditions``/``evidence`` (``decision_text.bind_text_digest``, which mutates ``row``).
+    The gate verifies with :func:`_hmac_decision_row`, which never rebinds.
 
     Args:
         row: The decision row, using either supported schema.
@@ -346,8 +353,15 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
         Hex digest.
 
     Raises:
-        RuntimeError: When no signing key is available.
+        RuntimeError: When no signing key is available, or the text holds ``\x1f``.
     """
+    if TEXT_DIGEST_FIELD in row:
+        bind_text_digest(row)
+    return _hmac_decision_row(row, key=key)
+
+
+def _hmac_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
+    """The HMAC over the row exactly as it stands (no binding): the verifier side of :func:`sign_decision_row`."""
     signing_key = key if key is not None else os.getenv("AGENTTEAMS_DECISION_SIGNING_KEY", "")
     if not signing_key:
         raise RuntimeError("decision signing key is not configured")
@@ -368,7 +382,7 @@ _AGENT_PRIVILEGE_CONFIG = "agent-privilege.json"
 SIGNED_DECISION_COLUMNS: tuple[str, ...] = (
     "date", "action_reviewed", "verdict", "scope", "conditions", "conditions_verified",
     "evidence", "author", "derives_from", "effect_class", "effect_grants", "effect_targets",
-    "effect_relaxes", "effect_destructive", "effect_cross_repo", "effect_bulk",
+    "effect_relaxes", "effect_destructive", "effect_cross_repo", "effect_bulk", TEXT_DIGEST_FIELD,
     "sig_scheme", "key_id", "prev_digest", "signature",
 )
 
@@ -620,7 +634,7 @@ def _assert_ed25519_sufficient(row: dict[str, str], *, output_dir: Path, action:
         # the grant purpose tag. A decision whose payload lies in that domain could be a replayed
         # grant signature — refuse it (--sign-decision refuses to mint one, too).
         raise RuntimeError(
-            f"decision authorizing relaxing action '{action}' has a payload in the capability-"
+            f"decision authorizing action '{action}' has a payload in the capability-"
             f"grant signing domain (it begins with the grant purpose tag); refused (fail-closed)."
         )
     public_pem = _load_verify_key(output_dir, (row.get("key_id") or "").strip())
@@ -634,13 +648,14 @@ def _assert_ed25519_sufficient(row: dict[str, str], *, output_dir: Path, action:
         )
     except (ValueError, RuntimeError) as exc:
         raise RuntimeError(
-            f"decision authorizing relaxing action '{action}' could not be Ed25519-verified: "
+            f"decision authorizing action '{action}' could not be Ed25519-verified: "
             f"{exc} (fail-closed)."
         ) from exc
     if not ok:
         raise RuntimeError(
-            f"decision authorizing relaxing action '{action}' failed Ed25519 verification"
+            f"decision authorizing action '{action}' failed Ed25519 verification"
         )
+    assert_text_bound(row, action=action)
 
 
 def _assert_authorizing_row_is_authentic(
@@ -654,7 +669,8 @@ def _assert_authorizing_row_is_authentic(
     In a **governed** workspace a **relaxing** row takes the elevated path — lineage traceability
     (WS-A) + Ed25519 sufficiency (WS-B) — and does NOT fall through to the symmetric HMAC check (a
     relaxing row is ed25519-signed, not HMAC-signed). Non-relaxing rows, and any row in an
-    ungoverned/legacy workspace, keep the existing author + HMAC path unchanged.
+    ungoverned/legacy workspace, keep the existing author + HMAC path unchanged — except that a row whose
+    signed ``sig_scheme`` is ed25519 is always Ed25519-verified, never HMAC, whatever its verdict (rc.11).
     """
     if not _scope_permits(row, action):
         raise RuntimeError(
@@ -706,6 +722,13 @@ def _assert_authorizing_row_is_authentic(
         _assert_relaxing_row_is_traceable(row, output_dir=output_dir, action=action)
         _assert_ed25519_sufficient(row, output_dir=output_dir, action=action)
         return
+    if (row.get("sig_scheme") or "").strip().lower() == SIG_SCHEME_ED25519:
+        # rc.11: dispatch on the SIGNED scheme. An ed25519 row (any authorizing verdict, governed or not)
+        # verifies against the team's verify key and never falls back to HMAC (fail-closed), so no
+        # symmetric secret is needed. sig_scheme is signed, so a keyless relabel breaks either check.
+        _assert_ed25519_sufficient(row, output_dir=output_dir, action=action)
+        _assert_relaxing_row_is_traceable(row, output_dir=output_dir, action=action)
+        return
 
     if not signing_active:
         # Strict agent-privilege switch (enforce_decision_signing): when ON, an unsigned
@@ -723,7 +746,7 @@ def _assert_authorizing_row_is_authentic(
             )
         return
 
-    expected = sign_decision_row(row)
+    expected = _hmac_decision_row(row)
     actual = (row.get("signature") or "").strip().lower()
     if not actual:
         raise RuntimeError(
@@ -733,6 +756,7 @@ def _assert_authorizing_row_is_authentic(
         raise RuntimeError(
             f"decision authorizing '{action}' failed signature verification"
         )
+    assert_text_bound(row, action=action)
 
     # WS-A, final gate: an authenticated, signed authorization must still be traceable if its
     # effect is relaxing (governed workspaces only — see the helper). Placed last so the existing
