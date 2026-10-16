@@ -20,6 +20,7 @@ from pathlib import Path
 
 from agentteams.cli.action_ids import action_matches, halt_names_action
 from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
+from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, assert_text_bound
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
     non_eligibility_reason,
@@ -280,8 +281,10 @@ def _decision_signature_payload(row: dict[str, str]) -> str:
 #: ``_scope_permits`` narrows a clearance by ``scope``, and the effect columns derive the Rule 15
 #: class (``effect_classifier``), so leaving them unsigned let a keyless writer clear a narrow
 #: scope (widening the grant) or rewrite a signed row's granted capabilities while its signature
-#: still verified (security review of merge-mode adopt, condition 1, 2026-10-05). Rows without
-#: these columns sign exactly as before.
+#: still verified (security review of merge-mode adopt, condition 1, 2026-10-05). ``text_digest``
+#: (last, so earlier ordering is unchanged) binds the free-text ``conditions``/``evidence``; a
+#: mismatch fails like a bad signature (:mod:`agentteams.cli.decision_text`). Rows without these
+#: columns sign exactly as before.
 _OPTIONAL_SIGNED_AXES: tuple[str, ...] = (
     _DERIVES_FROM_FIELD,
     "sig_scheme",
@@ -294,6 +297,7 @@ _OPTIONAL_SIGNED_AXES: tuple[str, ...] = (
     "effect_destructive",
     "effect_cross_repo",
     "effect_bulk",
+    TEXT_DIGEST_FIELD,
 )
 
 
@@ -368,7 +372,7 @@ _AGENT_PRIVILEGE_CONFIG = "agent-privilege.json"
 SIGNED_DECISION_COLUMNS: tuple[str, ...] = (
     "date", "action_reviewed", "verdict", "scope", "conditions", "conditions_verified",
     "evidence", "author", "derives_from", "effect_class", "effect_grants", "effect_targets",
-    "effect_relaxes", "effect_destructive", "effect_cross_repo", "effect_bulk",
+    "effect_relaxes", "effect_destructive", "effect_cross_repo", "effect_bulk", TEXT_DIGEST_FIELD,
     "sig_scheme", "key_id", "prev_digest", "signature",
 )
 
@@ -641,6 +645,7 @@ def _assert_ed25519_sufficient(row: dict[str, str], *, output_dir: Path, action:
         raise RuntimeError(
             f"decision authorizing relaxing action '{action}' failed Ed25519 verification"
         )
+    assert_text_bound(row, action=action)
 
 
 def _assert_authorizing_row_is_authentic(
@@ -733,6 +738,7 @@ def _assert_authorizing_row_is_authentic(
         raise RuntimeError(
             f"decision authorizing '{action}' failed signature verification"
         )
+    assert_text_bound(row, action=action)
 
     # WS-A, final gate: an authenticated, signed authorization must still be traceable if its
     # effect is relaxing (governed workspaces only — see the helper). Placed last so the existing

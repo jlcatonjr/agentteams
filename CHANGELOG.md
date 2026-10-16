@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security: a signed decision row now binds its conditions and evidence text)
+
+- **The bug.** A decision row's signature, and the hash chain, covered the fixed fields and the optional signed
+  axes, but not the free-text `conditions` and `evidence` columns. A keyless writer could rewrite a signed row's
+  stated limits ("only these repos, expires 2027-01-16") while its HMAC or Ed25519 signature still verified. That
+  matters most on a Rule 15 constraint-relaxing row, whose conditions are often all that narrows it.
+- **The fix.** A new optional signed column, `text_digest`, holds `sha256:` plus the hex digest of
+  `conditions.strip() + "\x1f" + evidence.strip()`.
+  - It is the last entry of `_OPTIONAL_SIGNED_AXES` and is signed and chained only when non-empty, like the other
+    axes. Every existing signature still verifies byte-for-byte, and a `|` in it is refused.
+  - Wherever a row's signature is verified (the HMAC path and the Ed25519 relaxing path), a non-empty
+    `text_digest` that no longer matches the row's text fails exactly like a bad signature, so the row stops
+    clearing. A row without `text_digest` behaves as before.
+- **Signing.** `--sign-decision` computes `text_digest` itself (a spec can't supply one) whenever the log has the
+  column; a new log is created with it. Into a log without the column it signs as before and prints a one-line
+  notice that the conditions are not bound, naming `--migrate-decision-log`.
+- **Migration.** `--migrate-decision-log` adds the `text_digest` column, empty. It never fills existing rows:
+  that would change their signed payloads and void their signatures. Re-sign a row to bind its text.
+- **Reporting.** `--verify-integrity` reports how many signed rows bind their text, how many don't, and any row
+  whose text was edited after signing. Advisory only: exit codes are unchanged.
+- **New pinned module** `agentteams/cli/decision_text.py` (`text_digest_for`, `assert_text_bound`,
+  `describe_text_binding`), in `ENFORCEMENT_MODULES` and the signing closure. **Re-pinned:**
+  `cli/decision_log.py`, `cli/operator_signing.py`, `integrity.py`.
+
 ## [1.0.0-rc.10] - 2026-10-15
 
 ### release notes (rc10)

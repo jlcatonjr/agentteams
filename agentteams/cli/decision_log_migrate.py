@@ -21,6 +21,10 @@ The rules (plan ``decision-log-migration``, Revision 1):
   optional fields are not signed), and the migration asserts every row's signed payload, and so the
   hash chain, is unchanged. The result must still classify as a schema ``_read_decision_rows``
   accepts.
+* **``text_digest`` is added, never filled.** It binds a signed row's ``conditions``/``evidence``
+  (:mod:`agentteams.cli.decision_text`). Filling it on an existing row would change that row's signed
+  payload and void its signature, so the column is added empty; ``--sign-decision`` fills it on each
+  new row, and ``--verify-integrity`` counts the signed rows that still do not bind their text.
 * **No laundering.** A data row carrying more fields than the old header would have those values
   land in an added column (a ``signature`` nobody minted). The migration refuses that.
 * **An intended revocation.** A ``signature`` column turns signing on

@@ -50,6 +50,7 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/operator_signing.py",
     "agentteams/cli/signed_ledger.py",
     "agentteams/cli/decision_log.py",
+    "agentteams/cli/decision_text.py",  # computes the signed text_digest
     "agentteams/cli/grants.py",
     "agentteams/cli/effect_classifier.py",
     "agentteams/cli/governance_targets.py",
@@ -476,6 +477,17 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     except RuntimeError as exc:
         print(f"Error: cannot extend the security-decisions log: {exc}", file=sys.stderr)
         return 1
+    # text_digest binds conditions/evidence into the signature. Computed here, never taken from the
+    # spec; filled when the log will persist it (a new log is created with the column).
+    from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, text_digest_for
+
+    row.pop(TEXT_DIGEST_FIELD, None)
+    if read is None or TEXT_DIGEST_FIELD in read[1]:
+        row[TEXT_DIGEST_FIELD] = text_digest_for(row)
+    else:
+        print(f"Notice: the log has no {TEXT_DIGEST_FIELD} column, so this row's conditions and evidence "
+              "are not bound by its signature; add the column with "
+              "`agentteams --migrate-decision-log --output <team dir> --yes`.", file=sys.stderr)
 
     # Classify the row up front. derive_effect_class / requires_operator_signature raise
     # EffectClassifierError on a dangerous self-declared effect_class divergence — catch it here so

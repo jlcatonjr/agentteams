@@ -113,7 +113,8 @@ Mints and appends one Ed25519-signed constraint-relaxing decision row under the 
 `output_dir`. Returns 0, or 1 on any error (fail-closed). The steps run in this order (#9/#10):
 
 1. team-dir refusal;
-2. spec load and shape check, then the display-spoofing refusal;
+2. spec load and shape check, then the display-spoofing refusal; the chain link (`prev_digest`) and, when the
+   log has the column, `text_digest` (binding `conditions` and `evidence`) are computed, never taken from the spec;
 3. eligibility and effect classification, then the PR-E grant-purpose refusal;
 4. preflight: env, integrity, install location, key-file existence. With `allow_checkout`, an overridden
    location refusal is recorded in the signed `conditions_verified`;
@@ -191,6 +192,31 @@ it was planned, then replaces it atomically with the file's own mode. Returns th
 The CLI runner (re-exported by `commands.py` as `_run_migrate_decision_log`, dispatched by `app.py` after
 `--self` resolves the team dir). `resolve_team_dir(args)` resolves the agents dir as the generate pipeline does.
 Returns 0 for a migration, a no-op or a dry run, and 1 for a refusal or a real run without `--yes`.
+
+## Decision text binding
+
+> *Source: `agentteams/cli/decision_text.py`*
+
+Binds a signed decision row's free-text `conditions` and `evidence` into its signature. `text_digest` is the last
+entry of `decision_log._OPTIONAL_SIGNED_AXES`, so it is signed and chained only when non-empty and every older
+signature still verifies. The module is integrity-pinned and in the signing closure.
+
+### `text_digest_for(row) -> str`
+
+`sha256:` plus the hex digest of the UTF-8 of `conditions.strip() + "\x1f" + evidence.strip()`. A legacy row
+has no `evidence`; it reads as empty. `--sign-decision` uses it to fill the column; verification uses it to check.
+
+### `assert_text_bound(row, *, action)`
+
+Raises `RuntimeError` ("failed signature verification") when the row's non-empty `text_digest` no longer matches
+its text. `decision_log` calls it right after a row's HMAC or Ed25519 signature verifies, so an edited row stops
+clearing. A row without `text_digest` passes. `text_is_bound(row)` and `text_digest_mismatch(row)` are the
+underlying predicates.
+
+### `describe_text_binding(team_dir) -> list[str]`
+
+The `--verify-integrity` report lines: signed rows that bind their text, those that don't, a missing column, and
+any mismatched row. Empty when the log is absent, unreadable or has no signed row. Advisory only.
 
 ## Related pages
 
