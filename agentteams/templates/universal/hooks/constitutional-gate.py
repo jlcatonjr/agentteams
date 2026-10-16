@@ -668,6 +668,7 @@ def _log_decision(payload: object, decision: str, reason_id: str | None, checked
             "categories": list(categories),
             "lines": list(lines),
             "fail_closed": _FAIL_CLOSED_ON_ERROR,
+            "reexec": os.environ.get(_REEXEC_ENV) == "1",
             "gate_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "input_hmac": _input_hmac(fields.get("tool_input")),
         }
@@ -696,8 +697,11 @@ def _entrypoint() -> int:
     ``deny`` decision, so a gate crash cannot become a silent allow in a workspace that
     explicitly opted into a boundary.
 
-    Every path records exactly one decision-log line, after stdout is written (see the module
-    docstring; the log is opt-in and never changes the decision).
+    Every path records exactly one decision-log line per process, after stdout is written (see the
+    module docstring; the log is opt-in and never changes the decision). A re-run under the pinned
+    interpreter logs from the child (``reexec: true``) and the parent writes nothing, except when the
+    child crashes under fail-open: the child's ``crash-open`` record (never emitted) is then followed
+    by the parent's own record of the decision it did emit.
 
     Returns:
         0 when no decision was reached. A decision (and a fail-closed crash) is written to stdout

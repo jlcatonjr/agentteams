@@ -391,6 +391,7 @@ def test_a_reexec_writes_exactly_one_decision_log_record(env: dict) -> None:
     assert code == 0 and decision is not None and decision["permissionDecision"] == "deny"
     records = [_json.loads(line) for line in log.read_text().splitlines()]
     assert len(records) == 1 and records[0]["decision"] == "deny" and records[0]["reason_id"] == "scan-high"
+    assert records[0]["reexec"] is True  # written by the re-run child, never by the parent
 
 
 def test_no_interpreter_is_logged_as_its_own_reason(env: dict) -> None:
@@ -402,3 +403,20 @@ def test_no_interpreter_is_logged_as_its_own_reason(env: dict) -> None:
     assert decision is not None and decision["permissionDecision"] == "ask"
     (record,) = [_json.loads(line) for line in log.read_text().splitlines()]
     assert record["reason_id"] == "no-interpreter" and record["decision"] == "ask"
+
+
+def test_after_a_failed_child_the_parent_record_is_marked_not_reexec(env: dict) -> None:
+    """@security: when the re-run child fails (exit other than 0/2), the parent logs the decision it
+    actually emitted with reexec false; a child's own records carry reexec true (previous test), so a
+    child crash-open record and the parent's record are always distinguishable."""
+    import json as _json
+
+    crashing = _wrapper(env["tmp"] / "pinbin3" / "python3",
+                        f'exec "{sys.executable}" -c "import json,sys,os; sys.exit(1)" "$@"\n')
+    _pin(env, str(crashing))
+    log = env["tmp"] / "gate-log3" / "gate.jsonl"
+    log.parent.mkdir()
+    _run(env, CREDENTIAL, AGENTTEAMS_GATE_LOG=str(log))
+    records = [_json.loads(line) for line in log.read_text().splitlines()]
+    (record,) = records  # this stub child writes no record; only the parent's remains
+    assert record["reexec"] is False and record["reason_id"] == "no-interpreter"

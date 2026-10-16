@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   let through. With `AGENTTEAMS_GATE_LOG` set to an absolute path outside the project and any git work tree, the
   hook now appends one JSON line per invocation: `tool_use_id`, tool name, decision (`pass`, `ask`, `deny`,
   `crash-open`, `crash-deny`), a fixed `reason_id`, scanner categories and line numbers, `checked`
-  (`bash-triggers`, `scan`, `git-config` or `none`), `fail_closed`, the installed hook's sha256, and a `prev_sha`
+  (`bash-triggers`, `scan`, `git-config` or `none`), `fail_closed`, `reexec` (written by a re-run under the
+  interpreter pin), the installed hook's sha256, and a `prev_sha`
   chain written under `flock`. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed `input_hmac` of the canonical `tool_input`.
 - The log never holds written content, the free-text reason or exception text: the scanner's message embeds the
   matched text, so only categories and line numbers are kept. Relative, in-project, in-work-tree, symlinked and
