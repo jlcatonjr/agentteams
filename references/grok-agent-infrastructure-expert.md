@@ -58,27 +58,29 @@ Confidence marks:
 - `.claude/agents/*.md` is also loaded (S: `xai-grok-agent/src/discovery.rs`). In the spike (S1), all 35 Claude
   agents loaded as `project` agents, even in an untrusted folder and with `compat.claude.agents=false`. **No
   compatibility switch turns this off.**
-- When a name exists in both, `.grok/agents` wins and there is no duplicate (`inspect`: 35 agents, not 36; spike
-  S2). The docs say agents shadow by name (`16-subagents.md:69`), so a Grok twin must keep the Claude twin's `name:`
-  exactly. The runtime check of *which body runs* was inconclusive (round 2, R2-c) and is repeated at the
-  validation gate.
+- When a name exists in both, `inspect` lists one agent, not two (35 agents, not 36; spike S2), and the docs say
+  agents shadow by name (`16-subagents.md:69`). **Which body runs is not confirmed** (G15): R2-c was inconclusive,
+  and the check cannot be made headless because custom agents are not resolved by name (G8). A Grok twin keeps the
+  Claude twin's `name:` exactly, and both teams are regenerated together.
 - Front matter is YAML with camelCase keys. `name` and `description` are required. Optional keys (S,
   `xai-grok-agent/src/config.rs`): `tools`, `disallowedTools`, `model`, `permissionMode`, `effort`, `maxTurns`,
   `isolation`, `background`, `mcpServers`, `mcpInheritance`, `hooks`, `memory`, `skills`, `discoverSkills`,
   `inheritSkills`, `agentsMd`, `promptMode`, `injectDefaultTools` and `capabilityMode`.
-- **Agents are not gated by folder trust.** An untrusted repo's agents are listed and can be spawned (L, spike S4),
-  while its instruction files do not load. Every agent body must therefore carry its own invariants.
+- **Agents are not gated by folder trust.** An untrusted repo's agents are listed (L, spike S4) while its instruction
+  files do not load. (S4's "can be spawned" predates G8: on the pinned release a custom agent cannot be spawned as a
+  subagent at all; it runs only as the session agent, by path.) Every agent body must carry its own invariants.
 - A project agent with the same name as a built-in type (`general-purpose`, `explore`, `plan`) shadows that built-in.
 
 ### Tool vocabulary (D, L)
 
 - Permission rules recognize `Bash`, `Read`, `Edit` (also `Write`), `Grep` (also `Glob`), `MCPTool`, `WebFetch` and
   `WebSearch`. Unknown names are skipped with a warning (`22-permissions-and-safety.md`, "Tool Names").
-- An agent's `tools:` takes Claude names such as `Read`. `Agent(...)` in a parent's `tools` restricts which agent
-  types `spawn_subagent` may launch (`16-subagents.md:71`).
+- An agent's `tools:` takes bare Claude names such as `Read`. The docs say `Agent(...)` in a parent's `tools`
+  restricts which agent types `spawn_subagent` may launch (`16-subagents.md:71`), but scoped entries are not honoured
+  (G11), so the adapter drops `Agent(type)` and emits only bare `Agent`.
 - `TodoWrite` and Claude's `Task` are not in the documented vocabulary.
-- Unverified: whether a scoped entry such as `Bash(python -m agentteams.research:*)` in agent `tools:` is honoured
-  as a scope, read as bare `Bash`, or dropped.
+- A scoped entry such as `Bash(python -m agentteams.research:*)` is **not honoured**: it, and `MCPTool`, make grok
+  discard the list and grant a shell plus an edit tool; `disallowedTools` is ignored (G11, G18, G19).
 
 ### Delegation (D, L)
 
@@ -245,4 +247,4 @@ Confidence marks:
 4. **Phase 3 (done on `feat/grok-phase3`):** detection, interop and absorb, fleet, agent-doc sync, learned blocks,
    the provider-docs register. Convert and the bridge target stay refused (codex posture).
 5. **On every Grok Build upgrade:** diff `crates/codegen/xai-grok-shell/changelogs/` and `~/.grok/docs/user-guide/`,
-   re-check G1–G17, then bump `FormatSpec.pinned_version` and the version at the top of this file together.
+   re-check G1–G19, then bump `FormatSpec.pinned_version` and the version at the top of this file together.

@@ -10,9 +10,12 @@ Grok Build facts this adapter relies on (the release pinned in ``FORMAT_SPECS["g
 and tmp/by-week/2026-W42/grok-integration.plan.md §9 for evidence):
 
 * Custom agents load from ``.grok/agents/*.md``; ``.claude/agents/*.md`` load too, always (no compatibility
-  switch turns them off, and folder trust does not gate them). A ``.grok/agents`` file shadows the Claude agent
-  with the same ``name:`` (spike S1/S2), so every ``name:`` here is byte-identical to the Claude render (D4).
-* ``tools:`` takes Claude tool names (``Read``, ``Bash(...)``…; ``Agent`` for spawning). An EMPTY list means
+  switch turns them off, and folder trust does not gate them). ``inspect`` lists one agent per ``name:`` (spike S2),
+  but which body runs for a shared name is not confirmed at runtime (G15), so every ``name:`` here is byte-identical
+  to the Claude render (D4) and both teams are regenerated together. Custom agents run by definition path
+  (``grok --agent .grok/agents/<slug>.md``) and cannot be spawned as subagents on the pinned release (G8).
+* ``tools:`` takes bare Claude tool names (``Read``, ``Bash``…; ``Agent`` for spawning); scopes and ``MCPTool``
+  are never emitted, and denies are applied by absence (G11, G18, G19; ``_grok_tool_scoping``). An EMPTY list means
   "inherit every tool", and ``injectDefaultTools`` defaults to true, layering session tools on top of the list,
   and ``mcpInheritance`` defaults to ``all`` (source-only: ``xai-grok-agent/src/config.rs``). Every agent
   therefore carries ``injectDefaultTools: false`` and ``mcpInheritance: none`` so ``tools:`` is the exact limit
@@ -64,7 +67,7 @@ from ._agents_md_ownership import (
     upsert_fenced_block,
 )
 from ._grok_tool_scoping import EXACT_TOOLSET_LINES, effective_grok_tools, split_tool_list, translate_grok_tools
-from agentteams.capability_map import _RETRIEVAL_CLI_SCOPE
+from agentteams.capability_map import _RETRIEVAL_CLI_SCOPE, grok_widening_entries
 from .format_spec import COPILOT_INSTRUCTIONS_FILENAME, FORMAT_SPECS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
@@ -187,8 +190,10 @@ def _translate_agent_tools(manifest: dict[str, Any], slug: str, allow: str, deny
         changes = changes + deny_changes
     if not effective_grok_tools(tools, disallowed):
         raise ValueError(
-            f"{slug}: disallowedTools ({disallowed}) leaves no built-in tool in ({tools}) for grok: an empty effective "
-            "toolset (an empty tools: list inherits every tool), so the render is refused"
+            f"{slug}: no built-in tool that grants anything is left in ({tools})"
+            + (f" after disallowedTools ({disallowed})" if disallowed else "")
+            + " for grok (Write, WebFetch, WebSearch and MCP entries grant nothing there): an empty effective toolset "
+            "(an empty tools: list inherits every tool), so the render is refused"
         )
     if disallowed:
         denied = set(split_tool_list(disallowed))
@@ -562,9 +567,11 @@ def front_matter_name(text: str) -> str | None:
 
 
 def stale_scope_notices(agents_dir: Path) -> list[str]:
-    """Name existing grok agent files whose ``tools:`` / ``disallowedTools:`` line still holds a scoped entry.
+    """Name existing grok agent files whose ``tools:`` / ``disallowedTools:`` lists grok widens.
 
-    Grok ignores the scope and widens the agent (GROK-FU-R8-SCOPE). This run's render drops a scoped allow entry and
+    The shapes are those :func:`agentteams.capability_map.grok_widening_entries` reports: a scoped entry or ``MCPTool``
+    (grok discards the list), a tool both allowed and denied (grok ignores the deny), a duplicated key or an unbalanced
+    parenthesis (GROK-FU-R8-SCOPE). This run's render drops a scoped allow entry and
     widens a scoped deny, but ``--update --merge`` keeps an edited file's front matter and never auto-applies a deny
     change (not a strict narrowing), so a deployed team can keep the widening line after the update.
 
@@ -588,13 +595,12 @@ def stale_scope_notices(agents_dir: Path) -> list[str]:
         except (OSError, UnicodeDecodeError) as exc:
             found.append(f"[GROK-SCOPE] {path}: could not be read to check for scoped tool entries ({exc}).")
             continue
-        line = next((ln.strip() for ln in (yaml_text or "").splitlines()
-                     if ln.strip().startswith(("tools:", "disallowedTools:")) and "(" in ln), None)
-        if line:
+        problems = grok_widening_entries(yaml_text or "")
+        if problems:
             found.append(
-                f"[GROK-SCOPE] {path}: existing grok agent still has a scoped entry ({line}); grok ignores the scope "
-                "and widens the agent. This run's render removes it, but --update --merge keeps an edited file's line "
-                "and never auto-applies a deny change: check the file after this run, or run "
+                f"[GROK-SCOPE] {path}: existing grok agent has {'; '.join(problems)}, so grok offers it more than its "
+                "list. This run's render removes these, but --update --merge keeps an edited file's line and never "
+                "auto-applies a deny change: check the file after this run, or run "
                 "--reconcile-front-matter --reconcile-apply."
             )
     return found
