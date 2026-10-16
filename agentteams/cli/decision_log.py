@@ -20,13 +20,14 @@ from pathlib import Path
 
 from agentteams.cli.action_ids import action_matches, halt_names_action
 from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
-from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, assert_text_bound, bind_text_digest
 from agentteams.cli.decision_lineage import (  # noqa: F401  (re-exported: tests and callers)
+    _DERIVES_FROM_FIELD,
     _build_lineage_map,
     _row_action_id,
     _row_lineage,
     _transitive_ancestors,
 )
+from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, assert_text_bound, bind_text_digest
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
     non_eligibility_reason,
@@ -203,7 +204,7 @@ _DECISION_SIGNATURE_FIELDS: tuple[str, ...] = (
 #: payload — the ~100 legacy signatures still verify — while a row that carries lineage binds it
 #: into both the HMAC and the hash chain. Without this, a keyless writer could add/clear/rewrite a
 #: ``derives_from`` cell without breaking any signature, defeating the whole mechanism.
-_DERIVES_FROM_FIELD = "derives_from"
+# (_DERIVES_FROM_FIELD is defined in decision_lineage and imported above.)
 
 #: Author values that may issue an AUTHORIZING decision, absent a project roster. The security
 #: sentinel is the only agent the constitution empowers to clear an action (Constitutional Rule

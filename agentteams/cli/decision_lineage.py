@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import re
 
-#: The optional column naming the action id(s) a decision derives from. Mirrors
-#: ``decision_log._DERIVES_FROM_FIELD`` (kept equal by a test).
+#: The optional column naming the action id(s) a decision derives from. The single definition:
+#: ``decision_log`` imports it (its signed-axis comment explains why the column is signed).
 _DERIVES_FROM_FIELD = "derives_from"
 
 

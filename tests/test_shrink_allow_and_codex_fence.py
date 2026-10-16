@@ -174,16 +174,27 @@ def test_a_fenced_body_keeps_its_fences_and_gains_notes_once():
     assert _fence_native_body(out) == out                       # idempotent: a body with Notes is unchanged
 
 
-def test_every_native_codex_agent_has_a_notes_region():
-    """The orchestrator and the governance agents render from section-fenced templates: they need it most."""
-    for slug in ("git-operations", "orchestrator", "security", "navigator", "conflict-auditor"):
-        try:
-            text = CodexAdapter().render_agent_file(_CANON.replace("git-operations", slug), slug, {})
-        except Exception:  # noqa: BLE001 - a slug the fixture canon can't render is not this test's concern
-            continue
-        di = _instructions(text)
-        assert di.count("## Project-Specific Notes") == 1, slug
-        assert di.index("## Project-Specific Notes") < di.index("AGENTTEAMS:BEGIN codex_translation"), slug
+def test_every_native_codex_agent_has_a_notes_region(tmp_path):
+    """A full render: the orchestrator and governance agents come from section-fenced templates (rc.12)."""
+    import build_team
+
+    brief = Path(__file__).resolve().parents[1] / "examples" / "software-project" / "brief.json"
+    out = tmp_path / ".codex" / "agents"
+    (out / "references").mkdir(parents=True)
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # fresh intel: the gate refuses stale
+    (out / "references" / "security-vulnerability-watch.json").write_text(
+        f'{{"generated_at":"{now}","sources":[],"vulnerabilities":[],"osv_packages":[]}}', encoding="utf-8")
+    assert build_team.main(["--description", str(brief), "--framework", "codex", "--output", str(out),
+                            "--yes", "--no-scan", "--security-offline"]) == 0
+    tomls = sorted(out.glob("*.toml"))
+    assert len(tomls) >= 20, [t.name for t in tomls]
+    for path in tomls:
+        di = tomllib.loads(path.read_text(encoding="utf-8"))["developer_instructions"]
+        assert di.count("## Project-Specific Notes") == 1, path.name
+        assert di.index("## Project-Specific Notes") < di.index("AGENTTEAMS:BEGIN codex_translation"), path.name
+    assert {"orchestrator.toml", "security.toml", "navigator.toml"} <= {t.name for t in tomls}
 
 
 def test_retrofit_wraps_only_the_body():
