@@ -310,7 +310,45 @@ def capabilities_from_tokens(tokens: list[str] | None, framework: str) -> dict[s
     return {"tool_scopes": list(tokens)}
 
 
-from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS  # noqa: E402
+from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS, split_tool_list  # noqa: E402
+
+
+def grok_widening_entries(yaml_text: str) -> list[str]:
+    """Return the ``tools:`` / ``disallowedTools:`` problems that make grok offer MORE than the agent's list.
+
+    Each was shown live on the pinned release (expert reference G11, G18, G19): a scoped entry (``Name(...)``) and an
+    ``MCPTool`` entry make grok discard the list and grant a shell plus an edit tool, and ``disallowedTools`` is ignored,
+    so a tool that is both allowed and denied is still granted. Teams rendered before the fix can carry any of these.
+
+    Args:
+        yaml_text: An agent file's YAML front matter (the text between the ``---`` lines).
+
+    Returns:
+        One short description per problem found; empty when the lists are safe for grok.
+
+    Raises:
+        Nothing.
+    """
+    values: dict[str, str] = {}
+    for line in yaml_text.splitlines():
+        key, sep, value = line.strip().partition(":")
+        if sep and key in ("tools", "disallowedTools") and key not in values:
+            values[key] = value.strip()
+    found: list[str] = []
+    for key, value in values.items():
+        if "(" in value:
+            found.append(f"a scoped entry in {key}: ({value})")
+    try:
+        allowed = split_tool_list(values.get("tools", "")) if values.get("tools") else []
+        denied = set(split_tool_list(values["disallowedTools"])) if values.get("disallowedTools") else set()
+    except ValueError:  # unbalanced parentheses: already reported as a scoped entry above
+        return found
+    if "MCPTool" in allowed:
+        found.append("MCPTool in tools (grok discards the list)")
+    both = [t for t in allowed if t in denied]
+    if both:
+        found.append(f"{', '.join(both)} both allowed and denied (grok ignores disallowedTools)")
+    return found
 
 _GROK_EXACT_KEY_RE = re.compile(rf"^({'|'.join(GROK_EXACT_TOOLSET_KEYS)})\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
 
@@ -322,16 +360,15 @@ def grok_exact_toolset(content: str) -> bool:
     on) and ``mcpInheritance: none`` (default all: every parent MCP server) are set. Parsed case-insensitively, as
     Grok does; a duplicate key, a missing key or any other value means NOT exact (@security Phase 3 condition 3).
 
-    A ``tools:`` or ``disallowedTools:`` line holding a scoped entry (``Bash(cmd:*)``) is also NOT exact: grok 1.0.52
-    ignores the scope (an allow scope widens to a full shell plus an edit tool; a deny scope is not a reliable limit;
-    GROK-FU-R8-SCOPE). Teams rendered before the fix can carry one, and must export as FULL.
+    A list that grok widens is also NOT exact (:func:`grok_widening_entries`: a scoped entry, ``MCPTool``, or a tool both
+    allowed and denied; GROK-FU-R8-SCOPE). Teams rendered before the fix can carry one, and must export as FULL.
 
     Args:
         content: The agent file text.
 
     Returns:
-        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, and unscoped
-        ``tools:`` / ``disallowedTools:`` lines.
+        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, and lists grok
+        does not widen.
 
     Raises:
         Nothing.
@@ -339,7 +376,7 @@ def grok_exact_toolset(content: str) -> bool:
     yaml_text, _ = parse_yaml_front_matter(content)
     if yaml_text is None:
         return False
-    if any(line.lstrip().startswith(("tools:", "disallowedTools:")) and "(" in line for line in yaml_text.splitlines()):
+    if grok_widening_entries(yaml_text):
         return False
     seen: dict[str, list[str]] = {}
     for m in _GROK_EXACT_KEY_RE.finditer(yaml_text):

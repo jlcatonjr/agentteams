@@ -269,3 +269,38 @@ def test_an_mcptool_deny_is_dropped_without_error() -> None:
     from agentteams.frameworks.grok import _translate_agent_tools
     tools, disallowed = _translate_agent_tools({}, "x", "Read, Grep", "MCPTool")
     assert tools == "Read, Grep" and not disallowed
+
+
+# PR #227 close-out (Rule 8 audit finding 4): every widening shape is caught, not only a scope ---------------------
+
+@pytest.mark.parametrize("front, expected", [
+    ("tools: Read, MCPTool", "MCPTool in tools"),
+    ("tools: Read, Bash\ndisallowedTools: Bash", "Bash both allowed and denied"),
+    ("tools: Read, Bash(x:*)", "a scoped entry in tools"),
+    ("tools: Read\ndisallowedTools: Bash(rm:*)", "a scoped entry in disallowedTools"),
+])
+def test_every_widening_shape_is_detected(front: str, expected: str) -> None:
+    found = cm.grok_widening_entries(front)
+    assert any(expected in f for f in found), found
+    exact = "injectDefaultTools: false\nmcpInheritance: none\n"
+    assert not cm.grok_exact_toolset(f"---\nname: x\n{front}\n{exact}---\nbody\n")
+
+
+def test_a_safe_list_is_not_flagged() -> None:
+    assert cm.grok_widening_entries("tools: Read, Grep\ndisallowedTools: Bash") == []
+
+
+@pytest.mark.parametrize("front", ["tools: Read, MCPTool\n", "tools: Read, Bash\ndisallowedTools: Bash\n"])
+def test_a_deployed_unscoped_widening_is_named(tmp_path, front: str) -> None:
+    agents = tmp_path / ".grok" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "old.md").write_text(f"---\nname: Old\n{front}---\n\nbody\n", encoding="utf-8")
+    notices = stale_scope_notices(agents)
+    assert len(notices) == 1 and "old.md" in notices[0] and "more than its list" in notices[0]
+
+
+def test_a_no_grant_list_without_a_deny_says_why() -> None:
+    from agentteams.frameworks.grok import _translate_agent_tools
+    with pytest.raises(ValueError, match="grant nothing there") as exc:
+        _translate_agent_tools({}, "x", "Write, WebFetch", None)
+    assert "disallowedTools (None)" not in str(exc.value)
