@@ -193,3 +193,19 @@ def test_an_unsigned_retraction_alone_leaves_the_halt_open_and_says_why(tmp_path
                       _row("overwrite-replay-record", "HALT-RETRACTED", evidence="written before signing")])
     with pytest.raises(RuntimeError, match=r"has never been retracted.*row 2 not accepted"):
         dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_tampered_ed25519_retraction_leaves_its_halt_open(tmp_path: Path) -> None:
+    private_pem = _team(tmp_path, governed=False)
+    signed = _ed25519(_row("restore-backup", "HALT-RETRACTED", evidence="backup verified"), private_pem)
+    _write(tmp_path, [_row("restore-backup", "HALT"), {**signed, "action_reviewed": "restore-backup-x"}])
+    with pytest.raises(RuntimeError, match="has never been retracted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="restore-backup")
+
+
+def test_an_exact_id_retraction_that_fails_authentication_leaves_its_halt_open(tmp_path: Path) -> None:
+    private_pem = _team(tmp_path, governed=False)
+    signed = _ed25519(_row("m6-overwrite-render", "HALT-RETRACTED", evidence="re-rendered"), private_pem)
+    _write(tmp_path, [_row("m6-overwrite-render", "HALT"), {**signed, "conditions_verified": "pending"}])
+    with pytest.raises(RuntimeError, match=r"has never been retracted.*row 2 not accepted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
