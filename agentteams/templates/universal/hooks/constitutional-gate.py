@@ -59,7 +59,18 @@ Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when actin
 
 from __future__ import annotations
 
-import hashlib
+import sys
+
+# Drop this script's own directory from the import path BEFORE any other import. Run as
+# `python3 .../hooks/constitutional-gate.py`, Python puts the hooks directory first on sys.path, so a
+# planted agentteams/, json.py or subprocess.py beside the hook would be imported ahead of the real
+# one even where agentteams is installed (1.0 must-fix, @security 2026-10-16). Under -I or
+# PYTHONSAFEPATH, sys.path[0] is not the script directory and nothing is removed; nor when imported (tests).
+# `sys` is built in.
+if __name__ == "__main__" and not sys.flags.isolated and not getattr(sys.flags, "safe_path", False):
+    sys.path[:] = [p for p in sys.path[1:] if p != ""]
+
+import hashlib  # noqa: E402
 import hmac
 import json
 import os
@@ -67,7 +78,6 @@ import re
 import shlex
 import stat
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
