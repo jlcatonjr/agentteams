@@ -126,6 +126,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The rule is the pinned `_agents_md_ownership.codex_write_policy_decision`, re-pinned in
   `references/enforcement-integrity.json`. Tests: `tests/test_codex_agents_md_write_policy.py`.
 
+### docs (1.0: stability statuses, known limitations, upgrading and rolling back)
+
+- **`STABILITY.md`:**
+  - a status table for all seven frameworks. Goose, agents-md, Codex and Grok are Beta, outside SemVer. Grok's
+    hook gate is advisory;
+  - a new section on `write_policy: orchestrator-only` with the per-framework 1.0 status;
+  - corrected rc wording: rcs may add features or remove surfaces no final release has shipped;
+  - the `agentteams/schemas/` link is fixed.
+- **New `docs_src/known-limitations.md`:** what each 1.0 limitation is, who it affects, the workaround and its
+  tracking, including the Codex merge, project-hooks and legacy decision-log limitations.
+- **`docs_src/migration-guide.md`:** a new section, "Upgrading to 1.0". It covers the pre-upgrade
+  `--verify-integrity` HALT review, `--migrate-decision-log`, the interpreter pin, the release-checkout model, and
+  rolling back by turning `write_policy` off or by returning to rc.9.
+- **The stale claim that interop into Goose is unsupported** is removed from the README, `index.md`,
+  `getting-started.md` and `how-it-works.md`.
+
 ## [1.0.0-rc.10] - 2026-10-15
 
 ### release notes (rc10)

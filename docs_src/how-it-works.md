@@ -174,9 +174,9 @@ The same template library targets five frameworks via adapters in `agentteams/fr
 | `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
 | `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) + repo-root `AGENTS.md`/`.goosehints` | `goose run --recipe` |
-| `agents-md` | Cross-tool `AGENTS.md` standard (plain `.md`) + `.agents/` | Any AGENTS.md-aware tool |
+| `agents-md` **(beta)** | Cross-tool `AGENTS.md` standard (plain `.md`) + `.agents/` | Any AGENTS.md-aware tool |
 
-Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar. **Goose support is in beta** (generate/convert/bridge; interop is not yet supported) and its adapter API is not yet under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
+Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar. **Goose support is in beta** (generate, convert, bridge and interop), and its adapter is **Beta** under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 
 ---
 
