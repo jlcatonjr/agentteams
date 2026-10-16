@@ -83,6 +83,7 @@ _HEADING_RE = re.compile(r"^[ \t]*(#{1,6})[ \t]+\S")
 _CODE_RE = fence_twins._CODE_FENCE_RE
 _FM_CLOSE_RE = re.compile(r"^---[ \t]*$")
 _INSTRUCTIONS_RE = fence_twins._INSTRUCTIONS_RE
+_TOML_BODY_RE = fence_twins._TOML_BODY_RE
 #: A managed-region marker of any kind (template fence, bridge, learned block), even quoted in prose.
 _MARKER_RE = re.compile(r"AGENTTEAMS[-A-Z]*:(?:BEGIN|END)")
 _TOML_DELIMS = ("'''", '"""')
@@ -188,9 +189,10 @@ def _units(lines: list[str]) -> list[tuple[str, str, list[str]]]:
 
 
 def _body_start(lines: list[str]) -> int:
-    """Index of the first body line: after YAML front matter, or after a Goose ``instructions: |`` line."""
+    """Index of the first body line: after YAML front matter, a Goose ``instructions: |`` line, or a Codex
+    ``developer_instructions = '''`` line (without that, a TOML render's whole header was pasted into the body)."""
     for i, line in enumerate(lines):
-        if _INSTRUCTIONS_RE.match(line):
+        if _INSTRUCTIONS_RE.match(line) or _TOML_BODY_RE.match(line):
             return i + 1
     if lines and lines[0].rstrip("\n") == "---":
         for i in range(1, len(lines)):

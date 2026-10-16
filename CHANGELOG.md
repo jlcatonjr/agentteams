@@ -6,6 +6,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (codex: `--update --merge` no longer writes an agent TOML that does not parse)
+
+- A Codex agent (`.codex/agents/*.toml`) whose body was one legacy `content` fence, or unfenced (the
+  pre-2026-10-04 adapter format, which the merge wraps in a `content` fence in the same run), got a whole-body
+  migration once its template gained named sections. `whole_body_migration._body_start` recognised YAML front
+  matter and Goose's `instructions: |` but not Codex's `developer_instructions = '''`, so it returned 0 and the
+  render's whole TOML header (a second `name = …` and `developer_instructions = '''`) was pasted inside the
+  string. The merge exited 0 and Codex could no longer load the agent (quality-auditor, conflict-resolution,
+  repo-liaison and tool-doc-researcher in the 2026-10-16 reproduction).
+- The TOML body opener is now `fence_twins._TOML_BODY_RE`, beside Goose's `_INSTRUCTIONS_RE`, and
+  `_body_start` honours it. The migrated file parses and keeps its Project-Specific Notes.
+- Defence in depth: `emit_all` parses every merged `.toml` with `tomllib` before writing it
+  (`frameworks.codex.toml_write_error`). One that does not parse is refused with an error naming the file, the
+  on-disk file is left as it was (a legacy retrofit made earlier in the same run is undone), and the run exits
+  non-zero. `retrofit_legacy_toml` returns nothing rather than a retrofit that does not parse.
+- `fence_twins.py` and `whole_body_migration.py` re-pinned in `references/enforcement-integrity.json`. Tests:
+  `tests/test_codex_toml_merge_guard.py` (both triggers, and the guard refusing a broken merge result).
+
+### fix (codex: a goose-owned `AGENTS.md` gets the write-policy block under `write_policy: "orchestrator-only"`)
+
+- Under the switch, the top-level Codex session reads its dispatch and proposal instructions ("Write Policy: You Are
+  the Orchestrator") from the repo-root `AGENTS.md`. When goose had written that file (goose renders without the
+  switch), Codex left it untouched, so the session never saw them. Deleting the file to let Codex write it lost
+  goose's content, and goose then refused the file.
+- With the switch on for Codex (in `write_policy_frameworks`, or unscoped) and a goose-generated `AGENTS.md`, Codex
+  now adds or refreshes only a `codex_write_policy` fence holding that section (with `--merge` or `--overwrite`),
+  the way Grok upserts `grok_runtime`. Every byte outside it stays goose's. Goose's re-render carries the fence
+  over, as it does `grok_runtime` (both are now `_agents_md_ownership.CO_OWNER_FENCE_IDS`, kept in on-disk order),
+  and a file fenced only by co-owner fences is still treated as hand-written.
+- A hand-written `AGENTS.md` (or one Grok, agents-md or a legacy fenced render owns) is still never written. Under
+  the switch a `MISSING` notice names the absent section, and the block is written to
+  `.codex/examples/AGENTS.codex-write-policy-block.md` to paste in (not when `.codex/examples` is a symlink).
+- With the switch off, nothing changes; a stale `codex_write_policy` block in a goose file is named in the notice.
+- The rule is the pinned `_agents_md_ownership.codex_write_policy_decision`, re-pinned in
+  `references/enforcement-integrity.json`. Tests: `tests/test_codex_agents_md_write_policy.py`.
+
 ## [1.0.0-rc.10] - 2026-10-15
 
 ### release notes (rc10)

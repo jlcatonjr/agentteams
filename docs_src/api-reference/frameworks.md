@@ -303,9 +303,9 @@ Transforms each rendered Markdown agent into a recipe (`title`/`description`/`in
 
   | Existing `AGENTS.md` | What goose does |
   |---|---|
-  | Absent, or goose-generated | Writes the render (through `--merge` / `--overwrite` as usual), carrying an existing `grok_runtime` fence over; a duplicated or unbalanced one makes it skip the file with a warning |
-  | agentteams-fenced with no marker and a fence other than `grok_runtime` (a legacy goose render) | Adopts it, with a notice |
-  | Hand-written, a legacy unfenced goose render (indistinguishable), or fenced only by `grok_runtime` | Never written; a warning says to remove `AGENTS.md` and re-render to hand it to goose |
+  | Absent, or goose-generated | Writes the render (through `--merge` / `--overwrite` as usual), carrying the other targets' existing co-owner fences over in their on-disk order (`grok_runtime`, and Codex's `codex_write_policy`: `CO_OWNER_FENCE_IDS`); a duplicated or unbalanced one makes it skip the file with a warning |
+  | agentteams-fenced with no marker and a fence other than a co-owner fence (a legacy goose render) | Adopts it, with a notice |
+  | Hand-written, a legacy unfenced goose render (indistinguishable), or fenced only by co-owner fences (`grok_runtime`, `codex_write_policy`) | Never written; a warning says to remove `AGENTS.md` and re-render to hand it to goose |
   | Codex, Grok or agents-md generated | Never written; same warning |
   | A symlink (itself or `.goose`/`.goose/recipes`), unreadable, malformed fences, or outside the project | Never written |
 
@@ -343,7 +343,7 @@ Adapter for the cross-tool `AGENTS.md` standard.
 Adapter for the OpenAI Codex CLI. Emits each agent as a Codex **custom agent**, a TOML file under `.codex/agents/`. Subclasses `AgentsMdAdapter` only for the framework-neutral `AGENTS.md` rendering.
 
 - **framework_id:** `'codex'`
-- **Output format:** Agent files: `.codex/agents/<slug>.toml`, with keys `name` (the slug; authoritative over the file name), `description`, `developer_instructions` (a TOML multi-line string), and `sandbox_mode` (`"workspace-write"` when the canonical tools declare `edit`, otherwise `"read-only"`; omitted for a non-canonical or missing tool list). `sandbox_mode` is a declaration, not enforced (see below). No `model`, provider or approval keys. Instructions: repo-root `AGENTS.md`, written only when absent or already Codex-generated.
+- **Output format:** Agent files: `.codex/agents/<slug>.toml`, with keys `name` (the slug; authoritative over the file name), `description`, `developer_instructions` (a TOML multi-line string), and `sandbox_mode` (`"workspace-write"` when the canonical tools declare `edit`, otherwise `"read-only"`; omitted for a non-canonical or missing tool list). `sandbox_mode` is a declaration, not enforced (see below). No `model`, provider or approval keys. Instructions: repo-root `AGENTS.md`, written in full only when absent or already Codex-generated (under `write_policy: "orchestrator-only"`, a goose-generated one gets Codex's `codex_write_policy` block; see below).
 - **Handoffs:** `native`. Translated into a "Hand off to" list inside a fenced `codex_translation` block in `developer_instructions`, and parsed back by `parse_agent_source`. No sidecar.
 - **Agents dir:** `<project>/.codex/agents/` (`normalize_output_path` appends it to a project-root `--output`)
 
@@ -354,6 +354,15 @@ Adapter for the OpenAI Codex CLI. Emits each agent as a Codex **custom agent**, 
 - An agent whose canonical tools include `execute` or `retrieval` (it already runs commands, so it reads through the shell too) gets a **Secrets on Codex** section with the same secret-store line: read only inside the workspace, and never `~/.config/agentteams/`, `~/.ssh/`, `.env` or credential stores.
 - Exactly one title H1: the body's own H1 is kept, and `# {name}` is added only when the body has none.
 - `guard_rendered_files` (and the interop import) skip an existing repo-root `AGENTS.md` that was not generated for Codex, with a notice. `AGENTS.override.md` is never emitted.
+- **Write-policy co-ownership** (`_agents_md_ownership.codex_write_policy_decision`). Under `write_policy: "orchestrator-only"` with Codex in scope (in `write_policy_frameworks`, or unscoped), the top-level Codex session reads its dispatch and proposal instructions ("Write Policy: You Are the Orchestrator") from `AGENTS.md`:
+
+  | Existing `AGENTS.md` | What Codex does under the switch |
+  |---|---|
+  | Absent, or Codex-generated | Writes the render, section included |
+  | goose-generated | Adds or refreshes only the `codex_write_policy` fence, via `upsert_fenced_block` (with `--merge` or `--overwrite`); every byte outside it stays goose's, and goose's re-render carries the fence over |
+  | Hand-written, Grok, agents-md, legacy-fenced or unsafe | Never written; a `MISSING` notice names the absent section, and the block is written to `.codex/examples/AGENTS.codex-write-policy-block.md` to paste in (not when `.codex/examples` is a symlink) |
+
+  With the switch off, nothing changes: a non-Codex `AGENTS.md` is left untouched, and a stale `codex_write_policy` block in a goose file is named in the notice.
 - An interop import keeps `.github/agents/...` paths as they are, because interop does not copy references. Native generation rewrites them to `.codex/agents/...`.
 - Codex loads `.codex/agents/**/*.toml` only, so reference docs under `.codex/agents/references/` are ignored by Codex.
 - `codex exec --ephemeral` breaks custom-agent spawning in codex-cli 0.160.1 ("collab spawn failed: ... no rollout found for thread id"): spawned agents need the session's rollout. Run multi-agent teams without `--ephemeral`. Observed in mathAgents' live check, 2026-10-07.
@@ -412,7 +421,7 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
   | Hand-written, unfenced | Never written; the block is emitted to `.grok/examples/AGENTS.grok-block.md` instead |
   | A symlink (itself or a parent such as `.grok`/`.grok/examples`), unreadable, malformed fences, or outside the project | Never written |
 
-  `CodexAdapter` uses the same classifier, and it leaves a Grok- or goose-generated `AGENTS.md` alone.
+  `CodexAdapter` uses the same classifier, and it leaves a Grok- or goose-generated `AGENTS.md` alone, except for its own `codex_write_policy` block in a goose file under `write_policy: "orchestrator-only"`.
 - **`extra_output_files`:**
   - always: the framework-neutral baseline plus `.grok/hooks/README.md`, which keeps the launcher-protected dir present
   - when confinement is requested (`grok:sandbox`, or a confined/exclusive profile) on Linux/macOS: `_grok_sandbox_emit.grok_sandbox_output_files` adds `.grok/sandbox.toml`, `.grok/confined-run.example.sh` and the advisory hook gate (`agentteams-gate.json` + `agentteams-gate-shim.py` + `constitutional-gate.py`)

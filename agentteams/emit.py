@@ -58,6 +58,7 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 # Backup subsystem extracted to agentteams/backup.py (CH-07); re-exported so
 # cli/, build_team, drift, and tests resolve emit.<symbol> unchanged.
 from agentteams.frameworks.structural_merge import post_merge_structural
+from agentteams.frameworks.codex import toml_write_error
 from agentteams.learned_blocks import carry_learned_block
 from agentteams.fence_twins import persist_dropped as _persist_twins
 from agentteams.front_matter_baseline import (
@@ -741,6 +742,10 @@ def emit_all(
                     and migrated == existing_text
                 ):
                     result.unchanged.append(str(target))
+                elif _bad := toml_write_error(rel_path, migrated):  # never write a TOML agent that won't parse
+                    result.errors.append(f"Refused to write {target}: {_bad}")
+                    if auto_fenced_now:  # undo this run's retrofit too, so the file is as it was
+                        _atomic_write_text(target, _pre_text)
                 else:
                     try:
                         _atomic_write_text(target, migrated)
