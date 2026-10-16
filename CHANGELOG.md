@@ -6,28 +6,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (rc.11 must-fix: an Ed25519-signed decision row is verified as Ed25519 everywhere)
+
+- **The bug.** `_assert_authorizing_row_is_authentic` took the Ed25519 path only for a governed, constraint-relaxing,
+  non-retraction row. Every other row fell through to the HMAC check, which raises "decision signing key is not
+  configured" without `AGENTTEAMS_DECISION_SIGNING_KEY`. Found by mathAgents at rc.10:
+  - an operator Ed25519-signed `HALT-RETRACTED` row could never clear a HALT, contradicting the shared policy
+    that requires Ed25519 retractions;
+  - with `enforce_decision_signing: false`, even an Ed25519 relaxing PASS was HMAC-checked;
+  - consumers had to put the symmetric secret in the environment of every render, agent sessions included.
+- **The fix.** The gate dispatches on the row's signed `sig_scheme`. A row declaring `ed25519` is verified against
+  the team's `references/authorized-verify-keys/<key_id>.pub.pem` with the existing verifier, for every
+  authorizing verdict, whether or not `enforce_decision_signing` is on. A failed check fails closed and never
+  falls back to HMAC; `text_digest` is still checked afterwards. `sig_scheme` and `key_id` are signed axes, so a
+  keyless writer cannot switch a row between the schemes.
+- **Unchanged:** HMAC rows; the elevated path (a governed relaxing row still requires Ed25519, so HMAC is refused
+  there, and still needs traceable lineage); the retraction evidence requirement; the author and roster checks.
+- **Re-pinned:** `cli/decision_log.py`.
+
 ### fix (security: a signed decision row now binds its conditions and evidence text)
 
 - **The bug.** A decision row's signature, and the hash chain, covered the fixed fields and the optional signed
   axes, but not the free-text `conditions` and `evidence` columns. A keyless writer could rewrite a signed row's
   stated limits ("only these repos, expires 2027-01-16") while its HMAC or Ed25519 signature still verified. That
   matters most on a Rule 15 constraint-relaxing row, whose conditions are often all that narrows it.
-- **The fix.** A new optional signed column, `text_digest`, holds `sha256:` plus the hex digest of
-  `conditions.strip() + "\x1f" + evidence.strip()`.
+- **The fix.** A new optional signed column, `text_digest`, holds `sha256:` plus the hex digest of a
+  length-prefixed encoding, `f"{len(c)}:{c}{len(e)}:{e}"` over the stripped texts (lengths in UTF-8 bytes), so
+  no split of the text between the two columns collides. A text holding `\x1f` is refused.
   - It is the last entry of `_OPTIONAL_SIGNED_AXES` and is signed and chained only when non-empty, like the other
     axes. Every existing signature still verifies byte-for-byte, and a `|` in it is refused.
   - Wherever a row's signature is verified (the HMAC path and the Ed25519 relaxing path), a non-empty
     `text_digest` that no longer matches the row's text fails exactly like a bad signature, so the row stops
     clearing. A row without `text_digest` behaves as before.
-- **Signing.** `--sign-decision` computes `text_digest` itself (a spec can't supply one) whenever the log has the
-  column; a new log is created with it. Into a log without the column it signs as before and prints a one-line
-  notice that the conditions are not bound, naming `--migrate-decision-log`.
+- **Signing: bind, then sign.** `decision_text.bind_text_digest(row)` sets the digest before any signature is
+  computed. `--sign-decision` uses it whenever the log has the column (a spec can't supply a digest; a new log is
+  created with the column), and `sign_decision_row` binds a row that has a `text_digest` key. The gate verifies
+  HMAC rows with a non-binding helper, so legacy rows are untouched.
+- **No downgrade.** Into a log without the column, `--sign-decision` refuses a constraint-relaxing row (anything
+  the effect classifier does not derive as non-relaxing), naming `--migrate-decision-log`, so deleting the column
+  from a migrated log cannot yield an unbound relaxing row. Other rows sign as before, with a one-line notice.
 - **Migration.** `--migrate-decision-log` adds the `text_digest` column, empty. It never fills existing rows:
   that would change their signed payloads and void their signatures. Re-sign a row to bind its text.
+- **Migration report.** For each revoked `HALT-RETRACTED` row, `--migrate-decision-log` now says that the HALT
+  it retracted blocks again after migration and to re-issue the retraction as a signed row
+  (`"reactivates_halt": true` in `--json`). Found by mathAgents.
 - **Reporting.** `--verify-integrity` reports how many signed rows bind their text, how many don't, and any row
   whose text was edited after signing. Advisory only: exit codes are unchanged.
-- **New pinned module** `agentteams/cli/decision_text.py` (`text_digest_for`, `assert_text_bound`,
-  `describe_text_binding`), in `ENFORCEMENT_MODULES` and the signing closure. **Re-pinned:**
+- **New pinned module** `agentteams/cli/decision_text.py` (`text_digest_for`, `bind_text_digest`,
+  `assert_text_bound`, `describe_text_binding`), in `ENFORCEMENT_MODULES` and the signing closure. **Re-pinned:**
   `cli/decision_log.py`, `cli/operator_signing.py`, `integrity.py`.
 
 ## [1.0.0-rc.10] - 2026-10-15

@@ -8,8 +8,10 @@ constraint-relaxing row, whose conditions are often the only thing narrowing it.
 
 The fix follows the optional-axis pattern. ``text_digest`` is the last entry of
 ``decision_log._OPTIONAL_SIGNED_AXES``, so it is signed (and chained) only when non-empty and every
-existing signature verifies byte-for-byte. Its value is ``sha256:`` + the hex digest of
-``conditions.strip() + "\\x1f" + evidence.strip()``. Signing the digest binds the text; verification
+existing signature verifies byte-for-byte. Its value is ``sha256:`` + the hex digest of an unambiguous,
+length-prefixed encoding of the stripped texts: ``f"{len(c)}:{c}{len(e)}:{e}"`` over their UTF-8 bytes,
+lengths in bytes. (A plain separator join let ``("A", "B\\x1fC")`` and ``("A\\x1fB", "C")`` collide.) A text
+holding ``\\x1f`` is refused outright. Signing the digest binds the text; verification
 recomputes it, and a row whose ``text_digest`` no longer matches its text fails exactly like a bad
 signature. A row with no ``text_digest`` behaves as before (its text stays unbound, and
 ``--verify-integrity`` counts it).
@@ -29,8 +31,15 @@ TEXT_DIGEST_FIELD = "text_digest"
 #: The digest's scheme prefix; a value without it never matches.
 _PREFIX = "sha256:"
 
-#: Unit separator between the two texts, so moving text from one column to the other changes the digest.
-_SEPARATOR = "\x1f"
+#: The unit separator, refused in either text (it was the pre-release delimiter; refusing it keeps any
+#: separator-joined reimplementation from colliding with a length-prefixed one).
+_REFUSED = "\x1f"
+
+
+def _field(text: str) -> bytes:
+    """Return ``<byte length>:<bytes>`` for one stripped text field."""
+    raw = text.encode("utf-8")
+    return str(len(raw)).encode("ascii") + b":" + raw
 
 
 def text_digest_for(row: dict[str, str]) -> str:
@@ -40,13 +49,37 @@ def text_digest_for(row: dict[str, str]) -> str:
         row: A decision row (either schema; a legacy row has no ``evidence``, read as empty).
 
     Returns:
-        ``sha256:`` followed by the hex digest of the UTF-8 of
-        ``conditions.strip() + "\\x1f" + evidence.strip()``.
+        ``sha256:`` followed by the hex digest of ``<n>:<conditions><m>:<evidence>``, where the texts are
+        stripped and UTF-8 encoded and ``n``/``m`` are their byte lengths.
+
+    Raises:
+        RuntimeError: Either text contains ``\\x1f`` (refused, fail-closed).
     """
     conditions = (row.get("conditions") or "").strip()
     evidence = (row.get("evidence") or "").strip()
-    blob = f"{conditions}{_SEPARATOR}{evidence}".encode("utf-8")
-    return _PREFIX + hashlib.sha256(blob).hexdigest()
+    if _REFUSED in conditions or _REFUSED in evidence:
+        raise RuntimeError("decision row conditions/evidence contains U+001F (unit separator); refused "
+                           "(fail-closed): it could make a text binding ambiguous")
+    return _PREFIX + hashlib.sha256(_field(conditions) + _field(evidence)).hexdigest()
+
+
+def bind_text_digest(row: dict[str, str]) -> dict[str, str]:
+    """Set ``row["text_digest"]`` from the row's current ``conditions`` and ``evidence``; bind, then sign.
+
+    Every path that mints a signed decision row calls this BEFORE computing the signature, so the
+    signature (and the chain) covers the text. It mutates and returns ``row``.
+
+    Args:
+        row: The decision row about to be signed.
+
+    Returns:
+        The same ``row``, with ``text_digest`` set.
+
+    Raises:
+        RuntimeError: Either text contains ``\\x1f``.
+    """
+    row[TEXT_DIGEST_FIELD] = text_digest_for(row)
+    return row
 
 
 def text_is_bound(row: dict[str, str]) -> bool:
@@ -68,10 +101,16 @@ def text_digest_mismatch(row: dict[str, str]) -> bool:
         row: A decision row.
 
     Returns:
-        False for a row without ``text_digest`` (nothing is claimed) or one whose digest matches.
+        False for a row without ``text_digest`` (nothing is claimed) or one whose digest matches. True,
+        fail-closed, for a bound row whose text can no longer be digested (it holds ``\\x1f``).
     """
     declared = (row.get(TEXT_DIGEST_FIELD) or "").strip()
-    return bool(declared) and declared != text_digest_for(row)
+    if not declared:
+        return False
+    try:
+        return declared != text_digest_for(row)
+    except RuntimeError:
+        return True
 
 
 def assert_text_bound(row: dict[str, str], *, action: str) -> None:
@@ -136,6 +175,7 @@ def describe_text_binding(team_dir: Path) -> list[str]:
 __all__ = [
     "TEXT_DIGEST_FIELD",
     "assert_text_bound",
+    "bind_text_digest",
     "describe_text_binding",
     "text_digest_for",
     "text_digest_mismatch",

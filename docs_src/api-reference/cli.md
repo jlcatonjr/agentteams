@@ -203,8 +203,15 @@ signature still verifies. The module is integrity-pinned and in the signing clos
 
 ### `text_digest_for(row) -> str`
 
-`sha256:` plus the hex digest of the UTF-8 of `conditions.strip() + "\x1f" + evidence.strip()`. A legacy row
-has no `evidence`; it reads as empty. `--sign-decision` uses it to fill the column; verification uses it to check.
+`sha256:` plus the hex digest of the length-prefixed encoding `f"{len(c)}:{c}{len(e)}:{e}"` over the stripped texts, with lengths in UTF-8 bytes. A length prefix
+keeps the boundary unambiguous: a plain `\x1f` join let `("A", "B\x1fC")` and `("A\x1fB", "C")` collide. A text
+holding `\x1f` is refused (`RuntimeError`). A legacy row has no `evidence`; it reads as empty.
+
+### `bind_text_digest(row) -> dict`
+
+Sets `row["text_digest"]` from `text_digest_for(row)` and returns the row. **Bind, then sign:** every minting path
+calls it before computing the signature. `decision_log.sign_decision_row` does so itself when the row has a
+`text_digest` key; the gate verifies with the non-binding `_hmac_decision_row`.
 
 ### `assert_text_bound(row, *, action)`
 

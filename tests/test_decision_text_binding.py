@@ -26,6 +26,7 @@ from agentteams.cli.decision_chain import row_chain_digest, verify_chain
 from agentteams.cli.decision_text import (
     TEXT_DIGEST_FIELD,
     assert_text_bound,
+    bind_text_digest,
     describe_text_binding,
     text_digest_for,
     text_digest_mismatch,
@@ -73,9 +74,9 @@ def _authentic(row: dict[str, str], root: Path) -> None:
 # --- the digest ----------------------------------------------------------------------------------
 
 
-def test_text_digest_is_sha256_of_the_stripped_texts_joined_by_a_unit_separator() -> None:
-    row = {"conditions": "  only a  ", "evidence": " T-1 "}
-    expected = hashlib.sha256("only a\x1fT-1".encode("utf-8")).hexdigest()
+def test_text_digest_is_sha256_of_the_length_prefixed_stripped_texts() -> None:
+    row = {"conditions": "  only \u00e9  ", "evidence": " T-1 "}
+    expected = hashlib.sha256("7:only \u00e93:T-1".encode("utf-8")).hexdigest()  # lengths in UTF-8 bytes
     assert text_digest_for(row) == f"sha256:{expected}"
     # Moving text from one column to the other is a different binding.
     assert text_digest_for({"conditions": "only aT-1", "evidence": ""}) != text_digest_for(row)
@@ -114,7 +115,7 @@ def test_editing_bound_text_after_signing_fails_verification(tmp_path: Path, fie
                                                              value: str) -> None:
     """SENSITIVITY: the signature still verifies over the payload, but the text no longer matches."""
     tampered = {**_row(bind=True), field: value}
-    assert tampered["signature"] == dl.sign_decision_row(tampered, key=_KEY)  # payload unchanged
+    assert tampered["signature"] == dl._hmac_decision_row(tampered, key=_KEY)  # payload unchanged
     assert text_digest_mismatch(tampered)
     with pytest.raises(RuntimeError, match="failed signature verification"):
         _authentic(tampered, tmp_path)
@@ -225,7 +226,7 @@ def test_migrate_adds_an_empty_text_digest_column_to_a_signed_log(tmp_path: Path
     rows, fieldnames = dl._read_decision_rows(out)
     assert fieldnames == columns + [TEXT_DIGEST_FIELD]
     assert rows[0][TEXT_DIGEST_FIELD] == ""                       # never back-filled
-    assert rows[0]["signature"] == dl.sign_decision_row(rows[0], key=_KEY)  # still verifies
+    assert rows[0]["signature"] == dl._hmac_decision_row(rows[0], key=_KEY)  # still verifies
     assert check_clearance(out, action="prune")[0]
 
 
@@ -243,22 +244,56 @@ def test_sign_decision_fills_text_digest_and_the_row_verifies(tmp_path: Path, mo
     assert not text_digest_mismatch(rows[-1])
 
 
-def test_sign_decision_into_a_log_without_the_column_says_so(tmp_path: Path, monkeypatch, capsys,
-                                                             signing_preapproved) -> None:
+def _team_without_text_column(tmp_path: Path) -> Path:
+    """A team whose log was migrated, then had its text_digest column deleted (the downgrade)."""
+    from tests.test_operator_signing import _team
+
+    team = _team(tmp_path)
+    columns = ["timestamp", "requesting_agent",
+               *(c for c in dl.SIGNED_DECISION_COLUMNS if c != TEXT_DIGEST_FIELD)]
+    (team / _LOG).write_text(",".join(columns) + "\n", encoding="utf-8")
+    return team
+
+
+def test_sign_decision_refuses_a_relaxing_row_into_a_log_without_the_column(
+        tmp_path: Path, monkeypatch, capsys, signing_preapproved) -> None:
+    """SENSITIVITY (downgrade): deleting the column must not yield an unbound relaxing row."""
     pytest.importorskip("cryptography")
     from tests.test_operator_signing import _decision, _sd
 
-    team = tmp_path / "team"
-    columns = ["timestamp", "requesting_agent",
-               *(c for c in dl.SIGNED_DECISION_COLUMNS if c != TEXT_DIGEST_FIELD)]
-    (team / "references").mkdir(parents=True)
-    (team / _LOG).write_text(",".join(columns) + "\n", encoding="utf-8")
-    argv = _sd(tmp_path, monkeypatch, spec=_decision(conditions="only repo b"))
-    assert build_team.main(argv) == 0
+    team = _team_without_text_column(tmp_path)
+    argv = _sd(tmp_path, monkeypatch, team=team, spec=_decision(conditions="only repo b"))
+    assert build_team.main(argv) == 1
+    err = capsys.readouterr().err
+    assert "refusing to sign a constraint-relaxing decision" in err and "--migrate-decision-log" in err
+    assert dl._read_decision_rows(team)[0] == []
+
+
+def test_sign_decision_of_a_non_relaxing_row_without_the_column_only_notices(
+        tmp_path: Path, monkeypatch, capsys, signing_preapproved) -> None:
+    """NEGATIVE CONTROL: a non-relaxing row still signs into such a log, with the notice."""
+    pytest.importorskip("cryptography")
+    from tests.test_operator_signing import _decision, _sd
+
+    team = _team_without_text_column(tmp_path)
+    spec = _decision(action_reviewed="review-notes", effect_grants=None, derives_from=None,
+                     conditions="only repo b")
+    assert build_team.main(_sd(tmp_path, monkeypatch, team=team, spec=spec)) == 0
     err = capsys.readouterr().err
     assert "not bound by its signature" in err and "--migrate-decision-log" in err
     rows, fieldnames = dl._read_decision_rows(team)
     assert TEXT_DIGEST_FIELD not in fieldnames and len(rows) == 1
+
+
+def test_sign_decision_refuses_a_unit_separator_in_the_text(tmp_path: Path, monkeypatch, capsys,
+                                                            signing_preapproved) -> None:
+    pytest.importorskip("cryptography")
+    from tests.test_operator_signing import _decision, _sd
+
+    argv = _sd(tmp_path, monkeypatch, spec=_decision(conditions="a\x1fb"))
+    assert build_team.main(argv) == 1
+    assert "U+001F" in capsys.readouterr().err
+    assert not (tmp_path / "team" / _LOG).exists()
 
 
 # --- reporting -----------------------------------------------------------------------------------
@@ -292,3 +327,85 @@ def test_verify_integrity_reports_text_binding_without_changing_its_exit_code(tm
     assert _run_verify_integrity(args) == clean_rc  # advisory only
     out = capsys.readouterr().out
     assert "Decision log text binding: 1 of 1 signed row(s)" in out and "MISMATCH on row(s) [1]" in out
+
+
+# --- C: no separator collision -------------------------------------------------------------------
+
+
+def test_moving_text_across_a_unit_separator_cannot_collide() -> None:
+    """The plain-join encoding made these two equal; the length prefix keeps them apart, and \\x1f is refused."""
+    joined = lambda c, e: hashlib.sha256(f"{c}\x1f{e}".encode()).hexdigest()  # noqa: E731
+    assert joined("A", "B\x1fC") == joined("A\x1fB", "C")   # the defect being closed
+    with pytest.raises(RuntimeError, match="U\\+001F"):
+        text_digest_for({"conditions": "A", "evidence": "B\x1fC"})
+    with pytest.raises(RuntimeError, match="U\\+001F"):
+        text_digest_for({"conditions": "A\x1fB", "evidence": "C"})
+    # Without the separator, boundary shifts still differ under the length prefix.
+    assert text_digest_for({"conditions": "AB", "evidence": "C"}) != text_digest_for(
+        {"conditions": "A", "evidence": "BC"})
+    assert text_digest_for({"conditions": "1:A", "evidence": ""}) != text_digest_for(
+        {"conditions": "", "evidence": "A"})
+
+
+def test_a_bound_row_whose_text_gains_a_unit_separator_fails_closed(tmp_path: Path) -> None:
+    tampered = {**_row(bind=True), "conditions": "A\x1fB"}
+    assert text_digest_mismatch(tampered)
+    with pytest.raises(RuntimeError, match="failed signature verification"):
+        _authentic(tampered, tmp_path)
+
+
+# --- A: HMAC rows bind too -----------------------------------------------------------------------
+
+
+def test_bind_text_digest_sets_and_returns_the_row() -> None:
+    row = {"conditions": "only a", "evidence": "T-1"}
+    assert bind_text_digest(row) is row and row[TEXT_DIGEST_FIELD] == text_digest_for(row)
+
+
+def test_sign_decision_row_binds_a_row_that_has_the_column(tmp_path: Path) -> None:
+    row = {**_row(bind=False), TEXT_DIGEST_FIELD: ""}       # built from a header with the column
+    row["signature"] = dl.sign_decision_row(row, key=_KEY)
+    assert row[TEXT_DIGEST_FIELD] == text_digest_for(row)   # bound before signing
+    _authentic(row, tmp_path)
+    with pytest.raises(RuntimeError, match="failed signature verification"):
+        _authentic({**row, "conditions": "every repo"}, tmp_path)
+
+
+def test_sign_decision_row_leaves_a_row_without_the_column_unbound() -> None:
+    row = _row(bind=False)
+    assert TEXT_DIGEST_FIELD not in row
+    assert dl.sign_decision_row(row, key=_KEY) == dl._hmac_decision_row(row, key=_KEY)
+    assert TEXT_DIGEST_FIELD not in row
+
+
+def test_the_verifier_never_rebinds_a_legacy_row_read_from_a_migrated_log(tmp_path: Path) -> None:
+    """A row signed before the column existed reads back with text_digest="" and must still verify."""
+    legacy = _row(bind=False)
+    _write_log(tmp_path, [legacy])   # the header has the column; the cell is empty
+    rows, _ = dl._read_decision_rows(tmp_path)
+    assert rows[0][TEXT_DIGEST_FIELD] == ""
+    _authentic(rows[0], tmp_path)
+    assert rows[0][TEXT_DIGEST_FIELD] == ""
+
+
+# --- D: the migration report names the HALT a revoked retraction re-arms -------------------------
+
+
+def test_migration_report_says_a_revoked_retraction_reactivates_its_halt(tmp_path: Path, capsys) -> None:
+    out = tmp_path / "proj" / ".claude" / "agents"
+    (out / "references").mkdir(parents=True)
+    (out / _LOG).write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        "2026-05-23T00:00:00Z,security,restore-backup,HALT,,\n"
+        "2026-05-24T00:00:00Z,security,restore-backup,HALT-RETRACTED,why,verified\n"
+        "2026-05-25T00:00:00Z,security,prune,PASS,,verified\n", encoding="utf-8")
+    argv = ["--migrate-decision-log", "--framework", "claude", "--output", str(out), "--dry-run"]
+    assert build_team.main(argv) == 0
+    text = capsys.readouterr().out
+    assert ("the HALT it retracted (restore-backup) blocks again after migration; re-issue the "
+            "retraction as a signed row") in text
+    assert text.count("blocks again after migration") == 1   # not for the PASS
+    assert build_team.main([*argv, "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    flags = {r["action"]: r["reactivates_halt"] for r in report["revoked"]}
+    assert flags == {"restore-backup": True, "prune": False}
