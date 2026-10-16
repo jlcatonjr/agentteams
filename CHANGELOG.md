@@ -6,6 +6,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (grok, security: a scoped tool entry no longer widens an agent; working run instructions)
+
+- **Security fix (C-3), behaviour change.** Grok Build 1.0.52 ignores a scoped entry in an agent's `tools:`. In a
+  live test, an agent declared `Read, Bash(echo:*)` was offered a full shell plus `search_replace` (an edit tool),
+  `monitor` and `workflow`. The default team's read-only `tool-doc-researcher`, and any `retrieval` agent such as
+  `reference-manager`, carried `Bash(python -m agentteams.research:*)`, so on grok they ran with shell and edit.
+  - A scoped allow entry (any `Name(...)`, including `Agent(type)`) is now **dropped** for grok. These agents lose
+    the retrieval CLI on grok.
+  - A scoped `disallowedTools` entry becomes the **whole tool**.
+  - A deny list that removes every allowed tool is refused.
+  - Each change prints a `[GROK-SCOPE]` notice on stderr, is added to interop notices, and is recorded in the build
+    log as `grok_tool_notices`.
+  - An exported grok agent that still carries a scope counts as not exact-toolset, so it exports as FULL.
+  - Remediation GROK-FU-R8-SCOPE; @security ruled it a 1.0 MUST-FIX.
+- **Operators of existing grok teams must act.** `--update --merge` keeps an edited file's front matter and never
+  applies a deny change automatically. The grok guard therefore names every existing `.grok/agents` file that still
+  carries a scoped entry: re-check it after the update, or run `--reconcile-front-matter --reconcile-apply`.
+- **Run instructions corrected.** The generated `grok_runtime` block (now `v=2`) and the grok team-builder said
+  `grok --agent "<name>"`. In grok 1.0.52 that form silently runs the default agent. They now say to run an agent by
+  its path, `grok --agent .grok/agents/<slug>.md` (or `/agents` in the TUI).
+- **Known limit in grok 1.0.52 (documented, not fixable here).** Custom agents cannot be spawned as subagents
+  ("Unknown subagent type"), so a grok orchestrator cannot delegate to its specialists. Run each one directly. Never
+  retry a failed spawn without a type: an untyped spawn starts an agent with every tool. Remediation GROK-FU-R8-TYPE.
+- The expert reference is corrected: G8, G10 (`.grok/skills` shadows `.claude/skills`), G11, G15. Round 2's
+  "delegation works" (R2-a) is withdrawn. The docs no longer claim same-name shadowing. `_grok_tool_scoping.py` is
+  re-pinned. Tests: `tests/test_grok_scope_fix.py`.
+
 ### fix (a HALT blocks every action named in its id; 1.0 must-fix from the mathAgents M6 pilot)
 
 - **C-2 bypass by spelling.** The HALT scan used the clearing-side prefix match, so a HALT recorded for an

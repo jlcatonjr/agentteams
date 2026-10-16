@@ -620,6 +620,8 @@ def import_from_cai(
         pending.append((dest, rendered))
         result.converted.append(str(dest))
 
+    if target_framework == "grok":  # scoped entries the grok render dropped or widened (GROK-FU-R8-SCOPE)
+        result.notices.extend(f"[GROK-SCOPE] {n}" for n in manifest.get("_grok_tool_notices", []))
     if run is not None:  # refuses (nothing written) or records each cooperative opt-in in the decision log
         result.notices += run.conclude(dry_run=dry_run)
     for dest, rendered in () if dry_run else pending:

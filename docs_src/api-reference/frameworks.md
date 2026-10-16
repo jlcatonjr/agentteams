@@ -397,8 +397,8 @@ Adapter for xAI Grok Build (the `grok` CLI). Subclasses `ClaudeAdapter`, because
 
 **Current behavior notes:**
 
-- **Tools are translated fail-closed** (`_grok_tool_scoping.to_grok_tools`): Claude names pass through, `Task` becomes `Agent`, and `TodoWrite` is dropped. An unknown name, an allow-list that translates to nothing (Grok reads an empty list as "inherit every tool"), or an untranslatable `disallowedTools` entry raises `ValueError`. `model` and `permissionMode` are not emitted.
-- **`name:` values are byte-identical to the Claude render** (operator decision D4). Grok always loads `.claude/agents/` too, and a `.grok/agents` file shadows the Claude agent with the same `name:`. `guard_rendered_files` prints a notice for:
+- **Tools are translated fail-closed** (`_grok_tool_scoping.translate_grok_tools`; `to_grok_tools` returns just the value): Claude names pass through, `Task` becomes `Agent`, and `TodoWrite` is dropped. A **scoped** entry (`Bash(cmd:*)`, `Agent(type)`, any `Name(...)`) is never emitted, because Grok Build 1.0.52 ignores the scope and widens the agent: a scoped allow entry is dropped and a scoped deny becomes the whole tool, each with a `[GROK-SCOPE]` notice on stderr, in interop notices and in the build log (`grok_tool_notices`). An unknown name, an allow-list that translates to nothing (Grok reads an empty list as "inherit every tool"), a deny-list that removes every allowed tool, or an untranslatable `disallowedTools` entry raises `ValueError`. `guard_rendered_files` also names any existing `.grok/agents` file that still carries a scoped entry. `model` and `permissionMode` are not emitted.
+- **`name:` values are byte-identical to the Claude render** (operator decision D4). Grok always loads `.claude/agents/` too; which body runs when two agents share a `name:` is not confirmed at runtime (G15), so both teams are regenerated together. `guard_rendered_files` prints a notice for:
   - a name mismatch with the on-disk Claude twin
   - Claude agents with no Grok twin
   - a slug that shadows a Grok built-in type (`general-purpose`, `explore`, `plan`)

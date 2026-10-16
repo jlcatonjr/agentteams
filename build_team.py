@@ -752,6 +752,9 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # Under the switch only, so every other team's build-log is unchanged. --convert-from and --bridge-from read
         # it to refuse writing agents the policy doesn't cover (interop_write_policy.refuse_outside_interop).
         **({"write_policy": manifest["write_policy"]} if manifest.get("write_policy") else {}),
+        # Grok only: scoped tool entries the render dropped (allow) or widened to the whole tool (deny), because grok
+        # does not honour scopes (GROK-FU-R8-SCOPE). Absent for every other framework and for clean grok renders.
+        **({"grok_tool_notices": list(manifest["_grok_tool_notices"])} if manifest.get("_grok_tool_notices") else {}),
     }
     from agentteams import prompt_roots  # #8 phase 1: per-fence prompt-root hashes (detection only)
 

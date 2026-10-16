@@ -220,7 +220,10 @@ Headless exit codes:
 - `1`: a configuration error or hitting the turn limit
 - `130` / `143`: a signal
 
-Headless delegation to a subagent needs an approval mode, or the call is cancelled.
+Headless delegation to a subagent needs an approval mode, or the call is cancelled. In Grok Build 1.0.52 a custom
+agent also cannot be spawned as a subagent at all ("Unknown subagent type"); run each agent as the session agent by
+its path (`grok --agent .grok/agents/<slug>.md`), and never retry a failed spawn without a type: an untyped spawn
+starts a general-purpose agent that has every tool.
 
 ---
 

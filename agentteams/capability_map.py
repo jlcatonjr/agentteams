@@ -325,14 +325,21 @@ def grok_exact_toolset(content: str) -> bool:
     Args:
         content: The agent file text.
 
+    A ``tools:`` line holding a scoped entry (``Bash(cmd:*)``) is also NOT exact: grok 1.0.52 ignores the scope and
+    offers far more than the list (a full shell plus an edit tool; GROK-FU-R8-SCOPE). Teams rendered before the fix
+    can carry one, and must export as FULL rather than as their declared tools.
+
     Returns:
-        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``.
+        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, and an unscoped
+        ``tools:`` line.
 
     Raises:
         Nothing.
     """
     yaml_text, _ = parse_yaml_front_matter(content)
     if yaml_text is None:
+        return False
+    if any(line.lstrip().startswith("tools:") and "(" in line for line in yaml_text.splitlines()):
         return False
     seen: dict[str, list[str]] = {}
     for m in _GROK_EXACT_KEY_RE.finditer(yaml_text):

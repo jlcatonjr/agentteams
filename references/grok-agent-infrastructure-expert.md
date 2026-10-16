@@ -84,10 +84,16 @@ Confidence marks:
 
 - Only the top-level session calls `spawn_subagent`. `subagent_type` is an enum of project, user and plugin agents;
   built-ins are not listed in it (`16-subagents.md:71`).
-- **The maximum nesting depth is one**: a subagent cannot spawn subagents (`16-subagents.md:401`). The orchestrator
-  must run as the session agent (`grok --agent <NAME>`).
-- Headless delegation **without** an approval mode ends with `stopReason: cancelled` (spike S14). **With**
-  `--always-approve`, a project agent was spawned and returned its reply (round 2, R2-a).
+- **The maximum nesting depth is one**: a subagent cannot spawn subagents (`16-subagents.md:401`). Run an agent as
+  the session agent **by its definition path**: `grok --agent .grok/agents/<slug>.md`, or `/agents` in the TUI. In
+  Grok Build 1.0.52 the name form (`grok --agent <NAME>`, `GROK_AGENT=<NAME>`) silently runs the default agent
+  headless (grok-followups typeprobes 3 and 4, 2026-10-15).
+- **Custom agents cannot be spawned as subagents in 1.0.52.** `spawn_subagent` with a project or user agent's
+  `subagent_type` fails with "Unknown subagent type: X. Available types: … X …", headless and in the TUI, for
+  spaced, kebab-case, file-stem and user-level names alike (typeprobes 1-3, an operator TUI check). A model that then
+  retries **untyped** gets a general-purpose child with every tool. Headless delegation **without** an approval mode
+  ends with `stopReason: cancelled` (spike S14). Correction: round 2's R2-a ("a project agent was spawned") rested on
+  a "Hello!" reply that an untyped fallback also produces; it is withdrawn (GROK-FU-R8-TYPE).
 
 ### Skills (D)
 
@@ -212,16 +218,16 @@ Confidence marks:
 | G5 | A user-defined profile with the same name overrides the project profile | `18-sandbox.md:95` | `.grok/confined-run.example.sh` profile mode refuses a shadowing user profile or a `requirements.toml` sandbox pin |
 | G6 | User `~/.claude` config leaks into Grok sessions | S5 | Advisory. Eval and validation runs set `GROK_CLAUDE_*_ENABLED=false`. |
 | G7 | Subagent depth is one | `16-subagents.md:401` | Stated in the `grok_runtime` block |
-| G8 | Headless delegation needs an approval mode | S14, R2-a | Documented for eval and redteam adapters |
+| G8 | Headless delegation needs an approval mode, and custom subagent types do not resolve in 1.0.52 | S14; typeprobes 1-4 + TUI (2026-10-15); R2-a withdrawn | The `grok_runtime` block (v=2) says to run each agent by path (`grok --agent .grok/agents/<slug>.md`) and never to retry a failed spawn untyped (GROK-FU-R8-TYPE) |
 | G9 | A sandbox `deny` blocks reads too | R2-b (T5d) | Never deny readable control-plane paths; write-only protection is impossible in the profile (R3), so it comes from the launcher |
 | G16 | Project `[permission]` rules load only after folder trust | R4 (2026-10-14: untrusted, not applied; trusted, applied) | The emitted `[permission]` deny block is DECLARED and trust-dependent |
 | G17 | Hooks receive a Claude-shaped envelope with Grok tool names (`run_terminal_command{command}`, `read_file{target_file}`, `search_replace{file_path,old_string,new_string}`); Grok accepts the Claude reply format | R5 (2026-10-14) | The gate runs behind `grok-gate-shim.py` (input translation only); the gate is unmodified |
-| G10 | Skill precedence between `.grok/skills` and `.claude/skills` for the same name | unverified | Spike item before Phase 2 |
-| G11 | A scoped `Bash(...)` in agent `tools:` may be honoured, widened to `Bash`, or dropped | unverified | Spike item |
+| G10 | With the same skill name, `.grok/skills` shadows `.claude/skills` | R8 spike v5 (2026-10-15): `grok inspect` lists only the `.grok` copy, Claude-compat skills enabled | Emit grok skills under `.grok/skills`; a same-name Claude skill is not seen |
+| G11 | A scoped entry in agent `tools:` is **not honoured**: `Read, Bash(echo:*)` was offered a full shell plus `search_replace`, `monitor`, `workflow`, `todo_write`, `grep`, `list_dir` | R8 spike v5 R8c (grok's `tool_definitions.json`) | `_grok_tool_scoping` drops a scoped allow entry and widens a scoped deny to the whole tool, with a `[GROK-SCOPE]` notice (GROK-FU-R8-SCOPE) |
 | G12 | The per-agent `agentsMd` key (source-only) may stop AGENTS.md being injected into subagents | source-only | Deferred (post-Phase 3) opportunity |
 | G13 | Goose wrote `AGENTS.md` with no marker and no guard | code read 2026-10-14 | Closed by GROK-RETRO-R4: goose stamps `GOOSE_AGENTS_MD_MARKER` and goes through `goose_agents_md_decision` (native, convert, interop); grok upserts only `grok_runtime` into a goose file |
 | G14 | Gitignore filtering of instruction files is unreliable on macOS | S16 | Advisory says "may be skipped"; keep AGENTS.md tracked |
-| G15 | Which body runs for a same-name agent has not been confirmed at runtime | R2-c inconclusive | Repeat at the validation gate |
+| G15 | Which body runs for a same-name agent has not been confirmed at runtime | R2-c inconclusive; not answerable headless (name resolution fails, R8 spike v5) | Docs no longer claim shadowing; an interactive TUI check remains open |
 
 ## Integration Checklist
 
