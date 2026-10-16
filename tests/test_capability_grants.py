@@ -35,7 +35,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey 
 
 pytestmark = [*globals().get("pytestmark", []), pytest.mark.usefixtures("signing_preapproved")] if isinstance(globals().get("pytestmark", []), list) else [globals()["pytestmark"], pytest.mark.usefixtures("signing_preapproved")]
 
-_KEY = "test-grant-key"
+_KEY = "test-grant-key-0123456789abcdef0"
 _FAR_FUTURE = "2099-01-01T00:00:00Z"
 _KEY_ID = "op-grant"
 
@@ -102,7 +102,7 @@ def test_hmac_sign_verify_roundtrip_and_tamper():
     sig = hmac_sign(_KEY, ["a", "b", "c"])
     assert hmac_verify(_KEY, ["a", "b", "c"], sig)
     assert not hmac_verify(_KEY, ["a", "b", "X"], sig)
-    assert not hmac_verify("wrong-key", ["a", "b", "c"], sig)
+    assert not hmac_verify("wrong-key-0123456789abcdef0123456789", ["a", "b", "c"], sig)
 
 
 def test_is_expired():

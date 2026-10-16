@@ -126,7 +126,7 @@ def _sg(tmp: Path, mp: pytest.MonkeyPatch, *, spec: object = None, key: bool = T
 
 
 def _ig(tmp: Path, mp: pytest.MonkeyPatch, *, spec: object) -> list[str]:
-    mp.setenv(grants.GRANT_KEY_ENV, "hmac-test-key")
+    mp.setenv(grants.GRANT_KEY_ENV, "hmac-test-key-0123456789abcdef01")
     team = _team(tmp)
     return ["--issue-grant", str(_write(tmp, "grant.json", spec)),
             "--framework", "claude", "--output", str(team)]

@@ -591,7 +591,7 @@ def test_update_restores_missing_expected_standard_file(tmp_path, monkeypatch):
 
     output_dir = tmp_path / ".github" / "agents"
 
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
@@ -692,7 +692,7 @@ def test_blocked_overwrite_update_creates_no_backup(tmp_path, monkeypatch, capsy
     backups_dir = output_dir / ".agentteams-backups"
 
     # Freshness waiver so the ONLY thing that can block is the overwrite gate.
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
@@ -873,7 +873,7 @@ def test_stale_fingerprint_with_identical_content_does_not_rerender(tmp_path, mo
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
 
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-freshness-003",
@@ -970,7 +970,7 @@ def test_stale_fingerprint_converges_in_two_updates(tmp_path, monkeypatch, capsy
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
 
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-freshness-p0heal",
@@ -1121,7 +1121,7 @@ def test_check_parity_with_update_dry_run(tmp_path, monkeypatch, capsys):
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
 
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "waiver-parity-001",
@@ -1211,7 +1211,7 @@ def test_initialization_writes_baseline_inventory_artifacts(tmp_path, monkeypatc
         pytest.skip("software-project brief not found")
 
     output_dir = tmp_path / ".github" / "agents"
-    waiver_key = "integration-waiver-key"
+    waiver_key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
 
     refs = output_dir / "references"
