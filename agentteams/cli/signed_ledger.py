@@ -48,7 +48,9 @@ _PLACEHOLDER_KEYS = frozenset({"...", "changeme", "change-me", "xxx", "secret", 
 MIN_HMAC_KEY_BYTES = 32
 
 
-def require_strong_hmac_key(key: str, what: str = "signing key") -> str:
+def require_strong_hmac_key(
+    key: str, what: str = "signing key", error: type[RuntimeError] = RuntimeError,
+) -> str:
     """Refuse an HMAC secret that is short or an obvious placeholder; return it unchanged otherwise.
 
     A placeholder such as ``...`` once signed a decision that read as verified, and anyone who knows
@@ -57,18 +59,19 @@ def require_strong_hmac_key(key: str, what: str = "signing key") -> str:
     Args:
         key: The secret, as read from the environment or passed in.
         what: The name used in the error (for example ``"decision signing key"``).
+        error: The exception type to raise, so a module can keep its own (``GrantError``).
 
     Returns:
         *key*, unchanged.
 
     Raises:
-        RuntimeError: The key is under :data:`MIN_HMAC_KEY_BYTES` bytes, a known placeholder, or one
-            repeated character.
+        RuntimeError: (or *error*) The key is under :data:`MIN_HMAC_KEY_BYTES` bytes, a known
+            placeholder, or one repeated character.
     """
     stripped = key.strip()
     if (len(key.encode("utf-8")) < MIN_HMAC_KEY_BYTES or stripped.lower() in _PLACEHOLDER_KEYS
             or len(set(stripped)) <= 1):
-        raise RuntimeError(
+        raise error(
             f"{what} is too weak (under {MIN_HMAC_KEY_BYTES} bytes, a placeholder, or one repeated "
             "character); use a random secret, e.g. `python -c 'import secrets; print(secrets.token_hex(32))'`"
         )

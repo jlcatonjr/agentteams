@@ -68,7 +68,7 @@ def served(tmp_path, monkeypatch):
     keydir = tmp_path / "keys"
     keydir.mkdir(mode=0o700)
     key = keydir / "proposal-ledger.key"
-    key.write_text("k" * 64)
+    key.write_text("ledger-key-" + "0123456789abcdef" * 4)
     key.chmod(0o600)
     monkeypatch.setattr(P, "KEY_DIR", str(keydir))
     monkeypatch.setenv(P.KEY_FILE_ENV, str(key))

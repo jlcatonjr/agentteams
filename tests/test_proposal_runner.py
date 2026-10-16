@@ -40,7 +40,7 @@ def key_file(tmp_path, monkeypatch):
     path = tmp_path / "keys" / "proposal-ledger.key"
     path.parent.mkdir()
     monkeypatch.setattr(P, "KEY_DIR", str(path.parent))
-    path.write_text("runner-secret\n")
+    path.write_text("runner-secret-0123456789abcdef01\n")
     path.chmod(0o600)
     monkeypatch.setenv(P.KEY_FILE_ENV, str(path))
     return path
@@ -92,9 +92,9 @@ def test_key_file_must_be_private_regular_and_not_a_link(tmp_path, monkeypatch):
 
 
 def test_file_custody_ignores_environment_keys(key_file, monkeypatch):
-    monkeypatch.setenv(P.KEY_ENV[0], "env-secret")
+    monkeypatch.setenv(P.KEY_ENV[0], "env-secret-0123456789abcdef01234")
     P.use_key_file()
-    assert P._key() == b"runner-secret"
+    assert P._key() == b"runner-secret-0123456789abcdef01"
 
 
 # --- the queue ----------------------------------------------------------------------------------
@@ -182,7 +182,7 @@ def test_cli_queues_through_a_live_runner(project, tmp_path):
     home = tmp_path / "home"   # the runner's key must sit in ~/.config/agentteams/keys: give it its own HOME
     keys = home / ".config" / "agentteams" / "keys"
     keys.mkdir(parents=True)
-    (keys / "proposal-ledger.key").write_text("runner-secret\n")
+    (keys / "proposal-ledger.key").write_text("runner-secret-0123456789abcdef01\n")
     (keys / "proposal-ledger.key").chmod(0o600)
     env = {k: v for k, v in os.environ.items() if k not in (*P.KEY_ENV, P.KEY_FILE_ENV)}
     env["HOME"] = str(home)
