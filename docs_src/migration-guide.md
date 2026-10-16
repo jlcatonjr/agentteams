@@ -182,6 +182,10 @@ The model:
    `SHA256:IPdnLwlF…`.
 3. **Install from that checkout into its own environment**, not as an editable install of the development
    checkout. Then make the checkout read-only, and keep it, and the environment, outside every agent write root.
+   - **Install it with `pip install <checkout>` or `pipx install <checkout>`.** That is what records the version
+     and commit agentteams reports and writes into `build-log.json` as the pin.
+   - Putting the source on `sys.path` (a `.pth` file or `PYTHONPATH`) reports `0.0.0+local` and records no pin.
+   - Don't hand-write install metadata to work around this: the recorded pin would then be an unverified claim.
 4. **Render from that environment,** so the gate pin (`<hooks>/agentteams-python`) names it. A team rendered earlier
    from the development checkout's interpreter keeps a pin to that interpreter, and its gate keeps importing
    whatever that interpreter imports. That may be the moving `main`. Re-render (step 3), then run `--check-wiring`

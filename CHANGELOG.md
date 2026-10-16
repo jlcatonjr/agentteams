@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A clearance targeting `AGENTS.md` is classed by its other effects. Review such rows as you would a `CLAUDE.md` one.
   The fix is planned for 1.0.x, with the operator-applied render mode (found by baseAgent's @security).
 
+### docs (migration guide: a release checkout records its pin only when pip-installed)
+
+- A source-path install (`.pth` or `PYTHONPATH`) reports `0.0.0+local` and records no pin in `build-log.json`.
+  Install the verified checkout with `pip install` or `pipx install` (found by baseAgent).
+
 ### docs (SECURITY.md: why a signer installed under `$HOME` can be refused)
 
 - If a repository has no `.claude/settings.json`, the signer's write-root search reaches
