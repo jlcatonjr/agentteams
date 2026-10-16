@@ -28,9 +28,11 @@ convert and bridge refuse ``grok`` (``cli/parser_validate``), and ``write_policy
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -61,8 +63,9 @@ from ._agents_md_ownership import (
     symlink_on_path,
     upsert_fenced_block,
 )
-from ._grok_tool_scoping import EXACT_TOOLSET_LINES, to_grok_tools
-from .format_spec import COPILOT_INSTRUCTIONS_FILENAME
+from ._grok_tool_scoping import EXACT_TOOLSET_LINES, effective_grok_tools, split_tool_list, translate_grok_tools
+from agentteams.capability_map import _RETRIEVAL_CLI_SCOPE
+from .format_spec import COPILOT_INSTRUCTIONS_FILENAME, FORMAT_SPECS
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
 
 #: Every agent front-matter key the pinned Grok Build release accepts (source-only: ``xai-grok-agent/src/config.rs``).
@@ -107,22 +110,101 @@ def grok_runtime_block() -> str:
     Raises:
         Nothing.
     """
+    pinned = FORMAT_SPECS["grok"].pinned_version
     return (
-        f"<!-- AGENTTEAMS:BEGIN {GROK_FENCE_ID} v=1 -->\n"
+        f"<!-- AGENTTEAMS:BEGIN {GROK_FENCE_ID} v=2 -->\n"
         "## Grok Build Notes\n"
         "\n"
         "- Grok Build loads this file only in a trusted folder. Review `.grok/hooks/`, `.grok/workflows/`,\n"
         "  `.grok/plugins/`, `.grok/lsp*`, `.mcp.json` and `.grok/config.toml` first, then run `grok --trust`\n"
         "  once in this repository (trust also turns on project hooks, MCP and LSP servers, and skills).\n"
-        "- The team's custom agents are in `.grok/agents/`. Subagents cannot spawn subagents (depth one), so run\n"
-        "  the orchestrator as the session agent: `grok --agent \"<orchestrator name>\"`.\n"
-        "- Grok also loads `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/agents/`. A `.grok/agents/` file replaces\n"
-        "  the `.claude/agents/` agent with the same `name:`; regenerate both teams together so the names stay\n"
-        "  identical.\n"
+        "- The team's custom agents are in `.grok/agents/`. Run one as the session agent by its file path:\n"
+        f"  `grok --agent .grok/agents/<slug>.md` (in the TUI, pick it with `/agents`). In Grok Build {pinned} the\n"
+        "  name form (`grok --agent \"<name>\"`, `GROK_AGENT`) silently runs the default agent instead.\n"
+        f"- Grok Build {pinned} cannot spawn the team's custom agents as subagents (\"Unknown subagent type\"), so the\n"
+        "  orchestrator cannot delegate to them: run each specialist directly, as above. If a spawn fails, never\n"
+        "  retry it without a type: an untyped spawn starts a general-purpose agent that has every tool.\n"
+        "- An agent whose `tools:` holds `Bash` has a full shell, which can write files whatever its other tools\n"
+        "  are. An agent holding `Agent` can start an untyped, all-tool subagent.\n"
+        "- Grok also loads `CLAUDE.md`, `.claude/CLAUDE.md` and `.claude/agents/`. Which body runs when a\n"
+        "  `.grok/agents/` and a `.claude/agents/` agent share a `name:` is not confirmed; regenerate both teams\n"
+        "  together so the two copies stay identical.\n"
         "- Keep this file tracked in git: Grok documents that gitignored instruction files are skipped\n"
         "  (behaviour on case-insensitive filesystems varies).\n"
         f"<!-- AGENTTEAMS:END {GROK_FENCE_ID} -->"
     )
+
+
+#: Manifest key (underscore: excluded from the fingerprint) collecting every scoped entry a grok render dropped or widened;
+#: build_team.py records it in the build log as ``grok_tool_notices``.
+GROK_TOOL_NOTICES_KEY = "_grok_tool_notices"
+
+
+def _record_tool_changes(manifest: dict[str, Any], slug: str, changes: list[str]) -> None:
+    """Tell the operator, on stderr and in the manifest, about each scoped entry a grok render changed.
+
+    Args:
+        manifest: The team manifest (mutated: :data:`GROK_TOOL_NOTICES_KEY`).
+        slug: The agent the change applies to.
+        changes: Lines from :func:`._grok_tool_scoping.translate_grok_tools`.
+
+    Raises:
+        Nothing.
+    """
+    seen = manifest.setdefault(GROK_TOOL_NOTICES_KEY, [])
+    for change in changes:
+        effect = "; the agent loses the retrieval CLI on grok" if _RETRIEVAL_CLI_SCOPE in change else ""
+        notice = f"{slug}: {change}{effect}"
+        if notice not in seen:
+            seen.append(notice)
+            print(f"  [GROK-SCOPE] {notice}", file=sys.stderr)
+
+
+def _translate_agent_tools(manifest: dict[str, Any], slug: str, allow: str, deny: str | None) -> tuple[str, str | None]:
+    """Translate an agent's allow and deny lists for grok, applying the deny by subtraction.
+
+    The pinned Grok Build release ignores ``disallowedTools`` (grok-scope-verify d/d2: ``Read, Bash`` with ``disallowedTools: Bash``
+    was still offered the shell). The only limit it honours is absence from ``tools:``, so every denied tool is left
+    out of the emitted allow-list; the ``disallowedTools:`` line is kept as a record of intent, not as enforcement.
+
+    Args:
+        manifest: The team manifest (notices are recorded on it).
+        slug: The agent slug.
+        allow: The Claude-style ``tools`` value.
+        deny: The Claude-style ``disallowedTools`` value, or None.
+
+    Returns:
+        ``(tools, disallowed)`` in grok's vocabulary; ``tools`` already excludes every denied entry.
+
+    Raises:
+        ValueError: A list cannot be translated, or the deny-list leaves no built-in tool (an empty ``tools:`` list
+            inherits every tool; @security grok-scope-fix C2).
+    """
+    tools, changes = translate_grok_tools(allow)
+    disallowed = None
+    if deny:
+        disallowed, deny_changes = translate_grok_tools(deny, deny=True)
+        changes = changes + deny_changes
+    if not effective_grok_tools(tools, disallowed):
+        raise ValueError(
+            f"{slug}: disallowedTools ({disallowed}) leaves no built-in tool in ({tools}) for grok: an empty effective "
+            "toolset (an empty tools: list inherits every tool), so the render is refused"
+        )
+    if disallowed:
+        denied = set(split_tool_list(disallowed))
+        mcp_patterns = [d for d in denied if d.startswith("mcp__")]
+
+        def _is_denied(entry: str) -> bool:  # an MCP wildcard deny (mcp__srv__*) removes the matching allow entries
+            return entry in denied or (entry.startswith("mcp__") and any(fnmatch.fnmatchcase(entry, p) for p in mcp_patterns))
+
+        kept = [t for t in split_tool_list(tools) if not _is_denied(t)]
+        removed = [t for t in split_tool_list(tools) if _is_denied(t)]
+        if removed:
+            changes.append(f"left {', '.join(removed)} out of tools: (grok ignores disallowedTools, so the deny is applied "
+                           "by absence)")
+            tools = ", ".join(kept)
+    _record_tool_changes(manifest, slug, changes)
+    return tools, disallowed
 
 
 def _front_matter(name: str, description: str, tools: str, disallowed: str | None) -> str:
@@ -161,7 +243,8 @@ class GrokAdapter(ClaudeAdapter):
         Raises:
             ValueError: The manifest grants the agent an ``agentteams_runner`` server (``write_policy:
                 "orchestrator-only"`` is not supported for grok), or the tool list cannot be translated without
-                widening (see :func:`._grok_tool_scoping.to_grok_tools`).
+                widening (see :func:`._grok_tool_scoping.translate_grok_tools`); a scoped entry is dropped (allow) or
+                widened to the whole tool (deny), with a ``[GROK-SCOPE]`` notice; or the deny-list empties the toolset.
         """
         if _runner_grant(agent_slug, manifest) is not None:
             raise ValueError(
@@ -169,9 +252,8 @@ class GrokAdapter(ClaudeAdapter):
                 f"grant can be rendered for {agent_slug!r}"
             )
         name, description = _extract_name_description(content, agent_slug, manifest)
-        tools = to_grok_tools(_map_allowed_tools(content))
         _model, disallowed, _permission = _extract_claude_optional_keys(content)
-        disallowed = to_grok_tools(disallowed, deny=True) if disallowed else None
+        tools, disallowed = _translate_agent_tools(manifest, agent_slug, _map_allowed_tools(content), disallowed)
         body = self._strip_handoffs_section(self._strip_yaml_front_matter(content))
         return (_front_matter(name, description, tools, disallowed) + body).strip() + "\n"
 
@@ -214,7 +296,8 @@ class GrokAdapter(ClaudeAdapter):
         if yaml_text is None or not _YAML_TOOLS_RE.search(yaml_text):
             raise ValueError("the Grok team-builder template needs a canonical `tools: [...]` front-matter line")
         head = content[: len(content) - len(body)]
-        replacement = "\n".join([f"tools: {to_grok_tools(_map_allowed_tools(content))}", *EXACT_TOOLSET_LINES])
+        tools, _ = _translate_agent_tools(manifest, "team-builder", _map_allowed_tools(content), None)
+        replacement = "\n".join([f"tools: {tools}", *EXACT_TOOLSET_LINES])
         head = _YAML_TOOLS_RE.sub(lambda _m: replacement, head, count=1)
         return head + body
 
@@ -402,6 +485,7 @@ class GrokAdapter(ClaudeAdapter):
             )
         if out_dir.name == "agents" and out_dir.parent.name == ".grok":
             notices.extend(parity_notices(kept, out_dir, root))
+            notices.extend(stale_scope_notices(out_dir))
         # A refused (operator-owned) hooks .gitignore means no pin either: the machine path would be committable.
         from agentteams.frameworks.claude import guard_gate_pin_files
 
@@ -475,6 +559,45 @@ def front_matter_name(text: str) -> str | None:
     if not m:
         return None
     return next(g for g in m.groups() if g is not None).strip() or None
+
+
+def stale_scope_notices(agents_dir: Path) -> list[str]:
+    """Name existing grok agent files whose ``tools:`` / ``disallowedTools:`` line still holds a scoped entry.
+
+    Grok ignores the scope and widens the agent (GROK-FU-R8-SCOPE). This run's render drops a scoped allow entry and
+    widens a scoped deny, but ``--update --merge`` keeps an edited file's front matter and never auto-applies a deny
+    change (not a strict narrowing), so a deployed team can keep the widening line after the update.
+
+    Args:
+        agents_dir: The ``.grok/agents`` directory (read only; a symlinked file is skipped).
+
+    Returns:
+        One notice per affected file.
+
+    Raises:
+        Nothing.
+    """
+    found: list[str] = []
+    if not agents_dir.is_dir():
+        return found
+    for path in sorted(agents_dir.glob("*.md")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            yaml_text, _ = _parse_yaml_front_matter(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as exc:
+            found.append(f"[GROK-SCOPE] {path}: could not be read to check for scoped tool entries ({exc}).")
+            continue
+        line = next((ln.strip() for ln in (yaml_text or "").splitlines()
+                     if ln.strip().startswith(("tools:", "disallowedTools:")) and "(" in ln), None)
+        if line:
+            found.append(
+                f"[GROK-SCOPE] {path}: existing grok agent still has a scoped entry ({line}); grok ignores the scope "
+                "and widens the agent. This run's render removes it, but --update --merge keeps an edited file's line "
+                "and never auto-applies a deny change: check the file after this run, or run "
+                "--reconcile-front-matter --reconcile-apply."
+            )
+    return found
 
 
 def parity_notices(kept: list[tuple[str, str]], output_dir: Path, root: Path) -> list[str]:
