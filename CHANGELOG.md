@@ -6,6 +6,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.10] - 2026-10-15
+
+### release notes (rc10)
+
+43 pull requests (#185–#228) since rc.9. rc.10 is the 1.0 release candidate. `release/1.0` is cut from it after
+a soak, and `v1.0.0` is tagged on that branch once both 1.0 gates are met: the mathAgents M6 pilot and the
+injection evaluation.
+
+**Before you upgrade:** run `agentteams --verify-integrity` in each team.
+- It reports the decision log's hash chain.
+- It lists every unretracted HALT that now blocks a gate action under the 1.0 token rule (#225), with the exact
+  id to retract it by.
+- Retract the ones that no longer apply. Then run `agentteams --check-wiring`, which now checks the gate hook's
+  interpreter (#226).
+
+- **The 1.0 must-fix set (#224, #225, #226)**, from the release triage and the M6 pilot:
+  - signed decision logs chain correctly. Logs broken by the old signer verify again through a disclosed legacy
+    prefix;
+  - `--migrate-decision-log` pads legacy rows;
+  - a corrupt intel cache is never reported fresh;
+  - **BREAKING:** `research browser --screenshot` is removed, because it was a file write in the read-only
+    retrieval grant;
+  - lost-fence sidecars are inert, and a restore never revives them;
+  - a HALT blocks every action named in its id;
+  - the gate hook runs under an interpreter that can import agentteams. It re-runs under a gitignored pin when
+    `python3` can't, and asks rather than silently allowing when nothing works.
+- **The Grok adapter (#214, #216, #218, #227, #228).**
+  - Grok agents drop scoped tool entries and `MCPTool`, and apply denies by absence.
+  - Run an agent with `grok --agent .grok/agents/<slug>.md`: custom subagents can't be spawned in grok 1.0.52.
+- **Security fixes:**
+  - derived content (decoded, translated, summarized) stays data under C-4, and outbound sends are gated (#211);
+  - an `--interop-from` projection never widens a grant (#210);
+  - the signing switch and task defaults (#208);
+  - backups live outside agent directories (#207);
+  - Goose delegate narrowing (#206);
+  - the sandboxed-orchestrator status channel (#203);
+  - the dispatch nonce (#204).
+- **New options:**
+  - `--adopt-only SLUG[,SLUG…]` (#209);
+  - `--migrate-decision-log` (#212);
+  - the opt-in per-case gate decision log, `AGENTTEAMS_GATE_LOG` (#217);
+  - memory-index shards (#219);
+  - the user-editable Project Layout region (#193);
+  - fence-twin acknowledgements (#198, #199).
+- **Behaviour changes:**
+  - Goose no longer overwrites a repository-root `AGENTS.md` it did not write (#222);
+  - the integrity re-record keeps absent installed-hook pins (#221);
+  - fence and merge fixes (#189, #194, #201, #202, #213).
+- **Known limitations for 1.0** are listed in the entries below and in the release notes for `v1.0.0`:
+  - clearance prefix binding: name clearances `<action>-<instance>` and use the `scope` column;
+  - `conditions_verified` must be exactly `verified`;
+  - the legacy decision-log prefix;
+  - Goose, Codex and AGENTS.md grants are cooperative.
+
 ### feat (constitutional-gate hook: opt-in per-case decision log)
 
 - The PreToolUse constitutional-gate hook returned its decision on stdout and kept no record of its own, so an
