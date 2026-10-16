@@ -28,6 +28,7 @@ convert and bridge refuse ``grok`` (``cli/parser_validate``), and ``write_policy
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import subprocess
@@ -191,8 +192,13 @@ def _translate_agent_tools(manifest: dict[str, Any], slug: str, allow: str, deny
         )
     if disallowed:
         denied = set(split_tool_list(disallowed))
-        kept = [t for t in split_tool_list(tools) if t not in denied]
-        removed = [t for t in split_tool_list(tools) if t in denied]
+        mcp_patterns = [d for d in denied if d.startswith("mcp__")]
+
+        def _is_denied(entry: str) -> bool:  # an MCP wildcard deny (mcp__srv__*) removes the matching allow entries
+            return entry in denied or (entry.startswith("mcp__") and any(fnmatch.fnmatchcase(entry, p) for p in mcp_patterns))
+
+        kept = [t for t in split_tool_list(tools) if not _is_denied(t)]
+        removed = [t for t in split_tool_list(tools) if _is_denied(t)]
         if removed:
             changes.append(f"left {', '.join(removed)} out of tools: (grok ignores disallowedTools, so the deny is applied "
                            "by absence)")

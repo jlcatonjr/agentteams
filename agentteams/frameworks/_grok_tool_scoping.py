@@ -41,6 +41,10 @@ GROK_TOOL_NAMES = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "W
 #: search_replace, todo_write, workflow; grok-scope-verify h-mcptool). Dropped, with a notice, never emitted.
 _GROK_LIST_BREAKERS = frozenset({"MCPTool"})
 
+#: Accepted names that grant nothing on the pinned release (grok-scope-verify h-write/h-webfetch/h-websearch). They never
+#: count toward a non-empty effective toolset: a list of only these may behave like an empty one (@security delta C2).
+_GROK_NO_GRANT = frozenset({"Write", "WebFetch", "WebSearch"})
+
 #: Front-matter lines every Grok agent carries so ``tools:`` is the exact limit. Grok's defaults widen it:
 #: ``injectDefaultTools`` (default true) layers session tools on top of the list and ``mcpInheritance``
 #: (default ``all``) passes every parent MCP server (source-only: ``xai-grok-agent/src/config.rs``).
@@ -177,7 +181,7 @@ def to_grok_tools(value: str, *, deny: bool = False) -> str:
 def effective_grok_tools(tools: str, disallowed: str | None) -> list[str]:
     """Return the built-in tools an allow-list keeps after a deny-list (bare names, as emitted).
 
-    Only names in :data:`GROK_TOOL_NAMES` count. An ``mcp__`` entry does not: under ``mcpInheritance: none`` the agent
+    Only names in :data:`GROK_TOOL_NAMES` that grant something count (not :data:`_GROK_NO_GRANT`). An ``mcp__`` entry does not: under ``mcpInheritance: none`` the agent
     has no MCP servers, so an allow-list of only MCP tools (or one whose MCP entries a wildcard deny removes) leaves
     nothing usable (@security grok-scope-fix step 5, condition 1).
 
@@ -193,4 +197,4 @@ def effective_grok_tools(tools: str, disallowed: str | None) -> list[str]:
         Nothing.
     """
     denied = set(split_tool_list(disallowed)) if disallowed else set()
-    return [t for t in split_tool_list(tools) if t in GROK_TOOL_NAMES and t not in denied]
+    return [t for t in split_tool_list(tools) if t in GROK_TOOL_NAMES and t not in _GROK_NO_GRANT and t not in denied]

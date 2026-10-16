@@ -242,3 +242,30 @@ def test_an_unscoped_deny_is_applied_by_absence(capsys) -> None:
     out = GrokAdapter().render_agent_file(_agent("['read', 'edit']", "disallowedTools: Edit\n"), "x", {})
     assert "Edit" not in _line(out, "tools").split(", ") and _line(out, "disallowedTools") == "Edit"
     assert "left Edit out of tools:" in capsys.readouterr().err
+
+
+# @security delta conditions 1-3 ---------------------------------------------------------------------------------
+
+def test_an_mcp_wildcard_deny_removes_the_matching_allow_entries() -> None:
+    from agentteams.frameworks.grok import _translate_agent_tools
+    tools, _ = _translate_agent_tools({}, "x", "Read, mcp__s__t, mcp__other__u", "mcp__s__*")
+    assert tools == "Read, mcp__other__u"
+
+
+@pytest.mark.parametrize("allow", ["Write", "WebFetch, WebSearch", "Write, mcp__s__t"])
+def test_a_list_that_grants_nothing_is_refused(allow: str) -> None:
+    from agentteams.frameworks.grok import _translate_agent_tools
+    with pytest.raises(ValueError, match="empty effective toolset"):
+        _translate_agent_tools({}, "x", allow, None)
+
+
+def test_a_task_deny_removes_agent() -> None:
+    from agentteams.frameworks.grok import _translate_agent_tools
+    tools, disallowed = _translate_agent_tools({}, "x", "Read, Task", "Task")
+    assert tools == "Read" and disallowed == "Agent"
+
+
+def test_an_mcptool_deny_is_dropped_without_error() -> None:
+    from agentteams.frameworks.grok import _translate_agent_tools
+    tools, disallowed = _translate_agent_tools({}, "x", "Read, Grep", "MCPTool")
+    assert tools == "Read, Grep" and not disallowed
