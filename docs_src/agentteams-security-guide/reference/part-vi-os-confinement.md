@@ -243,8 +243,20 @@ adds the sandbox as a further (Linux-deny-tested) obstacle to that third edit â€
 residual ceiling stands: composed layers raise cost and make tampering evident, they do
 not eliminate it.
 
+**The decision log is evidence, not a boundary.** With `AGENTTEAMS_GATE_LOG` set to an
+absolute path outside the project (judged from the hook's working directory) and outside
+any git work tree, the hook appends one JSON line per call: `tool_use_id`, tool name,
+decision (`pass`/`ask`/`deny`/`crash-open`/`crash-deny`), a fixed `reason_id`, scanner
+categories and line numbers, what it `checked`, the installed hook's sha256 and a
+`prev_sha` chain kept under `flock`. It never records written content, the free-text
+reason or exception text, because the scanner's message embeds the matched text.
+`AGENTTEAMS_GATE_LOG_KEY` adds a keyed `input_hmac` of the canonical `tool_input`. An
+unsafe path is refused with a stderr notice, and no logging failure changes the decision.
+Read it conservatively: a missing line is no evidence, never a pass, and `checked=none`
+does not show the call was inspected.
+
 **Source.**
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+`agentteams/templates/universal/hooks/constitutional-gate.py`.
 
 ---
 
