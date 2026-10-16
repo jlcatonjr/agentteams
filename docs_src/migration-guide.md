@@ -147,8 +147,8 @@ agentteams --description <brief> --framework <fw> --output <team dir> --check-wi
 
 Then run `--verify-integrity` again. It should exit 0.
 
-Even with a working pin, make sure PATH's `python3` can import agentteams: after any pin failure the gate imports
-agentteams from the project root (see [Known Limitations in 1.0](known-limitations.md#the-gate-imports-agentteams-from-the-project-root-after-any-pin-failure)).
+If neither the pin nor PATH's `python3` can import agentteams, the gate denies (confined) or asks (cooperative)
+on every write it would check, and names `--check-wiring`. It never imports agentteams from the project tree.
 
 #### Step 5 — Replace `--screenshot`
 

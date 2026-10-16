@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - corrected rc wording: rcs may add features or remove surfaces no final release has shipped;
   - the `agentteams/schemas/` link is fixed.
 - **New `docs_src/known-limitations.md`:** what each 1.0 limitation is, who it affects, the workaround and its
-  tracking. This includes the gate hook's in-checkout fallback when no interpreter can import agentteams.
+  tracking, including the Codex merge, project-hooks and legacy decision-log limitations.
 - **`docs_src/migration-guide.md`:** a new section, "Upgrading to 1.0". It covers the pre-upgrade
   `--verify-integrity` HALT review, `--migrate-decision-log`, the interpreter pin, the release-checkout model, and
   rolling back by turning `write_policy` off or by returning to rc.9.

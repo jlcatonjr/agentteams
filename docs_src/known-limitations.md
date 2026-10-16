@@ -182,23 +182,37 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   `egress-netns-wiring.sh` creates, and that script is not in the repository.
 - **Tracking:** remediation log rows 387, 410 and 414.
 
-### The gate imports agentteams from the project root after any pin failure
+## Codex (`--framework codex`)
 
-- **What:** when `python3` cannot import agentteams, the hook re-runs itself under the interpreter pin
-  (`<hooks>/agentteams-python`). After **any** pin failure (the pin is missing, it is refused because it points
-  inside the project tree, or the re-run exits with a code other than 0 or 2), the hook inserts the directory two
-  levels above itself (`parents[2]`, the project root for `.claude/hooks/constitutional-gate.py`) on `sys.path`
-  and imports `agentteams` from there. The fallback exists for agentteams' own checkout. In any other project it
-  means:
-  - an agent that can create an `agentteams/` package at the project root, or break the pin file in the
-    agent-writable hooks directory, decides the gate's verdict;
-  - `--verify-integrity` cannot catch it.
-- **Who:** any project whose `python3` cannot import agentteams.
-- **Workaround:**
-  - Make PATH's `python3` import agentteams. `--check-wiring` shows whether it does.
-  - Deny agent writes to `.claude/hooks/**` and to a root `agentteams/**` in your settings' permission rules.
-- **Tracking:** 1.0 known limitation, fix planned. The #226 PR, "Residual (logged)". CHANGELOG `[1.0.0-rc.10]`,
-  "the constitutional gate runs under an interpreter that can import agentteams".
+### `--update --merge` does not narrow an existing team's `sandbox_mode`
+
+- **What:** turning `write_policy: orchestrator-only` on for an existing Codex team and running `--update --merge`
+  leaves the specialists' `sandbox_mode = "workspace-write"` in place. Only a fresh build or `--update --overwrite`
+  (with an `overwrite` clearance) rewrites it. Agent files that agentteams did not generate are never touched, and
+  fail the write-policy audit.
+- **Who:** Codex teams adopting the switch on an existing render.
+- **Workaround:** run `--update --overwrite` with a clearance, or rebuild. The merge prints this warning, and
+  `[WRITE-POLICY]` names each file it did not generate. Under the launcher the role gate denies every spawned
+  agent's writes whatever its `sandbox_mode`, so enforcement still holds.
+- **Tracking:** 1.0 known limitation. A three-way merge of `sandbox_mode` is planned for 1.0.x.
+
+### A project's own `.codex/hooks.json` keeps the role gate out
+
+- **What:** the Codex role gate is installed only when agentteams owns `.codex/hooks.json`. If the project has its
+  own hooks file there, the render leaves it alone and says so, and `.codex/confined-run.example.sh` then refuses
+  to start, because the file is not the pinned copy. This fails closed.
+- **Who:** Codex projects with their own project hooks.
+- **Workaround:** move your own hooks to `CODEX_HOME/hooks.json`, then re-render.
+- **Tracking:** 1.0 known limitation. Merging the gate entry into an existing file is planned for 1.0.x.
+
+### New teams start a legacy six-column decision log
+
+- **What:** a fresh render seeds `references/security-decisions.log.csv` with the older six-column header, on
+  every framework. A signed row (for example a `#210` or Rule 15 row) needs the current schema.
+- **Who:** teams that will sign decisions.
+- **Workaround:** run `--migrate-decision-log` on the team before the first signed row (see
+  [Upgrading to 1.0, Step 2](migration-guide.md#step-2-upgrade-or-re-pad-a-legacy-log-migrate-decision-log)).
+- **Tracking:** 1.0 known limitation. Seeding the current header is planned for 1.0.x.
 
 ## Integrity manifest
 
