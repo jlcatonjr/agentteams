@@ -166,9 +166,24 @@ def test_native_render_fences_the_body_and_adds_notes():
     assert codex.h1_count(di) == 1
 
 
-def test_projected_fenced_body_is_unchanged():
+def test_a_fenced_body_keeps_its_fences_and_gains_notes_once():
+    """rc.12 (baseAgent at rc.11): a fenced body got no Notes region, so --overwrite refused to carry one."""
     body = "<!-- AGENTTEAMS:BEGIN invariant_core v=1 -->\nx\n<!-- AGENTTEAMS:END invariant_core -->"
-    assert _fence_native_body(body) == body
+    out = _fence_native_body(body)
+    assert out.startswith(body) and out.count("## Project-Specific Notes") == 1
+    assert _fence_native_body(out) == out                       # idempotent: a body with Notes is unchanged
+
+
+def test_every_native_codex_agent_has_a_notes_region():
+    """The orchestrator and the governance agents render from section-fenced templates: they need it most."""
+    for slug in ("git-operations", "orchestrator", "security", "navigator", "conflict-auditor"):
+        try:
+            text = CodexAdapter().render_agent_file(_CANON.replace("git-operations", slug), slug, {})
+        except Exception:  # noqa: BLE001 - a slug the fixture canon can't render is not this test's concern
+            continue
+        di = _instructions(text)
+        assert di.count("## Project-Specific Notes") == 1, slug
+        assert di.index("## Project-Specific Notes") < di.index("AGENTTEAMS:BEGIN codex_translation"), slug
 
 
 def test_retrofit_wraps_only_the_body():

@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (codex: every native agent renders a Project-Specific Notes region)
+
+- **The bug** (found by baseAgent on rc.11). A natively rendered Codex agent whose template already has section
+  fences (the orchestrator, security, the governance agents and the component experts) rendered no
+  `## Project-Specific Notes` region. 11 of 24 agents were affected on the example brief.
+  - `--update --overwrite` correctly refuses to drop an existing Notes region, so it refused those agents unless
+    `--discard-user-regions` was passed.
+  - That broke the documented way to narrow `sandbox_mode` when adopting `write_policy`.
+- **The fix.** A fenced body keeps its fences and gains the region once, before the `codex_translation` block. An
+  end-to-end `--update --overwrite` now carries the notes, and every TOML parses.
+
 ### fix (security log: an unauthenticated retraction no longer wedges the HALT scan)
 
 - **The bug** (found by mathAgents on rc.11). In a signing-active log, the HALT scan authenticated every matching
