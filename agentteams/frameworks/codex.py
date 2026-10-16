@@ -428,6 +428,37 @@ def toml_write_error(rel_path: str, text: str) -> str | None:
     return None
 
 
+def write_checked(write: Any, target: Path, rel_path: str, text: str, errors: list[str], *,
+                  restore: str | None = None) -> bool:
+    """Write *text* to *target* unless :func:`toml_write_error` refuses it: ``emit_all``'s one TOML write guard.
+
+    Used on every ``emit_all`` write of a rendered file (merge, machine-managed full replace, write and
+    ``--overwrite``), so neither a broken merge nor user regions carried over from a broken file reach disk.
+
+    Args:
+        write: The writer, called as ``write(target, text)`` (``atomicio._atomic_write_text``).
+        target: The file to write.
+        rel_path: Its output-relative path (only ``.toml`` is checked).
+        text: The content to write.
+        errors: The run's error list; a refusal is appended to it, naming *target*.
+        restore: On a refusal, content to write back instead (the file as this run found it), or None.
+
+    Returns:
+        True when *text* was written, False when it was refused.
+
+    Raises:
+        OSError: From *write*.
+    """
+    bad = toml_write_error(rel_path, text)
+    if bad is None:
+        write(target, text)
+        return True
+    errors.append(f"Refused to write {target}: {bad}")
+    if restore is not None:
+        write(target, restore)
+    return False
+
+
 def _content_wrap(text: str) -> str:
     """``text`` inside a ``content`` fence, ending with a newline."""
     return f"{_CONTENT_BEGIN}\n{text.strip()}\n{_CONTENT_END}\n"
@@ -825,11 +856,13 @@ class CodexAdapter(AgentsMdAdapter):
                 if merged is not None:
                     kept.append((rel_path, merged))
                 elif block is not None:
-                    examples = Path(os.path.normpath(output_dir / _WRITE_POLICY_EXAMPLE_REL)).parent
-                    if symlink_on_path(examples, root) is None:
+                    # The file itself too: emit resolves links, so a planted one would redirect the write.
+                    example = Path(os.path.normpath(output_dir / _WRITE_POLICY_EXAMPLE_REL))
+                    linked = symlink_on_path(example, root)
+                    if linked is None:
                         kept.append((_WRITE_POLICY_EXAMPLE_REL, block + "\n"))
                     else:
-                        notice += f" {examples} is a symlink, so no example block was written."
+                        notice += f" {linked} is a symlink, so no example block was written."
                 notices.append(notice)
                 continue
             if (target.name == "hooks.json" and target.parent.name == ".codex"

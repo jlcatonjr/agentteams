@@ -171,3 +171,32 @@ def test_grok_still_reads_a_grok_file_as_is(tmp_path: Path):
     (tmp_path / "AGENTS.md").write_text(kept[0][1], encoding="utf-8")
     kept, notices = _codex_guard(tmp_path, switch=False)
     assert kept == [] and "for Grok Build" in notices[0]
+
+
+@pytest.mark.parametrize("mode", [{}, {"merge": True}, {"overwrite": True}])
+def test_a_symlinked_example_file_is_never_followed(tmp_path: Path, mode: dict):
+    """@security condition 1: emit resolves links, so a planted example-file link would overwrite its target."""
+    (tmp_path / "AGENTS.md").write_text(HAND_TEXT, encoding="utf-8")
+    victim = tmp_path / "src" / "settings.py"
+    victim.parent.mkdir()
+    victim.write_text("SECRET = 1\n", encoding="utf-8")
+    (tmp_path / EXAMPLE).parent.mkdir(parents=True)
+    (tmp_path / EXAMPLE).symlink_to(victim)
+    notices = _emit_codex(tmp_path, **mode)
+    assert victim.read_text(encoding="utf-8") == "SECRET = 1\n"
+    assert (tmp_path / EXAMPLE).is_symlink() and "is a symlink, so no example block was written" in notices[0]
+
+
+def test_a_codex_toml_whose_carried_result_does_not_parse_is_never_written(tmp_path: Path, monkeypatch):
+    """@security condition 3: the write and --overwrite path checks TOML too (and the machine-managed path)."""
+    from agentteams import emit
+
+    target = tmp_path / "x.toml"
+    target.write_text('name = "x"\n', encoding="utf-8")
+    monkeypatch.setattr(emit, "_overwrite_carry", lambda rel, old, new, **kw: (new + "name = 'dup'\n", []))
+    result = emit_all([("x.toml", 'name = "x"\ndescription = "d"\n')], output_dir=tmp_path, yes=True,
+                      overwrite=True)
+    assert not result.success and any("x.toml" in e and "not valid TOML" in e for e in result.errors)
+    assert target.read_text(encoding="utf-8") == 'name = "x"\n'
+    fresh = emit_all([("y.toml", "a = 1\na = 2\n")], output_dir=tmp_path, yes=True)       # a fresh write too
+    assert not fresh.success and not (tmp_path / "y.toml").exists()
