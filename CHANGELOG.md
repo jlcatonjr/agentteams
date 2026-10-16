@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security log: an unauthenticated retraction no longer wedges the HALT scan)
+
+- **The bug** (found by mathAgents on rc.11). In a signing-active log, the HALT scan authenticated every matching
+  `HALT-RETRACTED` row and raised on the first one that failed.
+  - A retraction written unsigned before `--migrate-decision-log` therefore made `_assert_no_unretracted_halt`,
+    and every `check_clearance` for that action, raise "decision signing key is not configured".
+  - This happened even when a later operator Ed25519 retraction was valid. The log is append-only, so the action
+    could never be cleared.
+- **The fix.** A retraction that fails authentication, or has no evidence, retracts nothing and is skipped.
+  - The HALT stays open until a valid retraction, as `--migrate-decision-log` already says ("no longer clears").
+  - The "never been retracted" error names each skipped row and why it was not accepted.
+- **Also:** the `derives_from` lineage helpers move to the new pinned module `agentteams/cli/decision_lineage.py`.
+  `decision_log` re-exports them and stays under the module ceiling.
+
 ## [1.0.0-rc.11] - 2026-10-16
 
 ### release notes (rc11)

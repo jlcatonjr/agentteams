@@ -251,3 +251,9 @@ def test_traceability_noop_when_ungoverned(tmp_path):
     # (legacy behaviour preserved; the elevated path is what governs such rows in WS-B).
     row = {"action_reviewed": "prune-collectors", "verdict": "PASS", "derives_from": ""}
     dl._assert_relaxing_row_is_traceable(row, output_dir=tmp_path, action="prune-collectors")
+
+
+def test_the_lineage_module_and_decision_log_agree_on_the_column_name() -> None:
+    from agentteams.cli import decision_lineage
+
+    assert decision_lineage._DERIVES_FROM_FIELD == dl._DERIVES_FROM_FIELD

@@ -21,6 +21,12 @@ from pathlib import Path
 from agentteams.cli.action_ids import action_matches, halt_names_action
 from agentteams.cli.decision_chain import chain_tip, is_chained, verify_chain
 from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, assert_text_bound, bind_text_digest
+from agentteams.cli.decision_lineage import (  # noqa: F401  (re-exported: tests and callers)
+    _build_lineage_map,
+    _row_action_id,
+    _row_lineage,
+    _transitive_ancestors,
+)
 from agentteams.cli.effect_classifier import (
     EffectClassifierError,
     non_eligibility_reason,
@@ -794,86 +800,17 @@ def _read_decision_rows(output_dir: Path) -> tuple[list[dict[str, str]], list[st
     return rows, fieldnames
 
 
-def _row_action_id(row: dict[str, str]) -> str:
-    """Return a row's own action id, normalized (lowercased, stripped)."""
-    return (row.get("action_reviewed") or row.get("decision") or "").strip().lower()
-
-
-def _row_lineage(row: dict[str, str]) -> set[str]:
-    """Return the normalized parent action ids a row declares in ``derives_from`` (may be empty)."""
-    raw = row.get(_DERIVES_FROM_FIELD, "") or ""
-    return {part.strip().lower() for part in re.split(r"[;,]", raw) if part.strip()}
-
-
-def _build_lineage_map(rows: list[dict[str, str]]) -> dict[str, set[str]]:
-    """Map each row action id to the union of parent ids it declares across all its rows."""
-    lineage: dict[str, set[str]] = {}
-    for row in rows:
-        action_id = _row_action_id(row)
-        if not action_id:
-            continue
-        lineage.setdefault(action_id, set()).update(_row_lineage(row))
-    return lineage
-
-
-def _transitive_ancestors(action: str, lineage_map: dict[str, set[str]]) -> set[str]:
-    """Return the transitive ``derives_from`` ancestors of *action*, FAIL-CLOSED.
-
-    Raises rather than returning a partial set on any lineage defect, because a relaxing action
-    that evades its ancestor's HALT by a broken or fabricated lineage must refuse, not proceed:
-
-    * **nonexistent-id** — a ``derives_from`` naming an id that no row in the log defines (not a
-      key in ``lineage_map``): an untraceable / fabricated ancestor;
-    * **cycle** — a ``derives_from`` chain that revisits a node on the current path.
-
-    Args:
-        action: The requested action id (normalized inside).
-        lineage_map: Output of :func:`_build_lineage_map`.
-
-    Returns:
-        The set of transitive ancestor ids (excluding *action* itself).
-
-    Raises:
-        RuntimeError: A dangling reference or a cycle — traversal fails closed.
-    """
-    start = action.strip().lower()
-    ancestors: set[str] = set()
-    on_path: set[str] = set()   # nodes on the current recursion stack (cycle = edge into this)
-    explored: set[str] = set()  # nodes fully descended (safe to skip RE-descending, not the edge)
-
-    def _descend(node: str) -> None:
-        on_path.add(node)
-        for parent in lineage_map.get(node, set()):
-            if parent in on_path:
-                # A back-edge to a node on the current stack is a genuine cycle — regardless of
-                # which node it was first discovered from (WS-A re-review F-4: the earlier global
-                # dedup let an off-first-path cycle escape).
-                raise RuntimeError(
-                    f"lineage cycle detected at {parent!r} (via {node!r})"
-                )
-            if parent not in lineage_map:
-                raise RuntimeError(
-                    f"lineage reference {parent!r} (from {node!r}) names no recorded decision "
-                    f"row — a relaxing action cannot derive from a nonexistent/untraceable id"
-                )
-            ancestors.add(parent)
-            if parent not in explored:
-                _descend(parent)
-        on_path.discard(node)
-        explored.add(node)
-
-    _descend(start)
-    return ancestors
-
-
 def _open_halt_for(
-    rows: list[dict[str, str]], target: str, *, output_dir: Path, signing_active: bool
+    rows: list[dict[str, str]], target: str, *, output_dir: Path, signing_active: bool,
+    skipped: list[str] | None = None,
 ) -> tuple[int, dict[str, str]] | None:
     """Return the first unretracted HALT for exactly *target*, or None.
 
     Encapsulates the whole-log scan-and-clear for one action id (the pre-lineage behaviour),
     so the lineage-aware caller can run it for the requested action AND each ancestor without
-    duplicating the retraction authentication or evidence requirement.
+    duplicating the retraction authentication or evidence requirement. A retraction that fails
+    authentication or has no evidence retracts nothing and is skipped, its reason appended to *skipped*:
+    one unsigned historical row in an append-only signed log must not wedge the scan (rc.12 fix).
     """
     # (index, row, normalized id, matched by token only). A HALT blocks every action named in its id
     # (halt_names_action); one matched only by token is retracted only by a row with its exact id.
@@ -888,15 +825,20 @@ def _open_halt_for(
             family or any(norm == reviewed.lower() for _, _, norm, _ in open_halts)
         ):
             # A family retraction is scoped to the gate action; an exact-id one to the HALT it names.
-            _assert_authorizing_row_is_authentic(
-                row, output_dir=output_dir, signing_active=signing_active,
-                action=target if family else reviewed,
-            )
-            if not (row.get("evidence") or row.get("conditions") or "").strip():
-                raise RuntimeError(
-                    f"{_HALT_RETRACTION_VERDICT} row for '{target}' carries no evidence; a "
-                    f"retraction must record why the HALT no longer applies"
+            try:
+                _assert_authorizing_row_is_authentic(
+                    row, output_dir=output_dir, signing_active=signing_active,
+                    action=target if family else reviewed,
                 )
+                if not (row.get("evidence") or row.get("conditions") or "").strip():
+                    raise RuntimeError(
+                        f"{_HALT_RETRACTION_VERDICT} row for '{target}' carries no evidence; a "
+                        f"retraction must record why the HALT no longer applies"
+                    )
+            except RuntimeError as exc:
+                if skipped is not None:
+                    skipped.append(f"row {index + 1} not accepted: {exc}")
+                continue
             open_halts = [h for h in open_halts
                           if not ((family and not h[3]) or h[2] == reviewed.lower())]
     return (open_halts[0][0], open_halts[0][1]) if open_halts else None
@@ -951,8 +893,9 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
         targets.extend((ancestor, True) for ancestor in sorted(ancestors))
 
     for target, is_ancestor in targets:
+        skipped: list[str] = []
         offending = _open_halt_for(
-            rows, target, output_dir=output_dir, signing_active=signing_active
+            rows, target, output_dir=output_dir, signing_active=signing_active, skipped=skipped
         )
         if offending is None:
             continue
@@ -968,4 +911,5 @@ def _assert_no_unretracted_halt(output_dir: Path, *, action: str) -> None:
             f"{_HALT_RETRACTION_VERDICT} row recording why it no longer applies — not by a "
             f"later PASS, not by the `consumed` flag, and not by renaming the action: a HALT blocks "
             f"every action named in its id, and one recorded for an instance id is retracted by that id."
+            + "".join(f" Retraction {why}." for why in skipped)
         )
