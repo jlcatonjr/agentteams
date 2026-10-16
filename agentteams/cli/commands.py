@@ -258,6 +258,10 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     for line in chain_lines:
         print(line, file=sys.stderr if chain_broken else sys.stdout)
     enforcement_rc |= int(chain_broken)
+    from agentteams.cli.action_ids import describe_newly_blocking_halts
+
+    for line in describe_newly_blocking_halts(output_dir):  # advisory: review before upgrading
+        print(line)
     log_problems = check_logs(output_dir)
     if log_problems:
         enforcement_rc = 1

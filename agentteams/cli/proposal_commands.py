@@ -347,7 +347,8 @@ def run_serve_requests(args: argparse.Namespace) -> int:
     try:
         if os.name != "posix":
             raise ProposalError("the runner needs POSIX file locking; not supported on this platform")
-        runner = R.Runner(_root(args), Path(args.description).resolve(), _policy(args, "--serve-requests"))
+        policy = _policy(args, "--serve-requests")  # first: its guard names a missing --description
+        runner = R.Runner(_root(args), Path(args.description).resolve(), policy)
     except (ProposalError, OSError, ValueError) as exc:
         print(f"[serve-requests] cannot start: {exc}", file=sys.stderr)
         for line in _confined_reinstall_hint(args, exc):

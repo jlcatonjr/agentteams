@@ -34,6 +34,40 @@ Found in the mathAgents M6 pilot.
   checks it.
 - `references/enforcement-integrity.json` needs a re-pin for the changed gate template.
 
+### fix (a HALT blocks every action named in its id; 1.0 must-fix from the mathAgents M6 pilot)
+
+- **C-2 bypass by spelling.** The HALT scan used the clearing-side prefix match, so a HALT recorded for an
+  instance, such as `m6-overwrite-render-1a2fad6`, never blocked `overwrite`. In the M6 run, an older, unconsumed
+  `overwrite` PASS then cleared the action instead.
+- **The fix.** A HALT now also matches when the action id appears as a whole token run in the HALT's id. Tokens
+  are split on `- _ . : /` and whitespace. It errs wide, because a false match only blocks.
+  - A HALT matched only by token is retracted only by a `HALT-RETRACTED` row with that HALT's exact id. So
+    retracting plain `overwrite` does not clear an instance-specific HALT.
+  - Prefix-matched HALTs keep their existing retraction behaviour.
+  - The clearing side (`action_matches`) is unchanged and strict.
+- **New pinned module.** The matchers move to `agentteams/cli/action_ids.py`. `decision_log._action_matches`
+  stays as an alias.
+- **The refusal message** now says that a HALT blocks every action named in its id.
+- **The token boundary errs wide.** It splits on every non-alphanumeric character and on camelCase and
+  letter/digit boundaries, so `m6OverwriteRender`, `overwrite2`, `(prune)` and `overwrite,` all name their
+  action.
+- **An exact-id retraction is scope-checked against the HALT's own id,** so it clears the HALT instead of raising.
+- **Upgrade impact.** Older unretracted HALTs whose ids contain a gate action as a token, including prose ids such
+  as `overwrite post-render closing check`, start blocking that action. **Before upgrading, run
+  `agentteams --verify-integrity` or `--migrate-decision-log --dry-run`.** Both list each newly blocking HALT with
+  the exact id to retract it by. They also list every other unretracted HALT, because one blocks any action your
+  own gates check through `check_clearance` when that action's id appears in it.
+- **Disclosed, unchanged:** a family retraction such as `overwrite-001` still clears every prefix-matched HALT of
+  the action, `overwrite-999` included.
+- **Documented known limitations,** also from M6:
+  - **Clearance binding.** A clearance binds to the newest row whose id starts with the action id. So a
+    differently named clearance never binds, and an older, unconsumed single-use row can clear instead. Name
+    clearances `<action>-<instance>` and restrict them with the `scope` column; prose scope is not enforced.
+  - **`conditions_verified`.** A CONDITIONAL PASS requires `conditions_verified` to be exactly `verified`. Put
+    the evidence in `evidence`.
+- **Re-pinned:** `cli/decision_log.py`, `integrity.py`, and the new `cli/action_ids.py`.
+- **`--serve-requests` without `--description`** reports "requires --description BRIEF" instead of crashing with a `TypeError` (seen starting the M6 runner). `cli/proposal_commands.py` re-pinned.
+
 ### fix (1.0 must-fix set: decision-log chain and migration, stale intel, retrieval write, loadable sidecars)
 
 The five defects the 1.0 release triage classed must-fix (release-branch-adoption step 4).

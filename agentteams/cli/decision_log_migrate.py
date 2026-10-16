@@ -450,6 +450,10 @@ def run_migrate_decision_log(args: argparse.Namespace) -> int:
         print(f"[MIGRATE-DECISION-LOG] refused: {exc}", file=sys.stderr)
         return 1
     if args.dry_run:
+        from agentteams.cli.action_ids import describe_newly_blocking_halts
+
+        for line in describe_newly_blocking_halts(team_dir):  # review before upgrading to 1.0
+            print(f"  {line}", file=sys.stderr if is_json_mode(args) else sys.stdout)
         if is_json_mode(args):
             report = {"mode": "migrate-decision-log", "dry_run": True, **plan.as_report()}
             print(json.dumps(report, indent=2), file=json_stdout() or sys.stdout)

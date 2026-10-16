@@ -1218,6 +1218,11 @@ Logs signed before 1.0 may start with a **legacy prefix**, a run of rows with no
 active). The report gives its length and lists any HALT row inside it: a deletion within the prefix, a HALT
 included, cannot be detected, so confirm those rows are still present as recorded.
 
+**HALTs that block by token (1.0):** a HALT blocks every action whose id appears as a token in the HALT's id.
+`--verify-integrity` (and `--migrate-decision-log --dry-run`) lists each unretracted HALT that newly blocks an
+agentteams gate action this way, with the exact id to retract it by, and every other unretracted HALT, which blocks any
+action your own `check_clearance` gates use whose id appears in it. Advisory: it does not change the exit code.
+
 **Governance logs:** it also checks the append-only CSV logs (`security-decisions.log.csv`,
 `agentteams-remediation-log.csv`, `redteam-findings.log.csv`, `mcp-needs.csv`, `conflict-log.csv`) found under
 the resolved root's `references/`, `.github/agents/references/` or `.claude/agents/references/`. It exits
