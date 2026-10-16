@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `write_policy` interop supports claude and goose imports only, so a team with adopted agents keeps its Codex surface
   frozen for 1.0. The shared release policy says the same. A Codex interop backport is planned for 1.0.x.
 
+### docs (SECURITY.md: why a signer installed under `$HOME` can be refused)
+
+- If a repository has no `.claude/settings.json`, the signer's write-root search reaches
+  `~/.claude/settings.json`, which makes the home directory a write root. Install the signer outside it, for
+  example under `/opt` (found by baseAgent).
+
 ## [1.0.0-rc.13] - 2026-10-17
 
 ### release notes (rc13)
