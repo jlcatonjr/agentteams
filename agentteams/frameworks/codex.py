@@ -363,12 +363,13 @@ def _fence_native_body(body: str) -> str:
     used to carry its whole template body OUTSIDE every fence. ``--update --merge`` then treated
     that body as preserved-forever user content and never refreshed it (2026-10-04: agentteams'
     own agent-updater, cleanup, git-operations and security TOMLs were stale). A body that already
-    has fences (a projection of a fenced ``.github`` agent) is returned unchanged.
+    has fences keeps them and only gains the Notes section when it lacks one: without it,
+    ``--update --overwrite`` refused to carry an existing Notes region (rc.12, baseAgent).
     """
-    if _ANY_FENCE_RE.search(body):
-        return body
     from agentteams.fences import PROJECT_NOTES_SECTION
 
+    if _ANY_FENCE_RE.search(body):
+        return body if "## Project-Specific Notes" in body else body.rstrip("\n") + "\n" + PROJECT_NOTES_SECTION
     return _content_wrap(body) + PROJECT_NOTES_SECTION
 
 

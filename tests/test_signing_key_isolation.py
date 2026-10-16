@@ -409,7 +409,7 @@ def test_relaxing_decision_refuses_a_valid_hmac_even_from_a_key_holder(tmp_path,
     elevated path must still refuse it, under either scheme label."""
     from agentteams.cli import decision_log as dl
 
-    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "inherited-secret")
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "inherited-secret-0123456789abcde")
     refs = tmp_path / "references"
     (refs / "authorized-verify-keys").mkdir(parents=True)
     (refs / "agent-privilege.json").write_text(json.dumps({"enforce_decision_signing": True}))
@@ -444,7 +444,7 @@ def test_hmac_directive_cannot_authorize_a_relaxing_scope(tmp_path, scope):
         "task_scope": scope, "expires_at": "2099-01-01T00:00:00Z", "max_uses": "5", "uses": "0",
         "approver": "alice", "prev_digest": "", "timestamp": "2026-09-01T00:00:00Z",
     }
-    rec["signature"] = md.sign_directive(rec, key="holder-key")  # a key-holder's valid HMAC
-    assert md.verify_directive_signature(rec, key="holder-key")
-    ok, reason = md.validate_directive(rec, tmp_path, key="holder-key")
+    rec["signature"] = md.sign_directive(rec, key="holder-key-0123456789abcdef01234")  # a key-holder's valid HMAC
+    assert md.verify_directive_signature(rec, key="holder-key-0123456789abcdef01234")
+    ok, reason = md.validate_directive(rec, tmp_path, key="holder-key-0123456789abcdef01234")
     assert not ok and "refused task_scope" in reason

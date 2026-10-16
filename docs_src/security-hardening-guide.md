@@ -155,6 +155,10 @@ the signature scheme; it is a statement about custody.
   command that needs it (`AGENTTEAMS_WAIVER_SIGNING_KEY=$(security find-generic-password …)
   agentteams …`), so it lives for one process rather than one shell session.
 - Keep it out of any environment an agent can read. An agent with `Bash` can read `env`.
+- Make it strong: at least 32 bytes of random, e.g.
+  `python -c 'import secrets; print(secrets.token_hex(32))'`. Since rc.12 signing and verifying
+  both refuse a key under 32 bytes, a placeholder (`...`, `changeme`, `secret`, …), or one
+  repeated character, so a waiver signed with such a key no longer verifies; re-sign it.
 - Rotate it when an operator with access leaves, and re-sign outstanding waivers.
 - Maintain `references/security-approvers.txt` — one approver per line, `#` comments allowed.
   Since 2026-08-06 the gate validates a waiver's `approver` against this roster, so the field
@@ -235,7 +239,9 @@ print(",".join(row[c] for c in header))                  # append this row to th
 
 **Verify existing waivers (read-only; never consumes a use):**
 ```bash
-export AGENTTEAMS_WAIVER_SIGNING_KEY="your-hmac-key"
+# the key the waivers were signed with: at least 32 bytes of random, never a placeholder
+# (first-time setup: export AGENTTEAMS_WAIVER_SIGNING_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')")
+export AGENTTEAMS_WAIVER_SIGNING_KEY="$(security find-generic-password -s agentteams-waiver -w)"
 agentteams --verify-waivers --output /path/to/project
 #   [OK ] waiver-freshness-001 (action=security-intel-freshness)
 #   1 waiver(s): 1 valid, 0 invalid.

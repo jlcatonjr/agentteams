@@ -14,7 +14,7 @@ import pytest
 
 from agentteams.cli import management_directives as md
 
-_KEY = "test-management-key"
+_KEY = "test-management-key-0123456789ab"
 _FAR_FUTURE = "2099-01-01T00:00:00Z"
 
 

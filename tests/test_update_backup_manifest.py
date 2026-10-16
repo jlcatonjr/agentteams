@@ -26,7 +26,7 @@ def _schema() -> dict:
 def _seed_gates(output_dir: Path, monkeypatch):
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
-    key = "integration-waiver-key"
+    key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", key)
     w = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": "wf-bm",
@@ -57,7 +57,7 @@ def _seed_pass(output_dir: Path, monkeypatch):
     # not a divergent hand-rolled digest. (issue main-ci-red #4, @security Option A.)
     from agentteams.cli.decision_log import sign_decision_row
 
-    key = "test-decision-signing-key"
+    key = "test-decision-signing-key-012345"
     monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", key)
     row = {
         "timestamp": "2026-05-03T00:00:00Z",

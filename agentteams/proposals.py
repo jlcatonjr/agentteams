@@ -191,12 +191,23 @@ def use_key_file(path: str | None = None) -> Path:
 
 def _key() -> bytes:
     if _FILE_KEY is not None:
-        return _FILE_KEY
+        return _strong(_FILE_KEY)
     for name in KEY_ENV:
         value = os.environ.get(name)
         if value:
-            return value.encode("utf-8")
+            return _strong(value.encode("utf-8"))
     raise ProposalError(f"no ledger key: set {KEY_ENV[0]} (or {KEY_ENV[1]}); refusing to act unrecorded")
+
+
+def _strong(key: bytes) -> bytes:
+    """Refuse a short or placeholder ledger key (masterTeacher 4.1): dispatch rows it signs authorize writes."""
+    from agentteams.cli.signed_ledger import require_strong_hmac_key
+
+    try:
+        require_strong_hmac_key(key.decode("utf-8", "replace"), "ledger key")
+    except RuntimeError as exc:
+        raise ProposalError(str(exc)) from exc
+    return key
 
 
 def _mac(key: bytes, body: dict[str, Any]) -> str:

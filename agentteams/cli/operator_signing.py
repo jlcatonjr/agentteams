@@ -51,6 +51,9 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/signed_ledger.py",
     "agentteams/cli/decision_log.py",
     "agentteams/cli/decision_text.py",  # computes the signed text_digest
+    "agentteams/cli/decision_lineage.py",  # imported by decision_log at module level
+    "agentteams/cli/action_ids.py",  # imported by decision_log at module level
+    "agentteams/cli/decision_chain.py",  # imported by decision_log at module level
     "agentteams/cli/grants.py",
     "agentteams/cli/effect_classifier.py",
     "agentteams/cli/governance_targets.py",

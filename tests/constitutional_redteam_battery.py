@@ -251,7 +251,7 @@ def a6_control_unrelated_action_blocked() -> None:
 
 def a7_control_waiver_cannot_beat_halt() -> None:
     root = tmp()
-    key = "ct-key"
+    key = "ct-key-0123456789abcdef012345678"
     os.environ["AGENTTEAMS_WAIVER_SIGNING_KEY"] = key
     write_decisions(root, ["2026-08-06T09:00:00Z,security,prune-001,HALT,,pending"])
     w = {
@@ -275,7 +275,7 @@ def a7_control_waiver_cannot_beat_halt() -> None:
 
 def a8_control_unsigned_waiver_rejected() -> None:
     root = tmp()
-    os.environ["AGENTTEAMS_WAIVER_SIGNING_KEY"] = "ct-key"
+    os.environ["AGENTTEAMS_WAIVER_SIGNING_KEY"] = "ct-key-0123456789abcdef012345678"
     w = {
         "timestamp": "2026-08-06T09:30:00Z", "waiver_id": "w-2", "action_reviewed": "prune",
         "expires_at": future(), "max_uses": "1", "uses": "0", "approver": "security",
@@ -296,7 +296,7 @@ def a8_control_unsigned_waiver_rejected() -> None:
 
 def a9_signing_key_substitution() -> None:
     root = tmp()
-    attacker_key = "attacker-chosen-key"
+    attacker_key = "attacker-chosen-key-0123456789ab"
     os.environ["AGENTTEAMS_WAIVER_SIGNING_KEY"] = attacker_key
     # A T2 attacker who owns the environment also reads the roster, so the probe names a
     # roster-VALID approver. Using an obviously-fake one would make this probe report DEFENDED

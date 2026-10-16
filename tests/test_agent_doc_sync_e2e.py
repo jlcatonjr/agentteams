@@ -24,7 +24,7 @@ from agentteams import learned_blocks as lb
 
 ROOT = Path(__file__).resolve().parents[1]
 BRIEF = ROOT / "examples" / "research-project" / "brief.json"
-_KEY = "agent-doc-sync-e2e-waiver-key"
+_KEY = "agent-doc-sync-e2e-waiver-key-0123"
 DIRS = {"claude": ".claude/agents", "goose": ".goose/recipes", "copilot-vscode": ".github/agents",
         "codex": ".codex/agents"}
 SLUG = "agent-updater"

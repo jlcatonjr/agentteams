@@ -89,7 +89,7 @@ def test_model_routing_error_is_runtime_not_oserror():
 def _seed_gates(output_dir: Path, monkeypatch, *, ticket: str):
     refs = output_dir / "references"
     refs.mkdir(parents=True, exist_ok=True)
-    key = "integration-waiver-key"
+    key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", key)
     w = {
         "timestamp": "2026-05-03T00:00:00Z", "waiver_id": f"wf-{ticket}",

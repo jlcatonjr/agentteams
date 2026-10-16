@@ -133,7 +133,7 @@ def test_declared_server_flows_description_to_artifact(tmp_path):
 def _seed_gates(refs: Path, monkeypatch, *, ticket: str) -> None:
     """Seed a signed security-intel-freshness waiver (mirrors test_model_routing)."""
     refs.mkdir(parents=True, exist_ok=True)
-    key = "integration-waiver-key"
+    key = "integration-waiver-key-012345678"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", key)
     cols = ["waiver_id", "action_reviewed", "expires_at", "max_uses", "uses",
             "approver", "ticket_id", "reason_code", "conditions_verified"]
