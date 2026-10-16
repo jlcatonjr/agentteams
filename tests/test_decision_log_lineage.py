@@ -147,7 +147,7 @@ def test_lineage_is_a_signed_axis(tmp_path):
     tampered = {**base, "derives_from": "something-else"}
     assert dl._decision_signature_payload(tampered) != payload_with
 
-    key = "k"
+    key = "k-0123456789abcdef0123456789abcdef"
     sig = dl.sign_decision_row(with_lineage, key=key)
     assert dl.sign_decision_row({**base, "derives_from": "attacker-cleared"}, key=key) != sig
 

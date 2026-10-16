@@ -6,6 +6,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.12] - 2026-10-16
+
+### release notes (rc12)
+
+Three fixes found while the four repositories moved to rc.11. rc.12 replaces rc.11 as the soak base for the
+coordinated v1.0.0, and adds no new dependencies.
+
+**BREAKING for weak HMAC keys:** HMAC signing keys must now be at least 32 bytes and not a placeholder. Rows signed
+with a weaker key no longer verify, so re-sign them with a 32-byte secret (`secrets.token_hex(32)`). Ed25519 rows,
+and logs migrated on rc.11, carry over unchanged.
+
+- **Security: strong HMAC keys** (found by masterTeacher).
+  - A placeholder key such as `...` once signed a decision that read as verified, so anyone who knew the
+    placeholder could forge it.
+  - Signing and verifying now refuse keys under 32 bytes, known placeholders, and a single repeated character.
+  - This covers decision rows, waivers, grants, management directives and the runner's proposal-ledger key
+    (file or environment). A weak key raises the module's own error, so commands refuse with a message.
+- **The decision log's HALT scan no longer wedges on an unauthenticated retraction.**
+  - A `HALT-RETRACTED` row that fails authentication or has no evidence is skipped. It retracts nothing, the HALT
+    stays open until a valid retraction, and the error names each skipped row and why.
+  - Before this fix, one unsigned retraction written before migration blocked the action forever (found by
+    mathAgents).
+- **Every native Codex agent renders a Project-Specific Notes region,** so `--update --overwrite` can carry notes
+  when narrowing `sandbox_mode` (found by baseAgent).
+- **New known limitations:**
+  - the copilot-vscode body-size limit for the orchestrator and security agents;
+  - the Codex role gate has no codex-cli version pin;
+  - repository scanning with `--project` can change the roster.
+
+### fix (codex: every native agent renders a Project-Specific Notes region)
+
+- **The bug** (found by baseAgent on rc.11). A natively rendered Codex agent whose template already has section
+  fences (the orchestrator, security, the governance agents and the component experts) rendered no
+  `## Project-Specific Notes` region. 11 of 24 agents were affected on the example brief.
+  - `--update --overwrite` correctly refuses to drop an existing Notes region, so it refused those agents unless
+    `--discard-user-regions` was passed.
+  - That broke the documented way to narrow `sandbox_mode` when adopting `write_policy`.
+- **The fix.** A fenced body keeps its fences and gains the region once, before the `codex_translation` block. An
+  end-to-end `--update --overwrite` now carries the notes, and every TOML parses.
+
+### fix (security log: an unauthenticated retraction no longer wedges the HALT scan)
+
+- **The bug** (found by mathAgents on rc.11). In a signing-active log, the HALT scan authenticated every matching
+  `HALT-RETRACTED` row and raised on the first one that failed.
+  - A retraction written unsigned before `--migrate-decision-log` therefore made `_assert_no_unretracted_halt`,
+    and every `check_clearance` for that action, raise "decision signing key is not configured".
+  - This happened even when a later operator Ed25519 retraction was valid. The log is append-only, so the action
+    could never be cleared.
+- **The fix.** A retraction that fails authentication, or has no evidence, retracts nothing and is skipped.
+  - The HALT stays open until a valid retraction, as `--migrate-decision-log` already says ("no longer clears").
+  - The "never been retracted" error names each skipped row and why it was not accepted.
+- **Also:** the `derives_from` lineage helpers move to the new pinned module `agentteams/cli/decision_lineage.py`.
+  `decision_log` re-exports them and stays under the module ceiling.
+
+### fix (security: HMAC signing keys must be strong; placeholders are refused)
+
+- **The bug** (masterTeacher ticket 4.1). Any non-empty HMAC key was accepted. A placeholder key such as `...`
+  signed a decision that then read as verified, and anyone who knows the placeholder can forge that signature.
+- **The fix.** The new `signed_ledger.require_strong_hmac_key` refuses a key under 32 bytes
+  (`MIN_HMAC_KEY_BYTES`), a known placeholder (`...`, `changeme`, `secret`, `password`, …), or one repeated
+  character.
+  - `hmac_sign` and `hmac_verify` call it, as do both the sign and verify sides of decision rows
+    (`decision_log._hmac_decision_row`) and of security waivers (`security_gate`).
+  - The proposal ledger's key is checked too, whether it comes from the key file or the environment
+    (`AGENTTEAMS_PROPOSAL_LEDGER_KEY`, falling back to `AGENTTEAMS_DECISION_SIGNING_KEY`). Dispatch rows signed
+    with it authorize writes.
+  - Each module raises its own error type (`require_strong_hmac_key` takes an `error` class), so callers that
+    catch it keep working: `ProposalError` from `proposals._key()`, `GrantError` from grant signing and
+    verification, and `MgmtDirectiveError` from directive signing. `validate_directive` keeps its contract and
+    returns `(False, reason)` for a weak key.
+  - A weak key fails closed: signing raises and writes nothing, and verification refuses rather than passes.
+  - There is no bypass or environment override.
+- **Breaking** for anyone using a short or placeholder key: `AGENTTEAMS_DECISION_SIGNING_KEY`,
+  `AGENTTEAMS_WAIVER_SIGNING_KEY`, `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`, `AGENTTEAMS_GRANT_SIGNING_KEY`,
+  `AGENTTEAMS_PROPOSAL_LEDGER_KEY`, or the ledger key file (`~/.config/agentteams/keys/proposal-ledger.key`).
+  Rows already signed with such a key no longer verify, so the gate refuses them. Every proposal-ledger
+  operation (issuing a dispatch, staging, applying) refuses while the ledger key is weak.
+  - **Remedy:** generate a 32-byte secret, `python -c 'import secrets; print(secrets.token_hex(32))'`, and
+    re-sign every outstanding decision, waiver, directive and grant under it. For the ledger, write the new
+    secret to the key file (mode 0600) and issue fresh dispatch nonces.
+- **Also:** the waiver example in `docs_src/security-hardening-guide.md` no longer exports the placeholder
+  `"your-hmac-key"`, and the guide states the key-strength rule. The integrity digests of `signed_ledger.py`,
+  `decision_log.py`, `security_gate.py`, `proposals.py`, `grants.py` and `management_directives.py` are
+  re-recorded.
+
 ## [1.0.0-rc.11] - 2026-10-16
 
 ### release notes (rc11)

@@ -101,7 +101,7 @@ def test_gate_blocks_halt_verdict(tmp_path):
 
 
 def test_gate_prefers_halt_over_waiver(tmp_path, monkeypatch):
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     _write_security_log(
         tmp_path,
@@ -236,7 +236,7 @@ def test_gate_blocks_malformed_log_header(tmp_path):
 
 
 def test_gate_allows_valid_signed_waiver(tmp_path, monkeypatch):
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": _past_iso(2),
@@ -262,7 +262,7 @@ def test_gate_allows_valid_signed_waiver(tmp_path, monkeypatch):
 
 
 def test_gate_rejects_replayed_signed_waiver(tmp_path, monkeypatch):
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": _past_iso(2),
@@ -287,7 +287,7 @@ def test_gate_rejects_replayed_signed_waiver(tmp_path, monkeypatch):
 
 
 def test_gate_blocks_expired_signed_waiver(tmp_path, monkeypatch):
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": _past_iso(2),
@@ -310,7 +310,7 @@ def test_gate_blocks_expired_signed_waiver(tmp_path, monkeypatch):
 
 
 def test_gate_blocks_unsigned_waiver(tmp_path, monkeypatch):
-    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "test-waiver-key")
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", "test-waiver-key-0123456789abcdef")
     waiver = {
         "timestamp": _past_iso(2),
         "waiver_id": "waiver-prune-003",
@@ -331,7 +331,7 @@ def test_gate_blocks_unsigned_waiver(tmp_path, monkeypatch):
 
 
 def test_gate_rejects_waiver_scope_mismatch(tmp_path, monkeypatch):
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": _past_iso(2),
@@ -383,7 +383,7 @@ def test_stale_security_error_guides_to_waiver_and_offline_caveat(tmp_path):
 
 
 def test_security_intelligence_freshness_consumes_signed_waiver(tmp_path, monkeypatch):
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = {
         "timestamp": _past_iso(2),
@@ -439,7 +439,7 @@ def test_verify_waivers_missing_log_is_empty(tmp_path):
 def test_verify_waivers_reports_valid_and_never_consumes(tmp_path, monkeypatch):
     """P3: a valid signed waiver reports status=valid AND verify_waivers does not
     consume it — the on-disk `uses` stays 0 and the gate can still spend it."""
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     _write_security_waiver_log(tmp_path, [_valid_freshness_waiver(waiver_key)])
     log_path = tmp_path / "references" / "security-waivers.log.csv"
@@ -466,7 +466,7 @@ def test_verify_waivers_reports_valid_and_never_consumes(tmp_path, monkeypatch):
 
 def test_verify_waivers_flags_bad_signature(tmp_path, monkeypatch):
     """P3: a tampered signature is reported invalid with a reason (never raised)."""
-    waiver_key = "test-waiver-key"
+    waiver_key = "test-waiver-key-0123456789abcdef"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     waiver = _valid_freshness_waiver(waiver_key)
     waiver["signature"] = "deadbeef"  # tamper

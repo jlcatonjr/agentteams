@@ -33,7 +33,7 @@ from agentteams.cli.decision_text import (
 )
 from agentteams.cli.security_gate import check_clearance
 
-_KEY = "decision-text-binding-test-key"
+_KEY = "decision-text-binding-test-key-0123"
 _COLUMNS = ["timestamp", "requesting_agent", "date", "action_reviewed", "verdict", "scope", "conditions", "conditions_verified",
             "evidence", "author", "prev_digest", "signature"]
 _LOG = "references/security-decisions.log.csv"

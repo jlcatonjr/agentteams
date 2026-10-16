@@ -21,13 +21,13 @@ import pytest
 from agentteams import proposals as P
 
 PY = sys.executable
-KEY = "test-ledger-key"
+KEY = "test-ledger-key-0123456789abcdef"
 
 
 @pytest.fixture(autouse=True)
 def _ledger_key(monkeypatch):
     monkeypatch.setenv("AGENTTEAMS_PROPOSAL_LEDGER_KEY", KEY)
-    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "decision-secret")
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "decision-secret-0123456789abcdef")
 
 
 def _brief() -> dict:

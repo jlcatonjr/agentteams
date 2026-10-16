@@ -41,6 +41,43 @@ def canonical_payload(fields: Sequence[str]) -> str:
     return "|".join((f or "").strip() for f in fields)
 
 
+#: Placeholder values seen standing in for a real HMAC secret (masterTeacher 4.1, rc.12).
+_PLACEHOLDER_KEYS = frozenset({"...", "changeme", "change-me", "xxx", "secret", "test", "key", "password",
+                               "placeholder", "todo", "none", "null"})
+#: The shortest accepted HMAC secret: the SHA-256 output size (RFC 2104 §3 recommends at least that).
+MIN_HMAC_KEY_BYTES = 32
+
+
+def require_strong_hmac_key(
+    key: str, what: str = "signing key", error: type[RuntimeError] = RuntimeError,
+) -> str:
+    """Refuse an HMAC secret that is short or an obvious placeholder; return it unchanged otherwise.
+
+    A placeholder such as ``...`` once signed a decision that read as verified, and anyone who knows
+    the placeholder can forge that signature (masterTeacher 4.1). Signing and verifying both refuse.
+
+    Args:
+        key: The secret, as read from the environment or passed in.
+        what: The name used in the error (for example ``"decision signing key"``).
+        error: The exception type to raise, so a module can keep its own (``GrantError``).
+
+    Returns:
+        *key*, unchanged.
+
+    Raises:
+        RuntimeError: (or *error*) The key is under :data:`MIN_HMAC_KEY_BYTES` bytes, a known
+            placeholder, or one repeated character.
+    """
+    stripped = key.strip()
+    if (len(key.encode("utf-8")) < MIN_HMAC_KEY_BYTES or stripped.lower() in _PLACEHOLDER_KEYS
+            or len(set(stripped)) <= 1):
+        raise error(
+            f"{what} is too weak (under {MIN_HMAC_KEY_BYTES} bytes, a placeholder, or one repeated "
+            "character); use a random secret, e.g. `python -c 'import secrets; print(secrets.token_hex(32))'`"
+        )
+    return key
+
+
 def hmac_sign(key: str, fields: Sequence[str]) -> str:
     """Return the lowercase hex HMAC-SHA256 of the canonical payload of ``fields``.
 
@@ -52,6 +89,7 @@ def hmac_sign(key: str, fields: Sequence[str]) -> str:
         The hex digest (lowercase).
     """
     payload = canonical_payload(fields)
+    key = require_strong_hmac_key(key)
     return hmac.new(key.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
@@ -291,7 +329,9 @@ __all__ = [
     "canonical_payload",
     "ed25519_sign",
     "ed25519_verify",
+    "MIN_HMAC_KEY_BYTES",
     "hmac_sign",
+    "require_strong_hmac_key",
     "hmac_verify",
     "is_expired",
     "path_within",

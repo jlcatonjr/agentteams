@@ -30,7 +30,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey 
 from agentteams.cli import signed_ledger as sl  # noqa: E402
 
 _KEY_ID = "op-rc11"
-_HMAC_KEY = "rc11-hmac-key"
+_HMAC_KEY = "rc11-hmac-key-0123456789abcdef01"
 _COLUMNS = ["timestamp", "requesting_agent", "action_reviewed", "verdict", "conditions",
             "conditions_verified", "evidence", "author", "derives_from", "effect_grants", "sig_scheme",
             "key_id", "signature"]
@@ -171,3 +171,41 @@ def test_a_governed_relaxing_row_with_hmac_is_still_refused(tmp_path: Path, monk
     row["signature"] = dl._hmac_decision_row(row, key=_HMAC_KEY)
     with pytest.raises(RuntimeError, match="REQUIRES ed25519"):
         _authentic(row, tmp_path, "grant-cross-repo-write")
+
+
+def test_an_unsigned_historical_retraction_does_not_wedge_a_later_signed_one(tmp_path: Path) -> None:
+    """rc.12 (mathAgents, rc.11): an unsigned HALT-RETRACTED written before migration made the scan raise.
+
+    In an append-only signed log it could never be removed, so the action could never be cleared.
+    An unauthenticated retraction now retracts nothing and is skipped; a later valid one clears.
+    """
+    private_pem = _team(tmp_path, governed=False)
+    _write(tmp_path, [_row("overwrite-replay-record", "HALT"),
+                      _row("overwrite-replay-record", "HALT-RETRACTED", evidence="written before signing"),
+                      _ed25519(_row("overwrite-replay-record", "HALT-RETRACTED", evidence="re-retracted"),
+                               private_pem)])
+    dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_an_unsigned_retraction_alone_leaves_the_halt_open_and_says_why(tmp_path: Path) -> None:
+    _team(tmp_path, governed=False)
+    _write(tmp_path, [_row("overwrite-replay-record", "HALT"),
+                      _row("overwrite-replay-record", "HALT-RETRACTED", evidence="written before signing")])
+    with pytest.raises(RuntimeError, match=r"has never been retracted.*row 2 not accepted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")
+
+
+def test_a_tampered_ed25519_retraction_leaves_its_halt_open(tmp_path: Path) -> None:
+    private_pem = _team(tmp_path, governed=False)
+    signed = _ed25519(_row("restore-backup", "HALT-RETRACTED", evidence="backup verified"), private_pem)
+    _write(tmp_path, [_row("restore-backup", "HALT"), {**signed, "action_reviewed": "restore-backup-x"}])
+    with pytest.raises(RuntimeError, match="has never been retracted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="restore-backup")
+
+
+def test_an_exact_id_retraction_that_fails_authentication_leaves_its_halt_open(tmp_path: Path) -> None:
+    private_pem = _team(tmp_path, governed=False)
+    signed = _ed25519(_row("m6-overwrite-render", "HALT-RETRACTED", evidence="re-rendered"), private_pem)
+    _write(tmp_path, [_row("m6-overwrite-render", "HALT"), {**signed, "conditions_verified": "pending"}])
+    with pytest.raises(RuntimeError, match=r"has never been retracted.*row 2 not accepted"):
+        dl._assert_no_unretracted_halt(tmp_path, action="overwrite")

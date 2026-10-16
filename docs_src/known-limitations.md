@@ -225,6 +225,41 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   [Upgrading to 1.0, Step 2](migration-guide.md#step-2-upgrade-or-re-pad-a-legacy-log-migrate-decision-log)).
 - **Tracking:** 1.0 known limitation. Seeding the current header is planned for 1.0.x.
 
+### The Codex role gate is not pinned to a codex-cli version
+
+- **What:** the generated role gate reads Codex's hook input, including fields Codex does not document. A future
+  codex-cli release could change those fields, and nothing in the gate or the launcher detects that.
+- **Who:** Codex teams under `write_policy: orchestrator-only`.
+- **Workaround:** pin codex-cli yourself, and re-run your launcher checks after any Codex upgrade.
+- **Tracking:** 1.0 known limitation. A version pin that fails closed on an untested codex-cli is planned for 1.0.x
+  (found by baseAgent).
+
+## Copilot (`--framework copilot-vscode`)
+
+### The orchestrator and security agents exceed GitHub's custom-agent size limit
+
+- **What:** the generated copilot-vscode `orchestrator` and `security` agent bodies can exceed GitHub's 30,000-character
+  custom-agent limit (about 70,000 and 49,000 characters on one project), so Copilot truncates or rejects them.
+- **Who:** copilot-vscode teams. Claude, Codex, Goose and Grok are unaffected.
+- **Workaround:** rely on the Claude or Codex surface for those two roles, or trim their Project-Specific Notes.
+- **Tracking:** 1.0 known limitation. Splitting long sections into references, with an emit-time size check, is
+  planned for 1.0.x (found by masterTeacher).
+
+## Rendering
+
+### Repository scanning can add `retrieval-integrator` to the roster
+
+- **What:** every surface shares one roster. `retrieval-integrator` is included when `retrieval_integration` is
+  set, either in the brief or by a scan of the repository. The scan runs whenever `--project` is passed without
+  `--no-scan`. Rendering some surfaces with `--project` and others without can therefore give them different
+  rosters.
+- **Who:** projects that render several surfaces with different flags, or whose brief leaves `retrieval_integration`
+  unset.
+- **Workaround:** declare `retrieval_integration` in the brief, and pass the same `--project` and `--no-scan` settings
+  to every surface.
+- **Tracking:** 1.0 known limitation. A notice when an inferred contract changes the roster is planned for 1.0.x
+  (found by masterTeacher).
+
 ## Integrity manifest
 
 ### A re-record after deleting an enforcement module erases its pin

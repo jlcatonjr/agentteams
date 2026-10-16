@@ -181,7 +181,7 @@ def _git_project(tmp_path: Path) -> Path:
 def test_runner_stops_when_the_file_changes(tmp_path, monkeypatch):
     key = tmp_path / "keys" / "proposal-ledger.key"
     key.parent.mkdir()
-    key.write_text("runner-secret\n")
+    key.write_text("runner-secret-0123456789abcdef01\n")
     key.chmod(0o600)
     monkeypatch.setattr(P, "KEY_DIR", str(key.parent))
     monkeypatch.setenv(P.KEY_FILE_ENV, str(key))

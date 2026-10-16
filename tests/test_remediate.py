@@ -160,7 +160,7 @@ def test_build_main_auto_correct_reruns_audit(tmp_path, monkeypatch):
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
-    waiver_key = "remediate-waiver-key"
+    waiver_key = "remediate-waiver-key-0123456789a"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     _write_pass_security_decision(output_dir)
     _write_freshness_waiver(output_dir, waiver_key)
@@ -188,7 +188,7 @@ def test_build_main_update_audits_current_rendered_set(tmp_path, monkeypatch):
 
     brief = Path(__file__).parent.parent / "examples" / "software-project" / "brief.json"
     output_dir = tmp_path / ".github" / "agents"
-    waiver_key = "remediate-waiver-key"
+    waiver_key = "remediate-waiver-key-0123456789a"
     monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", waiver_key)
     _write_pass_security_decision(output_dir)
     _write_freshness_waiver(output_dir, waiver_key)
