@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory first on `sys.path`. So a planted `.claude/hooks/agentteams/`, `json.py` or `subprocess.py` was imported
   ahead of the real module, even where agentteams is installed. The gate now drops its own directory from
   `sys.path` before any other import. It does not do this under `-I`, where that entry isn't the script directory.
+  The gate and the Grok shim also drop `from __future__ import annotations`: it is an import that ran before the
+  scrub, so on Python 3.9 a planted `__future__.py` beside the hook ran. The few `X | None` annotations are quoted
+  instead, so the hooks stay 3.9-compatible.
 - **The fix.** The fallback is removed. With no working interpreter, the gate denies (confined) or asks
   (cooperative) and names `agentteams --check-wiring`, as it already did when the fallback found nothing.
   Tests plant a package and a `json.py` beside the hook, and an `agentteams/` package in the project root.

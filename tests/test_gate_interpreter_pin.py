@@ -128,7 +128,7 @@ def test_a_planted_project_package_never_decides_the_verdict(env: dict, pin: str
     assert code == 0 and decision is not None and decision["permissionDecision"] == "ask", decision
 
 
-@pytest.mark.parametrize("planted", ["agentteams", "json"])
+@pytest.mark.parametrize("planted", ["agentteams", "json", "__future__"])
 def test_a_module_planted_beside_the_hook_is_never_imported(env: dict, planted: str) -> None:
     """1.0 must-fix: the hook's own directory is dropped from sys.path before any import.
 
@@ -141,8 +141,8 @@ def test_a_module_planted_beside_the_hook_is_never_imported(env: dict, planted: 
         pkg = env["hooks"] / "agentteams"
         pkg.mkdir()
         (pkg / "__init__.py").write_text(body, encoding="utf-8")
-    else:
-        (env["hooks"] / "json.py").write_text(body, encoding="utf-8")
+    else:  # json: a stdlib module; __future__: imported before any scrub could run, so never imported at all
+        (env["hooks"] / f"{planted}.py").write_text(body, encoding="utf-8")
     proc = subprocess.run([sys.executable, str(env["hooks"] / "constitutional-gate.py")],
                           input=json.dumps(CREDENTIAL), capture_output=True, text=True, timeout=60,
                           cwd=str(env["project"]), env=env["environ"])

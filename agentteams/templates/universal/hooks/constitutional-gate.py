@@ -57,8 +57,6 @@ Input:  a JSON tool-call payload on stdin (``tool_name``, ``tool_input``).
 Output: exit 0, plus a ``hookSpecificOutput`` JSON decision on stdout when acting.
 """
 
-from __future__ import annotations
-
 import sys
 
 # Drop this script's own directory from the import path BEFORE any other import. Run as
@@ -239,7 +237,7 @@ def _mask_quoted_separators(command: str) -> str:
     return "".join(out)
 
 
-def _bash_trigger(command: str) -> str | None:
+def _bash_trigger(command: str) -> "str | None":
     """The first Mandatory Review Trigger a Bash command matches, else None — in bounded time."""
     # A trailing pipe or `&&`/`||` continues the pipeline on the next line; join it so per-line
     # evaluation still sees `curl … |` and `sh` together.
@@ -325,7 +323,7 @@ def _command_names(command: str) -> list[tuple[str, str]]:
     return found
 
 
-def _command_name_trigger(command: str) -> str | None:
+def _command_name_trigger(command: str) -> "str | None":
     """The trigger reason for a word-like network tool run as a command, else None."""
     for name, rest in _command_names(command):
         if name in _RAW_SOCKET_TOOLS or (name == "nc" and not re.search(r"(?:^|\s)-[a-zA-Z]*z", rest)):
@@ -406,7 +404,7 @@ def _inside(path: Path, roots: list[Path]) -> bool:
     return any(path == r or r in path.parents for r in roots)
 
 
-def _pinned_interpreter() -> tuple[str | None, str]:
+def _pinned_interpreter() -> "tuple[str | None, str]":
     """Return ``(interpreter, "")`` for a usable pin, else ``(None, why)``.
 
     Usable: an absolute path to an executable ``python*`` file that lies outside the project tree,
@@ -615,7 +613,7 @@ def _log_target(raw: str) -> Path:
     return parent / path.name
 
 
-def _input_hmac(tool_input: object) -> str | None:
+def _input_hmac(tool_input: object) -> "str | None":
     """Keyed digest of the canonical ``tool_input``, or None when no key is configured."""
     key = os.environ.get("AGENTTEAMS_GATE_LOG_KEY", "")
     if not key:
@@ -624,7 +622,7 @@ def _input_hmac(tool_input: object) -> str | None:
     return hmac.new(key.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def _bounded_id(value: object) -> str | None:
+def _bounded_id(value: object) -> "str | None":
     return value[:_LOG_ID_MAX] if isinstance(value, str) else None
 
 
@@ -652,7 +650,7 @@ def _append_chained(target: Path, record: dict) -> None:
         os.close(fd)  # closing the descriptor releases the flock
 
 
-def _log_decision(payload: object, decision: str, reason_id: str | None, checked: str,
+def _log_decision(payload: object, decision: str, reason_id: "str | None", checked: str,
                   categories: tuple[str, ...] = (), lines: tuple[int, ...] = ()) -> None:
     """Append this invocation's record when ``AGENTTEAMS_GATE_LOG`` is set; never raises OSError/ValueError."""
     raw = os.environ.get("AGENTTEAMS_GATE_LOG", "")

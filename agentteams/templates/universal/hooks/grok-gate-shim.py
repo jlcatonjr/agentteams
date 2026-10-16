@@ -13,8 +13,6 @@ never enforcement. When the gate copy beside this shim was emitted fail-closed (
 profile), a shim-internal failure denies (exit 2) instead of allowing.
 """
 
-from __future__ import annotations
-
 import sys
 
 # Drop this script's own directory from the import path BEFORE any other import: Grok runs the shim from the
