@@ -466,15 +466,11 @@ def _import_integrity(raw: bytes):
         if exc.name != "agentteams":
             raise
     why = _reexec_under_pin(raw)
-    # agentteams' own checkout: the interpreter puts this script's directory on sys.path, not the
-    # repo root, so derive the root from this file's location (parents[2]) rather than trusting cwd.
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    try:
-        from agentteams import integrity
-        return integrity
-    except ModuleNotFoundError as exc:
-        if exc.name != "agentteams":
-            raise
+    # No import from the project tree. An earlier fallback put this file's repository root
+    # (parents[2]) on sys.path, so in a project whose python3 lacks agentteams, an agent that
+    # planted an `agentteams/` package there (or broke the pin to reach the fallback) chose the
+    # gate's verdict, and --verify-integrity could not see it (1.0 must-fix, @security 2026-10-16).
+    # agentteams' own checkout gets its interpreter from the pin like any other project.
     message = (
         f"the constitutional gate found no Python interpreter that can import agentteams ({why}), so "
         "this write's content was NOT checked. Fix: run `agentteams --check-wiring` in this project, or "

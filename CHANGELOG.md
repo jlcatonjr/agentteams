@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security: the gate hook never imports agentteams from the project tree)
+
+- **The bug.** When no interpreter could import agentteams, the gate hook put its own repository root
+  (`parents[2]`) on `sys.path` and imported agentteams from there.
+  - This happened after any pin failure: a missing pin, a pin refused for pointing inside the project tree, or a
+    re-run that exited with a code other than 0 or 2.
+  - In a project whose `python3` lacks agentteams, an agent that planted an `agentteams/` package at the project
+    root (or broke the pin, which sits in the agent-writable hooks directory) could choose the gate's verdict.
+    `--verify-integrity` could not detect it, because the checker itself was replaced.
+  - Found by @security in the 1.0 docs review (2026-10-16).
+- **The fix.** The fallback is removed. With no working interpreter, the gate denies (confined) or asks
+  (cooperative) and names `agentteams --check-wiring`, as it already did when the fallback found nothing.
+  agentteams' own checkout gets its interpreter from the pin, like any other project.
+- **Operator action:** re-render, or copy the template hook into `.claude/hooks/` and `.github/hooks/`, so the
+  installed copies match the new pin. `--verify-integrity` flags them until then.
+
 ## [1.0.0-rc.10] - 2026-10-15
 
 ### release notes (rc10)

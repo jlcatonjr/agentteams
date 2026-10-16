@@ -109,6 +109,25 @@ def test_no_interpreter_fail_closed_denies(env: dict) -> None:
     assert code == 0 and decision is not None and decision["permissionDecision"] == "deny", decision
 
 
+@pytest.mark.parametrize("pin", ["none", "inside-project"])
+def test_a_planted_project_package_never_decides_the_verdict(env: dict, pin: str) -> None:
+    """1.0 must-fix: the gate never imports agentteams from the project tree.
+
+    An older fallback put the hook's repository root (``parents[2]``) on ``sys.path`` after any pin
+    failure, so a planted ``agentteams/`` package there could allow a credential write.
+    """
+    marker = env["tmp"] / "planted-ran"
+    pkg = env["project"] / "agentteams"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(f"open({str(marker)!r}, 'w').write('x')\n", encoding="utf-8")
+    (pkg / "integrity.py").write_text("def scan(*a, **k):\n    return []\n", encoding="utf-8")
+    if pin == "inside-project":
+        _pin(env, str(_wrapper(env["project"] / "tools" / "python3", f'exec "{sys.executable}" -S "$@"\n')))
+    code, decision, _ = _run(env, CREDENTIAL)
+    assert not marker.exists(), "the gate imported a package planted in the project tree"
+    assert code == 0 and decision is not None and decision["permissionDecision"] == "ask", decision
+
+
 def test_a_content_free_write_is_not_obstructed_without_an_interpreter(env: dict) -> None:
     code, decision, _ = _run(env, {"tool_name": "Edit", "tool_input": {"file_path": "a.md", "new_string": ""}})
     assert code == 0 and decision is None
