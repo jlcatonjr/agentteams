@@ -50,6 +50,7 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/operator_signing.py",
     "agentteams/cli/signed_ledger.py",
     "agentteams/cli/decision_log.py",
+    "agentteams/cli/decision_text.py",  # computes the signed text_digest
     "agentteams/cli/grants.py",
     "agentteams/cli/effect_classifier.py",
     "agentteams/cli/governance_targets.py",
@@ -476,6 +477,18 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     except RuntimeError as exc:
         print(f"Error: cannot extend the security-decisions log: {exc}", file=sys.stderr)
         return 1
+    # text_digest binds conditions/evidence into the signature: bind, then sign. Computed here, never
+    # taken from the spec; filled when the log will persist it (a new log is created with the column).
+    from agentteams.cli.decision_text import TEXT_DIGEST_FIELD, bind_text_digest
+
+    row.pop(TEXT_DIGEST_FIELD, None)
+    binds_text = read is None or TEXT_DIGEST_FIELD in read[1]
+    try:
+        if binds_text:
+            bind_text_digest(row)
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
     # Classify the row up front. derive_effect_class / requires_operator_signature raise
     # EffectClassifierError on a dangerous self-declared effect_class divergence — catch it here so
@@ -492,6 +505,16 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
     if reason is not None:
         print(f"Error: this decision is categorically NON-ELIGIBLE: it {reason}.", file=sys.stderr)
         return 1
+    migrate = "`agentteams --migrate-decision-log --output <team dir> --yes`"
+    if not binds_text and (needs_operator or derived_class != ec.NON_RELAXING):  # indeterminate = relaxing
+        # Downgrade guard: deleting the column from a migrated log must not yield an unbound relaxing row.
+        print(f"Error: refusing to sign a constraint-relaxing decision into a log with no {TEXT_DIGEST_FIELD} "
+              "column: its conditions and evidence would not be bound by its signature. Add the column "
+              f"with {migrate}, then re-run. The key was not read.", file=sys.stderr)
+        return 1
+    if not binds_text:
+        print(f"Notice: the log has no {TEXT_DIGEST_FIELD} column, so this row's conditions and evidence "
+              f"are not bound by its signature; add the column with {migrate}.", file=sys.stderr)
 
     from agentteams.cli.grants import payload_claims_grant_purpose
 

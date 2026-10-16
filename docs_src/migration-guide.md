@@ -71,6 +71,9 @@ agentteams \
 
 Backup files are created before modification.
 
+If you also run `--migrate-decision-log` on the team's decisions log, a revoked `HALT-RETRACTED` row means the HALT it
+retracted blocks again after migration; the report says so, and you re-issue the retraction as a signed row.
+
 ### Step 3 — Review and Commit
 
 ```bash

@@ -176,4 +176,11 @@ identifiable rather than arguable.
 The controls that do not depend on judgment are elsewhere and remain the real enforcement: the
 `tools:` capability grant, the destructive-action gate, signed waivers, path containment, and the
 deterministic content scanner.
+
+Signed decisions are only as strong as their verify-key store. An operator Ed25519 signature is checked
+against `references/authorized-verify-keys/<key_id>.pub.pem`, so a session that can write that directory can
+plant its own public key and sign a row that clears an action or withdraws a security stop. Emitted sandboxes deny writes
+to the store, but that holds only under confinement (for example `sandbox/confine-run.sh`). In an unconfined
+session, treat a new or changed file in `authorized-verify-keys/` as a C-2 event: review it before any row it
+verifies is relied on.
 <!-- AGENTTEAMS:END content -->
