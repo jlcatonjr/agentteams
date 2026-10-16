@@ -487,7 +487,9 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="check_wiring",
         help="P1-3: verify an emitted workspace-confinement sandbox block was actually "
         "merged into the live .claude/settings.json (it is inert until merged). Read-only, "
-        "output-only; exits non-zero when a confinement was emitted but is not live.",
+        "output-only; exits non-zero when a confinement was emitted but is not live. Also "
+        "checks that the constitutional gate's interpreter pin (<hooks>/agentteams-python) or "
+        "plain python3 can import agentteams, and fails with the fix when neither can.",
     )
     parser.add_argument(
         "--self",

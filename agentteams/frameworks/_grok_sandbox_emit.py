@@ -17,7 +17,8 @@ Emitted for a ``--framework grok`` team when confinement is requested (``grok:sa
 * ``.grok/hooks/agentteams-gate.json`` + ``agentteams-gate-shim.py`` + ``constitutional-gate.py`` — the advisory
   PreToolUse gate (operator decision D3: only alongside the sandbox artifacts). Grok sends a Claude-shaped
   envelope with Grok tool names (spike R5); the pinned shim translates the input and runs the unmodified gate.
-  Grok hooks fail open, so this is DECLARED, never enforcement.
+  Grok hooks fail open, so this is DECLARED, never enforcement. Beside the gate: ``agentteams-python`` (the
+  rendering interpreter, untracked) and the ``.gitignore`` that ignores it (Rule S-8).
 
 Integrity-pinned (``agentteams/integrity.py``), with the shim template.
 """
@@ -34,6 +35,9 @@ GROK_RUNNER_REL = "../confined-run.example.sh"
 GROK_GATE_JSON_REL = "../hooks/agentteams-gate.json"
 GROK_GATE_SHIM_REL = "../hooks/agentteams-gate-shim.py"
 GROK_GATE_REL = "../hooks/constitutional-gate.py"
+GROK_HOOKS_REL = "../hooks"
+#: The ignore file beside the gate's interpreter pin (owned-marker checked like the files above).
+GROK_GATE_PIN_IGNORE_REL = GROK_HOOKS_REL + "/.gitignore"
 
 #: First line of every agentteams-owned file here; an existing file without it is never overwritten.
 GROK_OWNED_MARKER = "agentteams-managed"
@@ -204,7 +208,7 @@ def grok_sandbox_output_files(manifest: dict[str, Any], platform: str | None = N
     plat = sys.platform if platform is None else platform
     if not (plat.startswith("linux") or plat.startswith("darwin")):
         return []
-    from agentteams.frameworks.claude import _apply_fail_closed_policy
+    from agentteams.frameworks.claude import _apply_fail_closed_policy, gate_interpreter_pin_files
 
     return [
         (GROK_SANDBOX_PROFILE_REL, _PROFILE),
@@ -212,4 +216,6 @@ def grok_sandbox_output_files(manifest: dict[str, Any], platform: str | None = N
         (GROK_GATE_JSON_REL, _GATE_JSON),
         (GROK_GATE_SHIM_REL, _read_template("hooks/grok-gate-shim.py")),
         (GROK_GATE_REL, _apply_fail_closed_policy(_read_template("hooks/constitutional-gate.py"), manifest)),
+        # The gate re-executes under this pin when the shim's python3 cannot import agentteams (untracked).
+        *gate_interpreter_pin_files(GROK_HOOKS_REL),
     ]

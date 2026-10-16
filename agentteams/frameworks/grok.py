@@ -422,6 +422,7 @@ def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
     """
     from agentteams.frameworks._grok_sandbox_emit import (
         GROK_GATE_JSON_REL,
+        GROK_GATE_PIN_IGNORE_REL,
         GROK_GATE_REL,
         GROK_GATE_SHIM_REL,
         GROK_GATE_SIGNATURE,
@@ -437,7 +438,8 @@ def _owned_file_refusal(rel_path: str, target: Path, root: Path) -> str | None:
         return f"{target}: left untouched; {linked} is a symlink."
     # The gate copy is the unmodified Claude template, so it is recognised by its own docstring, not the marker.
     signature = {GROK_GATE_REL: GROK_GATE_SIGNATURE}
-    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL)
+    marked = (GROK_SANDBOX_PROFILE_REL, GROK_RUNNER_REL, GROK_GATE_JSON_REL, GROK_GATE_SHIM_REL, GROK_GATE_REL,
+              GROK_GATE_PIN_IGNORE_REL)
     if rel_path in marked and target.is_file():
         try:
             with target.open(encoding="utf-8") as fh:
