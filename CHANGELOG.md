@@ -36,6 +36,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The expert reference is corrected: G8, G10 (`.grok/skills` shadows `.claude/skills`), G11, G15. Round 2's
   "delegation works" (R2-a) is withdrawn. The docs no longer claim same-name shadowing. `_grok_tool_scoping.py` is
   re-pinned. Tests: `tests/test_grok_scope_fix.py`.
+### fix (1.0 must-fix: the constitutional gate runs under an interpreter that can import agentteams)
+
+The emitted hook command is `python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/constitutional-gate.py"`, and the gate's
+write path imports `agentteams`. When PATH's `python3` lacked it, every Write/Edit check crashed. A confined profile
+then denied everything. The default cooperative profile silently allowed everything, so the gate was off unnoticed.
+Found in the mathAgents M6 pilot.
+
+- **Interpreter pin.** Rendering a Claude team (and a confined Grok team) now writes `agentteams-python` beside each
+  gate copy: one line, the rendering interpreter's absolute `sys.executable`. A `.gitignore` beside it ignores
+  exactly that file. The machine path appears in no other emitted file (Rule S-8), and a test checks that.
+  `--sync` projection carries the pin and its ignore file with the gate.
+- **The gate re-executes under the pin** when `import agentteams` fails with `ModuleNotFoundError` for `agentteams`
+  itself. It forwards the original stdin bytes and relays the child's output and exit code.
+  - The pin is used only when it is absolute, names an executable `python*` file, and lies outside the project tree,
+    both as written and resolved, with no in-project `pyvenv.cfg` above it.
+  - `PYTHONPATH`, `PYTHONSTARTUP` and `PYTHONHOME` are scrubbed for the child, and `AGENTTEAMS_GATE_REEXEC=1`
+    stops a second hop.
+  - A child that exits with anything but a verdict (0 or 2) counts as no interpreter.
+  - An isolated parent (`-I`, as Grok's shim runs the gate) re-executes an isolated child, so a module planted
+    beside the hook cannot shadow the stdlib there (@security M1).
+- **No pin without its ignore rule (@security M2/M3).** An existing hooks `.gitignore` without the
+  `agentteams-managed` marker, or a symlink, belongs to the operator and is left untouched. Claude used to overwrite it.
+  In that case the pin is not written either, with a notice. This holds for Claude, Grok and `--sync` projection.
+  - The hook stays stdlib-only and Python 3.9-compatible. Grok's shim runs the same gate, so the fix applies there.
+- **No silent allow.** With no interpreter that can import agentteams, a content-bearing Write/Edit/MultiEdit/
+  NotebookEdit gets `ask` (cooperative) or `deny` (fail-closed). The reason names the fix, and a line goes to stderr.
+- **`--check-wiring` checks the gate's interpreter.** It prints the pin's value and resolved target, and runs
+  `<pin> -c "import agentteams"` and the plain `python3`. It exits 1 with the exact fix when neither works.
+- Not changed: agentteams emits no SessionStart toolchain command, so there is nothing of that kind to fix. Copilot's
+  `.github/hooks` gate is not emitted by agentteams. A hand-installed copy reads a pin beside it, and `--check-wiring`
+  checks it.
+- Re-pinned in `references/enforcement-integrity.json`: the gate template (and this repo's installed copies) and `frameworks/_grok_sandbox_emit.py`.
 
 ### fix (a HALT blocks every action named in its id; 1.0 must-fix from the mathAgents M6 pilot)
 

@@ -587,6 +587,18 @@ The blocking (opt-in) disposition of `--check-rank`: runs the identical rank-con
 
 P1-3 verification that an emitted workspace-confinement `sandbox` block was actually **merged into the live `.claude/settings.json`** — the emitted block is inert until the operator merges it, and nothing else confirms the boundary took effect. Read-only and **output-only** (it reports booleans and the expected write roots, never echoes values from the operator's live settings, which may hold secrets). Exits non-zero when a confinement was emitted but is not live (missing, disabled, an open `allowUnsandboxedCommands` escape hatch, or mismatched write roots); exits `0` when the boundary is merged and enabled, or when no confinement was requested.
 
+It also checks the **constitutional gate's interpreter** wherever the framework installs the gate
+(`.claude/hooks/`, `.grok/hooks/`, `.github/hooks/`). The hook command is plain `python3`, and the
+gate's write path imports `agentteams`; when that interpreter lacks it, the gate re-runs under the
+**pin** `<hooks>/agentteams-python`, the absolute interpreter that rendered the team. The pin is
+written to an untracked file, ignored by the `.gitignore` emitted beside it, because a machine path
+must never be committed (Rule S-8). `--check-wiring` prints the pin's value and resolved target, says
+whether the gate would refuse it (relative, not a `python*` executable, or inside the project tree),
+runs `<pin> -c "import agentteams"` and the plain `python3`, and **exits non-zero when neither can
+import agentteams**, printing the fix: `<python-with-agentteams> -c "import sys; print(sys.executable)" > <hooks>/agentteams-python`,
+or re-render from that environment. Without a working interpreter the gate asks (cooperative) or
+denies (fail-closed) every content-bearing write instead of checking it.
+
 ### `--allow-unenforced-confinement`
 
 Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
