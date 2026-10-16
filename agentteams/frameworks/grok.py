@@ -567,9 +567,11 @@ def front_matter_name(text: str) -> str | None:
 
 
 def stale_scope_notices(agents_dir: Path) -> list[str]:
-    """Name existing grok agent files whose ``tools:`` / ``disallowedTools:`` line still holds a scoped entry.
+    """Name existing grok agent files whose ``tools:`` / ``disallowedTools:`` lists grok widens.
 
-    Grok ignores the scope and widens the agent (GROK-FU-R8-SCOPE). This run's render drops a scoped allow entry and
+    The shapes are those :func:`agentteams.capability_map.grok_widening_entries` reports: a scoped entry or ``MCPTool``
+    (grok discards the list), a tool both allowed and denied (grok ignores the deny), a duplicated key or an unbalanced
+    parenthesis (GROK-FU-R8-SCOPE). This run's render drops a scoped allow entry and
     widens a scoped deny, but ``--update --merge`` keeps an edited file's front matter and never auto-applies a deny
     change (not a strict narrowing), so a deployed team can keep the widening line after the update.
 

@@ -313,12 +313,51 @@ def capabilities_from_tokens(tokens: list[str] | None, framework: str) -> dict[s
 from agentteams.frameworks._grok_tool_scoping import GROK_EXACT_TOOLSET_KEYS, split_tool_list  # noqa: E402
 
 
+def _grok_list_values(yaml_text: str) -> dict[str, list[str]]:
+    """Return every top-level ``tools:`` / ``disallowedTools:`` value, flattened to comma-separated text.
+
+    Only keys at column 0 count (a nested ``tools:``, e.g. under ``mcpServers:``, is not the agent's list). Flow lists
+    (``[Read, Grep]``) and block lists (``- Read``) are flattened, and surrounding quotes are removed.
+
+    Args:
+        yaml_text: An agent file's YAML front matter.
+
+    Returns:
+        ``{key: [value, ...]}``; more than one value means the key is duplicated.
+
+    Raises:
+        Nothing.
+    """
+    lines = yaml_text.splitlines()
+    values: dict[str, list[str]] = {}
+    for idx, line in enumerate(lines):
+        if not line or line[0].isspace():
+            continue
+        key, sep, value = line.partition(":")
+        if not sep or key.strip() not in ("tools", "disallowedTools"):
+            continue
+        value = value.strip().strip("'\"")
+        if not value:  # a YAML block list follows
+            items = []
+            for nxt in lines[idx + 1:]:
+                if nxt.strip().startswith("- "):
+                    items.append(nxt.strip()[2:].strip())
+                elif nxt.strip() and not nxt[0].isspace():
+                    break
+            value = ", ".join(items)
+        elif value.startswith("[") and value.endswith("]"):
+            value = value[1:-1]
+        values.setdefault(key.strip(), []).append(value)
+    return values
+
+
 def grok_widening_entries(yaml_text: str) -> list[str]:
     """Return the ``tools:`` / ``disallowedTools:`` problems that make grok offer MORE than the agent's list.
 
     Each was shown live on the pinned release (expert reference G11, G18, G19): a scoped entry (``Name(...)``) and an
     ``MCPTool`` entry make grok discard the list and grant a shell plus an edit tool, and ``disallowedTools`` is ignored,
-    so a tool that is both allowed and denied is still granted. Teams rendered before the fix can carry any of these.
+    so a tool that is both allowed and denied is still granted. A duplicated key or an unbalanced parenthesis is also
+    reported: grok's reading of either is untested. Teams rendered before the fix can carry any of these.
 
     Args:
         yaml_text: An agent file's YAML front matter (the text between the ``---`` lines).
@@ -329,19 +368,23 @@ def grok_widening_entries(yaml_text: str) -> list[str]:
     Raises:
         Nothing.
     """
-    values: dict[str, str] = {}
-    for line in yaml_text.splitlines():
-        key, sep, value = line.strip().partition(":")
-        if sep and key in ("tools", "disallowedTools") and key not in values:
-            values[key] = value.strip()
     found: list[str] = []
-    for key, value in values.items():
-        if "(" in value:
-            found.append(f"a scoped entry in {key}: ({value})")
+    raw = _grok_list_values(yaml_text)
+    for key, vals in raw.items():
+        if len(vals) > 1:
+            found.append(f"{len(vals)} {key}: lines (grok's reading of a duplicated key is untested)")
+        for value in vals:
+            if "(" in value or ")" in value:
+                found.append(f"a scoped entry in {key}: ({value})")
+
+    def _entries(key: str) -> list[str]:
+        return [e.strip().strip("'\"") for v in raw.get(key, []) if v for e in split_tool_list(v)]
+
     try:
-        allowed = split_tool_list(values.get("tools", "")) if values.get("tools") else []
-        denied = set(split_tool_list(values["disallowedTools"])) if values.get("disallowedTools") else set()
-    except ValueError:  # unbalanced parentheses: already reported as a scoped entry above
+        allowed = _entries("tools")
+        denied = set(_entries("disallowedTools"))
+    except ValueError:
+        found.append("an unbalanced parenthesis in tools:/disallowedTools: (grok's reading is untested)")
         return found
     if "MCPTool" in allowed:
         found.append("MCPTool in tools (grok discards the list)")
@@ -349,6 +392,7 @@ def grok_widening_entries(yaml_text: str) -> list[str]:
     if both:
         found.append(f"{', '.join(both)} both allowed and denied (grok ignores disallowedTools)")
     return found
+
 
 _GROK_EXACT_KEY_RE = re.compile(rf"^({'|'.join(GROK_EXACT_TOOLSET_KEYS)})\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
 
@@ -367,8 +411,8 @@ def grok_exact_toolset(content: str) -> bool:
         content: The agent file text.
 
     Returns:
-        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, and lists grok
-        does not widen.
+        True only for exactly one ``injectDefaultTools: false`` and one ``mcpInheritance: none``, a non-empty top-level
+        ``tools:`` list, and lists grok does not widen.
 
     Raises:
         Nothing.
@@ -378,6 +422,8 @@ def grok_exact_toolset(content: str) -> bool:
         return False
     if grok_widening_entries(yaml_text):
         return False
+    if not any(v.strip() for v in _grok_list_values(yaml_text).get("tools", [])):
+        return False  # no top-level tools: (e.g. only allowed-tools:) -> grok sees an empty list and grants everything
     seen: dict[str, list[str]] = {}
     for m in _GROK_EXACT_KEY_RE.finditer(yaml_text):
         seen.setdefault(m.group(1).lower(), []).append(m.group(2).strip().strip("'\"").lower())

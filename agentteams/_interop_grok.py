@@ -48,8 +48,9 @@ def grok_capabilities(content: str, slug: str) -> dict[str, Any]:
     declared = _capability_map.canonical_tools_for_claude(content)
     if declared and _capability_map.grok_exact_toolset(content):
         return _capability_map.capabilities_from_tokens(declared, "grok")
-    print(f"  ⚠  {slug}: Grok source agent is not exact-toolset (injectDefaultTools/mcpInheritance unset or an empty "
-          "tools: list), so Grok granted it more than its declared tools; exported as FULL capabilities. An "
+    print(f"  ⚠  {slug}: Grok source agent is not exact-toolset (injectDefaultTools/mcpInheritance unset, an empty or "
+          "missing tools: list, or a list Grok widens: a scoped entry, MCPTool, or a tool both allowed and denied), "
+          "so Grok granted it more than its declared tools; exported as FULL capabilities. An "
           "exact-toolset target (claude, codex) will enforce that wider grant: narrow it from capabilities.raw "
           "before importing.", file=sys.stderr)
     return _capability_map.capabilities_from_tokens(list(_capability_map.CANONICAL_TOOL_SCOPES), "grok")
