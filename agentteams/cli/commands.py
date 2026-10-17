@@ -292,6 +292,8 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     print(f"Integrity of {len(results)} file(s) in {output_dir}: {counts}")
     for entry in (e for e in results if e["status"] == "MODIFIED"):
         print(f"  [MODIFIED] {entry['rel_path']} (edit or drift — review)")
+    for entry in (e for e in results if e["status"] == "LOCAL"):
+        print(f"  [LOCAL] {entry['rel_path']} — {entry['note']}")
     for entry in suspect:
         print(f"  [{entry['status']}] {entry['rel_path']} — {entry['note']}", file=sys.stderr)
     if suspect:
