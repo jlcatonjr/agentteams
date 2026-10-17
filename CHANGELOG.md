@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.13] - 2026-10-17
+
+### release notes (rc13)
+
+One fix, from an incident in mathAgents' M6 pilot on rc.12. rc.13 replaces rc.12 as the soak base for the coordinated
+v1.0.0. It adds no new dependencies, and logs and signed rows carry over unchanged.
+
+- **The macOS runner: xcrun launchers reach their real tool.**
+  - `/usr/bin/git` and the other `/usr/bin` developer tools are xcrun launchers. The runner's Seatbelt exec
+    allowlist accepted the launcher but not the real tool it runs, so every confined git call exited 71.
+  - In the pilot, `lake` read the failed call as a changed remote and deleted a package store inside the write root.
+    The files were restorable, and nothing outside the root was touched.
+  - The runner now allows the real tool by literal path, plus git's `--exec-path` helpers. It resolves them through
+    `xcrun --find` under `xcode-select -p`, only on root-owned paths, from `/`.
+- **Package stores.** A write root over a package store (`.lake/packages`, `node_modules`, `site-packages`, `.venv`
+  and similar) warns. A run that also depends on an unresolved launcher is **refused**, unless the confined-programs
+  entry sets `allow_unresolved_launcher_with_package_store: true`.
+- **`--check-wiring` on macOS** reports each exec list's launcher expansion and warns on unresolved launchers. The
+  runner also warns once per run.
+
 ### fix (runner, macOS: xcrun launchers in the exec allowlist reach their real tool; warn on write roots over package stores)
 
 - **The bug** (found by mathAgents, M6 step 14, on rc.12). A confined command had `/usr/bin/git` in its exec
