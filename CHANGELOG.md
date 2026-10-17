@@ -53,6 +53,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the runner uses the shared constant;
   - a snapshot waits for a beat in flight, and a beat during a snapshot skips only the legacy file.
 
+### fix (`--verify-integrity` passes on a clean checkout of a Claude team)
+
+- A Claude render records the gate's interpreter pin, `.claude/hooks/agentteams-python`, in the build log. The pin is
+  a machine path, so the `.gitignore` beside it keeps it out of git (Rule S-8). On a fresh clone, or a release
+  checkout, `--verify-integrity` therefore reported it `MISSING` and exited 1 (found by baseAgent).
+- An absent pin is now reported as `LOCAL`, which is advisory, when the `.gitignore` beside it ignores it. Without
+  that ignore file it is still `MISSING`. No other file is exempt. `--check-wiring` remains the check that the gate
+  has an interpreter that can import agentteams, whether from the pin or from plain `python3`.
+
 ### docs (1.0 known limitation: adopted agents can't be put under orchestrator-only on Codex)
 
 - `write_policy` interop supports claude and goose imports only, so a team with adopted agents keeps its Codex surface
