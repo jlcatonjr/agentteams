@@ -65,6 +65,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `~/.claude/settings.json`, which makes the home directory a write root. Install the signer outside it, for
   example under `/opt` (found by baseAgent).
 
+### fix (`--verify-integrity` passes on a clean checkout of a Claude team)
+
+- A Claude render records the gate's interpreter pin, `.claude/hooks/agentteams-python`, in the build log. The pin is
+  a machine path, so the `.gitignore` beside it keeps it out of git (Rule S-8). On a fresh clone, or a release
+  checkout, `--verify-integrity` therefore reported it `MISSING` and exited 1 (found by baseAgent).
+- An absent pin is now reported as `LOCAL`, which is advisory, when the `.gitignore` beside it ignores it. Without
+  that ignore file it is still `MISSING`. No other file is exempt. `--check-wiring` remains the check that the gate
+  has an interpreter that can import agentteams, whether from the pin or from plain `python3`.
+
 ## [1.0.0-rc.13] - 2026-10-17
 
 ### release notes (rc13)

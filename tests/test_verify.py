@@ -122,3 +122,63 @@ def test_cli_verify_backup(tmp_path):
     (tmp_path / "x.agent.md").write_text("content\n")
     emit.backup_output_dir(tmp_path, reason="test")
     assert build_team.main(["--verify-backup", "--output", str(tmp_path)]) == 0
+
+
+# ---------------------------------------------------------------------------
+# The gate's interpreter pin is machine-local (Rule S-8): a clean checkout never has it
+# ---------------------------------------------------------------------------
+
+def _seed_with_gate_pin(tmp_path: Path, *, ignore_file: bool) -> Path:
+    """An agents dir whose build log records ../hooks/agentteams-python, as a Claude render's does."""
+    from agentteams.frameworks.claude import GATE_PIN_GITIGNORE, GATE_PIN_NAME
+
+    agents = tmp_path / ".claude" / "agents"
+    agents.mkdir(parents=True)
+    hooks = tmp_path / ".claude" / "hooks"
+    hooks.mkdir()
+    (hooks / GATE_PIN_NAME).write_text("/opt/somewhere/bin/python3\n")
+    _seed(agents, {"a.md": _FENCED.format(body="a")})
+    log_path = agents / "references" / "build-log.json"
+    log = json.loads(log_path.read_text())
+    log["file_hashes"][f"../hooks/{GATE_PIN_NAME}"] = _short(hooks / GATE_PIN_NAME)
+    if ignore_file:
+        (hooks / ".gitignore").write_text(GATE_PIN_GITIGNORE)
+        log["file_hashes"]["../hooks/.gitignore"] = _short(hooks / ".gitignore")
+    log_path.write_text(json.dumps(log))
+    (hooks / GATE_PIN_NAME).unlink()  # a clean checkout: the pin is gitignored, so it never arrives
+    return agents
+
+
+def test_clean_checkout_without_the_gitignored_gate_pin_verifies(tmp_path):
+    # Regression (rc.14, found in baseAgent): a fresh clone of a Claude team failed --verify-integrity with
+    # [MISSING] ../hooks/agentteams-python, a file that is never committed by design.
+    agents = _seed_with_gate_pin(tmp_path, ignore_file=True)
+    status = {e["rel_path"]: e["status"] for e in drift.verify_output_integrity(agents)}
+    assert status["../hooks/agentteams-python"] == "LOCAL"
+    assert build_team.main(["--verify-integrity", "--output", str(agents)]) == 0
+
+
+def test_gate_pin_without_its_ignore_file_is_still_missing(tmp_path):
+    # Rule 12: the exemption needs the ignore file that makes the pin untracked; without it, absence is a finding.
+    agents = _seed_with_gate_pin(tmp_path, ignore_file=False)
+    status = {e["rel_path"]: e["status"] for e in drift.verify_output_integrity(agents)}
+    assert status["../hooks/agentteams-python"] == "MISSING"
+    assert build_team.main(["--verify-integrity", "--output", str(agents)]) == 1
+
+
+def test_only_the_pin_is_exempt_not_other_hook_files(tmp_path):
+    from agentteams.frameworks.claude import GATE_PIN_GITIGNORE
+
+    agents = _seed_with_gate_pin(tmp_path, ignore_file=True)
+    hooks = tmp_path / ".claude" / "hooks"
+    (hooks / ".gitignore").write_text(GATE_PIN_GITIGNORE + "/constitutional-gate.py\n")
+    gate = hooks / "constitutional-gate.py"
+    gate.write_text("# gate\n")
+    log_path = agents / "references" / "build-log.json"
+    log = json.loads(log_path.read_text())
+    log["file_hashes"]["../hooks/constitutional-gate.py"] = _short(gate)
+    log_path.write_text(json.dumps(log))
+    gate.unlink()  # a tracked enforcement file going missing must still fail, even if someone ignores it
+    status = {e["rel_path"]: e["status"] for e in drift.verify_output_integrity(agents)}
+    assert status["../hooks/constitutional-gate.py"] == "MISSING"
+    assert build_team.main(["--verify-integrity", "--output", str(agents)]) == 1
