@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.14] - 2026-10-17
+
+### release notes (rc14)
+
+Three runner fixes, one integrity fix and four documentation notes. rc.14 replaces rc.13 as the soak base for the
+coordinated v1.0.0, so every repository re-pins (shared release policy §6 2b). It adds no new dependencies, and
+logs and signed rows carry over unchanged.
+
+- **The runner's own heartbeat no longer fails confined commands (M6-F6).** Any confined command that outlasted a
+  heartbeat tick (about 3 s) failed with exit 3, even when it succeeded, because the runner counted its own
+  heartbeat as the command's undeclared write. Found in mathAgents' M6 pilot.
+- **Revoking an MCP grant takes effect for live dispatches.** After a grant is removed and the runner restarted, the
+  agent's unexpired nonces are refused on the MCP channel. Nonces issued while it held the grant are also refused on
+  the orchestrator's queue. Nonces issued before rc.14 carry no flag and stay usable for up to 24 h; rotate the
+  ledger key at upgrade to close that window.
+- **`--verify-integrity` passes on a clean checkout of a Claude team.** The gitignored gate interpreter pin is now
+  reported as `LOCAL`, not `MISSING`, so the verified release checkouts that 1.0 requires no longer exit 1.
+- **Documentation:** known limitations for 1.0 (Codex adopted agents; `AGENTS.md`), the release-checkout pin note,
+  and why a signer installed under `$HOME` can be refused.
+
+Still open for 1.0.x: proposals a revoked agent had already staged remain appliable with the orchestrator's approval
+(M6-F5 and the pipeline-graph merge order are also 1.0.x).
+
 ### fix (security, runner: revoking an MCP grant now binds live dispatches)
 
 - **What was wrong.** On the MCP channel the runner checked only that the dispatch nonce resolved to the sending
