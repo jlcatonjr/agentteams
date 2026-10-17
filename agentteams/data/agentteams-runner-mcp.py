@@ -67,7 +67,10 @@ LOST_AFTER_SECONDS = 600
 #: How long ``run_command`` waits for its own result (M6-F5): the runner's MCP command cap
 #: (``proposal_runner.MCP_COMMAND_TIMEOUT``, 120 s) plus time queued behind other requests. A granted agent
 #: often has no ``request_status`` (grants are exact), so a ``queued`` reply was a result it could never read.
-#: The wait still ends early when the runner stops beating (``_poll``).
+#: The wait still ends early when the runner stops beating (``_poll``). The MCP client's own tool-call timeout must
+#: be longer (Goose: the extension's 300 s, ``runner_mcp``; Claude Code: ``MCP_TOOL_TIMEOUT``). This server reads one
+#: message at a time and ignores ``notifications/cancelled``, so a call the client abandons keeps polling, and its
+#: result, when it arrives, is acknowledged and dropped: the exit status survives only in the runner's ledger.
 RUN_COMMAND_WAIT_SECONDS = 180.0
 
 _NONCE = {"type": "string", "description": "Your dispatch nonce, from your task."}
@@ -211,7 +214,8 @@ class Server:
             note = "the runner hasn't answered yet; call request_status with this request_id"
         else:
             note = ("the runner hasn't answered yet and you have no request_status tool; report this request_id "
-                    "in your handoff, and the orchestrator reads the result from the runner's ledger")
+                    "in your handoff. The runner's ledger records the command's exit status and any undeclared "
+                    "writes, not its output, so re-run a shorter command if you need the output")
         return {"request_id": request_id, "status": "queued", "note": note}
 
     # -- tools ----------------------------------------------------------------------------------------------

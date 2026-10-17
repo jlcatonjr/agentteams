@@ -13,11 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (mathAgents M6-F5: a 31 s `lake` build).
 - `run_command` now waits for its own result for up to 180 s, which is the runner's 120 s MCP command cap plus time
   queued. It still ends early when the runner stops beating. Writes and deletes keep the short call wait.
-- A `queued` reply now tells an agent without `request_status` to report the request id in its handoff, so the
-  orchestrator can read the result from the runner's ledger. No grant changes: `request_status` is still granted
-  only when the brief lists it.
-- `agentteams-runner-mcp.py` and its pin in `runner_mcp.py` change. The operator re-pins
-  `references/enforcement-integrity.json`.
+- A `queued` reply now tells an agent without `request_status` to report the request id in its handoff. No grant
+  changes: `request_status` is still granted only when the brief lists it.
+- **Limits:**
+  - The wait is not a guarantee. The runner serves one request at a time, so with several agents queued, or an
+    uncapped orchestrator-channel command ahead, a result can still take longer than 180 s and come back `queued`.
+  - The MCP client's own tool-call timeout must be longer than 180 s. Goose's runner extension sets 300 s; for
+    Claude Code, check `MCP_TOOL_TIMEOUT`.
+  - The server ignores cancellation, so a call the client abandons loses its output. The runner's ledger keeps the
+    command's exit status and undeclared writes, not its output.
+- The agent guidance (`write_policy.py`) now says this. `agentteams-runner-mcp.py`, its pin in `runner_mcp.py` and
+  `write_policy.py` change, and the operator re-pins `references/enforcement-integrity.json`.
 
 ### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
 
