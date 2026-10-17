@@ -9,11 +9,14 @@ starts must be confined. That includes each ``command-request`` and each pre-wri
   ``process-exec`` is denied except under the declared ``exec`` paths, matched as subpaths so a toolchain
   can run its own helpers. ``/bin/sh`` re-executes ``/bin/bash``, so a shell-using program needs both.
   Most developer tools in ``/usr/bin`` (``git``, ``make``, ``clang``) are Apple's xcrun launcher, which execs
-  the real tool from the active developer directory. When ``exec`` names such a program, or ``/usr/bin``
-  itself, :func:`wrap` also allows the real tool's directory (``xcrun --find``) and, for git, its
-  ``--exec-path``; nothing broader. If xcrun is missing or fails, nothing is added and a one-line notice names
-  the launcher, whose confined calls will then fail with exit 71. ``--check-wiring`` reports the same, and the
-  runner warns when a command (or ``lake``, which runs git) depends on an unresolved launcher.
+  the real tool from the active developer directory. When ``exec`` names such a program, :func:`wrap` also
+  allows the real tool by ``literal`` path (``xcrun --find``) and, for git, its ``--exec-path`` as a subpath;
+  only a declared ``/usr/bin`` itself adds whole tool directories. Each added path, and every parent, must be
+  root-owned and not group- or world-writable. Otherwise, or if xcrun is missing or fails, nothing is added for
+  that launcher and a one-line notice says why; its confined calls will then fail with exit 71.
+  ``--check-wiring`` reports the same. The runner warns when a command (or ``lake``, which runs git) needs an
+  unresolved launcher, and refuses the run when a write root also covers a package store, unless that agent's
+  ``confined_programs`` entry sets ``allow_unresolved_launcher_with_package_store: true``.
 * **Linux (bwrap).** The root is mounted read-only, and the write roots and the private ``TMPDIR`` are
   bind-mounted writable. The ledger, queue and ``.git`` inside them are re-mounted read-only, and the key
   directory is masked with an empty tmpfs. The command gets a new PID namespace with ``--die-with-parent``,
@@ -42,7 +45,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from agentteams.atomicio import read_regular_nofollow, write_new_atomic
 
@@ -115,7 +118,8 @@ def _real(path: str) -> str:
     return _clean(os.path.realpath(os.path.expanduser(path)))
 
 
-def seatbelt_profile(*, root: Path, exec_paths: list[str], write_roots: list[str], tmp_dir: Path) -> str:
+def seatbelt_profile(*, root: Path, exec_paths: list[str], write_roots: list[str], tmp_dir: Path,
+                     exec_literals: tuple[str, ...] | list[str] = ()) -> str:
     """Build the Seatbelt profile for one confined run.
 
     Args:
@@ -123,6 +127,8 @@ def seatbelt_profile(*, root: Path, exec_paths: list[str], write_roots: list[str
         exec_paths: Programs or directories the command may execute (subpath match), already validated.
         write_roots: Project-relative directories the command may write.
         tmp_dir: The run's private ``TMPDIR``.
+        exec_literals: Programs the command may execute by exact path only (``literal``): an xcrun launcher's
+            real tool, so allowing ``/usr/bin/git`` doesn't allow its whole developer ``bin`` directory.
 
     Returns:
         SBPL text for ``sandbox-exec -p``.
@@ -151,6 +157,7 @@ def seatbelt_profile(*, root: Path, exec_paths: list[str], write_roots: list[str
         "(deny process-exec*)",
         "(allow process-exec*",
         *[f'    (subpath "{_real(e)}")' for e in exec_paths],
+        *[f'    (literal "{_real(e)}")' for e in exec_literals],
         ")",
     ]
     return "\n".join(lines) + "\n"
@@ -172,18 +179,31 @@ _XCRUN = "/usr/bin/xcrun"
 XCRUN_TIMEOUT = 5.0
 XCRUN_BUDGET = 20.0
 
-#: A resolver maps a launcher name to the extra directories it needs: ``[]`` when the name is not an xcrun launcher,
-#: ``None`` when xcrun is missing or fails, so nothing can be added for it.
-LauncherResolver = Callable[[str], "list[str] | None"]
+#: An expansion entry: ``("literal", path)`` allows exactly that program, ``("subpath", dir)`` everything under it.
+ExecEntry = tuple[str, str]
+#: A resolver maps a launcher name to what it needs: ``[("literal", real tool), ("subpath", helper dir), ...]``,
+#: ``[]`` when the name is not an xcrun launcher, ``None`` when xcrun is missing or fails.
+LauncherResolver = Callable[[str], "list[ExecEntry] | None"]
+
+
+_lstat = os.lstat  # the ownership check's stat (a test seam)
+
+
+class Expansion(NamedTuple):
+    """What :func:`expand_exec_paths` adds to an exec allowlist."""
+
+    extras: list[ExecEntry]  #: entries to allow beyond the declared paths, in order
+    unresolved: list[str]  #: launchers whose real tool is not allowed (confined calls to them fail, exit 71)
+    dropped: list[str]  #: resolved paths refused by the ownership check, each with its reason
 
 
 def xcrun_resolver(timeout: float = XCRUN_TIMEOUT) -> LauncherResolver:
     """The real launcher resolver: ``xcrun --find`` under the active developer directory, cached per instance.
 
-    It runs with a fixed minimal environment, so a ``DEVELOPER_DIR`` in the caller's environment can't point it
-    elsewhere. A tool counts as a launcher's only when its real path lies under ``xcode-select -p`` (``xcrun``
-    also finds plain ``PATH`` programs such as ``/usr/bin/true``, which are not launchers). For ``git`` the real
-    tool's ``--exec-path`` is added too, and must lie under the developer directory as well.
+    Every call runs with ``cwd="/"`` and a fixed minimal environment, so neither the project nor a
+    ``DEVELOPER_DIR`` in the caller's environment can steer it. A tool counts as a launcher's only when its real
+    path lies under ``xcode-select -p`` (``xcrun`` also finds plain ``PATH`` programs such as ``/usr/bin/true``).
+    For ``git`` the real tool's ``--exec-path`` is added as a subpath, and must lie under the developer directory.
 
     Args:
         timeout: Seconds allowed for each subprocess.
@@ -195,36 +215,68 @@ def xcrun_resolver(timeout: float = XCRUN_TIMEOUT) -> LauncherResolver:
         Nothing.
     """
     env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": os.path.expanduser("~")}
-    cache: dict[str, list[str] | None] = {}
+    cache: dict[str, list[ExecEntry] | None] = {}
     dev: list[str | None] = []
 
     def run(argv: list[str]) -> str | None:
         try:
-            proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env=env,
+            proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env=env, cwd="/",
                                   stdin=subprocess.DEVNULL)
         except (OSError, subprocess.SubprocessError):
             return None
         out = proc.stdout.strip()
         return out if proc.returncode == 0 and out.startswith("/") and "\n" not in out else None
 
-    def resolve(name: str) -> list[str] | None:
+    def resolve(name: str) -> list[ExecEntry] | None:
         if name not in cache:
             if not dev:
                 found = run(["/usr/bin/xcode-select", "-p"]) if os.path.exists(_XCRUN) else None
                 dev.append(os.path.realpath(found) if found else None)
-            result: list[str] | None = None
+            result: list[ExecEntry] | None = None
             tool = run([_XCRUN, "--find", name]) if dev[0] not in (None, "/") else None
             if tool is not None:
                 real = os.path.realpath(tool)
-                result = [os.path.dirname(real)] if _within(real, str(dev[0])) else []
+                result = [("literal", real)] if _within(real, str(dev[0])) else []
                 if result and name in _LAUNCHER_HELPERS:
                     helper = run([real, _LAUNCHER_HELPERS[name]])
                     helper = os.path.realpath(helper) if helper else None
-                    result = result + [helper] if helper and _within(helper, str(dev[0])) else None
+                    result = result + [("subpath", helper)] if helper and _within(helper, str(dev[0])) else None
             cache[name] = result
         return cache[name]
 
     return resolve
+
+
+def ownership_problem(path: str, lstat: Callable[[str], os.stat_result] | None = None) -> str | None:
+    """Why *path* can't be trusted as an exec allowance, or None: it and every parent must be root's, not g/o-writable.
+
+    A developer directory a user can write (an Xcode under ``~/Applications``, say) would let a confined command
+    swap the real tool. *lstat* is the test seam.
+
+    Args:
+        path: An absolute real path.
+        lstat: ``os.lstat`` (through the module's ``_lstat`` seam) by default.
+
+    Returns:
+        A short reason naming the offending component, or None.
+
+    Raises:
+        Nothing.
+    """
+    current, lstat = path, lstat or _lstat
+    while True:
+        try:
+            st = lstat(current)
+        except OSError as exc:
+            return f"{current} can't be checked ({exc.strerror or exc})"
+        if st.st_uid != 0:
+            return f"{current} is not owned by root"
+        if st.st_mode & 0o022:
+            return f"{current} is writable by group or others"
+        parent = os.path.dirname(current)
+        if parent == current:
+            return None
+        current = parent
 
 
 def _usr_bin_launcher_names() -> list[str]:
@@ -246,29 +298,33 @@ def _usr_bin_launcher_names() -> list[str]:
 
 def expand_exec_paths(exec_paths: list[str], resolver: LauncherResolver, *, platform: str | None = None,
                       usr_bin_names: Callable[[], list[str]] = _usr_bin_launcher_names,
-                      budget: float = XCRUN_BUDGET) -> tuple[list[str], list[str]]:
-    """Add the real tool and helper directories of each xcrun launcher in *exec_paths* (darwin only).
+                      budget: float = XCRUN_BUDGET,
+                      lstat: Callable[[str], os.stat_result] | None = None) -> Expansion:
+    """What each xcrun launcher in *exec_paths* needs beyond the declared paths (darwin only).
 
-    A program directly under ``/usr/bin`` is checked by name; ``/usr/bin`` itself checks every candidate from
-    *usr_bin_names*. Pure apart from *resolver* and *usr_bin_names*, which tests inject.
+    A program named directly under ``/usr/bin`` gets its real tool as a ``literal`` and its helper directory as a
+    ``subpath``, so the allowlist still limits which programs run. Only when ``/usr/bin`` itself is declared does
+    each launcher's real tool *directory* become a ``subpath``. Every path must pass :func:`ownership_problem`;
+    one that fails is dropped, and its launcher counts as unresolved. Pure apart from the injected callables.
 
     Args:
         exec_paths: The validated exec allowlist.
-        resolver: Maps a launcher name to its extra directories (see :data:`LauncherResolver`).
-        platform: ``sys.platform`` by default; anything but ``"darwin"`` returns *exec_paths* unchanged.
+        resolver: See :data:`LauncherResolver`.
+        platform: ``sys.platform`` by default; anything but ``"darwin"`` adds nothing.
         usr_bin_names: Lists candidate names when ``/usr/bin`` itself is allowed.
         budget: Seconds for the whole expansion; names left when it runs out count as unresolved.
+        lstat: The ownership check's ``os.lstat`` (test seam).
 
     Returns:
-        ``(expanded, unresolved)``: *exec_paths* followed by the new directories (deduplicated), and the named
-        ``/usr/bin`` programs that could not be resolved (or ``/usr/bin`` itself, when none of its candidates
-        could), which will not work under the profile.
+        An :class:`Expansion`. ``unresolved`` names the declared ``/usr/bin`` programs left without their real
+        tool, or ``/usr/bin`` itself when none of its candidates resolved.
 
     Raises:
         Nothing.
     """
+    out = Expansion([], [], [])
     if (platform or sys.platform) != "darwin":
-        return list(exec_paths), []
+        return out
     named: list[str] = []
     listed: list[str] = []
     for path in exec_paths:
@@ -277,97 +333,132 @@ def expand_exec_paths(exec_paths: list[str], resolver: LauncherResolver, *, plat
             listed += [n for n in usr_bin_names() if n not in listed]
         elif os.path.dirname(real) == _USR_BIN and os.path.basename(real) not in named:
             named.append(os.path.basename(real))
-    expanded, unresolved = list(exec_paths), []
     deadline = time.monotonic() + budget
     resolved_any = False
     for name in named + [n for n in listed if n not in named]:
-        extra = [] if name == "xcrun" else resolver(name) if time.monotonic() < deadline else None
-        if extra is None:
+        entries = [] if name == "xcrun" else resolver(name) if time.monotonic() < deadline else None
+        if entries is None:
             # A named program is reported; of a listed /usr/bin, only total failure is (an Xcode-only launcher on a
             # Command Line Tools host fails outside the sandbox too).
             if name in named:
-                unresolved.append(f"{_USR_BIN}/{name}")
+                out.unresolved.append(f"{_USR_BIN}/{name}")
             continue
         resolved_any = True
-        expanded += [d for d in extra if d not in expanded]
+        if name not in named:  # /usr/bin itself was declared: allow the tool's directory, as the operator did
+            entries = [("subpath", os.path.dirname(p)) if kind_ == "literal" else (kind_, p) for kind_, p in entries]
+        ok = True
+        for entry in entries:
+            problem = ownership_problem(entry[1], lstat)
+            if problem:
+                ok = False
+                if f"{entry[1]} ({problem})" not in out.dropped:
+                    out.dropped.append(f"{entry[1]} ({problem})")
+            elif entry not in out.extras:
+                out.extras.append(entry)
+        if not ok and name in named:
+            out.unresolved.append(f"{_USR_BIN}/{name}")
     if listed and not resolved_any:
-        unresolved.append(f"{_USR_BIN} (its xcrun launchers)")
-    return expanded, unresolved
+        out.unresolved.append(f"{_USR_BIN} (its xcrun launchers)")
+    return out
 
 
-def unresolved_notice(unresolved: list[str]) -> str | None:
-    """The one-line notice for launchers :func:`expand_exec_paths` could not resolve, or None when there are none.
+def expansion_notices(expansion: Expansion) -> list[str]:
+    """The one-line notices for an :class:`Expansion`: dropped paths, then unresolved launchers.
 
     Args:
-        unresolved: The ``/usr/bin`` programs left unresolved.
+        expansion: From :func:`expand_exec_paths`.
 
     Returns:
-        The notice text.
+        Zero, one or two lines.
 
     Raises:
         Nothing.
     """
-    if not unresolved:
-        return None
-    return (f"[confinement] notice: xcrun could not resolve {', '.join(unresolved)}; if these are xcrun launchers, "
-            "their real tools are not allowed and confined calls to them will fail (exit 71)")
+    lines = []
+    if expansion.dropped:
+        lines.append(f"[confinement] notice: not allowing {'; '.join(expansion.dropped)}: an exec allowance must be "
+                     "root-owned and not group- or world-writable, with every parent")
+    if expansion.unresolved:
+        lines.append(f"[confinement] notice: xcrun could not resolve {', '.join(expansion.unresolved)}; if these are "
+                     "xcrun launchers, their real tools are not allowed and confined calls to them will fail (exit 71)")
+    return lines
 
 
-def launcher_warning(program: str, exec_paths: list[str], resolver: LauncherResolver, *,
-                     platform: str | None = None) -> str | None:
-    """A WARNING when *program*, or a launcher it is known to run (:data:`LAUNCHER_WRAPPERS`), can't be resolved.
+def unresolved_launchers(program: str, exec_paths: list[str], resolver: LauncherResolver, *,
+                         platform: str | None = None,
+                         lstat: Callable[[str], os.stat_result] | None = None) -> list[str]:
+    """The ``/usr/bin`` launchers *program* needs (itself, or via :data:`LAUNCHER_WRAPPERS`) that won't work confined.
 
     Args:
         program: The command's resolved ``argv[0]`` (its path, not its real path: elan's proxies are symlinks).
         exec_paths: The command's exec allowlist.
         resolver: The launcher resolver.
         platform: ``sys.platform`` by default; only ``"darwin"`` has launchers.
+        lstat: The ownership check's ``os.lstat`` (test seam).
 
     Returns:
-        The warning text, or None.
+        Launcher paths that could not be resolved or failed the ownership check.
 
     Raises:
         Nothing.
     """
     if (platform or sys.platform) != "darwin":
-        return None
+        return []
     names = [os.path.basename(program)] if os.path.dirname(program) == _USR_BIN else []
     names += [n for n in LAUNCHER_WRAPPERS.get(os.path.basename(program), ())
-              if exec_allows(f"{_USR_BIN}/{n}", exec_paths)]
-    bad = [f"{_USR_BIN}/{n}" for n in names if n != "xcrun" and resolver(n) is None]
-    if not bad:
+              if exec_allows(f"{_USR_BIN}/{n}", exec_paths) and n not in names]
+    paths = [f"{_USR_BIN}/{n}" for n in names if n != "xcrun"]
+    return expand_exec_paths(paths, resolver, platform=platform, lstat=lstat).unresolved if paths else []
+
+
+def launcher_warning(program: str, unresolved: list[str]) -> str | None:
+    """The runner's WARNING for :func:`unresolved_launchers`, or None when there are none.
+
+    Args:
+        program: The command's resolved ``argv[0]``.
+        unresolved: From :func:`unresolved_launchers`.
+
+    Returns:
+        The warning text.
+
+    Raises:
+        Nothing.
+    """
+    if not unresolved:
         return None
-    return (f"WARNING: {', '.join(bad)} may be an xcrun launcher that could not be resolved; confined calls to it "
-            f"from {program} will fail (exit 71), and a tool that misreads that failure may act on empty output")
+    return (f"WARNING: {', '.join(unresolved)} may be an xcrun launcher that could not be resolved; confined calls "
+            f"to it from {program} will fail (exit 71), and a tool that misreads that failure may act on empty output")
 
 
 def launcher_report(exec_lists: dict[str, list[str]], resolver: LauncherResolver, *,
                     platform: str | None = None,
-                    usr_bin_names: Callable[[], list[str]] = _usr_bin_launcher_names) -> list[str]:
+                    usr_bin_names: Callable[[], list[str]] = _usr_bin_launcher_names,
+                    lstat: Callable[[str], os.stat_result] | None = None) -> list[str]:
     """``--check-wiring`` lines for every xcrun launcher in *exec_lists*, using the profile build's expansion.
 
     Args:
-        exec_lists: ``{label: exec allowlist}``, e.g. ``confined_programs.lean`` or ``gate_exec.lint``.
+        exec_lists: ``{label: exec allowlist}``, e.g. ``confined_programs.lean`` or ``proposal_gates.lint``.
         resolver: The launcher resolver.
         platform: ``sys.platform`` by default; other platforms report nothing.
         usr_bin_names: As for :func:`expand_exec_paths`.
+        lstat: As for :func:`expand_exec_paths`.
 
     Returns:
-        One line per allowlist with launchers: what was added, or a WARNING naming the unresolved ones.
+        Per allowlist with launchers: what was added, then a WARNING naming unresolved or refused ones.
 
     Raises:
         Nothing.
     """
     lines: list[str] = []
     for label in sorted(exec_lists):
-        paths = exec_lists[label]
-        expanded, unresolved = expand_exec_paths(paths, resolver, platform=platform, usr_bin_names=usr_bin_names)
-        added = expanded[len(paths):]
-        if added:
-            lines.append(f"{label}: xcrun launchers reach their real tools; also allowed: {', '.join(added)}")
-        if unresolved:
-            lines.append(f"WARNING: {label}: {', '.join(unresolved)} could not be resolved with xcrun; if they are "
-                         "xcrun launchers, confined calls to them will fail (exit 71)")
+        exp = expand_exec_paths(exec_lists[label], resolver, platform=platform, usr_bin_names=usr_bin_names,
+                                lstat=lstat)
+        if exp.extras:
+            lines.append(f"{label}: xcrun launchers reach their real tools; also allowed: "
+                         f"{', '.join(f'{k} {p}' for k, p in exp.extras)}")
+        if exp.unresolved or exp.dropped:
+            lines.append(f"WARNING: {label}: {', '.join(exp.unresolved + exp.dropped)} could not be resolved or "
+                         "allowed; if they are xcrun launchers, confined calls to them will fail (exit 71)")
     return lines
 
 
@@ -477,9 +568,9 @@ def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: li
     """Return *argv* wrapped in *sandbox*.
 
     For Seatbelt the exec allowlist is first expanded by :func:`expand_exec_paths` (xcrun launchers reach their
-    real tool and helpers). An added directory that is ``/``, home, an ancestor of the project, or overlaps a
-    write root or the ``TMPDIR`` is dropped, as :func:`check_roots` would refuse it. Unresolved launchers get a
-    one-line notice on stderr.
+    real tool, as a ``literal``, and its helpers). An added path that is ``/``, home, an ancestor of the project, or overlaps a
+    write root or the ``TMPDIR`` is dropped, as :func:`check_roots` would refuse it. Dropped and unresolved
+    launchers get one-line notices on stderr.
 
     Args:
         argv: The command, with ``argv[0]`` already resolved to an absolute path.
@@ -498,23 +589,55 @@ def wrap(argv: list[str], *, sandbox: str, root: Path, cwd: Path, exec_paths: li
         ConfinementError: For an unknown sandbox, or a path that can't be expressed safely.
     """
     if sandbox == "seatbelt":
-        expanded, unresolved = expand_exec_paths(exec_paths, resolver or xcrun_resolver())
-        notice = unresolved_notice(unresolved)
-        if notice:
+        expansion = expand_exec_paths(exec_paths, resolver or xcrun_resolver())
+        for notice in expansion_notices(expansion):
             print(notice, file=sys.stderr)
         real_root, home = os.path.realpath(root), os.path.realpath(os.path.expanduser("~"))
         unsafe = [os.path.realpath(root / w) for w in write_roots] + [os.path.realpath(tmp_dir)]
-        extra = [e for e in expanded[len(exec_paths):] if e not in ("/", home) and not _within(real_root, e)
+        extra = [(k, e) for k, e in expansion.extras if e not in ("/", home) and not _within(real_root, e)
                  and not any(_within(e, u) or _within(u, e) for u in unsafe)]
-        profile = seatbelt_profile(root=root, exec_paths=[*exec_paths, *extra], write_roots=write_roots,
-                                   tmp_dir=tmp_dir)
+        profile = seatbelt_profile(root=root, exec_paths=[*exec_paths, *(e for k, e in extra if k == "subpath")],
+                                   write_roots=write_roots, tmp_dir=tmp_dir,
+                                   exec_literals=[e for k, e in extra if k == "literal"])
         return ["/usr/bin/sandbox-exec", "-p", profile, *argv]
     if sandbox == "bwrap":
         return [*bwrap_argv(root=root, write_roots=write_roots, tmp_dir=tmp_dir, cwd=cwd), "--", *argv]
     raise ConfinementError(f"unknown sandbox {sandbox!r}")
 
 
-def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[str], Any]) -> dict[str, dict[str, list[str]]]:
+#: The per-agent ``confined_programs`` opt-in that lets a run proceed when it needs an unresolved xcrun launcher
+#: *and* a write root covers a package store (mathAgents M6's combination; see :func:`launcher_store_refusal`).
+OPT_IN_LAUNCHER_STORE = "allow_unresolved_launcher_with_package_store"
+
+
+def launcher_store_refusal(agent: str, unresolved: list[str], store_warnings: list[str],
+                           jail: dict[str, Any]) -> str | None:
+    """Why a confined run must be refused for the M6 combination, or None.
+
+    Either condition alone only warns. Together, a tool whose launcher fails (exit 71) can misread the failure and
+    delete the package store it can write, as ``lake`` deleted ``.lake/packages/mathlib``.
+
+    Args:
+        agent: The agent whose ``confined_programs`` entry applies.
+        unresolved: From :func:`unresolved_launchers`.
+        store_warnings: From :func:`package_store_warnings` for the agent's write roots.
+        jail: The agent's validated entry (:func:`load_confined`).
+
+    Returns:
+        The refusal message, naming both conditions and the opt-in, or None.
+
+    Raises:
+        Nothing.
+    """
+    if not (unresolved and store_warnings) or jail.get(OPT_IN_LAUNCHER_STORE) is True:
+        return None
+    stores = "; ".join(w.removeprefix("warning: ").split(":", 1)[0] for w in store_warnings)
+    return (f"refused: {', '.join(unresolved)} could not be resolved (confined calls to it fail with exit 71) and "
+            f"{stores}. A tool that misreads that failure may delete the store. Narrow the write root to build "
+            f"outputs, fix xcrun (xcode-select -p), or set confined_programs.{agent}.{OPT_IN_LAUNCHER_STORE}: true")
+
+
+def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[str], Any]) -> dict[str, dict[str, Any]]:
     """Validate ``confined_programs`` and gates' optional ``exec``.
 
     Exec paths must be absolute (or ``~/``). Write roots must be safe relative paths clear of the project
@@ -527,7 +650,7 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         control_plane_of: :func:`agentteams.frameworks._write_roots.control_plane_of`.
 
     Returns:
-        ``{agent: {"exec": [...], "write": [...]}}``.
+        ``{agent: {"exec": [...], "write": [...]}}``, plus ``OPT_IN_LAUNCHER_STORE: True`` when set.
 
     Raises:
         ConfinementError: On any malformed or unsafe entry.
@@ -540,8 +663,12 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
                 raise ConfinementError(f"proposal_gates.{name}.exec entries must be absolute or ~/ paths")
     confined: dict[str, dict[str, list[str]]] = {}
     for agent, spec in raw.items():
-        if not (isinstance(spec, dict) and set(spec) <= {"exec", "write"}):
-            raise ConfinementError(f"confined_programs.{agent} must be {{exec, write}}")
+        if not (isinstance(spec, dict) and set(spec) <= {"exec", "write", OPT_IN_LAUNCHER_STORE}):
+            raise ConfinementError(f"confined_programs.{agent} must be {{exec, write}} (and optionally "
+                                   f"{OPT_IN_LAUNCHER_STORE})")
+        opt_in = spec.get(OPT_IN_LAUNCHER_STORE, False)
+        if not isinstance(opt_in, bool):
+            raise ConfinementError(f"confined_programs.{agent}.{OPT_IN_LAUNCHER_STORE} must be true or false")
         exec_paths, write = spec.get("exec") or [], spec.get("write") or []
         if not (isinstance(exec_paths, list) and isinstance(write, list)):
             raise ConfinementError(f"confined_programs.{agent}.exec and .write must be lists")
@@ -562,7 +689,7 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
                 raise ConfinementError(f"confined_programs.{agent}.write {rel!r} covers the project root, the ledger, "
                                     "the queue, .git or the control plane; refused")
         # The exec-inside-a-write-root check needs the project root: see check_roots (run time).
-        confined[agent] = {"exec": exec_paths, "write": write}
+        confined[agent] = {"exec": exec_paths, "write": write, **({OPT_IN_LAUNCHER_STORE: True} if opt_in else {})}
     return confined
 
 

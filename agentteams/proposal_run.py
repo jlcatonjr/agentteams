@@ -76,6 +76,17 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 P._confinement.check_roots(root, jail["exec"], jail["write"])
             except P._confinement.ConfinementError as exc:
                 raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
+            # mathAgents M6: say once per run when the command needs an unresolved xcrun launcher, or may delete a
+            # package store it can write. Either alone warns; both together refuse unless the operator opted in.
+            resolver = P._confinement.xcrun_resolver()
+            stores = P._confinement.package_store_warnings(jail["write"], root)
+            unresolved = P._confinement.unresolved_launchers(program, jail["exec"], resolver)
+            warning = P._confinement.launcher_warning(program, unresolved)
+            for note in [*stores, *([warning] if warning else [])]:
+                print(f"[runner] {note}", file=sys.stderr)
+            refusal = P._confinement.launcher_store_refusal(agent, unresolved, stores, jail)
+            if refusal:
+                raise P.ProposalError(f"confined_programs.{agent}: {refusal}")
         stdin_bytes = None
         spec = artifact.get("stdin_from_content")
         if spec is not None:
@@ -115,15 +126,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             except P._confinement.ConfinementError as exc:
                 shutil.rmtree(run_tmp, ignore_errors=True)
                 raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
-            # mathAgents M6: say once per run when the command leans on an unresolved xcrun launcher, or may
-            # delete a package store it can write; neither is refused.
-            for note in P._confinement.package_store_warnings(jail["write"], root):
-                print(f"[runner] {note}", file=sys.stderr)
             if sandbox:
-                resolver = P._confinement.xcrun_resolver()
-                warning = P._confinement.launcher_warning(program, jail["exec"], resolver)
-                if warning:
-                    print(f"[runner] {warning}", file=sys.stderr)
                 command = P._confinement.wrap(command, sandbox=sandbox, root=root, cwd=cwd, exec_paths=jail["exec"],
                                             write_roots=checked_roots, tmp_dir=Path(run_tmp), resolver=resolver)
         try:

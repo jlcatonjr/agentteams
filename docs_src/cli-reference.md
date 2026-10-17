@@ -606,7 +606,7 @@ denies (fail-closed) every content-bearing write instead of checking it.
 
 On macOS it also reports the runner's exec allowlists (the operator `confined_programs` file, else the
 brief's, and each gate's `exec`). For each xcrun launcher in `/usr/bin` it prints the real tool and helper
-directories the Seatbelt profile will allow. When they can't be resolved it prints a `WARNING` naming the
+paths the Seatbelt profile will allow (the real tool as a `literal`, git's helpers as a `subpath`). When they can't be resolved it prints a `WARNING` naming the
 launcher: confined calls to it will fail (exit 71). These lines are advisory and don't change the exit status.
 
 ### `--allow-unenforced-confinement`

@@ -21,21 +21,27 @@ runner starts inside an OS sandbox.
   - Give the toolchain root, not only its `bin`: Homebrew Python, for one, re-executes a binary inside its
     framework.
   - macOS: most developer tools in `/usr/bin` (`git`, `make`, `clang`) are Apple's xcrun launcher, which execs
-    the real tool from the active developer directory. When `exec` names one, or `/usr/bin` itself, `wrap` also
-    allows the real tool's directory (`xcrun --find`) and, for git, its `git --exec-path`. On a Command Line
-    Tools host, `/usr/bin/git` adds `/Library/Developer/CommandLineTools/usr/bin` and
-    `/Library/Developer/CommandLineTools/usr/libexec/git-core`, never the whole developer directory. An added
-    directory that overlaps a write root or `TMPDIR` is dropped. If xcrun is missing or fails, nothing is added
-    and a one-line notice names the launcher, whose confined calls then fail with exit 71. The runner warns once
-    per run when the command, or `lake` (which runs git), depends on such a launcher, and `--check-wiring`
-    reports each allowlist's launchers. Linux is unchanged (decision C).
+    the real tool from the active developer directory. When `exec` names one, `wrap` also allows the real tool
+    by `literal` path (`xcrun --find`) and, for git, `git --exec-path` as a subpath. On a Command Line Tools host,
+    `/usr/bin/git` adds `(literal "/Library/Developer/CommandLineTools/usr/bin/git")` and `(subpath
+    "/Library/Developer/CommandLineTools/usr/libexec/git-core")`. Only a declared `/usr/bin` itself adds whole
+    tool directories.
+    - Each added path and every parent must be root-owned and not group- or world-writable, or it is dropped
+      with a notice. One that overlaps a write root or `TMPDIR` is dropped too.
+    - If xcrun is missing or fails, nothing is added and a one-line notice names the launcher, whose confined
+      calls then fail with exit 71. `--check-wiring` reports each allowlist's launchers.
+    - The runner warns once per run when the command, or `lake` (which runs git), needs such a launcher. If a
+      write root also covers a package store, it refuses the run unless the agent's entry sets
+      `allow_unresolved_launcher_with_package_store: true`.
+    - Linux is unchanged (decision C).
 - **`write`.** Project-relative directories.
   - Never the project root, `.agentteams`, `.agentteams-queue`, `.git` or the control plane.
   - Never containing an `exec` path, or a command could build a binary there and then run it.
   - Changes inside a write root count as declared, so a build needn't list every output.
   - A write root that equals, contains or lies inside a package store (`.lake/packages`, `node_modules`,
     `site-packages`, `.venv`, `venv`, `vendor`, `.cargo/registry`, `Pods`, `.gradle`) gets a warning from
-    `--install-confined` and from the runner at each run. Tools may delete and re-create these when a probe
+    `--install-confined` and from the runner at each run, and the run is refused when an unresolved launcher is
+    needed too (see above). Tools may delete and re-create these when a probe
     fails inside the sandbox, so narrow the root to build outputs (`lean/.lake/build`, not `lean`). It is a
     warning, not a refusal.
 - **Gates.** A gate may set `exec`. The default is its own program plus a shebang interpreter. Gates write
@@ -140,8 +146,10 @@ runner starts inside an OS sandbox.
 | `available() -> str \| None` | `"seatbelt"`, `"bwrap"` or `None`, found by actually applying a trivial profile. |
 | `kind() -> str \| None` | The platform's sandbox, without probing. |
 | `wrap(argv, *, sandbox, root, cwd, exec_paths, write_roots, tmp_dir, resolver=None) -> list[str]` | Wrap a command; on Seatbelt, expands xcrun launchers first. |
-| `xcrun_resolver(timeout=XCRUN_TIMEOUT)` / `expand_exec_paths(exec_paths, resolver, *, platform=None, ...)` | macOS: resolve xcrun launchers (injectable), and the pure expansion that returns `(expanded, unresolved)`. |
-| `unresolved_notice(unresolved)` / `launcher_warning(program, exec_paths, resolver)` / `launcher_report(exec_lists, resolver)` | The profile-build notice, the runner's once-per-run WARNING, and the `--check-wiring` lines. |
+| `xcrun_resolver(timeout=XCRUN_TIMEOUT)` / `expand_exec_paths(exec_paths, resolver, *, platform=None, ..., lstat=None) -> Expansion` | macOS: resolve xcrun launchers (injectable), and the pure expansion: `extras` tagged `literal`/`subpath`, `unresolved`, `dropped`. |
+| `ownership_problem(path, lstat=None)` | Why a path can't be an exec allowance (it or a parent not root-owned, or group/other-writable), or None. |
+| `expansion_notices(exp)` / `unresolved_launchers(program, exec_paths, resolver)` / `launcher_warning(program, unresolved)` / `launcher_report(exec_lists, resolver)` | The profile-build notices, the runner's once-per-run WARNING, and the `--check-wiring` lines. |
+| `launcher_store_refusal(agent, unresolved, store_warnings, jail)` | The runner's refusal for an unresolved launcher plus a package-store write root, unless `OPT_IN_LAUNCHER_STORE` is set. |
 | `package_store_warnings(write_roots, root=None) -> list[str]` | Warnings for write roots over a package store (`PACKAGE_STORES`). |
 | `seatbelt_profile(...)` / `bwrap_argv(...)` | The profile text or argv prefix. |
 | `load_confined(raw, gates, control_plane_of)` | Validate `confined_programs` and gates' `exec`. |
