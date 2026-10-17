@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.x, held until after v1.0.0
+
+- A granted agent's `run_command` waited only the server's call wait (20 s by default) and then returned
+  `{request_id, status: queued}`. Grants are exact, so an agent without `request_status` could never read the result
+  (mathAgents M6-F5: a 31 s `lake` build).
+- `run_command` now waits for its own result for up to 180 s, which is the runner's 120 s MCP command cap plus time
+  queued. It still ends early when the runner stops beating. Writes and deletes keep the short call wait.
+- A `queued` reply now tells an agent without `request_status` to report the request id in its handoff, so the
+  orchestrator can read the result from the runner's ledger. No grant changes: `request_status` is still granted
+  only when the brief lists it.
+- `agentteams-runner-mcp.py` and its pin in `runner_mcp.py` change. The operator re-pins
+  `references/enforcement-integrity.json`.
+
 ### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
 
 - The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.
