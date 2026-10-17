@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (security, runner: revoking an MCP grant now binds live dispatches)
+
+- **What was wrong.** On the MCP channel the runner checked only that the dispatch nonce resolved to the sending
+  server's agent (`via_agent`). It never rechecked that the agent still held an `mcp_grants` entry. So after an
+  operator removed a grant and restarted the runner, an agent session that was still running, with an unexpired nonce
+  (up to 24 h), could still stage writes and queue allowlisted `run_command` calls. Found by agentteams' parallel
+  review of mathAgents' 14b rollback drill.
+- **The fix.** An MCP-channel request from an agent outside `policy.mcp_agents` is refused with the channel's uniform
+  refusal, the same answer as any bad nonce, so the channel gives no liveness oracle. The orchestrator channel is
+  unchanged. `agentteams/proposal_runner.py` is re-pinned.
+- **Tests.** `test_a_revoked_grant_binds_live_dispatches` checks that a revoked agent's live nonce is refused for
+  both kinds. The MCP-channel test helper now grants the sending agent, as real setups do.
+
 ### fix (runner: a confined command no longer fails on the runner's own heartbeat; M6-F6)
 
 - **What was wrong.** Since the runner moved its heartbeat under `.agentteams` (rc.10), any confined command that
