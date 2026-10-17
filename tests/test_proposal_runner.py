@@ -440,6 +440,28 @@ def test_a_revoked_grant_binds_live_dispatches(runner):
         assert not revoked["ok"] and revoked["error"] == P._CHANNEL_REFUSAL
 
 
+def test_a_revoked_agents_mcp_nonce_stays_off_the_orchestrator_queue(runner):
+    """A nonce issued while the agent held a grant carries a signed mcp flag; after the grant is revoked the agent
+    leaves refuse_agents, but that nonce is still refused on the orchestrator's queue (it writes directly)."""
+    import hashlib
+    runner.policy.mcp_agents = frozenset({"producer"})
+    flagged = _roundtrip(runner, {"kind": "issue-dispatch", "agent": "producer"})["result"]["nonce"]
+    assert P.dispatch_record(runner.root, flagged)["mcp"] is True
+    runner.policy.mcp_agents = frozenset()  # revoked, runner restarted with the new brief
+    target = runner.root / "src" / "a.py"
+    art = {"kind": "change-proposal", "dispatch": flagged, "path": "src/a.py",
+           "base_sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "content": "x = 3\n", "rationale": "r"}
+    refused = _roundtrip(runner, {"kind": "apply-proposal", "artifact": art})
+    assert not refused["ok"] and "issued for the agent's agentteams_runner server" in refused["error"]
+    command = _roundtrip(runner, {"kind": "run-request", "artifact": {"dispatch": flagged}})
+    assert not command["ok"] and "issued for the agent's agentteams_runner server" in command["error"]
+    assert target.read_text() == "x = 1\n"
+    fresh = _roundtrip(runner, {"kind": "issue-dispatch", "agent": "producer"})["result"]["nonce"]
+    assert "mcp" not in P.dispatch_record(runner.root, fresh)
+    assert _roundtrip(runner, {"kind": "apply-proposal", "artifact": {**art, "dispatch": fresh}})["ok"]
+    assert target.read_text() == "x = 3\n"
+
+
 def test_mcp_requests_must_name_their_agent(runner):
     result = _roundtrip_on(runner, {"kind": "run-request", "artifact": {}}, "mcp")
     assert not result["ok"] and "via_agent" in result["error"]

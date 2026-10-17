@@ -332,7 +332,7 @@ def _dispatch_rows(key: bytes, root: Path) -> list[dict[str, Any]]:
 
 
 def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOURS,
-                   max_uses: int = DISPATCH_MAX_USES) -> str:
+                   max_uses: int = DISPATCH_MAX_USES, mcp: bool = False) -> str:
     """Record a signed dispatch for ``agent`` and return its nonce for the agent's task.
 
     Only ``HMAC(key, nonce)`` is stored, so reading ``.agentteams/`` reveals no usable nonce. Expired dispatches
@@ -343,6 +343,8 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
         agent: The agent being dispatched.
         ttl_hours: How long the nonce stays valid.
         max_uses: How many artifacts it may submit.
+        mcp: Issued to an agent that holds an ``mcp_grants`` entry. The flag is signed into the record, and the
+            runner refuses such a nonce on the orchestrator's queue even after the grant is revoked.
 
     Returns:
         The nonce.
@@ -366,8 +368,11 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
             # Keep unexpired dispatches and the use rows that count against them; drop the rest.
             live = [line for line, r in rows if r and (r.get("id") in live_ids or r.get("use") in live_ids
                                                          or r.get("attempt") in live_ids)]
-            live.append(_signed(key, {"id": _nonce_id(key, nonce), "agent": agent, "max_uses": max_uses,
-                                      "expires": (now + timedelta(hours=ttl_hours)).isoformat(timespec="seconds")}))
+            row = {"id": _nonce_id(key, nonce), "agent": agent, "max_uses": max_uses,
+                   "expires": (now + timedelta(hours=ttl_hours)).isoformat(timespec="seconds")}
+            if mcp:
+                row["mcp"] = True
+            live.append(_signed(key, row))
             _atomic_write_text(path, "\n".join(live) + "\n")
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
