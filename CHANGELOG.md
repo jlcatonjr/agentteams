@@ -15,9 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   review of mathAgents' 14b rollback drill.
 - **The fix.** An MCP-channel request from an agent outside `policy.mcp_agents` is refused with the channel's uniform
   refusal, the same answer as any bad nonce, so the channel gives no liveness oracle. The orchestrator channel is
-  unchanged. `agentteams/proposal_runner.py` is re-pinned.
-- **Tests.** `test_a_revoked_grant_binds_live_dispatches` checks that a revoked agent's live nonce is refused for
-  both kinds. The MCP-channel test helper now grants the sending agent, as real setups do.
+  unchanged. `agentteams/proposals.py` and `agentteams/proposal_runner.py` are re-pinned.
+- **The orchestrator's queue too.** A nonce issued to an agent while it holds a grant now carries a signed `mcp`
+  flag (`issue_dispatch(..., mcp=True)`). The orchestrator's queue refuses such a nonce even after the grant is
+  revoked, because that queue's `apply-proposal` writes directly. A dispatch issued after revocation works normally.
+  Nonces issued before this release carry no flag and stay usable until they expire (24 h).
+- **Tests.**
+  - `test_a_revoked_grant_binds_live_dispatches`: a revoked agent's live nonce is refused for both kinds.
+  - `test_a_revoked_agents_mcp_nonce_stays_off_the_orchestrator_queue`: the flagged nonce is refused on the
+    orchestrator's queue, and a fresh dispatch is accepted.
+  - The MCP-channel test helper now grants the sending agent, as real setups do.
+- **Still open, for 1.0.x:** proposals a revoked agent had already staged can still be applied with the orchestrator's
+  approval. `list-staged` does not yet mark them.
 
 ### fix (runner: a confined command no longer fails on the runner's own heartbeat; M6-F6)
 
