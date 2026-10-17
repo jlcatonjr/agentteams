@@ -380,3 +380,18 @@ def test_a_stopped_runner_ends_the_long_wait(tmp_path):
     finally:
         c.close()
         runner.close()
+
+
+def test_a_runner_that_stops_beating_mid_wait_ends_it(tmp_path):
+    runner = _SlowRunner(tmp_path, delay=600)  # alive at the start, never answers
+    c = _client(tmp_path, ["run_command"], wait="1")
+    try:
+        threading.Timer(2.0, lambda: setattr(runner, "beat", False)).start()  # the runner dies 2 s in
+        started = time.monotonic()
+        ok, text = c.call("run_command", dispatch="0" * 32, argv=["true"], purpose="slow")
+        elapsed = time.monotonic() - started
+        assert not ok and "stopped answering" in text
+        assert 2.0 <= elapsed < 2.0 + 15 + 10  # ends once the heartbeat is stale, long before 180 s
+    finally:
+        c.close()
+        runner.close()

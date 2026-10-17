@@ -26,7 +26,7 @@
     "agentteams/cli/signer_location.py": "2a2fe57dcc492cc9c7cce4c684cd92cf4b3010ff17861f75db91b81dc886cf29",
     "agentteams/cli/write_root_policy.py": "2cb952f2ba69e73a2fa6e9e215c55abfd5f1b5f1d4496f8cc9987f1ffe70bafe",
     "agentteams/confinement.py": "4ccf825da2c388f1366ccb53dfef59fe2e28b592b3d311767f1e9694fa2d0eaf",
-    "agentteams/data/agentteams-runner-mcp.py": "7e96b91cb67ed9bf556d1e19cbeab91212794a9e5846e9a0a2808eca81d18dcf",
+    "agentteams/data/agentteams-runner-mcp.py": "4620bcf383dd819e030be287b19fd95b0d57b881301b1aaeb8f663b672c28db9",
     "agentteams/data/codex-role-gate.py": "8e2a3bea7a3b0022c85db521431699506641859bcc7577360bb82031e9f874c1",
     "agentteams/data/goose-readfs-mcp.py": "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58",
     "agentteams/data/template_lineage.json": "2deb853eb895b0b67d7761e0b4c27879b492b20d813b24fabc8b0b3b7be14ea7",
@@ -61,7 +61,7 @@
     "agentteams/redteam/checks_report.py": "3e13cc5ebf19b4b393ef0a2ee663d097ff2be3666d38b7f61203503ee77ffd24",
     "agentteams/redteam/checks_static.py": "f7eb60f6895cec707fe511ad772c14be714b56c3450dd7292893277bec243855",
     "agentteams/redteam/registry.py": "72e3916101ff0686e53bec5eba4eeea6103963a0d00e3e24febca88a22db0046",
-    "agentteams/runner_mcp.py": "4879352527a233bb7aec48885f30e8a5780c1510a03e8ffcf1e58782ad0b9fc2",
+    "agentteams/runner_mcp.py": "dd10daba710d9b7eb99f4d00d271e7a5f07000d804d337ed897410789a8b3bea",
     "agentteams/scan.py": "d257165cf7b68354c4ee61fa17040f6711a2a406ac986b5c9ef160b275e77737",
     "agentteams/scan_operational.py": "6b6687b3783d0a6336086ba7453ea7026b86a0c0d6b661551cf6297b98460d6c",
     "agentteams/sealed_result.py": "30c467f3551be3e888d0d2bbd24361f87ee02366704b4ed88fc8ee3f7b16a7cc",
@@ -73,7 +73,7 @@
     "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
     "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",
-    "agentteams/write_policy.py": "60b165d1fb60e7e767c698ec749aaf11a46de1074db5387cb6faa6e2300ac979"
+    "agentteams/write_policy.py": "422c4daf12c279366348205ca051638ca3037f118b9eacbee70668035cf1fff7"
   },
   "note": "SHA-256 of the modules that enforce C-1..C-5. Regenerate deliberately, with `agentteams --write-integrity-manifest`, only after an intended change to a control. See agentteams/integrity.py for what this does and does not guarantee.",
   "version": 1
