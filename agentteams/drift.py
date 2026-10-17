@@ -679,19 +679,21 @@ def detect_user_customizations(
     return customized
 
 
-def _is_ignored_gate_pin(path: Path) -> bool:
-    """True when *path* is the gate's interpreter pin and the ``.gitignore`` beside it ignores it.
+def _is_ignored_gate_pin(recorded: Path) -> bool:
+    """True when *recorded* is the gate's interpreter pin and the ``.gitignore`` beside it ignores it.
 
     The pin is a machine path (Rule S-8), so a clean checkout never has it. Only the pin qualifies, and only
     when its ignore file is present and lists it: without that file a missing pin is still MISSING.
+    *recorded* is the build-log path **unresolved**, and a symlink never qualifies: otherwise a tracked file
+    (the gate itself) replaced by a dangling link named for the pin would resolve to it and read as LOCAL.
     """
     from agentteams.frameworks.claude import GATE_PIN_NAME  # lazy, like the emit import below
 
-    if path.name != GATE_PIN_NAME:
+    if recorded.name != GATE_PIN_NAME or recorded.is_symlink():
         return False
     try:
-        rules = (path.parent / ".gitignore").read_text(encoding="utf-8").splitlines()
-    except OSError:
+        rules = (recorded.parent / ".gitignore").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
         return False
     return f"/{GATE_PIN_NAME}" in (line.strip() for line in rules)
 
@@ -740,7 +742,7 @@ def verify_output_integrity(
         abs_path = (agents_dir / Path(rel_path)).resolve()
         base = {"rel_path": rel_path, "path": str(abs_path)}
         if not abs_path.exists():
-            if _is_ignored_gate_pin(abs_path):
+            if _is_ignored_gate_pin(agents_dir / Path(rel_path)):
                 results.append({**base, "status": "LOCAL", "note": "machine-local gate interpreter pin, "
                                 "gitignored by design and absent here; --check-wiring verifies it"})
                 continue

@@ -182,3 +182,29 @@ def test_only_the_pin_is_exempt_not_other_hook_files(tmp_path):
     status = {e["rel_path"]: e["status"] for e in drift.verify_output_integrity(agents)}
     assert status["../hooks/constitutional-gate.py"] == "MISSING"
     assert build_team.main(["--verify-integrity", "--output", str(agents)]) == 1
+
+
+def test_a_gate_replaced_by_a_dangling_link_to_the_pin_is_missing(tmp_path):
+    # @security (rc.14 review): the pin check runs on the unresolved recorded path, and never on a symlink.
+    from agentteams.frameworks.claude import GATE_PIN_NAME
+
+    agents = _seed_with_gate_pin(tmp_path, ignore_file=True)
+    hooks = tmp_path / ".claude" / "hooks"
+    gate = hooks / "constitutional-gate.py"
+    gate.write_text("# gate\n")
+    log_path = agents / "references" / "build-log.json"
+    log = json.loads(log_path.read_text())
+    log["file_hashes"]["../hooks/constitutional-gate.py"] = _short(gate)
+    log_path.write_text(json.dumps(log))
+    gate.unlink()
+    gate.symlink_to(GATE_PIN_NAME)  # dangling: the pin is absent on a clean checkout
+    status = {e["rel_path"]: e["status"] for e in drift.verify_output_integrity(agents)}
+    assert status["../hooks/constitutional-gate.py"] == "MISSING"
+    assert build_team.main(["--verify-integrity", "--output", str(agents)]) == 1
+
+
+def test_an_undecodable_ignore_file_leaves_the_pin_missing(tmp_path):
+    agents = _seed_with_gate_pin(tmp_path, ignore_file=True)
+    (tmp_path / ".claude" / "hooks" / ".gitignore").write_bytes(b"\xff\xfe/agentteams-python\n")
+    status = {e["rel_path"]: e["status"] for e in drift.verify_output_integrity(agents)}
+    assert status["../hooks/agentteams-python"] == "MISSING"
