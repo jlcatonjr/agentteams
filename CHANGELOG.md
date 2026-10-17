@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     uncapped orchestrator-channel command ahead, a result can still take longer than 180 s and come back `queued`.
   - The MCP client's own tool-call timeout must be longer than 180 s. Goose's runner extension sets 300 s; for
     Claude Code, check `MCP_TOOL_TIMEOUT`.
+  - The server handles one call at a time, so while a `run_command` waits, that agent's other runner calls
+    (`write_file`, `request_status`) wait behind it.
   - The server ignores cancellation, so a call the client abandons loses its output. The runner's ledger keeps the
     command's exit status and undeclared writes, not its output.
 - The agent guidance (`write_policy.py`) now says this. `agentteams-runner-mcp.py`, its pin in `runner_mcp.py` and
