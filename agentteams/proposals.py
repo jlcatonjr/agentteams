@@ -70,6 +70,7 @@ import secrets
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -104,6 +105,11 @@ DISPATCH_MAX_ATTEMPTS = 4 * DISPATCH_MAX_USES
 LEDGER_REL = ".agentteams/proposal-ledger.jsonl"
 HEAD_REL = ".agentteams/proposal-ledger.head"
 DISPATCH_REL = ".agentteams/dispatches.jsonl"
+#: The runner's liveness file, rewritten by its heartbeat thread while a command runs (M6-F6).
+RUNNER_HEARTBEAT_REL = ".agentteams/runner.heartbeat"
+#: Held by :func:`_snapshot` and by the runner's heartbeat write, so a snapshot never sees a beat half done
+#: (its temp file, or a file that vanishes between listing and ``lstat``).
+RUNNER_STATE_LOCK = threading.Lock()
 #: A lock file that is never replaced, so issue/compaction and use counting serialize on one inode.
 DISPATCH_LOCK_REL = ".agentteams/dispatches.lock"
 KEY_ENV = ("AGENTTEAMS_PROPOSAL_LEDGER_KEY", "AGENTTEAMS_DECISION_SIGNING_KEY")
@@ -326,7 +332,7 @@ def _dispatch_rows(key: bytes, root: Path) -> list[dict[str, Any]]:
 
 
 def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOURS,
-                   max_uses: int = DISPATCH_MAX_USES) -> str:
+                   max_uses: int = DISPATCH_MAX_USES, mcp: bool = False) -> str:
     """Record a signed dispatch for ``agent`` and return its nonce for the agent's task.
 
     Only ``HMAC(key, nonce)`` is stored, so reading ``.agentteams/`` reveals no usable nonce. Expired dispatches
@@ -337,6 +343,8 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
         agent: The agent being dispatched.
         ttl_hours: How long the nonce stays valid.
         max_uses: How many artifacts it may submit.
+        mcp: Issued to an agent that holds an ``mcp_grants`` entry. The flag is signed into the record, and the
+            runner refuses such a nonce on the orchestrator's queue even after the grant is revoked.
 
     Returns:
         The nonce.
@@ -360,8 +368,11 @@ def issue_dispatch(root: Path, agent: str, *, ttl_hours: int = DISPATCH_TTL_HOUR
             # Keep unexpired dispatches and the use rows that count against them; drop the rest.
             live = [line for line, r in rows if r and (r.get("id") in live_ids or r.get("use") in live_ids
                                                          or r.get("attempt") in live_ids)]
-            live.append(_signed(key, {"id": _nonce_id(key, nonce), "agent": agent, "max_uses": max_uses,
-                                      "expires": (now + timedelta(hours=ttl_hours)).isoformat(timespec="seconds")}))
+            row = {"id": _nonce_id(key, nonce), "agent": agent, "max_uses": max_uses,
+                   "expires": (now + timedelta(hours=ttl_hours)).isoformat(timespec="seconds")}
+            if mcp:
+                row["mcp"] = True
+            live.append(_signed(key, row))
             _atomic_write_text(path, "\n".join(live) + "\n")
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
@@ -836,46 +847,47 @@ def _snapshot(root: Path, env: dict[str, str]) -> dict[str, Any] | None:
     Returns ``None`` when ``root`` is not inside a git worktree; :func:`run_request` then refuses to run.
     Paths are decoded with ``os.fsdecode``, so non-UTF-8 names cannot break the comparison.
     """
-    prefix_out = _git(root, env, "rev-parse", "--show-prefix")
-    status = _git(root, env, "status", "--porcelain=v1", "--untracked-files=all", "-z", "--", ".")
-    if prefix_out is None or status is None:
-        return None
-    prefix = os.fsdecode(prefix_out).strip()
-    tokens, files, i = status.split(b"\0"), set(), 0
-    while i < len(tokens):
-        entry = tokens[i]
-        if len(entry) > 3:
-            files.add(os.fsdecode(entry[3:]))
-            if entry[:1] in (b"R", b"C") or entry[1:2] in (b"R", b"C"):
-                i += 1  # the next token is the rename/copy source
-                if i < len(tokens) and tokens[i]:
-                    files.add(os.fsdecode(tokens[i]))
-        i += 1
-    snap: dict[str, Any] = {}
-    for f in files:
-        rel = f[len(prefix):] if prefix and f.startswith(prefix) else f
-        snap[rel] = _sha256(root / rel)
-    bases = [root / w for w in _WATCHED]
-    for name in _GIT_WATCHED:
-        resolved = _git(root, env, "rev-parse", "--path-format=absolute", "--git-path", name)
-        text = os.fsdecode(resolved or b"").strip()
-        path = Path(text)
-        # Fail closed: an unresolvable or garbled path (e.g. a git too old for --path-format echoing the flag)
-        # would silently drop the watch.
-        if not text or "\n" in text or not path.is_absolute() or not path.parent.is_dir():
+    with RUNNER_STATE_LOCK:
+        prefix_out = _git(root, env, "rev-parse", "--show-prefix")
+        status = _git(root, env, "status", "--porcelain=v1", "--untracked-files=all", "-z", "--", ".")
+        if prefix_out is None or status is None:
             return None
-        bases.append(path)
-    for base in bases:
-        paths = [base] if base.is_file() else (p for p in base.rglob("*") if p.is_file()) if base.is_dir() else []
-        for p in paths:
-            st = p.lstat()
-            try:
-                key_name = p.relative_to(root).as_posix()
-            except ValueError:
-                key_name = str(p)  # a git dir outside the project (linked worktree, core.hooksPath)
-            # ctime cannot be set by the user: a same-size rewrite with its mtime restored still shows.
-            snap[key_name] = ("stat", st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino)
-    return snap
+        prefix = os.fsdecode(prefix_out).strip()
+        tokens, files, i = status.split(b"\0"), set(), 0
+        while i < len(tokens):
+            entry = tokens[i]
+            if len(entry) > 3:
+                files.add(os.fsdecode(entry[3:]))
+                if entry[:1] in (b"R", b"C") or entry[1:2] in (b"R", b"C"):
+                    i += 1  # the next token is the rename/copy source
+                    if i < len(tokens) and tokens[i]:
+                        files.add(os.fsdecode(tokens[i]))
+            i += 1
+        snap: dict[str, Any] = {}
+        for f in files:
+            rel = f[len(prefix):] if prefix and f.startswith(prefix) else f
+            snap[rel] = _sha256(root / rel)
+        bases = [root / w for w in _WATCHED]
+        for name in _GIT_WATCHED:
+            resolved = _git(root, env, "rev-parse", "--path-format=absolute", "--git-path", name)
+            text = os.fsdecode(resolved or b"").strip()
+            path = Path(text)
+            # Fail closed: an unresolvable or garbled path (e.g. a git too old for --path-format echoing the flag)
+            # would silently drop the watch.
+            if not text or "\n" in text or not path.is_absolute() or not path.parent.is_dir():
+                return None
+            bases.append(path)
+        for base in bases:
+            paths = [base] if base.is_file() else (p for p in base.rglob("*") if p.is_file()) if base.is_dir() else []
+            for p in paths:
+                st = p.lstat()
+                try:
+                    key_name = p.relative_to(root).as_posix()
+                except ValueError:
+                    key_name = str(p)  # a git dir outside the project (linked worktree, core.hooksPath)
+                # ctime cannot be set by the user: a same-size rewrite with its mtime restored still shows.
+                snap[key_name] = ("stat", st.st_size, st.st_mtime_ns, st.st_ctime_ns, st.st_ino)
+        return snap
 
 
 def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
