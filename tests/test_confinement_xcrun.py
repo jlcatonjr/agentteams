@@ -288,7 +288,12 @@ def test_real_xcrun_resolves_git(monkeypatch: pytest.MonkeyPatch) -> None:
     assert os.path.basename(tool) == "git" and helper.endswith("git-core") and os.access(tool, os.X_OK)
     assert resolver("true") == []  # a plain /usr/bin program is not a launcher
     exp = C.expand_exec_paths(["/usr/bin/git"], resolver)
-    assert exp.extras == entries and exp.dropped == []  # this host's developer directory is root-owned
+    # Whether the developer directory is root-owned depends on the host: a Command Line Tools install is; a CI
+    # runner's Xcode may not be. Either way the ownership rule must hold exactly.
+    if all(C.ownership_problem(path) is None for _, path in entries):
+        assert exp.extras == entries and exp.dropped == []
+    else:
+        assert exp.extras == [] and exp.dropped and exp.unresolved == ["/usr/bin/git"]
 
 
 # --- the runner: warn once per run; refuse the M6 combination unless opted in --------------------------------------
