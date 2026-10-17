@@ -27,6 +27,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `~/.claude/settings.json`, which makes the home directory a write root. Install the signer outside it, for
   example under `/opt` (found by baseAgent).
 
+### fix (runner, macOS: xcrun launchers in the exec allowlist reach their real tool; warn on write roots over package stores)
+
+- **The bug** (found by mathAgents, M6 step 14, on rc.12). A confined command had `/usr/bin/git` in its exec
+  allowlist. On macOS that file is Apple's xcrun launcher, which execs the real git from the active developer
+  directory (`xcrun -f git`), and git then runs helpers from `git --exec-path`. The Seatbelt profile allowed
+  `process-exec` only under the declared paths, so every confined git call failed with exit 71.
+  - `lake` misread the empty remote URL and deleted `lean/.lake/packages/mathlib`, inside its write root. The
+    confinement held: nothing outside the root was touched.
+  - Follow-up M6-F4: the confined tool still reported success, so nothing outside the runner showed the cause.
+- **The fix.** On macOS, `confinement.wrap` expands the exec allowlist before building the profile.
+  - For a named `/usr/bin` program that is an xcrun launcher (`xcrun --find` returns a path under
+    `xcode-select -p`), it also allows the real tool by `literal` path and, for git, its `--exec-path` as a
+    `subpath`. For `/usr/bin/git` on a Command Line Tools host that is `(literal
+    "/Library/Developer/CommandLineTools/usr/bin/git")` and `(subpath
+    "/Library/Developer/CommandLineTools/usr/libexec/git-core")`. The tool's whole `bin` directory, which would
+    also allow `python3`, `clang` and `make`, is added only when `/usr/bin` itself is declared.
+  - Each added path, and every parent, must be root-owned and not group- or world-writable. Otherwise it is
+    dropped with a notice, so a user-writable developer directory (an Xcode under `~/Applications`) can't be used.
+  - Resolution runs once per profile build, from `cwd="/"`, with a fixed environment, a timeout per call and an
+    overall budget. An added path that overlaps a write root or `TMPDIR` is dropped. If xcrun is missing or
+    fails, nothing is added and a one-line notice names the launcher.
+  - `seatbelt_profile` stays pure and gains `exec_literals`. The new `expand_exec_paths` takes an injectable
+    resolver and `lstat`, and returns entries tagged `literal` or `subpath`. Linux bwrap has no program
+    allowlist (decision C) and is unchanged.
+- **Made visible (M6-F4).** `--check-wiring` on macOS reports each runner and gate exec allowlist's launchers:
+  what the profile will allow, or a `WARNING` that confined calls will fail with exit 71. The runner prints that
+  warning once per run when the command, or `lake` (which runs git), depends on an unresolved launcher.
+- **The incident combination is refused.** A confined run whose program, or `lake` (which runs git), needs an
+  unresolved launcher, *and* whose write root covers a package store, is refused before anything runs. The
+  message names both. The operator opts in per agent with `confined_programs.<agent>.
+  allow_unresolved_launcher_with_package_store: true`. Each condition alone still only warns.
+- **Package stores.** A write root that equals, contains or lies inside `.lake/packages`, `node_modules`,
+  `site-packages`, `.venv`, `venv`, `vendor`, `.cargo/registry`, `Pods` or `.gradle` gets a warning, both at
+  `--install-confined` and at each run. Tools may delete and re-create these stores when a probe fails inside the
+  sandbox, so narrow the root to build outputs. The operator chose a warning, not a refusal.
+- **Residual** (`docs_src/known-limitations.md`): only git gets a helper directory, and an unresolved launcher
+  alone warns but is not refused.
+- `confinement.py`, `proposal_run.py` and `cli/proposal_commands.py` are re-recorded in the integrity manifest.
+
 ## [1.0.0-rc.12] - 2026-10-16
 
 ### release notes (rc12)
