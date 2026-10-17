@@ -55,7 +55,7 @@ ACKS_REL = ".agentteams-queue/acks"
 RESULTS_REL = ".agentteams/queue-results"
 CLAIMED_REL = ".agentteams/queue-claimed"
 LOCK_REL = ".agentteams/runner.lock"
-HEARTBEAT_REL = ".agentteams/runner.heartbeat"  # still written: the pinned MCP server reads it
+HEARTBEAT_REL = P.RUNNER_HEARTBEAT_REL  # still written: the pinned MCP server reads it
 #: Session-readable, runner-written status tree (2026-10-11): the heartbeat and sealed orchestrator results.
 STATUS_REL = ".agentteams-status"
 STATUS_HEARTBEAT_REL = ".agentteams-status/heartbeat"
@@ -378,7 +378,13 @@ class Runner:
         beat = str(time.time()).encode()  # a timestamp only: no hostname or path (S-8)
         # The status heartbeat first: it is the orchestrator's liveness signal; the legacy one serves the MCP server.
         _write_new(self.root / STATUS_REL, Path(STATUS_HEARTBEAT_REL).name, beat)
-        _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, beat)
+        # Never mid-beat under a command's before/after snapshot (M6-F6). A snapshot can take seconds, so skip this
+        # legacy beat rather than wait: the status beat above stays live, and the next tick retries.
+        if P.RUNNER_STATE_LOCK.acquire(blocking=False):
+            try:
+                _write_new(self.root / ".agentteams", Path(HEARTBEAT_REL).name, beat)
+            finally:
+                P.RUNNER_STATE_LOCK.release()
 
     def _identity_args(self, request: dict[str, Any], channel: str) -> dict[str, Any]:
         """Channel rules for the proposal engine's identity check (R2).
