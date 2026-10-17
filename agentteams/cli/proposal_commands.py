@@ -273,7 +273,10 @@ def run_install_confined(args: argparse.Namespace) -> int:
                 if isinstance(gates.get(name), dict) and isinstance(gates[name].get("argv"), list)}}
         # Static checks only: the runner repeats check_roots against the live tree before every command, and a
         # write root such as lean/.lake may not exist yet.
-        load_policy(brief, brief_rel=brief_rel, confined_file=(data, "candidate"))
+        policy = load_policy(brief, brief_rel=brief_rel, confined_file=(data, "candidate"))
+        for agent, jail in sorted(policy.confined.items()):  # warn, never refuse (mathAgents M6)
+            for note in _confinement.package_store_warnings(jail["write"], root):
+                print(f"[install-confined] confined_programs.{agent}: {note}", file=sys.stderr)
         payload = _confinement.confined_bytes(data)
         digest = hashlib.sha256(payload).hexdigest()
         confirmed = (getattr(args, "confirm_review_sha256", None) or "").strip().lower()
