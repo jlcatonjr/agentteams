@@ -86,6 +86,49 @@ def stale_readfs_copy_note(root: Path) -> str | None:
     return (f"{READFS_SCRIPT} is left from before the orchestrator-only switch; recipes now launch "
             f"{READFS_PROTECTED_PATH}. The old copy is session-writable: delete it")
 
+def xcrun_launcher_lines(root: Path, description: dict[str, Any], resolver: Any = None,
+                         platform: str | None = None) -> list[str]:
+    """``--check-wiring`` lines for xcrun launchers in the runner's exec allowlists (macOS only; advisory).
+
+    Reads the operator ``confined_programs`` file (else the brief's) and the gates' ``exec`` (declared, from the
+    file's ``gate_exec``, or else an absolute ``argv[0]``), then reports through
+    :func:`agentteams.confinement.launcher_report`, the profile build's own expansion.
+
+    Args:
+        root: The project root.
+        description: The project brief.
+        resolver: The launcher resolver; a real :func:`~agentteams.confinement.xcrun_resolver` when None.
+        platform: ``sys.platform`` by default.
+
+    Returns:
+        Report lines, possibly empty; WARNING lines name launchers whose confined calls will fail (exit 71).
+    """
+    from agentteams import confinement as C
+    from agentteams.proposal_policy import GATE_ARGV_KEY, GATE_EXEC_KEY
+
+    if (platform or sys.platform) != "darwin":
+        return []
+    try:
+        found = C.read_confined_file(root)
+    except C.ConfinementError as exc:
+        return [f"WARNING: the operator confined_programs file could not be read ({exc})"]
+    raw = found[0] if found else description.get("confined_programs") or {}
+    raw = raw if isinstance(raw, dict) else {}
+    lists: dict[str, list[str]] = {}
+    for agent, spec in raw.items():
+        if agent not in (GATE_EXEC_KEY, GATE_ARGV_KEY) and isinstance(spec, dict) and isinstance(spec.get("exec"), list):
+            lists[f"confined_programs.{agent}"] = [p for p in spec["exec"] if isinstance(p, str)]
+    gate_exec = raw.get(GATE_EXEC_KEY) if isinstance(raw.get(GATE_EXEC_KEY), dict) else {}
+    gates = description.get("proposal_gates") if isinstance(description.get("proposal_gates"), dict) else {}
+    for name, gate in gates.items():
+        gate = gate if isinstance(gate, dict) else {}
+        argv = gate.get("argv") if isinstance(gate.get("argv"), list) else []
+        paths = gate.get("exec") or gate_exec.get(name) or ([argv[0]] if argv and str(argv[0]).startswith("/") else [])
+        if isinstance(paths, list) and paths:
+            lists[f"proposal_gates.{name}"] = [p for p in paths if isinstance(p, str)]
+    return C.launcher_report(lists, resolver or C.xcrun_resolver(), platform=platform)
+
+
 def run_standalone_modes(
     args: Any,
     manifest: dict[str, Any],
@@ -267,6 +310,8 @@ def run_standalone_modes(
         runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)
         if runner_problems:
             ok, messages = False, [*messages, *(f"ERROR: {p}" for p in runner_problems)]
+        # mathAgents M6-F4: an unresolved xcrun launcher fails every confined call (exit 71); advisory, exit-neutral.
+        messages = [*messages, *xcrun_launcher_lines(wiring_root, description)]
         print(f"Sandbox wiring check ({framework}): {output_dir}")
         for msg in messages:
             print(f"  {msg}")

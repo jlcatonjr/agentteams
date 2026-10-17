@@ -604,6 +604,11 @@ import agentteams**, printing the fix: `<python-with-agentteams> -c "import sys;
 or re-render from that environment. Without a working interpreter the gate asks (cooperative) or
 denies (fail-closed) every content-bearing write instead of checking it.
 
+On macOS it also reports the runner's exec allowlists (the operator `confined_programs` file, else the
+brief's, and each gate's `exec`). For each xcrun launcher in `/usr/bin` it prints the real tool and helper
+directories the Seatbelt profile will allow. When they can't be resolved it prints a `WARNING` naming the
+launcher: confined calls to it will fail (exit 71). These lines are advisory and don't change the exit status.
+
 ### `--allow-unenforced-confinement`
 
 Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
@@ -1141,6 +1146,8 @@ gates the install adds `gate_argv_sha256` (each gate's argv digest) to the JSON 
 later changes is refused until you reinstall. Run it outside every agent session, then restart
 `--serve-requests`: the runner pins the file at start and stops if it changes. Under `write_policy` the
 orchestrator never edits this file or writes a script for it. It gives you this one command.
+It warns, without refusing, when a write root equals, contains or lies inside a package store such as
+`.lake/packages` or `node_modules`, since tools may delete and re-create those when a probe fails in the sandbox.
 
 ### `--verify-grants`
 

@@ -26,6 +26,8 @@ agent asked for. Carved out of `proposals` at phase R2 (CH-07).
    passes the ordinary scoped-write check, and it is never in the control plane or the brief that defines the policy.
 5. **Confinement** (`confine=True`). The agent needs a `confined_programs` entry, the program must sit inside its exec
    paths, and its write roots may not cover a protected path or the brief. The runner runs nothing unconfined.
+   It warns on stderr, once per run, when a write root covers a package store, or (macOS) when the program or
+   `lake` depends on an xcrun launcher that could not be resolved.
 6. **Stdin content.** `stdin_from_content` must be exactly `{path, content}`, and the entry must register
    `stdin_gates`. The content goes through those gates before it reaches the command.
 

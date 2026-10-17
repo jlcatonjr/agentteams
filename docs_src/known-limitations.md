@@ -76,6 +76,19 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Mitigation:** dispatch only team agents.
 - **Tracking:** CHANGELOG `[1.0.0-rc.10]`, the same entry, "Residual (documented)".
 
+### macOS: only git's helper directory is added for an xcrun launcher
+
+- **What:** when a confined program's `exec` names an Apple xcrun launcher in `/usr/bin` (`git`, `make`,
+  `clang`), the runner's Seatbelt profile also allows the real tool's directory and, for git only, its
+  `--exec-path`. Another launched tool that runs helpers outside its own `bin` directory is still denied, and
+  its confined calls fail with exit 71. If xcrun is missing or fails, nothing is added; the runner and
+  `--check-wiring` print a warning, but the run is not refused. A tool that misreads exit 71 can still act on
+  it inside its write roots (mathAgents M6: `lake` deleted `.lake/packages/mathlib`).
+- **Who:** macOS operators whose confined programs call developer tools through `/usr/bin`.
+- **Workaround:** add the helper directory to `exec` yourself, and keep write roots off package stores
+  (`.lake/packages`, `node_modules`, `.venv`, ...). The runner warns about those, but does not refuse them.
+- **Tracking:** CHANGELOG `[Unreleased]`, "xcrun launchers in the exec allowlist reach their real tool".
+
 ## Decision log and the security gate
 
 ### Clearances bind by id prefix; prose scope is not enforced

@@ -11,6 +11,7 @@ import fnmatch
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -114,9 +115,17 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             except P._confinement.ConfinementError as exc:
                 shutil.rmtree(run_tmp, ignore_errors=True)
                 raise P.ProposalError(f"confined_programs.{agent}: {exc}") from exc
+            # mathAgents M6: say once per run when the command leans on an unresolved xcrun launcher, or may
+            # delete a package store it can write; neither is refused.
+            for note in P._confinement.package_store_warnings(jail["write"], root):
+                print(f"[runner] {note}", file=sys.stderr)
             if sandbox:
+                resolver = P._confinement.xcrun_resolver()
+                warning = P._confinement.launcher_warning(program, jail["exec"], resolver)
+                if warning:
+                    print(f"[runner] {warning}", file=sys.stderr)
                 command = P._confinement.wrap(command, sandbox=sandbox, root=root, cwd=cwd, exec_paths=jail["exec"],
-                                            write_roots=checked_roots, tmp_dir=Path(run_tmp))
+                                            write_roots=checked_roots, tmp_dir=Path(run_tmp), resolver=resolver)
         try:
             # Own process group, so a timeout kills everything the command started before the final check.
             child = subprocess.Popen(command, cwd=cwd, env=env,

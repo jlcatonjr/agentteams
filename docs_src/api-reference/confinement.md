@@ -20,10 +20,24 @@ runner starts inside an OS sandbox.
   - The command's own program must lie under one.
   - Give the toolchain root, not only its `bin`: Homebrew Python, for one, re-executes a binary inside its
     framework.
+  - macOS: most developer tools in `/usr/bin` (`git`, `make`, `clang`) are Apple's xcrun launcher, which execs
+    the real tool from the active developer directory. When `exec` names one, or `/usr/bin` itself, `wrap` also
+    allows the real tool's directory (`xcrun --find`) and, for git, its `git --exec-path`. On a Command Line
+    Tools host, `/usr/bin/git` adds `/Library/Developer/CommandLineTools/usr/bin` and
+    `/Library/Developer/CommandLineTools/usr/libexec/git-core`, never the whole developer directory. An added
+    directory that overlaps a write root or `TMPDIR` is dropped. If xcrun is missing or fails, nothing is added
+    and a one-line notice names the launcher, whose confined calls then fail with exit 71. The runner warns once
+    per run when the command, or `lake` (which runs git), depends on such a launcher, and `--check-wiring`
+    reports each allowlist's launchers. Linux is unchanged (decision C).
 - **`write`.** Project-relative directories.
   - Never the project root, `.agentteams`, `.agentteams-queue`, `.git` or the control plane.
   - Never containing an `exec` path, or a command could build a binary there and then run it.
   - Changes inside a write root count as declared, so a build needn't list every output.
+  - A write root that equals, contains or lies inside a package store (`.lake/packages`, `node_modules`,
+    `site-packages`, `.venv`, `venv`, `vendor`, `.cargo/registry`, `Pods`, `.gradle`) gets a warning from
+    `--install-confined` and from the runner at each run. Tools may delete and re-create these when a probe
+    fails inside the sandbox, so narrow the root to build outputs (`lean/.lake/build`, not `lean`). It is a
+    warning, not a refusal.
 - **Gates.** A gate may set `exec`. The default is its own program plus a shebang interpreter. Gates write
   only their temp dir. P5c: the operator file may set it instead, under the reserved top-level key `gate_exec`:
   `{"gate_exec": {"lean-draft-scan": ["/opt/anaconda3"]}, "lean-prover": {...}}`. That keeps a gate
@@ -125,7 +139,10 @@ runner starts inside an OS sandbox.
 |---|---|
 | `available() -> str \| None` | `"seatbelt"`, `"bwrap"` or `None`, found by actually applying a trivial profile. |
 | `kind() -> str \| None` | The platform's sandbox, without probing. |
-| `wrap(argv, *, sandbox, root, cwd, exec_paths, write_roots, tmp_dir) -> list[str]` | Wrap a command. |
+| `wrap(argv, *, sandbox, root, cwd, exec_paths, write_roots, tmp_dir, resolver=None) -> list[str]` | Wrap a command; on Seatbelt, expands xcrun launchers first. |
+| `xcrun_resolver(timeout=XCRUN_TIMEOUT)` / `expand_exec_paths(exec_paths, resolver, *, platform=None, ...)` | macOS: resolve xcrun launchers (injectable), and the pure expansion that returns `(expanded, unresolved)`. |
+| `unresolved_notice(unresolved)` / `launcher_warning(program, exec_paths, resolver)` / `launcher_report(exec_lists, resolver)` | The profile-build notice, the runner's once-per-run WARNING, and the `--check-wiring` lines. |
+| `package_store_warnings(write_roots, root=None) -> list[str]` | Warnings for write roots over a package store (`PACKAGE_STORES`). |
 | `seatbelt_profile(...)` / `bwrap_argv(...)` | The profile text or argv prefix. |
 | `load_confined(raw, gates, control_plane_of)` | Validate `confined_programs` and gates' `exec`. |
 | `confined_file_for(root) -> Path` | P5b: the operator-owned file's path for a project. |
