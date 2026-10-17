@@ -181,7 +181,10 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
             return bool(roots) and f.startswith(tuple(roots)) and not P._protected(f, policy.protected_paths) \
                 and not (policy.brief_rel and f.lower() == policy.brief_rel.lower())
 
-        undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f))
+        # The runner's heartbeat changes while a command runs (M6-F6). Exempt only when a sandbox ran: it keeps the
+        # command out of .agentteams, so the change is the runner's. Unconfined, nothing bounds it, so it stays watched.
+        runner_own = {P.RUNNER_HEARTBEAT_REL} if sandbox else set()
+        undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f) and f not in runner_own)
         if timed_out:
             P.record(root, {"action": "run-request-timeout", "agent": agent, "argv": argv,
                           "duration_ms": int((time.monotonic() - started) * 1000),
