@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (runner: a confined command no longer fails on the runner's own heartbeat; M6-F6)
+
+- **What was wrong.** Since the runner moved its heartbeat under `.agentteams` (rc.10), any confined command that
+  outlasted a heartbeat tick (about 3 s) failed with exit 3: "command wrote outside its declared writes:
+  `.agentteams/runner.heartbeat`". That happened even when the command succeeded. The heartbeat thread rewrites that
+  file while the command runs, and `run_request`'s before/after check watches `.agentteams`. Found by mathAgents' M6
+  pilot: a confined `lake env lean` run of about 31 s exited 0 and was recorded as failed.
+- **The fix.** The check now exempts exactly `.agentteams/runner.heartbeat`, and only when an OS sandbox ran. The
+  sandbox keeps the command out of the control plane, so the change can only be the runner's. Nothing else under
+  `.agentteams` is exempt, and the ledger, head and dispatch tampering checks are unchanged.
+- **No half-written beat.** The snapshot and the runner's `.agentteams` heartbeat write share a lock,
+  `proposals.RUNNER_STATE_LOCK`, so a snapshot never catches the beat's temp file or a file that disappears between
+  listing and `lstat`. While a snapshot holds the lock, the runner skips that tick's `.agentteams` beat rather than
+  waiting. The status heartbeat (`.agentteams-status/heartbeat`) is still written every tick.
+- **Unconfined opt-out unchanged.** Under `allow_unconfined_runs` nothing bounds the command, so the heartbeat stays
+  watched. Unconfined runs still fail if they outlast a tick.
+- **Integrity.** `proposals.py`, `proposal_run.py` and `proposal_runner.py` are re-pinned in
+  `references/enforcement-integrity.json`.
+- **Tests.** `tests/test_runner_heartbeat_exemption.py` covers:
+  - a heartbeat during a sandboxed command passes;
+  - another `.agentteams` change still fails;
+  - the unconfined opt-out still fails;
+  - the runner uses the shared constant;
+  - a snapshot waits for a beat in flight, and a beat during a snapshot skips only the legacy file.
+
 ### docs (1.0 known limitation: adopted agents can't be put under orchestrator-only on Codex)
 
 - `write_policy` interop supports claude and goose imports only, so a team with adopted agents keeps its Codex surface
