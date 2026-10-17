@@ -305,10 +305,19 @@ def test_heartbeat_thread_keeps_the_runner_alive_while_it_is_busy(project, key_f
     assert not (root / R.HEARTBEAT_REL).exists(), "the heartbeat thread outlived close()"
 
 
-def _roundtrip_on(runner, request, channel):
-    request_id = R.enqueue(runner.root, request, channel=channel)
-    runner.serve_once()
-    return R.wait_result(runner.root, request_id, timeout=5)
+def _roundtrip_on(runner, request, channel, *, granted=True):
+    """Serve one request. On the MCP channel the sending agent holds an mcp_grants entry for this call (as every real
+    server's agent does), unless ``granted=False``; the orchestrator channel's view of the policy is untouched."""
+    via = request.get("via_agent") if channel == "mcp" else None
+    saved = runner.policy.mcp_agents
+    if granted and isinstance(via, str) and via:
+        runner.policy.mcp_agents = saved | {via}
+    try:
+        request_id = R.enqueue(runner.root, request, channel=channel)
+        runner.serve_once()
+        return R.wait_result(runner.root, request_id, timeout=5)
+    finally:
+        runner.policy.mcp_agents = saved
 
 
 def test_mcp_channel_requests_get_the_shorter_command_cap(runner, monkeypatch):
@@ -414,6 +423,21 @@ def test_the_mcp_channel_gives_no_nonce_oracle(runner):
         result = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": via}, "mcp")
         answers.add(result["error"])
     assert answers == {P._CHANNEL_REFUSAL}
+
+
+def test_a_revoked_grant_binds_live_dispatches(runner):
+    """An agent removed from mcp_grants is refused on the MCP channel even with an unexpired nonce, with the same
+    answer as any bad nonce (no liveness oracle)."""
+    live = P.issue_dispatch(runner.root, "producer")
+    art = {"kind": "change-proposal", "dispatch": live, "path": "src/a.py", "base_sha256": "absent",
+           "content": "x\n", "rationale": "r"}
+    granted = _roundtrip_on(runner, {"kind": "stage-proposal", "artifact": art, "via_agent": "producer"}, "mcp")
+    # Granted: past the identity check, then refused for its own reason (a stale base), not by the channel.
+    assert not granted["ok"] and "stale base" in granted["error"]
+    for kind, artifact in (("stage-proposal", art), ("run-request", {"dispatch": live})):
+        revoked = _roundtrip_on(runner, {"kind": kind, "artifact": artifact, "via_agent": "producer"}, "mcp",
+                                granted=False)
+        assert not revoked["ok"] and revoked["error"] == P._CHANNEL_REFUSAL
 
 
 def test_mcp_requests_must_name_their_agent(runner):

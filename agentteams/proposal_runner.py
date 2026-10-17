@@ -389,8 +389,9 @@ class Runner:
     def _identity_args(self, request: dict[str, Any], channel: str) -> dict[str, Any]:
         """Channel rules for the proposal engine's identity check (R2).
 
-        MCP channel: only :data:`MCP_KINDS`, and the nonce must resolve to the request's ``via_agent`` (the server
-        instance's slug, fixed in the agent's canonical front matter). The check runs inside the engine's own
+        MCP channel: only :data:`MCP_KINDS`, from a ``via_agent`` that still holds an ``mcp_grants`` entry (so a
+        revoked grant binds live dispatches once the runner restarts with the new brief), and the nonce must resolve
+        to that ``via_agent`` (the server instance's slug, fixed in the agent's canonical front matter). The check runs inside the engine's own
         attempt-counted lookup, and every nonce problem gives one uniform refusal, so the channel can't be used to
         test whether a nonce is live or whose it is. Orchestrator channel: agents in ``policy.mcp_agents`` are
         refused. ``via_agent`` is written by the sender: it stops an honest server replaying another agent's nonce,
@@ -403,6 +404,8 @@ class Runner:
             via = request.get("via_agent")
             if not (isinstance(via, str) and via):
                 raise RunnerError("an MCP-channel request must name its server instance's agent (via_agent)")
+            if via not in self.policy.mcp_agents:
+                raise P.ProposalError(P._CHANNEL_REFUSAL)  # same answer as any bad nonce: no liveness oracle
             return {"expect_agent": via}
         if request.get("kind") in MCP_ONLY_KINDS:
             raise RunnerError(f"{request.get('kind')!r} comes only from an agent's agentteams_runner server")
