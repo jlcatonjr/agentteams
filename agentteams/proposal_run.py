@@ -117,6 +117,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         if timeout_cap is not None:
             timeout = max(1, min(timeout, int(timeout_cap)))
         started = time.monotonic()
+        notice_days = {time.strftime("%Y-%m-%d", time.gmtime())}  # the hook names its log by UTC date (M6-F7)
         run_tmp = tempfile.mkdtemp(prefix="agentteams-run-") if jail is not None else None
         command = [program, *argv[1:]]
         if run_tmp is not None:
@@ -184,7 +185,17 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         # The runner's heartbeat changes while a command runs (M6-F6). Exempt only when a sandbox ran: it keeps the
         # command out of .agentteams, so the change is the runner's. Unconfined, nothing bounds it, so it stays watched.
         runner_own = {P.RUNNER_HEARTBEAT_REL} if sandbox else set()
-        undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f) and f not in runner_own)
+        # The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long command runs (M6-F7).
+        # Same reasoning as the heartbeat: only when a sandbox ran (it keeps the command out of .claude), only that
+        # exact path for the UTC day(s) the command spanned, and only if the file still exists (an append or a create,
+        # never a deletion). Rule 12: this exempts one log file from the escape backstop; every other .claude path,
+        # .claude/settings.json included, stays watched, and nothing is exempt unconfined.
+        notice_days.add(time.strftime("%Y-%m-%d", time.gmtime()))
+        # On disk, not "in the snapshot": a deleted tracked file is still a (dirty) snapshot entry.
+        hook_own = {rel for rel in (f".claude/hook-notices/{d}.log" for d in notice_days)
+                    if (root / rel).is_file() and not (root / rel).is_symlink()} if sandbox else set()
+        undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f) and f not in runner_own
+                            and f not in hook_own)
         if timed_out:
             P.record(root, {"action": "run-request-timeout", "agent": agent, "argv": argv,
                           "duration_ms": int((time.monotonic() - started) * 1000),

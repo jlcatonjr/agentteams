@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
+
+- The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.
+  `run_request` watches `.claude`, so such runs were reported ok:false with that file as an undeclared write.
+- Now exempt, under the same rule as the runner's heartbeat (M6-F6), only when a sandbox ran. The exemption covers only
+  `.claude/hook-notices/<date>.log` for the UTC day or days the command spanned, and only when that file still exists
+  as a regular file (an append or a create, never a deletion or a symlink). Every other `.claude` path stays watched,
+  `.claude/settings.json` included, and nothing is exempt in an unconfined run. Rule 12: this exempts one log file
+  from the escape backstop.
+- `agentteams/proposal_run.py` changes. Its pin in `references/enforcement-integrity.json` moves too, and the
+  operator's merge approval covers that.
+
 ### fix (`--update --merge` draws the pipeline graph from the files it wrote) — 1.0.x, held until after v1.0.0
 
 - The graph was built before the write, from freshly rendered agents laid over the disk copies. A merge keeps the
