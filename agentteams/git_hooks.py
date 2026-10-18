@@ -735,10 +735,6 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
 def redraw_graph_after_merge(output_dir: Path) -> None:
     """Redraw the pipeline graph from the agent files a merge-mode ``--update`` actually wrote.
 
@@ -759,8 +755,12 @@ def redraw_graph_after_merge(output_dir: Path) -> None:
     """
     try:
         res = refresh_pipeline_graph(output_dir.parent.parent, agents_dir=output_dir, stage=False)
-    except (OSError, ValueError) as exc:
+    except OSError as exc:  # I/O only: a program error must surface, not read as a skipped redraw
         print(f"  !  Could not redraw the pipeline graph from disk after the merge: {exc}", file=sys.stderr)
         return
     if res.wrote:
         print(f"  ✓  Pipeline graph redrawn from the merged files ({res.count} agents).")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

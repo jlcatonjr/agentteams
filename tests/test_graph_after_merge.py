@@ -43,7 +43,63 @@ def test_redraw_is_idempotent(tmp_path):
     assert (agents / "references" / "pipeline-graph.md").read_bytes() == first
 
 
+def _run(argv: list[str]) -> int:
+    import build_team
+
+    return build_team.main(argv)
+
+
+def test_real_update_merge_draws_the_adopted_agent_and_logs_the_drawn_graph(tmp_path, monkeypatch):
+    """Behavioural (code-hygiene condition 5): a copilot team whose orchestrator roster lists a bespoke agent, as a
+    merge adoption leaves it; a real --update --merge must write a graph that includes it, and the build log must
+    record the hash of the graph actually on disk."""
+    import hashlib
+    import json
+    import re
+
+    brief = Path(git_hooks.__file__).parent.parent / "examples" / "data-pipeline" / "brief.json"
+    if not brief.exists():
+        import pytest
+        pytest.skip("data-pipeline brief not found")
+    from tests.test_adopt_only import _WAIVER_KEY, _seed_overwrite_pass, _seed_waiver
+
+    monkeypatch.setenv("AGENTTEAMS_WAIVER_SIGNING_KEY", _WAIVER_KEY)   # offline intel: a signed freshness waiver
+    out = tmp_path / "proj" / ".github" / "agents"
+    _seed_waiver(out)
+    base = ["--description", str(brief), "--framework", "copilot-vscode", "--output", str(out),
+            "--yes", "--no-scan", "--security-offline"]
+    assert _run(base) == 0
+    _seed_overwrite_pass(out, monkeypatch)                              # an --update needs an overwrite clearance
+    (out / "zeta-bespoke.agent.md").write_text(
+        "---\nname: zeta-bespoke\ndescription: \"Bespoke.\"\n---\n\nBody.\n", encoding="utf-8")
+    orch = out / "orchestrator.agent.md"
+    text = orch.read_text(encoding="utf-8")
+    text, n = re.subn(r"(?m)^(agents:\n)", r"\1  - zeta-bespoke\n", text, count=1)
+    assert n == 1, "orchestrator has no agents: block list"
+    orch.write_text(text, encoding="utf-8")
+    rc = _run([*base, "--update", "--merge"])
+    assert rc == 0
+    graph = (out / "references" / "pipeline-graph.md").read_text(encoding="utf-8")
+    # The edge, not just the node: the file alone makes a node; only the written roster makes the edge.
+    assert "orchestrator -.-> zeta_bespoke" in graph and '"orchestrator" -> "zeta-bespoke"' in graph
+    log = json.loads((out / "references" / "build-log.json").read_text(encoding="utf-8"))
+    recorded = log["file_hashes"].get("references/pipeline-graph.md")
+    disk = hashlib.sha256((out / "references" / "pipeline-graph.md").read_bytes()).hexdigest()[:16]
+    assert recorded == disk
+
+
+def test_a_claude_team_redraw_is_a_no_op(tmp_path):
+    agents = tmp_path / ".claude" / "agents"
+    (agents / "references").mkdir(parents=True)
+    (agents / "orchestrator.md").write_text(_ORCH, encoding="utf-8")
+    (agents / "references" / "pipeline-graph.md").write_text("# kept\n", encoding="utf-8")
+    git_hooks.redraw_graph_after_merge(agents)   # load_from_disk reads *.agent.md only: nothing to draw
+    assert (agents / "references" / "pipeline-graph.md").read_text(encoding="utf-8") == "# kept\n"
+
+
 def test_generate_calls_the_redraw_only_for_a_real_merge():
     src = (Path(git_hooks.__file__).parent / "cli" / "generate.py").read_text(encoding="utf-8")
-    line = next(l for l in src.splitlines() if "redraw_graph_after_merge(output_dir)" in l)
-    assert "not args.dry_run" in line and "not args.overwrite" in line and "result.success" in line
+    lines = src.splitlines()
+    i = next(k for k, l in enumerate(lines) if "redraw_graph_after_merge(output_dir)" in l)
+    guard = lines[i - 1]
+    assert "not args.dry_run" in guard and "not args.overwrite" in guard and "result.success" in guard
