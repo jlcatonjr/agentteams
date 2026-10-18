@@ -26,10 +26,10 @@ unexamined.
   (``--update --merge --adopt-orphans``, gated by ``cli.adopt_merge_gate``) leaves it. Each run rebuilds the
   manifest from the brief, so a later plain ``--update`` has no ``adopted_agents`` for these and used to call them
   orphans to "delete manually" (found by baseAgent: 17 adopted agents). They are printed under their own heading,
-  labelled "(roster in front matter, unverified)", and not persisted as orphan events. Rule 12: the roster is a
-  front-matter key, so a slug added there by hand leaves the orphan log; that is why the label says unverified, the
-  file is still listed, and the orchestrator's own build-log hash makes such an edit show as MODIFIED in
-  ``--verify-integrity``.
+  labelled "(roster in front matter, unverified)", and persisted as their own event kind
+  (``rostered-unverified``), not as orphans. Rule 12: the roster is a front-matter key anyone can edit, and a
+  hand-added line shows as MODIFIED in ``--verify-integrity`` only until the next merge run records a fresh hash. So
+  the persisted ``rostered-unverified`` record, not the integrity check, is what keeps a planted file on record.
 
 Every bucket is still printed, so nothing on disk becomes invisible.
 """
@@ -128,7 +128,7 @@ def report_orphan_agent_files(
     manifest: dict[str, Any],
     *,
     agent_ext: str,
-    persist: Callable[[list[str], dict[str, Any], Path], None] | None = None,
+    persist: Callable[..., None] | None = None,
 ) -> list[str]:
     """Print the orphan advisory and persist the orphaned bucket.
 
@@ -138,7 +138,9 @@ def report_orphan_agent_files(
         manifest: Team manifest (see :func:`classify_orphan_agent_files`).
         agent_ext: The framework's agent-file extension. Required, keyword-only.
         persist: Called with the orphaned filenames when any exist (the daily orphan-events
-            log). Only the orphaned bucket is ever passed.
+            log), and separately with the ROSTERED filenames plus the event kind
+            ``"rostered-unverified"`` as a fourth positional argument, so a file kept only by a
+            front-matter roster line still leaves a persisted record (@security, 1.0.x).
 
     Returns:
         The sorted orphaned filenames (the keep buckets are excluded).
@@ -171,6 +173,8 @@ def report_orphan_agent_files(
         )
         for name, label in buckets[ROSTERED]:
             print(f"       {name}  — {label}", file=sys.stderr)
+        if persist is not None:
+            persist([name for name, _ in buckets[ROSTERED]], manifest, output_dir, "rostered-unverified")
     kept = buckets[BESPOKE] + buckets[BRIDGE]
     if kept:
         print(
