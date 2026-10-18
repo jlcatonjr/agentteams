@@ -737,3 +737,30 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def redraw_graph_after_merge(output_dir: Path) -> None:
+    """Redraw the pipeline graph from the agent files a merge-mode ``--update`` actually wrote.
+
+    The graph rendered before the write overlays freshly rendered agents on the disk copies, but a merge keeps the
+    on-disk front matter (an adopted agent's place in the orchestrator's ``agents:``, for one). So the pre-write graph
+    described files that were never written, and dropped the adopted agents' edges (found by baseAgent: 13 lost, 6
+    added). Rebuilding from disk afterwards is what ``--refresh-graph`` and the commit hook do, so the three agree.
+    ``cli.generate`` calls this after the write and before the build log, so the logged hashes are the redrawn files'.
+
+    Args:
+        output_dir: The agents directory the update wrote.
+
+    Returns:
+        None.
+
+    Raises:
+        Nothing: a refresh failure is reported and the update's own result stands.
+    """
+    try:
+        res = refresh_pipeline_graph(output_dir.parent.parent, agents_dir=output_dir, stage=False)
+    except (OSError, ValueError) as exc:
+        print(f"  !  Could not redraw the pipeline graph from disk after the merge: {exc}", file=sys.stderr)
+        return
+    if res.wrote:
+        print(f"  ✓  Pipeline graph redrawn from the merged files ({res.count} agents).")

@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (`--update --merge` draws the pipeline graph from the files it wrote) — 1.0.x, held until after v1.0.0
+
+- The graph was built before the write, from freshly rendered agents laid over the disk copies. A merge keeps the
+  on-disk front matter, such as an adopted agent's place in the orchestrator's `agents:` list, so the graph described
+  files that were never written. baseAgent lost 13 adopted agents' edges and gained 6 that weren't in `agents:`, and
+  a standalone `--refresh-graph` then flipped the graph back.
+- After a successful merge-mode write, the graph is now redrawn from disk (`git_hooks.redraw_graph_after_merge`), the
+  same way `--refresh-graph` and the commit hook build it. This happens before the build log is written.
+
 ### fix (orphan advisory: merge-adopted agents are not "orphans to delete") — 1.0.x, held until after v1.0.0
 
 - An agent adopted with `--update --merge --adopt-orphans` is recorded only in the orchestrator's `agents:` roster

@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-from agentteams import analyze, emit, fences, ingest, liaison_logs, render, shrink_allow, template_pins
+from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
@@ -651,6 +651,7 @@ def _run_generate_inner(
             shrink_allow=shrink_allow.resolve(getattr(args, "shrink_allow", None)),
         )
         emit.print_summary(result, manifest)
+        if not args.dry_run and not args.overwrite and result.success: git_hooks.redraw_graph_after_merge(output_dir)
         if framework_id == "goose" and manifest.get("goose_tool_scoping") == "grant" and not args.overwrite:
             goose_grant_merge_notice(output_dir)
         build_team._persist_shrink_events(args, result, manifest, output_dir)
