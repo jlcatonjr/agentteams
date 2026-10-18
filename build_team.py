@@ -346,7 +346,8 @@ def _persist_orphan_events(
         project_label = manifest.get("project_name") or output_dir.name or "unknown"
         signature = f"{project_label}|{kind}|{','.join(orphans)}"
         log_path = log_dir / f"{now_utc.strftime('%Y-%m-%d')}.md"
-        if log_path.exists() and signature in log_path.read_text(encoding="utf-8"):
+        # Whole-line match: a substring test skipped a run whose signature sat inside a longer one ("P" in "XP").
+        if log_path.exists() and f"- signature: `{signature}`" in log_path.read_text(encoding="utf-8").splitlines():
             return
         section = [
             "",
