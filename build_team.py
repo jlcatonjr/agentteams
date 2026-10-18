@@ -328,6 +328,7 @@ def _persist_orphan_events(
     orphans: list[str],
     manifest: dict[str, Any],
     output_dir: Path,
+    kind: str = "orphaned",
 ) -> None:
     """F5: append the current orphan set to a daily-pipeline artefact.
 
@@ -343,7 +344,7 @@ def _persist_orphan_events(
         log_dir.mkdir(parents=True, exist_ok=True)
         now_utc = datetime.now(UTC)
         project_label = manifest.get("project_name") or output_dir.name or "unknown"
-        signature = f"{project_label}|{','.join(orphans)}"
+        signature = f"{project_label}|{kind}|{','.join(orphans)}"
         log_path = log_dir / f"{now_utc.strftime('%Y-%m-%d')}.md"
         if log_path.exists() and signature in log_path.read_text(encoding="utf-8"):
             return
@@ -352,10 +353,12 @@ def _persist_orphan_events(
             f"## {project_label} @ {now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}",
             "",
             f"- output_dir: `{output_dir}`",
+            f"- kind: {kind}",
             f"- orphan_count: {len(orphans)}",
             f"- signature: `{signature}`",
             "",
-            "Orphan agent files (present on disk, not in current team config):",
+            ("Orphan agent files (present on disk, not in current team config):" if kind == "orphaned" else
+             "Agent files kept only by the orchestrator's agents: roster (front matter, unverified):"),
             "",
         ]
         for name in orphans:
@@ -363,7 +366,9 @@ def _persist_orphan_events(
         section.append("")
         section.append("Routing: `@cleanup` (delete if obsolete) or `@code-hygiene` (review). "
                        "Daily pipeline never auto-deletes — destructive action requires "
-                       "orchestrator approval.")
+                       "orchestrator approval." if kind == "orphaned" else
+                       "Routing: `@code-hygiene` (confirm each was adopted on purpose; `--adopt-orphans` records it). "
+                       "Not an orphan: delete one only by also removing it from the roster, with approval.")
         section.append("")
         if log_path.exists():
             log_path.write_text(log_path.read_text(encoding="utf-8") + "\n".join(section), encoding="utf-8")

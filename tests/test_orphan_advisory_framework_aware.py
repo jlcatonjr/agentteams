@@ -260,7 +260,7 @@ def test_merge_adopted_agents_are_rostered_not_orphaned(tmp_path):
     assert "unverified" in buckets[ROSTERED][0][1]
 
 
-def test_rostered_agents_are_printed_but_not_persisted(tmp_path, capsys):
+def test_rostered_agents_are_printed_and_persisted_as_their_own_kind(tmp_path, capsys):
     out = _plant(tmp_path, ["bespoke-one.agent.md"])
     (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
     persisted: list = []
@@ -269,7 +269,8 @@ def test_rostered_agents_are_printed_but_not_persisted(tmp_path, capsys):
     orphans = report_orphan_agent_files(
         [("orchestrator.agent.md", "x")], out, _manifest(), agent_ext=".agent.md",
         persist=lambda names, *_: persisted.extend(names))
-    assert orphans == [] and persisted == []
+    assert orphans == []
+    assert persisted == ["bespoke-one.agent.md"]               # still on record, under its own kind
     assert "bespoke-one.agent.md" in capsys.readouterr().err   # visible, never silenced
 
 
@@ -280,3 +281,26 @@ def test_an_unparseable_roster_keeps_files_orphaned(tmp_path):
     (out / "orchestrator.agent.md").write_text("---\nagents: [bespoke-one]\n---\n", encoding="utf-8")  # flow list
     buckets = classify_orphan_agent_files([], out, _manifest(), agent_ext=".agent.md")
     assert [n for n, _ in buckets[ORPHANED]] == ["bespoke-one.agent.md"]
+
+
+def test_a_planted_rostered_file_stays_on_record_across_runs(tmp_path):
+    """@security (1.0.x): a planted file plus a hand-added roster line must keep a persisted record on every run,
+    since --verify-integrity's MODIFIED signal disappears once a merge run records the edited orchestrator."""
+    from agentteams.orphan_advisory import report_orphan_agent_files
+
+    out = _plant(tmp_path, ["bespoke-one.agent.md"])
+    (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
+    calls: list = []
+    for _ in range(2):   # first run, then a later run after the merge has accepted the roster line
+        report_orphan_agent_files([("orchestrator.agent.md", "x")], out, _manifest(), agent_ext=".agent.md",
+                                  persist=lambda names, manifest, output_dir, kind="orphaned": calls.append((kind, names)))
+    assert calls == [("rostered-unverified", ["bespoke-one.agent.md"])] * 2
+
+
+def test_persist_records_the_kind(tmp_path, monkeypatch):
+    import build_team as bt
+
+    monkeypatch.setattr(bt, "__file__", str(tmp_path / "build_team.py"))
+    bt._persist_orphan_events(["x.agent.md"], {"project_name": "P"}, tmp_path, "rostered-unverified")
+    log = next((tmp_path / "tmp" / "daily-pipeline" / "orphan-events").glob("*.md")).read_text(encoding="utf-8")
+    assert "- kind: rostered-unverified" in log and "P|rostered-unverified|x.agent.md" in log
