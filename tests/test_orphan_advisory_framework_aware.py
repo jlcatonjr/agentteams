@@ -241,3 +241,42 @@ def test_goose_buckets_bespoke_and_bridge_are_kept_not_orphaned(tmp_path: Path, 
     assert "bridge-orchestrator.yaml  — bridge-managed: keep" in err
     # A front-matter claim is self-asserted: labelled, but never moved to a keep bucket.
     assert "forged.yaml  — claims bridge-managed (unverified)" in err
+
+
+# --- merge-adopted agents (1.0.x; found by baseAgent: 17 adopted agents reported as orphans) -------------------
+
+_ORCH_WITH_ROSTER = "---\nname: orchestrator\nagents:\n  - producer\n  - bespoke-one\n---\n# Orchestrator\n"
+
+
+def test_merge_adopted_agents_are_rostered_not_orphaned(tmp_path):
+    from agentteams.orphan_advisory import ORPHANED, ROSTERED, classify_orphan_agent_files
+
+    out = _plant(tmp_path, ["bespoke-one.agent.md", "stray.agent.md"])
+    (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
+    rendered = [("orchestrator.agent.md", "x")]
+    buckets = classify_orphan_agent_files(rendered, out, _manifest(), agent_ext=".agent.md")
+    assert [n for n, _ in buckets[ROSTERED]] == ["bespoke-one.agent.md"]
+    assert [n for n, _ in buckets[ORPHANED]] == ["stray.agent.md"]       # not in the roster: still an orphan
+    assert "unverified" in buckets[ROSTERED][0][1]
+
+
+def test_rostered_agents_are_printed_but_not_persisted(tmp_path, capsys):
+    out = _plant(tmp_path, ["bespoke-one.agent.md"])
+    (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
+    persisted: list = []
+    from agentteams.orphan_advisory import report_orphan_agent_files
+
+    orphans = report_orphan_agent_files(
+        [("orchestrator.agent.md", "x")], out, _manifest(), agent_ext=".agent.md",
+        persist=lambda names, *_: persisted.extend(names))
+    assert orphans == [] and persisted == []
+    assert "bespoke-one.agent.md" in capsys.readouterr().err   # visible, never silenced
+
+
+def test_an_unparseable_roster_keeps_files_orphaned(tmp_path):
+    from agentteams.orphan_advisory import ORPHANED, classify_orphan_agent_files
+
+    out = _plant(tmp_path, ["bespoke-one.agent.md"])
+    (out / "orchestrator.agent.md").write_text("---\nagents: [bespoke-one]\n---\n", encoding="utf-8")  # flow list
+    buckets = classify_orphan_agent_files([], out, _manifest(), agent_ext=".agent.md")
+    assert [n for n, _ in buckets[ORPHANED]] == ["bespoke-one.agent.md"]
