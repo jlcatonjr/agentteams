@@ -219,7 +219,7 @@ def test_sweep_agent_ext_is_required(tmp_path: Path) -> None:
 
 def test_goose_buckets_bespoke_and_bridge_are_kept_not_orphaned(tmp_path: Path, capsys, monkeypatch) -> None:
     persisted: list[list[str]] = []
-    monkeypatch.setattr(build_team, "_persist_orphan_events", lambda o, m, d: persisted.append(o))
+    monkeypatch.setattr(build_team, "_persist_orphan_events", lambda o, m, d, *_: persisted.append(o))
     out = _plant(
         tmp_path,
         ["navigator.yaml", "interpretation-advisor.yaml", "bridge-orchestrator.yaml", "stale.yaml"],
@@ -304,3 +304,11 @@ def test_persist_records_the_kind(tmp_path, monkeypatch):
     bt._persist_orphan_events(["x.agent.md"], {"project_name": "P"}, tmp_path, "rostered-unverified")
     log = next((tmp_path / "tmp" / "daily-pipeline" / "orphan-events").glob("*.md")).read_text(encoding="utf-8")
     assert "- kind: rostered-unverified" in log and "P|rostered-unverified|x.agent.md" in log
+
+
+def test_dedupe_matches_the_whole_signature_line(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_team, "__file__", str(tmp_path / "build_team.py"))
+    build_team._persist_orphan_events(["a.agent.md", "b.agent.md"], {"project_name": "XP"}, tmp_path)
+    build_team._persist_orphan_events(["a.agent.md"], {"project_name": "P"}, tmp_path)   # inside XP's signature
+    log = next((tmp_path / "tmp" / "daily-pipeline" / "orphan-events").glob("*.md")).read_text(encoding="utf-8")
+    assert "## P @" in log and "## XP @" in log
