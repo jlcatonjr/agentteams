@@ -311,7 +311,10 @@ class _SlowRunner:
         self.thread.start()
 
     def _beat(self):
-        (self.root / _HEARTBEAT).write_text(str(time.time()))
+        # Atomic, as the real runner's beat is: a server reading mid-write would see an empty file, i.e. no runner.
+        tmp = self.root / f"{_HEARTBEAT}.tmp"
+        tmp.write_text(str(time.time()))
+        tmp.replace(self.root / _HEARTBEAT)
 
     def _loop(self):
         answered: set[str] = set()
