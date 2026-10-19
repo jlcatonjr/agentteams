@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (orphan advisory: merge-adopted agents are not "orphans to delete") — 1.0.x, held until after v1.0.0
+
+- An agent adopted with `--update --merge --adopt-orphans` is recorded only in the orchestrator's `agents:` roster
+  on disk. Each run rebuilds the manifest from the brief, so a later plain `--update` reported every such agent as an
+  orphan to "review and delete manually" (found by baseAgent: 17 adopted agents). The noise could hide a real orphan.
+- These files now print under their own heading, labelled as being in the orchestrator's roster (front matter,
+  unverified). They are still recorded in the daily orphan-events log, under their own kind (`rostered-unverified`)
+  and routing, so a planted file kept only by a roster line stays on record. A roster the merge gate's parser cannot
+  read leaves the files orphaned, so nothing is silently kept.
+
 ## [1.0.0] - 2026-10-18
 
 ### release notes

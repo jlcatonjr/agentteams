@@ -67,7 +67,9 @@ def orphan_section(today: str) -> str:
         "of the current team configuration. Routing: `@cleanup` (delete "
         "if obsolete) or `@code-hygiene` (review). The daily pipeline "
         "never auto-deletes — destructive action requires orchestrator "
-        "approval.",
+        "approval. Sections marked `kind: rostered-unverified` are not "
+        "orphans: the orchestrator's `agents:` roster lists them; confirm "
+        "each adoption instead.",
         "",
         "```",
         raw.rstrip(),

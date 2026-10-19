@@ -219,7 +219,7 @@ def test_sweep_agent_ext_is_required(tmp_path: Path) -> None:
 
 def test_goose_buckets_bespoke_and_bridge_are_kept_not_orphaned(tmp_path: Path, capsys, monkeypatch) -> None:
     persisted: list[list[str]] = []
-    monkeypatch.setattr(build_team, "_persist_orphan_events", lambda o, m, d: persisted.append(o))
+    monkeypatch.setattr(build_team, "_persist_orphan_events", lambda o, m, d, *_: persisted.append(o))
     out = _plant(
         tmp_path,
         ["navigator.yaml", "interpretation-advisor.yaml", "bridge-orchestrator.yaml", "stale.yaml"],
@@ -241,3 +241,74 @@ def test_goose_buckets_bespoke_and_bridge_are_kept_not_orphaned(tmp_path: Path, 
     assert "bridge-orchestrator.yaml  — bridge-managed: keep" in err
     # A front-matter claim is self-asserted: labelled, but never moved to a keep bucket.
     assert "forged.yaml  — claims bridge-managed (unverified)" in err
+
+
+# --- merge-adopted agents (1.0.x; found by baseAgent: 17 adopted agents reported as orphans) -------------------
+
+_ORCH_WITH_ROSTER = "---\nname: orchestrator\nagents:\n  - producer\n  - bespoke-one\n---\n# Orchestrator\n"
+
+
+def test_merge_adopted_agents_are_rostered_not_orphaned(tmp_path):
+    from agentteams.orphan_advisory import ORPHANED, ROSTERED, classify_orphan_agent_files
+
+    out = _plant(tmp_path, ["bespoke-one.agent.md", "stray.agent.md"])
+    (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
+    rendered = [("orchestrator.agent.md", "x")]
+    buckets = classify_orphan_agent_files(rendered, out, _manifest(), agent_ext=".agent.md")
+    assert [n for n, _ in buckets[ROSTERED]] == ["bespoke-one.agent.md"]
+    assert [n for n, _ in buckets[ORPHANED]] == ["stray.agent.md"]       # not in the roster: still an orphan
+    assert "unverified" in buckets[ROSTERED][0][1]
+
+
+def test_rostered_agents_are_printed_and_persisted_as_their_own_kind(tmp_path, capsys):
+    out = _plant(tmp_path, ["bespoke-one.agent.md"])
+    (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
+    persisted: list = []
+    from agentteams.orphan_advisory import report_orphan_agent_files
+
+    orphans = report_orphan_agent_files(
+        [("orchestrator.agent.md", "x")], out, _manifest(), agent_ext=".agent.md",
+        persist=lambda names, *_: persisted.extend(names))
+    assert orphans == []
+    assert persisted == ["bespoke-one.agent.md"]               # still on record, under its own kind
+    assert "bespoke-one.agent.md" in capsys.readouterr().err   # visible, never silenced
+
+
+def test_an_unparseable_roster_keeps_files_orphaned(tmp_path):
+    from agentteams.orphan_advisory import ORPHANED, classify_orphan_agent_files
+
+    out = _plant(tmp_path, ["bespoke-one.agent.md"])
+    (out / "orchestrator.agent.md").write_text("---\nagents: [bespoke-one]\n---\n", encoding="utf-8")  # flow list
+    buckets = classify_orphan_agent_files([], out, _manifest(), agent_ext=".agent.md")
+    assert [n for n, _ in buckets[ORPHANED]] == ["bespoke-one.agent.md"]
+
+
+def test_a_planted_rostered_file_stays_on_record_across_runs(tmp_path):
+    """@security (1.0.x): a planted file plus a hand-added roster line must keep a persisted record on every run,
+    since --verify-integrity's MODIFIED signal disappears once a merge run records the edited orchestrator."""
+    from agentteams.orphan_advisory import report_orphan_agent_files
+
+    out = _plant(tmp_path, ["bespoke-one.agent.md"])
+    (out / "orchestrator.agent.md").write_text(_ORCH_WITH_ROSTER, encoding="utf-8")
+    calls: list = []
+    for _ in range(2):   # first run, then a later run after the merge has accepted the roster line
+        report_orphan_agent_files([("orchestrator.agent.md", "x")], out, _manifest(), agent_ext=".agent.md",
+                                  persist=lambda names, manifest, output_dir, kind="orphaned": calls.append((kind, names)))
+    assert calls == [("rostered-unverified", ["bespoke-one.agent.md"])] * 2
+
+
+def test_persist_records_the_kind(tmp_path, monkeypatch):
+    import build_team as bt
+
+    monkeypatch.setattr(bt, "__file__", str(tmp_path / "build_team.py"))
+    bt._persist_orphan_events(["x.agent.md"], {"project_name": "P"}, tmp_path, "rostered-unverified")
+    log = next((tmp_path / "tmp" / "daily-pipeline" / "orphan-events").glob("*.md")).read_text(encoding="utf-8")
+    assert "- kind: rostered-unverified" in log and "P|rostered-unverified|x.agent.md" in log
+
+
+def test_dedupe_matches_the_whole_signature_line(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_team, "__file__", str(tmp_path / "build_team.py"))
+    build_team._persist_orphan_events(["a.agent.md", "b.agent.md"], {"project_name": "XP"}, tmp_path)
+    build_team._persist_orphan_events(["a.agent.md"], {"project_name": "P"}, tmp_path)   # inside XP's signature
+    log = next((tmp_path / "tmp" / "daily-pipeline" / "orphan-events").glob("*.md")).read_text(encoding="utf-8")
+    assert "## P @" in log and "## XP @" in log
