@@ -908,7 +908,7 @@ Search for newly disclosed AI-adversary techniques and write candidate strings �
 triage only** — to `references/redteam-freshness-candidates.md`.
 
 **Operator command, not part of the standing audit or any cycle phase.** Requires
-`pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git"` (never from PyPI); without it, exits `2` with a clear message. Uses
+`pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git@release/1.0"` (never from PyPI); without it, exits `2` with a clear message. Uses
 `agentteams.research.search` (a small, fixed, declared query set — never open-ended) but not
 `agentteams.research.verify`'s automated corroboration, which needs a caller-supplied LLM chat
 function this command has no plumbing for. Results are raw search output, never claimed as

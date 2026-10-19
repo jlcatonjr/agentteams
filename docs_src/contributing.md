@@ -60,6 +60,9 @@ To register a new template for use in the rendering pipeline, add it to the appr
 
 ## Pull Request Process
 
+Branches, releases and backports are covered in [Releases and branches](release-and-branching.md): changes go to
+`main`, and `release/1.0` takes only backported fixes.
+
 1. Fork the repository and create a feature branch
 2. Make your changes — keep each PR focused on a single concern
 3. Run `pytest tests/` and confirm all tests pass
