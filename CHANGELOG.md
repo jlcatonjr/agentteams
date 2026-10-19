@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.x, held until after v1.0.0
+### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.1
 
 - A granted agent's `run_command` waited only the server's call wait (20 s by default) and then returned
   `{request_id, status: queued}`. Grants are exact, so an agent without `request_status` could never read the result
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The agent guidance (`write_policy.py`) now says this. `agentteams-runner-mcp.py`, its pin in `runner_mcp.py` and
   `write_policy.py` change, and the operator re-pins `references/enforcement-integrity.json`.
 
-### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
+### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.1
 
 - The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.
   `run_request` watches `.claude`, so such runs were reported ok:false with that file as an undeclared write.
@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `agentteams/proposal_run.py` changes. Its pin in `references/enforcement-integrity.json` moves too, and the
   operator's merge approval covers that.
 
-### fix (`--update --merge` draws the pipeline graph from the files it wrote) — 1.0.x, held until after v1.0.0
+### fix (`--update --merge` draws the pipeline graph from the files it wrote) — 1.0.1
 
 - The graph was built before the write, from freshly rendered agents laid over the disk copies. A merge keeps the
   on-disk front matter, such as an adopted agent's place in the orchestrator's `agents:` list, so the graph described
@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After a successful merge-mode write, the graph is now redrawn from disk (`git_hooks.redraw_graph_after_merge`), the
   same way `--refresh-graph` and the commit hook build it. This happens before the build log is written.
 
-### fix (orphan advisory: merge-adopted agents are not "orphans to delete") — 1.0.x, held until after v1.0.0
+### fix (orphan advisory: merge-adopted agents are not "orphans to delete") — 1.0.1
 
 - An agent adopted with `--update --merge --adopt-orphans` is recorded only in the orchestrator's `agents:` roster
   on disk. Each run rebuilds the manifest from the brief, so a later plain `--update` reported every such agent as an
