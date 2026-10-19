@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
+
+- Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is
+  the self-declaration Rule 15 forbids. researchteam 1.0.1 refuses every unfreeze until agentteams derives it.
+- `cli/effect_classifier.py` now derives it on two axes:
+  - **Text.** A scope or `action_reviewed` that names an unfreeze (`unfreeze`, `--unfreeze`, `unfrozen`) derives
+    relaxing. `management_directives.scope_is_allowed` refuses those words, so no directive can authorise one.
+  - **Target.** `derive_effect_class`, `classify_row`, `is_relaxing` and `requires_operator_signature` take an
+    optional `frozen_paths`, the paths owned by the brief's `frozen_surfaces` (`frozen_owned_paths`, per the
+    shared contract with researchteam). Any `effect_targets` entry at or under one of those paths derives relaxing,
+    whatever the action is called. Callers pass the frozen set in force before the row's change, so a freeze row
+    stays an ordinary clearance.
+- An unfreeze is in the operator-Ed25519 subset (`requires_operator_signature`), so an HMAC row can't authorise it.
+- No caller passes `frozen_paths` yet, because agentteams has no `frozen_surfaces` brief key; the text axis holds
+  without it. `cli/effect_classifier.py` and `cli/management_directives.py` change, and their pins in
+  `references/enforcement-integrity.json` move; the operator's merge approval covers that.
+
 ### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.1
 
 - A granted agent's `run_command` waited only the server's call wait (20 s by default) and then returned

@@ -111,6 +111,9 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     "constitution", "invariant", "governance", "reference-template", "capability-grant",
     "grant", "roster", "authorized-manager", "management-authorit", "management-directive",
     "directive", "signing-key", "integrit", "enforc", "security-decision", "waiver",
+    # (3) unfreezing a frozen surface re-enables renders into it: a constraint-relaxing effect (Rule 15),
+    # so a scope that names it is never benign ("unfreez" also covers --unfreeze, "unfroz" unfrozen)
+    "unfreez", "unfroz",
 )
 
 
