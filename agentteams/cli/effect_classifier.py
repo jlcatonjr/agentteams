@@ -67,6 +67,112 @@ INDETERMINATE = "indeterminate"
 #: definition, so it is relaxing regardless of any other field.
 _HALT_RETRACTION_VERDICT = "HALT-RETRACTED"
 
+#: The paths each frozen-surface id owns (frozen-surfaces shared contract with researchteam, point 4). A path ending in
+#: ``/`` owns everything under it; any other path owns that file only. ``AGENTS.md`` is owned by ``codex``, ``goose``
+#: and ``agents-md`` alike: over-freezing only narrows writes.
+FROZEN_SURFACE_PATHS: dict[str, tuple[str, ...]] = {
+    "codex": (".codex/", ".agents/skills/", "AGENTS.md"),
+    "goose": (".goose/", "AGENTS.md", ".goosehints", "scripts/goose-run-resilient.py",
+              "scripts/goose-openrouter-route-proxy.py", "scripts/goose-coordination-mcp.py"),
+    "agents-md": ("AGENTS.md",),
+    "claude": (".claude/agents/",),
+    "copilot-vscode": (".github/agents/",),
+    "copilot-cli": (".github/agents/",),
+    "grok": (".grok/",),
+}
+
+
+def frozen_owned_paths(surfaces: object) -> tuple[str, ...]:
+    """Return the paths owned by a brief's ``frozen_surfaces`` list (contract point 4), for the target axis.
+
+    Validated as the contract requires (point 2): an unknown id, a non-list value or a duplicate is refused, never
+    ignored. An absent key (``None``) or ``[]`` freezes nothing.
+
+    Args:
+        surfaces: The brief's ``frozen_surfaces`` value.
+
+    Returns:
+        The owned paths, de-duplicated, in a stable order.
+
+    Raises:
+        ValueError: ``surfaces`` is not a list of distinct known surface ids.
+    """
+    if surfaces is None:
+        return ()
+    if not isinstance(surfaces, list) or not all(isinstance(s, str) for s in surfaces):
+        raise ValueError("frozen_surfaces must be a list of surface ids")
+    if len(set(surfaces)) != len(surfaces):
+        raise ValueError(f"frozen_surfaces lists a surface twice: {surfaces!r}")
+    unknown = [s for s in surfaces if s not in FROZEN_SURFACE_PATHS]
+    if unknown:
+        raise ValueError(f"frozen_surfaces names unknown surface id(s) {unknown!r}; known: {sorted(FROZEN_SURFACE_PATHS)}")
+    return tuple(dict.fromkeys(p for s in surfaces for p in FROZEN_SURFACE_PATHS[s]))
+
+
+def _norm_rel(path: str) -> str:
+    """A target path as a repository-relative, ``/``-separated path without ``./`` or leading-slash prefixes."""
+    p = path.strip().replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    return p.lstrip("/")
+
+
+def _under_frozen(target: str, frozen_paths: tuple[str, ...]) -> bool:
+    """Return True when ``target`` is, or is under, one of ``frozen_paths`` (case-insensitive, as macOS is)."""
+    t = _norm_rel(target).lower()
+    for owned in frozen_paths:
+        o = _norm_rel(owned).lower()
+        if o.endswith("/"):
+            if t == o.rstrip("/") or t.startswith(o):
+                return True
+        elif t == o:
+            return True
+    return False
+
+
+def _frozen_signal(profile: "EffectProfile", frozen_paths: tuple[str, ...]) -> str:
+    """The target axis: a write target at or under a frozen surface's owned path is relaxing, whatever the action is
+    called (an unfreeze phrased out of vocabulary is still caught). Decides nothing otherwise."""
+    if frozen_paths and any(_under_frozen(t, frozen_paths) for t in profile.write_targets):
+        return RELAXING
+    return INDETERMINATE
+
+
+def _scope_text(row: dict[str, str], *, kind: str) -> str:
+    """The row's operative scope text."""
+    if kind == "decision":
+        return (row.get("scope") or row.get("action_reviewed") or row.get("decision") or "").strip()
+    return (row.get("task_scope") or "").strip()
+
+
+def _names_unfreeze(text: str) -> bool:
+    """Return True when ``text`` names an unfreeze (word-start match, as ``scope_is_allowed`` matches)."""
+    return re.search(r"(?<![a-z])unfr(?:eez|oz)", text.lower()) is not None
+
+
+def is_unfreeze(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> bool:
+    """Return True when a row unfreezes a frozen surface or authorizes a write into one (frozen-surfaces Rule 15).
+
+    Derived, never declared: by the text axis (the scope or ``action_reviewed`` names an unfreeze, ``--unfreeze``
+    included) or by the target axis (an ``effect_targets`` entry at or under a path in ``frozen_paths``).
+
+    Args:
+        row: The authorizing row.
+        kind: ``"decision"`` or ``"directive"``.
+        frozen_paths: The owned paths of the frozen surfaces in force before the row's change
+            (:func:`frozen_owned_paths` of the brief's ``frozen_surfaces``). Callers that load the brief pass them;
+            without them the text axis still holds.
+
+    Returns:
+        Whether the row is an unfreeze.
+    """
+    texts = [_scope_text(row, kind=kind)]
+    if kind == "decision":
+        texts.append((row.get("action_reviewed") or "").strip())
+    if any(_names_unfreeze(t) for t in texts if t):
+        return True
+    return _frozen_signal(effect_profile_from_row(row), frozen_paths) == RELAXING
+
 class EffectClassifierError(RuntimeError):
     """Raised when a row's self-declared ``effect_class`` disagrees with its derived class.
 
@@ -249,7 +355,7 @@ def _combine(*signals: str) -> str:
     return INDETERMINATE
 
 
-def derive_effect_class(row: dict[str, str], *, kind: str) -> str:
+def derive_effect_class(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> str:
     """Return the derived effect class for a row, ignoring any self-declared ``effect_class``.
 
     Computed as the fail-closed UNION (:func:`_combine`) of two independent axes — the structured
@@ -258,20 +364,29 @@ def derive_effect_class(row: dict[str, str], *, kind: str) -> str:
     relaxing verdict or scope (the adversarial F-1 keystone hole). Never consults ``effect_class``
     — that column is only ever *checked against* this result by :func:`classify_row`.
 
+    A third axis applies when ``frozen_paths`` is given (frozen surfaces, Rule 15): a write target at or under a
+    frozen surface's owned path derives relaxing whatever the action is called. An unfreeze named in the scope text
+    is relaxing on the text axis already (``scope_is_allowed`` refuses ``unfreez``/``unfroz``).
+
     Args:
         row: The authorizing row (decision-log or directive).
         kind: ``"decision"`` or ``"directive"``.
+        frozen_paths: The owned paths of the frozen surfaces in force before the row's change; empty when the caller
+            has no brief.
 
     Returns:
         One of :data:`RELAXING`, :data:`NON_RELAXING`, :data:`INDETERMINATE`.
+
+    Raises:
+        ValueError: ``kind`` is neither ``"decision"`` nor ``"directive"``.
     """
     if kind not in {"decision", "directive"}:
         raise ValueError(f"kind must be 'decision' or 'directive', not {kind!r}")
     profile = effect_profile_from_row(row)
-    return _combine(_profile_signal(profile), _text_signal(row, kind=kind))
+    return _combine(_profile_signal(profile), _text_signal(row, kind=kind), _frozen_signal(profile, frozen_paths))
 
 
-def classify_row(row: dict[str, str], *, kind: str) -> str:
+def classify_row(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> str:
     """Return a row's effect class, refusing when a self-declaration disagrees with the derivation.
 
     This is the module's single public policy entry point. It:
@@ -295,6 +410,7 @@ def classify_row(row: dict[str, str], *, kind: str) -> str:
     Args:
         row: The authorizing row.
         kind: ``"decision"`` or ``"directive"``.
+        frozen_paths: Passed to :func:`derive_effect_class`.
 
     Returns:
         The derived class.
@@ -302,7 +418,7 @@ def classify_row(row: dict[str, str], *, kind: str) -> str:
     Raises:
         EffectClassifierError: The self-declared class dangerously diverges from the derived class.
     """
-    derived = derive_effect_class(row, kind=kind)
+    derived = derive_effect_class(row, kind=kind, frozen_paths=frozen_paths)
     declared = (row.get("effect_class") or "").strip().lower()
     dangerous = (declared == NON_RELAXING and derived != NON_RELAXING) or (
         declared == RELAXING and derived == NON_RELAXING
@@ -365,7 +481,7 @@ def non_eligibility_reason(row: dict[str, str], *, kind: str) -> str | None:
     return None
 
 
-def requires_operator_signature(row: dict[str, str], *, kind: str) -> bool:
+def requires_operator_signature(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> bool:
     """Return True for the NARROW constraint-relaxing EXCEPTION subset that needs operator Ed25519.
 
     Distinct from :func:`is_relaxing` (which is broad — it includes any destructive action so the
@@ -379,9 +495,13 @@ def requires_operator_signature(row: dict[str, str], *, kind: str) -> bool:
     destructive action would replace the normal destructive-clearance workflow, which is not the
     intent — the operator asked to retain a signable path for ADX-like *exceptions*.
 
+    An unfreeze (:func:`is_unfreeze`) is in the subset: it re-enables renders into a surface the operator froze, so it
+    relaxes a constraint (frozen-surfaces Rule 15), and an HMAC row can't authorize it.
+
     Args:
         row: The authorizing row.
         kind: ``"decision"`` or ``"directive"``.
+        frozen_paths: Passed to :func:`is_relaxing` and :func:`is_unfreeze`.
 
     Returns:
         Whether the row belongs to the exception subset that needs an operator Ed25519 signature.
@@ -390,8 +510,10 @@ def requires_operator_signature(row: dict[str, str], *, kind: str) -> bool:
         EffectClassifierError: A dangerous self-declared ``effect_class`` divergence (via
             :func:`is_relaxing`), so the caller fails closed.
     """
-    if not is_relaxing(row, kind=kind):  # also raises on a dangerous self-declaration divergence
+    if not is_relaxing(row, kind=kind, frozen_paths=frozen_paths):  # also raises on a dangerous self-declaration
         return False
+    if is_unfreeze(row, kind=kind, frozen_paths=frozen_paths):
+        return True
     profile = effect_profile_from_row(row)
     if profile.grants_capabilities or profile.relaxes or profile.cross_repo or profile.bulk:
         return True
@@ -406,7 +528,7 @@ def requires_operator_signature(row: dict[str, str], *, kind: str) -> bool:
     return bool(scope_text and target_is_governance_root(scope_text))
 
 
-def is_relaxing(row: dict[str, str], *, kind: str) -> bool:
+def is_relaxing(row: dict[str, str], *, kind: str, frozen_paths: tuple[str, ...] = ()) -> bool:
     """Return True when a row must take the elevated path (relaxing OR indeterminate).
 
     The fail-closed collapse every caller applies: a derivably-relaxing row and an
@@ -416,6 +538,7 @@ def is_relaxing(row: dict[str, str], *, kind: str) -> bool:
     Args:
         row: The authorizing row.
         kind: ``"decision"`` or ``"directive"``.
+        frozen_paths: Passed to :func:`classify_row`.
 
     Returns:
         Whether the row is treated as relaxing (relaxing-until-proven).
@@ -423,7 +546,7 @@ def is_relaxing(row: dict[str, str], *, kind: str) -> bool:
     Raises:
         EffectClassifierError: A self-declaration disagrees with the derivation.
     """
-    return classify_row(row, kind=kind) != NON_RELAXING
+    return classify_row(row, kind=kind, frozen_paths=frozen_paths) != NON_RELAXING
 
 
 __all__ = [
@@ -432,10 +555,13 @@ __all__ = [
     "INDETERMINATE",
     "EffectClassifierError",
     "EffectProfile",
+    "FROZEN_SURFACE_PATHS",
     "classify_row",
     "derive_effect_class",
     "effect_profile_from_row",
+    "frozen_owned_paths",
     "is_relaxing",
+    "is_unfreeze",
     "non_eligibility_reason",
     "requires_operator_signature",
     "target_is_governance_root",
