@@ -5,8 +5,10 @@
 AgentTeams is not yet published to PyPI. Install directly from GitHub:
 
 ```bash
-pip install git+https://github.com/jlcatonjr/agentteams.git
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@release/1.0"
 ```
+
+`release/1.0` is the stable 1.0 line, including reviewed fixes queued for the next patch release; use `@v1.0.0` for exactly what was released and signed. See [Releases and branches](release-and-branching.md).
 
 Requires **Python 3.11 or later**. One runtime dependency (`jsonschema`); otherwise the module uses only the Python standard library.
 

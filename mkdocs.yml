@@ -288,6 +288,7 @@ nav:
   - Description Format: DESCRIPTION-FORMAT.md
   - Structural Update Plan: structural-update-plan.md
   - Contributing: contributing.md
+  - Releases and branches: release-and-branching.md
   - Changelog: changelog.md
 
 markdown_extensions:
