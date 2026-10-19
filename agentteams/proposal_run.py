@@ -21,6 +21,31 @@ from agentteams import proposals as P
 from agentteams.proposal_policy import Policy
 
 
+def _appended_notice_log(root: Path, rel: str, before: dict[str, Any], after: dict[str, Any]) -> bool:
+    """True when the hook's notice log at *rel* was only appended to (or created) during the command (M6-F7).
+
+    Decided from the snapshots, not the live tree (@security): the after entry must be a watched-file stat
+    (``("stat", size, mtime_ns, ctime_ns, ino)``). A deleted log, or one under a symlinked directory that the
+    snapshot's walk does not enter, appears only as a git-status content entry and is refused. If the log existed
+    before, the inode must be the same and the size no smaller (append-only, as the hook's ``>>`` writes). The only live
+    check is an ``lstat`` of that same inode, to refuse a leaf symlink.
+    """
+    import stat as _stat
+
+    a = after.get(rel)
+    if not (isinstance(a, tuple) and a and a[0] == "stat"):
+        return False
+    b = before.get(rel)
+    if b is not None:
+        if not (isinstance(b, tuple) and b and b[0] == "stat") or a[4] != b[4] or a[1] < b[1]:
+            return False
+    try:
+        st = os.lstat(root / rel)
+    except OSError:
+        return False
+    return _stat.S_ISREG(st.st_mode) and st.st_ino == a[4]
+
+
 def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run: bool = False,
                 confine: bool = False, timeout_cap: int | None = None, expect_agent: str | None = None,
                 refuse_agents: frozenset[str] = frozenset()) -> dict[str, Any]:
@@ -191,9 +216,8 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         # never a deletion). Rule 12: this exempts one log file from the escape backstop; every other .claude path,
         # .claude/settings.json included, stays watched, and nothing is exempt unconfined.
         notice_days.add(time.strftime("%Y-%m-%d", time.gmtime()))
-        # On disk, not "in the snapshot": a deleted tracked file is still a (dirty) snapshot entry.
         hook_own = {rel for rel in (f".claude/hook-notices/{d}.log" for d in notice_days)
-                    if (root / rel).is_file() and not (root / rel).is_symlink()} if sandbox else set()
+                    if _appended_notice_log(root, rel, before, after)} if sandbox else set()
         undeclared = sorted(f for f in changed if f not in expected_rel and not exempt(f) and f not in runner_own
                             and f not in hook_own)
         if timed_out:
