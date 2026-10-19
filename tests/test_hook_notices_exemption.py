@@ -115,3 +115,52 @@ def test_notice_appends_still_fail_under_the_unconfined_opt_out(project, monkeyp
     finally:
         stop.set()
         t.join()
+
+
+def test_a_truncated_notice_log_is_still_flagged(project, monkeypatch):
+    _simulate(monkeypatch, "seatbelt")
+    log = project / ".claude" / "hook-notices" / f"{_today()}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("x" * 100 + "\n")
+    code = f"import time; time.sleep(0.2); open('.claude/hook-notices/{_today()}.log', 'w').write('y')"
+    with pytest.raises(P.UndeclaredWritesError, match=r"hook-notices/.*\.log"):
+        _run(project, code)
+
+
+def test_a_replaced_inode_is_still_flagged(project, monkeypatch):
+    _simulate(monkeypatch, "seatbelt")
+    log = project / ".claude" / "hook-notices" / f"{_today()}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("x\n")
+    d = f".claude/hook-notices/{_today()}.log"
+    code = f"import os, time; time.sleep(0.2); open('{d}.new', 'w').write('x\\nmore\\n'); os.replace('{d}.new', '{d}')"
+    with pytest.raises(P.UndeclaredWritesError, match=r"hook-notices/.*\.log"):
+        _run(project, code)
+
+
+def test_a_symlinked_notice_directory_is_still_flagged(project, monkeypatch, tmp_path):
+    _simulate(monkeypatch, "seatbelt")
+    log = project / ".claude" / "hook-notices" / f"{_today()}.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("x\n")
+    _commit_all(project)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / f"{_today()}.log").write_text("x\nmore\n")
+    code = ("import os, shutil, time; time.sleep(0.2); shutil.rmtree('.claude/hook-notices'); "
+            f"os.symlink({str(elsewhere)!r}, '.claude/hook-notices')")
+    # Never exempted. Today the snapshot itself fails on the symlinked directory (_sha256 of a directory raises
+    # IsADirectoryError, a pre-existing robustness gap reported separately); either way the run does not pass.
+    with pytest.raises((P.UndeclaredWritesError, OSError)):
+        _run(project, code)
+
+
+def test_a_leaf_symlink_is_still_flagged(project, monkeypatch, tmp_path):
+    _simulate(monkeypatch, "seatbelt")
+    target = tmp_path / "target.log"
+    target.write_text("x\n")
+    d = f".claude/hook-notices/{_today()}.log"
+    (project / ".claude" / "hook-notices").mkdir(parents=True)
+    code = f"import os, time; time.sleep(0.2); os.symlink({str(target)!r}, '{d}')"
+    with pytest.raises(P.UndeclaredWritesError, match=r"hook-notices"):
+        _run(project, code)
