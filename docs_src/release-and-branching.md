@@ -7,10 +7,11 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 ## The model in brief
 
 - **`main`** is where development happens. Every change, fixes included, lands there first, through a pull request.
-- **`release/1.0`** is the stable 1.0 line, and it is what users install. It changes only when Jim copies in a fix
-  that is already on `main` (a *backport*).
-- **Releases are tags on `release/1.0`.** Each published version (`v1.0.0`, `v1.0.1`, …) is a tag that Jim signs.
-  After each tag, `release/1.0` is merged back into `main`.
+- **Releases are signed tags,** `v1.0.0`, `v1.0.1`, …, and they are what users install and pin.
+- **`release/1.0`** collects the reviewed fixes for the next patch release. It changes only when Jim copies in a fix
+  that is already on `main` (a *backport*). Between tags its commits are unsigned, so it is not for installing or
+  pinning.
+- **Each tag is cut on `release/1.0`** and signed by Jim. After each tag, `release/1.0` is merged back into `main`.
 - **The next minor version gets its own branch.** `release/1.1` will be cut from `main` at its first release
   candidate.
 
@@ -19,8 +20,8 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 | Ref | What it is | Who changes it |
 |---|---|---|
 | `main` | Development, the next minor version | Anyone, through a pull request |
-| `release/1.0` | The stable 1.0 line, where users install from | Jim only, by backport |
-| `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved | Jim only |
+| `release/1.0` | Reviewed fixes queued for the next patch release; unsigned between tags; not for pinning | Jim only, by backport |
+| `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
 
 `main` is `1.1.0.dev0`. `release/1.0` is at `1.0.0`, which is tagged `v1.0.0`.
@@ -31,16 +32,28 @@ The name `release/<X.Y>` is reserved for maintained lines. Never create a `relea
 
 ## Using agentteams
 
+Install a signed release tag: `v1.0.0`, and later `v1.0.N`.
+
 ```bash
-# The stable 1.0 line:
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@release/1.0"
-# One exact, signed release:
 pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.0"
 ```
 
-The branch install is the 1.0 line as it stands. Between releases it can include reviewed fixes that are queued for the next patch release but not yet signed, while still reporting the last release's version number. When you need exactly what was released and signed, for a paper, an experiment or a pin, use the tag. To update a branch install, run the first command again with `--force-reinstall --no-deps`.
+**Verified install,** for a governed team, an experiment or a paper. Clone the tag into a directory of its own, check its signature with repository config neutralised, then install from that checkout:
 
-**A governed team is different.** If agentteams renders or signs for a governed team, follow the 1.0.0 release notes: install it from a verified, detached checkout of the signed tag, as the [migration guide](migration-guide.md) explains under "Moving to a release checkout". The same applies to signing decisions or grants (`SECURITY.md`, "Signing from a trusted install").
+```bash
+git clone --branch v1.0.0 https://github.com/jlcatonjr/agentteams.git agentteams-v1.0.0
+cd agentteams-v1.0.0
+git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
+    -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
+    -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    tag -v v1.0.0 && pip install .
+```
+
+The `&&` stops the install if the signature check fails. The output must also show the release key's full fingerprint, which begins `SHA256:IPdnLwlF`, not just "Good signature"; if it doesn't, stop and uninstall. "Verifying a release" below explains how to set up `allowed_signers` once. For a patch release, repeat this with the new tag in a new directory.
+
+To sign decisions or grants, follow `SECURITY.md` ("Signing from a trusted install"): install with `pipx`, from that verified checkout, outside every agent write root. The [migration guide](migration-guide.md) ("Moving to a release checkout") covers rendering a governed team from a tag checkout.
+
+**`release/1.0` is not an install source.** It holds reviewed fixes queued for the next patch release. Those commits are unsigned between tags, so don't install from the branch or pin it.
 
 **For development,** work on `main` in a clone of your fork, and install it with `pip install -e .`. "Contributing a change" below covers setting up the fork.
 
@@ -126,9 +139,9 @@ You only need this for context:
 3. **Repositories release in order:** agentteams → researchteam → mathAgents → baseAgent. Each one moves its pins only
    after verifying the upstream tag's signature.
 4. **Next minor.** When `1.1` reaches its first release candidate, Jim cuts `release/1.1` from `main`. From then on,
-   `release/1.0` takes fixes only on request, and the install instructions move to `release/1.1`.
+   `release/1.0` takes fixes only on request, and installs move to the `v1.1.N` tags.
 
-## Verifying a release (optional)
+## Verifying a release
 
 Each tag is SSH-signed with Jim's release key. Its fingerprint begins `SHA256:IPdnLwlF`; the full fingerprint and the
 `allowed_signers` line are in agentteams `SECURITY.md`, under "Release signers". Read them on GitHub, not from a
@@ -136,7 +149,7 @@ copy inside the repository you are checking, or confirm the fingerprint with Jim
 
 1. On your own machine, add that line to your own `~/.config/agentteams/allowed_signers`. (Agents never write this
    file; it's yours.)
-2. Run this from a clone of the repository:
+2. Run this from a checkout of the tag (the verified install above does this for you):
 
    ```bash
    git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
@@ -149,7 +162,7 @@ copy inside the repository you are checking, or confirm the fingerprint with Jim
 
 ## Notes for agentteams
 
-- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version. For the 1.0 documentation, browse the `docs_src/` folder on the `release/1.0` branch.
+- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version. For the 1.0 documentation, browse the `docs_src/` folder at the `v1.0.0` tag.
 - **Downstream repositories** (researchteam, mathAgents, baseAgent) pin agentteams in their `toolchain.lock` to the commit of a verified tag, never to a branch. A downstream repository may tighten these rules, never weaken them.
 
 ## Questions
