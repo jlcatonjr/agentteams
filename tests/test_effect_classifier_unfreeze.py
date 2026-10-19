@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from agentteams.cli import effect_classifier as ec
+from agentteams.cli import frozen_surfaces as fs
 from agentteams.cli.management_directives import scope_is_allowed
 
 FROZEN = ec.frozen_owned_paths(["codex"])
@@ -95,3 +96,54 @@ def test_owned_paths_follow_the_shared_contract():
 def test_a_bad_frozen_surfaces_value_is_refused_not_ignored(bad):
     with pytest.raises(ValueError):
         ec.frozen_owned_paths(bad)
+
+
+# --- @security review of b77384c2 ---------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("row", [
+    _decision(scope="refresh-codex", action_reviewed="agentteams --update --unfreeze codex"),  # benign scope first
+    _decision(scope="refresh-codex", decision="unfreeze codex"),
+    _decision(action_reviewed="refresh", decision="un-freeze the codex surface"),
+])
+def test_an_unfreeze_in_any_text_column_is_caught(row):
+    assert ec.derive_effect_class(row, kind="decision") == ec.RELAXING
+    assert ec.requires_operator_signature(row, kind="decision")
+
+
+@pytest.mark.parametrize("scope", ["un-freeze codex", "un_freeze codex", "un freeze codex", "thaw codex",
+                                   "codex-un-frozen", "UNFREEZE"])
+def test_unfreeze_spellings_are_caught(scope):
+    row = _decision(scope=scope)
+    assert ec.derive_effect_class(row, kind="decision") == ec.RELAXING
+    assert not scope_is_allowed(scope)
+
+
+@pytest.mark.parametrize("scope", ["run freeze-check", "refreeze codex", "freeze-surface codex"])
+def test_words_that_only_look_alike_are_not_unfreezes(scope):
+    # Word-start matching, as the directive denylist matches: trailing letters still match (thawte), fail-closed.
+    assert not ec.is_unfreeze(_decision(scope=scope), kind="decision")
+
+
+@pytest.mark.parametrize("target", ["docs/../.codex/a", "x/../AGENTS.md", ".", "./", "/", ".agents", ".agents/",
+                                    "\\.codex\\agents\\x.toml"])
+def test_traversal_and_containing_targets_touch_a_frozen_path(target):
+    row = _decision(scope="refresh-team-surfaces", effect_targets=target)
+    assert ec.derive_effect_class(row, kind="decision", frozen_paths=FROZEN) == ec.RELAXING
+
+
+def test_a_dropped_surface_id_is_an_unfreeze():
+    assert fs.unfrozen_ids(["codex", "goose"], ["goose"]) == ("codex",)
+    assert fs.unfrozen_ids(["codex"], ["codex", "goose"]) == ()  # adding a freeze is not an unfreeze
+    assert fs.unfrozen_ids(None, []) == ()
+    with pytest.raises(ValueError):
+        fs.unfrozen_ids(["codex"], ["kodex"])
+
+
+def test_is_unfreeze_refuses_an_unknown_kind():
+    with pytest.raises(ValueError):
+        ec.is_unfreeze({"scope": "x"}, kind="decison")
+
+
+def test_the_surface_ids_are_the_registry_framework_ids():
+    from agentteams.frameworks.registry import FRAMEWORKS
+    assert set(fs.FROZEN_SURFACE_PATHS) == set(FRAMEWORKS)

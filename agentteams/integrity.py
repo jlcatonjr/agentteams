@@ -181,6 +181,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
+    "agentteams/cli/frozen_surfaces.py",        # Rule 15: frozen-surface owned paths + unfreeze vocabulary
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,

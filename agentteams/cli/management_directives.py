@@ -47,6 +47,7 @@ from datetime import datetime
 from pathlib import Path
 
 from agentteams.atomicio import _atomic_write_text, atomic_rewrite_csv_rows
+from agentteams.cli.frozen_surfaces import UNFREEZE_TOKENS
 from agentteams.cli.governance_targets import target_is_governance_root
 from agentteams.cli.signed_ledger import (
     canonical_payload,
@@ -112,8 +113,8 @@ _REFUSED_SCOPE_TOKENS: tuple[str, ...] = (
     "grant", "roster", "authorized-manager", "management-authorit", "management-directive",
     "directive", "signing-key", "integrit", "enforc", "security-decision", "waiver",
     # (3) unfreezing a frozen surface re-enables renders into it: a constraint-relaxing effect (Rule 15),
-    # so a scope that names it is never benign ("unfreez" also covers --unfreeze, "unfroz" unfrozen)
-    "unfreez", "unfroz",
+    # so a scope that names it is never benign (shared vocabulary; covers --unfreeze, unfrozen, un-freeze, thaw)
+    *UNFREEZE_TOKENS,
 )
 
 
