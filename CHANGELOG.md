@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Scanner: exact allowlist for verified release values (SECRET-SCANNER-HEX-FALSE-POSITIVE)**, 1.0.2. The entropy
+  detector flagged 40-hex git commit IDs and `SHA256:<base64>` key fingerprints as "High-entropy token detected".
+  That blocked operator scripts and release notes from naming the verified release commits and the pinned
+  release-key fingerprint, and operators were splitting the strings to get past it.
+- `agentteams/scan.py` now has a package constant, `RELEASE_VALUE_ALLOWLIST`, which is a frozenset of exact strings.
+  A flagged token is exempt only when the whole token equals a listed value. Any character glued on either side makes
+  it a different token, so it stays flagged. Matching never goes by shape, prefix or case. No comment, marker or
+  filename exempts a file. Rule 12: the exemption covers only the listed public values.
+- The constant ships empty. An operator fills it from `git tag -v`-verified release tags and the `allowed_signers`
+  fingerprint. Adding a value is a reviewed change that needs @security. There is no new CLI flag and no new
+  configuration file. The `agentteams/scan.py` pin in `references/enforcement-integrity.json` moves.
+
 ### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
 
 - The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.

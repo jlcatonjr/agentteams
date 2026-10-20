@@ -82,6 +82,14 @@ _HIGH_ENTROPY_TOKEN_RE = re.compile(
     r"[A-Za-z0-9+/=]{24,}"
 )
 
+#: Exact public values the entropy detector must not flag. SECURITY: adding a value is a reviewed change
+#: that needs @security. It holds ONLY peeled commits of verified 1.0 release tags and the pinned release-key
+#: fingerprint (SECURITY.md), derived from ``git tag -v``-verified sources. Matching is per whole token and
+#: exact, never by shape, prefix or case; no comment, marker or filename exempts a file.
+RELEASE_VALUE_ALLOWLIST: frozenset[str] = frozenset()
+#: Characters a whole token spans for the allowlist check (``:`` keeps ``SHA256:<base64>`` one token).
+_RELEASE_TOKEN_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=_:-")
+
 #: Wider token matcher used only when the line already looks like secret
 #: material. This catches separator-rich tokens that would otherwise be missed.
 _SENSITIVE_CONTEXT_TOKEN_RE = re.compile(r"(?<!\S)[A-Za-z0-9+/=_-]{20,}(?!\S)")
@@ -719,6 +727,8 @@ def _check_line(
         # (a secret keyword is on the line) keeps its wider net deliberately.
         if not secret_context and _looks_like_filesystem_path(token):
             continue
+        if _is_allowlisted_release_value(_release_token_at(line, token_match.start(), token_match.end())):
+            continue
         severity = "high" if secret_context or entropy >= 4.2 else "medium"
         findings.append(ScanFinding(
             file=filepath,
@@ -775,6 +785,20 @@ def _check_line(
             message=f"Unresolved manual placeholder: {match.group(0)}",
             snippet=stripped,
         ))
+
+
+def _release_token_at(line: str, start: int, end: int) -> str:
+    """Widen a detector match to its whole token, so any glued-on character changes it."""
+    while start > 0 and line[start - 1] in _RELEASE_TOKEN_CHARS:
+        start -= 1
+    while end < len(line) and line[end] in _RELEASE_TOKEN_CHARS:
+        end += 1
+    return line[start:end]
+
+
+def _is_allowlisted_release_value(token: str) -> bool:
+    """True only when *token* exactly equals a ``RELEASE_VALUE_ALLOWLIST`` value."""
+    return token in RELEASE_VALUE_ALLOWLIST
 
 
 def _looks_like_filesystem_path(token: str) -> bool:
