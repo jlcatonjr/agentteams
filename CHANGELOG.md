@@ -6,6 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
+
+- Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is
+  the self-declaration Rule 15 forbids. researchteam 1.0.1 refuses every unfreeze until agentteams derives it.
+- `cli/effect_classifier.py` now derives it on two axes:
+  - **Text.** An unfreeze named in any of a row's text columns (`scope`, `action_reviewed` and `decision`, not
+    only the first non-empty one) derives relaxing: `unfreeze`, `--unfreeze`, `unfrozen`, `un-freeze`,
+    `un_freeze`, `thaw`. `management_directives.scope_is_allowed` refuses the same words, so no directive can
+    authorise one.
+  - **Target.** `derive_effect_class`, `classify_row`, `is_relaxing` and `requires_operator_signature` take an
+    optional `frozen_paths`, the paths owned by a `frozen_surfaces` list (shared contract with researchteam,
+    point 4). An `effect_targets` entry that is, is under, or contains one of them derives relaxing, whatever the
+    action is called; `..` segments are resolved first.
+- An unfreeze is in the operator-Ed25519 subset (`requires_operator_signature`), so an HMAC row can't authorise it.
+- The frozen set a caller passes is the recorded freeze state before the row's change, never the working brief,
+  which an agent can edit. A surface id dropped from that state is an unfreeze even when no row names it
+  (`frozen_surfaces.unfrozen_ids`).
+- The owned paths and the unfreeze vocabulary live in the new `cli/frozen_surfaces.py` (stdlib only; its ids are
+  pinned equal to the framework registry by a test). No caller passes `frozen_paths` yet, because agentteams has
+  no `frozen_surfaces` brief key; the text axis holds without it.
+- `cli/effect_classifier.py`, `cli/management_directives.py`, `integrity.py` (which now lists
+  `cli/frozen_surfaces.py`) and the new module change, and their pins in `references/enforcement-integrity.json`
+  move; the operator's merge approval covers that.
+
 ### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.1
 
 - A granted agent's `run_command` waited only the server's call wait (20 s by default) and then returned
