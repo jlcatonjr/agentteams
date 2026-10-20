@@ -6,6 +6,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
+
+- Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is
+  the self-declaration Rule 15 forbids. researchteam 1.0.1 refuses every unfreeze until agentteams derives it.
+- `cli/effect_classifier.py` now derives it on two axes:
+  - **Text.** An unfreeze named in any of a row's text columns (`scope`, `action_reviewed` and `decision`, not
+    only the first non-empty one) derives relaxing: `unfreeze`, `--unfreeze`, `unfrozen`, `un-freeze`,
+    `un_freeze`, `thaw`. `management_directives.scope_is_allowed` refuses the same words, so no directive can
+    authorise one.
+  - **Target.** `derive_effect_class`, `classify_row`, `is_relaxing` and `requires_operator_signature` take an
+    optional `frozen_paths`, the paths owned by a `frozen_surfaces` list (shared contract with researchteam,
+    point 4). An `effect_targets` entry that is, is under, or contains one of them derives relaxing, whatever the
+    action is called; `..` segments are resolved first.
+- An unfreeze is in the operator-Ed25519 subset (`requires_operator_signature`), so an HMAC row can't authorise it.
+- The frozen set a caller passes is the recorded freeze state before the row's change, never the working brief,
+  which an agent can edit. A surface id dropped from that state is an unfreeze even when no row names it
+  (`frozen_surfaces.unfrozen_ids`).
+- The owned paths and the unfreeze vocabulary live in the new `cli/frozen_surfaces.py` (stdlib only; its ids are
+  pinned equal to the framework registry by a test). No caller passes `frozen_paths` yet, because agentteams has
+  no `frozen_surfaces` brief key; the text axis holds without it.
+- `cli/effect_classifier.py`, `cli/management_directives.py`, `integrity.py` (which now lists
+  `cli/frozen_surfaces.py`) and the new module change, and their pins in `references/enforcement-integrity.json`
+  move; the operator's merge approval covers that.
+
+### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.1
+
+- A granted agent's `run_command` waited only the server's call wait (20 s by default) and then returned
+  `{request_id, status: queued}`. Grants are exact, so an agent without `request_status` could never read the result
+  (mathAgents M6-F5: a 31 s `lake` build).
+- `run_command` now waits for its own result for up to 180 s, which is the runner's 120 s MCP command cap plus time
+  queued. It still ends early when the runner stops beating. Writes and deletes keep the short call wait.
+- A `queued` reply now tells an agent without `request_status` to report the request id in its handoff. No grant
+  changes: `request_status` is still granted only when the brief lists it.
+- **Limits:**
+  - The wait is not a guarantee. The runner serves one request at a time, so with several agents queued, or an
+    uncapped orchestrator-channel command ahead, a result can still take longer than 180 s and come back `queued`.
+  - The MCP client's own tool-call timeout must be longer than 180 s. Goose's runner extension sets 300 s; for
+    Claude Code, check `MCP_TOOL_TIMEOUT`.
+  - The server handles one call at a time, so while a `run_command` waits, that agent's other runner calls
+    (`write_file`, `request_status`) wait behind it.
+  - The server ignores cancellation, so a call the client abandons loses its output. The runner's ledger keeps the
+    command's exit status and undeclared writes, not its output.
+- The agent guidance (`write_policy.py`) now says this. `agentteams-runner-mcp.py`, its pin in `runner_mcp.py` and
+  `write_policy.py` change, and the operator re-pins `references/enforcement-integrity.json`.
+
+### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.1
+
+- The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.
+  `run_request` watches `.claude`, so such runs were reported ok:false with that file as an undeclared write.
+- Now exempt, under the same rule as the runner's heartbeat (M6-F6), only when a sandbox ran. The exemption covers only
+  `.claude/hook-notices/<date>.log` for the UTC day or days the command spanned, and only when the snapshots show it
+  was appended to or created. That means the same inode and a size no smaller, still a regular file: never a
+  truncation, an inode replacement, a deletion or a symlink. Every other `.claude` path stays watched,
+  `.claude/settings.json` included, and nothing is exempt in an unconfined run. Rule 12: this exempts one log file
+  from the escape backstop.
+- `agentteams/proposal_run.py` changes. Its pin in `references/enforcement-integrity.json` moves too, and the
+  operator's merge approval covers that.
+
+### fix (`--update --merge` draws the pipeline graph from the files it wrote) — 1.0.1
+
+- The graph was built before the write, from freshly rendered agents laid over the disk copies. A merge keeps the
+  on-disk front matter, such as an adopted agent's place in the orchestrator's `agents:` list, so the graph described
+  files that were never written. baseAgent lost 13 adopted agents' edges and gained 6 that weren't in `agents:`, and
+  a standalone `--refresh-graph` then flipped the graph back.
+- After a successful merge-mode write, the graph is now redrawn from disk (`git_hooks.redraw_graph_after_merge`), the
+  same way `--refresh-graph` and the commit hook build it. This happens before the build log is written.
+
+### fix (orphan advisory: merge-adopted agents are not "orphans to delete") — 1.0.1
+
+- An agent adopted with `--update --merge --adopt-orphans` is recorded only in the orchestrator's `agents:` roster
+  on disk. Each run rebuilds the manifest from the brief, so a later plain `--update` reported every such agent as an
+  orphan to "review and delete manually" (found by baseAgent: 17 adopted agents). The noise could hide a real orphan.
+- These files now print under their own heading, labelled as being in the orchestrator's roster (front matter,
+  unverified). They are still recorded in the daily orphan-events log, under their own kind (`rostered-unverified`)
+  and routing, so a planted file kept only by a roster line stays on record. A roster the merge gate's parser cannot
+  read leaves the files orphaned, so nothing is silently kept.
+
 ## [1.0.0] - 2026-10-18
 
 ### release notes

@@ -291,3 +291,110 @@ def test_a_symlinked_queue_dir_is_refused(served, tmp_path):
         assert list(elsewhere.iterdir()) == []
     finally:
         c.close()
+
+
+# The server's own queue paths (it does not import agentteams, so they are restated here).
+_REQUESTS, _ACKS, _RESULTS = ".agentteams-queue/mcp-requests", ".agentteams-queue/acks", ".agentteams/queue-results"
+_HEARTBEAT = ".agentteams/runner.heartbeat"
+
+
+class _SlowRunner:
+    """A stand-in runner: keeps the heartbeat fresh and answers each MCP request after *delay* seconds."""
+
+    def __init__(self, root: Path, delay: float, beat: bool = True):
+        self.root, self.delay, self.beat = root, delay, beat
+        for rel in (_REQUESTS, _ACKS, _RESULTS):
+            (root / rel).mkdir(parents=True, exist_ok=True)
+        self._beat()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def _beat(self):
+        # Atomic, as the real runner's beat is: a server reading mid-write would see an empty file, i.e. no runner.
+        tmp = self.root / f"{_HEARTBEAT}.tmp"
+        tmp.write_text(str(time.time()))
+        tmp.replace(self.root / _HEARTBEAT)
+
+    def _loop(self):
+        answered: set[str] = set()
+        while not self.stop.is_set():
+            if self.beat:
+                self._beat()
+            for req in (self.root / _REQUESTS).glob("*.json"):
+                if req.stem in answered:
+                    continue
+                answered.add(req.stem)
+                threading.Timer(self.delay, self._answer, args=(req.stem,)).start()
+            time.sleep(0.1)
+
+    def _answer(self, request_id: str):
+        # Atomic, as the real runner's write is: the server must never see a half-written result.
+        tmp = self.root / _RESULTS / f".{request_id}.tmp"
+        tmp.write_text(json.dumps({"ok": True, "exit": 0, "ran": True}))
+        tmp.replace(self.root / _RESULTS / f"{request_id}.json")
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(timeout=5)
+
+
+def _client(root: Path, tools: list[str], wait: str) -> Client:
+    c = Client.__new__(Client)
+    c.proc = subprocess.Popen([sys.executable, "-I", "-S", str(SERVER), "--root", str(root), "--agent", "producer",
+                               "--approval", "staged", "--tools", ",".join(tools), "--wait", wait],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    c.n = 0
+    return c
+
+
+def test_run_command_waits_past_the_call_wait_for_its_own_result(tmp_path):
+    # M6-F5: a 31 s command answered "queued" at the 20 s call wait, to an agent with no request_status.
+    runner = _SlowRunner(tmp_path, delay=2.5)
+    c = _client(tmp_path, ["run_command"], wait="1")
+    try:
+        ok, result = c.call("run_command", dispatch="0" * 32, argv=["true"], purpose="slow")
+        assert ok and result == {"ok": True, "exit": 0, "ran": True}
+    finally:
+        c.close()
+        runner.close()
+
+
+def test_writes_keep_the_short_call_wait(tmp_path):
+    runner = _SlowRunner(tmp_path, delay=2.5)
+    c = _client(tmp_path, ["write_file"], wait="1")
+    try:
+        ok, result = c.call("write_file", dispatch="0" * 32, path="a", content="", base_sha256="absent", rationale="r")
+        assert ok and result["status"] == "queued"
+        assert "no request_status tool" in result["note"]  # the agent is told what it can actually do
+    finally:
+        c.close()
+        runner.close()
+
+
+def test_a_stopped_runner_ends_the_long_wait(tmp_path):
+    runner = _SlowRunner(tmp_path, delay=600, beat=False)
+    (tmp_path / _HEARTBEAT).write_text(str(time.time() - 3600))  # stale: the runner is gone
+    c = _client(tmp_path, ["run_command"], wait="1")
+    try:
+        started = time.monotonic()
+        ok, text = c.call("run_command", dispatch="0" * 32, argv=["true"], purpose="slow")
+        assert not ok and time.monotonic() - started < 10
+    finally:
+        c.close()
+        runner.close()
+
+
+def test_a_runner_that_stops_beating_mid_wait_ends_it(tmp_path):
+    runner = _SlowRunner(tmp_path, delay=600)  # alive at the start, never answers
+    c = _client(tmp_path, ["run_command"], wait="1")
+    try:
+        threading.Timer(2.0, lambda: setattr(runner, "beat", False)).start()  # the runner dies 2 s in
+        started = time.monotonic()
+        ok, text = c.call("run_command", dispatch="0" * 32, argv=["true"], purpose="slow")
+        elapsed = time.monotonic() - started
+        assert not ok and "stopped answering" in text
+        assert 2.0 <= elapsed < 2.0 + 15 + 10  # ends once the heartbeat is stale, long before 180 s
+    finally:
+        c.close()
+        runner.close()

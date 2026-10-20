@@ -24,7 +24,7 @@ PROTECTED_PATH = ".agentteams/bin/agentteams-runner-mcp.py"
 #: Python flags for the launch: no PYTHON* variables, user site-packages, script-dir imports or site hooks.
 PYTHON_FLAGS: tuple[str, ...] = ("-I", "-S")
 #: sha256 of the shipped server; ``tests/test_runner_mcp.py`` keeps it current.
-SHA256 = "7335eeeaf69e3021d73c6ebc75a5af00c065f8962aeee126974c9e8bde301532"
+SHA256 = "4620bcf383dd819e030be287b19fd95b0d57b881301b1aaeb8f663b672c28db9"
 
 
 def server_content() -> str:

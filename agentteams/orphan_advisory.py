@@ -22,6 +22,14 @@ unexamined.
   or ``selected_archetypes`` but no template rendered it.
 * ``bridge`` — "bridge-managed: keep": a reserved bridge slug
   (``bridge_subagents_goose._RESERVED_SLUGS``, e.g. ``bridge-orchestrator.yaml``).
+* ``rostered`` — listed in the on-disk orchestrator's ``agents:`` roster, as merge-mode adoption
+  (``--update --merge --adopt-orphans``, gated by ``cli.adopt_merge_gate``) leaves it. Each run rebuilds the
+  manifest from the brief, so a later plain ``--update`` has no ``adopted_agents`` for these and used to call them
+  orphans to "delete manually" (found by baseAgent: 17 adopted agents). They are printed under their own heading,
+  labelled "(roster in front matter, unverified)", and persisted as their own event kind
+  (``rostered-unverified``), not as orphans. Rule 12: the roster is a front-matter key anyone can edit, and a
+  hand-added line shows as MODIFIED in ``--verify-integrity`` only until the next merge run records a fresh hash. So
+  the persisted ``rostered-unverified`` record, not the integrity check, is what keeps a planted file on record.
 
 Every bucket is still printed, so nothing on disk becomes invisible.
 """
@@ -36,6 +44,7 @@ from typing import Any, Callable
 ORPHANED = "orphaned"
 BESPOKE = "bespoke"
 BRIDGE = "bridge"
+ROSTERED = "rostered"
 
 _BRIDGE_CLAIM_RE = re.compile(r"^(?:bridge|source_sha256):", re.MULTILINE)
 _CLAIM_LABEL = "claims bridge-managed (unverified)"
@@ -76,7 +85,7 @@ def classify_orphan_agent_files(
         agent_ext: The framework's agent-file extension (``adapter.get_file_extension("agent")``).
 
     Returns:
-        ``{ORPHANED: [...], BESPOKE: [...], BRIDGE: [...]}``; each entry is ``(filename, label)``
+        ``{ORPHANED: [...], BESPOKE: [...], BRIDGE: [...], ROSTERED: [...]}``; each entry is ``(filename, label)``
         sorted by filename. ``label`` is empty for a plain orphan.
     """
     from agentteams.bridge_subagents_goose import _RESERVED_SLUGS
@@ -87,8 +96,9 @@ def classify_orphan_agent_files(
     # Tool docs are never agents; a legacy tool-<slug> agent is handled by the caller's migration.
     tool_doc_names = {f"{ta['slug']}{agent_ext}" for ta in manifest.get("tool_agents", [])}
     roster = set(manifest.get("agent_slug_list", [])) | set(manifest.get("selected_archetypes", []))
+    on_disk_roster = _orchestrator_roster(output_dir, agent_ext)
 
-    buckets: dict[str, list[tuple[str, str]]] = {ORPHANED: [], BESPOKE: [], BRIDGE: []}
+    buckets: dict[str, list[tuple[str, str]]] = {ORPHANED: [], BESPOKE: [], BRIDGE: [], ROSTERED: []}
     for f in sorted(output_dir.glob(f"*{agent_ext}")):
         name = f.name
         # SETUP-REQUIRED.md is a build artifact, not an agent (the `.agent.md` suffix excluded
@@ -105,6 +115,8 @@ def classify_orphan_agent_files(
             buckets[BRIDGE].append((name, "bridge-managed: keep"))
         elif slug in roster:
             buckets[BESPOKE].append((name, "bespoke roster member (no template): keep"))
+        elif slug in on_disk_roster:
+            buckets[ROSTERED].append((name, "in the orchestrator's agents: roster (roster in front matter, unverified)"))
         else:
             buckets[ORPHANED].append((name, _CLAIM_LABEL if _claims_bridge(f) else ""))
     return buckets
@@ -116,7 +128,7 @@ def report_orphan_agent_files(
     manifest: dict[str, Any],
     *,
     agent_ext: str,
-    persist: Callable[[list[str], dict[str, Any], Path], None] | None = None,
+    persist: Callable[..., None] | None = None,
 ) -> list[str]:
     """Print the orphan advisory and persist the orphaned bucket.
 
@@ -126,7 +138,9 @@ def report_orphan_agent_files(
         manifest: Team manifest (see :func:`classify_orphan_agent_files`).
         agent_ext: The framework's agent-file extension. Required, keyword-only.
         persist: Called with the orphaned filenames when any exist (the daily orphan-events
-            log). Only the orphaned bucket is ever passed.
+            log), and separately with the ROSTERED filenames plus the event kind
+            ``"rostered-unverified"`` as a fourth positional argument, so a file kept only by a
+            front-matter roster line still leaves a persisted record (@security, 1.0.x).
 
     Returns:
         The sorted orphaned filenames (the keep buckets are excluded).
@@ -150,6 +164,17 @@ def report_orphan_agent_files(
         )
         if persist is not None:
             persist(orphans, manifest, output_dir)
+    if buckets[ROSTERED]:
+        print(
+            f"\n  ℹ  {len(buckets[ROSTERED])} agent file(s) are listed in the orchestrator's agents: roster but not in "
+            "this run's brief (adopted by merge). Pass --adopt-orphans to record them; delete one only by also "
+            "removing it from the roster:",
+            file=sys.stderr,
+        )
+        for name, label in buckets[ROSTERED]:
+            print(f"       {name}  — {label}", file=sys.stderr)
+        if persist is not None:
+            persist([name for name, _ in buckets[ROSTERED]], manifest, output_dir, "rostered-unverified")
     kept = buckets[BESPOKE] + buckets[BRIDGE]
     if kept:
         print(
@@ -162,4 +187,20 @@ def report_orphan_agent_files(
     return orphans
 
 
-__all__ = ["BESPOKE", "BRIDGE", "ORPHANED", "classify_orphan_agent_files", "report_orphan_agent_files"]
+def _orchestrator_roster(output_dir: Path, agent_ext: str) -> set[str]:
+    """Slugs in the on-disk orchestrator's front-matter ``agents:`` block list; empty when absent or unparseable.
+
+    Reuses ``cli.adopt_merge_gate.existing_agents``, the same parser the gated merge writes with, so the two agree on
+    what the roster is. A roster this parser refuses to read is treated as empty: the files stay ORPHANED, never
+    silently kept.
+    """
+    from agentteams.cli.adopt_merge_gate import AdoptMergeError, existing_agents
+
+    try:
+        text = (output_dir / f"orchestrator{agent_ext}").read_text(encoding="utf-8")
+        return set(existing_agents(text) or [])
+    except (OSError, UnicodeDecodeError, AdoptMergeError):
+        return set()
+
+
+__all__ = ["BESPOKE", "BRIDGE", "ORPHANED", "ROSTERED", "classify_orphan_agent_files", "report_orphan_agent_files"]
