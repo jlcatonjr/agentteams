@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (Goose: the coordination MCP server appends to the decisions log instead of rewriting it, M6-R4) — 1.0.2
+
+- mathAgents' M6 run found existing `security-decisions.log.csv` rows re-quoted: same values, different bytes. The
+  Goose team's shipped coordination MCP server (`scripts/goose-coordination-mcp.py`, packaged copy
+  `agentteams/data/goose-coordination-mcp.py`) recorded each `request_security_clearance` (and coordination-log row)
+  by parsing the whole log and writing every row back through `csv.writer`, re-quoting hand-written rows and turning
+  CRLF into LF.
+- It now appends: one `os.write` on an `O_APPEND` descriptor under `flock`, in the existing header's columns and line
+  ending, after checking that the row round-trips. Existing bytes are never rewritten. A log with a quote left open
+  is refused, because an append would land inside that field, and a hash-chained log is still refused.
+- A `--update --merge` re-render already left the log byte-identical. `tests/test_goose_decision_log_append_only.py`
+  now pins both behaviours. The security gate's consumption mark (`security_gate._consume_security_decision_use`)
+  still rewrites the log to set `consumed`. That is the log's own mechanism, and it is unchanged here.
+
 ### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
 
 - The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.

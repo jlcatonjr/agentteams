@@ -47,6 +47,11 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+try:
+    import fcntl
+except ImportError:  # Windows: appends are unlocked there
+    fcntl = None  # type: ignore[assignment]
+
 #: Ledger header schemas — kept byte-identical to agentteams/liaison_logs.py so a row this
 #: server appends is indistinguishable from one the Claude path writes.
 COORD_LOG_HEADERS = ["date", "adjacent_repo", "direction", "outcome"]
@@ -126,42 +131,61 @@ def _contained(root: Path, candidate: Path) -> bool:
 def _append_csv_row(refs_dir: Path, filename: str, headers: list[str], row: dict[str, str]) -> Path:
     """Append one row to ``refs_dir/filename``, writing the header first if new.
 
-    Atomic: the full contents (existing rows + the new one) are rendered in memory and
-    written to a temp file that is then ``os.replace``'d over the target, so a concurrent
-    reader never sees a half-written file. Missing fields are written empty; unknown keys
-    are ignored (the header is the schema of record).
+    Append-only: an existing log is never rewritten. Its bytes stay exactly as they are (no
+    re-quoting, no line-ending change, no header re-render); the new row is rendered in memory in
+    the existing header's columns and the file's own line ending, checked to round-trip to one
+    record of the header's width, and written with a single ``os.write`` on an ``O_APPEND``
+    descriptor under an exclusive ``flock`` (POSIX; elsewhere unlocked). A new log is created with
+    the header and the row via a temp file and ``os.replace``. Missing fields are written empty;
+    unknown keys are ignored (the header is the schema of record).
 
-    An existing file's header is never rewritten: the row is written in that header's columns. A
-    log carrying ``prev_digest`` (a hash-chained decision log) is refused, because this server cannot
-    compute the chain link, and rewriting such a header would silently drop its signing and chain
-    columns (1.0 must-fix, @security C2).
+    A log carrying ``prev_digest`` (a hash-chained decision log) is refused, because this server
+    cannot compute the chain link (1.0 must-fix, @security C2).
 
     Raises:
-        ValueError: if the resolved target escapes ``refs_dir`` (path containment), or the existing
-            log is hash-chained.
+        ValueError: if the resolved target escapes ``refs_dir`` (path containment), the existing
+            log is hash-chained or headerless, or the rendered row does not round-trip.
     """
     target = refs_dir / filename
     if not _contained(refs_dir, target):
         raise ValueError(f"refused: target escapes references dir: {filename}")
 
-    existing: list[list[str]] = []
-    if target.is_file():
-        with target.open("r", encoding="utf-8", newline="") as fh:
-            existing = [r for r in csv.reader(fh) if r]
+    if not target.is_file() or target.stat().st_size == 0:
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(headers)
+        w.writerow([row.get(h, "") for h in headers])
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        tmp.write_text(buf.getvalue(), encoding="utf-8", newline="")
+        os.replace(tmp, target)
+        return target
 
-    header = [h.strip() for h in existing[0]] if existing else list(headers)
-    if "prev_digest" in header:
-        raise ValueError(f"refused: {filename} is a hash-chained log; append through the agentteams CLI")
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(existing[0] if existing else headers)
-    for r in existing[1:]:
-        w.writerow(r)
-    w.writerow([row.get(h, "") for h in header])
-
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(buf.getvalue(), encoding="utf-8")
-    os.replace(tmp, target)
+    fd = os.open(target, os.O_RDWR | os.O_APPEND)
+    try:
+        if fcntl is not None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        raw = target.read_bytes()
+        text = raw.decode("utf-8")
+        try:
+            records = list(csv.reader(io.StringIO(text), strict=True))
+        except csv.Error as exc:  # e.g. a quote left open at end of file: an append would land inside it
+            raise ValueError(f"refused: {filename} is malformed ({exc})") from exc
+        if not records or not records[0]:
+            raise ValueError(f"refused: {filename} has no header row")
+        header = [h.strip() for h in records[0]]
+        if "prev_digest" in header:
+            raise ValueError(f"refused: {filename} is a hash-chained log; append through the agentteams CLI")
+        newline = "\r\n" if "\r\n" in text else "\n"
+        buf = io.StringIO()
+        csv.writer(buf, lineterminator=newline).writerow([row.get(h, "") for h in header])
+        rendered = buf.getvalue()
+        if [len(r) for r in csv.reader(io.StringIO(rendered))] != [len(header)]:
+            raise ValueError("refused: the rendered row does not round-trip to one record of the header's width")
+        data = ((newline if not text.endswith(("\n", "\r")) else "") + rendered).encode("utf-8")
+        if os.write(fd, data) != len(data):
+            raise OSError(f"short write appending to {target}")
+    finally:
+        os.close(fd)  # closing releases the flock
     return target
 
 
