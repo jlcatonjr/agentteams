@@ -83,8 +83,8 @@ _HIGH_ENTROPY_TOKEN_RE = re.compile(
 )
 
 #: Exact public values the entropy detector must not flag. SECURITY: adding a value is a reviewed change
-#: that needs @security. It holds ONLY peeled commits of verified 1.0 release tags and the pinned release-key
-#: fingerprint (SECURITY.md), derived from ``git tag -v``-verified sources. Matching is per whole token and
+#: that needs @security. It holds ONLY peeled commits of release tags signed by the release key (the 1.0 line and
+#: baseAgent's 0.2 line) and the pinned release-key fingerprint (SECURITY.md), derived from ``git tag -v``-verified sources. Matching is per whole token and
 #: exact, never by shape, prefix or case; no comment, marker or filename exempts a file.
 RELEASE_VALUE_ALLOWLIST: frozenset[str] = frozenset()
 #: Characters a whole token spans for the allowlist check (``:`` keeps ``SHA256:<base64>`` one token).
