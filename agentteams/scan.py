@@ -86,7 +86,17 @@ _HIGH_ENTROPY_TOKEN_RE = re.compile(
 #: that needs @security. It holds ONLY peeled commits of release tags signed by the release key (the 1.0 line and
 #: baseAgent's 0.2 line) and the pinned release-key fingerprint (SECURITY.md), derived from ``git tag -v``-verified sources. Matching is per whole token and
 #: exact, never by shape, prefix or case; no comment, marker or filename exempts a file.
-RELEASE_VALUE_ALLOWLIST: frozenset[str] = frozenset()
+RELEASE_VALUE_ALLOWLIST: frozenset[str] = frozenset({
+    "SHA256:IPdnLwlFdHNhr7QGKVWU40BOKyYzv2u8qxP/qxnzTNM",  # pinned release-key fingerprint
+    "cc5b8c9ec4efdcb479939e0c1246a0ac11913259",  # agentteams v1.0.0
+    "a21e7db7d632664253d4796444ee8b57069c05b2",  # researchteam v1.0.0
+    "b55e2307a95a2db92fe971d867a8453871183e8d",  # researchteam v1.0.1
+    "10a36758d7fcbb3ccc4c8a8cf1e822c375591f7e",  # researchteam v1.0.2
+    "04b5ec86eb3c520d5b182c443d9b18bcc1710960",  # mathAgents v1.0.0
+    "5de4347b4a4bdf7d919de81f00b3bb6571df3ce7",  # baseAgent v1.0.0
+    "61526bbb15fe1e1f192959a83c2bce647a9e4505",  # baseAgent v1.0.1
+    "3b4306df15293c85344c0e0b022741018a280a50",  # baseAgent v0.2.3
+})
 #: Characters a whole token spans for the allowlist check (``:`` keeps ``SHA256:<base64>`` one token).
 _RELEASE_TOKEN_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=_:-")
 
