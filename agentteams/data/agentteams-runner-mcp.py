@@ -64,6 +64,14 @@ DENY_ALLOWED = (".env.example", ".env.sample", ".env.template")
 MAX_TRACKED = 256
 #: A result the runner expired unread (its TTL is 300 s) is reported as lost after this long.
 LOST_AFTER_SECONDS = 600
+#: How long ``run_command`` waits for its own result (M6-F5): the runner's MCP command cap
+#: (``proposal_runner.MCP_COMMAND_TIMEOUT``, 120 s) plus time queued behind other requests. A granted agent
+#: often has no ``request_status`` (grants are exact), so a ``queued`` reply was a result it could never read.
+#: The wait still ends early when the runner stops beating (``_poll``). The MCP client's own tool-call timeout must
+#: be longer (Goose: the extension's 300 s, ``runner_mcp``; Claude Code: ``MCP_TOOL_TIMEOUT``). This server reads one
+#: message at a time and ignores ``notifications/cancelled``, so a call the client abandons keeps polling, and its
+#: result, when it arrives, is acknowledged and dropped: the exit status survives only in the runner's ledger.
+RUN_COMMAND_WAIT_SECONDS = 180.0
 
 _NONCE = {"type": "string", "description": "Your dispatch nonce, from your task."}
 SCHEMAS: dict[str, dict[str, Any]] = {
@@ -194,16 +202,21 @@ class Server:
         self.mine.pop(request_id, None)
         return result
 
-    def _submit(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _submit(self, request: dict[str, Any], wait: float | None = None) -> dict[str, Any]:
         request_id = self._enqueue(request)
-        deadline = time.monotonic() + self.wait
+        deadline = time.monotonic() + (self.wait if wait is None else wait)
         while time.monotonic() < deadline:
             result = self._poll(request_id)
             if result is not None:
                 return result
             time.sleep(0.25)
-        return {"request_id": request_id, "status": "queued",
-                "note": "the runner hasn't answered yet; call request_status with this request_id"}
+        if "request_status" in self.tools:
+            note = "the runner hasn't answered yet; call request_status with this request_id"
+        else:
+            note = ("the runner hasn't answered yet and you have no request_status tool; report this request_id "
+                    "in your handoff. The runner's ledger records the command's exit status and any undeclared "
+                    "writes, not its output, so re-run a shorter command if you need the output")
+        return {"request_id": request_id, "status": "queued", "note": note}
 
     # -- tools ----------------------------------------------------------------------------------------------
 
@@ -245,7 +258,7 @@ class Server:
                 artifact[key] = args[key]
         if "stdin_path" in args or "stdin_content" in args:
             artifact["stdin_from_content"] = {"path": args.get("stdin_path"), "content": args.get("stdin_content")}
-        return self._submit({"kind": "run-request", "artifact": artifact})
+        return self._submit({"kind": "run-request", "artifact": artifact}, wait=max(self.wait, RUN_COMMAND_WAIT_SECONDS))
 
     @staticmethod
     def _denied(rel: str) -> bool:

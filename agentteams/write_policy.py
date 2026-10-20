@@ -119,8 +119,9 @@ checks every request against your policy and does the work.
 - **To run a command:** call `run_command` with an `argv` list (never a shell string). Only commands on your
   allowlist run, inside your sandbox.
 - **A `write_file` or `delete_file` receipt is final:** report its `sid` and stop; don't call `request_status`
-  after it. Only when a call returns a `request_id` instead of a result (a long `run_command`) call
-  `request_status` with it later.
+  after it. `run_command` waits for its own result (up to about three minutes). Only when a call returns a
+  `request_id` instead of a result: if you hold `request_status`, call it with that id later; otherwise report the
+  `request_id` in your handoff (the runner's ledger keeps the exit status, not the output).
 - **Every call** carries the `dispatch` value the orchestrator gave you for this task. Never invent or reuse one.
 - **If you can't do what the task needs** with these, attach a gap note to your handoff; the orchestrator records
   it (`references/mcp-need.reference.md`).
