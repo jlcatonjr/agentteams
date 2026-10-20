@@ -82,7 +82,7 @@ READFS_PROTECTED_PATH = ".agentteams/bin/goose-readfs-mcp.py"
 READFS_PYTHON_FLAGS: tuple[str, ...] = ("-I", "-S")
 #: sha256 of the shipped server (``agentteams/data/goose-readfs-mcp.py``). This module is integrity-pinned, so
 #: the runner can check an installed copy against it; ``tests/test_readfs_launch_integrity.py`` keeps it current.
-READFS_SHA256 = "dc8413e8ec16298e79b5ff27e6629c792693ef88bcae4c9f9c40e85d127cab58"
+READFS_SHA256 = "3b4606aa61cefde5654d3c23fd0997e6a10a0846b97968896a64f045176ee553"
 
 #: Declared canonical tool -> ((extension, goose tool), ...).
 GOOSE_TOOL_MAP: dict[str, tuple[tuple[str, str], ...]] = {

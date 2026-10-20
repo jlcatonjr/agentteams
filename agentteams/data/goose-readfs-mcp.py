@@ -42,6 +42,8 @@ packaged dist). Phase 2 of the plan ships it into generated Goose teams.
 from __future__ import annotations
 
 import argparse
+import codecs
+import contextlib
 import fnmatch
 import io
 import json
@@ -52,7 +54,7 @@ import stat as stat_mod
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, BinaryIO, Callable
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "agentteams_readfs"
@@ -201,14 +203,22 @@ def _fd_path(fd: int) -> str | None:
         return None
 
 
-def _open_regular(ws: Workspace, real: str, limit: int) -> tuple[bytes, int]:
-    """Read up to ``limit`` bytes of a regular file inside the root, refusing anything swapped in.
+@contextlib.contextmanager
+def _opened(ws: Workspace, real: str) -> Iterator[tuple[BinaryIO, int]]:
+    """Open a regular file inside the root for reading, refusing anything swapped in.
 
     The handle is opened ``O_RDONLY|O_NONBLOCK|O_NOFOLLOW``. It must be a regular file with the
     device and inode the path had when checked, and the path the OS reports for the open handle
     must still lie inside the root. ``O_NOFOLLOW`` guards only the last component, so this last
     check is what refuses a parent directory swapped for an outward link after ``resolve()``.
     Where the OS cannot report a handle's path, only the inode check applies (documented residual).
+
+    Args:
+        ws: The workspace the file must lie in.
+        real: The already-resolved path to open.
+
+    Returns:
+        A context manager yielding ``(binary_handle, size_in_bytes)``; the handle closes on exit.
 
     Raises:
         ReadfsError: The path is not (or is no longer) the regular file inside the root that was checked.
@@ -225,7 +235,53 @@ def _open_regular(ws: Workspace, real: str, limit: int) -> tuple[bytes, int]:
         opened = _fd_path(fh.fileno())
         if opened is not None and not ws.inside(os.path.realpath(opened)):
             raise ReadfsError("file resolved outside the workspace while being opened; refused")
-        return fh.read(limit), after.st_size
+        yield fh, after.st_size
+
+
+def _open_regular(ws: Workspace, real: str, limit: int) -> tuple[bytes, int]:
+    """Read up to ``limit`` bytes of a regular file inside the root (checked as ``_opened`` does).
+
+    Raises:
+        ReadfsError: The path is not (or is no longer) the regular file inside the root that was checked.
+    """
+    with _opened(ws, real) as (fh, size):
+        return fh.read(limit), size
+
+
+#: Line boundaries exactly as ``str.splitlines`` sees them, so read_file and grep number lines alike.
+_LINE_BREAK = re.compile("\r\n|[\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
+_READ_CHUNK = 64 * 1024
+#: How far past the returned window read_file keeps counting lines before reporting the total as "N+".
+_COUNT_AHEAD_BYTES = 8 * 1024 * 1024
+
+
+def _iter_lines(fh: BinaryIO) -> Iterator[str]:
+    """Stream a file's lines (``str.splitlines`` semantics), each cut to ``MAX_LINE_CHARS + 1`` chars.
+
+    Reads ``_READ_CHUNK`` bytes at a time, so memory stays bounded however large the file or a line is.
+    """
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    line, started, carry = "", False, ""
+    while True:
+        chunk = fh.read(_READ_CHUNK)
+        text = carry + decoder.decode(chunk, final=not chunk)
+        carry = ""
+        if chunk and text.endswith("\r"):
+            text, carry = text[:-1], "\r"  # it may be the first half of a CRLF split across chunks
+        pos = 0
+        for brk in _LINE_BREAK.finditer(text):
+            if len(line) <= MAX_LINE_CHARS:
+                line += text[pos:brk.start()][:MAX_LINE_CHARS + 1 - len(line)]
+            yield line
+            line, started, pos = "", False, brk.end()
+        if pos < len(text):
+            started = True
+            if len(line) <= MAX_LINE_CHARS:
+                line += text[pos:][:MAX_LINE_CHARS + 1 - len(line)]
+        if not chunk:
+            if started:
+                yield line
+            return
 
 
 def _is_binary(head: bytes) -> bool:
@@ -244,23 +300,63 @@ def _pattern(args: dict[str, Any], key: str) -> str:
 
 
 def _tool_read_file(ws: Workspace, args: dict[str, Any]) -> str:
-    """Read a text file with line numbers, paged by ``offset``/``limit``."""
+    """Read a text file with line numbers, paged by ``offset``/``limit``.
+
+    The byte bound applies per call, not per file: the file is streamed, so every ``offset`` is
+    reachable, and one call returns at most ``MAX_READ_LINES`` lines and ``MAX_READ_BYTES`` bytes of
+    numbered content. The total line count is exact when counting it is cheap, else shown as ``N+``.
+
+    Args:
+        ws: The confined workspace.
+        args: ``path`` (required), ``offset`` (1-based first line) and ``limit`` (lines).
+
+    Returns:
+        A header, the numbered lines and, when more lines follow, a hint naming the next ``offset``.
+
+    Raises:
+        ReadfsError: The path is refused, is not a file, or changed while being opened.
+    """
     real = ws.resolve(args.get("path"))
     if not os.path.isfile(real):
         raise ReadfsError(f"'{args.get('path')}' is not a file")
-    data, size = _open_regular(ws, real, MAX_READ_BYTES + 1)
-    if _is_binary(data[:_BINARY_SNIFF]):
-        return f"{ws.rel(real)}: binary file, {size} bytes (not shown)"
-    truncated_bytes = len(data) > MAX_READ_BYTES
-    lines = data[:MAX_READ_BYTES].decode("utf-8", errors="replace").splitlines()
     offset = max(int(args.get("offset") or 1), 1)
     limit = min(max(int(args.get("limit") or MAX_READ_LINES), 1), MAX_READ_LINES)
-    window = lines[offset - 1: offset - 1 + limit]
-    last = offset - 1 + len(window)
-    header = f"{ws.rel(real)} (lines {offset}-{last} of {len(lines)}{'+' if truncated_bytes else ''}; {size} bytes)"
-    body = "\n".join(f"{offset + i:6d}  {line[:MAX_LINE_CHARS]}" for i, line in enumerate(window))
-    more = last < len(lines) or truncated_bytes
-    return f"{header}\n{body}" + ("\n[truncated: call again with a larger offset]" if more else "")
+    with _opened(ws, real) as (fh, size):
+        if _is_binary(fh.read(_BINARY_SNIFF)):
+            return f"{ws.rel(real)}: binary file, {size} bytes (not shown)"
+        fh.seek(0)
+        lines = _iter_lines(fh)
+        seen = 0
+        while seen < offset - 1 and next(lines, None) is not None:
+            seen += 1
+        body: list[str] = []
+        used = 0
+        byte_capped = more = False
+        if seen == offset - 1:
+            for line in lines:
+                numbered = f"{offset + len(body):6d}  {line[:MAX_LINE_CHARS]}"
+                cost = len(numbered.encode("utf-8")) + 1
+                if len(body) >= limit or used + cost > MAX_READ_BYTES:
+                    byte_capped, more = len(body) < limit, True
+                    break
+                body.append(numbered)
+                used += cost
+        last = offset - 1 + len(body)
+        seen += len(body) + more
+        exact = True
+        if more:
+            stop_at = fh.tell() + _COUNT_AHEAD_BYTES
+            for _ in lines:
+                seen += 1
+                if fh.tell() > stop_at:
+                    exact = False
+                    break
+    header = f"{ws.rel(real)} (lines {offset}-{last} of {seen}{'' if exact else '+'}; {size} bytes)"
+    text = f"{header}\n" + "\n".join(body)
+    if not more:
+        return text
+    why = f"{MAX_READ_BYTES}-byte per-call limit" if byte_capped else f"{len(body)}-line window"
+    return f"{text}\n[truncated at the {why}: more lines follow; call again with offset={last + 1}]"
 
 
 def _tool_list_dir(ws: Workspace, args: dict[str, Any]) -> str:

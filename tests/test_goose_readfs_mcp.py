@@ -16,6 +16,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -293,6 +294,90 @@ def test_large_file_skip_is_reported(mod, ws, tree, monkeypatch):
     monkeypatch.setattr(mod, "MAX_GREP_FILE_BYTES", 50)
     text, _ = _call(mod, ws, "grep", pattern="needle", glob="huge.log")
     assert "[skipped 1 file(s) over 50 bytes]" in text
+
+
+# --- per-call read bound (M6-F2): every offset is reachable --------------------------------
+
+
+def _body(text):
+    """The numbered lines of a read_file result (no header, no hint)."""
+    return [ln for ln in text.split("\n")[1:] if not ln.startswith("[truncated")]
+
+
+def _page_through(mod, ws, path, **extra):
+    """Read ``path`` by successive offset calls, following each hint; return (lines, results)."""
+    offset, seen, results = 1, [], []
+    for _ in range(10000):
+        text, err = _call(mod, ws, "read_file", path=path, offset=offset, **extra)
+        assert not err, text
+        results.append(text)
+        seen += [ln[8:] for ln in _body(text)]
+        hint = re.search(r"call again with offset=(\d+)\]$", text)
+        if not hint:
+            return seen, results
+        assert int(hint.group(1)) == offset + len(_body(text))  # the hint names the next unread line
+        offset = int(hint.group(1))
+    raise AssertionError("paging did not terminate")
+
+
+def test_file_over_one_mib_is_fully_readable_by_offset(mod, ws, tree):
+    lines = [f"row {i:07d} " + "x" * 600 for i in range(2500)]  # ~1.5 MiB, past the old 256 KiB wall
+    (tree[0] / "large.txt").write_text("\n".join(lines) + "\n")
+    assert (tree[0] / "large.txt").stat().st_size > 1024 * 1024
+    seen, results = _page_through(mod, ws, "large.txt")
+    assert seen == lines
+    assert len(results) > 2
+    for text in results:
+        assert len("\n".join(_body(text)).encode()) <= mod.MAX_READ_BYTES  # each call at most 256 KiB
+    assert "per-call limit" in results[0] and "offset=" in results[0]
+    assert "[truncated" not in results[-1]  # no hint once the end is reached
+    assert "of 2500;" in results[-1]
+
+
+def test_line_window_hint_and_exact_tail(mod, ws, tree):
+    (tree[0] / "lines.txt").write_text("".join(f"l{i}\n" for i in range(1, 51)))
+    text, _ = _call(mod, ws, "read_file", path="lines.txt", offset=10, limit=5)
+    assert "lines 10-14 of 50;" in text and text.endswith("call again with offset=15]")
+    assert "5-line window" in text
+    text, _ = _call(mod, ws, "read_file", path="lines.txt", offset=46, limit=5)
+    assert "lines 46-50 of 50;" in text and "[truncated" not in text
+    text, _ = _call(mod, ws, "read_file", path="lines.txt", offset=99)
+    assert "of 50;" in text and "[truncated" not in text
+
+
+def test_total_is_marked_approximate_when_not_counted(mod, ws, tree, monkeypatch):
+    monkeypatch.setattr(mod, "_COUNT_AHEAD_BYTES", 10)
+    monkeypatch.setattr(mod, "_READ_CHUNK", 64)
+    (tree[0] / "many.txt").write_text("".join(f"line {i}\n" for i in range(5000)))
+    text, _ = _call(mod, ws, "read_file", path="many.txt", limit=3)
+    header = text.split("\n", 1)[0]
+    assert re.search(r"lines 1-3 of \d+\+;", header) and "of 5000;" not in header
+    assert text.endswith("call again with offset=4]")
+
+
+def test_streaming_keeps_splitlines_numbering(mod, ws, tree, monkeypatch):
+    """Chunk edges (a CRLF or a multibyte char split across reads) do not shift numbering."""
+    monkeypatch.setattr(mod, "_READ_CHUNK", 3)
+    content = "a\r\nbé c\x0cd\re\n\nlast"
+    (tree[0] / "mixed.txt").write_text(content, newline="")
+    text, _ = _call(mod, ws, "read_file", path="mixed.txt")
+    assert [ln[8:] for ln in _body(text)] == content.splitlines()
+
+
+def test_overlong_line_is_cut_and_paging_continues(mod, ws, tree):
+    (tree[0] / "wide.txt").write_text("y" * (3 * 1024 * 1024) + "\nafter\n")
+    text, _ = _call(mod, ws, "read_file", path="wide.txt")
+    body = _body(text)
+    assert len(body) == 2 and len(body[0]) == 8 + mod.MAX_LINE_CHARS and body[1].endswith("after")
+
+
+def test_binary_and_outward_link_still_refused_after_paging_change(mod, ws, tree):
+    (tree[0] / "late.bin").write_bytes(b"text\n" * 10 + b"\x00" + b"more\n" * 10)
+    text, err = _call(mod, ws, "read_file", path="late.bin", offset=5)
+    assert not err and "binary file" in text and "\x00" not in text
+    (tree[0] / "out.txt").symlink_to(tree[1] / "secret.txt")
+    text, err = _call(mod, ws, "read_file", path="out.txt", offset=1)
+    assert err and "outside the workspace" in text and "outside secret" not in text
 
 
 # --- read-only by construction (a tripwire scan, itself mutation-tested) --------------------

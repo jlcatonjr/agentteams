@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (Goose readfs `read_file`: the 256 KiB bound is per call, not per file, M6-F2) — 1.0.x, held until after v1.0.0
+
+- **Consumers must re-render.** The shipped server `agentteams/data/goose-readfs-mcp.py` changed, so its pinned
+  sha256 (`READFS_SHA256` in `agentteams/frameworks/goose_tool_scoping.py`, and its entry in
+  `references/enforcement-integrity.json`) changed too. A Goose team rendered before this fix keeps the old server,
+  and its launch-integrity check will not match the new pin until the team is re-rendered.
+- `read_file` used to read only the first 256 KiB of a file before splitting it into lines. No `offset` could reach
+  anything past that, and the hint "call again with a larger offset" was wrong for large files.
+- It now streams the file in 64 KiB chunks. It returns the window that starts at `offset`, capped at 2000 lines and
+  256 KiB of numbered content per call, so every line of any size of file can be reached. Line numbering still
+  follows `str.splitlines`, so it matches `grep`.
+- The hint now names the exact next offset and the limit that stopped the read. If counting the total line count
+  would mean scanning more than 8 MiB past the window, the header shows the count so far as `N+`.
+- The parameters (`path`, `offset`, `limit`) are unchanged. So are the binary sniff, the workspace, outward-link and
+  deny-list refusals, and `MAX_LINE_CHARS`. `agentteams/frameworks/goose_tool_scoping.py` changed only in its pin.
+
 ### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.x, held until after v1.0.0
 
 - The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.
