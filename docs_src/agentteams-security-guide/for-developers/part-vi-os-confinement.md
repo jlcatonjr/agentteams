@@ -123,7 +123,7 @@ The **PreToolUse hook** the harness runs **before** each tool call, enforcing
 C-4/C-5 on **agent-initiated** actions — the counterpart to `security_gate.py`,
 which only guards CLI entry points that agent `Bash`/`Write` never reach. Because
 the *harness* runs it, it is "not merely another file the agents can edit on their
-way past it" (`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`).
+way past it" (`agentteams/templates/universal/hooks/constitutional-gate.py`).
 
 **Split verdict:**
 
@@ -172,4 +172,4 @@ a missing line means no evidence, not a pass.
 `agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
 `references/agentteams-remediation-log.csv` (D-3);
 `agentteams/cli/artifacts.py:321-411`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+`agentteams/templates/universal/hooks/constitutional-gate.py`.

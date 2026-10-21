@@ -83,7 +83,7 @@ fallible model (S5), several layers are procedural rather than code-enforced
 `.claude/CLAUDE.md` Constitutional Core;
 `agentteams/templates/universal/security.template.md`;
 `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
-`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring, fail-open paragraph)
 (fail-open default). Full line-precise treatment: Edition R, S1.
 
 ## Two surfaces and where enforcement lives  ✅/⚙ {#S2}
@@ -136,7 +136,7 @@ A reviewer should treat these four sentences as the load-bearing residual-risk
 list for the whole system.
 
 **Source.** `SECURITY.md` §threat-model; `agentteams/cli/security_gate.py:1-10`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-49`;
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring);
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44`.
 Full treatment: Edition R, S2.
 

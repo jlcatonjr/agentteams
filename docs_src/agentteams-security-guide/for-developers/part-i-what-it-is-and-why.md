@@ -33,7 +33,7 @@ inert until wired**:
 
 | Knob | Default | Cost of the default |
 |---|---|---|
-| Privilege profile (`--privilege-profile`) | `confined` as of 2026-W39 (`agentteams/host_features.py:184`, `DEFAULT_PRIVILEGE_PROFILE`) | OS write-confinement boundary **emitted** as an inert example (merge to enforce); the PreToolUse hook stays **fail-open** because the flip needs an *explicit* `confined`/`exclusive` (`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`) |
+| Privilege profile (`--privilege-profile`) | `confined` as of 2026-W39 (`agentteams/host_features.py:184`, `DEFAULT_PRIVILEGE_PROFILE`) | OS write-confinement boundary **emitted** as an inert example (merge to enforce); the PreToolUse hook stays **fail-open** because the flip needs an *explicit* `confined`/`exclusive` (`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring, fail-open paragraph)) |
 | Runtime OS confinement | emitted but inert | Enforces only once you wire the emitted example in; select `confined`/`exclusive` explicitly to also flip the hook fail-closed (S18) |
 
 Reading "layered stack" as "every layer is armed out of the box" is the exact
@@ -48,7 +48,7 @@ and the strongest OS locks are off unless armed.
 `.claude/CLAUDE.md` Constitutional Core;
 `agentteams/templates/universal/security.template.md`;
 `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
-`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`.
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring, fail-open paragraph).
 
 ## Two surfaces and where enforcement lives  ✅/⚙ {#S2}
 
@@ -80,7 +80,7 @@ integrity manifest beside the files it protects is a *speed bump, not a boundary
 verified on **Linux**, not macOS — macOS Seatbelt is unverified (S18).
 
 **Source.** `SECURITY.md` §threat-model; `agentteams/cli/security_gate.py:1-10`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-49`;
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring);
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44`.
 
 ---

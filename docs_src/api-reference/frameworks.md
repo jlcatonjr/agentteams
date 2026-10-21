@@ -332,7 +332,7 @@ Adapter for the cross-tool `AGENTS.md` standard.
 - `required_front_matter_keys()` is `()`, stated explicitly rather than left as an unexamined default.
 - Shared-namespace note: `--framework goose` also writes a repo-root `AGENTS.md`; if a project uses both, the emitted file carries a one-line generated notice to that effect (see `references/bridge-refresh-safety.md`).
 - **No ownership guard (known gap):** `guard_rendered_files` is the base no-op, so this adapter overwrites a Codex-, Grok- or goose-generated `AGENTS.md`, unlike those three adapters (remediation `GROK-FU-R4-SIDE-B`).
-- Generate-only: not a `--convert-from` / `--interop-from` / `--bridge-from` target — the CLI rejects those combinations.
+- Generate-only for convert/bridge: not a `--convert-from` / `--bridge-from` target — the CLI rejects those combinations. It is an `--interop-from` target (the CAI path), best-effort because its rendered output carries no front matter; see the [feature-support matrix](../cli-reference.md#feature-support-by-framework).
 
 ---
 

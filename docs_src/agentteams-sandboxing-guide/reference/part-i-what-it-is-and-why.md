@@ -54,7 +54,7 @@ as "enforced out of the box" is the overclaim this fact exists to prevent.
 
 *Source:* `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/frameworks/_sandbox_emit.py:116` `_sandbox_feature_enabled`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:205` (`_FAIL_CLOSED_ON_ERROR = False`).
+`agentteams/templates/universal/hooks/constitutional-gate.py` `_FAIL_CLOSED_ON_ERROR` (`False` by default).
 
 ---
 

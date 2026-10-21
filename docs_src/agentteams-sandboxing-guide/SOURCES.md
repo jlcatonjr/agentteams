@@ -40,10 +40,10 @@
 |---|---|
 | Ship-an-example, never write live config | `agentteams/frameworks/hooks_emit.py`; `agentteams/frameworks/claude.py` (settings example) |
 | Wiring verifiers (claude; goose, platform-honest) | `agentteams/frameworks/claude.py:320` `verify_sandbox_wiring`; `agentteams/frameworks/_goose_sandbox_emit.py:392` `verify_goose_sandbox_wiring` |
-| PreToolUse delete-authorization gate; scope + limits | `agentteams/templates/universal/hooks/constitutional-gate.py:63`; `agentteams/templates/universal/security.template.md` |
-| PR merges route to the operator: `gh [flags] pr [flags] merge`, REST `pulls/<n>/merge`, GraphQL `mergePullRequest`/`enablePullRequestAutoMerge`, any client (PR #173) | `agentteams/templates/universal/hooks/constitutional-gate.py:75-85`; `tests/test_constitutional_gate_hook.py:280-292` (gh, curl, wget, httpie, python), `:226-228` (benign non-merges) |
-| The match is over one `Bash` command string, case-insensitive (so obfuscation/splitting evades it) | `agentteams/templates/universal/hooks/constitutional-gate.py:157-161` |
-| Fail-open default; fail-closed flip under confined/exclusive | `agentteams/templates/universal/hooks/constitutional-gate.py:230` `_FAIL_CLOSED_ON_ERROR = False`; `agentteams/frameworks/claude.py` `_apply_fail_closed_policy` |
+| PreToolUse delete-authorization gate; scope + limits | `agentteams/templates/universal/hooks/constitutional-gate.py` `_BASH_REVIEW_TRIGGERS` (delete-gate patterns); `agentteams/templates/universal/security.template.md` |
+| PR merges route to the operator: `gh [flags] pr [flags] merge`, REST `pulls/<n>/merge`, GraphQL `mergePullRequest`/`enablePullRequestAutoMerge`, any client (PR #173) | `agentteams/templates/universal/hooks/constitutional-gate.py` `_BASH_REVIEW_TRIGGERS` (PR-merge rule); `tests/test_constitutional_gate_hook.py:280-292` (gh, curl, wget, httpie, python), `:226-228` (benign non-merges) |
+| The match is over one `Bash` command string, case-insensitive (so obfuscation/splitting evades it) | `agentteams/templates/universal/hooks/constitutional-gate.py` `_bash_trigger` |
+| Fail-open default; fail-closed flip under confined/exclusive | `agentteams/templates/universal/hooks/constitutional-gate.py` `_FAIL_CLOSED_ON_ERROR` (`False` by default); `agentteams/frameworks/claude.py` `_apply_fail_closed_policy` |
 
 ## Write policy & the `agentteams_runner` MCP server (SB24)
 

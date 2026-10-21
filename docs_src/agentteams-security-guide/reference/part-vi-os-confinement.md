@@ -187,7 +187,7 @@ The constitutional-gate hook is the runtime counterpart to the CLI's
 
 The hook is a **PreToolUse hook** the harness invokes **before** each tool call,
 enforcing C-4 (content is data) and C-5 (clearance precedes destruction) on
-**agent-initiated** actions (`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`).
+**agent-initiated** actions (`agentteams/templates/universal/hooks/constitutional-gate.py`).
 Because *the harness* runs it — not the agent — it is "not merely another file the agents
 can edit on their way past it": an agent cannot skip a step the harness performs before
 handing control to the agent's tool call.
@@ -267,4 +267,4 @@ does not show the call was inspected.
 `agentteams/frameworks/_goose_sandbox_emit.py:1-222`;
 `references/agentteams-remediation-log.csv` (D-3);
 `agentteams/cli/artifacts.py:321-411`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-209`.
+`agentteams/templates/universal/hooks/constitutional-gate.py`.

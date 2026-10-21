@@ -59,8 +59,8 @@ same cooperative speed bump: an obfuscated or split string (a path assembled fro
 GraphQL body, a script file that makes the call) still evades it, and a merge through a non-Bash tool
 is never seen.
 
-*Source:* `agentteams/templates/universal/hooks/constitutional-gate.py:63` (delete gate), `:75-85`
-(PR-merge rule), `:157-161` (Bash-only, case-insensitive);
+*Source:* `agentteams/templates/universal/hooks/constitutional-gate.py` `_BASH_REVIEW_TRIGGERS` (delete-gate patterns, then the PR-merge rule), `_bash_trigger`
+(Bash-only, case-insensitive);
 `agentteams/templates/universal/security.template.md` (scope + limits);
 `tests/test_constitutional_gate_hook.py:280-292` (merge spellings), `:226-228` (benign non-merges).
 
@@ -84,7 +84,7 @@ flowchart TD
     FC -->|"True (confined/exclusive)"| DENY["fail-CLOSED → deny<br/>(operator opted into a boundary)"]
 ```
 
-*Source:* `agentteams/templates/universal/hooks/constitutional-gate.py:230`;
+*Source:* `agentteams/templates/universal/hooks/constitutional-gate.py` `_FAIL_CLOSED_ON_ERROR`;
 `agentteams/frameworks/claude.py` `_apply_fail_closed_policy`.
 
 ## SB24 — The orchestrator-only write policy and the `agentteams_runner` MCP server  ✅/⚙

@@ -59,7 +59,7 @@ The honest posture throughout: a boundary is described as **"engages as tested,"
 
 *Source:* `agentteams/templates/universal/sandbox/confine-run.sh` (policy header);
 `agentteams/templates/universal/security.template.md` (delete-gate limits).
-`agentteams/templates/universal/hooks/constitutional-gate.py:75-85`; `agentteams/write_policy.py:179-240`;
+`agentteams/templates/universal/hooks/constitutional-gate.py` `_BASH_REVIEW_TRIGGERS` (PR-merge rule); `agentteams/write_policy.py:179-240`;
 `agentteams/proposals.py:109-115`; `agentteams/mcp_direct_grants.py:1-18`.
 
 > **Next:** [Part VIII — Synthesis & reference matter](part-viii-synthesis-and-reference.md).

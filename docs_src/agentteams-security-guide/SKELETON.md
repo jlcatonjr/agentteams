@@ -59,7 +59,7 @@
    overclaim this fact exists to prevent.
 **Source.** `SECURITY.md` §threat-model, §design-time-vs-runtime; `.claude/CLAUDE.md` Constitutional
 Core; `agentteams/templates/universal/security.template.md`;
-`agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`); `agentteams/templates/universal/hooks/constitutional-gate.py:22-36` (fail-open default).
+`agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`); `agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring, fail-open paragraph) (fail-open default).
 **Dial.** R Full · D Core · S Full · E Light.
 
 ### S2 — Two surfaces and where enforcement lives  ✅/⚙
@@ -79,7 +79,7 @@ Core; `agentteams/templates/universal/security.template.md`;
    OS-confinement path is **Linux** (a live-kernel bwrap deny test), while **macOS Seatbelt is
    UNVERIFIED**. These ceilings are facts, carried into every edition.
 **Source.** `SECURITY.md` §threat-model; `agentteams/cli/security_gate.py:1-10`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-49`;
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring);
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44`.
 **Dial.** R Full · D Core · S Full · E Light.
 

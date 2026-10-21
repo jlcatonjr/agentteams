@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (agents-md is an interop target; gate citations name functions, not line numbers) — 1.0.2
+
+- `docs_src/api-reference/frameworks.md` said agents-md is not an `--interop-from` target, contradicting the CLI
+  reference and the parser. It is one (best-effort: its rendered output has no front matter); only
+  `--convert-from` and `--bridge-from` refuse it (remediation GROK-RETRO-R6).
+- The security and sandboxing guides cited `constitutional-gate.py` by line number in 29 places, and every gate
+  edit made them stale. They now cite the module docstring, `_BASH_REVIEW_TRIGGERS`, `_bash_trigger` and
+  `_FAIL_CLOSED_ON_ERROR`.
+
+### docs (migration guide: a render's default network use and `--security-offline`) — 1.0.2
+
+- Step 3 (re-render) now says a render without `--security-offline` fetches the live CISA KEV, EPSS and NVD
+  feeds, names the hosts, and gives `--security-offline` and `--security-no-nvd` for renders under an egress rule
+  (remediation RENDER-NETWORK-BY-DEFAULT).
+
+### docs (Style Rules: `jsonschema` is the one runtime dependency) — 1.0.2
+
+- The self-build Style Rule said agentteams is stdlib-only with two lazy extras, but `pyproject.toml` declares
+  `jsonschema` as a runtime dependency and `canonical.py` imports it at module level (remediation
+  JSONSCHEMA-RUNTIME-DEP). The rule text comes from the descriptor's `style_rules`
+  (`.github/agents/_build-description.json`, and its bootstrap copy
+  `references/_self-build-description.template.json`), which `copilot-instructions.template.md` renders through
+  `{STYLE_RULES_SUMMARY}` into `CLAUDE.md` and `.claude/CLAUDE.md`. Both descriptors now name `jsonschema`.
+  Style Rules is a USER-EDITABLE section, so `--update --merge` keeps an existing rendered copy; edit that section
+  by hand (or re-render it fresh) to pick up the correction.
+
 ### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
 
 - Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is

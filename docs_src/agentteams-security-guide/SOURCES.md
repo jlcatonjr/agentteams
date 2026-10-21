@@ -10,8 +10,8 @@
 
 | § | Topic | Primary sources | Status |
 |---|---|---|---|
-| S1 | What agentteams security is | `SECURITY.md` (threat-model, design-time-vs-runtime); `.claude/CLAUDE.md` (Constitutional Core); `agentteams/templates/universal/security.template.md`; `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`); `hooks/constitutional-gate.py:22-36` (fail-open default) | ✅/⚙ |
-| S2 | Two surfaces & where enforcement lives | `SECURITY.md`; `agentteams/cli/security_gate.py:1-10`; `agentteams/templates/universal/hooks/constitutional-gate.py:1-49`; `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44` | ✅/⚙ |
+| S1 | What agentteams security is | `SECURITY.md` (threat-model, design-time-vs-runtime); `.claude/CLAUDE.md` (Constitutional Core); `agentteams/templates/universal/security.template.md`; `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`); `hooks/constitutional-gate.py` (module docstring, fail-open paragraph) (fail-open default) | ✅/⚙ |
+| S2 | Two surfaces & where enforcement lives | `SECURITY.md`; `agentteams/cli/security_gate.py:1-10`; `agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring); `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44` | ✅/⚙ |
 | S3 | Constitutional Core (C-1..C-5) | `.claude/CLAUDE.md`; `agentteams/templates/universal/orchestrator.template.md:121-142`; `agentteams/templates/universal/instruction-authority.reference.template.md:27-43` | ✅ |
 | S4 | Instruction-authority ordering | `agentteams/templates/universal/instruction-authority.reference.template.md:9-91`; `agentteams/audit_agent_contract.py:95-152` | ⚙ rule / ✅ presence |
 | S5 | The `@security` sentinel | `agentteams/templates/universal/security.template.md:5,28-38,49-72,76-247,250-279`; `agentteams/scan.py` | ✅ contract / ⚙ rules |
@@ -28,7 +28,7 @@
 | S16 | Redaction & feed sanitization | `agentteams/fences.py:158-161,304-403`; `agentteams/security_feed_render.py:21-60` | ✅ |
 | S17 | Infrastructure-layers model | `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-70,119-130` | ✅ ref |
 | S18 | Sandbox emission & profiles | `agentteams/host_features.py:134-261`; `agentteams/frameworks/_sandbox_emit.py:25-208`; `agentteams/frameworks/_goose_sandbox_emit.py:1-222`; `references/agentteams-remediation-log.csv` (D-3); `agentteams/cli/artifacts.py:321-411` | ✅ Linux (bwrap deny-tested) / ⚙ macOS Seatbelt UNVERIFIED, Windows |
-| S19 | The constitutional-gate hook | `agentteams/templates/universal/hooks/constitutional-gate.py:1-209` | ✅ (fail-closed under confined/exclusive; fail-open default) |
+| S19 | The constitutional-gate hook | `agentteams/templates/universal/hooks/constitutional-gate.py` | ✅ (fail-closed under confined/exclusive; fail-open default) |
 | S20 | Threat-intelligence watch | `agentteams/security_refs.py:42-70,710-917`; `agentteams/security_feed_render.py:21-144`; `agentteams/templates/universal/security-vulnerability-watch.reference.template.md` | ✅ |
 | S21 | Red-team methodology | `agentteams/templates/universal/redteam-methodology.reference.template.md:22-239`; `agentteams/redteam/registry.py:36-55`; `agentteams/redteam/runner.py:39-79`; `agentteams/redteam/selfaudit.py:33-101`; `agentteams/redteam/cycle.py:1-215` | ✅ |
 | S22 | Integrity manifests | `agentteams/integrity.py:1-188`; `agentteams/cli/commands.py:170-266` | ✅ |

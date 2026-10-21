@@ -129,7 +129,7 @@ flowchart LR
    of the box, the boundary is emitted but dormant until wired.
 **Source.** `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
 `agentteams/frameworks/_sandbox_emit.py:116` `_sandbox_feature_enabled`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:230` (`_FAIL_CLOSED_ON_ERROR = False`).
+`agentteams/templates/universal/hooks/constitutional-gate.py` `_FAIL_CLOSED_ON_ERROR` (`False` by default).
 **Dial.** R Full · D Full · S Core · E Light (mandatory ceiling #1).
 
 ---
@@ -434,8 +434,8 @@ flowchart TD
    pattern match over one `Bash` command string, so an obfuscated or split string (the path assembled
    from variables, an encoded GraphQL body, a script file that does the call) still evades it, and a
    merge made through a non-Bash tool is not seen at all.
-**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:63` (delete gate), `:75-85`
-(PR-merge rule), `:157-161` (Bash-only, case-insensitive match);
+**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py` `_BASH_REVIEW_TRIGGERS` (delete-gate patterns, then the PR-merge rule), `_bash_trigger`
+(Bash-only, case-insensitive match);
 `agentteams/templates/universal/security.template.md` (scope + limits);
 `tests/test_constitutional_gate_hook.py:226-228` (benign non-merges), `:280-292` (merge spellings incl.
 curl/wget/httpie/python).
@@ -447,7 +447,7 @@ curl/wget/httpie/python).
    so a buggy gate never bricks a cooperative session. Under an **explicit** `confined`/`exclusive`, emission flips the
    sentinel to `_FAIL_CLOSED_ON_ERROR = True` (unless `--allow-fallback-fail-open`), so a crash emits a
    `deny` rather than a silent allow — the operator opted into a boundary a crash must not drop.
-**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py:230`
+**Source.** `agentteams/templates/universal/hooks/constitutional-gate.py` `_FAIL_CLOSED_ON_ERROR`
 (`_FAIL_CLOSED_ON_ERROR = False`); `agentteams/frameworks/claude.py` `_apply_fail_closed_policy`.
 **Dial.** R Full · D Full · S Core · E Light.
 
@@ -659,7 +659,7 @@ flowchart LR
    codex only through its launcher + role gate, and not Copilot.
 **Source.** `agentteams/templates/universal/sandbox/confine-run.sh` (policy header);
 `agentteams/templates/universal/security.template.md` (delete-gate limits);
-`agentteams/templates/universal/hooks/constitutional-gate.py:75-85`; `agentteams/write_policy.py:179-240`;
+`agentteams/templates/universal/hooks/constitutional-gate.py` `_BASH_REVIEW_TRIGGERS` (PR-merge rule); `agentteams/write_policy.py:179-240`;
 `agentteams/proposals.py:109-115`; `agentteams/mcp_direct_grants.py:1-18`.
 **Dial.** R Full · D Core · S Full · E Core (mandatory ceiling #4 restated).
 

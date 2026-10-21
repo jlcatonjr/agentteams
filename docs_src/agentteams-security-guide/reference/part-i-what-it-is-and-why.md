@@ -64,7 +64,7 @@ profile is `confined` (`agentteams/host_features.py:184`,
 write-confinement boundary — but only as a settings/config example the operator
 must merge, so it enforces nothing until wired. The PreToolUse constitutional-gate
 hook still stays **fail-open by default**
-(`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`); its
+(`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring, fail-open paragraph)); its
 fail-open→fail-closed flip requires an *explicit* `confined`/`exclusive`, not the
 defaulted `confined`. Opt out of the emitted boundary with `cooperative`. Reading
 "layered stack" as "every layer is enforced out of the box" is the overclaim this
@@ -81,7 +81,7 @@ code-enforced (S2), and the strongest OS locks are off unless armed.
 `.claude/CLAUDE.md` Constitutional Core;
 `agentteams/templates/universal/security.template.md`;
 `agentteams/host_features.py:184` (`DEFAULT_PRIVILEGE_PROFILE = "confined"`);
-`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring, fail-open paragraph)
 (fail-open default).
 
 ## Two surfaces and where enforcement lives  ✅/⚙ {#S2}
@@ -130,7 +130,7 @@ states what it *buys* and what it *cannot*:
 These ceilings are facts, not caveats — they ship in every edition unsoftened.
 
 **Source.** `SECURITY.md` §threat-model; `agentteams/cli/security_gate.py:1-10`;
-`agentteams/templates/universal/hooks/constitutional-gate.py:1-49`;
+`agentteams/templates/universal/hooks/constitutional-gate.py` (module docstring);
 `agentteams/templates/universal/security-infrastructure-layers.reference.template.md:31-44`.
 
 ---

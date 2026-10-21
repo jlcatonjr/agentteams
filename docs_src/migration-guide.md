@@ -120,6 +120,11 @@ agentteams --description <brief> --framework <fw> --output <team dir> --migrate-
   hook copies. `--verify-integrity` flags them until it has run.
 - **Grok teams:** follow the `[GROK-SCOPE]` notices, then `--reconcile-front-matter --reconcile-apply` if needed.
   Re-adding capability keys is a C-3 change, so review each `[CAPABILITY GRANT CHANGED]` line.
+- **Network use:** a render without `--security-offline` fetches the live CISA KEV, EPSS and NVD feeds
+  (`www.cisa.gov`, `api.first.org`, `services.nvd.nist.gov`) for the generated security references. Where the
+  render runs under an egress rule, add `--security-offline` to use the cached snapshot instead, or
+  `--security-no-nvd` to drop only the NVD lookups. With no cache to fall back to, the snapshot is marked stale and
+  write-capable commands block until it is refreshed (see [`--security-offline`](cli-reference.md#--security-offline)).
 
 The re-render installs the 1.0 gate and its pin, and renames old loadable backup files and sidecars.
 
