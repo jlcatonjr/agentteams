@@ -254,7 +254,7 @@ class IntegrityFinding:
     rel_path: str
     expected: str
     actual: str
-    reason: str  # "modified" | "missing" | "unmanifested" | "manifest-missing"
+    reason: str  # "modified" | "missing" | "unreadable" | "unmanifested" | "manifest-missing"
 
     def describe(self) -> str:
         if self.reason == "manifest-missing":
@@ -451,13 +451,16 @@ def verify(repo_root: Path) -> list[IntegrityFinding]:
         got = actual.get(rel, "")
         if got and got == expected:
             continue
-        if not got and rel in INSTALLED_COPIES:
+        present = (repo_root / rel).exists()
+        if not present and rel in INSTALLED_COPIES:
             # A per-install copy legitimately absent here (see INSTALLED_COPIES). Absence is
-            # benign; a PRESENT copy that differs is still caught by the `modified` branch below.
+            # benign and judged by exists(), never by an empty digest (GROK-FU-R2-SIDE-B): _digest
+            # also returns "" for a present but unreadable copy, which is reported below, as is a
+            # PRESENT copy that differs.
             continue
         # An empty recorded digest is not a pin: "" == "" for an ordinary module means a re-record
         # ran while it was absent or unreadable, and passing it would erase the control's pin.
-        reason = "missing" if not got else "modified"
+        reason = "modified" if got else ("unreadable" if present else "missing")
         findings.append(IntegrityFinding(rel_path=rel, expected=expected, actual=got, reason=reason))
     # A module added to ENFORCEMENT_MODULES but absent from the manifest is unverified. Report
     # it rather than passing silently: the failure mode of the manifest is under-coverage.

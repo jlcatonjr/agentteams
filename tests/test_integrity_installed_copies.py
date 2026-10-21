@@ -162,3 +162,16 @@ def test_an_absent_installed_copy_recorded_empty_still_verifies(tmp_path: Path) 
     # The "" == "" refusal is for ordinary modules; an installed copy may be legitimately absent.
     integrity.write_manifest(_tree(tmp_path, skip=tuple(integrity.INSTALLED_COPIES)))
     assert integrity.verify(tmp_path) == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads files regardless of mode")
+def test_verify_flags_a_present_but_unreadable_installed_copy(recorded: Path) -> None:
+    # GROK-FU-R2-SIDE-B: verify judged absence by an empty digest (`not got`), so a copy that is
+    # present but unreadable was skipped as benignly absent. Absence is judged by exists() now.
+    copy = recorded / CLAUDE_COPY
+    copy.chmod(0)
+    try:
+        findings = integrity.verify(recorded)
+    finally:
+        copy.chmod(0o644)
+    assert [(f.rel_path, f.reason) for f in findings] == [(CLAUDE_COPY, "unreadable")]

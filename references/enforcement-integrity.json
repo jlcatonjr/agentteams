@@ -50,7 +50,7 @@
     "agentteams/front_matter_reconcile.py": "e07758e1606ea49553959009d22698933fd9e0d0c3069a64d64096bb838140fe",
     "agentteams/git_exec.py": "4ddf3486c7d54369907f2af17ad630d858fd6ab3dd2e6f8b0eeb402a965f7742",
     "agentteams/grok_config_emit.py": "7d404aaa73ea67c6b11a8c82248ffd7f4a1bc56afb9ab25bda80e964e9bdfb7d",
-    "agentteams/integrity.py": "a5863aedf65d4ed95ef60bd1bb76d60d04ff8422d113cd51edddb759eac1829c",
+    "agentteams/integrity.py": "3992fa0d78e192273d5bff013158e0c3dd5268f412f42322ee5ac313a66bdbb5",
     "agentteams/learned_blocks.py": "2df7c5432bfd85e3eefc19f51561a38c04fc29d6e07d484a25c2e82a08eae1fb",
     "agentteams/mcp_direct_grants.py": "99fc3804eeed4b92214242c63a8463a9f99ab681e038bc82bb90db0bdf89a895",
     "agentteams/proposal_policy.py": "1432a649589b0cd348a901622503aad5e487d7568ec5ad1fe786124e613cbdff",

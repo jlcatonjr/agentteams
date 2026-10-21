@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (integrity: a present but unreadable installed hook copy is a finding, not an absence) — 1.0.2
+
+- `integrity.verify` skipped an installed constitutional-gate copy whenever its digest was empty, and `_digest`
+  returns `""` for a present but unreadable file too, so such a copy passed as "benignly absent"
+  (GROK-FU-R2-SIDE-B, @security). Absence is now judged by `exists()`, as `write_manifest` already does.
+- A present file that cannot be read is reported with the reason `unreadable` (any pinned module); an absent
+  installed copy still verifies.
+- `integrity.py` changes, and its pin in `references/enforcement-integrity.json` moves.
+
 ### fix (integrity: a re-record cannot erase a missing control's pin) — 1.0.2
 
 - Re-recording the enforcement manifest while an ordinary pinned module (not one of the two gitignored installed
