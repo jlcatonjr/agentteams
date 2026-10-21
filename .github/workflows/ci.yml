@@ -83,11 +83,11 @@ jobs:
         run: pytest tests/test_template_lineage.py -v
 
   # Follow-up #5 (2026-09-30): the goose Seatbelt profile under the REAL sandbox-exec on an unnested
-  # macOS runner, plus the macOS launcher gate. ADVISORY until 2026-10-14 (remediation row
-  # macos-seatbelt-job-required): a red result is visible but does not block merges yet.
+  # macOS runner, plus the macOS launcher gate. REQUIRED since 1.0.2 (the 2026-10-14 advisory sunset passed;
+  # @security 2026-10-21): a red result blocks, and AGENTTEAMS_REQUIRE_SEATBELT makes a missing Seatbelt fail the
+  # run instead of skipping its tests.
   macos-seatbelt:
     runs-on: macos-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
 
@@ -101,7 +101,8 @@ jobs:
       - name: Goose Seatbelt mechanism probes (sandbox-exec)
         env:
           RUN_GOOSE_SEATBELT_PROBES: "1"
-        run: pytest -v tests/test_goose_seatbelt_mechanism.py tests/test_os_sandbox_enforcement.py tests/test_confinement.py
+          AGENTTEAMS_REQUIRE_SEATBELT: "1"
+        run: pytest -v tests/test_goose_seatbelt_mechanism.py tests/test_os_sandbox_enforcement.py tests/test_confinement.py tests/test_sandbox_hardening_battery.py
 
       - name: macOS launcher gate (mac-escape-tests.sh)
         run: |

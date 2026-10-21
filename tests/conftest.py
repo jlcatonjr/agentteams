@@ -153,7 +153,29 @@ def _snapshot_watched_tree():
 
 
 def pytest_sessionstart(session):  # noqa: D103
+    _require_os_sandbox()
     _tree_watch["prev"] = _snapshot_watched_tree()
+
+
+def _require_os_sandbox() -> None:
+    """Fail the whole run, never skip, when CI requires a usable OS sandbox and none is available.
+
+    The sandbox tests skip when ``confinement.available()`` finds no usable mechanism, which is right inside an
+    already-sandboxed session (Seatbelt can't nest; GROK-FU-RETRO-B1). On a CI runner that should have one, a
+    broken ``sandbox-exec`` would turn every enforcement test into a silent skip, so the job that runs them sets
+    ``AGENTTEAMS_REQUIRE_SEATBELT=1`` (or ``AGENTTEAMS_REQUIRE_BWRAP=1``) and a missing mechanism stops the run
+    (@security, 2026-10-21).
+    """
+    wanted = [m for m, var in (("seatbelt", "AGENTTEAMS_REQUIRE_SEATBELT"), ("bwrap", "AGENTTEAMS_REQUIRE_BWRAP"))
+              if os.environ.get(var) == "1"]
+    if not wanted:
+        return
+    from agentteams import confinement
+
+    got = confinement.available()
+    if got not in wanted:
+        raise pytest.UsageError(f"an OS sandbox ({' or '.join(wanted)}) is required here, but "
+                                f"confinement.available() found {got!r}; the sandbox tests would only skip")
 
 
 def pytest_runtest_teardown(item, nextitem):  # noqa: D103
