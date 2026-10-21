@@ -176,14 +176,20 @@ def test_input_hmac_recomputes_from_the_canonical_tool_input(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize("weak", ["k3y", "...", "changeme", "a" * 40, "x" * 31])
-def test_a_weak_gate_log_key_writes_no_record_and_never_changes_the_decision(tmp_path: Path, weak: str) -> None:
-    """HMAC-KEY-STRENGTH-REMAINING: a short or placeholder AGENTTEAMS_GATE_LOG_KEY made a forgeable input_hmac."""
+def test_a_weak_gate_log_key_records_unsigned_and_never_changes_the_decision(tmp_path: Path, weak: str) -> None:
+    """HMAC-KEY-STRENGTH-REMAINING: a short or placeholder AGENTTEAMS_GATE_LOG_KEY made a forgeable input_hmac.
+
+    The decision is still recorded (a weak key must not shrink the audit trail, @security 2026-10-21), unsigned and
+    marked ``input_hmac_status: weak-key``.
+    """
     log = tmp_path / "gate.jsonl"
     payload = _bash("rm -rf build")
     plain = _run(payload)
     weak_run = _run(payload, {"AGENTTEAMS_GATE_LOG": str(log), "AGENTTEAMS_GATE_LOG_KEY": weak})
     assert (weak_run.stdout, weak_run.returncode) == (plain.stdout, plain.returncode)
-    assert not log.exists() or log.read_text() == ""
+    records = _lines(log)
+    assert len(records) == 1
+    assert records[0]["input_hmac"] is None and records[0]["input_hmac_status"] == "weak-key"
     assert "AGENTTEAMS_GATE_LOG_KEY is too weak" in weak_run.stderr
 
 

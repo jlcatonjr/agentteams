@@ -626,7 +626,8 @@ def _input_hmac(tool_input: object) -> "str | None":
 
     Raises:
         ValueError: The key is under 32 bytes, a placeholder or one repeated character. Anyone who can
-            guess it could forge ``input_hmac``, so the record is not written (HMAC-KEY-STRENGTH-REMAINING).
+            guess it could forge ``input_hmac``, so the caller records the decision unsigned, marked
+            ``input_hmac_status: weak-key`` (HMAC-KEY-STRENGTH-REMAINING).
     """
     key = os.environ.get("AGENTTEAMS_GATE_LOG_KEY", "")
     if not key:
@@ -692,8 +693,15 @@ def _log_decision(payload: object, decision: str, reason_id: "str | None", check
             "fail_closed": _FAIL_CLOSED_ON_ERROR,
             "reexec": os.environ.get(_REEXEC_ENV) == "1",
             "gate_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            "input_hmac": _input_hmac(fields.get("tool_input")),
         }
+        # A weak key never signs, but the decision is still recorded, unsigned and marked (@security
+        # 2026-10-21): skipping the record would let a weak key shrink the audit trail.
+        try:
+            record["input_hmac"] = _input_hmac(fields.get("tool_input"))
+            record["input_hmac_status"] = "ok" if record["input_hmac"] else "no-key"
+        except ValueError as exc:
+            record["input_hmac"], record["input_hmac_status"] = None, "weak-key"
+            sys.stderr.write(f"constitutional-gate: {exc}; this record is unsigned\n")
         _append_chained(target, record)
     except (OSError, ValueError, RuntimeError) as exc:  # RuntimeError: resolve() on a symlink loop, py<3.13
         sys.stderr.write(f"constitutional-gate: decision log not written ({type(exc).__name__}: {exc})\n")

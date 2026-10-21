@@ -16,14 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   listed as not checked. It is an advisory: the chain verdict and the exit code are unchanged.
 - `cli/decision_chain.py` changes, and its pin in `references/enforcement-integrity.json` moves.
 
-### fix (gate decision log: a weak `AGENTTEAMS_GATE_LOG_KEY` writes no record) — 1.0.2
+### fix (gate decision log: a weak `AGENTTEAMS_GATE_LOG_KEY` never signs a record) — 1.0.2
 
 - rc.12's `require_strong_hmac_key` covers decision rows, waivers, grants, management directives, the signed
   ledger and the proposal-ledger key. The constitutional-gate hook's optional decision-log key was still
   unchecked, so a short or placeholder `AGENTTEAMS_GATE_LOG_KEY` produced an `input_hmac` anyone could forge
   (HMAC-KEY-STRENGTH-REMAINING).
 - The hook now refuses such a key the same way (under 32 bytes, a known placeholder, or one repeated character):
-  it writes no record and prints a notice to stderr. The decision itself never changes. The hook is
+  it still writes the record, unsigned (`input_hmac: null`) and marked `input_hmac_status: "weak-key"`, and prints a
+  notice to stderr, so a weak key never shrinks the audit trail. Records now carry `input_hmac_status` (`ok`,
+  `no-key` or `weak-key`). The decision itself never changes. The hook is
   self-contained, so it restates the rule, and a test pins it equal to `cli/signed_ledger.py`'s.
 - The gate template changes, and its pin and the two installed-copy pins in
   `references/enforcement-integrity.json` move to the new template digest. Re-install the hook (`--update`)
@@ -59,6 +61,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `modified` once it is back) until it is restored and re-recorded, so `--write-integrity-manifest` refuses to
   report success. `write_manifest` still records `""`, now with a WARNING naming the module.
 - An absent installed hook copy recorded as `""` still verifies, as before.
+- **Migration:** a manifest that already holds `""` for an ordinary module (for example one written by
+  `--write-integrity-manifest` run outside the source tree) now fails `--verify-integrity` (exit 1) until that module
+  is restored and the manifest re-recorded. This is intended: such a pin protected nothing. If the module is
+  `agentteams/scan.py`, the gate asks the operator on every write until then.
 - `integrity.py` changes, and its pin in `references/enforcement-integrity.json` moves.
 
 ### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
