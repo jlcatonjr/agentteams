@@ -220,6 +220,9 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     battery, leaving no CLI path to heed the man page's "review the diff" guidance
     (remediation log, 2026-08-13). An enforcement-module mismatch exits 1.
 
+    Also lists, as an advisory that does not change the exit code, every authorizing or retraction row of the
+    decisions log that fails authentication (``decision_chain._describe_unauthenticated_rows``).
+
     Also checks the governance CSV logs (:mod:`agentteams.governance_logs`): a malformed log (a field count off the
     header's, a quote open at end of file, or a field that swallowed later dated rows) exits 1, with or without a
     build-log baseline.
@@ -258,6 +261,10 @@ def _run_verify_integrity(args: argparse.Namespace) -> int:
     for line in chain_lines:
         print(line, file=sys.stderr if chain_broken else sys.stdout)
     enforcement_rc |= int(chain_broken)
+    from agentteams.cli.decision_chain import _describe_unauthenticated_rows
+
+    for line in _describe_unauthenticated_rows(output_dir):  # advisory: forged or non-authenticating rows
+        print(line)
     from agentteams.cli.decision_text import describe_text_binding
 
     for line in describe_text_binding(output_dir):  # advisory: which signed rows bind their text

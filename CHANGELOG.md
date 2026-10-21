@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (--verify-integrity names forged or non-authenticating decision rows) — 1.0.2
+
+- Since the rc.12 HALT-scan fix, a HALT-RETRACTED row that fails authentication retracts nothing and is skipped,
+  and when a later valid retraction clears the HALT the skip was never reported, so a forged row stayed invisible
+  (VERIFY-INTEGRITY-NONAUTH-ROWS, @security rc.12 review).
+- `--verify-integrity` now runs the gate's own authentication check on every PASS, CONDITIONAL PASS and
+  HALT-RETRACTED row and names each one that fails, with the reason. It is an advisory: the exit code is
+  unchanged. Rows that need the HMAC key while `AGENTTEAMS_DECISION_SIGNING_KEY` is unset are listed as not
+  checked, not as forged.
+- `cli/decision_chain.py` (the new private reporter) and `cli/decision_log.py` (a shared message constant)
+  change, and their pins in `references/enforcement-integrity.json` move.
+
 ### fix (integrity: a present but unreadable installed hook copy is a finding, not an absence) — 1.0.2
 
 - `integrity.verify` skipped an installed constitutional-gate copy whenever its digest was empty, and `_digest`

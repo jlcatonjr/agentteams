@@ -368,11 +368,15 @@ def sign_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     return _hmac_decision_row(row, key=key)
 
 
+#: The refusal when no HMAC key is configured; ``decision_chain._describe_unauthenticated_rows`` tells it from a forgery.
+_NO_SIGNING_KEY = "decision signing key is not configured"
+
+
 def _hmac_decision_row(row: dict[str, str], *, key: str | None = None) -> str:
     """The HMAC over the row exactly as it stands (no binding): the verifier side of :func:`sign_decision_row`."""
     signing_key = key if key is not None else os.getenv("AGENTTEAMS_DECISION_SIGNING_KEY", "")
     if not signing_key:
-        raise RuntimeError("decision signing key is not configured")
+        raise RuntimeError(_NO_SIGNING_KEY)
     require_strong_hmac_key(signing_key, "decision signing key")
     return hmac.new(
         signing_key.encode("utf-8"),

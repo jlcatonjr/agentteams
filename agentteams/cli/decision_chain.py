@@ -152,4 +152,69 @@ def describe_log_chain(team_dir: Path) -> tuple[list[str], bool]:
     return lines, False
 
 
+def _describe_unauthenticated_rows(output_dir: Path) -> list[str]:
+    """Advisory lines for ``--verify-integrity``: every authorizing or retraction row that fails authentication.
+
+    The HALT scan skips a retraction that does not authenticate, and a later valid retraction then
+    clears the HALT, so a forged row is never surfaced (VERIFY-INTEGRITY-NONAUTH-ROWS). This runs the
+    gate's own check (``decision_log._assert_authorizing_row_is_authentic``, plus a retraction's evidence
+    requirement) on every PASS / CONDITIONAL PASS / HALT-RETRACTED row and names each that fails.
+    A row is checked against its first ``scope`` entry, or its ``action_reviewed`` when unscoped, so
+    the question is whether it authenticates, not what it may clear. Rows that need the HMAC key when
+    none is set are listed as not checked, never as forged. Advisory: it never changes the exit code.
+
+    Args:
+        output_dir: The team root (the log is ``references/security-decisions.log.csv``).
+
+    Returns:
+        Report lines; empty when the log is absent, unreadable (reported elsewhere) or all authentic.
+    """
+    # Local import: decision_log imports this module, so a top-level import would be a cycle.
+    from agentteams.cli.decision_log import (
+        _HALT_RETRACTION_VERDICT,
+        _NO_SIGNING_KEY,
+        _assert_authorizing_row_is_authentic,
+        _decision_signing_active,
+        _read_decision_rows,
+    )
+
+    try:
+        read = _read_decision_rows(output_dir)
+    except RuntimeError:
+        return []  # describe_log_chain and check_logs report an unreadable log
+    if read is None:
+        return []
+    rows, fieldnames = read
+    signing_active = _decision_signing_active(fieldnames)
+    failed: list[str] = []
+    unchecked: list[int] = []
+    for index, row in enumerate(rows):
+        verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
+        if verdict not in {"PASS", "CONDITIONAL PASS", _HALT_RETRACTION_VERDICT}:
+            continue
+        reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
+        scoped = [part.strip() for part in (row.get("scope") or "").split(";") if part.strip()]
+        try:
+            _assert_authorizing_row_is_authentic(row, output_dir=output_dir, signing_active=signing_active,
+                                                 action=scoped[0] if scoped else reviewed)
+            evidence = (row.get("evidence") or row.get("conditions") or "").strip()
+            if verdict == _HALT_RETRACTION_VERDICT and not evidence:
+                raise RuntimeError("a retraction carries no evidence")
+        except RuntimeError as exc:
+            if str(exc) == _NO_SIGNING_KEY:
+                unchecked.append(index + 1)
+            else:
+                failed.append(f"  row {index + 1} ({verdict} {reviewed!r}): {exc}")
+    lines: list[str] = []
+    if failed:
+        lines.append(f"Decision log authentication: {len(failed)} authorizing or retraction row(s) do not "
+                     "authenticate and clear nothing (advisory; the HALT scan skips such a row silently, so "
+                     "review each as a possible forgery):")
+        lines.extend(failed)
+    if unchecked:
+        lines.append(f"Decision log authentication: not checked for row(s) {unchecked}; "
+                     "AGENTTEAMS_DECISION_SIGNING_KEY is not set")
+    return lines
+
+
 __all__ = ["ChainReport", "chain_tip", "describe_log_chain", "is_chained", "row_chain_digest", "verify_chain"]
