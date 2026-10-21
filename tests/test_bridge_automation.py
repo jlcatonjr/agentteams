@@ -1,5 +1,6 @@
 """Automation coverage for bridge maintenance script and workflows."""
 
+import re
 from pathlib import Path
 
 
@@ -29,7 +30,7 @@ def test_bridge_maintenance_workflow_invokes_script_and_uploads_summary():
     assert 'workflow_dispatch:' in text
     assert 'cron: "41 5 * * *"' in text
     assert 'bash scripts/run_daily_bridge_maintenance.sh' in text
-    assert 'uses: actions/upload-artifact@v7' in text
+    assert re.search(r'uses: actions/upload-artifact@[0-9a-f]{40} # v7', text)
     # Multi-line path list (D7 v2 added daily-pipeline alongside bridge-maintenance).
     assert 'tmp/bridge-maintenance/' in text
     assert 'tmp/daily-pipeline/' in text

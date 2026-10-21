@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Find latest successful bridge-maintenance run
         id: find-run
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const runs = await github.rest.actions.listWorkflowRuns({
@@ -50,7 +50,7 @@ jobs:
             --dir artifact || echo "download_failed=true" >>"$GITHUB_OUTPUT"
 
       - name: Evaluate staleness and manage issue
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           RUN_UPDATED_AT: ${{ steps.find-run.outputs.updated_at }}
           DOWNLOAD_FAILED: ${{ steps.download.outputs.download_failed }}

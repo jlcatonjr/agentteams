@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ci (pin workflow actions by commit SHA) — 1.0.2
+
+- WORKFLOW-ACTIONS-NOT-SHA-PINNED: every third-party `uses:` in `.github/workflows/*.yml` now names a full
+  40-character commit SHA with its tag as a trailing comment (`uses: actions/checkout@<sha> # v7`). A tag can be
+  moved by whoever controls the action's repository; a SHA cannot. Each SHA was resolved from the action's own
+  repository with `git ls-remote` (the peeled commit for annotated tags). Triggers and job logic are unchanged.
+- `tests/test_workflow_actions_pinned.py` fails on any tag- or branch-pinned `uses:`, or a pin without its tag
+  comment. Local `./` actions and `docker://` images are exempt.
+- `tests/test_bridge_automation.py` now matches the pinned `upload-artifact` line instead of `@v7`.
+
 ### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
 
 - Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is
