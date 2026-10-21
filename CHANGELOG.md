@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ci (docs publish from final release tags, not every push to `main`) — 1.0.2
+
+- 1.0 ships from signed tags on `release/1.0`, so the docs site now matches the released code. `docs.yml` runs on
+  pushed `v1.*` tags and skips release candidates (`!v1.*-rc.*`). It no longer runs on pushes to `main`.
+  `actions/checkout` checks out the triggering tag. `workflow_dispatch` stays for a manual republish.
+- Operator setting, needed before the first tag deploy: allow the tag pattern `v1.*` in the `github-pages`
+  environment (Settings > Environments > github-pages > Deployment branches and tags). Otherwise the run is rejected.
+- `framework-auto-update.yml` keeps `ref: main` on purpose: its proposals are development changes, and a backport to
+  `release/1.0` is decided per PR.
+- New `tests/test_docs_workflow.py` pins both.
+
 ### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
 
 - Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is

@@ -1,9 +1,15 @@
 name: Deploy Docs
 
+# Release-checkout model (1.0): the site is published from final release tags, so it matches the released
+# code, not every push to main. actions/checkout checks out the triggering tag. Release candidates do not
+# publish. workflow_dispatch stays for a manual republish; run it against the current release tag.
+# The github-pages environment must allow the tag pattern v1.* (Settings > Environments > github-pages >
+# Deployment branches and tags), or the tag run is rejected.
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v1.*"
+      - "!v1.*-rc.*"
   workflow_dispatch: {}
 
 permissions:
