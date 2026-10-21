@@ -16,10 +16,15 @@ pytest.importorskip("cryptography")
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
+from agentteams import confinement  # noqa: E402
 from agentteams import mcp_direct_grants as G  # noqa: E402
 from agentteams import proposal_runner as R  # noqa: E402
 from agentteams import proposals as P  # noqa: E402
 from agentteams.cli import mcp_grant_commands as C  # noqa: E402
+
+#: The runner refuses without a usable OS sandbox, which includes inside an already-sandboxed session, so tests
+#: that serve a staged write skip there rather than fail (remediation GROK-FU-RETRO-B1).
+live = pytest.mark.skipif(confinement.available() is None, reason="no usable OS sandbox here")
 
 
 @pytest.fixture(autouse=True)
@@ -175,6 +180,7 @@ def _direct(runner, nonce, content, base):
     return R.wait_result(runner.root, rid, timeout=5)
 
 
+@live
 def test_the_runner_honours_a_verified_grant_and_its_write_cap(project, operator_key):
     _sign(project, operator_key)
     runner = _runner(project)
@@ -199,6 +205,7 @@ def test_the_runner_honours_a_verified_grant_and_its_write_cap(project, operator
         runner.close()
 
 
+@live
 def test_without_a_grant_direct_is_refused(project):
     runner = _runner(project)
     try:
@@ -291,6 +298,7 @@ def test_signing_refuses_without_a_confirmed_digest(project, operator_key, monke
     assert not G.grants_file_for(project).exists()
 
 
+@live
 def test_a_verified_grant_turns_a_staged_write_into_a_direct_one(project, operator_key):
     """@security C1: generated agents always submit staged writes; the runner upgrades only on a verified grant,
     and never a deletion."""

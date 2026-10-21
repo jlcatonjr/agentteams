@@ -191,6 +191,37 @@ def test_feature_summary_total_equals_its_addends() -> None:
 _VERSION_BASELINE_RE = re.compile(r"\*\*Version baseline:\*\*\s*([0-9][^\s·]*)")
 
 
+def _installed_from_elsewhere() -> "str | None":
+    """Why the installed ``agentteams`` distribution is not this checkout, or None when it is.
+
+    ``agentteams.__version__`` is the INSTALLED distribution's version. When this interpreter's install is a
+    non-editable one (another project's venv, a pip-from-git install) or an editable install of another
+    checkout, that version belongs to a different tree, and comparing it to this tree's document is
+    meaningless (remediation GROK-FU-RETRO-B2).
+    """
+    import json
+    from importlib.metadata import PackageNotFoundError, distribution
+    from urllib.parse import unquote, urlparse
+
+    try:
+        dist = distribution("agentteams")
+    except PackageNotFoundError:
+        return "agentteams is not installed in this interpreter"
+    try:
+        direct = json.loads(dist.read_text("direct_url.json") or "{}")
+    except ValueError:
+        direct = {}
+    url = direct.get("url", "")
+    if direct.get("dir_info", {}).get("editable") and url.startswith("file:"):
+        if Path(unquote(urlparse(url).path)).resolve() == REPO_ROOT:
+            return None
+        return f"agentteams {dist.version} is an editable install of another checkout ({url})"
+    installed = Path(str(dist.locate_file("agentteams/__init__.py"))).resolve()
+    if installed.is_relative_to(REPO_ROOT):
+        return None
+    return f"agentteams {dist.version} is installed from {url or installed.parent}, not this checkout"
+
+
 def test_inventory_version_baseline_matches_the_installed_version() -> None:
     """The drift that actually caused harm was the baseline, not the per-category counts.
 
@@ -210,6 +241,11 @@ def test_inventory_version_baseline_matches_the_installed_version() -> None:
         # agentteams/__init__.py's fallback when the package isn't installed: there is no installed version to
         # compare against. CI and the dev venv install it, so the check still runs there.
         pytest.skip("agentteams is not installed in this interpreter (version 0.0.0+local)")
+    elsewhere = _installed_from_elsewhere()
+    if elsewhere:
+        # The test pins the INSTALLED version, so it runs where this checkout is the install (CI and the dev
+        # venv use `pip install -e .`), and skips rather than fails where another tree's install answers.
+        pytest.skip(elsewhere)
     text = INVENTORY.read_text(encoding="utf-8")
     match = _VERSION_BASELINE_RE.search(text)
     assert match, "feature-inventory.md states no **Version baseline:** — format changed"

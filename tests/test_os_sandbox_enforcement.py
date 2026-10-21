@@ -33,6 +33,8 @@ from pathlib import Path
 
 import pytest
 
+from agentteams import confinement
+
 # --- host gates ------------------------------------------------------------
 
 _IS_MACOS = sys.platform == "darwin"
@@ -42,11 +44,18 @@ _HAS_SEATBELT = _IS_MACOS and Path(_SANDBOX_EXEC).exists()
 _BWRAP = "/usr/bin/bwrap"
 _HAS_BWRAP = sys.platform.startswith("linux") and Path(_BWRAP).exists()
 
+# Inside an already-sandboxed process (an agent session) Seatbelt can't nest and bwrap may be
+# refused, so a present binary is not a usable mechanism: confinement.available() applies a
+# trivial profile to find out, as tests/test_confinement.py does (remediation GROK-FU-RETRO-B1).
+_USABLE = confinement.available() if (_HAS_SEATBELT or _HAS_BWRAP) else None
+
 _seatbelt = pytest.mark.skipif(
-    not _HAS_SEATBELT, reason="macOS Seatbelt (sandbox-exec) not available on this host"
+    not _HAS_SEATBELT or _USABLE != "seatbelt",
+    reason="macOS Seatbelt (sandbox-exec) not usable here (absent, or already inside a sandbox)",
 )
 _bwrap = pytest.mark.skipif(
-    not _HAS_BWRAP, reason="Linux bubblewrap (bwrap) not available on this host"
+    not _HAS_BWRAP or _USABLE != "bwrap",
+    reason="Linux bubblewrap (bwrap) not usable here (absent, or already inside a sandbox)",
 )
 
 

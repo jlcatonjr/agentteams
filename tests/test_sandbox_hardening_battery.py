@@ -14,6 +14,7 @@ import sys
 
 import pytest
 
+from agentteams import confinement
 from agentteams.frameworks._goose_sandbox_emit import (
     _build_seatbelt_profile,
     _seatbelt_egress_rule,
@@ -150,6 +151,8 @@ def test_live_confined_profile_enforces(tmp_path):
 
     if not shutil.which("sandbox-exec"):
         pytest.skip("sandbox-exec not available")
+    if confinement.available() != "seatbelt":  # already sandboxed: Seatbelt can't nest (GROK-FU-RETRO-B1)
+        pytest.skip("sandbox-exec not usable here (already inside a sandbox)")
     ws = tmp_path / "ws"
     ws.mkdir()
     prof = tmp_path / "sandbox.sb"
@@ -188,6 +191,8 @@ def test_live_profile_loads_under_sandbox_exec(tmp_path):
 
     if not shutil.which("sandbox-exec"):
         pytest.skip("sandbox-exec not available")
+    if confinement.available() != "seatbelt":  # already sandboxed: Seatbelt can't nest (GROK-FU-RETRO-B1)
+        pytest.skip("sandbox-exec not usable here (already inside a sandbox)")
     # (write_roots, deny_read, egress, deny_network) — every emitted variant must LOAD.
     variants = [
         (["."], None, None, False),                 # confined (network open)

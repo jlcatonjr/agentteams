@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (tests: sandbox and install-version tests skip where they can't run, not fail) — 1.0.2
+
+- Inside an already-sandboxed session Seatbelt can't nest, so six live tests failed there although the binary was
+  present: `test_os_sandbox_enforcement.py` (1), `test_sandbox_hardening_battery.py` (2) and
+  `test_mcp_direct_grants.py` (3, where the runner refuses without a sandbox). They now skip unless
+  `confinement.available()` finds a usable sandbox, as `test_confinement.py` does. The other Seatbelt tests in
+  `test_os_sandbox_enforcement.py` had been passing there for the wrong reason (sandbox-exec itself failing), and
+  now skip too (remediation GROK-FU-RETRO-B1).
+- `test_inventory_version_baseline_matches_the_installed_version` compared the docs with whatever agentteams the
+  interpreter had installed. A non-editable install at another version (another venv, a pip-from-git install)
+  failed it. It now runs only where the installed distribution is this checkout (an editable install of it, or
+  files under it) and skips with the install's version and source otherwise (remediation GROK-FU-RETRO-B2).
+
 ### docs (agents-md is an interop target; gate citations name functions, not line numbers) — 1.0.2
 
 - `docs_src/api-reference/frameworks.md` said agents-md is not an `--interop-from` target, contradicting the CLI
