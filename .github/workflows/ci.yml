@@ -23,7 +23,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # ubuntu-24.04, not ubuntu-latest: GitHub moved ubuntu-latest to Ubuntu 26 from 2026-10-19, where the
+        # confinement tests' expectations (EPERM wording, survivor reporting, GNU coreutils) don't hold yet.
+        # Ubuntu 26 support is a 1.0.2 must-fix; move back to ubuntu-latest with it.
+        os: [ubuntu-24.04, macos-latest]
         python-version: ["3.11", "3.12"]
 
     steps:
@@ -66,7 +69,7 @@ jobs:
   # archived pre-public history (not on origin, so unreadable here) must match the digest pinned in
   # tests/test_template_lineage.py. Full regeneration runs only where that archive is present.
   template-lineage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
