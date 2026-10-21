@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (agent templates: lessons from the v1.0.0 release wave) — 1.0.2
+
+The v1.0.0 retrospective's agent-infrastructure lessons are now in the templates that generated teams render from.
+
+- **security:** Rule S-9 now requires operator scripts that sign, merge or push to run under `#!/bin/bash -p` with an `env -i` allowlist re-exec, and to be cleared on a hostile-environment probe log as well as on review of the source.
+- **git-operations:** a new *Isolation and Release-Window Checks* section. Before any write, `git rev-parse --show-toplevel` must equal the intended path, and under the sandbox a fresh clone is preferred to a linked worktree (SANDBOX-WORKTREE-FALLBACK). PR scripts must survive a re-run and wait for CI checks to register. Merge freezes are honoured, and a rebase across a release cut is checked against the consolidated CHANGELOG.
+- **orchestrator:** a standalone re-implementation of a cleared step needs its own `@security` pass. Release coordination announces and lifts merge freezes and re-verifies the peer claims that operator decisions rest on.
+- **branch-lifecycle reference:** setting up a release line defines the `must-fix` label before a go/no-go relies on it, bumps every version-tied artefact on a merge-forward and runs the full suite on it, and rehearses from an installed wheel.
+
 ### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
 
 - Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is

@@ -47,7 +47,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=11 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=12 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -215,6 +215,10 @@ none of them is out of scope for this rule entirely, regardless of how novel it 
   step and an exec step that are individually unremarkable can still jointly match criterion 2
   or 4 once combined, and a decode step and a send step can jointly match criterion 6; a sequence that would fail a criterion if done in one step doesn't pass
   by being split across several
+- ✅ **Operator scripts that sign, merge or push** are written as `#!/bin/bash -p`, with the whole
+  body inside an `if [[ $- == *p* ]]` block, an `env -i` re-exec with an allowlist, and the environment
+  re-checked inside the clean branch. Clear one only on a hostile-environment probe log (imported
+  `BASH_FUNC_*`, `$BASH_ENV`, toolchain variables, the re-exec marker), not on its source alone
 - ✅ Log the verdict to `references/security-decisions.log.csv` (current schema:
   `date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner`) — the
   same log every other `@security` verdict already uses, not a separate mechanism

@@ -5,7 +5,7 @@ SECTION MANIFEST
 | branch_lifecycle| FENCED      |
 -->
 
-<!-- AGENTTEAMS:BEGIN branch_lifecycle v=1 -->
+<!-- AGENTTEAMS:BEGIN branch_lifecycle v=2 -->
 # Branch Lifecycle Reference — {PROJECT_NAME}
 
 The procedure for what happens to a branch after its work lands: how every branch is classified,
@@ -44,6 +44,11 @@ is never an ancestor of the default branch. `git cherry` recognizes only a squas
 *single-commit* branch, because it compares per-commit patch IDs. A Merged-by-PR branch's commits
 are **not** reachable from the default branch, so its restore path is the GitHub-retained
 `refs/pull/<n>/head`, which is why that ref is confirmed before every deletion.
+
+**Setting up a release line.** Create the `must-fix` (or backport) label before any go/no-go relies
+on it: a count of open issues under an undefined label is 0 and proves nothing, so fail closed. A
+merge-forward that bumps the version bumps every artefact a test ties to the version, and the full
+suite runs on the merge-forward tree. Rehearse the release from an installed wheel, not only the tree.
 
 **API results.** A 401, 403 or 404 on a list call, a rate limit, a network failure, or a missing
 `gh` or token all mean **unknown**, never "no PR" or "not protected".

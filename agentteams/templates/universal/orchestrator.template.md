@@ -282,7 +282,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=5 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=6 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -367,6 +367,7 @@ Before executing any such step:
 2. Verify every condition in the `conditions` column has been addressed — each mitigation must have confirmable evidence
 3. If any condition is unverified (`conditions_verified = pending`): treat as HALT and surface to the user; do not proceed
 4. If all conditions are verified: update `conditions_verified` to `verified` in the log and proceed
+5. A clearance covers the artefact it reviewed. A standalone re-implementation of a cleared step (a new script doing the same job) needs its own `@security` pass before it goes to the operator
 
 > This check is not optional. An unverified CONDITIONAL PASS blocks the operation as if HALT had been issued.
 
@@ -528,6 +529,7 @@ A workflow step may attach a workflow-specific instruction to its closeout refer
 3. If approved updates exist → invoke `@repo-liaison` → Protocol 2 (Update Adjacent Repo Docs); requires `@security` clearance on each write
 4. If the adjacent repository has its own orchestrator → invoke `@repo-liaison` → Protocol 3 (Orchestrator-to-Orchestrator Coordination). **Role-conditional surfacing:** if *this* orchestrator is acting as a **delegate** of a prime that spawned it, route the Coordination Request **up to that prime** (→ Workflow 12), not to the user; if this orchestrator is the **initiator / peer / standalone** (the ordinary case), surface the Coordination Request to the user as before. See `references/orchestrator-spawn-authority.reference.md`.
 5. After all updates: invoke `@conflict-auditor` → verify internal consistency
+   - **Release coordination.** Announce a merge freeze on every branch that a pending reviewed PR targets, and lift it explicitly; a merge to that base makes the reviewed head stale and needs a fresh review. Re-verify every peer claim an operator decision rests on (a tag, a hash, a "not set" note) against the live source (Rule 14), since peer messages go stale
 6. → **Standard Doc-Sync Closeout** — during its `@agent-updater` step, also update `references/adjacent-repos.md` with changelog entries
 
 ### Workflow 10: Plan Documentation and Review

@@ -54,6 +54,13 @@ After a merge to the default branch is pushed **and** the rule 7 CI/CD check is 
 3. A squash- or rebase-merged PR branch is not covered by the grant: its remote head is normally removed by GitHub (`delete_branch_on_merge`); the local copy is swept by `@cleanup` under clearance.
 4. Record the outcome as `Branch disposition` below. When `@orchestrator` closes a session that merged or pushed, run `agentteams --branch-inventory` and report its summary line as `Branch inventory`.
 
+## Isolation and Release-Window Checks
+
+- **Confirm where you are.** Before any git write, `git rev-parse --show-toplevel` must equal the intended path. Under a sandbox that denies reads of `.git`, a linked worktree silently falls back to the parent checkout, so prefer a fresh clone in a writable temp dir for isolated work.
+- **PR scripts survive a re-run.** A script that opens a PR and waits on CI reuses exactly one open same-repo PR (refuse forks) instead of a second `gh pr create`, polls `statusCheckRollup` until checks register before `--watch`, and re-checks after.
+- **Honour merge freezes.** Do not merge into a branch that a pending reviewed PR targets while a freeze is announced; a moved base makes every reviewed head on it stale.
+- **Rebasing across a release cut**: diff the result against the consolidated CHANGELOG (range-diff and stat), because the conflict resolver can re-add pre-release sections.
+
 ## Required GitHub Policy Alignment
 
 Follow merge and PR policy using official GitHub guidance captured in `references/github-workflows-merge.reference.md`.
