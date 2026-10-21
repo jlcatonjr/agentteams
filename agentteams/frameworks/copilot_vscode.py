@@ -266,12 +266,15 @@ _MAX_BODY_CHARS = 30_000
 
 
 def _check_body_length(body_text: str, agent_slug: str) -> None:
-    if len(body_text) > _MAX_BODY_CHARS:
+    size = len(body_text)
+    if size > _MAX_BODY_CHARS:
+        over = size - _MAX_BODY_CHARS
         warnings.warn(
-            f"{agent_slug}: agent body is {len(body_text):,} characters, exceeding "
+            f"@{agent_slug}: agent body is {size:,} characters, {over:,} ({over / _MAX_BODY_CHARS:.0%}) over "
             f"GitHub's {_MAX_BODY_CHARS:,}-character limit for custom-agent bodies "
             "(cross-surface configuration reference). The platform may truncate or "
-            "reject this file. Front matter does not count toward this limit.",
+            "reject this file. Front matter does not count toward this limit; to fit, move "
+            "long sections into references/ or skills and point to them from the body.",
             UserWarning,
             stacklevel=2,
         )

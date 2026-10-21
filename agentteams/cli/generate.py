@@ -139,7 +139,7 @@ def _run_generate_inner(
             )
 
     # Retrieval references are brief-authoritative only for a DECLARED contract (not an inferred one).
-    retrieval_inferred = bool(description.pop("_retrieval_integration_inferred", False))
+    retrieval_inferred = build_team._pop_inferred_retrieval(description)  # prints the roster notice
     brief_derived_files = (
         fences._BRIEF_DERIVED_FILES
         if "retrieval_integration" in description and not retrieval_inferred

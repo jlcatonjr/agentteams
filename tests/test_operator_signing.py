@@ -576,3 +576,51 @@ def _no_cryptography_floor_warning(monkeypatch):
     from agentteams.cli import signed_ledger
 
     monkeypatch.setattr(signed_ledger, "_CRYPTO_WARNED", [True])
+
+
+# --- SIGNER-HOME-AS-PROJECT-ROOT: name the $HOME case in the refusal ------------------------------------------------
+
+
+def _home_with_settings(tmp_path, monkeypatch) -> Path:
+    home = (tmp_path / "home").resolve()
+    (home / ".claude").mkdir(parents=True)
+    (home / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    return home
+
+
+def test_refusal_names_home_reached_through_the_user_settings(tmp_path, monkeypatch, capsys):
+    from agentteams.cli import operator_signing as O
+    from agentteams.cli import signer_location as L
+
+    home = _home_with_settings(tmp_path, monkeypatch)
+    team = home / "repo" / "team"
+    team.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    roots = O._project_roots(team)
+    assert roots[1:] == [home]  # the repo has no .claude/settings.json of its own
+    monkeypatch.setattr(L, "verify_install_location", lambda _roots: [
+        L.LocationFinding("a", True, f"sys.executable ({home}/venv/bin/python) is inside the agent-writable "
+                                     f"root {home}")])
+    assert O._location_gate(roots, allow_checkout=False) is None  # still refused: the note never relaxes it
+    err = capsys.readouterr().err
+    assert "is your home directory" in err and "~/.claude/settings.json" in err and "The refusal stands" in err
+
+
+def test_refusal_without_home_as_a_root_has_no_home_note(tmp_path, monkeypatch, capsys):
+    from agentteams.cli import operator_signing as O
+    from agentteams.cli import signer_location as L
+
+    home = _home_with_settings(tmp_path, monkeypatch)
+    repo = home / "repo"
+    (repo / ".claude").mkdir(parents=True)
+    (repo / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+    (repo / "team").mkdir()
+    monkeypatch.chdir(tmp_path)
+    roots = O._project_roots(repo / "team")
+    assert home not in roots
+    monkeypatch.setattr(L, "verify_install_location", lambda _roots: [
+        L.LocationFinding("a", True, f"the agentteams package ({repo}/agentteams) is inside the agent-writable "
+                                     f"root {repo}")])
+    assert O._location_gate(roots, allow_checkout=False) is None
+    assert "is your home directory" not in capsys.readouterr().err

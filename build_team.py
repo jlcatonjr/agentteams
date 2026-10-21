@@ -177,6 +177,22 @@ from agentteams.cli.security_gate import (
 _DUAL_DESCRIPTOR_FIELDS = ("project_name", "primary_output_dir", "reference_db_path", "deliverables")
 
 
+def _pop_inferred_retrieval(description: dict) -> bool:
+    """Pop ingest's inferred-retrieval flag; when set, say the inferred contract changes this render's roster.
+
+    4.4 root cause: only a scanning render gains @retrieval-integrator. Returns whether the contract was inferred.
+    """
+    inferred = bool(description.pop("_retrieval_integration_inferred", False))
+    if inferred:
+        mode = (description.get("retrieval_integration") or {}).get("mode", "?")
+        print(f"[NOTICE] project scanning inferred retrieval_integration (mode {mode!r}); the brief declares none. "
+              "This adds @retrieval-integrator to this render's roster. A render of the same brief without project "
+              "scanning (no --project, or --no-scan) gets no retrieval-integrator, so teams rendered for different "
+              "frameworks can diverge. Declare retrieval_integration in the brief (or set mode \"none\") to keep "
+              "rosters identical.", file=sys.stderr)
+    return inferred
+
+
 def _check_dual_descriptor(args: argparse.Namespace) -> None:
     """Advisory check: warn when a consumer repo has both the user-supplied
     descriptor and a sibling `_build-description.json` that diverges on a

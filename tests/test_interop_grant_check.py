@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 import tomllib
 import warnings
 from pathlib import Path
@@ -351,6 +352,11 @@ def test_an_oversized_copilot_body_is_refused_on_interop_only(tmp_path):
         rendered = CopilotVSCodeAdapter().render_agent_file(native, "big", {})
     assert body in rendered
     assert any("30,000-character limit" in str(w.message) for w in caught)
+    # COPILOT-BODY-LIMIT: the warning names the agent and how far over the limit it is.
+    sized = [re.match(r"@big: agent body is ([\d,]+) characters, ([\d,]+) \(\d+%\) over", str(w.message))
+             for w in caught]
+    sized = [m for m in sized if m]
+    assert sized and all(int(m[1].replace(",", "")) - _MAX_BODY_CHARS == int(m[2].replace(",", "")) for m in sized)
 
 
 # --- the other projection paths: multi_sync and --convert-from ------------------------------------

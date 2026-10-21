@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (messages: signer refusal under `$HOME`, inferred retrieval roster, Copilot body size) — 1.0.2
+
+- A repository or worktree with no `.claude/settings.json` of its own reaches `~/.claude/settings.json`, so
+  `$HOME` counts as the project root and a signer installed under it is refused. The refusal is protective and is
+  unchanged; it now says why `$HOME` is a root and that the refusal stands (remediation
+  SIGNER-HOME-AS-PROJECT-ROOT). `cli/operator_signing.py` changes, and its pin in
+  `references/enforcement-integrity.json` moves.
+- When project scanning infers a `retrieval_integration` contract the brief doesn't declare, the render prints a
+  `[NOTICE]`: the contract adds @retrieval-integrator to this render's roster only, so renders of one brief with
+  and without scanning diverge. Declare the contract (or `mode "none"`) in the brief to keep rosters identical
+  (remediation 4.4 ROSTER-DIVERGENCE root cause). The roster itself is unchanged.
+- The copilot-vscode body-size warning now names the agent as `@slug` and says how far over the 30,000-character
+  limit it is, in characters and percent, and where long sections can move (remediation COPILOT-BODY-LIMIT). It is
+  still a warning.
+
 ### fix (tests: sandbox and install-version tests skip where they can't run, not fail) — 1.0.2
 
 - Inside an already-sandboxed session Seatbelt can't nest, so six live tests failed there although the binary was

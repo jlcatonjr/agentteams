@@ -369,3 +369,35 @@ def test_migration_notice_says_replaced_and_keeps_old_body():
     assert mr.migrated and "old template body" in mr.lost_fence_bodies["content"]
     lines = fences._shrink_notice_lines(".goosehints", mr, "preserve", None)
     assert lines and all("replaced (structural migration)" in l and "retained" not in l for l in lines)
+
+
+def _render_with_inference(tmp_path, monkeypatch, inferred: dict, extra: tuple[str, ...] = ()) -> int:
+    from agentteams import ingest
+
+    brief_src = Path(__file__).resolve().parents[1] / "examples" / "software-project" / "brief.json"
+    if not brief_src.exists():
+        pytest.skip("software-project brief not found")
+    brief = tmp_path / "brief.json"
+    data = json.loads(brief_src.read_text(encoding="utf-8"))
+    data.pop("retrieval_integration", None)
+    brief.write_text(json.dumps(data), encoding="utf-8")
+    monkeypatch.setattr(ingest, "_infer_retrieval_integration", lambda _p: dict(inferred))
+    project = tmp_path / "proj"
+    project.mkdir()
+    return build_team.main([
+        "--description", str(brief), "--project", str(project), "--framework", "claude",
+        "--output", str(tmp_path / "out"), "--dry-run", "--security-offline", *extra,
+    ])
+
+
+def test_an_inferred_retrieval_contract_gets_a_roster_notice(tmp_path, monkeypatch, capsys):
+    """4.4 root cause: project scanning's inferred contract changes this render's roster; say so."""
+    _render_with_inference(tmp_path, monkeypatch, {"mode": "lexical-index"})
+    err = capsys.readouterr().err
+    assert "[NOTICE] project scanning inferred retrieval_integration (mode 'lexical-index')" in err
+    assert "@retrieval-integrator" in err
+
+
+def test_no_roster_notice_without_an_inferred_contract(tmp_path, monkeypatch, capsys):
+    _render_with_inference(tmp_path, monkeypatch, {"mode": "none"})
+    assert "inferred retrieval_integration" not in capsys.readouterr().err

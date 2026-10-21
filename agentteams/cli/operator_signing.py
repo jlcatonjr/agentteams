@@ -307,6 +307,34 @@ def _confirm(digest: str, confirm_sha256: str | None) -> bool:
     return False
 
 
+def _home_as_project_root_note(project_roots: list[Path], refusals: list[str]) -> str | None:
+    """Name the case where ``$HOME`` is a write root only because ``~/.claude/settings.json`` was found.
+
+    ``_project_roots`` takes the nearest ancestor holding ``.claude/settings.json``; a repository or worktree
+    without one reaches ``~/.claude/settings.json``, so ``$HOME`` itself counts as the project. The refusal that
+    follows is deliberate (an agent in bypass mode can write under ``$HOME``); only its stated reason, "a
+    project root", needs explaining (remediation SIGNER-HOME-AS-PROJECT-ROOT).
+
+    Args:
+        project_roots: The roots ``_project_roots`` returned (the cwd first, then the walked ancestor).
+        refusals: The refusing install-location messages.
+
+    Returns:
+        The explanatory sentence, or None when no refusal names ``$HOME`` as a walked project root.
+    """
+    try:
+        home = Path.home().resolve()
+    except (OSError, RuntimeError):
+        return None
+    if (home not in project_roots[1:] or not (home / ".claude" / "settings.json").is_file()
+            or not any(f"root {home}" in message for message in refusals)):
+        return None
+    return (f"{home} is your home directory: it counts as the project here because "
+            "~/.claude/settings.json is the nearest .claude/settings.json above the team directory (this "
+            "repository or worktree has none of its own). The refusal stands: an agent in bypass mode can write "
+            "under your home directory, so an install there is agent-editable.")
+
+
 def _location_gate(project_roots: list[Path], allow_checkout: bool) -> bool | None:
     """Run the install-location check; print findings.
 
@@ -320,16 +348,21 @@ def _location_gate(project_roots: list[Path], allow_checkout: bool) -> bool | No
     for finding in findings:
         if not finding.refuse:
             print(f"Warning: install location ({finding.criterion}): {finding.message}", file=sys.stderr)
+    home_note = _home_as_project_root_note(project_roots, [f.message for f in refusals])
     if refusals and not allow_checkout:
         print("Error: refusing to sign from an install an agent may be able to edit:", file=sys.stderr)
         for finding in refusals:
             print(f"  {finding.message}", file=sys.stderr)
+        if home_note:
+            print(f"  {home_note}", file=sys.stderr)
         print(f"  {_TRUSTED_INSTALL_HINT[0].upper()}{_TRUSTED_INSTALL_HINT[1:]}; or, knowingly, pass "
               "--allow-checkout-signing. The key was not read.", file=sys.stderr)
         return None
     for finding in refusals:
         print(f"WARNING: --allow-checkout-signing: signing despite: {finding.message}. "
               f"{_TRUSTED_INSTALL_WARNING}", file=sys.stderr)
+    if home_note:
+        print(f"WARNING: --allow-checkout-signing: {home_note}", file=sys.stderr)
     return bool(refusals)
 
 
