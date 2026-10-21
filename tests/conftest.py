@@ -166,8 +166,14 @@ def _require_os_sandbox() -> None:
     ``AGENTTEAMS_REQUIRE_SEATBELT=1`` (or ``AGENTTEAMS_REQUIRE_BWRAP=1``) and a missing mechanism stops the run
     (@security, 2026-10-21).
     """
-    wanted = [m for m, var in (("seatbelt", "AGENTTEAMS_REQUIRE_SEATBELT"), ("bwrap", "AGENTTEAMS_REQUIRE_BWRAP"))
-              if os.environ.get(var) == "1"]
+    wanted = []
+    for mech, var in (("seatbelt", "AGENTTEAMS_REQUIRE_SEATBELT"), ("bwrap", "AGENTTEAMS_REQUIRE_BWRAP")):
+        value = os.environ.get(var)
+        if value is None or value == "":
+            continue
+        if value != "1":  # never read an unrecognised value as "off" (@security)
+            raise pytest.UsageError(f"{var}={value!r}: set it to 1 to require {mech}, or unset it")
+        wanted.append(mech)
     if not wanted:
         return
     from agentteams import confinement
