@@ -39,8 +39,9 @@ project and outside any git work tree, every invocation appends one JSON line: i
 decision, a fixed ``reason_id``, scanner categories and line numbers, what was ``checked``, and a
 ``prev_sha`` hash chain. It never records written content, the free-text reason or an exception
 message. ``AGENTTEAMS_GATE_LOG_KEY``, when set, adds a keyed ``input_hmac`` of the canonical
-``tool_input``. The log is evidence, not the boundary: a failure to write it never changes the
-decision, and a missing line means "no evidence", never "pass". ``gate_sha256`` is the hash of
+``tool_input``; a key under 32 bytes, a placeholder or one repeated character writes no record. The
+log is evidence, not the boundary: a failure to write it never changes the decision, and a missing
+line means "no evidence", never "pass". ``gate_sha256`` is the hash of
 this installed file, so it differs between the fail-open and fail-closed renders.
 
 **Interpreter pin (1.0 must-fix, 2026-10-15).** The harness runs this hook as plain ``python3``, and
@@ -613,11 +614,28 @@ def _log_target(raw: str) -> Path:
     return parent / path.name
 
 
+#: ``signed_ledger.require_strong_hmac_key``'s rule, restated because this hook is self-contained (a test pins
+#: the two equal): the shortest accepted key, and the placeholders that stand in for a real secret.
+_MIN_LOG_KEY_BYTES = 32
+_PLACEHOLDER_LOG_KEYS = frozenset({"...", "changeme", "change-me", "xxx", "secret", "test", "key", "password",
+                                   "placeholder", "todo", "none", "null"})
+
+
 def _input_hmac(tool_input: object) -> "str | None":
-    """Keyed digest of the canonical ``tool_input``, or None when no key is configured."""
+    """Keyed digest of the canonical ``tool_input``, or None when no key is configured.
+
+    Raises:
+        ValueError: The key is under 32 bytes, a placeholder or one repeated character. Anyone who can
+            guess it could forge ``input_hmac``, so the record is not written (HMAC-KEY-STRENGTH-REMAINING).
+    """
     key = os.environ.get("AGENTTEAMS_GATE_LOG_KEY", "")
     if not key:
         return None
+    stripped = key.strip()
+    if (len(key.encode("utf-8")) < _MIN_LOG_KEY_BYTES or stripped.lower() in _PLACEHOLDER_LOG_KEYS
+            or len(set(stripped)) <= 1):
+        raise ValueError(f"AGENTTEAMS_GATE_LOG_KEY is too weak (under {_MIN_LOG_KEY_BYTES} bytes, a "
+                         "placeholder, or one repeated character); use a random secret")
     canonical = json.dumps(tool_input, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
     return hmac.new(key.encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
 

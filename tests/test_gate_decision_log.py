@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -165,12 +166,39 @@ def test_chain_links_every_line_even_under_concurrent_writers(tmp_path: Path) ->
 def test_input_hmac_recomputes_from_the_canonical_tool_input(tmp_path: Path) -> None:
     log = tmp_path / "gate.jsonl"
     payload = _bash("ls -la")
-    _run(payload, {"AGENTTEAMS_GATE_LOG": str(log), "AGENTTEAMS_GATE_LOG_KEY": "k3y"})
+    key = secrets.token_hex(32)
+    _run(payload, {"AGENTTEAMS_GATE_LOG": str(log), "AGENTTEAMS_GATE_LOG_KEY": key})
     canonical = json.dumps(payload["tool_input"], sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    expected = hmac.new(b"k3y", canonical.encode(), hashlib.sha256).hexdigest()
+    expected = hmac.new(key.encode(), canonical.encode(), hashlib.sha256).hexdigest()
     assert _lines(log)[0]["input_hmac"] == expected
     _run(payload, {"AGENTTEAMS_GATE_LOG": str(log)})
     assert _lines(log)[1]["input_hmac"] is None
+
+
+@pytest.mark.parametrize("weak", ["k3y", "...", "changeme", "a" * 40, "x" * 31])
+def test_a_weak_gate_log_key_writes_no_record_and_never_changes_the_decision(tmp_path: Path, weak: str) -> None:
+    """HMAC-KEY-STRENGTH-REMAINING: a short or placeholder AGENTTEAMS_GATE_LOG_KEY made a forgeable input_hmac."""
+    log = tmp_path / "gate.jsonl"
+    payload = _bash("rm -rf build")
+    plain = _run(payload)
+    weak_run = _run(payload, {"AGENTTEAMS_GATE_LOG": str(log), "AGENTTEAMS_GATE_LOG_KEY": weak})
+    assert (weak_run.stdout, weak_run.returncode) == (plain.stdout, plain.returncode)
+    assert not log.exists() or log.read_text() == ""
+    assert "AGENTTEAMS_GATE_LOG_KEY is too weak" in weak_run.stderr
+
+
+def test_the_gate_key_strength_rule_matches_signed_ledger() -> None:
+    """The hook is self-contained, so it restates require_strong_hmac_key's rule; the two must agree."""
+    import importlib.util
+
+    from agentteams.cli import signed_ledger
+
+    spec = importlib.util.spec_from_file_location("gate_under_test", TEMPLATE)
+    assert spec is not None and spec.loader is not None
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    assert gate._MIN_LOG_KEY_BYTES == signed_ledger.MIN_HMAC_KEY_BYTES
+    assert gate._PLACEHOLDER_LOG_KEYS == signed_ledger._PLACEHOLDER_KEYS
 
 
 def test_the_profile_flip_sentinel_occurs_exactly_once() -> None:

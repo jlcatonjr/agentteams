@@ -644,7 +644,8 @@ environment variables at run time. `AGENTTEAMS_GATE_LOG=<absolute path>` appends
 invocation (ids, decision, a fixed `reason_id`, scanner categories and line numbers, `checked`, the installed
 hook's sha256 and a `prev_sha` chain; never written content, free-text reasons or exception text). The path
 must be outside the project and outside any git work tree; otherwise the hook logs nothing and prints a
-notice to stderr. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed HMAC of the canonical `tool_input`. Neither variable
+notice to stderr. `AGENTTEAMS_GATE_LOG_KEY` adds a keyed HMAC of the canonical `tool_input`; a key under 32
+bytes, a placeholder or one repeated character writes no record and prints a notice. Neither variable
 changes any decision. See the security guide, S19.
 
 ### `--self`

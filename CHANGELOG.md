@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (gate decision log: a weak `AGENTTEAMS_GATE_LOG_KEY` writes no record) — 1.0.2
+
+- rc.12's `require_strong_hmac_key` covers decision rows, waivers, grants, management directives, the signed
+  ledger and the proposal-ledger key. The constitutional-gate hook's optional decision-log key was still
+  unchecked, so a short or placeholder `AGENTTEAMS_GATE_LOG_KEY` produced an `input_hmac` anyone could forge
+  (HMAC-KEY-STRENGTH-REMAINING).
+- The hook now refuses such a key the same way (under 32 bytes, a known placeholder, or one repeated character):
+  it writes no record and prints a notice to stderr. The decision itself never changes. The hook is
+  self-contained, so it restates the rule, and a test pins it equal to `cli/signed_ledger.py`'s.
+- The gate template changes, and its pin and the two installed-copy pins in
+  `references/enforcement-integrity.json` move to the new template digest. Re-install the hook (`--update`)
+  so the installed copies match.
+
 ### fix (--verify-integrity names forged or non-authenticating decision rows) — 1.0.2
 
 - Since the rc.12 HALT-scan fix, a HALT-RETRACTED row that fails authentication retracts nothing and is skipped,
