@@ -1,5 +1,8 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+# Exact pins (remediation BUILD-REQUIRES-UNPINNED): an unpinned requirement let an isolated build pull any
+# release, including wheel 0.44.0 with two OSV advisories. Neither pinned version has an OSV advisory; both were
+# the latest releases (so what CI's isolated build resolved) from August until 2026-10-19. Bump deliberately.
+requires = ["setuptools==84.0.0", "wheel==0.48.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -39,8 +42,9 @@ test = [
     # which builds a real wheel with `--no-isolation` (no network) to assert the JSON
     # schemas ship. Editable CI never exercises a built wheel, so this is the only guard.
     "build>=1.0",
-    "setuptools>=68",
-    "wheel",
+    # Equal to the [build-system] pins: a `--no-isolation` build refuses any other version.
+    "setuptools==84.0.0",
+    "wheel==0.48.0",
 ]
 # The `agentteams.research` subpackage (search/reputable/verify) is a real, optional runtime
 # library, not part of the CLI/generator pipeline — the base install stays exactly as

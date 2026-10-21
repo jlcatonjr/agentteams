@@ -189,6 +189,8 @@ The model:
    checkout. Then make the checkout read-only, and keep it, and the environment, outside every agent write root.
    - **Install it with `pip install <checkout>` or `pipx install <checkout>`.** That is what records the version
      and commit agentteams reports and writes into `build-log.json` as the pin.
+     The build uses the exact `setuptools` and `wheel` versions pinned in `pyproject.toml` `[build-system]`, so a
+     release checkout builds with the same vetted tools as CI.
    - Putting the source on `sys.path` (a `.pth` file or `PYTHONPATH`) reports `0.0.0+local` and records no pin.
    - Don't hand-write install metadata to work around this: the recorded pin would then be an unverified claim.
 4. **Render from that environment,** so the gate pin (`<hooks>/agentteams-python`) names it. A team rendered earlier

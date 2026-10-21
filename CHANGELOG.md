@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (build: `[build-system]` requires exact `setuptools` and `wheel` versions) — 1.0.2
+
+- `[build-system]` required `setuptools>=68` and an unpinned `wheel`, so an isolated build took whatever was newest;
+  mathAgents found wheel 0.44.0 with two OSV advisories in a build env (remediation BUILD-REQUIRES-UNPINNED). It now
+  pins `setuptools==84.0.0` and `wheel==0.48.0`, neither with an OSV advisory. Both were the newest releases on PyPI,
+  which CI's isolated builds resolve, from August until 2026-10-19. The `test` extra pins the same versions, because
+  the wheel-packaging test builds with `--no-isolation` and a different installed version fails it.
+- The migration guide's release-checkout steps say the install builds with these pinned tools.
+
 ### fix (messages: signer refusal under `$HOME`, inferred retrieval roster, Copilot body size) — 1.0.2
 
 - A repository or worktree with no `.claude/settings.json` of its own reaches `~/.claude/settings.json`, so
