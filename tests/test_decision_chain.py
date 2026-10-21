@@ -157,3 +157,48 @@ def test_verify_integrity_report_fails_on_a_broken_chain(tmp_path):
     _write_log(tmp_path, rows)
     lines, broken = describe_log_chain(tmp_path)
     assert broken and "BROKEN" in lines[0]
+
+
+def _signed_legacy(count: int, key: str) -> list[dict[str, str]]:
+    """A pre-1.0 log: every row HMAC-signed over an empty link."""
+    rows = _legacy(count)
+    for row in rows:
+        row["signature"] = dl.sign_decision_row(row, key=key)
+    return rows
+
+
+def test_verify_integrity_names_prefix_rows_whose_signature_fails(tmp_path, monkeypatch):
+    """Row 338 follow-up: blanking a signed row's link widens the prefix, and breaks that row's signature."""
+    import secrets
+
+    from agentteams.cli.decision_chain import describe_log_chain
+
+    key = secrets.token_hex(32)  # built at run time, never a literal
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", key)
+    rows = _signed_legacy(2, key)  # rows 1-2: the genuine pre-1.0 prefix
+    for n in (3, 4):  # rows 3-4: chained and signed over their links, as the 1.0 signer writes them
+        row = _row(n, prev=row_chain_digest(rows[-1]))
+        row["signature"] = dl.sign_decision_row(row, key=key)
+        rows.append(row)
+    rows[2]["prev_digest"] = ""  # an attacker blanks row 3's link: the prefix now spans rows 1-3
+    rows[3]["prev_digest"] = row_chain_digest(rows[2])
+    _write_log(tmp_path, rows)
+    lines, broken = describe_log_chain(tmp_path)
+    assert not broken  # advisory only
+    assert any("signed row(s) inside the prefix whose signature does not verify: [3]" in line for line in lines)
+
+
+def test_an_intact_signed_prefix_reports_no_signature_failure(tmp_path, monkeypatch):
+    import secrets
+
+    from agentteams.cli.decision_chain import describe_log_chain
+
+    key = secrets.token_hex(32)
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", key)
+    _write_log(tmp_path, _signed_legacy(3, key))
+    lines, _ = describe_log_chain(tmp_path)
+    assert any("legacy prefix: 2 row(s)" in line for line in lines)
+    assert not any("signature" in line for line in lines)
+    monkeypatch.delenv("AGENTTEAMS_DECISION_SIGNING_KEY")
+    lines, _ = describe_log_chain(tmp_path)
+    assert any("signatures of prefix row(s) [1, 2, 3] not checked" in line for line in lines)

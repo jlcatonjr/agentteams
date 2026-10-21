@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (--verify-integrity checks the signatures inside the decision log's legacy prefix) — 1.0.2
+
+- The legacy prefix (pre-1.0 rows signed over an empty `prev_digest`) was accepted with no signature check, so
+  an attacker who blanked a later row's link to widen the prefix, and hide a deletion inside it, went unreported
+  (row 338 follow-up, @security M2).
+- `--verify-integrity` now verifies each signed prefix row (HMAC, or Ed25519 for an `ed25519` row) and names
+  those whose signature does not verify. Rows it cannot check (no signing key, a weak one, or no verify key) are
+  listed as not checked. It is an advisory: the chain verdict and the exit code are unchanged.
+- `cli/decision_chain.py` changes, and its pin in `references/enforcement-integrity.json` moves.
+
 ### fix (gate decision log: a weak `AGENTTEAMS_GATE_LOG_KEY` writes no record) — 1.0.2
 
 - rc.12's `require_strong_hmac_key` covers decision rows, waivers, grants, management directives, the signed

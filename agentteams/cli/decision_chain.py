@@ -12,8 +12,9 @@ blocks every gated action. When signing is active, a *leading* run of rows with 
 the first non-empty ``prev_digest`` must equal the digest of the row just before it, and from there
 on every row must chain (an empty link after that point is a break). Deletions inside the prefix,
 HALT rows included, are undetectable, exactly as in a log with no ``prev_digest`` column; the prefix
-length is reported so the operator can see it. The chain is unkeyed, so rows cut from the tail are
-not detected either.
+length is reported so the operator can see it, with every signed prefix row whose signature does not
+verify (a link blanked to widen the prefix breaks its row's signature). The chain is unkeyed, so rows
+cut from the tail are not detected either.
 """
 
 from __future__ import annotations
@@ -149,7 +150,64 @@ def describe_log_chain(team_dir: Path) -> tuple[list[str], bool]:
     if report.halts_in_prefix:
         lines.append(f"  HALT row(s) inside the prefix: {report.halts_in_prefix}; their deletion would be "
                      "undetectable, so confirm they are still present as recorded")
+    if report.legacy_prefix:
+        lines.extend(_prefix_signature_lines(read[0][: report.legacy_prefix + 1], team_dir))
     return lines, False
+
+
+def _prefix_signature_lines(prefix: list[dict[str, str]], team_dir: Path) -> list[str]:
+    """Advisory lines naming signed rows of the legacy prefix whose signature does not verify.
+
+    Row 338 follow-up (@security M2): a pre-1.0 row was signed over its empty link, so its signature
+    still verifies inside the prefix. An attacker who blanks a later row's link to widen the prefix
+    (and hide a deletion behind it) breaks that row's signature, because ``prev_digest`` is signed.
+    Unsigned rows are not judged here (a HALT is honoured unsigned); authorizing rows are also
+    covered by :func:`_describe_unauthenticated_rows`. Advisory: never a chain failure.
+
+    Args:
+        prefix: The rows of the unchained run (row 1 through the last empty link), in file order.
+        team_dir: The team root (the Ed25519 verify-key store).
+
+    Returns:
+        Report lines; empty when every signed prefix row verifies.
+    """
+    # Local import: decision_log imports this module, so a top-level import would be a cycle.
+    import hmac
+
+    from agentteams.cli.decision_log import (
+        _NO_SIGNING_KEY,
+        SIG_SCHEME_ED25519,
+        _assert_ed25519_sufficient,
+        _hmac_decision_row,
+    )
+
+    failed: list[int] = []
+    unchecked: list[int] = []
+    for number, row in enumerate(prefix, start=1):
+        signature = (row.get("signature") or "").strip().lower()
+        if not signature:
+            continue
+        reviewed = (row.get("action_reviewed") or row.get("decision") or "").strip()
+        try:
+            if (row.get("sig_scheme") or "").strip().lower() == SIG_SCHEME_ED25519:
+                _assert_ed25519_sufficient(row, output_dir=team_dir, action=reviewed)
+            elif not hmac.compare_digest(_hmac_decision_row(row), signature):
+                failed.append(number)
+        except RuntimeError as exc:
+            # No key, a weak one (refused before any HMAC) or no verify key: unverifiable here, not forged.
+            reason = str(exc)
+            if reason == _NO_SIGNING_KEY or "too weak" in reason or reason.startswith("no Ed25519 verify key"):
+                unchecked.append(number)
+            else:
+                failed.append(number)
+    lines: list[str] = []
+    if failed:
+        lines.append(f"  signed row(s) inside the prefix whose signature does not verify: {failed}; a link "
+                     "blanked to widen the prefix breaks its row's signature, so treat these as tampering")
+    if unchecked:
+        lines.append(f"  signatures of prefix row(s) {unchecked} not checked (no usable signing key or "
+                     "verify key here)")
+    return lines
 
 
 def _describe_unauthenticated_rows(output_dir: Path) -> list[str]:

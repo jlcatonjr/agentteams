@@ -10,7 +10,7 @@
     "agentteams/branch_inventory.py": "5df2d88d8ba68ecea86b4cac410f6cdff5ad43c496c97801dce8d1bf7a46faef",
     "agentteams/cli/action_ids.py": "45901d62eec761da71c48161b7a17d465e47310dc75436742a4fd9e80b86d320",
     "agentteams/cli/adopt_merge_gate.py": "573cf2e71d22d74d0b70dc7903f594927d25966beec74d123178d4d8bcb6b378",
-    "agentteams/cli/decision_chain.py": "7496621ae1f1975297032abbe2ea8a82dd796abd49652f437f6bda5867133a6c",
+    "agentteams/cli/decision_chain.py": "11c1a49a3c534ff40c3642393c44e1aec2c57538735278e191b1f4e0ab6a90ed",
     "agentteams/cli/decision_lineage.py": "1a287a76f21a3594eb86936acd60b9d682f17855e28a120c29188f9b70b05d57",
     "agentteams/cli/decision_log.py": "e1f16d157cc9943e754808a553f1e2e56837640d9e5a8bc91c70df6b2e91a42f",
     "agentteams/cli/decision_text.py": "174d40806dc6e5a3bd62644e49c5b9ec3c8cadbae6fb832d7cecb4cddf707ed3",
