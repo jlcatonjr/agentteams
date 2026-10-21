@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fix (integrity: a re-record cannot erase a missing control's pin) — 1.0.2
+
+- Re-recording the enforcement manifest while an ordinary pinned module (not one of the two gitignored installed
+  hook copies) was absent or unreadable wrote `""` for it, and `verify` then compared `""` with `""` and passed:
+  the re-record silently erased that control's pin (GROK-FU-R2-SIDE-A, @security).
+- `integrity.verify` no longer treats an empty recorded digest as a pin. It reports that module as `missing` (or
+  `modified` once it is back) until it is restored and re-recorded, so `--write-integrity-manifest` refuses to
+  report success. `write_manifest` still records `""`, now with a WARNING naming the module.
+- An absent installed hook copy recorded as `""` still verifies, as before.
+- `integrity.py` changes, and its pin in `references/enforcement-integrity.json` moves.
+
 ### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
 
 - Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is

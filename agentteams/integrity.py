@@ -260,6 +260,9 @@ class IntegrityFinding:
         if self.reason == "manifest-missing":
             return (f"{self.rel_path}: the integrity manifest is missing although this repository "
                     "ships one or the scanner runs from inside it (nothing can be verified)")
+        if not self.expected and not self.actual:
+            return (f"{self.rel_path}: {self.reason}, and the manifest pins nothing for it (it was "
+                    "re-recorded while the module was unreadable or absent, which erased its pin)")
         return f"{self.rel_path}: {self.reason} (expected {self.expected[:12]}, got {self.actual[:12]})"
 
 
@@ -384,7 +387,9 @@ def write_manifest(repo_root: Path) -> Path:
 
     An :data:`INSTALLED_COPIES` path that does not exist keeps the digest the existing manifest
     records for it (see :func:`_carry_over_installed_copies`); every other module is re-hashed,
-    and a missing one is still recorded as ``""``.
+    and a missing or unreadable one is still recorded as ``""``, with a WARNING. That ``""`` is
+    never a pin: :func:`verify` reports it until the module is back and re-recorded
+    (GROK-FU-R2-SIDE-A), so the CLI's re-record refuses to report success.
 
     Args:
         repo_root: Repository root.
@@ -395,6 +400,9 @@ def write_manifest(repo_root: Path) -> Path:
     manifest_path = repo_root / MANIFEST_REL_PATH
     digests = compute_digests(repo_root)
     _carry_over_installed_copies(digests, _previous_modules(manifest_path), repo_root)
+    for rel in sorted(rel for rel, digest in digests.items() if not digest and rel not in INSTALLED_COPIES):
+        _notice(f"WARNING: enforcement module {rel} is missing or unreadable; recording '' for it, "
+                "which pins nothing, so verify reports it until it is restored and re-recorded.")
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": _MANIFEST_VERSION,
@@ -441,12 +449,14 @@ def verify(repo_root: Path) -> list[IntegrityFinding]:
     findings: list[IntegrityFinding] = []
     for rel, expected in sorted(recorded.items()):
         got = actual.get(rel, "")
-        if got == expected:
+        if got and got == expected:
             continue
         if not got and rel in INSTALLED_COPIES:
             # A per-install copy legitimately absent here (see INSTALLED_COPIES). Absence is
             # benign; a PRESENT copy that differs is still caught by the `modified` branch below.
             continue
+        # An empty recorded digest is not a pin: "" == "" for an ordinary module means a re-record
+        # ran while it was absent or unreadable, and passing it would erase the control's pin.
         reason = "missing" if not got else "modified"
         findings.append(IntegrityFinding(rel_path=rel, expected=expected, actual=got, reason=reason))
     # A module added to ENFORCEMENT_MODULES but absent from the manifest is unverified. Report

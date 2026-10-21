@@ -144,3 +144,21 @@ def test_a_present_but_unreadable_copy_does_not_inherit_the_old_digest(recorded:
     finally:
         copy.chmod(0o644)
     assert _modules(recorded)[CLAUDE_COPY] == ""
+
+
+def test_a_re_record_with_a_missing_ordinary_module_does_not_verify_clean(recorded: Path, capsys) -> None:
+    # GROK-FU-R2-SIDE-A: the re-record writes "" for the missing control, and verify then compared
+    # "" == "" and passed, so the re-record silently erased that control's pin.
+    rel = "agentteams/cli/security_gate.py"
+    (recorded / rel).unlink()
+    integrity.write_manifest(recorded)
+    assert "WARNING" in capsys.readouterr().err
+    findings = [f for f in integrity.verify(recorded) if f.rel_path == rel]
+    assert [f.reason for f in findings] == ["missing"]
+    assert "pins nothing" in findings[0].describe()
+
+
+def test_an_absent_installed_copy_recorded_empty_still_verifies(tmp_path: Path) -> None:
+    # The "" == "" refusal is for ordinary modules; an installed copy may be legitimately absent.
+    integrity.write_manifest(_tree(tmp_path, skip=tuple(integrity.INSTALLED_COPIES)))
+    assert integrity.verify(tmp_path) == []
