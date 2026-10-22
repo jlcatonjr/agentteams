@@ -134,9 +134,15 @@ class PlanStep:
         return _footprint_tokens(self.outputs)
 
     def touches_shared_state(self) -> bool:
-        """True if the step matches the shared-mutable-state denylist."""
+        """True if the step matches the shared-mutable-state denylist or is an operator handoff step."""
+        if self.is_operator_step():
+            return True
         scope = f"{self.action} {self.inputs} {self.outputs}"
         return bool(_SHARED_STATE_RE.search(scope))
+
+    def is_operator_step(self) -> bool:
+        """True for a sandbox operator handoff step (``agent`` = ``operator``), which runs outside the sandbox."""
+        return self.agent.strip().lower() == "operator"
 
     def has_footprint(self) -> bool:
         """True if the step declares at least one path-like read or write."""
@@ -392,7 +398,12 @@ def compute_waves(steps: list[PlanStep]) -> WaveSchedule:
         singletons: list[str] = []
         for sid in layer:
             step = by_id[sid]
-            if step.touches_shared_state():
+            if step.is_operator_step():
+                # A sandbox operator handoff runs outside the agent sandbox (git, network, state the
+                # footprint can't see): always its own wave (references/sandbox-handoff.reference.md §6).
+                result.reasons[sid] = "operator handoff step (runs outside the sandbox)"
+                singletons.append(sid)
+            elif step.touches_shared_state():
                 result.reasons[sid] = "touches shared mutable state (denylist)"
                 singletons.append(sid)
             elif not step.has_footprint():

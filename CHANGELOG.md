@@ -6,6 +6,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### feat (sandbox operator handoff: a sandboxed agent hands refused work to the operator as a script and a complete command)
+
+- An agent inside an OS sandbox (Claude Code, Codex `workspace-write`, `confine-run.sh`) that hits a refused
+  operation (a denied network host, `Operation not permitted` on a `.git` gitfile or outside its roots, an
+  unreachable credential socket) now writes a reviewable `<slug>.handoff.sh` in the plan's week folder and gives the
+  operator the **complete command** to run it in a terminal outside the sandbox, then reads the result back
+  from `<slug>.handoff.log` and continues.
+- New `agentteams/sandbox_handoff.py` (stdlib), `python -m agentteams.sandbox_handoff detect|write|status`:
+  - The script carries a header (purpose, `blocked-by`, `touches`, destructive + clearance, plan), uses
+    `set -euo pipefail` and an absolute `cd`, checks for required tools, echoes every command, prompts `y/N` by
+    default (always when destructive), runs `verify` commands, and refuses to run while a sandbox marker is set.
+  - The complete command re-checks the script's SHA-256 before running it, so an edit made after the operator
+    reviewed it refuses to start.
+  - `write` refuses a destructive spec without a recorded `@security` clearance (C-5), any trust root or
+    capability grant (settings/hooks, rosters, `management-authority.json`, the integrity manifest, signing
+    keys), credential-shaped text, and a script that fails `bash -n`.
+  - `status` reads `ok` / `failed rc= step=` / `incomplete` / `not-run`, and `stale` when the log came from a
+    different version of the script.
+- New always-emitted `references/sandbox-handoff.reference.md`. It covers channel order (the intended in-grant
+  path, then the proposal runner, whose refusal is a stop, then a handoff), the script and message contracts,
+  governance, plan integration, resuming, and common handoffs.
+- Orchestrator `available_workflows` v=5 → v=6:
+  - A new **Sandbox Operator Handoff** sub-protocol that any workflow step can append. It is named rather than
+    numbered, so it cannot collide with a project's own workflow numbers.
+  - A sandbox augmentation table across Workflows 0/4/7/8/9/11 and git operations.
+  - Workflow 0's capability-gap check gains a sandbox branch.
+  - Plan documentation gains `operator` steps.
+  - In Workflow 11, gates 7/7b run through a handoff when GitHub is unreachable; "unreachable from the sandbox" is
+    no longer an "otherwise skip".
+  - A new gate 7c reports pending handoffs. While work depends on a handoff, the session closes as *awaiting
+    operator handoff*.
+- `@git-operations` gains Invariant rule 10, a Sandbox Augmentation table and a `Sandbox handoff` output-contract
+  line.
+- `parallel_plan`: a step with `agent` = `operator` is always a singleton wave and is never a coordination
+  candidate. The parallelization reference lists it among the carve-outs.
+- The CI/CD gate's "run status is reachable" condition now counts reachability through a handoff:
+  - The orchestrator's Workflow 11 step 7, `@git-operations` rule 7 and `github-workflows-merge.reference.md` are
+    aligned on this.
+  - The handoffs use the REST `actions/runs` query first and fall back to `gh run watch`.
+  - Step 8's terminal-act ordering also admits a session that closes as awaiting operator handoff.
+- Under `write_policy: "orchestrator-only"`:
+  - Only `@orchestrator` writes handoff scripts.
+  - "Not allowlisted" counts as a runner refusal, which is a stop and is never re-routed through a handoff.
+- New API page `docs_src/api-reference/sandbox-handoff.md`.
+
 ## [1.0.1] - 2026-10-21
 
 ### release notes
