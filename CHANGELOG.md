@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - An agent inside an OS sandbox (Claude Code, Codex `workspace-write`, `confine-run.sh`) that hits a refused
   operation (a denied network host, `Operation not permitted` on a `.git` gitfile or outside its roots, an
-  unreachable credential socket) now writes a reviewable `tmp/by-week/YYYY-Www/<slug>.handoff.sh` and gives the
+  unreachable credential socket) now writes a reviewable `<slug>.handoff.sh` in the plan's week folder and gives the
   operator the **complete command** to run it in a terminal outside the sandbox, then reads the result back
   from `<slug>.handoff.log` and continues.
 - New `agentteams/sandbox_handoff.py` (stdlib), `python -m agentteams.sandbox_handoff detect|write|status`:
