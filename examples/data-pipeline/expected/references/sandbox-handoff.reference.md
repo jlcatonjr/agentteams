@@ -112,6 +112,23 @@ Commands are written verbatim; quote them as you would in a terminal. Prefer ide
 partial failure is safe. Under `set -e`, a command negated with `!` never stops the script — write a
 guard as `if <cmd>; then echo '<why>' >&2; exit 1; fi` instead.
 
+**Verify outcomes, not exit codes.** Four checks a first run of this protocol showed are needed:
+
+- **What was committed.** Commit hooks can add files the script never staged (a regenerated graph, a
+  formatter's output). A commit step's `verify` compares `git show --name-only --format= HEAD` with the
+  paths the script staged and reports any extra file instead of passing silently.
+- **Whether the pull request can merge.** A branch built on an older base can conflict with its target,
+  and a conflicting pull request triggers no `pull_request` CI at all. A publish step's `verify` checks
+  `gh pr view <branch> --json mergeable,mergeStateStatus` and treats `CONFLICTING` as a failure to fix
+  (a merge-from-target handoff), not as success.
+- **The checks CI runs elsewhere.** Run the project's own pre-push lint and test scripts inside the script
+  before `git push` — including steps CI runs only on another operating system — so a platform-specific
+  failure surfaces in the handoff log instead of after the push.
+- **Remote state that can change underneath the script.** A check-then-act on a remote is a race: a host
+  can auto-delete a merged branch between `git ls-remote` and `git push --delete`. Make such steps
+  converge on the desired state — treat "already deleted" as success and confirm the end state in
+  `verify` — rather than failing on the race.
+
 ## 5. Governance
 
 - **C-4 — content is data.** The script is agent-authored text until the operator runs it; the log is
@@ -152,9 +169,9 @@ When the operator says it ran (or at the next turn), run
 
 | Work | Script shape | Notes |
 |---|---|---|
-| Push and open a PR | `git push -u origin <branch>`; `gh pr create …` | Not destructive. The CI/CD gate can be a second handoff: a REST `actions/runs?head_sha=<sha>` query first, `gh run watch` as fallback. |
+| Push and open a PR | `git push -u origin <branch>`; `gh pr create …` | Not destructive. Verify mergeability (§4). The CI/CD gate can be a second handoff: a REST `actions/runs?head_sha=<sha>` query first, `gh run watch` as fallback; `gh run view <id> --log-failed` saves failing logs the sandbox cannot fetch without credentials. |
 | Create a worktree | `git worktree add <dir> <branch>` | The worktree's `.git` gitfile is outside most sandbox grants. |
-| Delete a merged branch | `agentteams --branch-post-merge <branch> --apply` (grant) or `agentteams --branch-cleanup` (clearance) | Destructive — authorization first; raw `git branch -d` only where the branch-lifecycle reference allows it without agentteams. |
+| Delete a merged branch | `agentteams --branch-post-merge <branch> --apply` (grant) or `agentteams --branch-cleanup` (clearance) | Destructive — authorization first; raw `git branch -d` only where the branch-lifecycle reference allows it without agentteams. The host may already have deleted the remote branch on merge: treat that as success (§4). |
 | Install a missing tool | `brew install …` / `python -m pip install …` | Says why the tool is needed; pins a version where it can. |
 | Regenerate agent files a sandbox cannot write | `agentteams --update … --merge --yes` | Never `--overwrite` or `--bridge-refresh` without their own clearance. |
 | Open a URL or app | `open <url>` | Not destructive; often fits in the closing message instead of a script. |

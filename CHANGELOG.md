@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (sandbox operator handoff: verify outcomes, not exit codes)
+
+- `references/sandbox-handoff.reference.md` §4 adds four checks learned from landing the handoff feature through
+  its own protocol (PR #263):
+  - A commit step compares what was committed with what it staged, because commit hooks can add files.
+  - A publish step checks the pull request is mergeable, because a conflicting PR triggers no `pull_request` CI.
+  - A script runs the project's pre-push checks before `git push`, including steps CI runs only on another
+    operating system.
+  - A step that acts on remote state converges on the desired state instead of racing a check-then-act. When a
+    host auto-deleted the merged branch between `git ls-remote` and `git push --delete`, the cleanup should have
+    treated that as success.
+- §8's push row points at the mergeability check, and `gh run view --log-failed` covers failing logs the sandbox
+  cannot fetch without credentials. Its branch-deletion row notes the remote branch may already be gone.
+
 ### feat (sandbox operator handoff: a sandboxed agent hands refused work to the operator as a script and a complete command)
 
 - An agent inside an OS sandbox (Claude Code, Codex `workspace-write`, `confine-run.sh`) that hits a refused
