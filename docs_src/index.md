@@ -106,10 +106,10 @@ Open the dedicated [Interoperability](interoperability.md) tab for mode-by-mode 
 AgentTeams is not yet published to PyPI. Install directly from the GitHub repository:
 
 ```bash
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.0"
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.1"
 ```
 
-Install the signed `v1.0.0` tag (later `v1.0.N`); for a verified install from a separate tag checkout, see [Releases and branches](release-and-branching.md). `release/1.0` holds reviewed fixes queued for the next patch release: unsigned between tags, not for pinning.
+Install the signed `v1.0.1` tag (or a later `v1.0.N`); for a verified install from a separate tag checkout, see [Releases and branches](release-and-branching.md). `release/1.0` holds reviewed fixes queued for the next patch release: unsigned between tags, not for pinning.
 
 Or clone and install in editable mode for development:
 

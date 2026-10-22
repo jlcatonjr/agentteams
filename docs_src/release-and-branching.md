@@ -24,7 +24,7 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 | `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
 
-`main` is `1.1.0.dev0`. `release/1.0` is at `1.0.0`, which is tagged `v1.0.0`.
+`main` is `1.1.0.dev0`. `release/1.0` is at `1.0.1`, which is tagged `v1.0.1` (the first patch release; `v1.0.0` is the first 1.0 release).
 
 **Older lines:** none. The 1.0 line is the first maintained line. RCs 1–9 were tags on `main`.
 
@@ -32,21 +32,21 @@ The name `release/<X.Y>` is reserved for maintained lines. Never create a `relea
 
 ## Using agentteams
 
-Install a signed release tag: `v1.0.0`, and later `v1.0.N`.
+Install the latest signed release tag on the 1.0 line: today `v1.0.1`.
 
 ```bash
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.0"
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.1"
 ```
 
 **Verified install,** for a governed team, an experiment or a paper. Clone the tag into a directory of its own, check its signature with repository config neutralised, then install from that checkout:
 
 ```bash
-git clone --branch v1.0.0 https://github.com/jlcatonjr/agentteams.git agentteams-v1.0.0
-cd agentteams-v1.0.0
+git clone --branch v1.0.1 https://github.com/jlcatonjr/agentteams.git agentteams-v1.0.1
+cd agentteams-v1.0.1
 git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
     -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
     -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    tag -v v1.0.0 && pip install .
+    tag -v v1.0.1 && pip install .
 ```
 
 The `&&` stops the install if the signature check fails. The output must also show the release key's full fingerprint, which begins `SHA256:IPdnLwlF`, not just "Good signature"; if it doesn't, stop and uninstall. "Verifying a release" below explains how to set up `allowed_signers` once. For a patch release, repeat this with the new tag in a new directory.
@@ -155,14 +155,14 @@ copy inside the repository you are checking, or confirm the fingerprint with Jim
    git -c gpg.format=ssh -c gpg.ssh.program=/usr/bin/ssh-keygen \
        -c gpg.ssh.allowedSignersFile=$HOME/.config/agentteams/allowed_signers \
        -c gpg.program=/usr/bin/gpg -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-       tag -v v1.0.0
+       tag -v v1.0.1
    ```
 
 3. Check that the output shows the full fingerprint from `SECURITY.md`, not just "Good signature".
 
 ## Notes for agentteams
 
-- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version. For the 1.0 documentation, browse the `docs_src/` folder at the `v1.0.0` tag.
+- **The docs site follows `main`.** The site at jlcatonjr.github.io/agentteams is built from `main`, so it describes the development version. For the 1.0 documentation, browse the `docs_src/` folder at the latest `v1.0.N` tag (today `v1.0.1`).
 - **Downstream repositories** (researchteam, mathAgents, baseAgent) pin agentteams in their `toolchain.lock` to the commit of a verified tag, never to a branch. A downstream repository may tighten these rules, never weaken them.
 
 ## Questions
