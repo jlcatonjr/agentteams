@@ -32,7 +32,7 @@ itself. If your app serves LLM output to end users, you're responsible for addin
 governance; the generated team reviews the code as it's written, not the app's live behavior.
 See the [Runtime Security for Served Apps](docs_src/runtime-security-guide.md) guide for what that
 responsibility involves.
-**One exception, disclosed:** `pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.0"` installs
+**One exception, disclosed:** `pip install "agentteams[research] @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.1"` installs
 `agentteams.research` — a small, real Python library (no-key web search, curated-source rating,
 dual-lens claim verification) a project may add as its own runtime dependency and call directly.
 Unlike everything else this module emits, that's genuine runtime code, not a design-time
@@ -72,10 +72,10 @@ Short reads (about five paragraphs each) explaining how core module components f
 
 ### 1. Install
 
-Install the signed `v1.0.0` release (one runtime dependency, `jsonschema`; otherwise stdlib Python 3.11+):
+Install the signed `v1.0.1` release (one runtime dependency, `jsonschema`; otherwise stdlib Python 3.11+):
 
 ```bash
-pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.0"
+pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.1"
 ```
 
 For a verified install (a separate checkout of the tag, its signature checked with repository config
