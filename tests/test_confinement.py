@@ -128,9 +128,18 @@ def test_declared_program_writes_its_root(project):
 @live
 @pytest.mark.parametrize("target", ["src/a.txt", ".agentteams/proposal-ledger.jsonl", "../escape.txt"])
 def test_writes_outside_the_roots_are_refused_by_the_kernel(project, target):
+    path = (project / target).resolve()
+    before = path.read_bytes() if path.exists() else None
     code = f"open({target!r}, 'w').write('x')"
     result = _run(project, code)
-    assert result["exit"] != 0 and "Operation not permitted" in result["stderr"] + "PermissionError"
+    # The target is unchanged (or still absent): the refusal is the kernel's, not some unrelated failure. The
+    # positive control is test_declared_program_writes_its_root, which writes inside a write root.
+    assert (path.read_bytes() if path.exists() else None) == before
+    # The kernel refuses the write; which errno it reports depends on the image: EPERM on Ubuntu 24 and macOS, EROFS
+    # ("Read-only file system") on Ubuntu 26's bwrap (#262). Any of the refusal errnos passes; a success never does.
+    assert result["exit"] != 0
+    assert any(m in result["stderr"] for m in ("[Errno 1] Operation not permitted", "[Errno 13] Permission denied",
+                                               "[Errno 30] Read-only file system")), result["stderr"]
     assert P.verify_ledger(project) == []
 
 

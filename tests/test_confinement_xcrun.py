@@ -51,7 +51,12 @@ def test_named_git_adds_the_real_tool_literal_and_its_exec_path() -> None:
     assert exp.unresolved == [] and exp.dropped == []
 
 
-def test_non_launcher_adds_nothing() -> None:
+def test_non_launcher_adds_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The expansion is macOS's, so the host's /usr/bin must not leak in: Ubuntu 26's Rust coreutils make /usr/bin/true
+    # a link to gnutrue (#262). Resolve /usr/bin paths as a macOS host would (no links there); everything else is
+    # unchanged. (A temp symlink can't stand in: the expansion keys on the literal /usr/bin directory.)
+    real = C.os.path.realpath
+    monkeypatch.setattr(C.os.path, "realpath", lambda p: p if str(p).startswith("/usr/bin/") else real(p))
     calls: list[str] = []
     exp = C.expand_exec_paths(["/usr/bin/true", "/opt/lean/bin"], fake_resolver({}, calls), platform="darwin")
     assert exp == C.Expansion([], [], [])
