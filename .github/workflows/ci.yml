@@ -23,10 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-24.04, not ubuntu-latest: GitHub moved ubuntu-latest to Ubuntu 26 from 2026-10-19, where the
-        # confinement tests' expectations (EPERM wording, survivor reporting, GNU coreutils) don't hold yet.
-        # Ubuntu 26 support is a 1.0.2 must-fix; move back to ubuntu-latest with it.
-        os: [ubuntu-24.04, macos-latest]
+        # TEMPORARY (#262 verification): both Ubuntu images while the fix is checked; the final commit keeps
+        # ubuntu-latest only (Ubuntu 26, where bwrap is usable and the live confinement tests actually run).
+        os: [ubuntu-24.04, ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12"]
 
     steps:
@@ -42,8 +41,24 @@ jobs:
       - name: Install package and pytest
         run: pip install -e ".[test,research]"
 
+      # TEMPORARY (#262 verification): say which OS sandbox this runner has, so a skipped live suite is visible.
+      - name: Report the OS sandbox
+        run: python -c "from agentteams import confinement as C; print('::notice title=sandbox::' + str(C.available()))"
+
       - name: Run tests
-        run: pytest tests/
+        run: pytest tests/ -rs --junitxml=pytest-results.xml
+
+      # TEMPORARY (#262 verification): failed tests as annotations, readable from the public check-runs API.
+      - name: Annotate failed tests
+        if: failure()
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          for tc in ET.parse("pytest-results.xml").iter("testcase"):
+              for f in list(tc.findall("failure")) + list(tc.findall("error")):
+                  msg = (f.get("message") or "").replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")[:900]
+                  print(f"::error title={tc.get('classname')}.{tc.get('name')}::{msg}")
+          PY
 
       # The full suite above installs the package EDITABLE, where source `schemas/`
       # is always on the path — which is exactly why the rc6 wheel shipping zero
