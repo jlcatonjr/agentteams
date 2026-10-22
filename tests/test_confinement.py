@@ -185,7 +185,7 @@ def test_survivor_fails_the_run(project):
 
 @live
 def test_a_survivor_cannot_write_after_the_run(project):
-    """The property that matters on every sandbox: nothing the command leaves behind writes after the run ends.
+    """On every sandbox, a process the command leaves in the sandbox does not write after the run ends.
 
     Seatbelt reports the survivor and fails the run; bwrap's PID namespace kills it at teardown, unobserved (#262),
     and the ledger records that rather than "none". Either way the late write never lands.

@@ -191,7 +191,7 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 survivors = False  # the group is empty: nothing outlived the command
             # Under bwrap the command runs in its own PID namespace and session (--unshare-pid --new-session), so
             # this group check can't see what it left behind. The kernel kills every process in the namespace when
-            # bwrap exits, before the snapshot below, so nothing outlives the run; but survivors are unobservable
+            # bwrap exits, before the snapshot below, so none of them outlives the run; but survivors are unobservable
             # here, and the ledger says so rather than "none" (#262: on Ubuntu 26 the check never sees them).
             if sandbox == "bwrap" and not survivors:
                 survivors = None

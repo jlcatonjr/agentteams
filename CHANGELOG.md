@@ -12,11 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not on an escape. CI for v1.0.1 was pinned to `ubuntu-24.04`.
 - **Survivors under bwrap.** The command runs in its own PID namespace and session (`--unshare-pid --new-session`), so
   the process-group check after a run cannot see what it left behind. The kernel kills every process in the namespace
-  when bwrap exits, before the post-run snapshot, so nothing outlives the run. On Ubuntu 24 the check seemed to work
+  when bwrap exits, before the post-run snapshot, so no process in it outlives the run. On Ubuntu 24 the check seemed to work
   only because of process-exit timing. The ledger now records `survivors_killed: "unobservable: killed at PID-namespace
   teardown"` under bwrap instead of `false`. Seatbelt still reports survivors and fails the run.
-  `test_a_survivor_cannot_write_after_the_run` checks the property that matters on both sandboxes: a left-behind
-  process never writes after the run.
+  `test_a_survivor_cannot_write_after_the_run` checks, on both sandboxes, that a process the command leaves in the
+  sandbox does not write after the run.
 - **Tests:** a refused write may report EPERM, EACCES or EROFS (Ubuntu 26's bwrap reports EROFS), and the target must
   be unchanged. The xcrun expansion test no longer reads the host's `/usr/bin` links (Ubuntu 26's Rust coreutils).
 - `agentteams/proposal_run.py` changes, and its pin in `references/enforcement-integrity.json` moves; the operator's

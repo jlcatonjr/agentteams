@@ -54,7 +54,7 @@
     "agentteams/learned_blocks.py": "2df7c5432bfd85e3eefc19f51561a38c04fc29d6e07d484a25c2e82a08eae1fb",
     "agentteams/mcp_direct_grants.py": "99fc3804eeed4b92214242c63a8463a9f99ab681e038bc82bb90db0bdf89a895",
     "agentteams/proposal_policy.py": "1432a649589b0cd348a901622503aad5e487d7568ec5ad1fe786124e613cbdff",
-    "agentteams/proposal_run.py": "f3574b501624be9829e7791f9cbe3648f75040e64e69d32237b1b8799a1098d5",
+    "agentteams/proposal_run.py": "8371a97b9c11384b950f3ba1a3f29e606ef60e88ef8ca781132b8313c3bd5ecb",
     "agentteams/proposal_runner.py": "19d525a0de733820c92c937fee43d0bc55251a667802fdca6574806e55928d64",
     "agentteams/proposal_staging.py": "c2c5e41e0d47579e4086fc191e6f88f11f015f3aa02c9cf758246bb6924cdde3",
     "agentteams/proposals.py": "2db55fbc58f69b370cd35191cbd12022755499b34a825ecc0dc3ec50b9d94f10",
