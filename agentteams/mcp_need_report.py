@@ -168,7 +168,9 @@ def _read_register(path: Path) -> list[dict[str, str]]:
 def _failed(row: dict[str, Any]) -> bool:
     return (row.get("action") == "run-request-timeout"
             or (isinstance(row.get("exit"), int) and row["exit"] != 0)
-            or bool(row.get("undeclared_writes")) or bool(row.get("survivors_killed")))
+            or bool(row.get("undeclared_writes"))
+            # True only: under bwrap the ledger records survivors as an "unobservable: ..." string (#262), not a failure.
+            or row.get("survivors_killed") is True)
 
 
 def build_report(root: Path, *, register: Path | None = None, prefix_words: int = DEFAULT_PREFIX_WORDS,

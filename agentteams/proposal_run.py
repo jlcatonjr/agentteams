@@ -189,6 +189,12 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
                 survivors = True
             except ProcessLookupError:
                 survivors = False  # the group is empty: nothing outlived the command
+            # Under bwrap the command runs in its own PID namespace and session (--unshare-pid --new-session), so
+            # this group check can't see what it left behind. The kernel kills every process in the namespace when
+            # bwrap exits, before the snapshot below, so nothing outlives the run; but survivors are unobservable
+            # here, and the ledger says so rather than "none" (#262: on Ubuntu 26 the check never sees them).
+            if sandbox == "bwrap" and not survivors:
+                survivors = None
             if run_tmp:
                 shutil.rmtree(run_tmp, ignore_errors=True)
         after = P._snapshot(root, env)
@@ -235,7 +241,9 @@ def run_request(artifact: dict[str, Any], *, root: Path, policy: Policy, dry_run
         P.record(root, {"action": "run-request", "agent": agent, "argv": argv, "exit": proc.returncode,
                       "duration_ms": duration_ms,
                       "undeclared_writes": undeclared, "purpose": purpose.strip()[:300],
-                      **({"confined": confined_as, "survivors_killed": survivors} if confined_as else {})})
+                      **({"confined": confined_as,
+                          "survivors_killed": "unobservable: killed at PID-namespace teardown" if survivors is None
+                          else survivors} if confined_as else {})})
         (stdout, cut_out), (stderr, cut_err) = P._cap_output(proc.stdout), P._cap_output(proc.stderr)
         result = {"agent": agent, "argv": argv, "exit": proc.returncode, "duration_ms": duration_ms,
                   "stdout": stdout, "stderr": stderr, "truncated": cut_out or cut_err,

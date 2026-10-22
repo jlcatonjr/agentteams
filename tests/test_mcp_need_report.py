@@ -191,3 +191,12 @@ def test_cli_is_read_only_and_supports_json(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads(proc.stdout)["agents"]["lean-prover"]["proposals"]["bytes_total"] == 4000
     assert {p: p.stat().st_mtime_ns for p in tmp_path.rglob("*")} == before     # nothing written or touched
+
+
+def test_an_unobservable_bwrap_survivor_is_not_a_failed_run():
+    # #262: under bwrap the ledger records survivors_killed as an "unobservable: ..." string, which must not count.
+    from agentteams.mcp_need_report import _failed
+    ok = {"action": "run-request", "exit": 0, "undeclared_writes": [],
+          "survivors_killed": "unobservable: killed at PID-namespace teardown"}
+    assert not _failed(ok)
+    assert _failed({**ok, "survivors_killed": True})

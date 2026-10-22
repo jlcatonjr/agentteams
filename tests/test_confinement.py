@@ -11,6 +11,7 @@ import multiprocessing
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -172,7 +173,7 @@ def test_agent_without_confined_entry_refused(project):
         P.run_request(req, root=project, policy=policy, confine=True)
 
 
-@live
+@pytest.mark.skipif(SANDBOX != "seatbelt", reason="only Seatbelt can observe survivors (bwrap: see the test below)")
 def test_survivor_fails_the_run(project):
     # A child that detaches its output (as a daemon would) and keeps running after the command exits.
     code = ("import subprocess, sys; "
@@ -180,6 +181,28 @@ def test_survivor_fails_the_run(project):
             "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)")
     with pytest.raises(P.UndeclaredWritesError, match="left processes running"):
         _run(project, code)
+
+
+@live
+def test_a_survivor_cannot_write_after_the_run(project):
+    """The property that matters on every sandbox: nothing the command leaves behind writes after the run ends.
+
+    Seatbelt reports the survivor and fails the run; bwrap's PID namespace kills it at teardown, unobserved (#262),
+    and the ledger records that rather than "none". Either way the late write never lands.
+    """
+    late = project / "out" / "late.txt"
+    code = ("import subprocess, sys; "
+            "subprocess.Popen([sys.executable, '-c', "
+            "\"import time; time.sleep(1.5); open('out/late.txt', 'w').write('late')\"], "
+            "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)")
+    try:
+        _run(project, code)
+    except P.UndeclaredWritesError as exc:
+        assert "left processes running" in str(exc)
+    time.sleep(3)
+    assert not late.exists()
+    if SANDBOX == "bwrap":
+        assert "unobservable: killed at PID-namespace teardown" in (project / P.LEDGER_REL).read_text()
 
 
 def test_no_sandbox_refuses_unless_opted_out(project, monkeypatch):
