@@ -74,7 +74,8 @@ _BASELINE: dict[str, int] = {
     "universal/code-hygiene.template.md": 13,
     "universal/conflict-auditor.template.md": 1,
     "universal/external-retrieval-quality-gate.reference.template.md": 8,
-    "universal/git-operations.template.md": 4,  # 2->3: Invariant rule 8, no branch deletion; 3->4: rule 9, never commit a .env file
+    "universal/git-operations.template.md": 5,  # 2->3: Invariant rule 8, no branch deletion; 3->4: rule 9, never commit a .env file;
+                                                # 4->5: rule 10, sandbox refusals become operator handoffs (2026-10-21)
                                                 # outside the branch-lifecycle guards (2026-10-04);
                                                 # rendered inside the `content` fence; enforced by
                                                 # branch_cleanup.py + the delete gate hook.
