@@ -6,7 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared) — 1.0.1
+## [1.0.1] - 2026-10-21
+
+### release notes
+
+agentteams 1.0.1 is a patch release on the 1.0 line: five fixes held until after v1.0.0, backported from `main`
+by `cherry-pick -x`. It adds no dependencies and no new configuration. Decision logs, signed rows and generated teams
+carry over unchanged.
+
+- **Rule 15: unfreezing a frozen surface now needs the operator's Ed25519 signature.** An unfreeze is derived from
+  any of the row's text columns, or from a write target inside a frozen surface. An author can no longer
+  self-declare it away. researchteam 1.0.1 refuses every unfreeze until agentteams has this.
+- **A long `run_command` returns its result instead of "queued"** (mathAgents M6-F5). The call waits up to 180 s
+  for its own result.
+- **The Claude hook's notice log is no longer an undeclared write** during a long confined command (M6-F7).
+- **`--update --merge` draws the pipeline graph from the files it wrote**, so adopted agents appear in it.
+- **Merge-adopted agents are listed as rostered, not as orphans to delete.**
+- **Re-pins:** `references/enforcement-integrity.json` re-pins the changed enforcement modules. Re-render, then run
+  `--verify-integrity`.
+- **Install:** run from a verified, detached checkout of the signed `v1.0.1` tag, and pin its peeled commit (release
+  key `SHA256:IPdnLwlF…`, as in `SECURITY.md`).
+
+### fix (Rule 15: an unfreeze of a frozen surface derives constraint-relaxing; it is never self-declared)
 
 - Before, a decision row that unfroze a surface was relaxing only when its author set `effect_relaxes`, which is
   the self-declaration Rule 15 forbids. researchteam 1.0.1 refuses every unfreeze until agentteams derives it.
@@ -30,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `cli/frozen_surfaces.py`) and the new module change, and their pins in `references/enforcement-integrity.json`
   move; the operator's merge approval covers that.
 
-### fix (runner MCP: a long `run_command` returns its result, not "queued") — 1.0.1
+### fix (runner MCP: a long `run_command` returns its result, not "queued")
 
 - A granted agent's `run_command` waited only the server's call wait (20 s by default) and then returned
   `{request_id, status: queued}`. Grants are exact, so an agent without `request_status` could never read the result
@@ -51,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The agent guidance (`write_policy.py`) now says this. `agentteams-runner-mcp.py`, its pin in `runner_mcp.py` and
   `write_policy.py` change, and the operator re-pins `references/enforcement-integrity.json`.
 
-### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7) — 1.0.1
+### fix (runner: the Claude hook's notice log is not a confined command's undeclared write, M6-F7)
 
 - The generated Claude hook appends `.claude/hook-notices/<UTC date>.log` while a long confined command runs.
   `run_request` watches `.claude`, so such runs were reported ok:false with that file as an undeclared write.
@@ -64,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `agentteams/proposal_run.py` changes. Its pin in `references/enforcement-integrity.json` moves too, and the
   operator's merge approval covers that.
 
-### fix (`--update --merge` draws the pipeline graph from the files it wrote) — 1.0.1
+### fix (`--update --merge` draws the pipeline graph from the files it wrote)
 
 - The graph was built before the write, from freshly rendered agents laid over the disk copies. A merge keeps the
   on-disk front matter, such as an adopted agent's place in the orchestrator's `agents:` list, so the graph described
@@ -73,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After a successful merge-mode write, the graph is now redrawn from disk (`git_hooks.redraw_graph_after_merge`), the
   same way `--refresh-graph` and the commit hook build it. This happens before the build log is written.
 
-### fix (orphan advisory: merge-adopted agents are not "orphans to delete") — 1.0.1
+### fix (orphan advisory: merge-adopted agents are not "orphans to delete")
 
 - An agent adopted with `--update --merge --adopt-orphans` is recorded only in the orchestrator's `agents:` roster
   on disk. Each run rebuilds the manifest from the brief, so a later plain `--update` reported every such agent as an
