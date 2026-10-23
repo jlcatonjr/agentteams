@@ -12,6 +12,8 @@ and stops for you to check. None of them runs inside an agent session.
 | `../vulnscan-agent-image.sh` | Step 7 | build the agent image (goose checked against GitHub's published digest) and run `agent-selftest`; needs Docker running |
 | `05-first-run.sh` | Steps 8, 9 | sign a narrow grant (1 repo root, 1 day, 5 uses), `daily`, one supervised `agent-run`, `review`, spend |
 | `../vulnscan-acceptance.sh` | Part D | read-only acceptance checks; report written outside any repository |
+| `06-sigterm-check.sh` | Part D #9 | starts `agent-run`, sends SIGTERM after `DELAY` s, checks exit 143, no container left, status `agent-error` |
+| `07-schedule.sh [--remove]` | Step 3 | dry run of the daily job, then (after you confirm) `schedule install --apply` and `schedule status` |
 
 Your keys never pass through these scripts' output: the signing key is named only on the signing
 command, and the OpenRouter key goes straight into a mode-600 file outside the

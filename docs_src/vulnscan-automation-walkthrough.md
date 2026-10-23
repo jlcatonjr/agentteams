@@ -318,22 +318,36 @@ run until a passing self-test exists **for the current image and the current con
 after every image rebuild, and after an agentteams upgrade that changes how the containers are
 started, re-run `agent-selftest` (the run's refusal says which).
 
-*No screenshot: the self-test needs Docker, so its capture comes from the operator's supervised
-run. The shape it prints (`agent_run.selftest`; also saved to `<state>/agent-selftest.json`):*
+A passing self-test, as printed on a real first setup (macOS, Docker Desktop, goose 1.37.0; also saved
+to `<state>/agent-selftest.json`):
 
 ```text
+$ python -P -m agentteams.vulnscan agent-selftest
 {
   "passed": true,
-  "checks": {"no_credential_paths": true, "no_token_env": true, "internet_blocked": true,
-             "gateway_reachable": true, "readonly_rootfs": true, "readonly_run_dir": true,
-             "readonly_results": true, "spool_writable": true, "goose_dirs_writable": true,
-             "no_capabilities": true, "no_new_privs": true, "non_root": true},
-  "image": "sha256:<image id>",
-  "flags_sha256": "<hex>",
-  "at": "<UTC time>",
-  "stderr": "<last 1000 characters>"
+  "checks": {
+    "no_credential_paths": true,
+    "no_token_env": true,
+    "internet_blocked": true,
+    "gateway_reachable": true,
+    "readonly_rootfs": true,
+    "readonly_run_dir": true,
+    "readonly_results": true,
+    "spool_writable": true,
+    "goose_dirs_writable": true,
+    "no_capabilities": true,
+    "no_new_privs": true,
+    "non_root": true
+  },
+  "image": "sha256:cb71cf61b47e3f66ed71a687045c3c66844afdf0c997ed5243f4982a317b163f",
+  "flags_sha256": "2f589ad2606b1e8a3a8639eca809317b17caab9c84a8d4290253fba8c273a647",
+  "at": "2026-10-23T16:09:39.102160+00:00",
+  "stderr": ""
 }
 ```
+
+The `image` and `flags_sha256` values are yours to compare against later runs: a different image or
+different container flags need a new self-test.
 
 A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
@@ -405,25 +419,30 @@ python -m agentteams.vulnscan agent-run
 15 seconds: escalations first, then the agent's report, then granted operations. It exits 0 when the
 run completed, 3 when it did not run, failed or timed out, and 143 on SIGTERM.
 
-At the end it prints the run's status, also written to `<run>/agent/status.json`. *A real capture
-comes from the operator's supervised run (it needs Docker and the model route); the shape, from
-`agent_run.run_agent`:*
+At the end it prints the run's status, also written to `<run>/agent/status.json`. A real first
+supervised run (GLM 5.3 through OpenRouter, a private test repository with two vulnerable pins):
 
 ```text
 {
-  "started": "<UTC time>",
+  "started": "2026-10-23T16:21:33.637079+00:00",
   "model": "z-ai/glm-5.3",
-  "run_id": "<run date>-<6 hex>",
+  "run_id": "2026-10-23-beca2f",
   "exit": 0,
   "timed_out": false,
-  "spend": {"budget_usd": 2.0, "max_tokens": 10000000, "spent_usd": ..., "calls": ...,
-            "refused": 0, "unmetered": 0, "max_unmetered_calls": 20, "upstream_errors": 0,
-            "allow_unmetered": false, "prompt_tokens": ..., "completion_tokens": ..., "updated": "..."},
+  "spend": {
+    "budget_usd": 2.0, "max_tokens": 10000000, "spent_usd": 0.057209, "calls": 43,
+    "refused": 0, "unmetered": 0, "max_unmetered_calls": 20, "upstream_errors": 0,
+    "allow_unmetered": false, "prompt_tokens": 339252, "completion_tokens": 2700,
+    "updated": "2026-10-23T16:22:20.578648+00:00"
+  },
   "run_state": "completed",
   "state": "completed",
-  "finished": "<UTC time>"
+  "finished": "2026-10-23T16:22:28.832302+00:00"
 }
 ```
+
+About a minute and six cents: `unmetered: 0` shows the route reports usage on every reply, so the budget
+cap is exact.
 
 `run_state` is `completed`, `agent-error`, `timed-out` or `not-run`. A refused run, a launcher
 failure or a SIGTERM has `reason` in place of `exit`, `timed_out` and `spend` (a held run lock also
@@ -448,6 +467,27 @@ python -m agentteams.vulnscan review
 ![the review lists open escalations, the grant, actions taken, refused requests and findings not acted on](book/figures/vulnscan/11-review.svg)
 
 *Demo account; the output is cut where marked (the agent's stored report follows).*
+
+The same run's review, actions section (home directory shown as `~`):
+
+```text
+## Standing grants
+
+- `vg-bea77869f82518a5`: ops open-pr, stage-fix; 2/5 uses; expires 2026-10-24T15:53:54+00:00; roots 1, hosts —
+
+## Actions taken
+
+| When | Op | Target | Result | Detail | Agent rationale (untrusted) |
+|---|---|---|---|---|---|
+| 2026-10-23T16:21:53+00:00 | stage-fix | `~/vulnscan-sandbox-root/vulnscan-sandbox` | **done** | vulnscan/20261023-88a4e171fe | CRITICAL runtime finding: PyJWT 2.3.0 → 2.15.0 (26 advisories, …); plus MODERATE requests 2.32.4 → 2.33.0 … |
+| 2026-10-23T16:22:13+00:00 | open-pr | `~/vulnscan-sandbox-root/vulnscan-sandbox` | **done** | https://github.com/<owner>/vulnscan-sandbox/pull/1 | Stage-fix … completed (branch vulnscan/20261023-88a4e171fe, changed requirements.txt). … |
+| 2026-10-23T16:22:28+00:00 | report | `run` | **done** | stored report.md |  |
+```
+
+The pull request changed only the two pins (`PyJWT==2.15.0`, `requests==2.33.0`). The same run also
+showed a refusal: the agent asked for `server-audit` on a local-runtime finding's target, and the
+executor refused it because no grant covers it. (Local findings now use the target `this-machine`, and
+the task limits server operations to configured server names.)
 
 Read it end to end, and look at the staged change before going on: `stage-fix` commits it in an
 executor-owned worktree under `~/.local/state/agentteams/vulnscan/worktrees/`, on the branch the
