@@ -20,7 +20,7 @@ echo "== installing $(git -C "$REPO" rev-parse --short "$REF") with pipx"
 pipx install --force "$WORK/src[signing]"
 
 PY="$(pipx environment --value PIPX_LOCAL_VENVS)/agentteams/bin/python"
-"$PY" -c 'import agentteams.vulnscan, cryptography' || { echo "install check failed" >&2; exit 1; }
+"$PY" -P -c 'import agentteams.vulnscan, cryptography' || { echo "install check failed" >&2; exit 1; }
 "$PY" -P -m agentteams.vulnscan --help >/dev/null
 echo
 echo "Installed. The other scripts find this interpreter automatically; to use it by hand:"

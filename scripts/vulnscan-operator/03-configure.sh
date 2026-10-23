@@ -79,7 +79,7 @@ else
   # 3) goose's keychain entry
   if [ -z "$ORKEY" ] && [ "${GOOSE_KEY:-1}" = 1 ] && command -v security >/dev/null; then
     echo "reading OPENROUTER_API_KEY from goose's keychain entry (allow access if macOS asks)"
-    ORKEY="$(security find-generic-password -s goose -a secrets -w 2>/dev/null | "$PY" -c '
+    ORKEY="$(security find-generic-password -s goose -a secrets -w 2>/dev/null | "$PY" -P -c '
 import json, sys
 raw = sys.stdin.read().strip()
 try:
@@ -102,7 +102,7 @@ print(value if isinstance(value, str) else "")' || true)"
   unset ORKEY
   echo "wrote $KEYFILE (mode 600)"
 fi
-"$PY" - "$CFG/vulnscan.json" "$TEAM" "$KEYFILE" <<'PY'
+"$PY" -P - "$CFG/vulnscan.json" "$TEAM" "$KEYFILE" <<'PY'
 import json, sys
 from pathlib import Path
 cfg_path, team, keyfile = Path(sys.argv[1]), sys.argv[2], sys.argv[3]

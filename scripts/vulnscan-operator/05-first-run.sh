@@ -21,7 +21,7 @@ VS=("$PY" -P -m agentteams.vulnscan)
 [ -t 0 ] || { echo "run this in an interactive terminal (signing asks you to confirm)" >&2; exit 2; }
 [ -f "$PRIV" ] || { echo "no operator key $PRIV (run 03-configure.sh)" >&2; exit 2; }
 docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 2; }
-"$PY" -c 'import sys; from agentteams.vulnscan import daily, agent_run
+"$PY" -P -c 'import sys; from agentteams.vulnscan import daily, agent_run
 ok, why = agent_run.selftest_ok(daily.load_config()); print("self-test:", why); sys.exit(0 if ok else 1)' \
   || { echo "no passing self-test for this image (run scripts/vulnscan-agent-image.sh)" >&2; exit 2; }
 

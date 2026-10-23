@@ -27,7 +27,7 @@ if [ -z "$PY" ] && command -v pipx >/dev/null; then
   [ -n "$venvs" ] && [ -x "$venvs/agentteams/bin/python" ] && PY="$venvs/agentteams/bin/python"
 fi
 PY="${PY:-python3}"
-"$PY" -c 'import agentteams.vulnscan' 2>/dev/null || { echo "agentteams is not importable with $PY (set VULNSCAN_PY)" >&2; exit 2; }
+"$PY" -P -c 'import agentteams.vulnscan' 2>/dev/null || { echo "agentteams is not importable with $PY (set VULNSCAN_PY)" >&2; exit 2; }
 docker info >/dev/null 2>&1 || { echo "Docker is not running: start Docker Desktop (or the daemon), then re-run." >&2; exit 2; }
 
 case "$(uname -m)" in arm64|aarch64) GARCH=aarch64-unknown-linux-gnu;; x86_64|amd64) GARCH=x86_64-unknown-linux-gnu;;
@@ -42,7 +42,7 @@ PUB=""
 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
   PUB="$(gh api "repos/block/goose/releases/tags/v$GV" --jq ".assets[] | select(.name==\"$ASSET\") | .digest" 2>/dev/null | sed 's/^sha256://')"
 else
-  PUB="$(curl -fsSL "https://api.github.com/repos/block/goose/releases/tags/v$GV" | "$PY" -c \
+  PUB="$(curl -fsSL "https://api.github.com/repos/block/goose/releases/tags/v$GV" | "$PY" -P -c \
     "import json,sys; a=[x for x in json.load(sys.stdin)['assets'] if x['name']=='$ASSET']; print((a[0].get('digest') or '').removeprefix('sha256:') if a else '')")"
 fi
 if [ -n "$PUB" ]; then
@@ -65,7 +65,7 @@ echo "== 3/4 agent-image build (source: $SRC)"
   --goose-version "$GV" --goose-sha256 "$SHA" --python-image "$PYIMG"
 
 echo "== 4/4 agent-selftest"
-if "$PY" -c 'from agentteams.vulnscan import daily, agent_run; import sys; a = agent_run.agent_cfg(daily.load_config()); sys.exit(0 if a.get("team_dir") else 1)' 2>/dev/null; then
+if "$PY" -P -c 'from agentteams.vulnscan import daily, agent_run; import sys; a = agent_run.agent_cfg(daily.load_config()); sys.exit(0 if a.get("team_dir") else 1)' 2>/dev/null; then
   "$PY" -P -m agentteams.vulnscan agent-selftest
 else
   echo "Skipped: agent mode is not configured (vulnscan.json needs agent.team_dir and agent.key_file; walkthrough Step 6)."
