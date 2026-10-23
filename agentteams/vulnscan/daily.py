@@ -30,7 +30,6 @@ import fcntl
 import json
 import math
 import os
-import platform
 import re
 import subprocess
 import sys
@@ -587,7 +586,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             total.feed_errors += [f"fix plan: {e}" for e in plan.feed_errors]
 
     if cfg.get("local_runtimes", True):
-        total.merge(engine.local_runtimes(platform.node() or "localhost"))
+        total.merge(engine.local_runtimes())
 
     kit = paths.server_kit_dir()
     for host in cfg.get("servers", []):

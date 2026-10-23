@@ -182,6 +182,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Gateway: `spend.json` is written atomically; `--max-tokens-total` below 0 exits 2.
     `debrief_limits` refuses NaN, infinity, booleans and strings. A SIGTERM during `agent-chat`
     removes its containers.
+- **vulnscan fixes from the first live supervised runs** (goose 1.37.0, GLM 5.3 via OpenRouter; the third
+  run staged and opened a correct dependency PR for $0.06).
+  - goose could not create its log directory (the sessions bind mount makes Docker create `$HOME/.local`
+    root-owned) and stopped before its first model call: `XDG_STATE_HOME` now points inside the writable
+    sessions mount, so goose's logs also survive as `<run>/agent/goose-data/state/goose/logs`. The self-test
+    checks it (`goose_dirs_writable`).
+  - A run whose agent exits 0 without a single model call is `agent-error`, not `completed`.
+  - **Behaviour change:** the default recipe is `.goose/recipes/vuln-remediation.yaml`; the generated
+    orchestrator's prompt is a role check, so a one-shot run of it answered that and stopped.
+  - Local runtime findings use the target `this-machine` instead of the hostname (the agent took the
+    hostname for a server); the task text limits server operations to configured server names.
+  - Operator scripts sign from an empty temporary directory (a `pipx` install under `~/.local` made signing
+    from `$HOME` refuse), and `03-configure.sh` takes the OpenRouter key from the checkout's `.env`.
 - **vulnscan operator tooling and screenshots.**
   - Packaging: a wheel built from a working tree no longer ships `__pycache__` bytecode left by a test
     run (`[tool.setuptools.exclude-package-data]`; `MANIFEST.in` covered only the sdist). The shipped

@@ -647,3 +647,13 @@ def test_e6_unreadable_version_is_unscannable_not_a_crash(tmp_path: Path, monkey
     rep = engine.local_runtimes()
     assert [s[0] for s in seen] == ["python"]
     assert [Path(p).name for p, _ in rep.unscannable] == ["node"]
+
+
+def test_local_runtime_findings_never_carry_the_hostname(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The agent took a hostname target for a server (first live run); local findings use a fixed label."""
+    from agentteams.vulnscan import engine
+    assert engine.LOCAL_TARGET == "this-machine"
+    import inspect
+    assert inspect.signature(engine.local_runtimes).parameters["target"].default == engine.LOCAL_TARGET
+    import agentteams.vulnscan.daily as daily
+    assert "platform.node()" not in inspect.getsource(daily)

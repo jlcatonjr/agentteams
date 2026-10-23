@@ -213,7 +213,13 @@ def _manager_of(path: str) -> str:
     return "tarball"
 
 
-def local_runtimes(target: str = "localhost") -> Report:
+#: Target of findings about runtimes on the machine running vulnscan. Not its hostname: the agent took a
+#: hostname for a server and requested server-audit on it (first live run), and the hostname would end up in
+#: the ledger and reports. Server operations only ever take hosts.conf names.
+LOCAL_TARGET = "this-machine"
+
+
+def local_runtimes(target: str = LOCAL_TARGET) -> Report:
     """Evaluate Node.js, PHP and Python found on PATH of the machine running this.
 
     Args:
