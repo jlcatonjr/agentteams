@@ -106,9 +106,12 @@ Output is written to `/path/to/your/project/.github/agents/`.
 Framework-specific defaults:
 
 - `copilot-vscode` -> `/path/to/your/project/.github/agents/`
-- `copilot-cli` -> `/path/to/your/project/.github/copilot/`
+- `copilot-cli` -> `/path/to/your/project/.github/agents/`
 - `claude` -> `/path/to/your/project/.claude/agents/`
 - `goose` **(beta)** -> `/path/to/your/project/.goose/recipes/`
+- `agents-md` **(beta)** -> `/path/to/your/project/.agents/`
+- `codex` **(beta)** -> `/path/to/your/project/.codex/agents/`
+- `grok` **(beta)** -> `/path/to/your/project/.grok/agents/`
 
 !!! note "Goose is in beta"
     The `goose` framework supports generate, convert, bridge and interop, and its adapter is **Beta** under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md). See the [feature-support matrix](cli-reference.md#feature-support-by-framework).
@@ -118,6 +121,7 @@ Instructions file defaults:
 - `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
 - `claude` -> `.claude/CLAUDE.md`
 - `goose` -> repo-root `AGENTS.md` (+ `.goosehints` integrator)
+- `agents-md`, `codex` and `grok` -> repo-root `AGENTS.md`
 
 ---
 

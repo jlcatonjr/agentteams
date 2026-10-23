@@ -1,173 +1,98 @@
-# Agent Teams Module
-
-Generate a complete, coordinated AI agent team for any project — from a single project description file.
-
+---
+hide:
+  - navigation
+  - toc
+search:
+  boost: 2
 ---
 
-## What It Does
+# A governed AI agent team for your project
 
-Given a project description (a `.json` or `.md` brief), the module:
+agentteams writes a coordinated team of AI agents into your repository from one short description of
+your project. It is for anyone who works with an AI coding tool and wants that work organized, checked and
+kept up to date as the project changes.
 
-1. **Analyzes** the project goal, deliverables, tools, and components
-2. **Selects** the right agent archetypes from a 4-tier taxonomy
-3. **Renders** all agent files by filling in project-specific placeholders
-4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, Block / AAIF **Goose**, or the cross-tool **AGENTS.md** standard
+<span id="what-it-does"></span>
 
-The generated team includes:
+## The problem it solves
 
-- 1 **Orchestrator** agent — coordinates all workflows
-- 11 **Governance agents** — navigation, security, code hygiene, consistency, cleanup, refactoring, documentation, cross-repository coordination, conflict resolution, and git operations
-- 3–10 **Domain agents** — `@work-summarizer` plus project-appropriate archetypes
-- 1 **Workstream Expert** per project component — deep, component-specific knowledge
-- 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team
-- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` (Goose / `agents-md`)
+- **One agent doing everything** drafts, reviews and approves its own work, so nothing catches its
+  mistakes.
+- **Long sessions erode instructions:** project rules stated early lose their hold as the conversation
+  grows.
+- **Agent documentation drifts:** the files that tell agents how your project works go stale, and agents
+  act on them anyway.
 
----
+## The idea
 
-## Workflow
+agentteams gives your agents what a well-run organization gives its people:
 
-![Adaptive Plan Execution Workflow](assets/images/workflow-12-adaptive-plan-execution.svg)
+- roles with clear boundaries;
+- an explicit order of authority;
+- checks before risky actions;
+- rules that stay current as the project changes.
 
----
+The rules are a short constitution that nothing an agent reads can override.
 
-## Blog Series: AgentTeams Module Roles and Workflows
+<span id="workflow"></span><span id="install"></span><span id="quick-example"></span>
 
-Short reads (about five paragraphs each) explaining how core module components fit together:
-
-1. [Introduction](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Introduction.html)
-2. [Adaptive Workflows with Step-by-Step Auditing and Revision](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Adaptive%20Workflows%20with%20Step-by-Step%20Auditing%20and%20Revision.html)
-3. [Team Builder and Workstream Expert Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Team%20Builder%20and%20Workstream%20Expert%20Agents.html)
-4. [Orchestrator Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Orchestrator%20Agent.html)
-5. [Functional Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Functional%20Agents.html)
-6. [Domain Agents](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Domain%20Agents.html)
-7. [Tools and References](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Tools%20and%20References.html)
-8. [Security Agent](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Security%20Agent.html)
-9. [Audit Protocols and Security](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Audit%20Protocols%20and%20Security.html)
-10. [Regularly Auditing Agent Documentation](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Regularly%20Auditing%20Agent%20Documentation.html)
-11. [Constitutional Fencing](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Constitutional%20Fencing.html)
-12. [Efficient Inter-agent Communication via a Daily Work Summaries Document](https://jameslcaton.com/#/blog/04-22-2026-AgentTeams%20Efficient%20Inter-agent%20Communication%20via%20a%20Daily%20Work%20Summaries%20Document.html)
-
----
-
-## Framework Support
-
-| Framework | Format | Handoffs | Builder Agent |
-|-----------|--------|----------|---------------|
-| `copilot-vscode` | `.agent.md` with YAML front matter | Native inline YAML | VS Code Copilot `.agent.md` |
-| `copilot-cli` | Plain `.md` system prompts | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | CLI prompt `.md` |
-| `claude` | Claude front matter `.md` + `CLAUDE.md` instructions | Runtime manifest when handoffs are present (`references/runtime-handoffs.json`) | `CLAUDE.md` system prompt |
-| `goose` **(beta)** | Block / AAIF Goose recipe YAML (`.goose/recipes/*.yaml`) | Native — orchestrator handoffs become `sub_recipes`, deeper edges become `summon` `load(...)` (no sidecar) | Runnable `team-builder.yaml` recipe |
-| `agents-md` | Cross-tool **AGENTS.md** standard (plain `.md`) | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
-
-For `copilot-cli`, `claude`, and `agents-md`, AgentTeams strips inline handoff sections from the visible prompt files but emits `references/runtime-handoffs.json` when handoffs are extracted, so routing metadata remains available to bridge layers and other runtime tooling. `copilot-vscode` and `goose` keep handoff semantics inline (for Goose, encoded directly in the recipes).
-
-!!! note "Goose support is in beta"
-    Goose support works and is validated against the Goose CLI, but is still maturing: interop into Goose is supported, converting from `claude`/`copilot-cli` sources currently yields flat (un-delegated) recipes, and the `goose` adapter is **Beta** under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md) (its API may change in a minor release). See the [framework feature-support matrix](cli-reference.md#feature-support-by-framework).
-
-**Goose** (`--framework goose`) emits one recipe per agent plus a team brief at the repo-root `AGENTS.md` and a `.goosehints` integrator; the orchestrator delegates to specialist recipes via `sub_recipes`. It is supported for **generate**, **convert** (`--convert-from … --framework goose`), **bridge** (`--bridge-from … --framework goose`) and **interop** (`--interop-from … --framework goose`; the canonical interop path keeps the handoff graph).
-
-**`agents-md`** (`--framework agents-md`) emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 AI coding tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. It is **generate-only**.
-
-Default framework locations:
-- `copilot-vscode`: `.github/agents/`
-- `copilot-cli`: `.github/copilot/`
-- `claude`: `.claude/agents/`
-- `goose`: `.goose/recipes/` (team brief at repo-root `AGENTS.md` + `.goosehints`)
-- `agents-md`: `.agents/` (canonical brief at repo-root `AGENTS.md`)
-
-Framework instructions locations:
-- `copilot-vscode`: `.github/copilot-instructions.md`
-- `copilot-cli`: `.github/copilot-instructions.md`
-- `claude`: `.claude/CLAUDE.md`
-- `goose`: repo-root `AGENTS.md` (+ `.goosehints`)
-- `agents-md`: repo-root `AGENTS.md`
-
-Three build paths:
-- Path A: fresh generation from a brief (`--description`)
-- Path B: format migration of an existing team (`--convert-from`)
-- Path C: lightweight interface bridge to source canonical agents (`--bridge-from`)
-
----
-
-## Interoperability Feature Family
-
-Interoperability is now a first-class capability in AgentTeams with three explicit modes:
-
-1. **Format migration** (`--convert-from`) for wrapper/front matter translation while preserving body prose.
-2. **CAI interop pipeline** (`--interop-from`) for canonical normalization and optional compatibility bundles.
-3. **Lightweight bridge** (`--bridge-from`) for source-canonical runtime integration without regenerating all source docs.
-
-Open the dedicated [Interoperability](interoperability.md) tab for mode-by-mode guidance and API links.
-
----
-
-## Install
-
-AgentTeams is not yet published to PyPI. Install directly from the GitHub repository:
+## See it
 
 ```bash
 pip install "agentteams @ git+https://github.com/jlcatonjr/agentteams.git@v1.0.1"
+agentteams --description brief.json --project /path/to/project --framework claude
 ```
 
-Install the signed `v1.0.1` tag (or a later `v1.0.N`); for a verified install from a separate tag checkout, see [Releases and branches](release-and-branching.md). `release/1.0` holds reviewed fixes queued for the next patch release: unsigned between tags, not for pinning.
+The brief names your project's goal, deliverables, tools and components. The command writes a complete
+team into your repository, from the orchestrator down to one expert per component. The same brief works
+for VS Code Copilot, Copilot CLI and Claude Code; Goose, the cross-tool AGENTS.md standard, Codex and
+Grok Build are supported in beta. Python 3.11 or later is required.
 
-Or clone and install in editable mode for development:
+[Get started](getting-started.md){ .md-button .md-button--primary } [Why agentteams](why/index.md){ .md-button }
 
-```bash
-git clone https://github.com/jlcatonjr/agentteams
-cd agentteams
-pip install -e .
-```
+<span id="framework-support"></span><span id="interoperability-feature-family"></span>
 
-Requires Python 3.11+. One runtime dependency (`jsonschema`); otherwise stdlib.
+## Why trust it
 
----
+- **Signed releases.** Release tags are signed. You install and pin a tag; [Releases and
+  branches](release-and-branching.md) lists the current one and explains how to verify it.
+- **A stability policy.** [STABILITY.md](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md)
+  states what semantic versioning covers, and labels the adapters that are still in beta.
+- **Documentation checked against the code.** CI fails when a documented API signature or CLI flag
+  stops matching the code. See the [API signature check](https://github.com/jlcatonjr/agentteams/blob/main/tests/test_api_doc_signatures.py)
+  and the [CLI flag check](https://github.com/jlcatonjr/agentteams/blob/main/tests/test_cli_reference_flag_parity.py).
 
-## Quick Example
+<span id="in-depth-guides"></span>
 
-```bash
-agentteams --description brief.json --project /path/to/project --framework copilot-vscode
-```
+## Where to start
 
-See [Getting Started](getting-started.md) for a full walkthrough, [Agent-Assisted Setup](agent-assisted-setup.md) to use a coding agent to create your team interactively, or [CLI Reference](cli-reference.md) for all flags.
+<div class="grid cards" markdown>
 
----
+-   **[Use it](getting-started.md)**
 
-## In-Depth Guides
+    Install agentteams, write a brief and generate your first team, then keep it up to date.
 
-### [Post-Production Auditor Guide](post-production-auditor-guide.md)
+-   **[Understand it](why/index.md)**
 
-Outcome-verification specialist for domain-agnostic completion checks (software, docs, operations, data). Covers:
+    The problem, the constitutional approach and the role of each agent, with the blog series and the
+    research manuscript.
 
-- When to use post-production-auditor (contextual automatic selection + manual override)
-- Core audit capability (sampling, verdict rules, closure gating)
-- Configuration and output artifacts
-- Escalation rules and remediation workflows
-- Applicability contract and limitations
+-   **[Integrate it](interoperability.md)**
 
-**Best for:** Projects with high-impact state changes, migration/release/remediation work, or compliance requirements.
+    Convert a team to another agent tool, bridge one canonical team into several, or exchange teams in
+    the Canonical Agent Interface format.
 
-### [Security Hardening & Threat Intelligence](security-hardening-guide.md)
+-   **[Secure it](agentteams-security-guide/README.md)**
 
-Comprehensive vulnerability management integrated into every pipeline run. Covers:
+    The security model: clearance, waivers, content safety, OS confinement and red-team testing.
 
-- Live threat intelligence feeds (CISA KEV, NVD CVSS, EPSS)
-- Fail-closed gating and 24-hour auto-refresh
-- Waiver system for offline/air-gapped environments
-- CLI flags for security control
-- Agent-level vulnerability handling
-- Security governance integration
+-   **[Help build it](contributing.md)**
 
-**Best for:** Security teams, CI/CD maintainers, and air-gapped deployments.
+    How the project is developed, tested and released, and how to report problems.
 
-### [Update Compatibility Maintenance Guide](update-compatibility-maintenance-guide.md)
+</div>
 
-Infrastructure hygiene practices for keeping generated agent teams continuously compatible with `--update` over time. Covers:
+<span id="blog-series-agentteams-module-roles-and-workflows"></span>
 
-- Fence coverage checks and legacy retrofit strategy
-- Safe merge-mode update invocation patterns
-- Outside-fence diff review and backup hygiene
-- CI maintenance cadence for early drift detection
-- Common compatibility failure modes and fast remediation paths
-
-**Best for:** Team maintainers, platform engineers, and repository owners responsible for long-lived agent infrastructure.
+**Next:** [get started](getting-started.md), read the [blog series and manuscript](why/further-reading.md),
+or see [how you can help](contributing.md).
