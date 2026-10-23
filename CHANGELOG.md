@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (site build: mkdocs-material 9.7.7)
+
+- `.github/workflows/docs.yml` pins `mkdocs-material==9.7.7` (was 9.7.6) and `pymdown-extensions==12.1` (was
+  unpinned). 9.7.6 carries GHSA-xvg9-69gf-fjrf (DOM XSS in search suggestions via a query parameter); the site
+  enables `search.suggest`, and every `jlcatonjr.github.io/*` project site shares its origin. Both versions are
+  past a 14-day cooldown with no OSV advisory (checked 2026-10-22).
+
 ### docs (sandbox operator handoff: verify outcomes, not exit codes)
 
 - `references/sandbox-handoff.reference.md` §4 adds four checks learned from landing the handoff feature through
