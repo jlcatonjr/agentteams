@@ -31,7 +31,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install MkDocs dependencies
-        run: pip install "mkdocs==1.6.1" "mkdocs-material==9.7.6" pymdown-extensions
+        run: pip install "mkdocs==1.6.1" "mkdocs-material==9.7.7" "pymdown-extensions==12.1"
 
       - name: Build docs
         run: mkdocs build --site-dir _site
