@@ -563,7 +563,13 @@ def publish_run(cfg: dict, run_dir: Path, run_id: str) -> dict | None:
 
 
 def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[str]) -> None:
-    """Scan repos, local runtimes and servers into ``total``."""
+    """Scan repos, local runtimes and servers into ``total``.
+
+    Plans an earlier run of the same day wrote are removed first: the agent reads every ``fixplan-*.md``
+    in the run directory, and a stale one would name a fix (or a target) this scan no longer has.
+    """
+    for old in [*run_dir.glob("fixplan-*.md"), *run_dir.glob("fix-*.md")]:
+        old.unlink()   # unlink never follows a symlink
     for root_s in cfg.get("repo_roots", []):
         root = Path(root_s).expanduser()
         if not root.is_dir():

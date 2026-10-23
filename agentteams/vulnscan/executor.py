@@ -462,8 +462,10 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
         changed = validate_diff(wt, base)
-        if not changed:
-            raise ExecError("nothing fixable without a major jump or cooldown exception")
+        if not changed:   # an npm that failed to run must not read as "nothing fixable"
+            npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
+            raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
+                            "nothing fixable without a major jump or cooldown exception")
         digest = hashlib.sha256(git(wt, "diff", "--no-ext-diff", "--no-textconv", base).encode()).hexdigest()[:10]
         name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
         _release_own_branch(repo, name)   # the branch is absent from here on, or this raised
