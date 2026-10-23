@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     its own is `agent-error`; the gateway counts connection failures as `upstream_errors`;
     `stage-fix` stages tracked files under ignored directories (`git add -u`, exact staged set),
     removes its own branch after a failed attempt, and disables repo-configured commit signing.
+    A nested clone of another owner's project gets a plan with no target (update or remove it locally).
+  - npm `stage-fix` runs npm again: its user and global config were the same empty file, which npm
+    refuses ("double-loading config"), so every npm fix had found nothing. stage-fix now reports
+    `npm failed: …` when npm cannot run, and a second scan the same day removes the first scan's plans.
   - The executor serves at most 200 spool requests per pass (more open an `escalation-flood`),
     sets aside requests left from a crashed run, and `serve-requests` by hand refuses while a run
     holds the run lock. Escalations on a linked worktree block its main repository.

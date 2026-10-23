@@ -128,6 +128,15 @@ def test_a_repo_configured_signing_program_never_runs(env: dict, monkeypatch: py
     assert not marker.exists()
 
 
+def test_an_npm_that_failed_to_run_is_reported_as_such(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-fix"], hosts=[])
+    err = 'npm error double-loading config "/x/npmrc" as "global", previously loaded as "user"'
+    monkeypatch.setattr(fix, "fix_path", lambda root, **kw: fix.FixResult(npm=[(".", f"Exit\n{err}\n")], applied=True))
+    res = executor.act("stage-fix", str(repo), env["cfg"])
+    assert res["status"] == "failed" and res["detail"].startswith("npm failed: npm error double-loading"), res
+
+
 def test_stage_changed_uses_literal_paths_and_checks_the_staged_set(env: dict, tmp_path: Path) -> None:
     repo, base = _committed(tmp_path / "r", {"requirements.txt": b"a==1\n", "requirements-dev.txt": b"b==1\n"})
     for name in ("requirements.txt", "requirements-dev.txt"):

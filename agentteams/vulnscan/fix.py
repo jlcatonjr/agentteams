@@ -416,12 +416,13 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
         cmd.append("--dry-run")
     env = {k: v for k, v in os.environ.items() if not k.lower().startswith("npm_config_")}
     with tempfile.TemporaryDirectory(prefix="agentteams-npm-") as tmp:
-        scratch, empty = Path(tmp) / "pkg", Path(tmp) / "empty-npmrc"
+        scratch, user_rc, global_rc = Path(tmp) / "pkg", Path(tmp) / "user-npmrc", Path(tmp) / "global-npmrc"
         scratch.mkdir()
-        empty.write_text("", encoding="utf-8")
+        for empty in (user_rc, global_rc):   # two files: npm refuses one file as both ("double-loading config")
+            empty.write_text("", encoding="utf-8")
         for n in names:
             shutil.copyfile(directory / n, scratch / n)
-        env.update({"NPM_CONFIG_USERCONFIG": str(empty), "NPM_CONFIG_GLOBALCONFIG": str(empty)})
+        env.update({"NPM_CONFIG_USERCONFIG": str(user_rc), "NPM_CONFIG_GLOBALCONFIG": str(global_rc)})
         try:
             proc = subprocess.run(cmd, cwd=scratch, env=env, capture_output=True, text=True, timeout=600,
                                   check=False)
