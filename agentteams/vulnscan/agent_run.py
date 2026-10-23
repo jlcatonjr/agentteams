@@ -11,7 +11,10 @@ The isolation design (operator decision, plan R5):
 Agent container flags: a fixed name, ``--read-only``, tmpfs ``/tmp`` and ``$HOME``
 (``/agenthome``), ``--cap-drop ALL``, ``no-new-privileges``, a non-root uid, pids and memory
 limits. Its **only** writable mounts are the request spool and its own goose sessions dir
-(``<run>/agent/goose-data``, mounted at :data:`GOOSE_SESSIONS_IN_CONTAINER`). The transcript is
+(``<run>/agent/goose-data``, mounted at :data:`GOOSE_SESSIONS_IN_CONTAINER`). goose's state dir
+(``XDG_STATE_HOME``, its logs) is :data:`GOOSE_STATE_IN_CONTAINER`, inside that mount, so the logs
+survive as ``<run>/agent/goose-data/state/goose/logs``. The run executes ``agent.recipe`` from the
+team dir, by default ``.goose/recipes/vuln-remediation.yaml`` (its prompt is the task). The transcript is
 captured host-side from stdout, and the gateway's ``spend.json`` lives in ``<run>/gateway``,
 which only the gateway mounts. One run at a time: :data:`run_lock_path` is held for the whole run.
 
@@ -27,6 +30,7 @@ container flags (:func:`flags_sha256`). The test proves, from inside the contain
 - the internet unreachable, including OpenRouter directly;
 - the gateway reachable;
 - read-only mounts and filesystem;
+- goose's log, session and config directories writable (``goose_dirs_writable``);
 - zero effective capabilities, ``no_new_privs`` set, and a non-root uid.
 
 Every ``docker`` command is built by a pure function, so tests check the flags without Docker.

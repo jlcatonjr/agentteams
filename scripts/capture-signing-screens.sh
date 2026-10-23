@@ -48,4 +48,4 @@ git -C "$REPO" status --short -- docs_src/book/figures/vulnscan
 for f in 06-grant-sign 09-resolve; do
   if [ -f "$REPO/docs_src/book/figures/vulnscan/$f.svg" ]; then echo "ok: $f.svg written"; else echo "MISSING: $f.svg"; fi
 done
-echo "Done. Tell Claude the script finished; it will review the figures and wire them into the walkthrough."
+echo "Done. Report the result: which figures changed, and any MISSING line above."

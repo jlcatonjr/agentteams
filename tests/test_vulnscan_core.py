@@ -657,3 +657,14 @@ def test_local_runtime_findings_never_carry_the_hostname(monkeypatch: pytest.Mon
     assert inspect.signature(engine.local_runtimes).parameters["target"].default == engine.LOCAL_TARGET
     import agentteams.vulnscan.daily as daily
     assert "platform.node()" not in inspect.getsource(daily)
+
+
+def test_scratch_tmp_directories_are_not_scanned(tmp_path: Path) -> None:
+    """A repo's tmp/ holds throwaway clones of other repos (first VK scan); they are skipped like node_modules."""
+    from agentteams.vulnscan import manifests
+    (tmp_path / "requirements.txt").write_text("PyJWT==2.3.0\n")
+    clone = tmp_path / "tmp" / "scratch" / "other-repo"
+    clone.mkdir(parents=True)
+    (clone / "requirements.txt").write_text("requests==2.31.0\n")
+    found = [str(p.relative_to(tmp_path)) for p in manifests.discover(tmp_path)]
+    assert found == ["requirements.txt"], found

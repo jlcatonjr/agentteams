@@ -212,6 +212,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Operator scripts: `scripts/vulnscan-acceptance.sh` (read-only Part D checks, report written outside the
     repository) and `scripts/vulnscan-agent-image.sh` (goose download checked against the digest GitHub
     publishes, base image pinned by digest, `agent-image build`, `agent-selftest`).
+  - `scripts/vulnscan-operator/` runs a first setup in order: `01-install.sh` (`pipx install` with
+    `[signing]`), `02-sandbox-repo.sh` (a private sandbox repository), `03-configure.sh` (Steps 1, 4, 5,
+    6), `05-first-run.sh` (a narrow `stage-fix` + `open-pr` grant on the sandbox, `daily`, one
+    supervised `agent-run`, `review`), `06-sigterm-check.sh` (Part D #9), `07-schedule.sh` (the daily
+    job) and `08-enable-agent.sh` (the unattended grant, `agent.enabled`, the daily job). There is no
+    `04`: Step 7 is `scripts/vulnscan-agent-image.sh`. `03-configure.sh` takes the OpenRouter key from,
+    in order, the `OPENROUTER_API_KEY` line of the agentteams checkout's `.env` (or
+    `AGENTTEAMS_ENV_FILE`), `~/.config/goose/goose-backend.sh`, goose's keychain entry (skipped with
+    `GOOSE_KEY=0`), then a hidden-input paste, and writes it to
+    `~/.config/agentteams-secrets/openrouter.env` (mode 600). With two grants already valid,
+    `08-enable-agent.sh` offers to revoke the one that expires first, and exits without signing if
+    you decline. The walkthrough's Step 6 example `key_file` is now that path.
 - **vulnscan documentation remediation.** Code fixes found while checking the docs against the code,
   and the docs that describe them.
   - Signing on Homebrew Python (`cli/signer_location.py`): the base interpreter (`sys.executable`,

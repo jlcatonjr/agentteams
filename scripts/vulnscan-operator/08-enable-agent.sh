@@ -2,7 +2,9 @@
 # 08 — switch on unattended agent mode (walkthrough Step 10). Run in your own interactive terminal.
 #
 #   1. sign the unattended grant: stage-fix + open-pr, only REPO_ROOT, DAYS days, USES uses
-#      (you review every field and confirm with y; your key is named on this one command only)
+#      (you review every field and confirm with y; your key is named on this one command only).
+#      At most two grants may be valid: with two already valid it first offers to revoke the one that
+#      expires first, and exits without signing if you decline.
 #   2. set agent.enabled true in vulnscan.json (the daily job then runs the agent after each scan)
 #   3. install the daily job at HOUR:MINUTE local time (dry run first, then it asks you)
 # Afterwards: read `review` every few days and `review --ack`; re-sign before the grant expires.
@@ -31,6 +33,24 @@ WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/vulnscan-enable.XXXXXX")"; trap 'rmdir "$W
 cd "$WORKDIR"   # sign from an empty directory (a pipx install under ~/.local is refused from $HOME)
 
 echo "== 1/3 sign the unattended grant: stage-fix + open-pr on $REPO_ROOT, $DAYS days, $USES uses"
+# At most two grants may be valid (with a third, vulnscan refuses them all). `grant list` prints one JSON
+# object per valid grant; with two already valid, offer to revoke the one that expires first.
+OLDEST="$("${VS[@]}" grant list | "$PY" -P -c '
+import json, sys
+from datetime import datetime
+rows = [json.loads(line) for line in sys.stdin if line.strip()]
+if len(rows) >= 2:
+    g = min(rows, key=lambda r: datetime.fromisoformat(r["expires"]))
+    print(g["grant_id"], g["expires"])')"
+if [ -n "$OLDEST" ]; then
+  OLD_ID="${OLDEST%% *}"; OLD_EXP="${OLDEST#* }"
+  echo "two grants are already valid; a third would make vulnscan refuse them all"
+  read -r -p "Revoke $OLD_ID (expires $OLD_EXP) before signing? [y/N] " ANS
+  case "$ANS" in
+    y|Y) "${VS[@]}" grant revoke --grant-id "$OLD_ID" ;;
+    *) echo "not signing: revoke a grant first (grant revoke --grant-id <grant_id>)" >&2; exit 1 ;;
+  esac
+fi
 AGENTTEAMS_DECISION_ED25519_KEYFILE="$PRIV" "${VS[@]}" grant sign --key-id "$KEY_ID" --days "$DAYS" --max-uses "$USES" \
   --op stage-fix --op open-pr --repo-root "$REPO_ROOT" --governance-dir "$GOV"
 "${VS[@]}" grant list

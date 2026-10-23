@@ -94,7 +94,7 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
 | The npm registry (`stage-fix` in a repository with `package-lock.json`) | the lockfile's dependency tree, through `npm audit fix --package-lock-only` | npm runs on a scratch copy holding only `package.json` and the lockfile, with empty user and global npm config, the public registry, `--strict-ssl=true` and `--ignore-scripts`; the repository's `.npmrc` is never read. npm workspaces fail closed (npm errors, nothing is staged) |
 | The model API (through the gateway) | everything the agents read and write: the scan summary and findings, repository paths, host names, fix plans, executor results, your notes | one route, one model; **not scrubbed**. Choose an `upstream` and model provider you trust with that |
 | GitHub (`open-pr`) | the fix branch and a pull request body with the fix plan and the agent's rationale (sanitised, quoted) | only to `origin` of a repository a grant covers |
-| Your servers | the server-kit scripts, streamed over ssh (`remote.sh` streams only `L1-audit.sh` to `L5-containers.sh`) | exact `hosts.conf` names a grant covers; audit and dry run only |
+| Your servers | the server-kit scripts, streamed over ssh (`remote.sh` streams only `L1-audit.sh` to `L5-containers.sh`) | exact `hosts.conf` names a grant covers; audit and dry run only. The audit (which the agent then reads) never reads process environments, unit files, journals or `.env` contents and shows each service by its executable path only, so service arguments and inline secrets never reach its output. Only a hand-run `L1-audit.sh --deep` reads process environments, and nothing in vulnscan passes it |
 | Your private ops repo (publish grant) | the run's report, review and summary | agent text fenced; home paths, hostname and private IPs scrubbed; content scan; preflight |
 
 **The spend cap** counts the `usage.cost` the upstream reports with each response, after the
@@ -288,7 +288,7 @@ config's `governance_dir`) and exits 0 or 1 as above; with an unusable one it ex
 | Field | Type | Meaning |
 |---|---|---|
 | `schema_version` | integer | `1` (`REPORT_SCHEMA_VERSION`; the string `"1"` before this release). It increases on an incompatible change: check it before reading the rest. `Report.from_dict` ignores unknown top-level keys |
-| `target` | string | the scanned path, host label, or `"daily"` for the daily aggregate |
+| `target` | string | the scanned path, host label, `this-machine` for local runtimes (`engine.LOCAL_TARGET`), or `"daily"` for the daily aggregate |
 | `findings` | array of Finding objects | below |
 | `unscannable` | array of `{"path": string, "reason": string}` | manifests without exact versions |
 | `feed_errors` | array of strings | feeds or hosts that failed; non-empty means partially unscanned (exit 3) |
@@ -300,7 +300,7 @@ A Finding (`report.Finding`):
 | Field | Type | Meaning |
 |---|---|---|
 | `kind` | string | `package`, `runtime`, `host` or `ioc` |
-| `target` | string | repository (relative to the scan root) or host name |
+| `target` | string | repository (relative to the scan root), host name, or `this-machine` for local runtimes (`engine.LOCAL_TARGET`) |
 | `name` | string | package or runtime name; `host` / `compromise indicator` for host checks |
 | `version` | string | installed version (`""` when not applicable) |
 | `ecosystem` | string | OSV ecosystem (`PyPI`, `npm`, …); `""` for runtimes and host checks |
@@ -615,8 +615,16 @@ Text: the mechanism, whether the job is installed, the config and state paths, a
 
 #### `schedule.job_environment()`
 
-The variables baked into the job: those of `JOB_ENV_VARS` set now (`PATH` defaults to
-`/usr/bin:/bin`). Raises `ValueError` for a value holding a control character.
+The variables baked into the job: `HOME` and those of `JOB_ENV_VARS` set now, with `PATH`
+always replaced by `job_path()[0]`. Raises `ValueError` for a value holding a control character.
+
+#### `schedule.job_path(path)`
+
+`(PATH, skipped)`: the `PATH` baked into the job, built from `path` (default: this process's
+`PATH`). It holds the first safe directory each of `JOB_TOOLS` (`git`, `gh`, `docker`, `ssh`, `npm`,
+`node`, `openssl`) resolves to, then `SYSTEM_PATH` (`/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`). A
+directory that is relative, holds a literal `~`, or lies inside a git work tree under `$HOME` is left
+out; `skipped` lists `"tool (dir)"` for each tool found only in a left-out directory.
 
 ### `agentteams.vulnscan.gateway`
 
@@ -945,6 +953,17 @@ Why `path` may not be mounted as the team directory, or `None`. Always refuses a
 above `~/.config/agentteams` (so its `keys/`), home or an ancestor of it, and the vulnscan config and
 state directories. `secrets` (`agent.key_file`) must lie outside it; the signing key named by
 `AGENTTEAMS_DECISION_ED25519_KEYFILE` is added only when that variable is set.
+
+### `agentteams.vulnscan.selftest_probe`
+
+The in-container probe the [self-test](#selftestcfg) runs with the agent's exact flags. It prints one
+line, `SELFTEST {json}`, with one boolean per check; its text is part of `flags_sha256`.
+
+`PROBE_TEMPLATE`: the probe's Python source, with `%s` / `%d` for the gateway host name and port.
+
+#### `selftest_probe.render(gateway, port)`
+
+The probe source for one gateway: `PROBE_TEMPLATE` filled with the gateway container name and port.
 
 ### `agentteams.vulnscan.debrief`
 

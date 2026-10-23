@@ -8,8 +8,9 @@
 
 Every call is a dry run unless ``apply=True``. A dry run returns exactly the files and
 commands it would write or run. The job runs this same interpreter
-(``sys.executable -m agentteams.vulnscan daily``) with the PATH from install time, so it
-finds npm, git and ssh. HOME, the XDG config/state directories and the vulnscan location
+(``sys.executable -P -m agentteams.vulnscan daily``; ``-P`` keeps the working directory off the
+import path) with the PATH from :func:`job_path`: the directories the :data:`JOB_TOOLS` (npm, git,
+ssh, ...) resolve to at install time, plus :data:`SYSTEM_PATH`. HOME, the XDG config/state directories and the vulnscan location
 overrides (:data:`JOB_ENV_VARS`) are baked in as well, so the job resolves the same config and state as
 the CLI that installed it; no other ``AGENTTEAMS_*`` variable is (they can hold API keys, and the job file
 is plain text).

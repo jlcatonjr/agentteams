@@ -413,6 +413,7 @@ def _host(kit: Kit, *, sudo: bool = True, uid: int = 1000, extra: dict[str, str]
     if sudo:
         kit.tool("sudo", '#!/bin/bash\n[ "$1" = -n ] && shift\nexec "$@"\n', hb)
     for name, body in (extra or {}).items():
+        (hb / name).unlink(missing_ok=True)      # never write through a symlink to a system tool
         kit.tool(name, body, hb)
     return hb
 
@@ -639,3 +640,57 @@ def test_apps_conf_ordinary_flags_still_reach_l4_word_by_word(kit: Kit) -> None:
     assert kit.run("run-host.sh", "web1").returncode == 0
     l4 = [c for c in kit.calls() if c["script"] == "L4-python-app.sh"]
     assert len(l4) == 1 and l4[0]["args"][6:9] == ["--as", "app", "--user-site"], l4[0]["args"]
+
+
+# ---------------------------------------------------------------- secret-bearing surfaces stay unread by default
+
+FAKE_SYSTEMCTL = r"""#!/bin/bash
+case "$1" in
+  list-units) echo "app-worker.service loaded active running App worker";;
+  show) echo "{ path=/usr/bin/python3 ; argv[]=/usr/bin/python3 worker.py --db-password=hunter2 TOKEN=s3cr3t ; ignore_errors=no }";;
+esac
+"""
+# Records every grep that names a process environment, then runs the real grep.
+LOGGING_GREP = r"""#!/bin/bash
+case "$*" in *environ*) echo "$*" >> "$GREP_LOG";; esac
+exec REAL_GREP "$@"
+"""
+
+
+def _secret_host(kit: Kit) -> tuple[Path, Path]:
+    log = kit.root / "grep-environ.log"
+    grep_body = LOGGING_GREP.replace("REAL_GREP", shutil.which("grep", path="/usr/bin:/bin"))
+    hb = _host(kit, extra={"systemctl": FAKE_SYSTEMCTL, "grep": grep_body})
+    (kit.conf / "ioc-test.txt").write_text("env LITELLM_EXFIL=1\nname evil.pth\n")
+    return hb, log
+
+
+def test_l1_shows_a_service_by_its_executable_never_its_arguments(kit: Kit) -> None:
+    hb, log = _secret_host(kit)
+    proc = kit.run("remote.sh", "web1", "L1-audit.sh", FAKE_SSH_EXEC=str(hb), GREP_LOG=str(log))
+    assert "app-worker.service → /usr/bin/python3\n" in proc.stdout, (proc.stdout, proc.stderr)
+    for secret in ("hunter2", "s3cr3t", "worker.py", "--db-password"):
+        assert secret not in proc.stdout + proc.stderr
+
+
+def test_l1_reads_no_process_environment_by_default(kit: Kit) -> None:
+    hb, log = _secret_host(kit)
+    proc = kit.run("remote.sh", "web1", "L1-audit.sh", FAKE_SSH_EXEC=str(hb), GREP_LOG=str(log))
+    assert "\nRESULT " in proc.stdout, (proc.stdout, proc.stderr)
+    assert not log.exists(), log.read_text()
+    assert "1 env indicator rule(s) not checked" in proc.stdout and "--deep" in proc.stdout
+
+
+def test_l1_deep_checks_env_rules(kit: Kit) -> None:
+    hb, log = _secret_host(kit)
+    proc = kit.run("remote.sh", "web1", "L1-audit.sh", "--deep", FAKE_SSH_EXEC=str(hb), GREP_LOG=str(log))
+    assert "\nRESULT " in proc.stdout, (proc.stdout, proc.stderr)
+    assert kit.calls()[0]["args"] == ["--deep"]
+    assert "LITELLM_EXFIL=1" in log.read_text() and "not checked" not in proc.stdout
+
+
+@pytest.mark.parametrize("bad", ["--apply", "deep", "--deep=1"])
+def test_l1_refuses_unknown_options(kit: Kit, bad: str) -> None:
+    proc = subprocess.run([BASH, str(kit.kit / "L1-audit.sh"), bad], capture_output=True, text=True, timeout=60,
+                          env={"PATH": "/usr/bin:/bin"}, check=False)
+    assert proc.returncode == 2 and "L1 takes only --deep" in proc.stderr

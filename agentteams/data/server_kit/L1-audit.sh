@@ -14,6 +14,11 @@
 #   IOC        message                                compromise indicator (from ioc-*.txt data)
 # Exit: 0 nothing local to flag · 1 action needed · 4 compromise indicator.
 #
+# Secret-bearing surfaces are never read or printed by default: no process environment (/proc/*/environ),
+# no unit file or `systemctl cat`, no journal, no .env or credential file contents; a running service is shown
+# by its executable path only (never its arguments, which can carry inline secrets). `env` indicator rules
+# need process environments, so they run only with --deep (an operator decision per host).
+#
 # Indicator rules come from the ioc-*.txt data files beside remote.sh. remote.sh embeds
 # them as a quoted heredoc (data, never executed) in AGENTTEAMS_IOC_DATA; one rule per line:
 #   file  <path-glob>          the path exists
@@ -147,7 +152,8 @@ services_section(){
   local u ex
   for u in $(systemctl list-units --type=service --state=running --no-legend --plain 2>/dev/null | awk '{print $1}'); do
     ex=$(systemctl show -p ExecStart --value "$u" 2>/dev/null | grep -oE 'argv\[\]=[^;]+' | head -1)
-    echo "$ex" | grep -qiE 'python|gunicorn|uwsgi|uvicorn|node|npm|pm2|php|java|docker|ruby' && info "$u → ${ex#argv[]=}"
+    ex="${ex#argv[]=}"; ex="${ex%% *}"   # the executable only: arguments can carry inline secrets
+    echo "$ex" | grep -qiE 'python|gunicorn|uwsgi|uvicorn|node|npm|pm2|php|java|docker|ruby' && info "$u → $ex"
   done
   command -v ss >/dev/null 2>&1 && ss -ltnpH 2>/dev/null | awk '{printf "INFO        listen %-22s %s\n", $4, $6}'
   if command -v docker >/dev/null 2>&1; then
@@ -161,7 +167,11 @@ ioc_section(){
   # ${a[@]+"${a[@]}"}: an empty array is "unbound" under set -u before bash 4.4 (RHEL 7, Amazon Linux 2)
   local g p name pat e any=0
   for g in ${_IF[@]+"${_IF[@]}"}; do for p in $g; do [ -e "$p" ] && { ioc "indicator path present: $p"; any=1; }; done; done
-  for e in ${_IE[@]+"${_IE[@]}"}; do grep -qsl -- "$e" /proc/[0-9]*/environ 2>/dev/null && { ioc "a process has $e in its environment"; any=1; }; done
+  if $DEEP; then
+    for e in ${_IE[@]+"${_IE[@]}"}; do grep -qsl -- "$e" /proc/[0-9]*/environ 2>/dev/null && { ioc "a process has $e in its environment"; any=1; }; done
+  elif [ ${#_IE[@]} -gt 0 ]; then
+    info "${#_IE[@]} env indicator rule(s) not checked: process environments hold secrets (run L1 with --deep to check them)"
+  fi
   if [ ${#_IN[@]} -gt 0 ] || [ ${#_IG[@]} -gt 0 ]; then
     local expr=() first=1
     for name in ${_IN[@]+"${_IN[@]}"} ${_IG[@]+"${_IG[@]%%:*}"}; do
@@ -207,4 +217,11 @@ main(){
   return "$RC"
 }
 
-main "$@" < /dev/null
+DEEP=false
+for _arg in "$@"; do
+  case "$_arg" in
+    --deep) DEEP=true;;   # also read process environments for `env` indicator rules
+    *) echo "unknown option: $_arg (L1 takes only --deep)" >&2; exit 2;;
+  esac
+done
+main < /dev/null

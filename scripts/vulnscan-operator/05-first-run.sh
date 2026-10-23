@@ -60,4 +60,4 @@ RUN="$(ls -1d "$HOME/.local/state/agentteams/vulnscan"/20*-*-* 2>/dev/null | tai
 echo
 echo "Check: the PR (if any) on your vulnscan-sandbox repo; spend.json calls > 0, prompt_tokens > 0, unmetered = 0."
 echo "When satisfied:  ${VS[*]} review --ack"
-echo "Tell Claude the result (exit codes, the review headline, spend.json); do not paste your keys."
+echo "Report the result (exit codes, the review headline, spend.json); never include your keys."

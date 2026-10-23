@@ -37,4 +37,4 @@ ok=true
 case "$state" in "agent-error | terminated by SIGTERM"*) echo "PASS  status: $state";;
   *) echo "FAIL  status: ${state:-unreadable} (expected agent-error, terminated by SIGTERM)"; ok=false;; esac
 [ -s "$WORKDIR/err.txt" ] && { echo "stderr:"; sed -n '1,10p' "$WORKDIR/err.txt"; }
-$ok && echo "Check 9 passed." || { echo "Check 9 FAILED — paste this output to Claude."; exit 1; }
+$ok && echo "Check 9 passed." || { echo "Check 9 FAILED — report this output."; exit 1; }

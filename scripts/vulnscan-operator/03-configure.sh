@@ -54,10 +54,11 @@ mkdir -p "$SECRETS"; chmod 700 "$SECRETS"
 KEYFILE="$SECRETS/openrouter.env"
 if [ -f "$KEYFILE" ]; then echo "exists: $KEYFILE (left unchanged)"
 else
-  # Prefer the key goose itself uses: `goose configure` keeps provider secrets as JSON in the login
-  # keychain (service "goose", account "secrets"). macOS may ask you to allow access. The key is never
-  # printed, passed as a command argument, or written anywhere but the mode-600 key file.
+  # Sources, first hit wins: 1) the agentteams checkout's .env, 2) ~/.config/goose/goose-backend.sh,
+  # 3) goose's keychain entry, 4) a hidden-input paste. The key is never printed, passed as a command
+  # argument, or written anywhere but the mode-600 key file.
   ORKEY=""
+  TRIED_KEYCHAIN=0
   # 1) the agentteams checkout's own .env (gitignored): only its OPENROUTER_API_KEY line is read; the
   #    file is never sourced, so nothing else in it reaches this script. From a worktree, the main
   #    checkout's .env is used. Override with AGENTTEAMS_ENV_FILE.
@@ -76,8 +77,10 @@ else
     echo "reading OPENROUTER_API_KEY the way $GB resolves it"
     ORKEY="$(bash -c 'source "$1" >/dev/null 2>&1; declare -F _goose_resolve_key >/dev/null && _goose_resolve_key' _ "$GB" 2>/dev/null || true)"
   fi
-  # 3) goose's keychain entry
+  # 3) goose's keychain entry: `goose configure` keeps provider secrets as JSON in the login keychain
+  #    (service "goose", account "secrets"); macOS may ask you to allow access. GOOSE_KEY=0 skips it.
   if [ -z "$ORKEY" ] && [ "${GOOSE_KEY:-1}" = 1 ] && command -v security >/dev/null; then
+    TRIED_KEYCHAIN=1
     echo "reading OPENROUTER_API_KEY from goose's keychain entry (allow access if macOS asks)"
     ORKEY="$(security find-generic-password -s goose -a secrets -w 2>/dev/null | "$PY" -P -c '
 import json, sys
@@ -92,8 +95,13 @@ except ValueError:
 value = data.get("OPENROUTER_API_KEY", "") if isinstance(data, dict) else ""
 print(value if isinstance(value, str) else "")' || true)"
   fi
+  # 4) a hidden-input paste
   if [ -z "$ORKEY" ]; then
-    echo "no OPENROUTER_API_KEY in goose's keychain entry (or access was denied)"
+    if [ "$TRIED_KEYCHAIN" = 1 ]; then
+      echo "no OPENROUTER_API_KEY in the .env, goose-backend.sh or goose's keychain entry (or access was denied)"
+    else
+      echo "no OPENROUTER_API_KEY in the .env or goose-backend.sh (goose's keychain entry was not read)"
+    fi
     printf 'Paste your OpenRouter API key instead (input hidden), then Enter: '
     read -rs ORKEY; echo
   fi

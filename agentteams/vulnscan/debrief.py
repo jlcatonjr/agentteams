@@ -131,7 +131,8 @@ def verify_goose_sessions(goose_version: str | None = None) -> dict[str, Any]:
             "matches": agent_run.GOOSE_SESSIONS_IN_CONTAINER == data_dir,
             "note": "valid while HOME is AGENT_HOME, XDG_DATA_HOME is AGENT_HOME/.local/share (agent_run sets "
                     "it) and GOOSE_PATH_ROOT is unset; XDG_DATA_HOME was verified on a macOS host build, not "
-                    "inside the Linux container",
+                    "inside the Linux container. XDG_STATE_HOME is GOOSE_STATE_IN_CONTAINER, inside the "
+                    "sessions mount, so goose's logs land in <run>/agent/goose-data/state/goose/logs",
         },
         "version_notes": [
             "1.10.0: sessions moved from per-session .jsonl files to sessions/sessions.db (sqlite)",

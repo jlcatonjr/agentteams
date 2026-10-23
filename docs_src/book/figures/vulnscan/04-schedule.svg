@@ -16,15 +16,15 @@
 <text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;key&gt;ProgramArguments&lt;/key&gt;</text>
 <text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;array&gt;</text>
 <text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;&lt;python&gt;&lt;/string&gt;</text>
-<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;-m&lt;/string&gt;</text>
-<text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;agentteams.vulnscan&lt;/string&gt;</text>
-<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;daily&lt;/string&gt;</text>
-<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;/array&gt;</text>
-<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;key&gt;StartCalendarInterval&lt;/key&gt;</text>
-<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;dict&gt;&lt;key&gt;Hour&lt;/key&gt;&lt;integer&gt;7&lt;/integer&gt;&lt;key&gt;Minute&lt;/key&gt;&lt;integer&gt;30&lt;/integer&gt;&lt;/dict&gt;</text>
-<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;key&gt;EnvironmentVariables&lt;/key&gt;</text>
-<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;dict&gt;</text>
-<text x="14" y="375" fill="#7f8594" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[… 21 more lines not shown]</text>
+<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;-P&lt;/string&gt;</text>
+<text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;-m&lt;/string&gt;</text>
+<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;agentteams.vulnscan&lt;/string&gt;</text>
+<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    &lt;string&gt;daily&lt;/string&gt;</text>
+<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;/array&gt;</text>
+<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;key&gt;StartCalendarInterval&lt;/key&gt;</text>
+<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;dict&gt;&lt;key&gt;Hour&lt;/key&gt;&lt;integer&gt;7&lt;/integer&gt;&lt;key&gt;Minute&lt;/key&gt;&lt;integer&gt;30&lt;/integer&gt;&lt;/dict&gt;</text>
+<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;key&gt;EnvironmentVariables&lt;/key&gt;</text>
+<text x="14" y="375" fill="#7f8594" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[… 7 more lines not shown]</text>
 <text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">&lt;/dict&gt;</text>
 <text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">&lt;/plist&gt;</text>
 <text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>

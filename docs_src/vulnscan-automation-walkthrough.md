@@ -15,7 +15,8 @@ This page is the procedure. Every command, flag, file and contract is in the
     address), a demo signing key, and a demo scan result (the real `daily` needs network access to
     OSV.dev). Paths are shortened to `~`, and long outputs are cut where marked. Ids, digests and
     times differ on your machine. Two demo shortcuts are disclosed where they occur; neither is a
-    supported way to run vulnscan.
+    supported way to run vulnscan. The grant-sign and resolve screens need a clean install and a
+    real terminal: `scripts/capture-signing-screens.sh` regenerates them that way.
 
 ![Three zones: your account (scan, executor, checks, ledger, you), the agent container (goose team, MCP server, request spool, egress gateway), and outside services (GitHub, servers, the private ops repo, the model API). Requests flow from the agents through the spool to the executor, which alone reaches GitHub and the servers.](book/figures/vulnscan/vulnscan-architecture.svg)
 
@@ -51,6 +52,18 @@ component table.
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
 | shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
+
+!!! tip "Operator scripts"
+    The source checkout scripts these steps for a first setup against a throwaway sandbox repository.
+    Run them yourself, in your own terminal, in order; each skips what already exists. See
+    `scripts/vulnscan-operator/README.md`.
+
+    - `scripts/vulnscan-operator/`: `01-install.sh` (install), `02-sandbox-repo.sh` (a test
+      repository), `03-configure.sh` (Steps 1, 4, 5, 6), `05-first-run.sh` (Steps 8, 9),
+      `06-sigterm-check.sh` ([Part D](#part-d-acceptance-checks-on-your-machine) #9),
+      `07-schedule.sh` (Step 3), `08-enable-agent.sh` (Step 10). There is no `04`.
+    - `scripts/vulnscan-agent-image.sh`: [Step 7](#step-7-build-the-agent-image-and-prove-its-isolation).
+    - `scripts/vulnscan-acceptance.sh`: the read-only checks of [Part D](#part-d-acceptance-checks-on-your-machine).
 
 Install `agentteams` somewhere an agent cannot edit: `pipx install` from a release you verified.
 This works on Homebrew's Python too. Signing refuses to run when the `agentteams` package or a
@@ -257,7 +270,7 @@ Add the `agent` block to `~/.config/agentteams/vulnscan.json`, with `enabled` of
 "agent": {
   "enabled": false,
   "team_dir": "~/ops-team",
-  "key_file": "~/.config/agentteams/openrouter.env",
+  "key_file": "~/.config/agentteams-secrets/openrouter.env",
   "upstream": "https://openrouter.ai",
   "model": "z-ai/glm-5.3",
   "budget_usd": 2.0,
@@ -265,7 +278,9 @@ Add the `agent` block to `~/.config/agentteams/vulnscan.json`, with `enabled` of
 }
 ```
 
-- `key_file` holds one line, `OPENROUTER_API_KEY=...`. Only the gateway container mounts it.
+- `key_file` holds one line, `OPENROUTER_API_KEY=...`. Only the gateway container mounts it. Keep it
+  in its own mode-700 directory outside `~/.config/agentteams` and outside the team directory, such as
+  `~/.config/agentteams-secrets/openrouter.env` (the path `03-configure.sh` writes, mode 600).
 - `upstream` defaults to a local route proxy at `http://host.docker.internal:8791`. Without one, set
   `https://openrouter.ai` as above.
 - The gateway relays only this `model` and refuses calls once the reported spend reaches
@@ -473,7 +488,9 @@ python -m agentteams.vulnscan review
 
 *Demo account; the output is cut where marked (the agent's stored report follows).*
 
-The same run's review, actions section (home directory shown as `~`):
+The real first supervised run, actions section (home directory shown as `~`). That run used
+`scripts/vulnscan-operator/05-first-run.sh`, which grants `stage-fix` plus `open-pr` on a throwaway
+sandbox repository, so it differs from Step 8's stage-fix-only grant and its review shows an `open-pr`:
 
 ```text
 ## Standing grants
@@ -736,6 +753,7 @@ Search the message for the quoted text.
 | `refusing ...: binary content (NUL bytes)` (exit 2) | an `ioc-*.txt` file is not plain text | remove the file or save it as text |
 | `docker is not reachable or the agent image ... is not built — start Docker (or run agent-image build) first` (`agent-selftest: …`, exit 1, `docker_reachable: false`; a refused run's reason ends `…first, then re-run agent-selftest`; a docker client that hangs gives up after 60 s and counts as not reachable) | the Docker daemon is down, or the image for this agentteams version is missing | start Docker, or run `agent-image build`; then `agent-selftest` |
 | `agent image build failed: docker is not reachable — start Docker (or install it) first` | `agent-image build` found no Docker daemon; nothing was built, `pip wheel` did not run | start or install Docker, then build |
+| a run ends early, or `agent-error`'s `reason` quotes a goose error | goose stopped inside the container | read goose's own logs for that run in `<run>/agent/goose-data/state/goose/logs` |
 | `agent-selftest failed: ...` (exit 1) | a `docker` command failed part-way through the self-test | read the error; check `docker info`, then re-run |
 | `refused: --node-id is empty` / `refused: --owner-id is empty` / `... is required` / `--owner-id must be your numeric GitHub user id` (`publish-grant sign`, exit 2) | a `gh` lookup printed nothing (the `$(…)` expanded to empty), a flag was left out, or the owner id is not a number | run the two lookups by hand and check each prints a value ([Reports](#reports-and-publishing-them-optional)) |
 | `Warning: security intelligence: <feed> (<host>): truncated or malformed HTTP response (...)` / `response is not valid JSON, possibly truncated (...)` / `response is not a JSON object (got list)` (Step 4) | a feed's response was cut off or is not a JSON object | usually transient: re-run. If the CISA KEV snapshot is stale, generation stops with `[SEC-GATE/INTEL-FRESHNESS] blocked`; re-run once www.cisa.gov answers |

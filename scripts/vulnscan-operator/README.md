@@ -2,7 +2,8 @@
 
 Run these on your own machine, in your own interactive terminal, in order. Each one does one stage of
 the [setup walkthrough](../../docs_src/vulnscan-automation-walkthrough.md), skips what already exists,
-and stops for you to check. None of them runs inside an agent session.
+and stops for you to check. None of them runs inside an agent session. There is no `04-*.sh`: Step 7
+is `../vulnscan-agent-image.sh`, run between `03` and `05`.
 
 | Script | Walkthrough | What it does |
 |---|---|---|
@@ -14,11 +15,11 @@ and stops for you to check. None of them runs inside an agent session.
 | `../vulnscan-acceptance.sh` | Part D | read-only acceptance checks; report written outside any repository |
 | `06-sigterm-check.sh` | Part D #9 | starts `agent-run`, sends SIGTERM after `DELAY` s, checks exit 143, no container left, status `agent-error` |
 | `07-schedule.sh [--remove]` | Step 3 | dry run of the daily job, then (after you confirm) `schedule install --apply` and `schedule status` |
-| `08-enable-agent.sh` | Step 10 | sign the unattended grant (`REPO_ROOT`, `DAYS`, `USES`), set `agent.enabled: true`, install the daily job at `HOUR:MINUTE` |
+| `08-enable-agent.sh` | Step 10 | sign the unattended grant (`REPO_ROOT`, `DAYS`, `USES`; with two grants already valid it first offers to revoke the one that expires first, and stops if you decline), set `agent.enabled: true`, install the daily job at `HOUR:MINUTE` |
 
 Your keys never pass through these scripts' output: the signing key is named only on the signing
 command, and the OpenRouter key goes straight into a mode-600 file outside the
 team directory and outside `~/.config/agentteams`.
 
 Afterwards: `gh repo delete <you>/vulnscan-sandbox`, `rm -rf ~/vulnscan-sandbox-root`, and
-`python -P -m agentteams.vulnscan grant revoke <grant_id>` if the grant is still active.
+`python -P -m agentteams.vulnscan grant revoke --grant-id <grant_id>` if the grant is still active.
