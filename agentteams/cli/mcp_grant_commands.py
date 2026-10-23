@@ -78,7 +78,8 @@ def run_sign_mcp_direct_grant(args: argparse.Namespace) -> int:
     except (ProposalError, OSError, ValueError, KeyError) as exc:
         print(f"[sign-mcp-direct-grant] refused: {exc}", file=sys.stderr)
         return 1
-    signed = sign_mcp_direct_grant(record, confirm_sha256=getattr(args, "confirm_review_sha256", None),
+    signed = sign_mcp_direct_grant(record, project_root=root,
+                                   confirm_sha256=getattr(args, "confirm_review_sha256", None),
                                    allow_checkout=bool(getattr(args, "allow_checkout_signing", False)))
     if signed is None:
         return 1

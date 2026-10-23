@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="574" height="566" viewBox="0 0 574 566" role="img">
+<title>Step 4 — the generated goose team</title>
+<rect width="574" height="566" rx="8" fill="#1e1f24"/>
+<rect width="574" height="26" rx="8" fill="#2c2e35"/>
+<rect y="18" width="574" height="8" fill="#2c2e35"/>
+<circle cx="16" cy="13" r="5" fill="#ff5f57"/><circle cx="34" cy="13" r="5" fill="#febc2e"/><circle cx="52" cy="13" r="5" fill="#28c840"/>
+<text x="287" y="17" fill="#a9adb7" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">Step 4 — the generated goose team</text>
+<text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ ls ~/ops-team/.goose/recipes</text>
+<text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">SETUP-REQUIRED.md</text>
+<text x="14" y="86" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">adversarial.yaml</text>
+<text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">agent-refactor.yaml</text>
+<text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">agent-updater.yaml</text>
+<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">auth-module-expert.yaml</text>
+<text x="14" y="154" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">cleanup.yaml</text>
+<text x="14" y="171" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">code-hygiene.yaml</text>
+<text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">cohesion-repairer.yaml</text>
+<text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">conflict-auditor.yaml</text>
+<text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">conflict-resolution.yaml</text>
+<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">content-enricher.yaml</text>
+<text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">format-converter.yaml</text>
+<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">git-operations.yaml</text>
+<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">navigator.yaml</text>
+<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">orchestrator.yaml</text>
+<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">output-compiler.yaml</text>
+<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">primary-producer.yaml</text>
+<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">quality-auditor.yaml</text>
+<text x="14" y="375" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">references</text>
+<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">repo-liaison.yaml</text>
+<text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">security.yaml</text>
+<text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">tasks-api-expert.yaml</text>
+<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">team-builder.yaml</text>
+<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">technical-validator.yaml</text>
+<text x="14" y="477" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">tool-doc-researcher.yaml</text>
+<text x="14" y="494" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">vuln-remediation.yaml</text>
+<text x="14" y="511" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">work-summarizer.yaml</text>
+<text x="14" y="528" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ grep -n vuln_remediation ~/ops-team/.goose/recipes/orchestrator.yaml</text>
+<text x="14" y="545" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">763:  - name: "vuln_remediation"</text>
+</svg>

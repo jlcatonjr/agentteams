@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="566" height="566" viewBox="0 0 566 566" role="img">
+<title>Step 1 — write the config</title>
+<rect width="566" height="566" rx="8" fill="#1e1f24"/>
+<rect width="566" height="26" rx="8" fill="#2c2e35"/>
+<rect y="18" width="566" height="8" fill="#2c2e35"/>
+<circle cx="16" cy="13" r="5" fill="#ff5f57"/><circle cx="34" cy="13" r="5" fill="#febc2e"/><circle cx="52" cy="13" r="5" fill="#28c840"/>
+<text x="283" y="17" fill="#a9adb7" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">Step 1 — write the config</text>
+<text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan init --repo-root ~/code</text>
+<text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">config: ~/.config/agentteams/vulnscan.json</text>
+<text x="14" y="86" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">Edit it, then: python -m agentteams.vulnscan schedule install --apply</text>
+<text x="14" y="103" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ cat ~/.config/agentteams/vulnscan.json</text>
+<text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">{</text>
+<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "repo_roots": [</text>
+<text x="14" y="154" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "~/code"</text>
+<text x="14" y="171" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  ],</text>
+<text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "include_worktrees": false,</text>
+<text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "servers": [],</text>
+<text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "fail_on": "high",</text>
+<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "include_dev": false,</text>
+<text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "cooldown_days": 14,</text>
+<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "local_runtimes": true,</text>
+<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "fix_mode": "plan",</text>
+<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "allow_major": false,</text>
+<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "notify": "desktop",</text>
+<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "schedule": {</text>
+<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "hour": 7,</text>
+<text x="14" y="375" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "minute": 30</text>
+<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  },</text>
+<text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "stale_after_hours": 26,</text>
+<text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "governance_dir": "",</text>
+<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "agent": {</text>
+<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "enabled": false,</text>
+<text x="14" y="477" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "team_dir": "",</text>
+<text x="14" y="494" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "key_file": "",</text>
+<text x="14" y="511" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "budget_usd": 2.0</text>
+<text x="14" y="528" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  }</text>
+<text x="14" y="545" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">}</text>
+</svg>
