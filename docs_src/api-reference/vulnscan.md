@@ -912,6 +912,7 @@ and exits 1). A `docker` failure part-way through raises; the CLI prints
 | `gateway_reachable` | the gateway answers on the internal network |
 | `readonly_rootfs`, `readonly_run_dir`, `readonly_results` | the root filesystem, run directory and results are read-only |
 | `spool_writable` | the agent can queue requests |
+| `goose_dirs_writable` | goose can create its log, session and config directories (`XDG_STATE_HOME` is `/agenthome/state`, outside the root-owned `.local` the sessions mount creates); without them goose stops before its first model call |
 | `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, a non-root uid (the image runs as 10001) |
 
 #### `selftest_ok(cfg)`

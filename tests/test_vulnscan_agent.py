@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
@@ -328,7 +329,13 @@ def test_gateway_counts_upstream_errors_apart_from_unmetered_replies(tmp_path: P
             with pytest.raises(urllib.error.HTTPError) as err:
                 urllib.request.urlopen(req, timeout=10)
             assert err.value.code == 429                        # never 402: errors are not unmetered replies
-        spend = json.loads((tmp_path / "spend.json").read_text())
+        # The gateway meters after the reply is sent, so the last error can land just after the client sees it.
+        deadline = time.monotonic() + 5
+        while True:
+            spend = json.loads((tmp_path / "spend.json").read_text())
+            if spend["upstream_errors"] == 3 or time.monotonic() > deadline:
+                break
+            time.sleep(0.05)
         assert spend["upstream_errors"] == 3 and spend["unmetered"] == 0
     finally:
         gw.shutdown()
@@ -672,6 +679,8 @@ def test_folded_notes_reach_the_task_param_of_the_container_argv(dirs: dict[str,
     from agentteams.vulnscan import notes
     calls = _launchable(dirs, monkeypatch)
     notes.add("skip repo X today; it is being migrated")
+    (dirs["run"] / "gateway").mkdir(parents=True, exist_ok=True)
+    (dirs["run"] / "gateway" / "spend.json").write_text(json.dumps({"calls": 2, "unmetered": 0}))
     st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
     assert st["run_state"] == "completed"
     argv = next(c[1:] for c in calls if c[0] == "popen")

@@ -195,6 +195,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # mcp.py is the agents' only request channel (@security P3 review, MAJOR 4).
     "agentteams/vulnscan/paths.py",
     "agentteams/vulnscan/agent_run.py",
+    "agentteams/vulnscan/selftest_probe.py",   # the self-test probe a passing self-test vouches for
     "agentteams/vulnscan/gateway.py",
     "agentteams/vulnscan/mcp.py",
     # R6 operator loop (2026-10-22, metaplan vulnscan-r6 T1): escalations.py and publish.py sign through the operator

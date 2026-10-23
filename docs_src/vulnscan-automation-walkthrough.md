@@ -325,8 +325,8 @@ run. The shape it prints (`agent_run.selftest`; also saved to `<state>/agent-sel
   "passed": true,
   "checks": {"no_credential_paths": true, "no_token_env": true, "internet_blocked": true,
              "gateway_reachable": true, "readonly_rootfs": true, "readonly_run_dir": true,
-             "readonly_results": true, "spool_writable": true, "no_capabilities": true,
-             "no_new_privs": true, "non_root": true},
+             "readonly_results": true, "spool_writable": true, "goose_dirs_writable": true,
+             "no_capabilities": true, "no_new_privs": true, "non_root": true},
   "image": "sha256:<image id>",
   "flags_sha256": "<hex>",
   "at": "<UTC time>",
@@ -427,7 +427,9 @@ comes from the operator's supervised run (it needs Docker and the model route); 
 `run_state` is `completed`, `agent-error`, `timed-out` or `not-run`. A refused run, a launcher
 failure or a SIGTERM has `reason` in place of `exit`, `timed_out` and `spend` (a held run lock also
 adds `"status_written": false`, and nothing is written); `stale_requests`, `spend_problem`, `report_problem` and
-`cleanup_error` appear only when they apply.
+`cleanup_error` appear only when they apply. A run whose agent exits 0 without a single model call
+(no gateway spend recorded) is `agent-error`, not `completed`, and its `reason` quotes goose's error line
+from `<run>/agent/transcript.log`.
 
 ![the executor's results for four requests: escalate done, report stored, server-audit refused (blocked by the escalation), stage-fix done with a vulnscan branch](book/figures/vulnscan/07-serve-requests.svg)
 
