@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.1] - 2026-10-23
+
+### release notes
+
+agentteams 1.1.0-rc.1 is the first release candidate of the 1.1 line, cut from `main` as `release/1.1`. It is a
+prerelease: install it to try 1.1, and keep pinning `v1.0.1` where you need the stable line. The final `v1.1.0`
+will be signed from `release/1.1` after the candidate has run in daily use.
+
+- **`python -m agentteams.vulnscan`: daily known-vulnerability scanning and remediation** for your repositories
+  (PyPI, npm, Composer; OSV.dev) and, through the packaged read-only server kit, your servers. It writes a
+  summary, per-repository fix plans and a desktop notification, and can be scheduled with launchd, systemd or cron.
+- **Agent-driven remediation, opt-in and bounded by operator-signed grants.** A credential-free agent container
+  queues requests (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`) that a host-side executor performs
+  only within an Ed25519-signed standing grant (repositories, hosts, operations, uses, expiry). A gateway holds the
+  model key and enforces the spend and token caps. Every action is recorded in a MAC-chained ledger, and
+  `vulnscan review` produces an after-action review. The operator loop adds escalations, notes, debriefs and an
+  optional report publish to a private ops repository.
+- **Safe by default on servers.** The read-only audit never reads process environments, unit files, journals or
+  `.env` contents, and shows services by executable path only.
+- **Guides:** "Automated Remediation: Step-by-Step Setup" (`docs_src/vulnscan-automation-walkthrough.md`), the
+  vulnerability remediation guide and the vulnscan API reference, with operator scripts under
+  `scripts/vulnscan-operator/`.
+- **Security fixes:** `--sign-mcp-direct-grant --confirm-review-sha256` can now confirm; the operator directory
+  `~/.config/agentteams` is protected as a whole; macOS `~/Library/LaunchAgents` and `~/Library/Keychains` are
+  protected write roots.
+- **Sandbox operator handoff:** a sandboxed agent hands work it may not do to the operator as a checked script
+  and one complete command.
+- **Re-pins:** `references/enforcement-integrity.json` pins the vulnscan modules and the server kit. Re-render,
+  then run `--verify-integrity`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.1` tag (release key
+  `SHA256:IPdnLwlF…`, as in `SECURITY.md`); pin its peeled commit.
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
+
 ### Added
 
 - **`python -m agentteams.vulnscan`: known-vulnerability scanning and remediation for repositories and
