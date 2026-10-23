@@ -11,7 +11,9 @@ backtick fence longer than any backtick run it contains (:func:`fence`), so no M
 Layout: ``<run_dir>/agent-report/report.md`` (directory mode 700, file mode 600). The file is a short
 header that this module writes, a blank line, then the fenced body. :func:`save` writes the header with
 the request id and ``run state: pending``. :func:`finalize` rewrites it with the run's final state at
-the end of the run. Every write is atomic (temp file plus rename) and goes through a directory
+the end of the run, and only when that run submitted it. Before each agent run an earlier run's report is
+renamed to ``<run id>.report.md`` beside it (:func:`archive`, via :mod:`.run_records`), so ``report.md`` is
+always the latest run's own. Every write is atomic (temp file plus rename) and goes through a directory
 descriptor opened with ``O_NOFOLLOW``, so a symlink planted at the directory or the file is refused,
 not followed. The header records the body's SHA-256, and :func:`load` refuses a file whose body no
 longer matches it.
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import os
 import re
 import secrets
@@ -35,6 +38,8 @@ REPORT_FILE = "report.md"
 PENDING_STATE = "pending"
 REVIEW_HEADING = "## Agent report (untrusted, verbatim)"
 NO_REPORT_LINE = "_No report was submitted for this run._"
+NO_RUN_REPORT_LINE = ("_The latest agent run ({run_id}) submitted no report. The stored report is an earlier "
+                      "run's and is not shown._")
 
 _TITLE = "Agent report — stored by the vulnscan executor; the fenced body below is untrusted agent text."
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -228,14 +233,19 @@ def save(run_dir: Path, markdown: str, *, request_id: str) -> Path:
     return Path(run_dir) / REPORT_DIR / REPORT_FILE
 
 
-def finalize(run_dir: Path, run_state: str) -> None:
+def finalize(run_dir: Path, run_state: str, *, since: str | None = None) -> dict[str, str] | None:
     """Record the run's final state in the stored report's header (end of run).
 
-    Does nothing when no report was submitted.
+    Does nothing when no report was submitted, or (with ``since``) when the stored report was
+    submitted before the run started: it is an earlier run's, never this run's.
 
     Args:
         run_dir: The run directory.
         run_state: The final state, one of ``agent_run.RUN_STATES``.
+        since: The run's start (ISO 8601); a report submitted before it is left alone.
+
+    Returns:
+        The finalized report's header fields, or None when there is no report of this run.
 
     Raises:
         ValueError: ``run_state`` is not a known run state, or the stored report is unsafe,
@@ -248,13 +258,54 @@ def finalize(run_dir: Path, run_state: str) -> None:
         raise ValueError(f"unknown run state {str(run_state)[:40]!r}; expected one of {RUN_STATES}")
     with _report_dir(Path(run_dir), create=False) as dfd:
         if dfd is None:
-            return
+            return None
         content = _read_file(dfd)
         if content is None:
-            return
+            return None
         fields, fenced = _parse(content)
+        if since is not None and _before(fields["submitted"], since):
+            return None
         fields.update({"run state": run_state, "finalized": _now()})
         _write_file(dfd, _header(fields) + "\n" + fenced)
+    return fields
+
+
+def _before(submitted: str, since: str) -> bool:
+    """Return whether a header ``submitted`` time is before ``since`` (compared to the second)."""
+    try:
+        return datetime.fromisoformat(submitted) < datetime.fromisoformat(since).replace(microsecond=0)
+    except ValueError:   # an unparseable start binds nothing to this run
+        return True
+
+
+def archive(run_dir: Path, name: str) -> str | None:
+    """Rename the stored report to ``<name>.report.md`` beside it (an earlier run's report, kept).
+
+    Args:
+        run_dir: The run directory.
+        name: The archived run's name (a run id).
+
+    Returns:
+        The archived file name, or None when there was no report.
+
+    Raises:
+        ValueError: ``name`` is malformed, or the report directory is unsafe.
+        FileExistsError: The archive name is taken.
+    """
+    if not _REQUEST_ID_RE.match(name) or name.startswith("."):
+        raise ValueError(f"malformed archive name {name[:80]!r}")
+    target = f"{name}.report.md"
+    with _report_dir(Path(run_dir), create=False) as dfd:
+        if dfd is None:
+            return None
+        with contextlib.suppress(FileNotFoundError):
+            os.stat(target, dir_fd=dfd, follow_symlinks=False)
+            raise FileExistsError(target)
+        try:
+            os.rename(REPORT_FILE, target, src_dir_fd=dfd, dst_dir_fd=dfd)
+        except FileNotFoundError:
+            return None
+    return target
 
 
 def load(run_dir: Path) -> str | None:
@@ -282,8 +333,24 @@ def load(run_dir: Path) -> str | None:
     return content
 
 
+def _latest_run(run_dir: Path) -> dict[str, str]:
+    """Return ``run_id`` and ``started`` from ``<run_dir>/agent/status.json`` (the latest agent run), or {}."""
+    try:
+        data = json.loads((Path(run_dir) / "agent" / "status.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    rid, started = data.get("run_id"), data.get("started")
+    return {"run_id": rid if isinstance(rid, str) and _REQUEST_ID_RE.match(rid) else "?",
+            "started": started} if isinstance(started, str) else {}
+
+
 def render_for_review(run_dir: Path) -> str:
-    """Return the review section for the agent's report.
+    """Return the review section for the agent's report, bound to the latest agent run.
+
+    A stored report submitted before the latest run (``<run_dir>/agent/status.json``) started is an
+    earlier run's: it is not shown as this run's, and the section says the run submitted none.
 
     Args:
         run_dir: The run directory.
@@ -295,5 +362,10 @@ def render_for_review(run_dir: Path) -> str:
         ValueError: As :func:`load`.
     """
     text = load(run_dir)
+    latest = _latest_run(run_dir)
+    if text is not None and latest:
+        fields, _ = _parse(text)
+        if _before(fields["submitted"], latest["started"]):
+            return f"{REVIEW_HEADING}\n\n{NO_RUN_REPORT_LINE.format(run_id=latest['run_id'])}\n"
     body = text if text is not None else NO_REPORT_LINE + "\n"
     return f"{REVIEW_HEADING}\n\n{body}"

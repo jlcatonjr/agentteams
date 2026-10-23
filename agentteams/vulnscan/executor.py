@@ -28,12 +28,13 @@ Operations (v1):
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
 
-git always runs with system/global config ignored, hooks disabled, a fixed ssh command and an
-explicit credential helper, so repository or user config cannot redirect what runs.
+git always runs with system/global config ignored, hooks and commit/tag signing disabled, a fixed ssh
+command and an explicit credential helper, so repository or user config cannot redirect what runs.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -94,7 +95,8 @@ def kit_dir() -> Path:
 # ---------------------------------------------------------------- hardened git
 
 _GIT_HARDENING = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.sshCommand=ssh",
-                  "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper=")
+                  "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper=",
+                  "-c", "commit.gpgsign=false", "-c", "tag.gpgSign=false")   # never a repo-configured gpg.program
 
 
 def _clean_git_env(global_config: str) -> dict[str, str]:
@@ -331,6 +333,18 @@ def _release_own_branch(repo: Path, branch: str) -> None:
     ref = f"refs/heads/{branch}"
     if git_proc(repo, "rev-parse", "--verify", "-q", ref).returncode:
         return
+    holders = _branch_holders(repo, ref)
+    if holders is None:
+        raise ExecError(f"{branch} is checked out outside the executor's worktrees; not touching it")
+    if git(repo, "log", "-1", "--format=%ce", ref).strip() != GIT_IDENTITY[1]:
+        raise ExecError(f"local branch {branch} exists and was not created by the executor; not touching it")
+    for p in holders:
+        git(repo, "worktree", "remove", "--force", str(p))
+    git(repo, "branch", "-D", branch)
+
+
+def _branch_holders(repo: Path, ref: str) -> list[Path] | None:
+    """Return the worktrees that have ``ref`` checked out, or None when any is outside :func:`_worktrees_dir`."""
     holders: list[Path] = []
     current: Path | None = None
     for ln in git(repo, "worktree", "list", "--porcelain").splitlines():
@@ -339,13 +353,33 @@ def _release_own_branch(repo: Path, branch: str) -> None:
         elif ln == f"branch {ref}" and current is not None:
             holders.append(current)
     owned = _worktrees_dir().resolve()
-    if any(not p.resolve().is_relative_to(owned) for p in holders):
-        raise ExecError(f"{branch} is checked out outside the executor's worktrees; not touching it")
-    if git(repo, "log", "-1", "--format=%ce", ref).strip() != GIT_IDENTITY[1]:
-        raise ExecError(f"local branch {branch} exists and was not created by the executor; not touching it")
-    for p in holders:
-        git(repo, "worktree", "remove", "--force", str(p))
-    git(repo, "branch", "-D", branch)
+    return None if any(not p.resolve().is_relative_to(owned) for p in holders) else holders
+
+
+def _drop_failed_branch(repo: Path, branch: str, base: str) -> None:
+    """Delete the local ``branch`` a failed :func:`stage_fix` attempt itself created, so a retry starts clean.
+
+    Only while it still points at ``base`` (compare-and-swap delete) and is checked out nowhere outside
+    the executor's worktrees. A tip the executor committed is already reusable by :func:`_release_own_branch`.
+    """
+    ref = f"refs/heads/{branch}"
+    if _branch_holders(repo, ref) is not None:
+        git(repo, "update-ref", "-d", ref, base, check=False)   # no-op unless the ref is exactly ``base``
+
+
+def _stage_changed(wt: Path, base: str, changed: list[str]) -> None:
+    """Stage exactly the validated ``changed`` paths (``:(literal)`` pathspecs) and check nothing else is staged.
+
+    Tracked files use ``add -u`` (index entries only, so a tracked pin under a gitignored directory
+    stages without ``-f``); new, never-ignored files (``--exclude-standard``) a plain ``add``.
+    """
+    new = set(git(wt, "ls-files", "-z", "--others", "--exclude-standard").split("\0")) & set(changed)
+    for flags, group in ((["-u"], [p for p in changed if p not in new]), ([], sorted(new))):
+        if group:
+            git(wt, "add", *flags, "--", *(f":(literal){p}" for p in group))
+    staged = {p for p in git(wt, "diff", "--cached", "--name-only", "-z", "--no-renames", base).split("\0") if p}
+    if staged != set(changed):
+        raise ExecError(f"staged paths differ from the validated change: {sorted(staged ^ set(changed))}")
 
 
 def validate_diff(wt: Path, base: str) -> list[str]:
@@ -408,7 +442,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
 
     Raises:
         ExecError: The repository's own git config defines a filter driver (or git refuses to open it),
-            or anything else fails (the worktree is removed, whatever the exception, D4).
+            or anything else fails (the worktree, and a branch this attempt created, are removed, D4).
         subprocess.SubprocessError: A git or npm step timed out (the worktree is removed too).
     """
     unsafe = fix.git_config_problem(repo)   # before any git on the repo: checkout would run smudge filters
@@ -420,6 +454,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     wt = _worktrees_dir() / f"{_state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}-{os.urandom(3).hex()}"
     wt.parent.mkdir(parents=True, exist_ok=True)
     staged = False
+    branch = ""   # set once this attempt (and only it) may have created the branch
     try:
         git(repo, "worktree", "add", "-q", "--detach", str(wt), base)
         cooldown = max(MIN_COOLDOWN_DAYS, int(cfg.get("cooldown_days", MIN_COOLDOWN_DAYS)))
@@ -430,18 +465,22 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         if not changed:
             raise ExecError("nothing fixable without a major jump or cooldown exception")
         digest = hashlib.sha256(git(wt, "diff", "--no-ext-diff", "--no-textconv", base).encode()).hexdigest()[:10]
-        branch = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
-        _release_own_branch(repo, branch)
-        git(wt, "checkout", "-q", "-b", branch)
-        git(wt, "add", "--", *changed)
+        name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
+        _release_own_branch(repo, name)   # the branch is absent from here on, or this raised
+        git(wt, "checkout", "-q", "-b", name)
+        branch = name   # only now is the branch this attempt's own (cleanup may delete it)
+        _stage_changed(wt, base, changed)
         git(wt, "commit", "-q", "-m", f"security(deps): fix known-vulnerable dependency versions ({digest})",
             "-m", "Staged by the agentteams vulnscan executor (deterministic fix; lockfile/pin changes only).")
         staged = True
     except OSError as exc:
         raise ExecError(str(exc)) from exc
     finally:
-        if not staged:   # any exception, a timeout included (D4)
+        if not staged:   # any exception, a timeout included (D4): undo this attempt's worktree and branch
             git(repo, "worktree", "remove", "--force", str(wt), check=False)
+            if branch:
+                with contextlib.suppress(ExecError, OSError, subprocess.SubprocessError):
+                    _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
               "changed": changed, "plan": res.markdown()}
     _write_json(spool_dir() / "staged" / f"{_state_slug(repo)}.json", result)

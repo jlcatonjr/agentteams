@@ -469,7 +469,11 @@ failure or a SIGTERM has `reason` in place of `exit`, `timed_out` and `spend` (a
 adds `"status_written": false`, and nothing is written); `stale_requests`, `spend_problem`, `report_problem` and
 `cleanup_error` appear only when they apply. A run whose agent exits 0 without a single model call
 (no gateway spend recorded) is `agent-error`, not `completed`, and its `reason` quotes goose's error line
-from `<run>/agent/transcript.log`.
+from `<run>/agent/transcript.log`. The sample above predates two later fields: `report` (the
+`request_id` and `submitted` time of the report this run submitted, or `null`) and, when an earlier
+run on the same date was set aside, `archived_previous` (its records move to `<run>/agent/runs/<run id>/`
+and its report to `<run>/agent-report/<run id>.report.md`). A run that exits 0 without submitting a
+report of its own is also `agent-error`, with `reason` quoting goose's last error line.
 
 ![the executor's results for four requests: escalate done, report stored, server-audit refused (blocked by the escalation), stage-fix done with a vulnscan branch](book/figures/vulnscan/07-serve-requests.svg)
 

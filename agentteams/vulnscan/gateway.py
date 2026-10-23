@@ -118,7 +118,7 @@ class Meter:
             self._persist()
 
     def add_error(self) -> None:
-        """Count an upstream error reply (4xx/5xx): reported in spend.json, not an unmetered reply."""
+        """Count an upstream error (a 4xx/5xx reply, or no reply: DNS, refused, timeout); not an unmetered reply."""
         with self.lock:
             self.upstream_errors += 1
             self._persist()
@@ -303,7 +303,8 @@ def make_handler(*, model: str, key: str, upstream: str, meter: Meter) -> type[B
                     self.wfile.write(chunk)
                     self.wfile.flush()
             except (OSError, http.client.HTTPException) as exc:
-                if status is None:   # nothing came back: nothing to meter
+                if status is None:   # nothing came back (DNS, refused, timeout): an upstream error, nothing to meter
+                    meter.add_error()
                     self._deny(502, f"upstream error: {type(exc).__name__}")
             finally:
                 conn.close()

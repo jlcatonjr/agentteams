@@ -60,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     published review fences all agent- and repository-derived text, and published files have home
     paths, this machine's hostname and private IPv4 addresses scrubbed. Content is scanned before a
     publish use is reserved; injection-pattern hits inside fences are allowed and counted.
+  - From the first multi-repository run: fix plans are written per git repository
+    (`fixplan-<name>-<sha8>.md`, headed by the exact `stage-fix` target) and list npm lockfile
+    fixes (with `major-held`, `workspace-held` and `npm-unavailable` holds); each agent run keeps its
+    own status, transcript and report (`agent/runs/<run id>/`), and a run that submits no report of
+    its own is `agent-error`; the gateway counts connection failures as `upstream_errors`;
+    `stage-fix` stages tracked files under ignored directories (`git add -u`, exact staged set),
+    removes its own branch after a failed attempt, and disables repo-configured commit signing.
   - The executor serves at most 200 spool requests per pass (more open an `escalation-flood`),
     sets aside requests left from a crashed run, and `serve-requests` by hand refuses while a run
     holds the run lock. Escalations on a linked worktree block its main repository.

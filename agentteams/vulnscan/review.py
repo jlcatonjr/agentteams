@@ -25,6 +25,7 @@ from agentteams.vulnscan import (
     paths,
     publish,
     report_store,
+    run_records,
 )
 from agentteams.vulnscan.report import Report
 
@@ -278,7 +279,10 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
             out += ["", report_store.REVIEW_HEADING, "", f"- could not load the agent report: {_line(exc, 300)}"]
         agent_dir = runs[-1] / "agent"
         if agent_dir.is_dir() and not for_publish:
-            out += ["", "## Agent session", ""] + [f"- `{p}`" for p in sorted(agent_dir.iterdir())]
+            out += ["", "## Agent session", ""] + [f"- `{p}`" for p in sorted(agent_dir.iterdir())
+                                                   if p.name != run_records.RUNS_DIR]
+            earlier = run_records.run_dirs_of(runs[-1])   # earlier agent runs on this date, kept (not this run's)
+            out += ["", "Earlier agent runs on this date:", ""] + [f"- `{p}`" for p in earlier] if earlier else []
     out += [""] + _publish_section(rows, window, for_publish) + _notes_section()
     if gh_replies:
         out += _gh_section(window)

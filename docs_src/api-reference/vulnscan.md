@@ -72,14 +72,16 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    write skips the agent phase):
    1. **Agent run** (`agent_run.run_agent`): take the run lock (when another run or a debrief holds
       it: `not-run`, and nothing in the run directory is written); then refuse (`not-run`) on the
-      first failing check, in this order: `team_dir` and `key_file` are set, docker is installed, a
+      first failing check (after moving an earlier run's record aside, see `run_records`), in this order: `team_dir` and `key_file` are set, docker is installed, a
       passing self-test exists for this image and these container flags, `team_dir` passes its
       checks, the run limits are valid. Then set aside requests left over from an
       earlier run (`executor.quarantine_pending`); fold your notes into the task (`notes-folded`
       row); start the gateway, then the agent container. Every 15 s the executor serves the agents'
       requests (`executor.serve_requests`): at most 200 per pass, escalations first, then the
       report, then granted operations. At the time cap the container is removed; the last requests
-      are served; the stored report is finalized with the run state. A SIGTERM (launchd unload,
+      are served; the run's own report is finalized with the run state. A run that would end
+      `completed` without a report of its own ends `agent-error` (the reason quotes the
+      transcript's last error line). A SIGTERM (launchd unload,
       logout) removes both containers, records `agent-error` and exits 143.
    2. Append the agent run's state to `summary.md`.
    3. **Publish** the report, review and summary when a publish grant is active
@@ -133,7 +135,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Ledger | `<state>/ledger.jsonl` | append-only, MAC-chained |
 | Heartbeat | `<state>/heartbeat.json` | read by the stale-run warning; written atomically |
 | Daily run lock | `<state>/daily.lock` | held for a whole daily run; a second run exits 3 |
-| Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json`, `fixplan-*.md`, `agent/`, `agent-report/`, `gateway/` |
+| Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json`, `fixplan-*.md`, `agent/` (earlier agent runs of the day under `agent/runs/<run id>/`), `agent-report/`, `gateway/` |
 | Request spool | `<state>/spool/requests/`, `results/`, `processed/` | the only path the agents write besides their sessions |
 | Staged fixes | `<state>/worktrees/<repo>-<8 hex>-<YYYYmmddHHMMSS>-<6 hex>/` (repository name, a hash of its path, the UTC time, a random suffix) | executor-owned worktrees; removed once `open-pr` has a pull request (the branch is kept) |
 | Run lock | `<state>/agent.lock` | held for a whole agent run or debrief |
@@ -172,7 +174,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
 | `cooldown_days` | `14` | A fix release must be at least this old (Rule S-10). The executor never goes below 14 |
 | `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
-| `fix_mode` | `"plan"` | `plan` writes fix plans; `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with the cooldown clamped to at least 14 days. The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
+| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with the cooldown clamped to at least 14 days. The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
 | `notify` | `"desktop"` | `none`, `desktop`, or `command:<program and args>` (the program gets the fixed message as its last argument) |
 | `schedule` | `{"hour": 7, "minute": 30}` | When `schedule install` runs the job |
@@ -193,7 +195,7 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 | `key_file` | `""` | File holding `OPENROUTER_API_KEY=...` (or the bare key). Mounted read-only into the gateway only |
 | `budget_usd` | `2.0` | Spend cap per run (see [What leaves your machine](#what-leaves-your-machine)) |
 | `max_tokens_total` | `10000000` | Prompt + completion token cap per run, independent of reported cost (integer 1–100 000 000) |
-| `max_unmetered_calls` | `20` | The gateway refuses after this many successful replies without usable (non-zero) usage or cost (integer ≥ 1). Upstream error replies (4xx/5xx) are counted separately (`upstream_errors` in `spend.json`) and do not count here |
+| `max_unmetered_calls` | `20` | The gateway refuses after this many successful replies without usable (non-zero) usage or cost (integer ≥ 1). Upstream errors (4xx/5xx replies, and calls that got no reply: DNS failure, connection refused, timeout) are counted separately (`upstream_errors` in `spend.json`) and do not count here |
 | `allow_unmetered` | `false` | Accept replies without usage (then only the token cap, if usage has tokens, and the time cap bound a run) |
 | `max_minutes` | `45` | Time cap per run; the container is removed at the cap |
 | `image` | `""` | Image tag; default `agentteams-vulnscan-agent:<agentteams version>` |
@@ -326,7 +328,7 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated` |
-| `get_fix_plans` | — | The deterministic fix plans |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository path to give `stage-fix` as `target` |
 | `request` | `op` (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
@@ -567,22 +569,41 @@ fix. `GIT` ranges are ignored.
 
 ### `agentteams.vulnscan.fix`
 
-#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm)`
+#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
-`allow_major=False`, `cooldown_days=14`, `include_worktrees=False`, `allow_dirty=False`, `npm=True`.
-Returns a `FixResult`. Symlinked manifests are refused, never followed.
+`allow_major=False`, `cooldown_days=14`, `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
+`manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists
+each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
+never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
+
+#### `fix.plan_npm_lock(path, *, cooldown_days, label)`
+
+`(rows, note)` for one `package-lock.json` / `npm-shrinkwrap.json`, from OSV; npm is not run. One
+`PinChange` per vulnerable package version, with `new` the smallest version the advisories call fixed.
+`stage-fix` runs `npm audit fix` on the lockfile as a whole, and npm picks the versions, so `new` is a
+floor, not a promise (the plan shows it as `≥`). Actions follow `plan_requirements`, with npm's limits:
+`malicious`; `no-clean-release` (no advisory names a fix); `major-held` when the fix leaves the
+installed version's caret range (`1.x` → `2.x`, `0.3.x` → `0.4.x`), whatever `allow_major` says,
+because npm without `--force` never takes it; `workspace-held` when the lockfile's root package or
+the `package.json` beside it declares `workspaces` (`stage-fix` fails closed there);
+`npm-unavailable` when npm is not on `PATH`. Dev-only packages are planned like the rest (npm fixes
+them too) and say `dev only` in the note. Raises `FeedError`.
 
 #### `FixResult`
 
-Dataclass: `changes` (`PinChange` list), `npm` (`(directory, summary)` tuples), `composer`,
-`refused` (`(path, reason)` tuples), `feed_errors`, `applied`. `exit_code()`: 4 a malicious pin,
-3 a feed failed, 1 anything held back or refused, else 0. `markdown()` renders the fix plan.
+Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`),
+`npm_notes` (lockfile → note), `npm` (`(directory, summary)` tuples), `composer`, `refused`
+(`(path, reason)` tuples), `feed_errors`, `applied`, `target` (the repository a daily plan is for)
+and `target_problem` (why `stage-fix` cannot take it). `exit_code()`: 4 a malicious version,
+3 a feed failed, 1 anything held back or refused, else 0. `markdown()` renders the fix plan; with
+`target` set it opens with ``Repository (the `stage-fix` target): `<path>` ``.
 
 #### `PinChange`
 
-Dataclass for one requirements edit: `path`, `name`, `old`, `new`, `action` (`fix`, `major-held`,
-`no-clean-release`, `cooldown-held`, `hash-held`, `malicious`), `ids`, `note`.
+Dataclass for one requirements edit or npm plan row: `path`, `name`, `old`, `new`, `action` (`fix`,
+`major-held`, `no-clean-release`, `cooldown-held`, `hash-held`, `malicious`; npm rows also
+`workspace-held`, `npm-unavailable`), `ids`, `note`.
 
 ### `agentteams.vulnscan.ledger`
 
@@ -685,8 +706,13 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   branch is kept. A second call then raises `no staged fix`.
 
 Re-staging the same change on the same day releases the earlier local branch only when the executor
-created it and every worktree holding it is executor-owned; otherwise `stage-fix` refuses. Raises
-`ExecError`.
+created it and every worktree holding it is executor-owned; otherwise `stage-fix` refuses. When
+`stage-fix` fails it removes its worktree and, if this attempt created the branch, deletes that
+branch while it still points at the base commit and is checked out nowhere outside the executor's
+worktrees, so a retry starts clean. `stage-fix` stages only the validated paths, as literal
+pathspecs: tracked files with `git add -u` (so a tracked pin file under a gitignored directory is
+staged without `-f`) and new, non-ignored files with a plain `git add`. It refuses if anything else
+ends up staged. Raises `ExecError`.
 
 #### `validate_diff(wt, base)`
 
@@ -897,8 +923,12 @@ One agent run. Returns the status (also written to `<run>/agent/status.json`) wi
 `completed`, `agent-error`, `timed-out` or `not-run`, and `run_id`. Launcher failures end as
 `agent-error` rather than raising. Exception: when another run or a debrief holds the run lock, it
 returns `not-run` with `status_written: False`, and nothing in the run directory is written or
-finalized (the holder may be a live run of that directory). Every other not-run reason is decided
-under the lock.
+finalized (the holder may be a live run of that directory); the same holds when an earlier run's
+record cannot be archived. Every other not-run reason is decided under the lock. The status also
+carries `report` (`{"request_id", "submitted"}` of the report this run submitted, or `null`) and,
+when an earlier run's record was moved aside, `archived_previous` (its name under
+`<run>/agent/runs/`). A run whose agent exits 0 without submitting a report of its own is
+`agent-error`, not `completed`.
 
 #### `fold_notes(task, run_id)`
 
@@ -1031,13 +1061,35 @@ prints an "after-action review overdue" notice when it is true.
 
 Store the agent's report fenced and inert under `<run>/agent-report/report.md`.
 
-#### `finalize(run_dir, run_state)`
+#### `finalize(run_dir, run_state, *, since)`
 
-Record the run's final state in the stored report's header.
+Record the run's final state in the stored report's header and return its header fields. With
+`since` (the run's start), a report submitted earlier is an earlier run's: it is left alone and
+`None` is returned. `None` also when no report was submitted.
+
+#### `archive(run_dir, name)`
+
+Rename the stored report to `<name>.report.md` beside it (an earlier run's report, kept).
 
 #### `render_for_review(run_dir)`
 
-The review section for the stored report.
+The review section for the stored report, bound to the latest agent run: a report submitted before
+the run in `<run>/agent/status.json` started is not shown, and the section says that run submitted
+none.
+
+### `agentteams.vulnscan.run_records`
+
+#### `archive_previous(run_dir)`
+
+Before an agent run writes anything (under the run lock), move the previous run's
+`agent/status.json`, `agent/transcript.log` and `gateway/spend.json` to
+`<run>/agent/runs/<previous run id>/`, and its report to `agent-report/<previous run id>.report.md`.
+The latest run therefore always owns `agent/status.json`, `agent/transcript.log` and
+`agent-report/report.md`. Returns the archive name, or `None` when there was nothing to move.
+
+#### `run_dirs_of(run_dir)`
+
+The archived run records of a run directory, oldest first (listed by `review`).
 
 ### `agentteams.vulnscan.notify`
 

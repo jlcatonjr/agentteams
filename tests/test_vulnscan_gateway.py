@@ -278,7 +278,7 @@ def test_upstream_disconnect_and_timeout(upstream: Upstream) -> None:
     assert meter.calls == 1 and meter.unmetered == 1
     status, body = _drive(h, _request(_chat()))
     assert status == 502 and "TimeoutError" in json.loads(body)["error"]["message"]
-    assert meter.calls == 1 and meter.upstream_errors == 0     # nothing came back: nothing to meter
+    assert meter.calls == 1 and meter.upstream_errors == 1     # nothing came back: an upstream error, not a call
 
 
 # ---------------------------------------------------------------- D7: concurrency

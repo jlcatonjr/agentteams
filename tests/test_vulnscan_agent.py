@@ -529,7 +529,10 @@ def test_finish_finalizes_the_stored_report(dirs: dict[str, Path], monkeypatch: 
     st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
     assert st["reason"] == "docker is not installed"
     assert st["run_state"] == "not-run" and st["run_id"].startswith(dirs["run"].name)
-    assert "not-run" in report_store.render_for_review(dirs["run"])
+    # the report predates this run: archived untouched, never finalized as this run's (defect #1)
+    assert st["report"] is None and report_store.NO_REPORT_LINE in report_store.render_for_review(dirs["run"])
+    kept = dirs["run"] / report_store.REPORT_DIR / f"{st['archived_previous']}.report.md"
+    assert "- run state: pending" in kept.read_text()
 
 
 def test_a_launcher_failure_ends_as_agent_error_and_still_finalizes(dirs: dict[str, Path],
@@ -546,7 +549,7 @@ def test_a_launcher_failure_ends_as_agent_error_and_still_finalizes(dirs: dict[s
     monkeypatch.setattr(agent_run, "_docker", docker)
     st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
     assert st["run_state"] == "agent-error" and "daemon down" in st["reason"]
-    assert "agent-error" in report_store.render_for_review(dirs["run"])
+    assert st["report"] is None and report_store.NO_REPORT_LINE in report_store.render_for_review(dirs["run"])
     (dirs["tmp"] / "state" / "agent-selftest.json").write_text("{not json")
     assert "unreadable" in real_selftest_ok({"agent": _a(dirs)})[1]
 
@@ -632,6 +635,18 @@ def _launchable(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch, *, rc: i
     return calls
 
 
+def _agent_reports(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch, calls: list[list[str]],
+                   spend: bytes = b'{"calls": 2, "unmetered": 0}') -> None:
+    """Make the fake agent write the gateway's spend.json and submit its own report during the run."""
+    from agentteams.vulnscan import report_store
+
+    def popen(argv: list[str], **kw: object) -> _FakeProc:
+        (dirs["run"] / "gateway" / "spend.json").write_bytes(spend)
+        report_store.save(dirs["run"], "# report", request_id="d" * 32)
+        return _FakeProc(calls, argv, 0)
+    monkeypatch.setattr(agent_run.subprocess, "Popen", popen)
+
+
 def test_sigterm_during_a_run_still_removes_gateway_and_agent(dirs: dict[str, Path],
                                                               monkeypatch: pytest.MonkeyPatch) -> None:
     import fcntl
@@ -678,9 +693,8 @@ def test_folded_notes_reach_the_task_param_of_the_container_argv(dirs: dict[str,
                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     from agentteams.vulnscan import notes
     calls = _launchable(dirs, monkeypatch)
+    _agent_reports(dirs, monkeypatch, calls)
     notes.add("skip repo X today; it is being migrated")
-    (dirs["run"] / "gateway").mkdir(parents=True, exist_ok=True)
-    (dirs["run"] / "gateway" / "spend.json").write_text(json.dumps({"calls": 2, "unmetered": 0}))
     st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
     assert st["run_state"] == "completed"
     argv = next(c[1:] for c in calls if c[0] == "popen")
@@ -744,7 +758,7 @@ def test_a_launcher_exception_through_daily_ends_agent_error(dirs: dict[str, Pat
     daily.run_daily(cfg, today="2026-10-22")
     hb = json.loads(daily.heartbeat_path().read_text())
     assert hb["agent"]["state"] == "agent-error" and "docker vanished" in hb["agent"]["reason"]
-    assert "agent-error" in report_store.render_for_review(run) and sent == ["agent-not-completed"]
+    assert report_store.NO_REPORT_LINE in report_store.render_for_review(run) and sent == ["agent-not-completed"]
 
 
 def test_second_daily_run_on_one_date_has_one_agent_section(dirs: dict[str, Path],
@@ -840,9 +854,7 @@ def test_selftest_ok_refuses_a_non_object_record(dirs: dict[str, Path], record: 
 @pytest.mark.parametrize("spend", [b'{"budget_usd": 2.0, "spent', b"[1]", b"\xff"])
 def test_a_truncated_spend_file_still_writes_the_status(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch,
                                                         spend: bytes) -> None:
-    _launchable(dirs, monkeypatch)
-    (dirs["run"] / "gateway").mkdir()
-    (dirs["run"] / "gateway" / "spend.json").write_bytes(spend)             # G12
+    _agent_reports(dirs, monkeypatch, _launchable(dirs, monkeypatch), spend)   # G12
     st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
     assert st["run_state"] == "completed" and st["spend"] is None and "spend.json" in st["spend_problem"]
     assert json.loads((dirs["run"] / "agent" / "status.json").read_text())["spend"] is None

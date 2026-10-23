@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.frameworks._write_roots import HOME_PROTECTED
-from agentteams.vulnscan import executor, ledger, notes, notify, paths, report_store, selftest_probe
+from agentteams.vulnscan import executor, ledger, notes, notify, paths, report_store, run_records, selftest_probe
 
 NETWORK = "agentteams-vulnscan-net"
 GATEWAY = "agentteams-vulnscan-gw"
@@ -745,8 +745,9 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
 
     Holds :func:`run_lock_path` for the whole run (a concurrent run or a debrief is refused). On
     timeout the container is removed (``docker rm -f``) **before** anything is captured. Operator
-    notes are folded into ``task`` here; at the end the stored report (if any) is finalized with
-    the run state. A SIGTERM during the run (:func:`sigterm_raises_exit`) still removes both
+    notes are folded into ``task`` here. Under the lock an earlier run's record is archived first
+    (:func:`run_records.archive_previous`); at the end this run's own report (if any) is finalized with
+    the run state, and a run that would be ``completed`` without one is ``agent-error``. A SIGTERM during the run (:func:`sigterm_raises_exit`) still removes both
     containers, records ``agent-error`` and then exits.
 
     Args:
@@ -757,8 +758,9 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
 
     Returns:
         Status dict with ``run_state`` in :data:`RUN_STATES` (also ``state``, the same value) and
-        ``run_id``, written to ``<run_dir>/agent/status.json``. Exception (G2): when the run lock is
-        held the status is ``not-run`` with ``status_written: False`` and nothing in ``run_dir`` is
+        ``run_id`` and ``report`` (its request id and submit time, or None), written to
+        ``<run_dir>/agent/status.json``. Exception (G2): when the run lock is held (or the earlier record
+        cannot be archived) the status is ``not-run`` with ``status_written: False`` and nothing in ``run_dir`` is
         written or finalized, since the holder may be a live run of the same directory. A
         ``spend.json`` that cannot be read gives ``spend: None`` and a ``spend_problem`` (G12).
 
@@ -771,11 +773,20 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
     status: dict[str, Any] = {"started": datetime.now(UTC).isoformat(), "model": a["model"], "run_id": run_id}
 
     def finish(state: str, **extra: Any) -> dict[str, Any]:
-        status.update(extra, run_state=state, state=state, finished=datetime.now(UTC).isoformat())
-        try:
-            report_store.finalize(run_dir, state)
+        status.update(extra)
+        mine = None
+        try:   # only this run's report (an earlier run's was archived under the lock)
+            mine = report_store.finalize(run_dir, state, since=status["started"])
+            if state == "completed" and mine is None:   # goose exits 0 after "Ran into this error"
+                state = "agent-error"
+                status["reason"] = ("the agent submitted no report of its own"
+                                    + _transcript_error(run_dir / "agent" / "transcript.log"))
         except (OSError, ValueError) as exc:
             status["report_problem"] = str(exc)[:300]
+            if state == "completed":   # an unverifiable report is not a completed run (fail closed)
+                state, status["reason"] = "agent-error", f"the agent's report could not be verified: {exc}"[:300]
+        status.update(report={"request_id": mine["request id"], "submitted": mine["submitted"]} if mine else None,
+                      run_state=state, state=state, finished=datetime.now(UTC).isoformat())
         out.mkdir(parents=True, exist_ok=True)
         (out / "status.json").write_text(json.dumps(status, indent=2), encoding="utf-8")
         return status
@@ -789,7 +800,16 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
                           reason="another agent run or debrief holds the run lock", status_written=False)
             return status
         # Every other refusal is decided under the lock (R8-4): a refused run writes status.json and finalizes
-        # the report, which must never land on a live run's directory.
+        # the report, which must never land on a live run's directory. An earlier run's record is kept first.
+        try:
+            archived = run_records.archive_previous(run_dir)
+        except (OSError, ValueError) as exc:   # never overwrite a record that could not be set aside
+            status.update(run_state="not-run", state="not-run", finished=datetime.now(UTC).isoformat(),
+                          reason=f"could not archive the previous agent run's record: {exc}"[:300],
+                          status_written=False)
+            return status
+        if archived:
+            status["archived_previous"] = archived
         why = _not_run_reason(cfg, a)
         if why:
             return finish("not-run", reason=why)
@@ -816,21 +836,22 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
                     _stop_gateway()
                 except (OSError, subprocess.SubprocessError) as exc:   # cleanup must not mask the run's outcome
                     status["cleanup_error"] = f"{type(exc).__name__}: {exc}"[:300]
-                fcntl.flock(lock, fcntl.LOCK_UN)
-    if terminated:
-        finish("agent-error", reason="terminated by SIGTERM; the agent and gateway containers were removed")
-        raise SystemExit(SIGTERM_EXIT)
-    if launch_error:
-        return finish("agent-error", reason=f"launcher failed: {launch_error}")
-    spend, spend_problem = read_spend(run_dir / "gateway" / "spend.json")
-    state = "timed-out" if timed_out else ("completed" if rc == 0 else "agent-error")
-    extra: dict[str, Any] = {"spend_problem": spend_problem} if spend_problem else {}
-    if state == "completed" and not spend_problem and not (spend or {}).get("calls"):
-        # goose exits 0 after "Ran into this error": a run that never reached the model did nothing.
-        state = "agent-error"
-        extra["reason"] = ("the agent exited without a single model call (no gateway spend recorded)"
-                           + _transcript_error(run_dir / "agent" / "transcript.log"))
-    return finish(state, exit=rc, timed_out=timed_out, spend=spend, **extra)
+        # Still under the lock (closing the file releases it): a next run must not archive this run's report
+        # and transcript before finish() has finalized them and written this run's status.json.
+        if terminated:
+            finish("agent-error", reason="terminated by SIGTERM; the agent and gateway containers were removed")
+            raise SystemExit(SIGTERM_EXIT)
+        if launch_error:
+            return finish("agent-error", reason=f"launcher failed: {launch_error}")
+        spend, spend_problem = read_spend(run_dir / "gateway" / "spend.json")
+        state = "timed-out" if timed_out else ("completed" if rc == 0 else "agent-error")
+        extra: dict[str, Any] = {"spend_problem": spend_problem} if spend_problem else {}
+        if state == "completed" and not spend_problem and not (spend or {}).get("calls"):
+            # goose exits 0 after "Ran into this error": a run that never reached the model did nothing.
+            state = "agent-error"
+            extra["reason"] = ("the agent exited without a single model call (no gateway spend recorded)"
+                               + _transcript_error(run_dir / "agent" / "transcript.log"))
+        return finish(state, exit=rc, timed_out=timed_out, spend=spend, **extra)
 
 
 def _transcript_error(path: Path) -> str:

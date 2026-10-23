@@ -196,6 +196,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/paths.py",
     "agentteams/vulnscan/agent_run.py",
     "agentteams/vulnscan/selftest_probe.py",   # the self-test probe a passing self-test vouches for
+    "agentteams/vulnscan/run_records.py",      # archives earlier runs' status, transcript and report
     "agentteams/vulnscan/gateway.py",
     "agentteams/vulnscan/mcp.py",
     # R6 operator loop (2026-10-22, metaplan vulnscan-r6 T1): escalations.py and publish.py sign through the operator

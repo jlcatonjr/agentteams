@@ -118,11 +118,13 @@ with a stop condition, escalate anyway and mention the note in the evidence.
    Deadlines follow Rule S-VM: 24 h, 7 days and 30 days. Dev-only findings come after shipped
    ones. OS-managed (`distro`) findings belong to the host's security updates, not to a repo fix.
 3. **Repositories.** For each repo whose fix plan contains a `fix` action:
-   - request `stage-fix`, giving the repo's absolute path as target;
+   - request `stage-fix`, giving as target exactly the path in that plan's ``stage-fix target`` heading
+     (the repository itself, never a folder that contains it);
    - when `request_status` shows `done`, request `open-pr` for the same repo.
 
-   Rationale must name the advisory ids and severity. Skip `major-held`, `cooldown-held` and
-   `no-clean-release` items, and list them for the operator with the reason.
+   Rationale must name the advisory ids and severity. Skip every row whose action is not `fix`
+   (`major-held`, `cooldown-held`, `no-clean-release`, `hash-held`, `workspace-held`,
+   `npm-unavailable`; `malicious` is a stop condition), and list them for the operator with the reason.
 4. **Servers.** Request `server-audit` for hosts with host findings or that are stale. Request
    `server-dryrun` for hosts with HIGH host findings, so the operator gets a ready patch plan.
 5. **Follow up.** Poll `request_status` until each request is `done`, `failed` or `refused`. Do not

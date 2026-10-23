@@ -5,7 +5,8 @@ dir. That file names the user's own repos and hosts, so it is never inside a rep
 
 One run:
 
-1. Scans each ``repo_roots`` entry, writes a fix plan per root, and in
+1. Scans each ``repo_roots`` entry, writes a fix plan per git repository (``fixplan-<name>-<digest>.md``,
+   naming the repository as the ``stage-fix`` target), and in
    ``fix_mode = "apply-worktree"`` stages non-major, cooldown-clean fixes in a fresh git
    worktree per repository. It never commits, pushes or merges.
 2. Checks the runtimes on this machine (``local_runtimes``).
@@ -27,16 +28,19 @@ from __future__ import annotations
 import copy
 import datetime as _dt
 import fcntl
+import hashlib
 import json
 import math
 import os
 import re
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, executor, fix, notify, paths
+from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
 
@@ -569,21 +573,17 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         slug = root.name or "root"
         (run_dir / f"repos-{slug}.json").write_text(json.dumps(rep.to_dict(), indent=2), encoding="utf-8")
         total.merge(rep)
+        repos = sorted({f.target for f in rep.findings if f.kind == "package" and f.fix and not f.malicious})
         for f in rep.findings:
             f.target = f"{root_s}/{f.target}" if f.target != "." else root_s
-        fixable = sorted({f.target for f in rep.findings if f.kind == "package" and f.fix and not f.malicious})
         if cfg.get("fix_mode") == "apply-worktree":
-            for t in fixable:
+            for t in (f"{root_s}/{r}" if r != "." else root_s for r in repos):
                 repo = Path(t).expanduser()
                 wt, md = stage_worktree_fixes(repo, cfg, today)
                 staged.append(f"- `{t}` → `{wt or 'not staged'}`")
-                (run_dir / f"fix-{repo.name}.md").write_text(md, encoding="utf-8")
-        elif fixable:
-            plan = fix.fix_path(root, apply=False, allow_major=bool(cfg["allow_major"]),
-                                cooldown_days=int(cfg["cooldown_days"]),
-                                include_worktrees=bool(cfg["include_worktrees"]), npm=False)
-            (run_dir / f"fixplan-{slug}.md").write_text(plan.markdown(), encoding="utf-8")
-            total.feed_errors += [f"fix plan: {e}" for e in plan.feed_errors]
+                (run_dir / f"fix-{plan_slug(repo.resolve())}.md").write_text(md, encoding="utf-8")
+        elif repos:
+            _write_fix_plans(cfg, root, repos, run_dir, total)
 
     if cfg.get("local_runtimes", True):
         total.merge(engine.local_runtimes())
@@ -591,6 +591,50 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     kit = paths.server_kit_dir()
     for host in cfg.get("servers", []):
         total.merge(_scan_server(host, kit, run_dir))
+
+
+def plan_slug(repo: Path) -> str:
+    """Return the file-name key of a repository's fix plan: its name plus a digest of its full path.
+
+    Two repositories with the same name under different roots get different plans.
+
+    Args:
+        repo: Resolved repository path.
+
+    Returns:
+        ``<name>-<8 hex>``.
+    """
+    return re.sub(r"[^A-Za-z0-9._-]", "-", repo.name or "root") + "-" + hashlib.sha256(str(repo).encode()).hexdigest()[:8]
+
+
+def _write_fix_plans(cfg: dict, root: Path, repos: list[str], run_dir: Path, total: Report) -> None:
+    """Write ``fixplan-<slug>.md`` for each git repository under ``root`` that has fixable findings.
+
+    A plan is keyed by the repository that holds the manifests (:func:`engine.repo_of`, as the scan
+    groups findings), names that repository as the ``stage-fix`` target, lists file paths relative to
+    it, and leaves out nested repositories (they get their own plan). A manifest outside any git
+    repository still gets a plan, which says ``stage-fix`` cannot take it.
+
+    Args:
+        cfg: Daily config.
+        root: A ``repo_roots`` entry (a repository or a folder of repositories).
+        repos: Repositories with fixable findings, relative to ``root`` (``"."`` for ``root``).
+        run_dir: The run directory.
+        total: The run's report; fix-plan feed failures are added to it.
+    """
+    root = root.resolve()
+    groups: dict[str, list[Path]] = defaultdict(list)
+    for path in discover(root, include_worktrees=bool(cfg["include_worktrees"])):
+        groups[engine.repo_of(path, root)].append(path)
+    for rel in repos:
+        repo = root / rel
+        plan = fix.fix_path(repo, apply=False, allow_major=bool(cfg["allow_major"]),
+                            cooldown_days=int(cfg["cooldown_days"]), npm=False, manifests=groups.get(rel, []))
+        plan.target = str(repo)
+        if not (repo / ".git").exists():
+            plan.target_problem = "not a git repository — fix these files by hand"
+        (run_dir / f"fixplan-{plan_slug(repo)}.md").write_text(plan.markdown(), encoding="utf-8")
+        total.feed_errors += [f"fix plan: {e}" for e in plan.feed_errors]
 
 
 def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,

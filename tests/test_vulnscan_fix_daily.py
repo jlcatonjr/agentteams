@@ -170,7 +170,7 @@ def test_run_daily_writes_summary_heartbeat_and_marks_new(xdg: Path, feed: Feed)
     cfg = {**daily.DEFAULT_CONFIG, "repo_roots": [str(root)], "local_runtimes": False, "notify": "none"}
     rep, code, run_dir = daily.run_daily(cfg, today="2026-10-21")
     assert code == 1 and (run_dir / "summary.md").exists() and "**NEW**" in (run_dir / "summary.md").read_text()
-    assert (run_dir / "fixplan-code.md").read_text().count("2.15.0") >= 1
+    assert (run_dir / f"fixplan-{daily.plan_slug(repo.resolve())}.md").read_text().count("2.15.0") >= 1
     hb = json.loads(daily.heartbeat_path().read_text())
     assert hb["exit"] == 1 and hb["new"] == 1
     _, _, run2 = daily.run_daily(cfg, today="2026-10-22")
