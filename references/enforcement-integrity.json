@@ -87,7 +87,7 @@
     "agentteams/vulnscan/__main__.py": "7d167e7db317684da3d533ebcbc36533be22f5dd639192728a10f78df89bad04",
     "agentteams/vulnscan/_http.py": "97be28be3009833aa7024650acb72b15f86e6e4aa5f67edd64d7e734e78c4b7f",
     "agentteams/vulnscan/agent_run.py": "e438d3ed55919616ff07f7052a6c0add1aff224a43bd1eeb0a8c8225ffc505fe",
-    "agentteams/vulnscan/daily.py": "6f596fcbaf1602dd3489bdd54a0b80e3e22ee62f10990b2eee64a90839b03e5b",
+    "agentteams/vulnscan/daily.py": "c3061ad6132145babae363c9ea571cf68f17911a4fdda5791de258e961408ceb",
     "agentteams/vulnscan/debrief.py": "07469b7b89967b5279fc83e57901d4c7d09169db9fda10511830999701293b71",
     "agentteams/vulnscan/engine.py": "2e5003931913a043bb63f0f8c89533f95f37568f99708df718efcfb4429e3c31",
     "agentteams/vulnscan/escalations.py": "b64b1b256a2523ae457be5c4a468b1ae142099924158ccd7a5bb9e9823ec8cca",

@@ -607,6 +607,45 @@ def plan_slug(repo: Path) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "-", repo.name or "root") + "-" + hashlib.sha256(str(repo).encode()).hexdigest()[:8]
 
 
+_ORIGIN_URL = re.compile(r'^\[remote "origin"\]\s*$(?:\n(?!\[).*)*?\n\s*url\s*=\s*(\S+)', re.M)
+
+
+def _origin_owner(repo: Path) -> str | None:
+    """Return ``host/owner`` of the repository's ``origin`` from ``.git/config`` (read as text; git is not run)."""
+    try:
+        m = _ORIGIN_URL.search((repo / ".git" / "config").read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return None
+    url = re.sub(r"^[a-z+]+://(?:[^@/]+@)?|^[^@/]+@", "", m.group(1)) if m else ""   # scheme and user@
+    parts = [p for p in re.split(r"[:/]", url.removesuffix(".git")) if p]
+    return "/".join(parts[:2]).lower() if len(parts) >= 3 else None
+
+
+def foreign_clone(repo: Path) -> str:
+    """Return why ``repo`` is not a ``stage-fix`` target when it is someone else's clone nested in a repository, else "".
+
+    A nested repository with its own ``.git`` directory (not a submodule, whose ``.git`` is a file) whose
+    ``origin`` belongs to a different owner than the enclosing repository's is a local copy of a third-party
+    project: a PR would go to that project. It is reported for the operator to update or remove locally.
+
+    Args:
+        repo: A git repository.
+
+    Returns:
+        The reason, or "" when ``repo`` is not a nested foreign clone.
+    """
+    if not (repo / ".git").is_dir():
+        return ""
+    outer = next((p for p in repo.parents if (p / ".git").exists()), None)
+    if outer is None:
+        return ""
+    mine, theirs = _origin_owner(outer), _origin_owner(repo)
+    if theirs is None or mine == theirs:
+        return ""
+    return (f"a separate clone of {theirs}'s project inside {outer.name} (not part of that repository): "
+            "update or remove it locally; a PR would go to the upstream project")
+
+
 def _write_fix_plans(cfg: dict, root: Path, repos: list[str], run_dir: Path, total: Report) -> None:
     """Write ``fixplan-<slug>.md`` for each git repository under ``root`` that has fixable findings.
 
@@ -633,6 +672,8 @@ def _write_fix_plans(cfg: dict, root: Path, repos: list[str], run_dir: Path, tot
         plan.target = str(repo)
         if not (repo / ".git").exists():
             plan.target_problem = "not a git repository — fix these files by hand"
+        elif foreign := foreign_clone(repo):
+            plan.target_problem = foreign
         (run_dir / f"fixplan-{plan_slug(repo)}.md").write_text(plan.markdown(), encoding="utf-8")
         total.feed_errors += [f"fix plan: {e}" for e in plan.feed_errors]
 

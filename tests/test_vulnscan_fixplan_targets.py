@@ -217,3 +217,47 @@ def test_a_crafted_path_cannot_inject_a_stage_fix_target(xdg: Path, problem: str
     text = mcp.Server(run_dir, xdg / "s", xdg / "r").call("get_fix_plans", {})
     assert "stage-fix target `/elsewhere`" not in text
     assert ("stage-fix target `" in text) is (not problem)
+
+
+def _git_dir(repo: Path, origin: str | None) -> None:
+    (repo / ".git").mkdir(parents=True)
+    remote = f'[remote "origin"]\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\turl = {origin}\n' if origin else ""
+    (repo / ".git" / "config").write_text('[core]\n\tbare = false\n' + remote)
+
+
+@pytest.mark.parametrize(("outer", "inner", "foreign"), [
+    ("git@github.com:me-org/app.git", "https://github.com/upstream/tool.git", True),
+    ("https://github.com/me-org/app", "ssh://git@github.com/Me-Org/lib.git", False),   # same owner (case-blind)
+    ("git@github.com:me-org/app.git", None, False),                                     # no origin: not judged
+    (None, "https://github.com/upstream/tool", True),                                   # outer has no origin
+])
+def test_a_nested_clone_of_another_owners_project_is_not_a_target(tmp_path: Path, outer: str | None,
+                                                                   inner: str | None, foreign: bool) -> None:
+    _git_dir(tmp_path / "app", outer)
+    _git_dir(tmp_path / "app" / "tools" / "tool", inner)
+    why = daily.foreign_clone(tmp_path / "app" / "tools" / "tool")
+    assert bool(why) is foreign and ("update or remove it locally" in why) is foreign
+    assert daily.foreign_clone(tmp_path / "app") == ""                 # the outer repository itself
+
+
+def test_a_submodule_is_never_called_a_foreign_clone(tmp_path: Path) -> None:
+    _git_dir(tmp_path / "app", "git@github.com:me-org/app.git")
+    sub = tmp_path / "app" / "vendor" / "lib"
+    sub.mkdir(parents=True)
+    (sub / ".git").write_text("gitdir: ../../.git/modules/lib\n")    # a submodule's .git is a file
+    assert daily.foreign_clone(sub) == ""
+
+
+def test_a_foreign_clone_gets_a_plan_without_a_target(xdg: Path, feed: Feed) -> None:
+    root = xdg / "roots" / "app"
+    _git_dir(root, "git@github.com:me-org/app.git")
+    clone = root / "tools" / "tool"
+    _git_dir(clone, "https://github.com/upstream/tool.git")
+    (clone / "requirements.txt").write_text("PyJWT==2.3.0\n")
+    feed.vulns[("PyPI", "PyJWT", "2.3.0")] = ["G1"]
+    feed.records["G1"] = _adv("G1", "PyPI", "PyJWT", "0", "2.15.0")
+    _pypi(feed, "PyJWT", {"2.15.0": 100})
+    _, _, run_dir = daily.run_daily(_cfg(root), today="2026-10-21")
+    md = (run_dir / f"fixplan-{daily.plan_slug(clone.resolve())}.md").read_text()
+    assert "github.com/upstream's project" in md and "the `stage-fix` target" not in md
+    assert "stage-fix target `" not in mcp.Server(run_dir, xdg / "s", xdg / "r").call("get_fix_plans", {})
