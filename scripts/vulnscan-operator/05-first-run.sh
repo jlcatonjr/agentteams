@@ -25,7 +25,12 @@ docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 2; }
 ok, why = agent_run.selftest_ok(daily.load_config()); print("self-test:", why); sys.exit(0 if ok else 1)' \
   || { echo "no passing self-test for this image (run scripts/vulnscan-agent-image.sh)" >&2; exit 2; }
 
-cd "$HOME"   # never sign from inside a repository or the team directory
+# Sign from an empty directory: never from inside a repository or the team directory, and not from $HOME
+# either, because a pipx install lives under ~/.local and the install-location check refuses an install
+# inside the current directory.
+WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/vulnscan-sign.XXXXXX")"
+trap 'rmdir "$WORKDIR" 2>/dev/null || true' EXIT
+cd "$WORKDIR"
 
 echo "== 1/4 sign the narrow grant (review every field, then answer y)"
 if "${VS[@]}" grant list 2>/dev/null | grep -q '"stage-fix"'; then
