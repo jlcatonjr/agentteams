@@ -191,6 +191,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A run whose agent exits 0 without a single model call is `agent-error`, not `completed`.
   - **Behaviour change:** the default recipe is `.goose/recipes/vuln-remediation.yaml`; the generated
     orchestrator's prompt is a role check, so a one-shot run of it answered that and stopped.
+  - **Security:** the scheduled job's `PATH` is no longer the installing shell's whole `PATH`, which put
+    project virtualenv `bin` directories (agent-writable repositories) ahead of `git`/`gh` for the
+    unsandboxed job. It holds only the directories the job's tools resolve to, plus the system
+    directories, never one inside a git work tree under `$HOME` (`schedule.job_path`); the job runs
+    Python with `-P`. Reinstall the job (`schedule install --apply`) to pick this up.
   - Local runtime findings use the target `this-machine` instead of the hostname (the agent took the
     hostname for a server); the task text limits server operations to configured server names.
   - Operator scripts sign from an empty temporary directory (a `pipx` install under `~/.local` made signing

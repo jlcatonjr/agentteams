@@ -66,7 +66,59 @@ class Plan:
 
 
 def _program() -> list[str]:
-    return [sys.executable, "-m", "agentteams.vulnscan", "daily"]
+    # -P: launchd/systemd/cron start the job in some working directory; keep it off the import path.
+    return [sys.executable, "-P", "-m", "agentteams.vulnscan", "daily"]
+
+
+#: Programs the unattended job runs by name; their directories (and only theirs) go on the job's PATH.
+JOB_TOOLS: tuple[str, ...] = ("git", "gh", "docker", "ssh", "npm", "node", "openssl")
+#: Always on the job's PATH (system directories, never agent-writable).
+SYSTEM_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
+
+
+def _in_work_tree(directory: Path) -> bool:
+    """True when ``directory`` is inside a git work tree (a repository an agent may be able to write)."""
+    return any((d / ".git").exists() for d in (directory, *directory.parents))
+
+
+def job_path(path: str | None = None) -> tuple[str, list[str]]:
+    """Return the PATH baked into the job, and the tools it could not place safely.
+
+    The job runs unsandboxed and invokes the :data:`JOB_TOOLS` by name, so its PATH holds only the
+    directories those tools resolve to now, plus :data:`SYSTEM_PATH`. A directory that is relative,
+    holds a literal ``~``, or lies inside a git work tree under ``$HOME`` (a project virtualenv's ``bin``,
+    which an agent working in that repository could write a fake ``git`` into) is left out (first live
+    install). Package-manager prefixes outside ``$HOME`` stay, though ``/opt/homebrew`` is itself a work tree.
+
+    Args:
+        path: The PATH to resolve from (default: this process's).
+
+    Returns:
+        ``(PATH, skipped)``: the job's PATH, and ``"tool (dir)"`` for each tool found only in a left-out dir.
+    """
+    path = os.environ.get("PATH", "") if path is None else path
+    dirs: list[str] = []
+    skipped: list[str] = []
+
+    home = Path.home().resolve()
+
+    def safe(d: str) -> bool:
+        # Projects (where agents work) live under $HOME; package-manager prefixes such as /opt/homebrew
+        # are git work trees too (Homebrew's own repository) but no agent workspace.
+        if not d.startswith("/") or "~" in d:
+            return False
+        real = Path(d).resolve()
+        return not (real.is_relative_to(home) and _in_work_tree(real))
+
+    for tool in JOB_TOOLS:
+        candidates = [d for d in path.split(os.pathsep) if d and shutil.which(tool, path=d)]
+        good = next((d for d in candidates if safe(d)), None)
+        if good is None and candidates:
+            skipped.append(f"{tool} ({candidates[0]})")
+        elif good and good not in dirs:
+            dirs.append(good)
+    dirs += [d for d in SYSTEM_PATH if d not in dirs]
+    return os.pathsep.join(dirs), skipped
 
 
 #: The only variables baked into the job: where vulnscan's config, state and server kit live.
@@ -85,16 +137,16 @@ def job_environment() -> dict[str, str]:
     crontab) is plain text, and other ``AGENTTEAMS_*`` variables carry API keys (round 2).
 
     Returns:
-        PATH, HOME and those of :data:`JOB_ENV_VARS` that are set now.
+        PATH (from :func:`job_path`), HOME and those of :data:`JOB_ENV_VARS` that are set now.
 
     Raises:
         ValueError: A value holds a control character (a newline would add a line to the unit or crontab).
     """
-    env = {k: v for k, v in os.environ.items() if k in JOB_ENV_VARS}
+    env = {k: v for k, v in os.environ.items() if k in JOB_ENV_VARS and k != "PATH"}
+    env["PATH"] = job_path()[0]   # only the tools' own directories, never a project's (see job_path)
     bad = sorted(k for k, v in env.items() if any(ord(c) < 0x20 or c == "\x7f" for c in v))
     if bad:
         raise ValueError(f"control characters in {', '.join(bad)}: not baked into the job file")
-    env.setdefault("PATH", "/usr/bin:/bin")
     return dict(sorted(env.items()))
 
 
@@ -243,6 +295,10 @@ def install(hour: int = 7, minute: int = 30, *, apply: bool = False) -> Plan:
     try:
         check_time(hour, minute)
         job_environment()   # control characters in a baked value: refuse before writing anything
+        skipped = job_path()[1]
+        if skipped:
+            plan.notes.append("left off the job's PATH (only found inside a git work tree): " + ", ".join(skipped)
+                              + " — install them system-wide (e.g. Homebrew) if the job needs them")
     except ValueError as exc:
         plan.errors.append(str(exc))
         return plan

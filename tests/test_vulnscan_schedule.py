@@ -342,7 +342,7 @@ def test_launchd_plist_parses_with_plistlib(env: dict[str, Path], monkeypatch: p
     data = plistlib.loads(schedule.launchd_plist(6, 5).encode("utf-8"))
     log = str(env["tmp"] / "state & <logs> 100%" / "scheduler.log")
     assert data["Label"] == schedule.LABEL
-    assert data["ProgramArguments"] == [sys.executable, "-m", "agentteams.vulnscan", "daily"]
+    assert data["ProgramArguments"] == [sys.executable, "-P", "-m", "agentteams.vulnscan", "daily"]
     assert data["StartCalendarInterval"] == {"Hour": 6, "Minute": 5}
     assert data["StandardOutPath"] == data["StandardErrorPath"] == log
     assert data["EnvironmentVariables"] == schedule.job_environment()
@@ -371,3 +371,40 @@ def test_r8_5_control_characters_are_never_baked(monkeypatch: pytest.MonkeyPatch
         schedule.job_environment()
     plan = schedule.install(hour=6, minute=0, apply=False)
     assert plan.errors and "control characters" in plan.errors[0] and not plan.files
+
+
+def _tool(d: Path, name: str) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / name).write_text("#!/bin/sh\n")
+    (d / name).chmod(0o755)
+
+
+def test_job_path_never_contains_a_directory_inside_a_repository(tmp_path: Path,
+                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    """A project virtualenv's bin early in PATH (first live install) must not reach the unsandboxed job;
+    a package-manager prefix outside $HOME that is itself a git work tree (Homebrew) stays."""
+    home = tmp_path / "home"
+    monkeypatch.setattr(schedule.Path, "home", classmethod(lambda cls: home))
+    repo = home / "repo"
+    (repo / ".git").mkdir(parents=True)
+    venv_bin = repo / ".venv-ci" / "bin"
+    _tool(venv_bin, "git")                        # an agent working in that repo could plant this
+    system = tmp_path / "homebrew" / "bin"          # outside $HOME, inside a work tree like /opt/homebrew
+    (tmp_path / "homebrew" / ".git").mkdir(parents=True)
+    for t in ("git", "gh", "docker"):
+        _tool(system, t)
+    only_in_repo = repo / "tools"
+    _tool(only_in_repo, "npm")
+    path = ":".join([str(venv_bin), "~/.dotnet/tools", "relative/bin", str(only_in_repo), str(system)])
+    job, skipped = schedule.job_path(path)
+    parts = job.split(":")
+    assert str(venv_bin) not in parts and str(only_in_repo) not in parts
+    assert "~/.dotnet/tools" not in parts and "relative/bin" not in parts
+    assert parts[0] == str(system) and parts[-4:] == list(schedule.SYSTEM_PATH)
+    assert skipped == [f"npm ({only_in_repo})"]
+
+
+def test_the_job_runs_python_with_safe_path() -> None:
+    assert schedule._program()[1] == "-P"
+    assert "<string>-P</string>" in schedule.launchd_plist(9, 0)
+

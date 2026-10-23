@@ -153,7 +153,12 @@ python -m agentteams.vulnscan schedule install --apply
 *macOS shown (launchd). Linux gets a systemd user timer, or a crontab line without systemd.
 `<python>` stands for the interpreter running vulnscan.*
 
-The job file bakes in only `PATH`, `HOME`, the `XDG_CONFIG_HOME`/`XDG_STATE_HOME` directories and
+The job runs `python -P -m agentteams.vulnscan daily`. Its `PATH` is not your shell's: it holds only the
+directories where `git`, `gh`, `docker`, `ssh`, `npm`, `node` and `openssl` resolve when you install it,
+plus the system directories, and never a directory inside a git repository under your home directory (a
+project virtualenv's `bin`, where an agent could plant a fake `git` for the unattended job to run).
+`install` names any tool it had to leave out. The job file also bakes in `HOME`, the
+`XDG_CONFIG_HOME`/`XDG_STATE_HOME` directories and
 the vulnscan and server-kit location overrides
 ([the list](api-reference/vulnscan.md#command-reference)); no other `AGENTTEAMS_*` variable, so an
 API key in your shell never lands in the plain-text plist, unit or crontab. Nor does it get your

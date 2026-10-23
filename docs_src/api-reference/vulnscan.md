@@ -237,7 +237,11 @@ The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious 
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
 
-**The scheduled job** gets only `PATH`, `HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME`,
+**The scheduled job** runs `python -P -m agentteams.vulnscan daily`. Its `PATH` is built by
+`schedule.job_path`: the directories `schedule.JOB_TOOLS` resolve to at install time plus
+`schedule.SYSTEM_PATH`, leaving out relative entries, a literal `~` and any directory inside a git work
+tree under `$HOME`; `install` adds a note naming any tool left out. Besides `PATH` it gets only `HOME`,
+`XDG_CONFIG_HOME`, `XDG_STATE_HOME`,
 `AGENTTEAMS_VULNSCAN_CONFIG_DIR`, `AGENTTEAMS_VULNSCAN_STATE_DIR`, `AGENTTEAMS_SERVER_KIT_DIR` and
 `AGENTTEAMS_SERVER_KIT_LOGS`, as set when you install it (`schedule.JOB_ENV_VARS`). No other
 `AGENTTEAMS_*` variable is baked in: the plist, unit or crontab line is plain text, and such
