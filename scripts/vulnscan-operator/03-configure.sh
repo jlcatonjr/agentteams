@@ -6,7 +6,8 @@
 #   Step 4  render a goose team with the vulnerability_remediation capability in ~/ops-team
 #   Step 5  create your Ed25519 operator key (KEY_ID, default op1) and install the public key for vulnscan
 #   Step 6  write the `agent` block: OpenRouter, GLM 5.3, $2 budget, enabled: false
-#           and create the OpenRouter key file from a key you paste (hidden input; never echoed or logged)
+#           and create the OpenRouter key file from the key goose uses (its keychain entry), or a key you
+#           paste (hidden input) if that entry has none; the key is never echoed or logged
 #
 # Every step is skipped when its result already exists. Nothing here signs anything or starts an agent.
 # Usage:   KEY_ID=op1 bash scripts/vulnscan-operator/03-configure.sh
@@ -53,12 +54,34 @@ mkdir -p "$SECRETS"; chmod 700 "$SECRETS"
 KEYFILE="$SECRETS/openrouter.env"
 if [ -f "$KEYFILE" ]; then echo "exists: $KEYFILE (left unchanged)"
 else
-  printf 'Paste your OpenRouter API key (input hidden), then Enter: '
-  read -rs ORKEY; echo
+  # Prefer the key goose itself uses: `goose configure` keeps provider secrets as JSON in the login
+  # keychain (service "goose", account "secrets"). macOS may ask you to allow access. The key is never
+  # printed, passed as a command argument, or written anywhere but the mode-600 key file.
+  ORKEY=""
+  if [ "${GOOSE_KEY:-1}" = 1 ] && command -v security >/dev/null; then
+    echo "reading OPENROUTER_API_KEY from goose's keychain entry (allow access if macOS asks)"
+    ORKEY="$(security find-generic-password -s goose -a secrets -w 2>/dev/null | "$PY" -c '
+import json, sys
+raw = sys.stdin.read().strip()
+try:
+    data = json.loads(raw)
+except ValueError:
+    try:
+        data = json.loads(bytes.fromhex(raw).decode())
+    except ValueError:
+        data = {}
+value = data.get("OPENROUTER_API_KEY", "") if isinstance(data, dict) else ""
+print(value if isinstance(value, str) else "")' || true)"
+  fi
+  if [ -z "$ORKEY" ]; then
+    echo "no OPENROUTER_API_KEY in goose's keychain entry (or access was denied)"
+    printf 'Paste your OpenRouter API key instead (input hidden), then Enter: '
+    read -rs ORKEY; echo
+  fi
   case "$ORKEY" in sk-or-*) ;; *) echo "that does not look like an OpenRouter key (sk-or-...)" >&2; exit 2;; esac
   (umask 077; printf 'OPENROUTER_API_KEY=%s\n' "$ORKEY" > "$KEYFILE")
   unset ORKEY
-  echo "wrote $KEYFILE (mode 600)"
+  echo "wrote $KEYFILE (mode 600; the same key goose uses)"
 fi
 "$PY" - "$CFG/vulnscan.json" "$TEAM" "$KEYFILE" <<'PY'
 import json, sys
