@@ -34,6 +34,10 @@ outputs are cut, and every cut is marked in the frame.
 Writes ``docs_src/book/figures/vulnscan/*.svg``.
 
 Run: ``python3 scripts/gen_vulnscan_screenshots.py`` (from the repository root).
+
+``--installed``: run the CLI from the ``agentteams`` installed in *this* interpreter (no ``PYTHONPATH`` to the
+checkout). Signing refuses a development checkout, so the grant-sign capture (06) shows the real review
+only from a clean install outside every git work tree; ``scripts/capture-signing-screens.sh`` builds one.
 """
 
 from __future__ import annotations
@@ -52,7 +56,11 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
+#: Use the installed package (``--installed``) instead of putting the checkout on ``PYTHONPATH``.
+INSTALLED = "--installed" in sys.argv[1:]
+#: What the demo's Python helpers put first on ``sys.path``: the checkout, or nothing with ``--installed``.
+SRC_PATHS: list[str] = [] if INSTALLED else [str(REPO_ROOT)]
+sys.path[:0] = SRC_PATHS
 
 OUT_DIR = REPO_ROOT / "docs_src" / "book" / "figures" / "vulnscan"
 MAX_COLS = 100
@@ -136,8 +144,12 @@ class Demo:
         self.home.mkdir()
         self.env = {k: v for k, v in os.environ.items()
                     if not k.startswith(("AGENTTEAMS_", "XDG_", "GH_", "GITHUB_"))}
-        self.env.update({"HOME": str(self.home), "PYTHONPATH": str(REPO_ROOT), "COLUMNS": str(MAX_COLS),
+        self.env.update({"HOME": str(self.home), "COLUMNS": str(MAX_COLS),
                          "NO_COLOR": "1", "GIT_CONFIG_NOSYSTEM": "1", "LANG": "C.UTF-8"})
+        if INSTALLED:
+            self.env.pop("PYTHONPATH", None)
+        else:
+            self.env["PYTHONPATH"] = str(REPO_ROOT)
 
     def shorten(self, text: str) -> str:
         """Show the demo home as ``~``; replace this machine's interpreter and checkout paths with placeholders."""
@@ -184,11 +196,17 @@ class Demo:
 
 
 VS = [sys.executable, "-m", "agentteams.vulnscan"]
+#: Signing and resolving run with ``-P`` (the walkthrough's form): the current directory is not put first on
+#: ``sys.path``, so a file there cannot shadow the installed package (install-location criterion e).
+VS_SAFE = [sys.executable, "-P", "-m", "agentteams.vulnscan"]
 
 
 def cmd_line(argv: list[str], demo: Demo) -> str:
     """The command as a reader would type it (demo paths shortened)."""
-    shown = ["python", "-m", "agentteams.vulnscan"] + argv[len(VS):] if argv[:len(VS)] == VS else argv
+    if argv[:len(VS_SAFE)] == VS_SAFE:
+        shown = ["python", "-P", "-m", "agentteams.vulnscan"] + argv[len(VS_SAFE):]
+    else:
+        shown = ["python", "-m", "agentteams.vulnscan"] + argv[len(VS):] if argv[:len(VS)] == VS else argv
     return demo.shorten("$ " + " ".join(a if a and " " not in a else repr(a) for a in shown))
 
 
@@ -240,7 +258,7 @@ def write_keys(demo: Demo, key_id: str) -> bool:
 def _install_demo_grant(demo: Demo, gov: Path) -> None:
     """Sign and install the demo grant through the Python API (used when the real signing is refused)."""
     code = (
-        "import sys; sys.path.insert(0, %r)\n"
+        "import sys; sys.path[:0] = %r\n"
         "from pathlib import Path\n"
         "from agentteams.cli.signed_ledger import ed25519_sign\n"
         "from agentteams.vulnscan import grant\n"
@@ -250,7 +268,7 @@ def _install_demo_grant(demo: Demo, gov: Path) -> None:
         "signed = {**rec, 'signature': ed25519_sign(pem, grant.signed_values(rec))}\n"
         "grant.verify(signed)\n"
         "print(grant.install(signed))\n"
-    ) % (str(REPO_ROOT), str(demo.home / "code" / "shop-api"), str(gov), demo.env["AGENTTEAMS_DECISION_ED25519_KEYFILE"])
+    ) % (SRC_PATHS, str(demo.home / "code" / "shop-api"), str(gov), demo.env["AGENTTEAMS_DECISION_ED25519_KEYFILE"])
     rc, out = demo.run([sys.executable, "-c", code])
     if rc:
         print(f"demo grant install failed:\n{out}", file=sys.stderr)
@@ -258,7 +276,7 @@ def _install_demo_grant(demo: Demo, gov: Path) -> None:
 
 def write_scan(demo: Demo, run_date: str) -> Path:
     """Write a demo scan result for ``run_date`` through the real Report class."""
-    sys.path.insert(0, str(REPO_ROOT))
+    sys.path[:0] = [p for p in SRC_PATHS if p not in sys.path]
     from agentteams.vulnscan.report import Finding, Report
 
     code = demo.home / "code"
@@ -408,6 +426,13 @@ def architecture() -> None:
 
 def main() -> int:
     """Stage the demo, run every capture, write the figures."""
+    if INSTALLED:
+        import agentteams
+        pkg = Path(agentteams.__file__).resolve()
+        if pkg.is_relative_to(REPO_ROOT):
+            print(f"--installed: agentteams is imported from the checkout ({pkg}); run with the installed "
+                  "interpreter from a directory outside the checkout", file=sys.stderr)
+            return 2
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     architecture()
     root = Path(tempfile.mkdtemp(prefix="vulnscan-demo-"))
@@ -469,10 +494,10 @@ def _captures(demo: Demo) -> int:
 
     if have_keys and gov is not None:
         rel = demo.shorten(str(gov))
-        sign = VS + ["grant", "sign", "--key-id", "op", "--days", "1", "--max-uses", "5",
+        sign = VS_SAFE + ["grant", "sign", "--key-id", "op", "--days", "1", "--max-uses", "5",
                      "--op", "stage-fix", "--repo-root", str(demo.home / "code" / "shop-api"),
                      "--governance-dir", str(gov)]
-        shown = ("$ python -m agentteams.vulnscan grant sign --key-id op --days 1 --max-uses 5 \\\n"
+        shown = ("$ python -P -m agentteams.vulnscan grant sign --key-id op --days 1 --max-uses 5 \\\n"
                  "    --op stage-fix --repo-root ~/code/shop-api --governance-dir " + rel)
         signed = capture(demo, "06-grant-sign", "Step 8 — sign a standing grant (operator terminal)", [
             (sign, {"pty": {"[y/N]": "y"}, "digest": True, "show": shown, "exit": True})], head=40)
@@ -485,7 +510,7 @@ def _captures(demo: Demo) -> int:
     (spool / "requests").mkdir(parents=True, exist_ok=True)
     (spool / "results").mkdir(parents=True, exist_ok=True)
     agent = (
-        "import sys; sys.path.insert(0, %r)\n"
+        "import sys; sys.path[:0] = %r\n"
         "from pathlib import Path\n"
         "from agentteams.vulnscan.mcp import Server\n"
         "s = Server(Path(%r), Path(%r), Path(%r))\n"
@@ -493,18 +518,18 @@ def _captures(demo: Demo) -> int:
         "print(s.call('request', {'op': 'server-audit', 'target': 'web1', 'rationale': 'stale host audit'}))\n"
         "print(s.call('escalate', {'target': 'web1', 'kind': 'other', 'evidence': 'unexpected cron entry in audit'}))\n"
         "print(s.call('submit_report', {'markdown': '# Daily vulnerability remediation\\n\\nRequested stage-fix for shop-api.'}))\n"
-    ) % (str(REPO_ROOT), str(run), str(spool / "requests"), str(spool / "results"), str(demo.home / "code" / "shop-api"))
+    ) % (SRC_PATHS, str(run), str(spool / "requests"), str(spool / "results"), str(demo.home / "code" / "shop-api"))
     demo.run([sys.executable, "-c", agent])
     # What agent-run's request loop does every 15 s (a manual `serve-requests` has no run, so it would
     # refuse the report): the real executor.serve_requests with this run's directory and id.
     loop = (
-        "import json, sys; sys.path.insert(0, %r)\n"
+        "import json, sys; sys.path[:0] = %r\n"
         "from pathlib import Path\n"
         "from agentteams.vulnscan import daily, executor\n"
         "run = Path(%r)\n"
         "out = executor.serve_requests(daily.load_config(), run_dir=run, run_id=executor.new_run_id(run))\n"
         "print(json.dumps(out))\n"
-    ) % (str(REPO_ROOT), str(run))
+    ) % (SRC_PATHS, str(run))
     rc, out = demo.run([sys.executable, "-c", loop])
     served = json.JSONDecoder().raw_decode(out[out.index("["):])[0] if "[" in out else []   # stderr may follow
     keep = ("op", "target", "status", "detail", "escalation", "scope", "branch", "stored")
@@ -522,7 +547,7 @@ def _captures(demo: Demo) -> int:
             break
     if esc_id:
         capture(demo, "09-resolve", "Resolve an `other` escalation", [
-            (VS + ["resolve", esc_id, "--evidence", "operator's own cron job (checked)"],
+            (VS_SAFE + ["resolve", esc_id, "--evidence", "operator's own cron job (checked)"],
              {"pty": {"[y/N]": "y"}, "exit": True})])
     capture(demo, "10-say", "Leave a note for the next run", [
         (VS + ["say", "skip billing this week: it is being migrated", "--days", "7"], {}),

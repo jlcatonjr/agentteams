@@ -182,6 +182,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Gateway: `spend.json` is written atomically; `--max-tokens-total` below 0 exits 2.
     `debrief_limits` refuses NaN, infinity, booleans and strings. A SIGTERM during `agent-chat`
     removes its containers.
+- **vulnscan operator tooling and screenshots.**
+  - Packaging: a wheel built from a working tree no longer ships `__pycache__` bytecode left by a test
+    run (`[tool.setuptools.exclude-package-data]`; `MANIFEST.in` covered only the sdist). The shipped
+    `.pyc` made the signing install-location check report a clean install as modified
+    (`tests/test_packaging_no_bytecode.py`).
+  - The walkthrough's signing and resolving commands use `python -P -m agentteams.vulnscan …`: the current
+    directory stays off the import path (install-location criterion e).
+  - The grant-sign and resolve screenshots are real captures from a clean install in a terminal
+    (`scripts/gen_vulnscan_screenshots.py --installed`; `scripts/capture-signing-screens.sh`).
+  - Operator scripts: `scripts/vulnscan-acceptance.sh` (read-only Part D checks, report written outside the
+    repository) and `scripts/vulnscan-agent-image.sh` (goose download checked against the digest GitHub
+    publishes, base image pinned by digest, `agent-image build`, `agent-selftest`).
 - **vulnscan documentation remediation.** Code fixes found while checking the docs against the code,
   and the docs that describe them.
   - Signing on Homebrew Python (`cli/signer_location.py`): the base interpreter (`sys.executable`,

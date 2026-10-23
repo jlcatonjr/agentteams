@@ -7,10 +7,10 @@
 <text x="404" y="17" fill="#a9adb7" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">Something blocks: vulnscan halts</text>
 <text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan halts</text>
 <text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Escalations raised by the agents</text>
-<text x="14" y="86" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- ve-85040767338555a1 [other] scope=web1 run=2026-10-23-2eb7b0 opened=2026-10-23T12:57:14+00:00: une</text>
+<text x="14" y="86" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- ve-12acb0d29fc098b9 [other] scope=web1 run=2026-10-23-8fc78b opened=2026-10-23T14:08:30+00:00: une</text>
 <text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    xpected cron entry in audit</text>
 <text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  blocks: web1</text>
-<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  resolve: vulnscan resolve ve-85040767338555a1 --evidence '...'</text>
+<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  resolve: vulnscan resolve ve-12acb0d29fc098b9 --evidence '...'</text>
 <text x="14" y="154" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
 <text x="14" y="171" fill="#ff9a8a" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## @security HALTs (decision log)</text>
 <text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- none</text>

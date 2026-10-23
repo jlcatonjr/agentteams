@@ -8,47 +8,47 @@
 <text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan review</text>
 <text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"># vulnscan after-action review</text>
 <text x="14" y="86" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">Generated 2026-10-23T12:57:24+00:00.</text>
+<text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">Generated 2026-10-23T14:08:33+00:00.</text>
 <text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- Ledger: ledger MAC chain verified; 6 rows in this review window.</text>
+<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- Ledger: ledger MAC chain verified; 7 rows in this review window.</text>
 <text x="14" y="154" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
 <text x="14" y="171" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Open escalations (remediation is blocked for their scope)</text>
 <text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- `ve-85040767338555a1` [other] scope `web1`; opened 2026-10-23T12:57:14+00:00; run `2026-10-23-2eb7</text>
-<text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    b0`; other: operator resolution in the MAC'd ledger — `vulnscan resolve ve-85040767338555a1`</text>
-<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  - evidence (untrusted agent text): unexpected cron entry in audit</text>
+<text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- none</text>
+<text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">Resolved in this window:</text>
 <text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">Resolved in this window:</text>
-<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- none</text>
-<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Standing grants</text>
-<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="375" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- `vg-9705f1fe04ed8b64`: ops stage-fix; 1/5 uses; expires 2026-10-24T12:57:14+00:00; roots 1, hosts </text>
-<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    —</text>
-<text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Actions taken</text>
-<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| When | Op | Target | Result | Detail | Agent rationale (untrusted) |</text>
-<text x="14" y="477" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">|---|---|---|---|---|---|</text>
-<text x="14" y="494" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| 2026-10-23T12:57:14+00:00 | escalate | `web1` | **done** | opened ve-85040767338555a1 |  |</text>
-<text x="14" y="511" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| 2026-10-23T12:57:15+00:00 | report | `run` | **done** | stored report.md |  |</text>
-<text x="14" y="528" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| 2026-10-23T12:57:24+00:00 | stage-fix | `~/code/shop-api` | **done** | vulnscan/20261023-f0d46db71</text>
-<text x="14" y="545" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    7 | GHSA-ffqj-6fqr-9h24 critical |</text>
-<text x="14" y="562" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="579" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Refused requests (outside the grant, HALTed, malformed or replayed)</text>
-<text x="14" y="596" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="613" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- 2026-10-23T12:57:15+00:00 server-audit `web1` — blocked by open escalation ve-85040767338555a1 (ot</text>
-<text x="14" y="630" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    her, scope web1); see: vulnscan halts</text>
-<text x="14" y="647" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="664" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Anomalies</text>
-<text x="14" y="681" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="698" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- none</text>
-<text x="14" y="715" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="732" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Findings not acted on (latest scan 2026-10-23)</text>
-<text x="14" y="749" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="766" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- ~/code/billing: Django 4.2.1 → 4.2.2</text>
-<text x="14" y="783" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="800" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Agent report (untrusted, verbatim)</text>
-<text x="14" y="817" fill="#7f8594" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[… 31 more lines not shown]</text>
+<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- `ve-12acb0d29fc098b9` [other] scope `web1`; resolved 2026-10-23T14:08:33+00:00 by `operator-mac`; </text>
+<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    reason: operator's own cron job (checked)</text>
+<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Standing grants</text>
+<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- `vg-f9e41fa5d8355bfb`: ops stage-fix; 1/5 uses; expires 2026-10-24T14:08:29+00:00; roots 1, hosts </text>
+<text x="14" y="375" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    —</text>
+<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Actions taken</text>
+<text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| When | Op | Target | Result | Detail | Agent rationale (untrusted) |</text>
+<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">|---|---|---|---|---|---|</text>
+<text x="14" y="477" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| 2026-10-23T14:08:30+00:00 | escalate | `web1` | **done** | opened ve-12acb0d29fc098b9 |  |</text>
+<text x="14" y="494" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| 2026-10-23T14:08:30+00:00 | report | `run` | **done** | stored report.md |  |</text>
+<text x="14" y="511" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">| 2026-10-23T14:08:32+00:00 | stage-fix | `~/code/shop-api` | **done** | vulnscan/20261023-f0d46db71</text>
+<text x="14" y="528" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    7 | GHSA-ffqj-6fqr-9h24 critical |</text>
+<text x="14" y="545" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="562" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Refused requests (outside the grant, HALTed, malformed or replayed)</text>
+<text x="14" y="579" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="596" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- 2026-10-23T14:08:32+00:00 server-audit `web1` — blocked by open escalation ve-12acb0d29fc098b9 (ot</text>
+<text x="14" y="613" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    her, scope web1); see: vulnscan halts</text>
+<text x="14" y="630" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="647" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Anomalies</text>
+<text x="14" y="664" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="681" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- none</text>
+<text x="14" y="698" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="715" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Findings not acted on (latest scan 2026-10-23)</text>
+<text x="14" y="732" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="749" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">- ~/code/billing: Django 4.2.1 → 4.2.2</text>
+<text x="14" y="766" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="783" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">## Agent report (untrusted, verbatim)</text>
+<text x="14" y="800" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="817" fill="#7f8594" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[… 30 more lines not shown]</text>
 </svg>

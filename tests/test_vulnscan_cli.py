@@ -347,7 +347,7 @@ def _documented_commands() -> list[tuple[str, str]]:
             while fenced and line.rstrip().endswith("\\") and i + 1 < len(lines):
                 i += 1
                 line = line.rstrip()[:-1] + " " + lines[i].strip()
-            for m in re.finditer(r"python -m agentteams\.vulnscan(?![.\w-])", line):
+            for m in re.finditer(r"python (?:-P )?-m agentteams\.vulnscan(?![.\w-])", line):
                 rest = line[m.end():]
                 if not fenced:
                     rest = rest.split("`")[0]

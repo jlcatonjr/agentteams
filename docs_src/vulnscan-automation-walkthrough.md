@@ -345,10 +345,14 @@ else. They cannot push or open pull requests yet.
 
 ```bash
 AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
-python -m agentteams.vulnscan grant sign --key-id <key-id> --days 1 --max-uses 5 \
+python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 1 --max-uses 5 \
     --op stage-fix --repo-root ~/code/shop-api \
     --governance-dir ~/ops-team/.goose/recipes
 ```
+
+`-P` (Python 3.11+) keeps the current directory off the import path, so a file in whatever directory
+you sign from cannot stand in for the installed `agentteams`. Without it the install-location check
+prints a warning (criterion e) but still signs. Use it for every signing and resolving command.
 
 What you see, in order:
 
@@ -364,11 +368,17 @@ What you see, in order:
 
 Answer `y`. The grant is verified against your public key and installed:
 
+![grant sign shows every signed field and the review sha256, asks Sign this payload, and installs the grant after y](book/figures/vulnscan/06-grant-sign.svg)
+
+*Demo account and demo key, signed from a clean `pipx`-style install outside every git work tree, in a
+terminal. The `grant_id`, `issued` and `expires` lines are minted per run and are not part of the review
+digest.*
+
+`grant list` then shows it:
+
 ![grant list prints the installed grant as JSON: stage-fix only, one repository root, one day, five uses](book/figures/vulnscan/06b-grant-list.svg)
 
-*Demo account. The capture was made inside a development checkout, where signing correctly refuses
-(the install-location check), so the demo signed an identical grant through the Python API. That
-bypasses the integrity, location and confirmation checks; it is not a supported way to sign.*
+*Demo account (the grant signed above).*
 
 !!! tip "Signing without a terminal"
     Without a terminal, signing prints everything above and stops at `no terminal to confirm on`.
@@ -450,7 +460,7 @@ governance directory and of the publish ops repository (worktrees included), wha
 
 ```bash
 AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
-python -m agentteams.vulnscan grant sign --key-id <key-id> --days 14 --max-uses 50 \
+python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 14 --max-uses 50 \
     --op stage-fix --op open-pr --repo-root ~/code/shop-api --repo-root ~/code/billing \
     --governance-dir ~/ops-team/.goose/recipes
 ```
@@ -496,15 +506,20 @@ python -m agentteams.vulnscan halts
   terminal:
 
   ```bash
-  python -m agentteams.vulnscan resolve ve-<id> --evidence "operator's own cron job (checked)"
+  python -P -m agentteams.vulnscan resolve ve-<id> --evidence "operator's own cron job (checked)"
   ```
+
+  ![resolve shows the escalation, asks to resume remediation for web1, and records the resolution in the ledger after y](book/figures/vulnscan/09-resolve.svg)
+
+  *Demo account. `operator-mac` is how the resolution is recorded: a MAC'd ledger row (a serious kind
+  needs your signature instead).*
 
 - **A serious escalation** (`malicious`, `ioc`, `injection`, `integrity`, `escalation-flood`): treat
   it as an incident first. To resume, resolve it with your signature:
 
   ```bash
   AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
-  python -m agentteams.vulnscan resolve ve-<id> --evidence "<what you checked>" --key-id <key-id>
+  python -P -m agentteams.vulnscan resolve ve-<id> --evidence "<what you checked>" --key-id <key-id>
   ```
 
 - **A `@security` HALT:** `halts` prints a `HALT-RETRACTED` spec. Fill in the evidence, save it, and
@@ -561,7 +576,7 @@ Then sign:
 
 ```bash
 AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
-python -m agentteams.vulnscan publish-grant sign --ops-repo ~/ops-reports \
+python -P -m agentteams.vulnscan publish-grant sign --ops-repo ~/ops-reports \
     --node-id "$(gh repo view <owner>/ops-reports --json id --jq .id)" \
     --owner-id "$(gh api users/<owner> --jq .id)" \
     --governance-dir ~/ops-team/.goose/recipes --key-id <key-id> --days 30
