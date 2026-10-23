@@ -120,8 +120,18 @@ def test_write_root_inside_the_key_dir_is_refused(home, root):
         se._build_sandbox_block([str(home / ".config" / "agentteams" / "keys")])
 
 
-def test_write_root_beside_the_key_dir_is_allowed(home):
-    se._build_sandbox_block([".", "~/.config/agentteams/keysX"])
+def test_write_root_beside_the_operator_dir_is_allowed(home):
+    # The boundary is a path component, not a prefix. Since P11 (2026-10-22) the whole operator directory
+    # ~/.config/agentteams is protected (so ~/.config/agentteams/keysX is refused, as inside it); its sibling
+    # ~/.config/agentteamsX must still be allowed.
+    se._build_sandbox_block([".", "~/.config/agentteamsX"])
+
+
+def test_write_root_inside_the_operator_dir_is_refused(home):
+    for root in ("~/.config/agentteams/keysX", "~/.config/agentteams/vulnscan-notes",
+                 "~/.config/agentteams/mcp-grants"):
+        with pytest.raises(ValueError, match="protected home path"):
+            se._build_sandbox_block([".", root])
 
 
 def test_write_root_above_the_key_dir_is_refused(home):

@@ -265,10 +265,10 @@
     },
     "capabilities": {
       "type": "array",
-      "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection.",
+      "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection. `vulnerability_remediation` adds the request-only `vuln-remediation` agent (goose: an orchestrator sub-recipe, plus a `task` recipe parameter) that triages the daily `python -m agentteams.vulnscan` scan and queues requests for the operator's grant-gated executor.",
       "items": {
         "type": "string",
-        "enum": ["research_verification"]
+        "enum": ["research_verification", "vulnerability_remediation"]
       }
     },
     "privilege_profile": {

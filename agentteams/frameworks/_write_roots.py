@@ -67,7 +67,14 @@ _HOME_PROTECTED: tuple[str, ...] = (
     "~/.config/fish", "~/.config/gcloud", "~/.kube", "~/.docker", "~/.azure", "~/.netrc",
     "~/.local/share/systemd", "~/.pki", "~/.password-store",
     _SIGNING_KEY_DIR,
+    # 2026-10-22 (vulnscan-remediation-2 P11, @security R3-1): every operator store lives under
+    # ~/.config/agentteams (keys, verify-keys, mcp-grants, confined, vulnscan grants/notes/config,
+    # server-kit). A write root at, inside or above it would let a sandboxed agent plant a verify key,
+    # an operator note, or a `notify: command:` the unsandboxed daily job runs.
+    "~/.config/agentteams",
 )
+#: Public name for other modules (vulnscan's team-dir check) that must refuse the same paths.
+HOME_PROTECTED: tuple[str, ...] = _HOME_PROTECTED
 
 
 def path_char_problem(path: str) -> str | None:

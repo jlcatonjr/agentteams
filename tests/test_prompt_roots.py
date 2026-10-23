@@ -85,7 +85,7 @@ def test_generation_records_prompt_root_hashes(_generated: Path) -> None:
 def test_untouched_tree_is_silent(project: Path, capsys) -> None:
     rc, out = _check(project, capsys, "--strict-prompt-roots")
     assert WARNING not in out
-    assert rc == 0
+    assert rc == 0, out
 
 
 def test_fenced_edits_and_new_prompt_are_reported(project: Path, capsys) -> None:
@@ -104,21 +104,21 @@ def test_user_editable_edit_is_not_reported(project: Path, capsys) -> None:
     for rel in (".github/copilot-instructions.md", "AGENTS.md"):
         with (project / rel).open("a", encoding="utf-8") as fh:
             fh.write("\nA project-specific note the operator added.\n")
-    rc_default, out = _check(project, capsys)
-    assert WARNING not in out
+    rc_default, out_default = _check(project, capsys)
+    assert WARNING not in out_default
     # --check may fail on its own (file drift); --strict-prompt-roots must add nothing here.
     rc_strict, out = _check(project, capsys, "--strict-prompt-roots")
     assert WARNING not in out
-    assert rc_strict == rc_default
+    assert rc_strict == rc_default, f"default:\n{out_default}\nstrict:\n{out}"
 
 
 def test_default_warns_only_and_strict_exits_1(project: Path, capsys) -> None:
     (project / ".github/instructions").mkdir(parents=True)
     (project / ".github/instructions/a.instructions.md").write_text("x\n", encoding="utf-8")
     rc, out = _check(project, capsys)
-    assert WARNING in out and rc == 0
+    assert WARNING in out and rc == 0, out
     rc, out = _check(project, capsys, "--strict-prompt-roots")
-    assert WARNING in out and rc == 1
+    assert WARNING in out and rc == 1, out
 
 
 def test_added_agent_file_is_reported(project: Path, capsys) -> None:
@@ -131,8 +131,9 @@ def test_update_over_a_change_prints_rebaseline_notice(project: Path, capsys) ->
     (project / ".github/prompts").mkdir(parents=True)
     (project / ".github/prompts/x.md").write_text("x\n", encoding="utf-8")
     capsys.readouterr()
-    assert _run(project, "copilot-vscode", ".github/agents", "--update") == 0
+    rc = _run(project, "copilot-vscode", ".github/agents", "--update")
     captured = capsys.readouterr()
+    assert rc == 0, captured.out + captured.err
     assert "PROMPT-ROOT RE-BASELINE" in captured.out + captured.err
     rc, out = _check(project, capsys)
     # copilot's log re-baselined; codex's older log is not consulted for the snapshot dirs.

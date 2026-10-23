@@ -130,6 +130,8 @@ CONFINED_PROGRAMS_DIR = "~/.config/agentteams/confined"
 #: R5 (mcp-mediated-agent-writes): operator-signed direct-write grants, and the operator public keys that verify them.
 MCP_GRANTS_DIR = "~/.config/agentteams/mcp-grants"
 OPERATOR_VERIFY_KEYS_DIR = "~/.config/agentteams/verify-keys"
+#: Every operator store lives under this directory (keys, verify-keys, mcp-grants, confined, vulnscan).
+OPERATOR_CONFIG_DIR = "~/.config/agentteams"
 #: The proposal ledger's directory; write-denied to every session under write_policy "orchestrator-only".
 LEDGER_DIR_REL = ".agentteams"
 #: The runner's status tree: session-readable, written only by the runner (2026-10-11).
@@ -277,6 +279,9 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     # R5: the direct-write grants and the keys that verify them are the operator's alone.
     rules += [f"Edit({d})" for d in (MCP_GRANTS_DIR, OPERATOR_VERIFY_KEYS_DIR)]
     rules += [f"Edit({d}/**)" for d in (MCP_GRANTS_DIR, OPERATOR_VERIFY_KEYS_DIR)]
+    # P11 (2026-10-22): the whole operator directory — vulnscan's config (whose `notify: command:` the
+    # unsandboxed daily job runs), notes, grants and server kit live beside the stores above.
+    rules += [f"Edit({OPERATOR_CONFIG_DIR})", f"Edit({OPERATOR_CONFIG_DIR}/**)"]
     store = _verify_key_store_path(framework)
     for path in protected_write_paths(framework):
         if path == _GATE_HOOK_PATH:

@@ -86,6 +86,9 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         "Edit(~/.config/agentteams/verify-keys)",
         "Edit(~/.config/agentteams/mcp-grants/**)",
         "Edit(~/.config/agentteams/verify-keys/**)",
+        # P11 (2026-10-22): the whole operator directory (vulnscan config, notes, grants, server kit).
+        "Edit(~/.config/agentteams)",
+        "Edit(~/.config/agentteams/**)",
         "Edit(/.claude/agents/references/agent-privilege.json)",
         "Edit(/.claude/agents/references/authorized-verify-keys/**)",
         "Edit(/.claude/agents/references/security-approvers.txt)",

@@ -40,6 +40,8 @@ nav:
   - Guides:
       - Post-Production Auditor: post-production-auditor-guide.md
       - Security Hardening & Threat Intelligence: security-hardening-guide.md
+      - Vulnerability Scanning & Remediation: vulnerability-remediation-guide.md
+      - Automated Remediation Setup (step by step): vulnscan-automation-walkthrough.md
       - Red-Team Model Scoring & Attack Generation: redteam-model-scoring-guide.md
       - Security Workflow Glossary: security-workflow-glossary.md
       - Runtime Security for Served Apps: runtime-security-guide.md
@@ -179,6 +181,7 @@ nav:
       - whole-body-migration: api-reference/whole-body-migration.md
       - convert: api-reference/convert.md
       - integrity: api-reference/integrity.md
+      - vulnscan: api-reference/vulnscan.md
       - interop: api-reference/interop.md
       - capability-map: api-reference/capability-map.md
       - canonical: api-reference/canonical.md

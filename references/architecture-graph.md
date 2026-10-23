@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **267**
-- Packages: **9**
-- Internal import edges: **792**
+- Modules mapped: **295**
+- Packages: **10**
+- Internal import edges: **891**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,8 +22,8 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 147 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
-| `agentteams.cli` | 48 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
+| `agentteams` | 148 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams.cli` | 49 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 6 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
@@ -31,6 +31,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.mcp_servers` | 3 | `agentteams`, `agentteams.cli` |
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 9 | — |
+| `agentteams.vulnscan` | 26 | `agentteams`, `agentteams.cli`, `agentteams.frameworks` |
 
 ---
 
@@ -46,7 +47,7 @@ Every module, coloured by package (full adjacency in the table below).
 
 | Module | Imports (internal) | Imported by |
 | --- | --- | --- |
-| `agentteams` | — | `agentteams.backup`, `agentteams.capability_hints`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.parser`, `agentteams.cli.signer_location`, `agentteams.git_hooks`, `agentteams.projection_marker`, `agentteams.source_provenance` |
+| `agentteams` | — | `agentteams.backup`, `agentteams.capability_hints`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.parser`, `agentteams.cli.signer_location`, `agentteams.git_hooks`, `agentteams.projection_marker`, `agentteams.source_provenance`, `agentteams.vulnscan.executor` |
 | `agentteams._fleet_bridge` | `agentteams.fences` | `agentteams.fleet` |
 | `agentteams._fleet_grok` | `agentteams.frameworks._agents_md_ownership`, `agentteams.projection_marker` | `agentteams.fleet` |
 | `agentteams._fleet_report` | `agentteams._fleet_shrink_grants` | `agentteams.fleet` |
@@ -83,7 +84,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.capability_map` | `agentteams.frameworks._grok_tool_scoping`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.adopt_only`, `agentteams.frameworks.codex`, `agentteams.frameworks.goose`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers`, `agentteams.rank_conformance` |
 | `agentteams.cli` | — | — |
 | `agentteams.cli.action_ids` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.decision_log_migrate` |
-| `agentteams.cli.adopt_merge_gate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.security_gate` | `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step` |
+| `agentteams.cli.adopt_merge_gate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.security_gate` | `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step`, `agentteams.orphan_advisory` |
 | `agentteams.cli.adopt_only` | `agentteams.adopted_agents`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.capability_map`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.frameworks.registry`, `agentteams.yaml_frontmatter` | `agentteams.cli.standalone_modes` |
 | `agentteams.cli.adopt_step` | `agentteams.adopted_agents`, `agentteams.analyze`, `agentteams.cli.adopt_merge_gate`, `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.agent_doc_sync_switch` | `agentteams.agent_doc_sync` | `agentteams.cli.app`, `agentteams.cli.parser`, `agentteams.cli.parser_validate` |
@@ -96,13 +97,14 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.commands_output` | — | `agentteams.cli.commands`, `agentteams.cli.grant_commands` |
 | `agentteams.cli.decision_chain` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.operator_signing`, `agentteams.interop_grant_check` |
 | `agentteams.cli.decision_lineage` | — | `agentteams.cli.decision_log` |
-| `agentteams.cli.decision_log` | `agentteams.atomicio`, `agentteams.cli.action_ids`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_lineage`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger` | `agentteams.cli.action_ids`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.decision_text`, `agentteams.cli.grants`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.interop_grant_check` |
+| `agentteams.cli.decision_log` | `agentteams.atomicio`, `agentteams.cli.action_ids`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_lineage`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger` | `agentteams.cli.action_ids`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.decision_text`, `agentteams.cli.grants`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.interop_grant_check`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish` |
 | `agentteams.cli.decision_log_migrate` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.action_ids`, `agentteams.cli.decision_log`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.frameworks.registry`, `agentteams.ingest` | `agentteams.cli.app` |
 | `agentteams.cli.decision_text` | `agentteams.cli.decision_log` | `agentteams.cli.commands`, `agentteams.cli.decision_log`, `agentteams.cli.operator_signing` |
-| `agentteams.cli.effect_classifier` | `agentteams.cli.governance_targets`, `agentteams.cli.management_directives` | `agentteams.cli.decision_log`, `agentteams.cli.operator_signing` |
+| `agentteams.cli.effect_classifier` | `agentteams.cli.frozen_surfaces`, `agentteams.cli.governance_targets`, `agentteams.cli.management_directives` | `agentteams.cli.decision_log`, `agentteams.cli.operator_signing` |
 | `agentteams.cli.exception_registry` | `agentteams.atomicio`, `agentteams.cli.signed_ledger` | `agentteams.cli.adopt_merge_gate`, `agentteams.cli.commands` |
 | `agentteams.cli.exit_codes` | `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.fleet_switch` | — | `agentteams.cli.parser` |
+| `agentteams.cli.frozen_surfaces` | — | `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives` |
 | `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.cli.adopt_step`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.generate_helpers`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_policy_warning`, `agentteams.cli.write_root_policy`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.fences`, `agentteams.framework_research`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.security_refs`, `agentteams.shrink_allow`, `agentteams.template_pins`, `agentteams.update_report`, `agentteams.write_policy` | `agentteams.cli.app` |
 | `agentteams.cli.generate_helpers` | `agentteams`, `agentteams.cli.artifacts`, `agentteams.cli.management_directives`, `agentteams.cli.render_pipeline`, `agentteams.control_plane_io`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.front_matter_reconcile`, `agentteams.integrity`, `agentteams.projection_marker`, `agentteams.prompt_roots`, `agentteams.signing_switch`, `agentteams.team_dir_advisories` | `agentteams.cli.generate`, `agentteams.cli.standalone_modes` |
 | `agentteams.cli.goose_switch` | `agentteams.goose_config` | `agentteams.cli.app`, `agentteams.cli.parser` |
@@ -111,9 +113,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.grants` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger` | `agentteams.branch_cleanup`, `agentteams.cli.artifacts`, `agentteams.cli.decision_log`, `agentteams.cli.grant_commands`, `agentteams.cli.operator_signing` |
 | `agentteams.cli.itest_tripwire` | — | `agentteams.cli.standalone_modes` |
 | `agentteams.cli.json_mode` | — | `agentteams.cli.adopt_only`, `agentteams.cli.app`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate` |
-| `agentteams.cli.management_directives` | `agentteams.atomicio`, `agentteams.cli.governance_targets`, `agentteams.cli.signed_ledger` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.effect_classifier`, `agentteams.cli.generate_helpers` |
+| `agentteams.cli.management_directives` | `agentteams.atomicio`, `agentteams.cli.frozen_surfaces`, `agentteams.cli.governance_targets`, `agentteams.cli.signed_ledger` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.effect_classifier`, `agentteams.cli.generate_helpers` |
 | `agentteams.cli.mcp_grant_commands` | `agentteams.atomicio`, `agentteams.cli.operator_signing`, `agentteams.ingest`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy` | `agentteams.cli.app` |
-| `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity`, `agentteams.mcp_direct_grants` | `agentteams.cli.commands`, `agentteams.cli.grant_commands`, `agentteams.cli.mcp_grant_commands` |
+| `agentteams.cli.operator_signing` | `agentteams`, `agentteams.cli.decision_chain`, `agentteams.cli.decision_log`, `agentteams.cli.decision_text`, `agentteams.cli.effect_classifier`, `agentteams.cli.grants`, `agentteams.cli.signed_ledger`, `agentteams.cli.signer_location`, `agentteams.frameworks._sandbox_emit`, `agentteams.git_exec`, `agentteams.integrity`, `agentteams.mcp_direct_grants` | `agentteams.cli.commands`, `agentteams.cli.grant_commands`, `agentteams.cli.mcp_grant_commands`, `agentteams.vulnscan.grant` |
 | `agentteams.cli.output_target` | `agentteams.backup`, `agentteams.drift` | `agentteams.cli.adopt_only`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate` |
 | `agentteams.cli.package_switch` | `agentteams.cli.security_gate`, `agentteams.security_refs`, `agentteams.team_package` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.parser` | `agentteams`, `agentteams.capability_hints`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.backup_switch`, `agentteams.cli.branch_switch`, `agentteams.cli.fleet_switch`, `agentteams.cli.goose_switch`, `agentteams.cli.package_switch`, `agentteams.cli.parser_validate`, `agentteams.cli.sync_switch`, `agentteams.emit`, `agentteams.frameworks.registry`, `agentteams.mcp_servers`, `agentteams.source_provenance` | `agentteams.cli.app` |
@@ -124,16 +126,16 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.render_pipeline` | `agentteams.backup`, `agentteams.emit`, `agentteams.fence_twin_acks`, `agentteams.fence_twins`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.vscode_tasks`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers` |
 | `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.mcp_servers.recall`, `agentteams.security_refs` |
 | `agentteams.cli.security_gate` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger` | `agentteams.branch_cleanup`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch`, `agentteams.cli.standalone_modes`, `agentteams.security_refs` |
-| `agentteams.cli.signed_ledger` | `agentteams.capability_hints` | `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.mcp_direct_grants`, `agentteams.proposals` |
+| `agentteams.cli.signed_ledger` | `agentteams.capability_hints` | `agentteams.cli.decision_log`, `agentteams.cli.exception_registry`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.operator_signing`, `agentteams.cli.security_gate`, `agentteams.mcp_direct_grants`, `agentteams.proposals`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.publish` |
 | `agentteams.cli.signer_location` | `agentteams`, `agentteams.git_exec` | `agentteams.cli.operator_signing` |
-| `agentteams.cli.standalone_modes` | `agentteams.audit_types`, `agentteams.budget`, `agentteams.cli.adopt_only`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.itest_tripwire`, `agentteams.cli.security_gate`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.rank_conformance`, `agentteams.runner_mcp`, `agentteams.scan`, `agentteams.template_pins`, `agentteams.write_policy` | `agentteams.cli.generate` |
+| `agentteams.cli.standalone_modes` | `agentteams.audit_types`, `agentteams.budget`, `agentteams.cli.adopt_only`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.itest_tripwire`, `agentteams.cli.security_gate`, `agentteams.confinement`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.proposal_policy`, `agentteams.rank_conformance`, `agentteams.runner_mcp`, `agentteams.scan`, `agentteams.template_pins`, `agentteams.write_policy` | `agentteams.cli.generate` |
 | `agentteams.cli.sync_switch` | `agentteams.multi_sync` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.write_policy_warning` | `agentteams.audit`, `agentteams.audit_agent_contract`, `agentteams.audit_types` | `agentteams.cli.generate` |
 | `agentteams.cli.write_root_policy` | `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots` | `agentteams.cli.artifacts`, `agentteams.cli.generate`, `agentteams.multi_sync` |
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources`, `agentteams.mcp_servers.recall` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.code_index_artifacts` |
 | `agentteams.codex_mcp_emit` | `agentteams.atomicio`, `agentteams.mcp_emit`, `agentteams.team_dir_advisories`, `agentteams.toml_write` | `agentteams.cli.artifacts`, `agentteams.grok_config_emit`, `agentteams.mcp_catalog` |
-| `agentteams.confinement` | `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` |
+| `agentteams.confinement` | `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` |
 | `agentteams.control_plane_io` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync`, `agentteams.projection_marker` |
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy` | `agentteams.cli.commands` |
 | `agentteams.data.agentteams-runner-mcp` | — | — |
@@ -142,7 +144,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.data.goose-openrouter-route-proxy` | — | — |
 | `agentteams.data.goose-readfs-mcp` | — | — |
 | `agentteams.data.goose-run-resilient` | — | — |
-| `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
+| `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
 | `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
 | `agentteams.enrich._audit` | `agentteams.enrich._fills`, `agentteams.enrich._models`, `agentteams.enrich._tools`, `agentteams.tool_metadata_catalog` | `agentteams.enrich` |
@@ -177,10 +179,10 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks._linux_sandbox_emit` | — | `agentteams.cli.generate_helpers`, `agentteams.control_plane_io`, `agentteams.frameworks.base`, `agentteams.frameworks.codex` |
 | `agentteams.frameworks._prompt_root_protect` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude` |
 | `agentteams.frameworks._sandbox_emit` | `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots` | `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.standalone_modes`, `agentteams.confinement`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.grok_config_emit`, `agentteams.mcp_direct_grants`, `agentteams.multi_sync`, `agentteams.projection_marker`, `agentteams.signing_switch` |
-| `agentteams.frameworks._write_roots` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.multi_sync`, `agentteams.proposal_policy`, `agentteams.proposals` |
+| `agentteams.frameworks._write_roots` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.multi_sync`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.vulnscan.agent_run` |
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.output_plan` |
-| `agentteams.frameworks.claude` | `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.base`, `agentteams.runner_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.multi_sync` |
+| `agentteams.frameworks.claude` | `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.base`, `agentteams.runner_mcp`, `agentteams.write_policy`, `agentteams.yaml_frontmatter` | `agentteams.bridge_subagents`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.multi_sync` |
 | `agentteams.frameworks.codex` | `agentteams.capability_map`, `agentteams.fences`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.emit`, `agentteams.fence_inject`, `agentteams.frameworks.registry`, `agentteams.learned_blocks` |
 | `agentteams.frameworks.copilot_cli` | `agentteams.frameworks.base`, `agentteams.frameworks.copilot_vscode`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.copilot_vscode` | `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check` |
@@ -224,7 +226,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.manifest_format` | `agentteams.frameworks.registry` | `agentteams.analyze` |
 | `agentteams.mcp_catalog` | `agentteams.codex_mcp_emit`, `agentteams.frameworks.goose`, `agentteams.grok_config_emit`, `agentteams.mcp_emit` | `agentteams.analyze`, `agentteams.cli.artifacts` |
 | `agentteams.mcp_detect` | `agentteams.mcp_need`, `agentteams.write_policy` | `agentteams.analyze` |
-| `agentteams.mcp_direct_grants` | `agentteams.cli.signed_ledger`, `agentteams.confinement`, `agentteams.frameworks._sandbox_emit`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.operator_signing`, `agentteams.proposal_runner`, `agentteams.proposal_staging` |
+| `agentteams.mcp_direct_grants` | `agentteams.cli.signed_ledger`, `agentteams.confinement`, `agentteams.frameworks._sandbox_emit`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.runner_mcp` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.operator_signing`, `agentteams.proposal_runner`, `agentteams.proposal_staging`, `agentteams.vulnscan.grant` |
 | `agentteams.mcp_emit` | `agentteams.atomicio` | `agentteams.analyze`, `agentteams.cli.artifacts`, `agentteams.codex_mcp_emit`, `agentteams.grok_config_emit`, `agentteams.interop`, `agentteams.interop_helpers`, `agentteams.mcp_catalog` |
 | `agentteams.mcp_need` | — | `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.liaison_logs`, `agentteams.mcp_detect`, `agentteams.mcp_need_report` |
 | `agentteams.mcp_need_report` | `agentteams.mcp_need` | `agentteams.cli.app` |
@@ -237,7 +239,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.memory_index_store` | `agentteams.atomicio`, `agentteams.errors` | `agentteams.cli.artifacts`, `agentteams.mcp_servers.recall` |
 | `agentteams.model_routing` | — | `agentteams.cli.artifacts` |
 | `agentteams.multi_sync` | `agentteams.backup`, `agentteams.canonical`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.registry`, `agentteams.git_exec`, `agentteams.host_features`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.projection_marker`, `agentteams.sync_baseline`, `agentteams.sync_classifier`, `agentteams.sync_pin` | `agentteams.cli.sync_switch`, `agentteams.stale_detector` |
-| `agentteams.orphan_advisory` | `agentteams.bridge_subagents_goose` | — |
+| `agentteams.orphan_advisory` | `agentteams.bridge_subagents_goose`, `agentteams.cli.adopt_merge_gate` | — |
 | `agentteams.output_plan` | `agentteams.analyze`, `agentteams.frameworks.base`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.analyze` |
 | `agentteams.parallel_plan` | — | `agentteams.bridge` |
 | `agentteams.plan_steps` | — | `agentteams.session_scan` |
@@ -246,7 +248,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.project_notes` | `agentteams.fences`, `agentteams.user_regions` | `agentteams.emit` |
 | `agentteams.projection_marker` | `agentteams`, `agentteams.control_plane_io`, `agentteams.frameworks._sandbox_emit`, `agentteams.signing_switch` | `agentteams._fleet_grok`, `agentteams.bridge`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.interop`, `agentteams.multi_sync` |
 | `agentteams.prompt_roots` | `agentteams.fences` | `agentteams.cli.generate_helpers` |
-| `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.proposal_commands`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_run`, `agentteams.proposal_staging`, `agentteams.proposals` |
+| `agentteams.proposal_policy` | `agentteams.confinement`, `agentteams.frameworks._write_roots` | `agentteams.cli.mcp_grant_commands`, `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_run`, `agentteams.proposal_staging`, `agentteams.proposals` |
 | `agentteams.proposal_run` | `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposals` |
 | `agentteams.proposal_runner` | `agentteams.atomicio`, `agentteams.confinement`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.mcp_direct_grants`, `agentteams.proposal_staging`, `agentteams.proposals`, `agentteams.runner_mcp`, `agentteams.sealed_result` | `agentteams.cli.proposal_commands` |
 | `agentteams.proposal_staging` | `agentteams.atomicio`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy`, `agentteams.proposals` | `agentteams.proposal_runner`, `agentteams.proposals` |
@@ -284,7 +286,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.research.search` | `agentteams.research.backends`, `agentteams.research.cache` | `agentteams.redteam.freshness`, `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.browser`, `agentteams.research.reputable` |
 | `agentteams.research.verify` | — | `agentteams.research` |
 | `agentteams.runner_mcp` | `agentteams.backup` | `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner` |
-| `agentteams.scan` | `agentteams.backup`, `agentteams.scan_operational` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.whole_body_migration` |
+| `agentteams.scan` | `agentteams.backup`, `agentteams.scan_operational` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.vulnscan.publish`, `agentteams.whole_body_migration` |
 | `agentteams.scan_operational` | — | `agentteams.scan` |
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.sealed_result` | — | `agentteams.proposal_runner` |
@@ -310,6 +312,33 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.update_report` | — | `agentteams.cli.generate` |
 | `agentteams.user_regions` | — | `agentteams.emit`, `agentteams.fence_twins`, `agentteams.project_notes`, `agentteams.whole_body_migration` |
 | `agentteams.vscode_tasks` | `agentteams._makefile_screen` | `agentteams.cli.render_pipeline` |
+| `agentteams.vulnscan` | — | `agentteams.vulnscan.report` |
+| `agentteams.vulnscan.__main__` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule` | — |
+| `agentteams.vulnscan._http` | — | `agentteams.vulnscan.engine`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.runtimes` |
+| `agentteams.vulnscan.agent_run` | `agentteams.frameworks._write_roots`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.report_store` |
+| `agentteams.vulnscan.daily` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.review` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.operator_cli` |
+| `agentteams.vulnscan.debrief` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor` | `agentteams.vulnscan.operator_cli` |
+| `agentteams.vulnscan.engine` | `agentteams.vulnscan._http`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.report`, `agentteams.vulnscan.runtimes` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor` |
+| `agentteams.vulnscan.escalations` | `agentteams.cli.signed_ledger`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.executor` | `agentteams`, `agentteams.cli.decision_log`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report_store` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish` |
+| `agentteams.vulnscan.fix` | `agentteams.vulnscan._http`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor` |
+| `agentteams.vulnscan.gateway` | — | — |
+| `agentteams.vulnscan.grant` | `agentteams.cli.operator_signing`, `agentteams.cli.signed_ledger`, `agentteams.mcp_direct_grants`, `agentteams.vulnscan.paths` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.ledger` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.manifests` | — | `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix` |
+| `agentteams.vulnscan.mcp` | — | — |
+| `agentteams.vulnscan.notes` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.notify` | `agentteams.vulnscan.escalations` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor` |
+| `agentteams.vulnscan.operator_cli` | `agentteams.cli.decision_log`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish` | `agentteams.vulnscan.__main__` |
+| `agentteams.vulnscan.osv` | `agentteams.vulnscan._http`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.engine`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.report` |
+| `agentteams.vulnscan.paths` | — | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule` |
+| `agentteams.vulnscan.publish` | `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger`, `agentteams.scan`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.paths` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.report` | `agentteams.vulnscan`, `agentteams.vulnscan.osv` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.report_store` | `agentteams.vulnscan.agent_run` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.review` |
+| `agentteams.vulnscan.review` | `agentteams.vulnscan.escalations`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report`, `agentteams.vulnscan.report_store` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily` |
+| `agentteams.vulnscan.runtimes` | `agentteams.vulnscan._http`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.engine` |
+| `agentteams.vulnscan.schedule` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.__main__` |
+| `agentteams.vulnscan.versions` | — | `agentteams.vulnscan.fix`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.runtimes` |
 | `agentteams.whole_body_migration` | `agentteams.fence_twins`, `agentteams.fences`, `agentteams.scan`, `agentteams.unfenced`, `agentteams.user_regions` | `agentteams.fences`, `agentteams.fleet` |
 | `agentteams.write_policy` | — | `agentteams.analyze`, `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_detect` |
 | `agentteams.yaml_frontmatter` | — | `agentteams.adopted_agents`, `agentteams.bridge_sources`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.cli.adopt_only`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.grok`, `agentteams.front_matter_reconcile`, `agentteams.graph_inputs`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers` |
@@ -353,6 +382,8 @@ flowchart LR
     class agentteams_redteam sub
     agentteams_research["agentteams.research"]
     class agentteams_research sub
+    agentteams_vulnscan["agentteams.vulnscan"]
+    class agentteams_vulnscan sub
     agentteams --> agentteams_cli
     agentteams --> agentteams_enrich
     agentteams --> agentteams_frameworks
@@ -368,6 +399,9 @@ flowchart LR
     agentteams_redteam --> agentteams
     agentteams_redteam --> agentteams_frameworks
     agentteams_redteam --> agentteams_research
+    agentteams_vulnscan --> agentteams
+    agentteams_vulnscan --> agentteams_cli
+    agentteams_vulnscan --> agentteams_frameworks
 ```
 
 ```dot
@@ -384,6 +418,7 @@ digraph "agentteams architecture" {
     "agentteams.mcp_servers" [fillcolor="#eef6ee"];
     "agentteams.redteam" [fillcolor="#eef6ee"];
     "agentteams.research" [fillcolor="#eef6ee"];
+    "agentteams.vulnscan" [fillcolor="#eef6ee"];
     "agentteams" -> "agentteams.cli";
     "agentteams" -> "agentteams.enrich";
     "agentteams" -> "agentteams.frameworks";
@@ -399,6 +434,9 @@ digraph "agentteams architecture" {
     "agentteams.redteam" -> "agentteams";
     "agentteams.redteam" -> "agentteams.frameworks";
     "agentteams.redteam" -> "agentteams.research";
+    "agentteams.vulnscan" -> "agentteams";
+    "agentteams.vulnscan" -> "agentteams.cli";
+    "agentteams.vulnscan" -> "agentteams.frameworks";
 }
 ```
 
@@ -1099,6 +1137,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/cli/effect_classifier.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.cli.frozen_surfaces",
         "agentteams.cli.governance_targets",
         "agentteams.cli.management_directives"
       ],
@@ -1129,6 +1168,14 @@ digraph "agentteams architecture" {
     "agentteams.cli.fleet_switch": {
       "package": "agentteams.cli",
       "path": "agentteams/cli/fleet_switch.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.cli.frozen_surfaces": {
+      "package": "agentteams.cli",
+      "path": "agentteams/cli/frozen_surfaces.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -1274,6 +1321,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.atomicio",
+        "agentteams.cli.frozen_surfaces",
         "agentteams.cli.governance_targets",
         "agentteams.cli.signed_ledger"
       ],
@@ -1492,11 +1540,13 @@ digraph "agentteams architecture" {
         "agentteams.cli.generate_helpers",
         "agentteams.cli.itest_tripwire",
         "agentteams.cli.security_gate",
+        "agentteams.confinement",
         "agentteams.emit",
         "agentteams.frameworks._goose_sandbox_emit",
         "agentteams.frameworks._sandbox_emit",
         "agentteams.frameworks.claude",
         "agentteams.frameworks.goose_tool_scoping",
+        "agentteams.proposal_policy",
         "agentteams.rank_conformance",
         "agentteams.runner_mcp",
         "agentteams.scan",
@@ -1664,6 +1714,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.emit",
+        "agentteams.frameworks.claude",
         "agentteams.frameworks.format_spec",
         "agentteams.frameworks.registry"
       ],
@@ -2777,7 +2828,8 @@ digraph "agentteams architecture" {
       "path": "agentteams/orphan_advisory.py",
       "is_package": false,
       "imports_internal": [
-        "agentteams.bridge_subagents_goose"
+        "agentteams.bridge_subagents_goose",
+        "agentteams.cli.adopt_merge_gate"
       ],
       "external": [],
       "repo_local": []
@@ -3536,6 +3588,335 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.vulnscan": {
+      "package": "agentteams",
+      "path": "agentteams/vulnscan/__init__.py",
+      "is_package": true,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.__main__": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/__main__.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.agent_run",
+        "agentteams.vulnscan.daily",
+        "agentteams.vulnscan.engine",
+        "agentteams.vulnscan.executor",
+        "agentteams.vulnscan.fix",
+        "agentteams.vulnscan.grant",
+        "agentteams.vulnscan.operator_cli",
+        "agentteams.vulnscan.paths",
+        "agentteams.vulnscan.report",
+        "agentteams.vulnscan.review",
+        "agentteams.vulnscan.schedule"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan._http": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/_http.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.agent_run": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/agent_run.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.frameworks._write_roots",
+        "agentteams.vulnscan.executor",
+        "agentteams.vulnscan.ledger",
+        "agentteams.vulnscan.notes",
+        "agentteams.vulnscan.notify",
+        "agentteams.vulnscan.paths",
+        "agentteams.vulnscan.report_store"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.daily": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/daily.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.agent_run",
+        "agentteams.vulnscan.engine",
+        "agentteams.vulnscan.executor",
+        "agentteams.vulnscan.fix",
+        "agentteams.vulnscan.notify",
+        "agentteams.vulnscan.paths",
+        "agentteams.vulnscan.publish",
+        "agentteams.vulnscan.report",
+        "agentteams.vulnscan.report_store",
+        "agentteams.vulnscan.review"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.debrief": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/debrief.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.agent_run",
+        "agentteams.vulnscan.executor"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.engine": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/engine.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan._http",
+        "agentteams.vulnscan.manifests",
+        "agentteams.vulnscan.osv",
+        "agentteams.vulnscan.report",
+        "agentteams.vulnscan.runtimes"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.escalations": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/escalations.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.cli.signed_ledger",
+        "agentteams.vulnscan.grant",
+        "agentteams.vulnscan.ledger"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.executor": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/executor.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams",
+        "agentteams.cli.decision_log",
+        "agentteams.vulnscan.engine",
+        "agentteams.vulnscan.escalations",
+        "agentteams.vulnscan.fix",
+        "agentteams.vulnscan.grant",
+        "agentteams.vulnscan.ledger",
+        "agentteams.vulnscan.manifests",
+        "agentteams.vulnscan.notify",
+        "agentteams.vulnscan.paths",
+        "agentteams.vulnscan.publish",
+        "agentteams.vulnscan.report_store"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.fix": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/fix.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan._http",
+        "agentteams.vulnscan.manifests",
+        "agentteams.vulnscan.osv",
+        "agentteams.vulnscan.versions"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.gateway": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/gateway.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.grant": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/grant.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.cli.operator_signing",
+        "agentteams.cli.signed_ledger",
+        "agentteams.mcp_direct_grants",
+        "agentteams.vulnscan.paths"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.ledger": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/ledger.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.paths"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.manifests": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/manifests.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.mcp": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/mcp.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.notes": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/notes.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.paths"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.notify": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/notify.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.escalations"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.operator_cli": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/operator_cli.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.cli.decision_log",
+        "agentteams.vulnscan.daily",
+        "agentteams.vulnscan.debrief",
+        "agentteams.vulnscan.escalations",
+        "agentteams.vulnscan.executor",
+        "agentteams.vulnscan.grant",
+        "agentteams.vulnscan.notes",
+        "agentteams.vulnscan.paths",
+        "agentteams.vulnscan.publish"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.osv": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/osv.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan._http",
+        "agentteams.vulnscan.versions"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.paths": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/paths.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.publish": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/publish.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.cli.decision_log",
+        "agentteams.cli.signed_ledger",
+        "agentteams.scan",
+        "agentteams.vulnscan.executor",
+        "agentteams.vulnscan.grant",
+        "agentteams.vulnscan.ledger",
+        "agentteams.vulnscan.paths"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.report": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/report.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan",
+        "agentteams.vulnscan.osv"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.report_store": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/report_store.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.agent_run"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.review": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/review.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.escalations",
+        "agentteams.vulnscan.grant",
+        "agentteams.vulnscan.ledger",
+        "agentteams.vulnscan.notes",
+        "agentteams.vulnscan.paths",
+        "agentteams.vulnscan.publish",
+        "agentteams.vulnscan.report",
+        "agentteams.vulnscan.report_store"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.runtimes": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/runtimes.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan._http",
+        "agentteams.vulnscan.versions"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.schedule": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/schedule.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.vulnscan.paths"
+      ],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.vulnscan.versions": {
+      "package": "agentteams.vulnscan",
+      "path": "agentteams/vulnscan/versions.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.whole_body_migration": {
       "package": "agentteams",
       "path": "agentteams/whole_body_migration.py",
@@ -3627,6 +4008,18 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.redteam",
       "target": "agentteams.research"
+    },
+    {
+      "source": "agentteams.vulnscan",
+      "target": "agentteams"
+    },
+    {
+      "source": "agentteams.vulnscan",
+      "target": "agentteams.cli"
+    },
+    {
+      "source": "agentteams.vulnscan",
+      "target": "agentteams.frameworks"
     }
   ],
   "module_edges": [
@@ -4484,6 +4877,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.effect_classifier",
+      "target": "agentteams.cli.frozen_surfaces"
+    },
+    {
+      "source": "agentteams.cli.effect_classifier",
       "target": "agentteams.cli.governance_targets"
     },
     {
@@ -4757,6 +5154,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.management_directives",
       "target": "agentteams.atomicio"
+    },
+    {
+      "source": "agentteams.cli.management_directives",
+      "target": "agentteams.cli.frozen_surfaces"
     },
     {
       "source": "agentteams.cli.management_directives",
@@ -5068,6 +5469,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.standalone_modes",
+      "target": "agentteams.confinement"
+    },
+    {
+      "source": "agentteams.cli.standalone_modes",
       "target": "agentteams.emit"
     },
     {
@@ -5085,6 +5490,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.standalone_modes",
       "target": "agentteams.frameworks.goose_tool_scoping"
+    },
+    {
+      "source": "agentteams.cli.standalone_modes",
+      "target": "agentteams.proposal_policy"
     },
     {
       "source": "agentteams.cli.standalone_modes",
@@ -5185,6 +5594,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.drift",
       "target": "agentteams.emit"
+    },
+    {
+      "source": "agentteams.drift",
+      "target": "agentteams.frameworks.claude"
     },
     {
       "source": "agentteams.drift",
@@ -6307,6 +6720,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.bridge_subagents_goose"
     },
     {
+      "source": "agentteams.orphan_advisory",
+      "target": "agentteams.cli.adopt_merge_gate"
+    },
+    {
       "source": "agentteams.output_plan",
       "target": "agentteams.analyze"
     },
@@ -6777,6 +7194,378 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.vscode_tasks",
       "target": "agentteams._makefile_screen"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.agent_run"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.daily"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.engine"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.executor"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.fix"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.grant"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.operator_cli"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.report"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.review"
+    },
+    {
+      "source": "agentteams.vulnscan.__main__",
+      "target": "agentteams.vulnscan.schedule"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.frameworks._write_roots"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.executor"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.notes"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.notify"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.report_store"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.agent_run"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.engine"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.executor"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.fix"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.notify"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.publish"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.report"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.report_store"
+    },
+    {
+      "source": "agentteams.vulnscan.daily",
+      "target": "agentteams.vulnscan.review"
+    },
+    {
+      "source": "agentteams.vulnscan.debrief",
+      "target": "agentteams.vulnscan.agent_run"
+    },
+    {
+      "source": "agentteams.vulnscan.debrief",
+      "target": "agentteams.vulnscan.executor"
+    },
+    {
+      "source": "agentteams.vulnscan.engine",
+      "target": "agentteams.vulnscan._http"
+    },
+    {
+      "source": "agentteams.vulnscan.engine",
+      "target": "agentteams.vulnscan.manifests"
+    },
+    {
+      "source": "agentteams.vulnscan.engine",
+      "target": "agentteams.vulnscan.osv"
+    },
+    {
+      "source": "agentteams.vulnscan.engine",
+      "target": "agentteams.vulnscan.report"
+    },
+    {
+      "source": "agentteams.vulnscan.engine",
+      "target": "agentteams.vulnscan.runtimes"
+    },
+    {
+      "source": "agentteams.vulnscan.escalations",
+      "target": "agentteams.cli.signed_ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.escalations",
+      "target": "agentteams.vulnscan.grant"
+    },
+    {
+      "source": "agentteams.vulnscan.escalations",
+      "target": "agentteams.vulnscan.ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.cli.decision_log"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.engine"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.escalations"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.fix"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.grant"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.manifests"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.notify"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.publish"
+    },
+    {
+      "source": "agentteams.vulnscan.executor",
+      "target": "agentteams.vulnscan.report_store"
+    },
+    {
+      "source": "agentteams.vulnscan.fix",
+      "target": "agentteams.vulnscan._http"
+    },
+    {
+      "source": "agentteams.vulnscan.fix",
+      "target": "agentteams.vulnscan.manifests"
+    },
+    {
+      "source": "agentteams.vulnscan.fix",
+      "target": "agentteams.vulnscan.osv"
+    },
+    {
+      "source": "agentteams.vulnscan.fix",
+      "target": "agentteams.vulnscan.versions"
+    },
+    {
+      "source": "agentteams.vulnscan.grant",
+      "target": "agentteams.cli.operator_signing"
+    },
+    {
+      "source": "agentteams.vulnscan.grant",
+      "target": "agentteams.cli.signed_ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.grant",
+      "target": "agentteams.mcp_direct_grants"
+    },
+    {
+      "source": "agentteams.vulnscan.grant",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.ledger",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.notes",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.notify",
+      "target": "agentteams.vulnscan.escalations"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.cli.decision_log"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.daily"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.debrief"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.escalations"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.executor"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.grant"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.notes"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.operator_cli",
+      "target": "agentteams.vulnscan.publish"
+    },
+    {
+      "source": "agentteams.vulnscan.osv",
+      "target": "agentteams.vulnscan._http"
+    },
+    {
+      "source": "agentteams.vulnscan.osv",
+      "target": "agentteams.vulnscan.versions"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.cli.decision_log"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.cli.signed_ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.scan"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.vulnscan.executor"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.vulnscan.grant"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.vulnscan.ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.publish",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.report",
+      "target": "agentteams.vulnscan"
+    },
+    {
+      "source": "agentteams.vulnscan.report",
+      "target": "agentteams.vulnscan.osv"
+    },
+    {
+      "source": "agentteams.vulnscan.report_store",
+      "target": "agentteams.vulnscan.agent_run"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.escalations"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.grant"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.ledger"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.notes"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.paths"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.publish"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.report"
+    },
+    {
+      "source": "agentteams.vulnscan.review",
+      "target": "agentteams.vulnscan.report_store"
+    },
+    {
+      "source": "agentteams.vulnscan.runtimes",
+      "target": "agentteams.vulnscan._http"
+    },
+    {
+      "source": "agentteams.vulnscan.runtimes",
+      "target": "agentteams.vulnscan.versions"
+    },
+    {
+      "source": "agentteams.vulnscan.schedule",
+      "target": "agentteams.vulnscan.paths"
     },
     {
       "source": "agentteams.whole_body_migration",

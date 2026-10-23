@@ -170,6 +170,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # payloads (plus the --issue-grant spec helpers). It was carved out of the high-churn
     # commands.py / grant_commands.py, whose runners are now one-line delegators.
     "agentteams/cli/operator_signing.py",
+    # 2026-10-22 (vulnscan-remediation-2, @security R3-7): --sign-mcp-direct-grant builds the record this
+    # signing path displays and signs; a silent edit to how it binds the brief or the lifetime would change
+    # what the operator's confirmed digest covers.
+    "agentteams/cli/mcp_grant_commands.py",
     # Runs during the signed append (writes the ledger) inside operator_signing's closure.
     "agentteams/atomicio.py",
     # CH-08 (2026-10-07): the shared git core and its read-only hardening; imported by the pinned proposals.py,
@@ -178,6 +182,52 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # #10 (2026-09-30): the install-location check the minters run before the key is read; in the
     # signing closure, so drift in it refuses signing.
     "agentteams/cli/signer_location.py",
+    # vulnscan standing remediation grants (2026-10-22, plan vulnscan-autonomous-remediation): grant.py
+    # signs through the operator flow and verifies the Ed25519 grant that pre-clears unattended actions
+    # (C-5 / Rule 15); executor.py is the only code that acts under a grant (HALT check, begun row,
+    # deterministic change, credentialed push); ledger.py is the MAC chain the use caps and the
+    # after-action review trust. A silent edit to any of them would widen what an agent can get done.
+    "agentteams/vulnscan/grant.py",
+    "agentteams/vulnscan/executor.py",
+    "agentteams/vulnscan/ledger.py",
+    # paths.py decides where grants, the ledger key and config live; agent_run.py sets the container flags that are
+    # S-VM's "no credentials inside the sandbox" precondition; gateway.py is the agents' only egress and spend cap;
+    # mcp.py is the agents' only request channel (@security P3 review, MAJOR 4).
+    "agentteams/vulnscan/paths.py",
+    "agentteams/vulnscan/agent_run.py",
+    "agentteams/vulnscan/gateway.py",
+    "agentteams/vulnscan/mcp.py",
+    # R6 operator loop (2026-10-22, metaplan vulnscan-r6 T1): escalations.py and publish.py sign through the operator
+    # flow and verify Ed25519 resolutions / the publish grant (publish.py also holds the only push of agent-derived
+    # text off the machine); operator_cli.py drives both signing flows; escalations.py, notes.py and report_store.py
+    # decide what blocks remediation and what agent / operator text reaches the agent or the review, fenced;
+    # notify.py keeps agent text out of notifications; review.py fences the published review; daily.py and
+    # debrief.py wire publishing and the debrief's read-only spool and caps.
+    "agentteams/vulnscan/escalations.py",
+    "agentteams/vulnscan/publish.py",
+    "agentteams/vulnscan/operator_cli.py",
+    "agentteams/vulnscan/notes.py",
+    "agentteams/vulnscan/report_store.py",
+    "agentteams/vulnscan/notify.py",
+    "agentteams/vulnscan/review.py",
+    "agentteams/vulnscan/daily.py",
+    "agentteams/vulnscan/debrief.py",
+    # G1 T2 condition: __main__.py wires grant signing and the operator commands; manifests.py's REQ_PIN decides
+    # what validate_diff lets stage-fix change.
+    "agentteams/vulnscan/__main__.py",
+    "agentteams/vulnscan/manifests.py",
+    # 2026-10-22 (vulnscan-remediation-2, @security V1-2 / @code-hygiene V3-8): the packaged server kit runs
+    # as root on the operator's servers (`sudo -n`), from the executor and, since P12, from the daily job;
+    # a silent edit to run-host.sh could turn the dry run into an apply. The agent image's Dockerfile
+    # decides what the credential-free container holds.
+    "agentteams/data/server_kit/remote.sh",
+    "agentteams/data/server_kit/run-host.sh",
+    "agentteams/data/server_kit/L1-audit.sh",
+    "agentteams/data/server_kit/L2-os-patch.sh",
+    "agentteams/data/server_kit/L3-node-runtime.sh",
+    "agentteams/data/server_kit/L4-python-app.sh",
+    "agentteams/data/server_kit/L5-containers.sh",
+    "agentteams/data/vulnscan_agent/Dockerfile",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
@@ -459,6 +509,35 @@ def verify(repo_root: Path) -> list[IntegrityFinding]:
     return findings
 
 
+def stale_summary(repo_root: Path) -> str:
+    """Return a short developer-facing summary of a stale manifest, or ``""`` when it verifies.
+
+    Every edit to a pinned module stales the manifest, and ``--check`` (plus the tests that assert
+    its exit code) then fails until the manifest is re-recorded — a predictable failure that reads
+    like a regression (INTEGRITY-MANIFEST-STALE-PER-PIN-EDIT). This names each stale pin and the
+    exact re-record command. It does not re-record anything: re-recording stays a deliberate act,
+    done only after the change was intended and its diff reviewed.
+
+    Args:
+        repo_root: Repository root.
+
+    Returns:
+        ``""`` when :func:`verify` reports no findings; otherwise a multi-line text with one line
+        per finding (path and reason) followed by the command that re-records the manifest.
+
+    Raises:
+        RuntimeError: When the manifest exists but cannot be read (propagated from :func:`verify`).
+    """
+    findings = verify(repo_root)
+    if not findings:
+        return ""
+    lines = [f"[INTEGRITY] {MANIFEST_REL_PATH} is stale: {len(findings)} pinned module(s) do not match."]
+    lines += [f"  - {finding.rel_path}: {finding.reason}" for finding in findings]
+    lines.append("  If the change was intended, review the diff, then re-record with:")
+    lines.append(f"    agentteams --write-integrity-manifest --project {repo_root.resolve()}")
+    return "\n".join(lines)
+
+
 __all__ = [
     "ENFORCEMENT_MODULES",
     "INSTALLED_COPIES",
@@ -467,4 +546,5 @@ __all__ = [
     "compute_digests",
     "write_manifest",
     "verify",
+    "stale_summary",
 ]

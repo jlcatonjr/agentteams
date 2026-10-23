@@ -6,6 +6,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`python -m agentteams.vulnscan`: known-vulnerability scanning and remediation for repositories and
+  servers.**
+  - It reads PyPI, npm and Packagist lockfiles and pins, and checks every exact version against OSV.dev,
+    including malicious-package (`MAL-*`) records.
+  - It judges Node.js, PHP and Python runtimes against live release data: security releases and
+    end-of-life lines.
+  - `fix` plans and makes the smallest clean upgrade. It honours the 14-day release cooldown and gates
+    major jumps. npm runs lockfile-only with no install scripts.
+  - `daily` and `schedule` run it every day through launchd, a systemd user timer or cron. Each run has a
+    heartbeat, a new-findings diff and a notification.
+  - The bundled server kit (`server-kit`) audits and patches Linux hosts over SSH. It is a dry run by
+    default; app upgrades roll back automatically, and a host with compromise indicators is not patched
+    in place.
+  - Vulnerability knowledge is fetched live, never hardcoded. All user configuration and results live in
+    XDG user directories, outside any repository; a test keeps operator data out of the shipped files.
+  - See `docs_src/vulnerability-remediation-guide.md`.
+- **Agent-driven, unattended remediation (opt-in).**
+  - The new `vulnerability_remediation` capability adds a request-only `vuln-remediation` agent: a
+    goose orchestrator sub-recipe whose grant is read and search only.
+  - Agents run in a credential-free Linux container behind a key-injecting, spend-capped egress
+    gateway. They queue requests through the `vulnscan` MCP server.
+  - A host-side executor performs a request only under an operator Ed25519-signed **standing grant**,
+    which is scoped, expires within 30 days, and is use-counted in a MAC-chained ledger. A HALT
+    check runs before every use.
+  - New commands: `vulnscan review` (after-action review and acknowledgement) and `agent-selftest`
+    (isolation proof, a precondition for agent mode).
+  - `@security` gains **Rule S-VM** (continuous vulnerability monitoring and standing grants;
+    `security_rules_invariant` v=12).
+- **The vulnscan operator loop: escalations, notes, debriefs and reports.** See "When the agents
+  stop" in `docs_src/vulnerability-remediation-guide.md`.
+  - The agent's new MCP `escalate` tool records a ledger escalation that blocks remediation. The
+    executor decides the scope: everything for `malicious`, `ioc` and `integrity`, otherwise the
+    canonical target. More than 10 in one run become one global `escalation-flood`. New commands:
+    `vulnscan halts` lists escalations and `@security` HALTs and prints the `HALT-RETRACTED` spec
+    to sign. `vulnscan resolve` clears `other` after an interactive confirmation, and serious kinds
+    only with an operator Ed25519 signature.
+  - `vulnscan say` leaves operator notes. The launcher folds them into the next run's task and
+    ledgers them by id and SHA-256. They never widen a grant or suppress an escalation.
+    `say --from-gh` imports one `/vulnscan note` PR comment, and only on request.
+  - `vulnscan agent-chat` resumes a past run's goose session for a read-only debrief: the spool is
+    read-only and the debrief has its own gateway, budget, time cap and token cap. The new gateway
+    option `--max-tokens-total` enforces the token cap.
+  - The agent's new MCP `submit_report` tool hands its report to the executor, which stores it
+    fenced under `<run>/agent-report/report.md`. With an operator-signed publish grant
+    (`vulnscan publish-grant`), the executor pushes the report, review and summary without force to
+    the `reports` branch of a preflighted private ops repository. `vulnscan publish` does the same
+    by hand. `vulnscan-publish` is added to `GATE_ACTIONS`, so a HALT on it stops publishing.
+  - `vulnscan review --gh-replies` lists replies on the agents' PRs as inert data; `say --from-gh`
+    imports only your own `/vulnscan note` comment, after showing it and a terminal `y`. The
+    published review fences all agent- and repository-derived text, and published files have home
+    paths, this machine's hostname and private IPv4 addresses scrubbed. Content is scanned before a
+    publish use is reserved; injection-pattern hits inside fences are allowed and counted.
+  - The executor serves at most 200 spool requests per pass (more open an `escalation-flood`),
+    sets aside requests left from a crashed run, and `serve-requests` by hand refuses while a run
+    holds the run lock. Escalations on a linked worktree block its main repository.
+  - **Behaviour change:** notifications carry fixed text only (ids, counts and state words). A
+    `notify: "command:..."` program now receives the message as its last argument instead of a
+    summary path.
+  - **Behaviour change:** `open-pr` opens the pull request on `origin`'s own repository
+    (`gh pr create --repo HOST/OWNER/REPO`, from `origin`'s URL); an `origin` not of that form fails
+    the request before anything is pushed. Before, gh chose the base repository, and in a fork with an `upstream` remote it
+    could pick the upstream project.
+  - `agent-selftest` refuses without `agent.key_file`; `agent-image build` and a signed grant that
+    does not verify end with a message and exit 1 or 2 instead of a traceback. The review's actions
+    table keeps one row per action, `halts` always reports its HALT section, and "Findings not acted
+    on" matches `~`-style repository roots.
+- **Docs: Automated Remediation: Step-by-Step Setup** (`docs_src/vulnscan-automation-walkthrough.md`)
+  with terminal screenshots generated from real runs (`scripts/gen_vulnscan_screenshots.py`), and the
+  **`vulnscan` API reference** (`docs_src/api-reference/vulnscan.md`).
+- **vulnscan hardening (remediation pass 2).**
+  - `--confirm-review-sha256` now works for `grant sign`, `publish-grant sign` and `resolve`: the
+    review digest covers what you chose (and the lifetime), not the id and times each run mints, and
+    no longer depends on the working directory.
+  - The executor refuses `stage-fix`/`open-pr` in the repository of the agentteams installation, of
+    `agent.team_dir`, of every grant's governance directory and of the publish ops repository
+    (compared by git common directory, so worktrees count).
+  - `agent.team_dir` is validated before it is mounted (not home, an ancestor of home, or at, inside
+    or above `~/.config/agentteams` or a credential directory); the self-test also checks that
+    `.config/agentteams/keys` is unreachable, and its record is bound to the container flags
+    (`flags_sha256`): **re-run `agent-selftest` once after upgrading.**
+  - New gateway backstops: `agent.max_tokens_total` (default 10 000 000) and a refusal after
+    `agent.max_unmetered_calls` (default 20) successful replies without usage, unless
+    `agent.allow_unmetered`; a client that hangs up mid-stream is still metered, and upstream error
+    replies are counted separately (`upstream_errors`).
+  - `agent.team_dir` may not contain `agent.key_file` or the operator signing key (it is mounted into
+    the container). The self-test's network probe catches only network errors, so a fault in it fails
+    the test instead of reading as "internet blocked". The packaged server kit and the agent
+    Dockerfile are integrity-pinned; a planted IOC terminator now stops `remote.sh` before ssh runs.
+  - Publish preflight also refuses other collaborators, pending invitations and any deploy key, and
+    fails closed on API errors. The fence rule that lets quoted injections through follows CommonMark
+    (a longer closing run closes; an unclosed fence fences nothing), and a file with an HTML-block start
+    or a non-CommonMark line break outside fences gets no exemption, closing three bypasses.
+  - **Behaviour change:** the daily server audit runs the packaged server-kit scripts with your
+    `hosts.conf`/`apps.conf`; the exported copies are no longer executed by the daily job. Extra
+    `ioc-*.txt` files in the server-kit directory are embedded as data.
+
+### Security
+
+- **`--sign-mcp-direct-grant --confirm-review-sha256` could never confirm.** Each run minted a fresh
+  `grant_id` and timestamps inside the digested record. The digest now covers the operator's choices
+  plus the lifetime and the target project (`operator_signing.review_choices`), as `--sign-grant`
+  already did; the display marks the minted fields. A digest is a standing approval of those choices,
+  not a one-time token. `cli/mcp_grant_commands.py` and `vulnscan/grant.py` join `SIGNING_CLOSURE`
+  and the integrity manifest.
+- **The operator directory `~/.config/agentteams` is protected as a whole.** A sandbox write root may
+  not be at, inside or above it (`frameworks/_write_roots.py`), and emitted Claude settings deny
+  `Edit(~/.config/agentteams)` and `Edit(~/.config/agentteams/**)`. Before, only `keys/` was refused as a
+  write root, and vulnscan's config (whose `notify: command:` the daily job runs), notes and server kit
+  had no protection.
+
+### Developer tooling
+
+- `integrity.stale_summary()`; the test session prints the stale pins and the re-record command once
+  at start. `test_prompt_roots` assertions show the `--check` output. `test_api_doc_signatures`
+  resolves a qualified heading (`grant.build(...)`) to that module in a package page.
+- `svg_render.render_svg(..., direction="TB")`: an opt-in top-to-bottom layout; the default output is
+  byte-identical.
+
 ## [1.0.1] - 2026-10-21
 
 ### release notes

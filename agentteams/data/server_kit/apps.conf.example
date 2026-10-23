@@ -1,0 +1,12 @@
+# Python services that run-host.sh upgrades with L4-python-app.sh
+# (restart → health check → automatic rollback). Copy to apps.conf and edit.
+#
+# host | systemd unit | app dir ("~user/dir" ok) | python | L4 flags | health URL ("-" = unit stays active) | pins
+#
+# Lines with an EMPTY pins field are skipped. Take pins from the vulnerability report that
+# `./remote.sh <host> L1-audit.sh` writes (it prints candidate --pin flags). Prefer the
+# exact versions from your reviewed repository fix, so server and repo agree.
+#
+# L4 flags: --user-site (packages in the user's ~/.local)  --as USER  --system-pip  --git-pull
+web1 | myapp.service    | ~deploy/myapp     | ~deploy/myapp/.venv/bin/python | --as deploy             | http://127.0.0.1:8000/health |
+api1 | api.service      | ~svc/api          | /usr/bin/python3               | --user-site --as svc    | -                            |

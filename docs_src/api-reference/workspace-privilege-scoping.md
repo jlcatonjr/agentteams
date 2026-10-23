@@ -284,8 +284,9 @@ Two properties matter for the privilege model:
   on the generating host are denied by **exact path** for now (the sandbox takes no globs), and
   `provision-operator-signing-key.sh --migrate` (an operator helper in the agentteams source
   repository's `references/authorized-verify-keys/`, not emitted into generated projects) moves
-  them into `keys/` without overwriting or deleting anything. A workspace write root at or inside `keys/` is refused at generation, since
-  a narrower `allowRead` would re-open it. Only the key **file** is covered: the environment
+  them into `keys/` without overwriting or deleting anything. A workspace write root at, inside or above `keys/` is refused at generation, since
+  a narrower `allowRead` would re-open it; since 2026-10-22 the whole operator directory
+  `~/.config/agentteams` is refused the same way (see the write-root list below). Only the key **file** is covered: the environment
   variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` are inherited by
   Claude-sandboxed commands (the launcher scrubs its environment; Claude Code does not). No
   relaxing or elevated authorization accepts an HMAC-only signature, which is what keeps an
@@ -378,7 +379,9 @@ In the project description:
 > so a sandboxed agent could add roots that the operator's next `--update` would emit. These are
 > refused in every emitter, through the pinned `frameworks/_write_roots.py`:
 > - `/`, `~`, `$HOME` and their ancestors;
-> - the signing-key directory, and anything at, inside or above it;
+> - the operator directory `~/.config/agentteams` (the signing keys, verify keys, `mcp-grants`,
+>   `confined`, and vulnscan's config, notes, grants and server kit), and anything at, inside or above
+>   it; the emitted `Edit(...)` deny rules cover the whole directory too;
 > - home credential and persistence paths;
 > - `~user`;
 > - the project control plane (`.git`, `.claude`, `.goose`, `.codex`, `.github/agents`,

@@ -152,8 +152,40 @@ def _snapshot_watched_tree():
         return None
 
 
+def _report_stale_integrity_manifest(session: pytest.Session) -> None:
+    """Print ``integrity.stale_summary`` once, from the controller process, when the manifest is stale.
+
+    INTEGRITY-MANIFEST-STALE-PER-PIN-EDIT: an edit to a pinned module stales
+    ``references/enforcement-integrity.json``, and tests asserting ``--check``'s exit code then fail in
+    a way that reads like a regression. Naming the stale pins and the re-record command up front says
+    why. Informational only: it never changes the session's outcome. xdist workers skip it (they
+    carry ``workerinput``) so a parallel run prints it once, not once per worker.
+
+    Args:
+        session: The pytest session.
+    """
+    if hasattr(session.config, "workerinput"):
+        return
+    import sys
+
+    from agentteams import integrity
+
+    try:
+        summary = integrity.stale_summary(Path(__file__).resolve().parents[1])
+    except (RuntimeError, OSError) as exc:
+        summary = f"[INTEGRITY] could not check the enforcement manifest: {exc}"
+    if not summary:
+        return
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_line(summary, yellow=True)
+    else:
+        print(summary, file=sys.stderr, flush=True)
+
+
 def pytest_sessionstart(session):  # noqa: D103
     _tree_watch["prev"] = _snapshot_watched_tree()
+    _report_stale_integrity_manifest(session)
 
 
 def pytest_runtest_teardown(item, nextitem):  # noqa: D103

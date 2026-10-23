@@ -1,37 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1232 222" width="1232" height="222" font-family="monospace">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1408 278" width="1408" height="278" font-family="monospace">
   <title>agentteams — Architecture</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
     </marker>
   </defs>
-  <path d="M176,63 L232,63 C268,63 268,117 304,117 L504,117 C540,117 540,69 576,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,63 L232,63 C268,63 268,31 304,31 L324,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,63 L232,63 C268,63 268,145 304,145 L504,145 C540,145 540,107 576,107 L712,107 C748,107 748,87 784,87 L952,87 L1024,87" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,63 L232,63 C268,63 268,79 304,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M176,63 L232,63 C268,63 268,201 304,201 L504,201 C540,201 540,163 576,163 L712,163 L784,163 L952,163 C988,163 988,135 1024,135 L1032,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M712,69 C748,69 748,59 784,59 L952,59 C988,59 988,87 1024,87" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M712,69 C748,69 748,125 784,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M504,79 C540,79 540,69 576,69" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M784,125 C748,125 748,135 712,135 L576,135 C540,135 540,173 504,173 L304,173 C268,173 268,63 232,63 L176,63" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-  <path d="M952,125 C988,125 988,87 1024,87" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M952,125 C988,125 988,135 1024,135 L1032,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="72" y="48" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="124" y="68" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
-  <rect x="576" y="54" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="644" y="74" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
-  <rect x="52" y="96" width="144" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="124" y="116" font-size="13" text-anchor="middle" fill="#000000">agentteams.data</text>
-  <rect x="324" y="16" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="404" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
-  <rect x="16" y="144" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="124" y="164" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
-  <rect x="1024" y="72" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="1120" y="92" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
-  <rect x="304" y="64" width="200" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="404" y="84" font-size="13" text-anchor="middle" fill="#000000">agentteams.mcp_servers</text>
-  <rect x="784" y="110" width="168" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="868" y="130" font-size="13" text-anchor="middle" fill="#000000">agentteams.redteam</text>
-  <rect x="1032" y="120" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="1120" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.research</text>
+  <path d="M408,139 C444,139 444,97 480,97 L680,97 C716,97 716,83 752,83" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M408,139 C444,139 444,135 480,135 L500,135" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M408,139 C444,139 444,173 480,173 L680,173 C716,173 716,121 752,121 L888,121 C924,121 924,101 960,101 L1128,101 C1164,101 1164,115 1200,115" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M408,139 C444,139 444,59 480,59" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M408,139 C444,139 444,229 480,229 L680,229 C716,229 716,177 752,177 L888,177 L960,177 L1128,177 C1164,177 1164,163 1200,163 L1208,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M888,83 C924,83 924,73 960,73 L1128,73 C1164,73 1164,115 1200,115" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M888,83 C924,83 924,139 960,139" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M680,59 C716,59 716,83 752,83" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M960,139 C924,139 924,149 888,149 L752,149 C716,149 716,201 680,201 L480,201 C444,201 444,139 408,139" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <path d="M1128,139 C1164,139 1164,115 1200,115" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M1128,139 C1164,139 1164,163 1200,163 L1208,163" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M212,91 L232,91 C268,91 268,139 304,139" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M212,91 L232,91 C268,91 268,101 304,101 L408,101 C444,101 444,21 480,21 L680,21 C716,21 716,83 752,83" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M212,91 L232,91 C268,91 268,177 304,177 L408,177 C444,177 444,257 480,257 L680,257 C716,257 716,205 752,205 L888,205 L960,205 L1128,205 C1164,205 1164,115 1200,115" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="304" y="124" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="356" y="144" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
+  <rect x="752" y="68" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="820" y="88" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
+  <rect x="52" y="124" width="144" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="124" y="144" font-size="13" text-anchor="middle" fill="#000000">agentteams.data</text>
+  <rect x="500" y="120" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="580" y="140" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
+  <rect x="16" y="172" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="124" y="192" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
+  <rect x="1200" y="100" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="1296" y="120" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
+  <rect x="480" y="44" width="200" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="580" y="64" font-size="13" text-anchor="middle" fill="#000000">agentteams.mcp_servers</text>
+  <rect x="960" y="124" width="168" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="1044" y="144" font-size="13" text-anchor="middle" fill="#000000">agentteams.redteam</text>
+  <rect x="1208" y="148" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="1296" y="168" font-size="13" text-anchor="middle" fill="#000000">agentteams.research</text>
+  <rect x="36" y="76" width="176" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="124" y="96" font-size="13" text-anchor="middle" fill="#000000">agentteams.vulnscan</text>
 </svg>
