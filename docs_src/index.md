@@ -86,13 +86,13 @@ Grok Build are supported in beta. Python 3.11 or later is required.
 
     The security model: clearance, waivers, content safety, OS confinement and red-team testing.
 
--   **[Help build it](contributing.md)**
+-   **[Help build it](contribute/index.md)**
 
-    How the project is developed, tested and released, and how to report problems.
+    Report problems, suggest improvements, and see how invited contributions are developed and reviewed.
 
 </div>
 
 <span id="blog-series-agentteams-module-roles-and-workflows"></span>
 
 **Next:** [get started](getting-started.md), read the [blog series and manuscript](why/further-reading.md),
-or see [how you can help](contributing.md).
+or see [how you can help](contribute/index.md).

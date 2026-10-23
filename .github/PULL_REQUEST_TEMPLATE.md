@@ -4,7 +4,18 @@ Delete any section that doesn't apply to this PR. Most PRs need only the top sec
 
 ## Summary
 
-<!-- What changed and why. -->
+<!-- What changed and why. Link the issue on which this pull request was invited: Closes #123 -->
+
+<!--
+First pull request? The checklist this is reviewed against:
+https://jlcatonjr.github.io/agentteams/contribute/what-your-pr-needs/
+- One change, linked to its issue.
+- `pytest tests/` passes (or say which failures you could not resolve).
+- New behavior has a test; no new runtime dependency.
+- CHANGELOG entry under [Unreleased] if users are affected.
+- Public API/CLI changed? Update docs_src/api-reference/ or docs_src/cli-reference.md and regenerate agentteams.1.
+- Docs changed? `mkdocs build --strict` and `python scripts/check_docs_site.py pages _site` pass.
+-->
 
 ## Test plan
 

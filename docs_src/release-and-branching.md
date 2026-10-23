@@ -1,5 +1,8 @@
 # Working with agentteams: branches, releases and contributions
 
+New here? This page explains which branch changes go to and which tag to install. To start contributing,
+see [Contribute to agentteams](contribute/index.md) first.
+
 **For:** collaborators: Kevin Vallier (`@selfreferencing`), John Schuler (`@jsschuler`) and anyone else contributing.
 The binding rules are in the shared release policy of the four repositories, which this page summarizes for agentteams. Signing and verification details are in `SECURITY.md`. Each downstream repository restates the policy in its own `docs/release-policy.md`; this guide explains how to work within them. agentteams, researchteam, mathAgents
 and baseAgent all follow the same model, so what you learn here applies to all four.

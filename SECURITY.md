@@ -15,7 +15,9 @@ six months and then move to unsupported.
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Email: **maintainer@example.org** with subject prefix `[agentteams-security]`.
+Report it privately through GitHub: open the repository's **Security** tab and choose **Report a
+vulnerability** (<https://github.com/jlcatonjr/agentteams/security/advisories/new>). Only the
+maintainers can see the report.
 
 Please include:
 - A description of the vulnerability.

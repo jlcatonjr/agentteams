@@ -42,7 +42,7 @@ theme:
     - navigation.path
     - navigation.prune
     - navigation.footer
-    - content.action.edit
+    - content.action.view
     - search.suggest
     - search.highlight
     - content.code.copy
@@ -331,7 +331,14 @@ nav:
       - Known limitations in 1.0: known-limitations.md
       - Changelog: changelog.md
   - Contribute:
-      - Pull request process and API policy: contributing.md
+      - Contribute to agentteams: contribute/index.md
+      - Your first pull request: contribute/first-pull-request.md
+      - What your pull request needs: contribute/what-your-pr-needs.md
+      - Project tour: contribute/project-tour.md
+      - Tests and CI: contribute/tests-and-ci.md
+      - Working on the docs site: contribute/docs-site.md
+      - Code of conduct: contribute/code-of-conduct.md
+      - Public API and template policy: contributing.md
       - Template authoring: template-authoring.md
       - Releases and branches: release-and-branching.md
       - "Design notes: structural update plan": structural-update-plan.md
