@@ -36,8 +36,8 @@ SKIP_DIRS: frozenset[str] = frozenset({
     "node_modules", ".git", ".hg", ".svn", "__pycache__", ".tox", ".nox", ".mypy_cache",
     ".pytest_cache", "site-packages", "dist-packages", "bower_components", "vendor",
     ".venv", "venv", "env", ".direnv", "dist", "build", ".next", ".nuxt", ".cache",
-    # Scratch space: a repository's tmp/ holds throwaway clones of other repositories (first VK scan: tmp/scratch
-    # copies of three sibling repos). Scanning them reports the same findings twice and invites duplicate fixes.
+    # Scratch space: a repository's "tmp" folder often holds throwaway clones of sibling repositories; scanning
+    # them reports the same findings twice and invites duplicate fixes.
     "tmp",
 })
 
