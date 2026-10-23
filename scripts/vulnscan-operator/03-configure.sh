@@ -6,8 +6,8 @@
 #   Step 4  render a goose team with the vulnerability_remediation capability in ~/ops-team
 #   Step 5  create your Ed25519 operator key (KEY_ID, default op1) and install the public key for vulnscan
 #   Step 6  write the `agent` block: OpenRouter, GLM 5.3, $2 budget, enabled: false
-#           and create the OpenRouter key file from the key your goose backend uses (goose-backend.sh, then
-#           goose's keychain entry), or a key you paste (hidden input); the key is never echoed or logged
+#           and create the OpenRouter key file from the agentteams checkout's .env (its OPENROUTER_API_KEY line;
+#           else goose-backend.sh, goose's keychain entry, or a hidden-input paste); never echoed or logged
 #
 # Every step is skipped when its result already exists. Nothing here signs anything or starts an agent.
 # Usage:   KEY_ID=op1 bash scripts/vulnscan-operator/03-configure.sh
@@ -58,15 +58,25 @@ else
   # keychain (service "goose", account "secrets"). macOS may ask you to allow access. The key is never
   # printed, passed as a command argument, or written anywhere but the mode-600 key file.
   ORKEY=""
-  # 1) the key your goose OpenRouter backend uses: ~/.config/goose/goose-backend.sh's own resolver
+  # 1) the agentteams checkout's own .env (gitignored): only its OPENROUTER_API_KEY line is read; the
+  #    file is never sourced, so nothing else in it reaches this script. From a worktree, the main
+  #    checkout's .env is used. Override with AGENTTEAMS_ENV_FILE.
+  MAIN="$(cd "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
+  ENVF="${AGENTTEAMS_ENV_FILE:-$MAIN/.env}"
+  if [ -f "$ENVF" ]; then
+    echo "reading OPENROUTER_API_KEY from $ENVF (that line only)"
+    ORKEY="$(grep -m1 -E '^[[:space:]]*(export[[:space:]]+)?OPENROUTER_API_KEY=' "$ENVF" \
+      | sed -E "s/^[[:space:]]*(export[[:space:]]+)?OPENROUTER_API_KEY=//; s/\r$//; s/^\"(.*)\"\$/\1/; s/^'(.*)'\$/\1/" || true)"
+  fi
+  # 2) the key your goose OpenRouter backend uses: ~/.config/goose/goose-backend.sh's own resolver
   #    (GOOSE_OPENROUTER_ENV_FILE, then an inherited OPENROUTER_API_KEY), run in a subshell so nothing
   #    it defines or exports leaks into this script.
   GB="${GOOSE_BACKEND_SH:-$HOME/.config/goose/goose-backend.sh}"
-  if [ -f "$GB" ]; then
+  if [ -z "$ORKEY" ] && [ -f "$GB" ]; then
     echo "reading OPENROUTER_API_KEY the way $GB resolves it"
     ORKEY="$(bash -c 'source "$1" >/dev/null 2>&1; declare -F _goose_resolve_key >/dev/null && _goose_resolve_key' _ "$GB" 2>/dev/null || true)"
   fi
-  # 2) goose's keychain entry
+  # 3) goose's keychain entry
   if [ -z "$ORKEY" ] && [ "${GOOSE_KEY:-1}" = 1 ] && command -v security >/dev/null; then
     echo "reading OPENROUTER_API_KEY from goose's keychain entry (allow access if macOS asks)"
     ORKEY="$(security find-generic-password -s goose -a secrets -w 2>/dev/null | "$PY" -c '
