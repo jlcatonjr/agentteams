@@ -58,8 +58,8 @@ def register(sub: Any) -> None:
     sp.add_argument("action", choices=("sign", "list", "revoke"))
     sp.add_argument("--ops-repo", default="")
     sp.add_argument("--remote-url", default="", help="default: the ops repo's remote.origin.url")
-    sp.add_argument("--node-id", default="", help="gh repo view <owner/repo> --json id")
-    sp.add_argument("--owner-id", type=int, default=0, help="gh api users/<owner> --jq .id")
+    sp.add_argument("--node-id", default=None, help="gh repo view <owner/repo> --json id")
+    sp.add_argument("--owner-id", default=None, help="gh api users/<owner> --jq .id (checked in cmd_publish_grant)")
     sp.add_argument("--governance-dir", default="")
     sp.add_argument("--days", type=int, default=30)
     sp.add_argument("--max-uses", type=int, default=60)
@@ -289,6 +289,30 @@ def _origin_url(repo: str) -> str:
         return ""
 
 
+def _grant_ids(node_id: str | None, owner_id: str | None) -> tuple[str, str, int]:
+    """Check ``--node-id`` / ``--owner-id`` as typed, before anything else (item 19).
+
+    Both usually come from ``$(gh ...)`` substitutions, which expand to "" when the lookup fails.
+
+    Args:
+        node_id: ``--node-id`` (None when not given).
+        owner_id: ``--owner-id`` (None when not given).
+
+    Returns:
+        ``(problem, node_id, owner_id)``; ``problem`` is "" when both are usable as typed.
+    """
+    node, owner = node_id or "", (owner_id or "").strip()
+    node_what = "the ops repository's node id (gh repo view <owner/repo> --json id)"
+    for flag, value, given, what in (("--node-id", node, node_id is not None, node_what),
+                                     ("--owner-id", owner, owner_id is not None, "your numeric GitHub user id")):
+        if not value.strip():
+            state = "is empty" if given else "is required"
+            return f"{flag} {state} — run the gh lookup first; it must be {what}", "", 0
+    if not owner.isascii() or not owner.isdigit():
+        return f"--owner-id must be your numeric GitHub user id (got {owner_id!r})", "", 0
+    return "", node, int(owner)
+
+
 def cmd_publish_grant(args: argparse.Namespace) -> int:
     """Sign, list or revoke the publish grant.
 
@@ -309,9 +333,13 @@ def cmd_publish_grant(args: argparse.Namespace) -> int:
         ok = publish.revoke(args.grant_id)
         print("revoked" if ok else "no such publish grant")
         return 0 if ok else 1
+    why, node_id, owner_id = _grant_ids(args.node_id, args.owner_id)
+    if why:
+        print(f"refused: {why}", file=sys.stderr)
+        return 2
     try:
         rec = publish.build(ops_repo=args.ops_repo, remote_url=args.remote_url or _origin_url(args.ops_repo),
-                            node_id=args.node_id, owner_id=args.owner_id, governance_dir=args.governance_dir,
+                            node_id=node_id, owner_id=owner_id, governance_dir=args.governance_dir,
                             days=args.days, max_uses=args.max_uses, key_id=args.key_id)
     except publish.PublishError as exc:
         print(f"refused: {exc}", file=sys.stderr)

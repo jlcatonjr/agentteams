@@ -24,11 +24,11 @@
 <text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;dict&gt;&lt;key&gt;Hour&lt;/key&gt;&lt;integer&gt;7&lt;/integer&gt;&lt;key&gt;Minute&lt;/key&gt;&lt;integer&gt;30&lt;/integer&gt;&lt;/dict&gt;</text>
 <text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;key&gt;EnvironmentVariables&lt;/key&gt;</text>
 <text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  &lt;dict&gt;</text>
-<text x="14" y="375" fill="#7f8594" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[… 23 more lines not shown]</text>
+<text x="14" y="375" fill="#7f8594" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[… 21 more lines not shown]</text>
 <text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">&lt;/dict&gt;</text>
 <text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">&lt;/plist&gt;</text>
 <text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
-<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">WOULD RUN launchctl bootout gui/501/io.agentteams.vulnscan</text>
-<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">WOULD RUN launchctl bootstrap gui/501 ~/Library/LaunchAgents/io.agentteams.vulnscan.plist</text>
+<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">WOULD RUN launchctl bootout gui/&lt;uid&gt;/io.agentteams.vulnscan</text>
+<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">WOULD RUN launchctl bootstrap gui/&lt;uid&gt; ~/Library/LaunchAgents/io.agentteams.vulnscan.plist</text>
 <text x="14" y="477" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">dry run — re-run with --apply</text>
 </svg>

@@ -287,16 +287,20 @@ def run_debrief(cfg: dict[str, Any], run_dir: Path) -> int:
 
     Returns:
         The container's exit code; :data:`EXIT_TIMED_OUT` at the time cap; :data:`EXIT_LOCKED`
-        when the run lock is held; :data:`EXIT_REFUSED` when a precondition fails.
+        when the run lock is held; :data:`EXIT_REFUSED` when a precondition fails or a debrief limit
+        (``agent.debrief_budget_usd``, ``debrief_max_minutes``, ``debrief_max_tokens``) is invalid.
 
     Raises:
-        ValueError: The debrief limits are not positive numbers.
         RuntimeError: A ``docker`` command needed to start the gateway failed (cleanup still runs).
         SystemExit: SIGTERM arrived during the debrief (status :data:`agent_run.SIGTERM_EXIT`), after
             the container and the gateway were removed and the outcome recorded (M4).
     """
     a = agent_run.agent_cfg(cfg)
-    budget, minutes = debrief_limits(a)
+    try:   # all three limits before anything starts: a bad one is a refusal, not a traceback
+        budget, minutes = debrief_limits(a)
+        debrief_max_tokens(a)
+    except ValueError as exc:
+        return _refuse(EXIT_REFUSED, str(exc))
     why = _preflight(cfg, a, run_dir)
     if why:
         return _refuse(EXIT_REFUSED, why)

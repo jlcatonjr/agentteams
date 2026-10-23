@@ -182,6 +182,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Gateway: `spend.json` is written atomically; `--max-tokens-total` below 0 exits 2.
     `debrief_limits` refuses NaN, infinity, booleans and strings. A SIGTERM during `agent-chat`
     removes its containers.
+- **vulnscan documentation remediation.** Code fixes found while checking the docs against the code,
+  and the docs that describe them.
+  - Signing on Homebrew Python (`cli/signer_location.py`): the base interpreter (`sys.executable`,
+    and `sys.prefix` outside a venv) may live in a git work tree when git ignores that path
+    (Homebrew's `Cellar/`). The agentteams package and a venv's `sys.prefix` are still judged
+    strictly, so a `pip install` into Homebrew's Python without a venv is still refused. The
+    recommended install is `pipx install`, which works on Homebrew's Python.
+  - `stage-fix` checks the repository before any fetch: `<repo>: git refuses to read this
+    repository (<git stderr>) — fix it by hand` (ledgered `refused`, from `executor._repo_root`) and
+    `<repo>: the repository's git config defines a filter driver, which git would run — fix it by
+    hand` (ledgered `failed`). Before, a repository git refused to open was reported as not the top
+    of a git repository, and the filter-driver check ran after the fetch.
+  - `agent-chat` with an invalid debrief limit exits 2 with `debrief refused:
+    agent.debrief_budget_usd must be …` (or the key at fault) instead of a traceback
+    (`debrief.run_debrief`).
+  - Every `agent.*` value is checked when the config loads (`agent_run.validate_agent`, from
+    `daily._config_problem`), not only `agent.enabled`; a bad one exits 2 with `config <path> is
+    unusable: …`. `team_dir`/`key_file`/`image` are strings (empty allowed);
+    `model`/`framework`/`recipe` non-empty strings; `upstream` an http(s) URL with a host; `command` a
+    non-empty list of strings; the numeric limits follow `run_limits`, `debrief_limits` and
+    `debrief_max_tokens`; `allow_unmetered` is a bool.
+  - Team generation names a failed security feed: `Warning: security intelligence: <feed> (<host>):
+    truncated or malformed HTTP response (...)`, `response is not valid JSON, possibly truncated
+    (...)` or `response is not a JSON object (got list)` (`security_refs.py`). A stale KEV snapshot
+    still blocks (`[SEC-GATE/INTEL-FRESHNESS] blocked`).
+  - `provision-operator-signing-key.sh` prints per-command usage
+    (`AGENTTEAMS_DECISION_ED25519_KEYFILE=<path> <command>`) and "Do NOT export
+    AGENTTEAMS_DECISION_ED25519_KEYFILE"; walkthrough Step 5 matches it.
+  - `publish-grant sign` refuses empty or missing ids before anything else, exit 2
+    (`operator_cli._grant_ids`): `refused: --owner-id is empty — run the gh lookup first; it must be
+    your numeric GitHub user id`, the same for `--node-id` (the ops repository's node id),
+    `is required` when a flag is omitted, and `refused: --owner-id must be your numeric GitHub user
+    id (got '…')`.
+  - Without Docker, `agent-selftest` exits 1 with `agent-selftest: docker is not reachable or the
+    agent image <tag> is not built — start Docker (or run agent-image build) first` and
+    `checks.docker_reachable: false`; `agent-image build` checks Docker before `pip wheel` (`agent
+    image build failed: docker is not reachable — start Docker (or install it) first`); a docker
+    failure part-way through the self-test prints `agent-selftest failed: <error>` (exit 1)
+    (`agent_run.docker_unreachable`). Docker probes give up after 60 s (a hung client counts as not
+    reachable); `selftest_ok` reports the same reason followed by `, then re-run agent-selftest`.
+  - **Behaviour change:** signing refuses when a project `.claude/settings.json` exists but cannot be
+    read or parsed, or its `allowWrite` is not a list (`<project>/.claude/settings.json cannot be read
+    or parsed, so the agent-writable roots it grants are unknown`); it used to count as "no extra
+    write roots". The Homebrew git-ignore lookup uses only the work tree's own ignore rules
+    (inherited `GIT_*` variables and global/system git config are dropped) (`signer_location`).
+  - Security-feed warnings are cleaned of control characters and terminal escapes and capped at 400
+    characters; the static OWASP / LLM-reference / control-evidence tables moved to
+    `agentteams/security_refs_data.py` (re-exported by `security_refs`).
+  - Docs corrected: a `team_dir` at, inside or above `~/.config/agentteams/keys` is always refused
+    (a protected path); a signing key kept elsewhere is checked only when
+    `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set (`agent_run.team_dir_problem`).
+  - **Behaviour change:** `schema_version` in `scan --format json`, `summary.json` and
+    `repos-*.json` is now the integer `1`, not the string `"1"` (`REPORT_SCHEMA_VERSION`). It
+    increases on an incompatible change; consumers should check it.
+  - Docs only: a "JSON output" section in the API reference (with `schema_version`); Python
+    reference sections for `engine`, `report`, `osv`, `fix`, `ledger`, `schedule` and the gateway
+    flags; prerequisites with pass conditions; goose sha256 and base-image digest instructions;
+    `daily` exit codes; troubleshooting rows for each message above.
+  - `scripts/gen_vulnscan_screenshots.py` captures `grant sign` confirmed by its review digest.
 
 ### Security
 

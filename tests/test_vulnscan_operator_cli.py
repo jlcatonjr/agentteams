@@ -167,3 +167,19 @@ def test_halts_through_main_with_a_real_halt_row(env: dict, capsys: pytest.Captu
     spec = json.loads(out[out.index("{"):out.index("}") + 1])
     assert spec["action_reviewed"] == "vulnscan-remediation:web1" and spec["verdict"] == "HALT-RETRACTED"
     assert f"--output {env['gov'].resolve()}" in out
+
+
+# ---------------------------------------------------------------- item 19: empty ids from failed gh lookups
+
+@pytest.mark.parametrize(("flag", "value", "want"), [
+    ("--owner-id", "", "--owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id"),
+    ("--owner-id", "alice", "--owner-id must be your numeric GitHub user id (got 'alice')"),
+    ("--node-id", "", "--node-id is empty — run the gh lookup first; it must be the ops repository's node id"),
+])
+def test_publish_grant_sign_with_an_empty_id_says_why(env: dict, capsys: pytest.CaptureFixture, flag: str,
+                                                      value: str, want: str) -> None:
+    other = {"--owner-id": ["--node-id", "R_kgDOAAAAAA"], "--node-id": ["--owner-id", "12345"]}[flag]
+    argv = ["publish-grant", "sign", "--ops-repo", str(env["tmp"]), flag, value, *other, "--key-id", "op"]
+    assert cli.main(argv) == 2
+    err = capsys.readouterr().err
+    assert want in err and "invalid int value" not in err

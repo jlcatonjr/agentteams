@@ -329,7 +329,11 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             return 0
         if args.cmd == "agent-selftest":
-            res = agent_run.selftest(cfg)
+            try:
+                res = agent_run.selftest(cfg)
+            except (RuntimeError, OSError, subprocess.SubprocessError) as exc:   # docker failed mid-test
+                print(f"agent-selftest failed: {exc}", file=sys.stderr)
+                return 1
             if res.get("error"):
                 print(f"agent-selftest: {res['error']}", file=sys.stderr)
             print(json.dumps(res, indent=2))

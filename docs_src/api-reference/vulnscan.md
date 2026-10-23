@@ -12,7 +12,7 @@ This page is the reference. To set it up step by step, follow the
 **Contents:** [Architecture](#architecture) ·
 [What leaves your machine](#what-leaves-your-machine) · [Files](#files-and-locations) ·
 [Configuration](#configuration-vulnscanjson) · [Commands](#command-reference) ·
-[Exit codes](#exit-codes) · [MCP tools](#the-agents-interface-mcp-tools) · [Grants](#grants) ·
+[Exit codes](#exit-codes) · [JSON output](#json-output) · [MCP tools](#the-agents-interface-mcp-tools) · [Grants](#grants) ·
 [Escalations](#escalations) · [Ledger](#ledger-rows) · [Notifications](#notifications) ·
 [Python API](#python-api) · [Known gaps](#limits-and-known-gaps)
 
@@ -30,7 +30,7 @@ and only within what you signed.
 | Deterministic scan | `engine`, `osv`, `runtimes`, `daily` | your account | nothing secret | read lockfiles, query OSV.dev and release feeds, audit servers over ssh (read-only) |
 | Agent team (goose orchestrator + `vuln-remediation`) | your generated team | Docker container on an internal-only network | a dummy model key | read today's scan; write requests into the spool |
 | `vulnscan` MCP server | `mcp` | inside the agent container | nothing | the agents' tools: read the scan, `request`, `escalate`, `submit_report` |
-| Egress gateway | `gateway` | sidecar container | the model API key (read-only mount) | relay one route and one model; enforce the spend cap (and, for a debrief, a token cap) |
+| Egress gateway | `gateway` | sidecar container | the model API key (read-only mount) | relay one route and one model; enforce the spend cap and a token cap on every run and debrief (`--max-tokens-total`, from `agent.max_tokens_total` or `agent.debrief_max_tokens`) |
 | Executor | `executor` | your account | git, `gh` and ssh credentials; the signed grants | perform a request only under a grant, after the HALT and escalation checks |
 | Ledger | `ledger` | your account | the MAC key, never mounted into a container | record every decision; the review trusts nothing else |
 | Operator CLI | `operator_cli`, `review`, `grant`, `publish` | your terminal | your Ed25519 signing key (read only while signing) | review, resolve, leave notes, sign grants |
@@ -44,9 +44,9 @@ and only within what you signed.
   operation, target and remaining use count; no `@security` HALT is open on `vulnscan-remediation`
   in the decision log named **inside the grant**; and no open escalation blocks the target.
 - The executor computes every change itself. `stage-fix` may only raise dependency pins and change
-  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base). Before any checkout it
-  refuses a repository whose own git config defines a filter driver, or that git refuses to open
-  (`fix.git_config_problem`). `open-pr` pushes a **new** `vulnscan/*` branch to `origin` and opens the pull request
+  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base). Before any fetch it
+  refuses a repository that git refuses to open (ledgered `refused`), or whose own git config
+  defines a filter driver (ledgered `failed`) (`fix.git_config_problem`). `open-pr` pushes a **new** `vulnscan/*` branch to `origin` and opens the pull request
   on that same repository (`--repo HOST/OWNER/REPO` from `origin`'s URL; an `origin` not of that form
   fails before anything is pushed), never merging and never force-pushing. It is idempotent
   ([`open_pr`](#open_prrepo-rationale)).
@@ -68,10 +68,13 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    newest readable earlier `summary.json`; an unreadable one is skipped with a note in `summary.md`.
    A write that fails (disk full) makes the run exit 3 (4 on compromise indicators), and `run-done`
    is still sent.
-3. **Only when `agent.enabled`:**
-   1. **Agent run** (`agent_run.run_agent`): refuse (`not-run`), checking in this order, unless
-      `team_dir` and `key_file` are set, docker is installed, a passing self-test exists for this
-      image, `team_dir` passes its checks, and the run limits are valid; take the run lock; set aside requests left over from an
+3. **Only when `agent.enabled`**, and only when step 2 wrote the summary and the heartbeat (a failed
+   write skips the agent phase):
+   1. **Agent run** (`agent_run.run_agent`): take the run lock (when another run or a debrief holds
+      it: `not-run`, and nothing in the run directory is written); then refuse (`not-run`) on the
+      first failing check, in this order: `team_dir` and `key_file` are set, docker is installed, a
+      passing self-test exists for this image and these container flags, `team_dir` passes its
+      checks, the run limits are valid. Then set aside requests left over from an
       earlier run (`executor.quarantine_pending`); fold your notes into the task (`notes-folded`
       row); start the gateway, then the agent container. Every 15 s the executor serves the agents'
       requests (`executor.serve_requests`): at most 200 per pass, escalations first, then the
@@ -132,7 +135,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Daily run lock | `<state>/daily.lock` | held for a whole daily run; a second run exits 3 |
 | Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json`, `fixplan-*.md`, `agent/`, `agent-report/`, `gateway/` |
 | Request spool | `<state>/spool/requests/`, `results/`, `processed/` | the only path the agents write besides their sessions |
-| Staged fixes | `<state>/worktrees/<repo>-<8 hex>-<timestamp>/` | executor-owned worktrees; removed once `open-pr` has a pull request (the branch is kept) |
+| Staged fixes | `<state>/worktrees/<repo>-<8 hex>-<YYYYmmddHHMMSS>-<6 hex>/` (repository name, a hash of its path, the UTC time, a random suffix) | executor-owned worktrees; removed once `open-pr` has a pull request (the branch is kept) |
 | Run lock | `<state>/agent.lock` | held for a whole agent run or debrief |
 | Self-test record | `<state>/agent-selftest.json` | tied to the image id |
 
@@ -144,6 +147,21 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 checks each key's type and range. A file that is not a JSON object, or a key with a wrong value, is
 refused with a message naming the file and the key (`config ... is unusable: ...: fail_on must be
 one of ...`), and every command that reads the config exits 2.
+
+Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not only `agent.enabled`
+(a bool):
+
+- `team_dir`, `key_file`, `image`: strings, empty allowed (paths are checked against the filesystem
+  only before a mount, by `team_dir_problem`);
+- `model`, `framework`, `recipe`: non-empty strings;
+- `upstream`: an `http://` or `https://` URL with a host;
+- `command`: a non-empty list of strings;
+- as in `run_limits`: `budget_usd` a number > 0 and ≤ 1000, `max_minutes` > 0 and ≤ 1440 (no
+  booleans, strings, `null`, NaN or infinity); `max_tokens_total` an integer 1–100 000 000;
+  `max_unmetered_calls` an integer ≥ 1;
+- `debrief_budget_usd`, `debrief_max_minutes`: as in [`debrief_limits`](#debrief_limitsa);
+  `debrief_max_tokens`: as in [`debrief_max_tokens`](#debrief_max_tokensa);
+- `allow_unmetered`: a bool.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -168,7 +186,7 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 |---|---|---|
 | `enabled` | `false` | Run the agent team after the daily scan |
 | `framework` | `"goose"` | The only framework agent mode runs |
-| `team_dir` | `""` | Root of the generated goose team's project (it contains `.goose/recipes/`). Required by agent runs, `agent-selftest` and `agent-chat`. Must be an existing directory you own, not group/world-writable; not home, an ancestor of home, or at, inside or above `~/.config/agentteams`, the vulnscan config or state directory, or a credential directory; and must not contain `key_file` or the operator signing key |
+| `team_dir` | `""` | Root of the generated goose team's project (it contains `.goose/recipes/`). Required by agent runs, `agent-selftest` and `agent-chat`. Must be an existing directory you own, not group/world-writable; not home, an ancestor of home, or at, inside or above `~/.config/agentteams`, the vulnscan config or state directory, or a credential directory (so at, inside or above `~/.config/agentteams/keys` is always refused); and must not contain `key_file`, nor the operator signing key when `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set (a key kept elsewhere is checked only then) |
 | `recipe` | `".goose/recipes/orchestrator.yaml"` | Recipe the container runs, relative to `team_dir` |
 | `model` | `"z-ai/glm-5.3"` | The one model the gateway allows (an OpenRouter model id) |
 | `upstream` | `"http://host.docker.internal:8791"` | Where the gateway sends requests. Without a local route proxy, use `"https://openrouter.ai"` |
@@ -211,7 +229,7 @@ All commands are `python -m agentteams.vulnscan <command>`. Every command except
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
 | `resolve ID --evidence TEXT [--key-id ID]` | Resolve an escalation ([Escalations](#escalations)) |
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
-| `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports |
+| `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
 | `publish [--run DATE]` | Publish a run's files now |
 | `agent-chat [--run DATE]` | Resume a past run's goose session interactively |
 
@@ -233,29 +251,64 @@ failed `systemctl disable` only when the units were installed.
 
 | Command | 0 | 1 | 2 | 3 | Other |
 |---|---|---|---|---|---|
-| `scan`, `inventory`, `runtimes`, `daily` | clean | findings at or above `--fail-on` (`daily`: the config's `fail_on`) | usage or setup error: a missing `scan` path or `inventory` log; `daily`: no config | partially unscanned (`daily`: also another daily run holds the lock, or the summary or heartbeat could not be written) | 4: malicious package or compromise indicator |
+| `scan`, `inventory`, `runtimes`, `daily` | clean | findings at or above `--fail-on` (`daily`: the config's `fail_on`) | usage or setup error: a missing `scan` path or `inventory` log; `daily`: no config | partially unscanned (`daily`: also another daily run holds the lock, or the summary or heartbeat could not be written) | 4: malicious package or compromise indicator · `daily`: 143, SIGTERM during the agent phase (both containers removed) |
 | `fix` | nothing held back | something held back or refused | usage error, a missing path | a feed failed (partially unscanned) | 4: a malicious pin |
 | `schedule` | done or dry run | errors (a time out of range, a failed command) | the config is unusable | — | — |
 | `grant sign` | signed and installed | not signed (declined, preflight) | refused (bounds; does not verify) | — | — |
 | `grant revoke`, `publish-grant revoke` | revoked | no such grant | — | — | — |
 | `act` | done | refused | no config | failed | — |
 | `serve-requests` | served | — | run lock held, or no config | — | — |
-| `agent-image build` | built | build failed | no config | — | — |
-| `agent-selftest` | passed | failed | no config | — | — |
-| `agent-run` | completed | — | no scan, or no config | not run, error or timed out | — |
-| `halts` | nothing blocks | something blocks | — | — | — |
+| `agent-image build` | built | build failed (also: Docker not reachable, checked before `pip wheel`) | no config | — | — |
+| `agent-selftest` | passed | failed, refused (also: Docker not reachable or the image not built), or a `docker` command failed part-way (`agent-selftest failed: …`) | no config | — | — |
+| `agent-run` | completed | — | no scan, or no config | not run, error or timed out | 143: SIGTERM (both containers removed, `agent-error` recorded) |
+| `halts` | nothing blocks | something blocks, or the ledger fails verification | an unusable config | — | — |
 | `resolve` | resolved | not resolved (declined, not signed) | refused | — | — |
 | `say` | done | no such note | refused | — | — |
-| `publish-grant sign` | signed and installed | not signed | refused | — | — |
+| `publish-grant sign` | signed and installed | not signed | refused (also: `--node-id` / `--owner-id` empty, missing or not numeric) | — | — |
 | `publish` | published | no publish grant | no such run, or no config | failed or refused | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong
-value): every command that reads the config then exits 2 and prints the reason. `halts` exits 0
-without a config but 2 with an unusable one. Argument errors exit 2, including a `--since`
+value): every command that reads the config then exits 2 and prints the reason. Without a config
+`halts` still runs (HALTs are read from the grants' governance directories only, without the
+config's `governance_dir`) and exits 0 or 1 as above; with an unusable one it exits 2. Argument errors exit 2, including a `--since`
 (`review`) or `--run` (`publish`, `agent-chat`) that is not a `YYYY-MM-DD` date.
 
 `init`, `server-kit`, `review` and every `list` otherwise exit 0.
+
+### JSON output
+
+`scan`, `inventory` and `runtimes` with `--format json`, and each run's `summary.json` and
+`repos-*.json`, print `report.Report.to_dict()`: one object.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schema_version` | integer | `1` (`REPORT_SCHEMA_VERSION`; the string `"1"` before this release). It increases on an incompatible change: check it before reading the rest. `Report.from_dict` ignores unknown top-level keys |
+| `target` | string | the scanned path, host label, or `"daily"` for the daily aggregate |
+| `findings` | array of Finding objects | below |
+| `unscannable` | array of `{"path": string, "reason": string}` | manifests without exact versions |
+| `feed_errors` | array of strings | feeds or hosts that failed; non-empty means partially unscanned (exit 3) |
+| `checked` | integer | items checked (distinct package versions plus runtimes) |
+| `generated_at` | string | UTC ISO-8601 time, whole seconds |
+
+A Finding (`report.Finding`):
+
+| Field | Type | Meaning |
+|---|---|---|
+| `kind` | string | `package`, `runtime`, `host` or `ioc` |
+| `target` | string | repository (relative to the scan root) or host name |
+| `name` | string | package or runtime name; `host` / `compromise indicator` for host checks |
+| `version` | string | installed version (`""` when not applicable) |
+| `ecosystem` | string | OSV ecosystem (`PyPI`, `npm`, …); `""` for runtimes and host checks |
+| `scope` | string | `runtime` or `dev` |
+| `severity` | integer 0–4 | 0 unrated, 1 low, 2 moderate, 3 high, 4 critical (`osv.SEVERITY_NAME`). A package advisory without a severity label counts as 2; a malicious package or `ioc` is 4 |
+| `fix` | string | smallest version that fixes every advisory with a fix; `""` when none is known |
+| `unfixed` | integer | advisories with no fixed version |
+| `ids` | array of strings | advisory ids (GHSA, PYSEC, CVE, `MAL-*`, …) |
+| `locations` | array of strings | manifest paths or install locations |
+| `malicious` | boolean | an OSV `MAL-*` record matches (exit 4) |
+| `distro` | boolean | a Python package in an OS-managed location (ignored by `--fail-on`) |
+| `detail` | string | host-check or runtime message, or the malicious-package note |
 
 ---
 
@@ -349,8 +402,17 @@ Group- or world-*readable* is fine.
 Every signature goes through one flow (`grant.operator_sign`):
 
 1. **Preflight, key unread.** `AGENTTEAMS_DECISION_ED25519_KEYFILE` must name your private key
-   file; the signing code's integrity is checked; the install-location check refuses an
-   `agentteams` an agent could edit (inside a git work tree, on an agent-writable path).
+   file; the signing code's integrity is checked; the install-location check
+   (`signer_location.verify_install_location`) refuses an `agentteams` an agent could edit: the
+   package, a venv's `sys.prefix` or the interpreter inside the current directory, a git work tree
+   or an agent-writable `allowWrite` root. The base interpreter (`sys.executable`, and `sys.prefix`
+   outside a venv) counts as inside a work tree only when git does not ignore its path there, so
+   Homebrew's Python (in the git-ignored `Cellar/` of Homebrew's own work tree) and a `pipx` install
+   on it pass. Only the work tree's own ignore rules count: the lookup drops inherited `GIT_*`
+   variables and global/system git config (`core.excludesFile`). A project `.claude/settings.json`
+   that exists but cannot be read or parsed (or whose `allowWrite` is not a list) refuses signing:
+   the agent-writable roots it grants are unknown. A missing file or no sandbox block means none. The package and a venv's prefix are judged strictly: a `pip install` into Homebrew's
+   Python without a venv is still refused.
    `--allow-checkout-signing` overrides that check, which means signing with code an agent may have
    edited.
 2. **Display.** The banner and every signed field, then the review digest.
@@ -444,6 +506,134 @@ or kind word; otherwise nothing is sent.
 
 The CLI is the supported interface. These functions are what it calls; use them to script around
 vulnscan or to test an integration.
+
+### `agentteams.vulnscan.engine`
+
+#### `engine.scan_path(root, *, include_worktrees)`
+
+Scan every manifest under `root` (a repository or a folder of repositories). Returns a
+[`Report`](#json-output) whose targets are repositories relative to `root`. A feed failure lands
+in `feed_errors`; it never raises for one.
+
+#### `engine.analyze(deps, report, *, distro_check)`
+
+Look up `(target, Dep)` pairs in OSV and append findings to `report` in place. Feed failures go to
+`report.feed_errors`. `distro_check=True` marks Python packages in OS-managed locations `distro`.
+
+#### `engine.scan_inventory(text, target)`
+
+Analyse a server-kit audit log (`INV`, `RUNTIME`, `HOSTCHECK`, `IOC` lines; anything else is
+ignored). Returns a `Report` for host `target`.
+
+### `agentteams.vulnscan.report`
+
+#### `Report`
+
+Dataclass: `target`, `findings`, `unscannable` (`(path, reason)` tuples), `feed_errors`, `checked`,
+`generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code; `to_dict()` /
+`from_dict(data)` convert to and from the [JSON shape](#json-output); `markdown(new_keys)` renders
+`summary.md`; `merge(other)` folds another report in.
+
+#### `Finding`
+
+Dataclass with the fields listed under [JSON output](#json-output). `key()` is the identity used for
+NEW marks: `target|kind|ecosystem|name|version|ids or detail`.
+
+#### `report.new_finding_keys(current, previous)`
+
+The `Finding.key()` values present in `current` but not in `previous` (every key when `previous` is
+`None`).
+
+### `agentteams.vulnscan.osv`
+
+#### `osv.vulnerable_ids(items)`
+
+`{(ecosystem, name, version): [advisory ids]}` for the affected items only, through OSV
+`querybatch`. Raises `FeedError` (`agentteams.vulnscan._http`) on a malformed or incomplete reply
+or endless pagination: nothing is concluded about the items.
+
+#### `osv.details(vuln_id)`
+
+The full OSV record (cached per process). Raises `FeedError`.
+
+#### `osv.fix_for(record, ecosystem, name, version)`
+
+The `fixed` version of the affected range that contains `version`, or `None` when that range has no
+fix. `GIT` ranges are ignored.
+
+### `agentteams.vulnscan.fix`
+
+#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm)`
+
+Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
+`allow_major=False`, `cooldown_days=14`, `include_worktrees=False`, `allow_dirty=False`, `npm=True`.
+Returns a `FixResult`. Symlinked manifests are refused, never followed.
+
+#### `FixResult`
+
+Dataclass: `changes` (`PinChange` list), `npm` (`(directory, summary)` tuples), `composer`,
+`refused` (`(path, reason)` tuples), `feed_errors`, `applied`. `exit_code()`: 4 a malicious pin,
+3 a feed failed, 1 anything held back or refused, else 0. `markdown()` renders the fix plan.
+
+#### `PinChange`
+
+Dataclass for one requirements edit: `path`, `name`, `old`, `new`, `action` (`fix`, `major-held`,
+`no-clean-release`, `cooldown-held`, `hash-held`, `malicious`), `ids`, `note`.
+
+### `agentteams.vulnscan.ledger`
+
+#### `ledger.read(*, verify)`
+
+Every row in order. With `verify=True` (the default) checks each MAC, the chain and the high-water
+mark, and raises `ValueError` on any break, a missing ledger that once had rows, or an incomplete
+final row. Row kinds: those in [Ledger rows](#ledger-rows) (`begun`, `done`, `failed`, `refused`,
+`escalation`, `resolved`, `notes-folded`, `publish-begun`, `publish-done`, `publish-failed`, `ack`).
+
+#### `ledger.uses(grant_id, rows)`
+
+How many uses are charged to a grant: its `begun` rows. `rows` reuses rows already read.
+
+### `agentteams.vulnscan.schedule`
+
+#### `schedule.install(hour, minute, *, apply)`
+
+Install the daily job (launchd, else a systemd user timer, else cron). Returns a `Plan` (`files`,
+`commands`, `notes`, `errors`); without `apply=True` nothing is written or run. A bad time or a
+control character in a baked variable is a plan error, and nothing is written.
+
+#### `schedule.remove(*, apply)`
+
+Remove the daily job. Returns a `Plan`.
+
+#### `schedule.status()`
+
+Text: the mechanism, whether the job is installed, the config and state paths, and the heartbeat.
+
+#### `schedule.job_environment()`
+
+The variables baked into the job: those of `JOB_ENV_VARS` set now (`PATH` defaults to
+`/usr/bin:/bin`). Raises `ValueError` for a value holding a control character.
+
+### `agentteams.vulnscan.gateway`
+
+#### `gateway.main(argv)`
+
+The egress gateway, `python -m agentteams.vulnscan.gateway`. `agent_run.gateway_argv` sets every
+flag; you never run it by hand.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--listen HOST:PORT` | `0.0.0.0:8080` | where it listens |
+| `--model M` | required | the only model relayed |
+| `--key-file PATH` | required | file holding `OPENROUTER_API_KEY=...` or the bare key |
+| `--upstream URL` | `https://openrouter.ai` | http(s) URL requests go to |
+| `--budget-usd X` | `2.0` | spend cap; finite and ≥ 0 |
+| `--spend-file PATH` | none | where `spend.json` is written |
+| `--max-tokens-total N` | `0` | prompt + completion token cap; 0 means none (runs and debriefs always pass a positive cap) |
+| `--max-unmetered-calls N` | `20` | refuse after this many replies without usable usage or cost; ≥ 1 |
+| `--allow-unmetered` | off | never refuse for unmetered replies (they are still counted) |
+
+A bad flag value exits 2; so does a key file that cannot be read or holds no key.
 
 ### `agentteams.vulnscan.executor`
 
@@ -707,8 +897,12 @@ Fold the active notes into the task and ledger which ones went in.
 Run the isolation self-test container (with the gateway it needs) and record the result against
 the image id and `flags_sha256` (a hash of the container and gateway flags and the self-test
 itself). Refuses without `agent.key_file` or `agent.team_dir`, or with a `team_dir` that fails
-`team_dir_problem` (the same check a run makes); there is no fallback directory. Every check must be
-`true`:
+`team_dir_problem` (the same check a run makes); there is no fallback directory. It also refuses,
+before starting any container, when Docker is not reachable or the image is not built
+(`checks.docker_reachable: false`; the CLI prints
+`agent-selftest: docker is not reachable or the agent image <tag> is not built — start Docker (or run agent-image build) first`
+and exits 1). A `docker` failure part-way through raises; the CLI prints
+`agent-selftest failed: <error>` and exits 1. Every check must be `true`:
 
 | Check | Meaning |
 |---|---|
@@ -723,7 +917,29 @@ itself). Refuses without `agent.key_file` or `agent.team_dir`, or with a `team_d
 #### `selftest_ok(cfg)`
 
 `(ok, reason)`: whether a passing self-test exists for the current image and the current container
-flags (`flags_sha256`).
+flags (`flags_sha256`). When Docker cannot be used the reason is `docker is not reachable or the
+agent image <tag> is not built — start Docker (or run agent-image build) first, then re-run
+agent-selftest`.
+
+#### `docker_unreachable(tag)`
+
+Why Docker cannot be used, or `""`. With `tag=None` it checks only that the daemon answers
+(`agent-image build` calls it before `pip wheel`, and fails with
+`agent image build failed: docker is not reachable — start Docker (or install it) first`); with a
+tag, also that the image exists. Every probe gives up after 60 s: a hung docker client counts as
+not reachable (it never blocks for the 10-minute default, and never raises).
+
+#### `validate_agent(a)`
+
+Check every `agent.*` value's type and range ([the rules](#configuration-vulnscanjson)); raises
+`ValueError` naming `agent.<key>`. `daily.load_config` calls it, so a bad value is refused at load.
+
+#### `team_dir_problem(path, secrets)`
+
+Why `path` may not be mounted as the team directory, or `None`. Always refuses a path at, inside or
+above `~/.config/agentteams` (so its `keys/`), home or an ancestor of it, and the vulnscan config and
+state directories. `secrets` (`agent.key_file`) must lie outside it; the signing key named by
+`AGENTTEAMS_DECISION_ED25519_KEYFILE` is added only when that variable is set.
 
 ### `agentteams.vulnscan.debrief`
 
@@ -731,6 +947,10 @@ flags (`flags_sha256`).
 
 Resume a past run's goose session with the terminal attached, a read-only spool, and its own
 gateway with the debrief caps.
+
+All three debrief limits are checked before anything starts: a bad one returns 2 with
+`debrief refused: agent.debrief_budget_usd must be …` (or the key at fault). The config load
+normally refuses it first ([`validate_agent`](#validate_agenta)).
 
 A SIGTERM during the debrief removes both containers, records `terminated` in the debrief's
 `status.json` and exits 143.
@@ -761,7 +981,7 @@ Publish a run when a publish grant is active; `None` otherwise.
 
 The config with defaults filled in. Raises `FileNotFoundError` when there is none, and
 `ValueError` naming the file and the key when it is not a JSON object or a key has a wrong type or
-range.
+range, every `agent.*` key included ([`validate_agent`](#validate_agenta)).
 
 ### `agentteams.vulnscan.review`
 

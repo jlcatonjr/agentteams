@@ -48,6 +48,14 @@ def test_list_findings_sorted_with_total_and_truncation_flag(dirs: dict[str, Pat
     assert small["truncated"] is False and small["total"] == len(small["findings"]) == 151
 
 
+def test_list_findings_reads_a_summary_with_a_schema_version(dirs: dict[str, Path]) -> None:
+    """Item 23: the versioned summary.json is read as before."""
+    data = json.loads((dirs["run"] / "summary.json").read_text())
+    (dirs["run"] / "summary.json").write_text(json.dumps({"schema_version": 1, **data}))
+    out = _server(dirs).call("list_findings", {})
+    assert [r["name"] for r in out["findings"]] == ["PyJWT"] and out["total"] == 1
+
+
 def test_list_findings_tolerates_malformed_rows(dirs: dict[str, Path]) -> None:
     (dirs["run"] / "summary.json").write_text(json.dumps({"findings": [
         {"name": "a", "severity": "high"}, "not-a-row", {"name": "b"}, {"name": "c", "severity": 3}]}))

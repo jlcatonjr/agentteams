@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **295**
+- Modules mapped: **296**
 - Packages: **10**
-- Internal import edges: **895**
+- Internal import edges: **897**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 148 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
+| `agentteams` | 149 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research` |
 | `agentteams.cli` | 49 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam` |
 | `agentteams.data` | 6 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -291,7 +291,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.schedule_emit` | `agentteams.atomicio` | `agentteams.bridge` |
 | `agentteams.sealed_result` | — | `agentteams.proposal_runner` |
 | `agentteams.security_feed_render` | — | `agentteams.security_refs` |
-| `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch` |
+| `agentteams.security_refs` | `agentteams.cli.schema_cache`, `agentteams.cli.security_gate`, `agentteams.security_feed_render`, `agentteams.security_refs_data` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch` |
+| `agentteams.security_refs_data` | — | `agentteams.security_refs` |
 | `agentteams.session_scan` | `agentteams.plan_steps` | — |
 | `agentteams.shrink_allow` | `agentteams.fences` | `agentteams.cli.generate`, `agentteams.emit`, `agentteams.fences` |
 | `agentteams.signing_switch` | `agentteams.drift`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.app`, `agentteams.cli.artifacts`, `agentteams.cli.generate_helpers`, `agentteams.fleet`, `agentteams.projection_marker` |
@@ -315,9 +316,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan` | — | `agentteams.vulnscan.report` |
 | `agentteams.vulnscan.__main__` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule` | — |
 | `agentteams.vulnscan._http` | — | `agentteams.vulnscan.engine`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.runtimes` |
-| `agentteams.vulnscan.agent_run` | `agentteams.frameworks._write_roots`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.report_store` |
+| `agentteams.vulnscan.agent_run` | `agentteams.frameworks._write_roots`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.report_store` |
 | `agentteams.vulnscan.daily` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.review` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.operator_cli` |
-| `agentteams.vulnscan.debrief` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor` | `agentteams.vulnscan.operator_cli` |
+| `agentteams.vulnscan.debrief` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.executor` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.operator_cli` |
 | `agentteams.vulnscan.engine` | `agentteams.vulnscan._http`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.report`, `agentteams.vulnscan.runtimes` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor` |
 | `agentteams.vulnscan.escalations` | `agentteams.cli.signed_ledger`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.review` |
 | `agentteams.vulnscan.executor` | `agentteams`, `agentteams.cli.decision_log`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report_store` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish` |
@@ -3380,11 +3381,20 @@ digraph "agentteams architecture" {
       "imports_internal": [
         "agentteams.cli.schema_cache",
         "agentteams.cli.security_gate",
-        "agentteams.security_feed_render"
+        "agentteams.security_feed_render",
+        "agentteams.security_refs_data"
       ],
       "external": [
         "jsonschema"
       ],
+      "repo_local": []
+    },
+    "agentteams.security_refs_data": {
+      "package": "agentteams",
+      "path": "agentteams/security_refs_data.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
       "repo_local": []
     },
     "agentteams.session_scan": {
@@ -3630,6 +3640,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.frameworks._write_roots",
+        "agentteams.vulnscan.debrief",
         "agentteams.vulnscan.executor",
         "agentteams.vulnscan.ledger",
         "agentteams.vulnscan.notes",
@@ -7090,6 +7101,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.security_feed_render"
     },
     {
+      "source": "agentteams.security_refs",
+      "target": "agentteams.security_refs_data"
+    },
+    {
       "source": "agentteams.session_scan",
       "target": "agentteams.plan_steps"
     },
@@ -7248,6 +7263,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.vulnscan.agent_run",
       "target": "agentteams.frameworks._write_roots"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.debrief"
     },
     {
       "source": "agentteams.vulnscan.agent_run",

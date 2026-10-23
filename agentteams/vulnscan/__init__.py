@@ -30,4 +30,4 @@ Configuration and results live under the XDG config and state directories.
 
 from __future__ import annotations
 
-REPORT_SCHEMA_VERSION = "1"
+REPORT_SCHEMA_VERSION = 1   # integer; readers ignore unknown top-level keys

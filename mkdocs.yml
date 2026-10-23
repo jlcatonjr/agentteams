@@ -199,6 +199,7 @@ nav:
       - audit: api-reference/audit.md
       - remediate: api-reference/remediate.md
       - security-refs: api-reference/security-refs.md
+      - security-refs-data: api-reference/security-refs-data.md
       - framework-research: api-reference/framework-research.md
       - framework-conformance: api-reference/framework-conformance.md
       - framework-freshness: api-reference/framework-freshness.md

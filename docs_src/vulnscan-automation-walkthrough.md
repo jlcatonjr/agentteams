@@ -39,19 +39,25 @@ component table.
 | You need | Why | Check |
 |---|---|---|
 | Python 3.11+ and `agentteams` | runs everything | `python -m agentteams.vulnscan --help` |
-| An `agentteams` **source checkout** of the release you run | the agent image is built from it; the key helper script lives in it | `git -C <checkout> describe --tags` |
-| Network access to OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | the scan reads live advisories and release data | `curl -sI https://api.osv.dev` |
+| An `agentteams` **source checkout** of the release you run | the agent image is built from it; the key helper script lives in it | `git -C <checkout> describe --tags` prints exactly the release tag, e.g. `v1.0.1`; `v1.0.1-60-g…` means you are past the tag: check out the tag |
+| Network access to OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | the scan reads live advisories and release data; `agent-image build` runs `pip wheel` on the host, which fetches the build backend from PyPI | `curl -s -o /dev/null -w '%{http_code}\n' https://api.osv.dev/v1/vulns/GHSA-ffqj-6fqr-9h24` prints `200` |
+| Network access to www.cisa.gov, api.first.org and services.nvd.nist.gov | generating the team (Step 4) fetches CISA KEV, FIRST EPSS and NVD records (and queries OSV.dev); MITRE CVE is listed as a source but not fetched | `curl -s -o /dev/null -w '%{http_code}\n' https://api.first.org/data/v1/epss` prints `200` |
 | git | scans and fixes | `git --version` |
+| A fetchable `origin` with `origin/HEAD` set, in each repository you grant `stage-fix` | `stage-fix` fetches `origin` and bases the fix on `origin/HEAD` (without it, on `origin/main`) | `git -C <repo> symbolic-ref refs/remotes/origin/HEAD` prints a ref; if not, `git -C <repo> remote set-head origin --auto` |
 | npm, if any repository has a `package-lock.json` | `stage-fix` updates npm lockfiles with `npm audit fix --package-lock-only` (it contacts the npm registry) | `npm --version` |
 | GitHub CLI, signed in | `open-pr` pushes a branch and opens a pull request | `gh auth status` |
 | ssh access to your servers, non-interactive, as root or with passwordless `sudo` | server audits run with `BatchMode=yes` and `sudo -n` | `ssh -o BatchMode=yes <host> sudo -n true` |
 | Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway | `docker info` |
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
+| shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
 
-Install `agentteams` somewhere an agent cannot edit, such as `pipx install` from a release you
-verified. Signing refuses to run from an editable checkout or a virtual environment inside a git
-work tree (see [Step 8](#step-8-sign-a-narrow-first-grant)).
+Install `agentteams` somewhere an agent cannot edit: `pipx install` from a release you verified.
+This works on Homebrew's Python too. Signing refuses to run when the `agentteams` package or a
+virtual environment's prefix is inside a git work tree, such as an editable checkout or a venv kept
+in a project. The base interpreter may sit in a work tree when git ignores that path (Homebrew's
+`Cellar/`). A `pip install` into Homebrew's Python without a venv is still refused: the package
+then sits in Homebrew's own work tree (see [Step 8](#step-8-sign-a-narrow-first-grant)).
 
 The setup has three parts. Part A gives you a scheduled, deterministic scan with no agents; you can
 stop there. Part B adds the agent team. Part C is the routine once it runs.
@@ -124,6 +130,17 @@ one daily run works at a time: a second one, started while the first holds
 *Demo findings, written through the real report code. One advisory id is real
 (GHSA-ffqj-6fqr-9h24, PyJWT); `DEMO-0001` is not.*
 
+`daily` exits with:
+
+| Exit | Meaning |
+|---|---|
+| 0 | clean |
+| 1 | findings at or above the config's `fail_on` |
+| 2 | no config, or an unusable one |
+| 3 | partially unscanned (a feed or host failed, or the summary or heartbeat could not be written), or another daily run holds the lock |
+| 4 | compromise indicators or a malicious package |
+| 143 | SIGTERM during the agent phase (Part B) |
+
 Install the daily job. Without `--apply` it only shows what it would do:
 
 ```bash
@@ -142,8 +159,10 @@ the vulnscan and server-kit location overrides
 API key in your shell never lands in the plain-text plist, unit or crontab. Nor does it get your
 shell's `SSH_AUTH_SOCK`: a launchd agent uses the login session's ssh-agent; under systemd or cron,
 set a stable agent socket with `IdentityAgent` in `~/.ssh/config`.
-`python -m agentteams.vulnscan schedule status` confirms it. From now on, every command warns when
-the last daily run is older than 26 hours.
+`python -m agentteams.vulnscan schedule status` confirms it. From now on, every command except
+`daily` and `schedule` prints a warning (`daily.stale_warning`) when the last daily run is older than
+`stale_after_hours` (26), when its heartbeat is unreadable, or when it exited 3 (*"only partially
+scanned"*) or 4 (*"found MALICIOUS packages or compromise indicators"*).
 
 ---
 
@@ -151,12 +170,18 @@ the last daily run is older than 26 hours.
 
 ### Step 4: Generate a goose team with the remediation agent
 
-Pick a directory for your ops team, for example `~/ops-team`, and put a brief there whose
-`capabilities` include `vulnerability_remediation`:
+Pick a directory for your ops team, for example `~/ops-team`, and put a brief there, `brief.json`.
+`project_goal` (at least 10 characters) is the only required field; `capabilities` must include
+`vulnerability_remediation`:
 
 ```json
-{ "capabilities": ["vulnerability_remediation"] }
+{
+  "project_goal": "Remediate known vulnerabilities in my repositories and servers",
+  "capabilities": ["vulnerability_remediation"]
+}
 ```
+
+Unknown fields are refused (`agentteams/schemas/project-description.schema.json`).
 
 Then render a goose team from inside that directory:
 
@@ -173,6 +198,10 @@ The capability is opt-in; agentteams never infers it from the brief's prose. The
 *Demo team from `examples/software-project/brief.json` plus the capability. Offline, the
 security-intelligence freshness gate refuses to render (correctly), so the demo stubbed that one gate
 as the test suite does. Do not do this: a real run fetches live intelligence.*
+
+A feed that fails prints `Warning: security intelligence: <feed> (<host>): …` and generation goes
+on, unless the CISA KEV snapshot is then stale: generation stops with
+`[SEC-GATE/INTEL-FRESHNESS] blocked` ([Troubleshooting](#troubleshooting)).
 
 You need two paths later:
 
@@ -204,11 +233,15 @@ openssl pkey -in ~/.config/agentteams/keys/decision-signing-<key-id>.pem -pubout
 chmod 644 ~/.config/agentteams/verify-keys/<key-id>.pub.pem
 ```
 
-!!! danger "Name the private key per command, never in a profile"
+The script ends by printing the per-command form for `grant sign` and `agentteams --sign-decision`,
+and "Do NOT export AGENTTEAMS_DECISION_ED25519_KEYFILE".
+
+!!! danger "Name the private key per command; never export it"
     Signing reads the key file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE`. Set it on the signing
-    command itself, as the commands below do, so no later process in that shell (an agent
-    session, a goose or claude run) inherits it. Never put it in a shell profile, and never copy the
-    private key elsewhere.
+    command itself, as every signing command on this page does
+    (`AGENTTEAMS_DECISION_ED25519_KEYFILE=<path> <command>`), so no later process in that shell (an
+    agent session, a goose or claude run) inherits it. Never `export` it, never put it in a shell
+    profile, and never copy the private key elsewhere.
 
 ### Step 6: Configure agent mode
 
@@ -239,14 +272,35 @@ Add the `agent` block to `~/.config/agentteams/vulnscan.json`, with `enabled` of
   world-writable, and not your home directory, an ancestor of it, or anything at, inside or above
   `~/.config/agentteams`, `~/.local/state/agentteams` (vulnscan's state) or another credential
   directory. It must not contain `key_file` (keep the OpenRouter key file outside the team
-  directory, as above) or your signing key. It is mounted into the container, so the run, the
-  self-test and `agent-chat` refuse anything else.
+  directory, as above). A team directory at, inside or above `~/.config/agentteams/keys` (where
+  Step 5 put your signing key) is always refused. A signing key kept anywhere else is checked only
+  when `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set for the command, and Step 5 sets it only on
+  signing commands, so keep the key where Step 5 put it. `team_dir` is mounted into the container,
+  so the run, the self-test and `agent-chat` refuse anything else.
+- Every `agent.*` value is checked whenever the config loads; a wrong one makes any command that
+  reads the config exit 2 with `config <path> is unusable: …` naming the key. The rules are in the
+  [configuration reference](api-reference/vulnscan.md#configuration-vulnscanjson).
 
 ### Step 7: Build the agent image and prove its isolation
 
-Take the goose version and the sha256 of its `goose-x86_64-unknown-linux-gnu.tar.bz2` (or the
-`aarch64` file on Apple silicon) from the [goose releases page](https://github.com/block/goose/releases).
-Pin the base image by digest.
+Pick a goose version from the [goose releases page](https://github.com/block/goose/releases).
+Recipe validation and goose's flags were verified live with **goose 1.37.0**. The image downloads
+`goose-<arch>.tar.bz2` from `releases/download/v<X.Y.Z>/`, where `<arch>` is
+`x86_64-unknown-linux-gnu` on an Intel/AMD Docker host and `aarch64-unknown-linux-gnu` on Apple
+silicon or another arm64 host. Download the same file yourself and hash it:
+
+```bash
+curl -fsSLO https://github.com/block/goose/releases/download/v<X.Y.Z>/goose-aarch64-unknown-linux-gnu.tar.bz2
+shasum -a 256 goose-aarch64-unknown-linux-gnu.tar.bz2      # Linux: sha256sum
+```
+
+Compare it with the checksum the release page publishes, if it publishes one. Then pin the base
+image by digest:
+
+```bash
+docker buildx imagetools inspect python:3.12-slim          # the "Digest:" line
+# or: docker pull python:3.12-slim && docker inspect --format '{{index .RepoDigests 0}}' python:3.12-slim
+```
 
 ```bash
 python -m agentteams.vulnscan agent-image build --source <agentteams checkout> \
@@ -263,6 +317,27 @@ run until a passing self-test exists **for the current image and the current con
 after every image rebuild, and after an agentteams upgrade that changes how the containers are
 started, re-run `agent-selftest` (the run's refusal says which).
 
+*No screenshot: the self-test needs Docker, so its capture comes from the operator's supervised
+run. The shape it prints (`agent_run.selftest`; also saved to `<state>/agent-selftest.json`):*
+
+```text
+{
+  "passed": true,
+  "checks": {"no_credential_paths": true, "no_token_env": true, "internet_blocked": true,
+             "gateway_reachable": true, "readonly_rootfs": true, "readonly_run_dir": true,
+             "readonly_results": true, "spool_writable": true, "no_capabilities": true,
+             "no_new_privs": true, "non_root": true},
+  "image": "sha256:<image id>",
+  "flags_sha256": "<hex>",
+  "at": "<UTC time>",
+  "stderr": "<last 1000 characters>"
+}
+```
+
+A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
+instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
+`docker_reachable`. `agent-image build` checks Docker before it runs `pip wheel`.
+
 ### Step 8: Sign a narrow first grant
 
 The first grant lets the agents stage fixes in **one** repository for **one** day, and do nothing
@@ -277,8 +352,12 @@ python -m agentteams.vulnscan grant sign --key-id <key-id> --days 1 --max-uses 5
 
 What you see, in order:
 
-1. any warnings from the integrity and install-location checks (signing **refuses** to run from an
-   `agentteams` an agent could edit, such as an editable install in a git work tree);
+1. any warnings from the integrity and install-location checks. Signing **refuses** to run from an
+   `agentteams` an agent could edit: the package or a venv's `sys.prefix` inside a git work tree,
+   the current directory or an agent-writable root. The base interpreter (`sys.executable`, and
+   `sys.prefix` outside a venv) is refused in a work tree only when git does not ignore it there, so
+   a `pipx` install on Homebrew's Python signs (see
+   [Troubleshooting](#troubleshooting) for the refusal);
 2. the banner *"About to sign a STANDING vulnerability-remediation grant…"* and every field the
    signature binds;
 3. the `review sha256` line, then the prompt `Sign this payload? [y/N]`.
@@ -307,7 +386,33 @@ python -m agentteams.vulnscan agent-run
 ```
 
 `agent-run` works on the latest scan. While it runs, the executor serves the agents' requests every
-15 seconds: escalations first, then the agent's report, then granted operations.
+15 seconds: escalations first, then the agent's report, then granted operations. It exits 0 when the
+run completed, 3 when it did not run, failed or timed out, and 143 on SIGTERM.
+
+At the end it prints the run's status, also written to `<run>/agent/status.json`. *A real capture
+comes from the operator's supervised run (it needs Docker and the model route); the shape, from
+`agent_run.run_agent`:*
+
+```text
+{
+  "started": "<UTC time>",
+  "model": "z-ai/glm-5.3",
+  "run_id": "<run date>-<6 hex>",
+  "exit": 0,
+  "timed_out": false,
+  "spend": {"budget_usd": 2.0, "max_tokens": 10000000, "spent_usd": ..., "calls": ...,
+            "refused": 0, "unmetered": 0, "max_unmetered_calls": 20, "upstream_errors": 0,
+            "allow_unmetered": false, "prompt_tokens": ..., "completion_tokens": ..., "updated": "..."},
+  "run_state": "completed",
+  "state": "completed",
+  "finished": "<UTC time>"
+}
+```
+
+`run_state` is `completed`, `agent-error`, `timed-out` or `not-run`. A refused run, a launcher
+failure or a SIGTERM has `reason` in place of `exit`, `timed_out` and `spend` (a held run lock also
+adds `"status_written": false`, and nothing is written); `stale_requests`, `spend_problem`, `report_problem` and
+`cleanup_error` appear only when they apply.
 
 ![the executor's results for four requests: escalate done, report stored, server-audit refused (blocked by the escalation), stage-fix done with a vulnscan branch](book/figures/vulnscan/07-serve-requests.svg)
 
@@ -352,15 +457,18 @@ python -m agentteams.vulnscan grant sign --key-id <key-id> --days 14 --max-uses 
 
 Add `--op server-audit --op server-dryrun --host web1` to let the agents audit and dry-run servers.
 `merge` and `server-apply` are refused: no grant can cover them. At most two grants may be valid at
-once (a third makes all of them invalid), so revoke the first one:
+once (a third makes all of them invalid), so revoke the first one. `grant list` prints each valid
+grant as JSON; take the first grant's `grant_id` from it:
 
 ```bash
-python -m agentteams.vulnscan grant revoke --grant-id <id of the first grant>
+python -m agentteams.vulnscan grant list
+python -m agentteams.vulnscan grant revoke --grant-id <grant_id of the first grant>
 ```
 
 `open-pr` pushes a new `vulnscan/*` branch to the repository's `origin` and opens the pull request
-on that same repository. Before pushing anything, it checks that `origin` has the form
-`HOST/OWNER/REPO` (`https://`, `git@` or `ssh://`); otherwise the request fails. gh must be signed in
+on that same repository. Before pushing anything, it checks that `origin` is one of
+`https://HOST/OWNER/REPO`, `git@HOST:OWNER/REPO` or `ssh://git@HOST[:PORT]/OWNER/REPO` (an optional
+`.git` suffix is allowed; an `ssh://` URL with another user is not); otherwise the request fails. gh must be signed in
 to that host. Once the pull request exists, the executor removes its worktree and keeps the branch;
 a retry after a failed `gh pr create` reuses the pushed branch instead of pushing again.
 
@@ -400,8 +508,9 @@ python -m agentteams.vulnscan halts
   ```
 
 - **A `@security` HALT:** `halts` prints a `HALT-RETRACTED` spec. Fill in the evidence, save it, and
-  sign it with `agentteams --sign-decision <spec.json> --output <governance dir>`. Nothing else
-  clears a HALT.
+  sign it with
+  `AGENTTEAMS_DECISION_ED25519_KEYFILE=<key file> agentteams --sign-decision <spec.json> --output <governance dir>`.
+  Nothing else clears a HALT.
 
 ### Talking to the agents
 
@@ -424,7 +533,10 @@ python -m agentteams.vulnscan say --list
 - **Ask a past run why:** `agent-chat [--run <date>]` resumes that run's goose session in the
   container. The spool is read-only there, so it can explain but not act. It has its own spend, time
   and token caps (`agent.debrief_*` in the
-  [configuration reference](api-reference/vulnscan.md#configuration-vulnscanjson)).
+  [configuration reference](api-reference/vulnscan.md#configuration-vulnscanjson)). The config
+  load refuses a bad cap first; if one still reaches `agent-chat`, it exits 2 with
+  `debrief refused: agent.debrief_budget_usd must be …` (or the key at fault) before starting
+  anything.
 
 ### Reports, and publishing them (optional)
 
@@ -436,7 +548,16 @@ The agent submits a report at the end of each run; the executor stores it, fence
 *Demo account. `[exit 1]`: no publish grant.*
 
 To have the executor push each run's report, review and summary to a **private** repository you
-own, create that repository, clone it, and sign a publish grant:
+own, create that repository, clone it, and sign a publish grant. `<owner>` must be your own GitHub
+login: the repository's owner and the signed-in `gh` user must both have the pinned owner id, so an
+organisation's repository is refused. Run the two lookups first and check that each prints a value:
+
+```bash
+gh repo view <owner>/ops-reports --json id --jq .id     # a node id, R_…
+gh api users/<owner> --jq .id                           # a number
+```
+
+Then sign:
 
 ```bash
 AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
@@ -446,6 +567,10 @@ python -m agentteams.vulnscan publish-grant sign --ops-repo ~/ops-reports \
     --governance-dir ~/ops-team/.goose/recipes --key-id <key-id> --days 30
 ```
 
+A failed lookup expands to an empty value, and signing refuses it before anything else (exit 2):
+`refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`
+(likewise `--node-id`). An `--owner-id` that is not a number is refused too.
+
 Before it signs, and again before every push, vulnscan checks that the repository is private, owned
 by you, has GitHub Actions and Pages off, is the exact remote you pinned, and has no other
 collaborator, no pending invitation and no deploy key. Any failure to check refuses. GitHub Apps and
@@ -453,6 +578,15 @@ tokens with access to the repository are not visible to these checks. Files go t
 force-pushed. Publishing runs at the end of each daily run while agent mode is on; `publish
 [--run <date>]` publishes by hand. Agent text in the files is fenced, and home paths, this machine's
 hostname and private IP addresses are scrubbed.
+
+*A real publish needs GitHub, so its capture comes from the operator's supervised run. `publish`
+prints the result (`publish.publish`) and exits 0 only on `done`:*
+
+```text
+{"status": "done", "commit": "<sha>", "path": "reports/<date>/<run id>", "fenced_injection_hits": 0}
+{"status": "failed", "detail": "<why>", "local_commit": "<sha>"}
+{"status": "refused", "detail": "<why>"}
+```
 
 ### Your routine
 
@@ -478,8 +612,8 @@ you change machines, Docker, the model route or your GitHub token.
 | 3 | One server audit | `~/.config/agentteams/server-kit/remote.sh <host> L1-audit.sh` | a log under `~/.local/state/agentteams/server-kit/logs/`, no password prompt |
 | 4 | Docker isolation | `agent-image build …` then `agent-selftest` ([Step 7](#step-7-build-the-agent-image-and-prove-its-isolation)) | exit 0 and every check `true` |
 | 5 | Model route and metering | a supervised `agent-run` ([Step 9](#step-9-run-once-supervised)), then read `<run>/gateway/spend.json` | `calls` > 0, `prompt_tokens` > 0 and `unmetered` = 0. Unmetered replies mean the route does not pass usage through; the run stops at `max_unmetered_calls` |
-| 6 | GitHub token for pull requests | `gh auth status`, then one `act open-pr` on a test repository under a narrow grant | a pull request opens and the executor's worktree under `~/.local/state/agentteams/vulnscan/worktrees/` is gone. The staged state goes with it, so a second `act open-pr` fails with `no staged fix`. If `gh pr create` failed after the push, retrying `act open-pr` finds or creates the pull request without pushing again; it refuses (`not claiming` / `not overwriting`) when the branch holds other content |
-| 7 | GitHub token for publishing | `gh api repos/<owner>/ops-reports/collaborators --jq length` and `gh api repos/<owner>/ops-reports/keys --jq length` | both print `0`. An error means the token cannot read collaborators or deploy keys (it needs Administration read), and every publish will refuse |
+| 6 | GitHub token for pull requests | `gh auth status`; then, under a narrow grant covering a test repository, `python -m agentteams.vulnscan act stage-fix <repo path>` followed by `python -m agentteams.vulnscan act open-pr <repo path>`. `<repo path>` is the absolute path of a repository inside a granted repo root, e.g. `~/code/shop-api` (the shell expands `~`) | a pull request opens and the executor's worktree under `~/.local/state/agentteams/vulnscan/worktrees/` is gone. The staged state goes with it, so a second `act open-pr` fails with `no staged fix`. If `gh pr create` failed after the push, retrying `act open-pr` finds or creates the pull request without pushing again; it refuses (`not claiming` / `not overwriting`) when the branch holds other content |
+| 7 | GitHub token for publishing | `gh api repos/<owner>/ops-reports/collaborators --jq '.[].login'` and `gh api repos/<owner>/ops-reports/keys --jq length` | the collaborators list holds only you (the owner is allowed), and `keys` prints `0`. An error means the token cannot read collaborators or deploy keys (it needs Administration read), and every publish will refuse |
 | 8 | Server kit syntax (contributors) | `shellcheck agentteams/data/server_kit/*.sh` in the source checkout | no errors |
 | 9 | Clean-up after a stop | start `agent-run`, stop it with `kill -TERM <pid>`, then `docker ps -a --filter name=vulnscan` | no vulnscan container is left (a terminated run removes the gateway and the agent before it exits) |
 
@@ -501,12 +635,14 @@ Search the message for the quoted text.
 | `decision log ... is missing or a symlink` | the grant's governance directory has no decision log | sign a grant naming the team directory that has `references/security-decisions.log.csv` |
 | `set agent.key_file in vulnscan.json first` | `agent-selftest` before Step 6 | do Step 6, then re-run |
 | `set agent.team_dir in vulnscan.json first` | `agent-selftest` without `team_dir` (it no longer falls back to a directory inside the state directory) | set `team_dir` (Step 6), then re-run |
-| `config ... is unusable: ...` | `vulnscan.json` is not valid JSON or a JSON object, or the named key has a wrong type or range | fix the key the message names |
+| `config ... is unusable: ...` (exit 2) | `vulnscan.json` is not valid JSON or a JSON object, or the named key has a wrong type or range. Every `agent.*` key is checked at load, not only `agent.enabled` | fix the key the message names ([rules](api-reference/vulnscan.md#configuration-vulnscanjson)) |
 | agent run state `not-run`, reason mentions the self-test | no passing self-test for this image | `agent-selftest` |
-| `refusing to sign from an install an agent may be able to edit` | `agentteams` runs from a git work tree | sign from a verified install outside agent write roots. `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
+| `refusing to sign from an install an agent may be able to edit` | `agentteams`, its venv or its interpreter is inside the current directory, a git work tree or an agent-writable root; the next lines name which | sign from a verified install outside agent write roots (`pipx install`). `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
+| `the agentteams package (...) is inside a git work tree` / `sys.prefix (...) is inside a git work tree` / `sys.executable (...) is inside a git work tree` | an editable checkout, a venv kept in a repository, a `pip install` into Homebrew's Python without a venv, or an interpreter git tracks or does not ignore. An interpreter in a git-ignored path (Homebrew's `Cellar/`) is not refused; only the work tree's own ignore rules count (inherited `GIT_*` variables and a global `core.excludesFile` do not) | `pipx install` from a verified release (works on Homebrew's Python) |
+| `<project>/.claude/settings.json cannot be read or parsed, so the agent-writable roots it grants are unknown` | a project's settings file exists but is unreadable, not JSON, or its `sandbox`/`filesystem` is not an object or `allowWrite` not a list (a missing file or no sandbox block is fine) | fix the file, then sign again |
 | `no terminal to confirm on` (suggesting `--confirm-review-sha256`) | signing ran without a terminal | check the printed fields, then re-run with `--confirm-review-sha256 <digest>` (see Step 8) |
 | `--confirm-review-sha256 does not match` | your choices differ from the run that printed the digest | re-run without it and read the new digest |
-| `agent.team_dir ... ` (run state `not-run`, or a refused self-test) | `team_dir` is unset, relative, not a directory, your home or an ancestor, at, inside or above the vulnscan state directory or a credential directory, or contains a key file | set it to the team's project directory and keep key files outside it (Step 6) |
+| `agent.team_dir ... ` (run state `not-run`, or a refused self-test) | `team_dir` is unset, relative, not a directory, your home or an ancestor, at, inside or above `~/.config/agentteams` (which holds `keys/`), the vulnscan state directory or a credential directory, or contains `key_file` (or the signing key, when `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set) | set it to the team's project directory and keep key files outside it (Step 6) |
 | `agent.team_dir ... is not owned by you` / `is group- or world-writable` | the team directory's owner or mode | use a directory you own; `chmod go-w` it |
 | `the container flags or the self-test changed` / `predates container-flag binding` | agentteams changed how containers start since the last self-test | `agent-selftest` |
 | `run token cap reached` / `replies carried no usable usage/cost` | the gateway's backstops (Step 6) | raise `max_tokens_total`, or fix usage reporting upstream |
@@ -521,15 +657,19 @@ Search the message for the quoted text.
 | `holds the run lock` | an agent run or `agent-chat` is in progress | wait for it to finish |
 | `another daily run holds ... daily.lock` (exit 3) | a daily run is already in progress | wait for it to finish |
 | `origin/HEAD is not set` (`fix_mode: apply-worktree`) | the repository has no default branch recorded | `git remote set-head origin --auto` in that repository |
-| `defines a filter driver` (`fix --apply`, or a refused `stage-fix`, before any checkout) | the repository's own git config defines a `filter.*` driver, which git would run | apply that fix by hand |
-| `git refuses to read this repository (...) — fix it by hand` (`fix --apply` or `stage-fix`) | git will not open the repository, e.g. `safe.directory` rejects it because another user owns it | fix what git reports (e.g. the directory's owner), or apply that fix by hand |
+| `the repository's git config defines a filter driver, which git would run — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch) | the repository's own git config defines a `filter.*` driver | apply that fix by hand |
+| `git refuses to read this repository (<git stderr>) — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `refused`, before any fetch) | git will not open the repository, e.g. `safe.directory` rejects it because another user owns it | fix what git reports (e.g. the directory's owner), or apply that fix by hand |
 | `hash-pinned (--hash) requirements are never edited` / `hash-held` | the requirements file pins `--hash` values | regenerate it yourself (`pip-compile --generate-hashes`) |
 | `invalid host name` (exit 2) | a `hosts.conf` name does not match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`, or is `all` | rename the host there and in `servers` |
 | `L1 audit of <host> did not complete (exit N) — stopping before any change` (`run-host.sh`, exit 3) | the audit printed no `RESULT` line (no passwordless sudo, the shell died) | read the audit log; fix access, then re-run |
-| `option ... needs a value` (exit 2) | an `L3`/`L4`/`L5` option, often from an `apps.conf` line, has no value | complete the option |
+| `option ... needs a value` (exit 2 from the `L3`/`L4`/`L5` script; through `run-host.sh`, `STEP FAILED (exit 2)` and exit 3) | an `L3`/`L4`/`L5` option, often from an `apps.conf` line, has no value | complete the option |
 | `apps.conf flags may not contain --apply, --restart-services or --reboot (found …)` (`run-host.sh`, exit 3) | an `apps.conf` entry's flags column carries one of those; the entry is skipped as a failed step | remove it from the flags column; pass it to `run-host.sh` instead |
 | `refusing ...: binary content (NUL bytes)` (exit 2) | an `ioc-*.txt` file is not plain text | remove the file or save it as text |
-| `docker is not reachable or the agent image ... is not built` | the Docker daemon is down, or the image for this agentteams version is missing | start Docker, or run `agent-image build`; then `agent-selftest` |
+| `docker is not reachable or the agent image ... is not built — start Docker (or run agent-image build) first` (`agent-selftest: …`, exit 1, `docker_reachable: false`; a refused run's reason ends `…first, then re-run agent-selftest`; a docker client that hangs gives up after 60 s and counts as not reachable) | the Docker daemon is down, or the image for this agentteams version is missing | start Docker, or run `agent-image build`; then `agent-selftest` |
+| `agent image build failed: docker is not reachable — start Docker (or install it) first` | `agent-image build` found no Docker daemon; nothing was built, `pip wheel` did not run | start or install Docker, then build |
+| `agent-selftest failed: ...` (exit 1) | a `docker` command failed part-way through the self-test | read the error; check `docker info`, then re-run |
+| `refused: --node-id is empty` / `refused: --owner-id is empty` / `... is required` / `--owner-id must be your numeric GitHub user id` (`publish-grant sign`, exit 2) | a `gh` lookup printed nothing (the `$(…)` expanded to empty), a flag was left out, or the owner id is not a number | run the two lookups by hand and check each prints a value ([Reports](#reports-and-publishing-them-optional)) |
+| `Warning: security intelligence: <feed> (<host>): truncated or malformed HTTP response (...)` / `response is not valid JSON, possibly truncated (...)` / `response is not a JSON object (got list)` (Step 4) | a feed's response was cut off or is not a JSON object | usually transient: re-run. If the CISA KEV snapshot is stale, generation stops with `[SEC-GATE/INTEL-FRESHNESS] blocked`; re-run once www.cisa.gov answers |
 | `not owned by you or group/world-writable — refused` (a grant file) | the grant file's mode or owner | `chmod 600` the file |
 | `not a regular file (symlink or special) — refused` (a grant file) | the grant file is a symlink | replace the symlink with the file itself |
 | `cannot tell which repositories are protected` | a `*.json` file in a grants directory cannot be read | make the file readable, or remove it |

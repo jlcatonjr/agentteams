@@ -46,6 +46,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from importlib import metadata, resources
@@ -211,6 +212,42 @@ def run_limits(a: dict[str, Any]) -> tuple[int, int, bool]:
     positive_number(a.get("budget_usd", DEFAULT_AGENT["budget_usd"]), "agent.budget_usd", BUDGET_USD_CEILING)
     return (_positive_int(a, "max_tokens_total", MAX_TOKENS_TOTAL_CEILING),
             _positive_int(a, "max_unmetered_calls"), allow)
+
+
+def validate_agent(a: dict[str, Any]) -> None:
+    """Check every ``agent.*`` value's type and range, as the config is loaded (item 9).
+
+    Numbers follow :func:`run_limits` and the debrief rules (:func:`debrief.debrief_limits`,
+    :func:`debrief.debrief_max_tokens`). ``team_dir``, ``key_file`` and ``image`` must be strings
+    (possibly empty); ``model``, ``framework`` and ``recipe`` non-empty strings; ``upstream`` an
+    ``http(s)://host`` URL; ``command`` a non-empty list of strings. Paths are not checked against the
+    filesystem here (:func:`team_dir_problem` runs before every mount).
+
+    Args:
+        a: The ``agent`` block as written (keys absent from it take their defaults).
+
+    Raises:
+        ValueError: A value has the wrong type or range; the message names ``agent.<key>``.
+    """
+    from agentteams.vulnscan import debrief   # lazy: debrief imports this module
+
+    merged = {**DEFAULT_AGENT, **a}
+    run_limits(merged)
+    debrief.debrief_limits(merged)
+    debrief.debrief_max_tokens(merged)
+    for key in ("team_dir", "key_file", "image"):
+        if not isinstance(merged[key], str):
+            raise ValueError(f"agent.{key} must be a string (got {repr(merged[key])[:80]})")
+    for key in ("model", "framework", "recipe"):
+        if not isinstance(merged[key], str) or not merged[key].strip():
+            raise ValueError(f"agent.{key} must be a non-empty string (got {repr(merged[key])[:80]})")
+    up = merged["upstream"]
+    parts = urllib.parse.urlsplit(up) if isinstance(up, str) else None
+    if parts is None or parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError(f"agent.upstream must be an http:// or https:// URL with a host (got {repr(up)[:80]})")
+    cmd = merged["command"]
+    if not isinstance(cmd, list) or not cmd or not all(isinstance(c, str) for c in cmd):
+        raise ValueError(f"agent.command must be a non-empty list of strings (got {repr(cmd)[:80]})")
 
 
 #: Paths a team dir may not be at, inside or above (besides home and its ancestors): the write-root
@@ -514,7 +551,36 @@ def _docker(argv: list[str], *, check: bool = True, timeout: int = 600) -> subpr
 
 
 def _image_id(tag: str) -> str:
-    return _docker(["docker", "image", "inspect", "-f", "{{.Id}}", tag], check=False).stdout.strip()
+    """Return the local image id of ``tag``, or "" when docker is unreachable, hung or the image is absent."""
+    try:
+        return _docker(["docker", "image", "inspect", "-f", "{{.Id}}", tag], check=False, timeout=60).stdout.strip()
+    except (OSError, subprocess.SubprocessError):   # not installed, or a hung client: never wait 10 minutes
+        return ""
+
+
+def _unreachable(tag: str | None) -> str:
+    """The one message for a docker that cannot be used (or an agent image that is not built)."""
+    if tag is None:
+        return "docker is not reachable — start Docker (or install it) first"
+    return f"docker is not reachable or the agent image {tag} is not built — start Docker (or run agent-image build) first"
+
+
+def docker_unreachable(tag: str | None = None) -> str:
+    """Return why docker cannot be used (or ``tag`` is not built), or "" when it can (item 21).
+
+    Args:
+        tag: The agent image that must exist; None checks only that the daemon answers.
+
+    Returns:
+        A one-line reason, or "".
+    """
+    if tag is not None:
+        return "" if _image_id(tag) else _unreachable(tag)
+    try:
+        ok = not _docker(["docker", "version", "--format", "{{.Server.Version}}"], check=False, timeout=60).returncode
+    except (OSError, subprocess.SubprocessError):   # not installed, or the client hung
+        ok = False
+    return "" if ok else _unreachable(None)
 
 
 def _ensure_network() -> None:
@@ -565,6 +631,9 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
         run_limits(a)
     except ValueError as exc:
         return {"passed": False, "checks": {"run_limits_valid": False}, "error": str(exc)}
+    unreachable = docker_unreachable(tag)
+    if unreachable:
+        return {"passed": False, "checks": {"docker_reachable": False}, "error": unreachable}
     _ensure_network()
     try:
         _start_gateway(a, tag, work / "gateway")
@@ -603,8 +672,7 @@ def selftest_ok(cfg: dict[str, Any]) -> tuple[bool, str]:
     tag = image_tag(agent_cfg(cfg))
     current = _image_id(tag)
     if not current:   # `docker image inspect` failed: the daemon is down or the image is absent (D10)
-        return False, (f"docker is not reachable or the agent image {tag} is not built — start Docker "
-                       "(or run agent-image build), then re-run agent-selftest")
+        return False, f"{_unreachable(tag)}, then re-run agent-selftest"
     if rec.get("image") != current:
         return False, "the agent image changed since the last passing self-test — re-run agent-selftest"
     if not rec.get("flags_sha256"):
@@ -869,11 +937,15 @@ def build_image(cfg: dict[str, Any], *, goose_version: str, goose_sha256: str, p
         The image tag.
 
     Raises:
-        RuntimeError: The build failed or no source checkout was found.
+        RuntimeError: Docker is not reachable (checked before ``pip wheel`` runs on the host), the
+            build failed, or no source checkout was found.
     """
     src = source or Path(__file__).resolve().parents[2]
     if not (src / "pyproject.toml").is_file():
         raise RuntimeError(f"no agentteams source checkout at {src} — pass --source")
+    unreachable = docker_unreachable()
+    if unreachable:
+        raise RuntimeError(unreachable)
     if "@sha256:" not in python_image:
         print(f"warning: base image {python_image!r} is not pinned by digest", file=sys.stderr)
     ctx = paths.state_dir() / "agent-image"

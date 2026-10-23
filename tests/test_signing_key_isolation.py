@@ -256,6 +256,24 @@ def test_provision_writes_into_a_0700_keys_dir(repo, home):
 
 
 @needs_openssl
+def test_provision_advises_a_per_command_keyfile_never_an_export(repo, home):
+    """#16: the walkthrough says never to leave the key-file variable set, so the advice must not
+    print an ``export`` line; it shows the per-command form and warns against exporting."""
+    run = _provision(repo, home, "op-1")
+    assert run.returncode == 0, run.stderr
+    priv = home / ".config" / "agentteams" / "keys" / "decision-signing-op-1.pem"
+    assert not any(ln.lstrip().startswith("export ") for ln in run.stdout.splitlines())
+    assert (f'AGENTTEAMS_DECISION_ED25519_KEYFILE="{priv}" python -m agentteams.vulnscan grant sign'
+            in run.stdout)
+    assert f'AGENTTEAMS_DECISION_ED25519_KEYFILE="{priv}" agentteams --sign-decision' in run.stdout
+    assert "Do NOT export AGENTTEAMS_DECISION_ED25519_KEYFILE" in run.stdout
+
+
+def test_provision_script_parses():
+    assert subprocess.run(["bash", "-n", str(PROVISION)], capture_output=True).returncode == 0
+
+
+@needs_openssl
 def test_provision_without_team_dir_refuses_and_lists_teams(repo, home):
     run = _provision(repo, home, "op-1", team=False)
     assert run.returncode == 2
@@ -348,6 +366,8 @@ def test_migrate_moves_without_clobbering_or_deleting(repo, home):
     assert (keys / "decision-signing-b.pem").read_text() == "B-NEW"
     assert (legacy / "decision-signing-b.pem").read_text() == "B-OLD"
     assert "SKIPPED" in run.stderr and ".bashrc" in run.stderr
+    assert "export AGENTTEAMS_DECISION_ED25519_KEYFILE=" not in run.stdout  # #16: per-command only
+    assert f'AGENTTEAMS_DECISION_ED25519_KEYFILE="{keys}/decision-signing-a.pem" <command>' in run.stdout
     assert (legacy / "goose-sources.json").exists()
     after = sorted(p.name for p in legacy.rglob("*") if p.is_file())
     assert len(after) == len(before)  # nothing deleted

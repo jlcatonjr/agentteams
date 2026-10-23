@@ -118,6 +118,13 @@ def _config_problem(cfg: dict[str, Any]) -> str:
         return f"agent must be an object{got(agent)}"
     if isinstance(agent, dict) and not isinstance(agent.get("enabled", False), bool):
         return f"agent.enabled must be true or false{got(agent['enabled'])}"
+    if isinstance(agent, dict):
+        from agentteams.vulnscan import agent_run   # lazy, as in _agent_phase
+
+        try:
+            agent_run.validate_agent(agent)
+        except ValueError as exc:
+            return str(exc)
     when = cfg["schedule"]
     if not isinstance(when, dict):
         return f"schedule must be an object with hour and minute{got(when)}"

@@ -228,10 +228,16 @@ def test_preconditions_refuse_without_docker_calls(case: str, env: dict[str, Any
     assert procs == [] and env["calls"] == []
 
 
-def test_non_positive_limits_are_rejected(env: dict[str, Any]) -> None:
-    env["cfg"]["agent"]["debrief_budget_usd"] = 0
-    with pytest.raises(ValueError):
-        debrief.run_debrief(env["cfg"], env["run"])
+@pytest.mark.parametrize(("key", "bad"), [("debrief_budget_usd", 0), ("debrief_max_minutes", "ten"),
+                                          ("debrief_max_tokens", 3.5)])
+def test_bad_debrief_limits_refuse_with_exit_2_and_the_reason(env: dict[str, Any], key: str, bad: object,
+                                                              capsys: pytest.CaptureFixture) -> None:
+    """Item 8: a bad debrief limit is a refusal naming the key (exit 2), not an uncaught ValueError."""
+    env["cfg"]["agent"][key] = bad
+    assert debrief.run_debrief(env["cfg"], env["run"]) == debrief.EXIT_REFUSED == 2
+    err = capsys.readouterr().err
+    assert err.startswith("debrief refused: ") and f"agent.{key}" in err
+    assert env["calls"] == []
 
 
 @pytest.mark.parametrize("key", ["debrief_budget_usd", "debrief_max_minutes"])

@@ -174,6 +174,57 @@ def test_load_config_accepts_valid_shapes(xdg: Path, data: dict[str, Any]) -> No
             assert cfg[key] == value
 
 
+@pytest.mark.parametrize(("agent", "key"), [
+    ({"budget_usd": 0}, "agent.budget_usd"),
+    ({"budget_usd": "2"}, "agent.budget_usd"),
+    ({"max_minutes": float("inf")}, "agent.max_minutes"),
+    ({"max_tokens_total": 1.5}, "agent.max_tokens_total"),
+    ({"max_unmetered_calls": 0}, "agent.max_unmetered_calls"),
+    ({"allow_unmetered": "no"}, "agent.allow_unmetered"),
+    ({"debrief_budget_usd": -1}, "agent.debrief_budget_usd"),
+    ({"debrief_max_minutes": None}, "agent.debrief_max_minutes"),
+    ({"debrief_max_tokens": True}, "agent.debrief_max_tokens"),
+    ({"team_dir": 5}, "agent.team_dir"),
+    ({"key_file": ["k"]}, "agent.key_file"),
+    ({"model": ""}, "agent.model"),
+    ({"model": 3}, "agent.model"),
+    ({"upstream": "ftp://proxy:21"}, "agent.upstream"),
+    ({"upstream": "http://"}, "agent.upstream"),
+    ({"upstream": 8791}, "agent.upstream"),
+    ({"framework": None}, "agent.framework"),
+    ({"recipe": {}}, "agent.recipe"),
+    ({"image": 1}, "agent.image"),
+    ({"command": "goose run"}, "agent.command"),
+    ({"command": ["goose", 1]}, "agent.command"),
+    ({"command": []}, "agent.command"),
+])
+def test_load_config_validates_every_agent_value(xdg: Path, agent: dict[str, Any], key: str) -> None:
+    """Item 9: a bad agent.* value fails at load, naming the key (the CLI then exits 2)."""
+    path = _write_config({"agent": agent})
+    with pytest.raises(ValueError, match=re.escape(key)) as info:
+        daily.load_config()
+    assert str(path) in str(info.value)
+
+
+def test_load_config_accepts_a_fully_specified_agent_block(xdg: Path) -> None:
+    agent = {"enabled": True, "team_dir": "/t", "key_file": "/k", "model": "m/x", "upstream": "https://proxy.example",
+             "framework": "goose", "recipe": "r.yaml", "image": "", "command": ["goose", "run"], "budget_usd": 1,
+             "max_minutes": 10, "max_tokens_total": 5, "max_unmetered_calls": 2, "allow_unmetered": True,
+             "debrief_budget_usd": 0.5, "debrief_max_minutes": 5, "debrief_max_tokens": 100}
+    _write_config({"agent": agent})
+    assert daily.load_config()["agent"] == agent
+
+
+def test_cli_exits_2_naming_a_bad_agent_value(xdg: Path, capsys: pytest.CaptureFixture) -> None:
+    """agent-chat (and every config-loading command) exits 2 with the reason, no traceback (items 8, 9)."""
+    from agentteams.vulnscan import __main__ as cli
+
+    _write_config({"agent": {"debrief_max_tokens": "lots"}})
+    assert cli.main(["agent-chat"]) == 2
+    err = capsys.readouterr().err
+    assert "is unusable" in err and "agent.debrief_max_tokens" in err and "Traceback" not in err
+
+
 # ---------------------------------------------------------------- G34: old config shapes
 
 def test_old_config_without_newer_keys_gets_every_default(xdg: Path, feed: Feed) -> None:
@@ -274,6 +325,23 @@ def test_malformed_previous_summary_falls_back_with_a_note(xdg: Path, monkeypatc
     md = (run_dir / "summary.md").read_text()
     assert code == 1 and "2026-10-21" in md and "unreadable" in md
     assert "**NEW**" not in md                                                  # compared with 2026-10-20
+
+
+def test_summary_json_carries_an_integer_schema_version_and_is_read_back(xdg: Path,
+                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    """Item 23: summary.json has ``"schema_version": 1``; the next run's diff and review read it as before."""
+    from agentteams.vulnscan import review
+
+    finding = Finding(kind="package", target="svc", name="PyJWT", version="2.3.0", ecosystem="PyPI", severity=4)
+    monkeypatch.setattr(daily, "_collect", lambda cfg, today, run_dir, total, staged: total.findings.append(finding))
+    _, _, first = daily.run_daily(_cfg(), today="2026-10-21")
+    data = json.loads((first / "summary.json").read_text())
+    assert data["schema_version"] == 1 and type(data["schema_version"]) is int
+    assert {"target", "findings", "checked", "feed_errors", "unscannable", "generated_at"} <= set(data)
+    _, _, second = daily.run_daily(_cfg(), today="2026-10-22")
+    md = (second / "summary.md").read_text()
+    assert "unreadable" not in md and "**NEW**" not in md                     # compared with the first run
+    assert review.Report.from_dict(data).findings[0].name == "PyJWT"
 
 
 def test_no_readable_previous_summary_marks_everything_new_with_a_note(xdg: Path,

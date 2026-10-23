@@ -356,6 +356,25 @@ def test_bad_team_dir_refuses_run_selftest_and_mounts(dirs: dict[str, Path], tmp
     assert '".config/agentteams/keys"' in agent_run.SELFTEST
 
 
+@pytest.mark.parametrize("where", ["at", "inside", "above", "symlink-above"])
+def test_team_dir_around_the_default_key_dir_is_refused_without_the_keyfile_env(
+        dirs: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str) -> None:
+    """Item 22b: ~/.config/agentteams/keys is refused via TEAM_DIR_PROTECTED even with the env var unset."""
+    home = tmp_path / "home"
+    keys = home / ".config" / "agentteams" / "keys"
+    (keys / "sub").mkdir(parents=True)
+    (keys / "op.pem").write_text("placeholder\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", raising=False)
+    assert "~/.config/agentteams/keys" in agent_run.TEAM_DIR_PROTECTED
+    team = {"at": keys, "inside": keys / "sub", "above": home / ".config"}.get(where)
+    if team is None:
+        team = tmp_path / "link"
+        team.symlink_to(home / ".config")
+    problem = agent_run.team_dir_problem(str(team))
+    assert problem and "is at, inside or above a protected path" in problem, problem
+
+
 # ---------------------------------------------------------------- P8: gateway backstops
 
 def test_run_limits_defaults_and_validation(dirs: dict[str, Path]) -> None:
@@ -743,7 +762,11 @@ def test_build_image_argv_and_unpinned_base_warning(dirs: dict[str, Path], tmp_p
     (src / "pyproject.toml").write_text("[project]\nname = 'agentteams'\n")
     docker: list[list[str]] = []
     pip: list[list[str]] = []
-    monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: docker.append(argv))
+    def fake_docker(argv: list[str], **kw: object) -> subprocess.CompletedProcess:
+        if argv[1] != "version":                                            # the reachability probe (item 21)
+            docker.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "27.0", "")
+    monkeypatch.setattr(agent_run, "_docker", fake_docker)
     monkeypatch.setattr(agent_run.subprocess, "run", lambda argv, **kw: pip.append(argv))
     tag = agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
                                 python_image="python:3.12-slim", source=src)
@@ -880,3 +903,51 @@ def test_r8_4_every_refusal_is_decided_under_the_lock(dirs: dict[str, Path], mon
         st = agent_run.run_agent({"agent": a}, dirs["run"])
     assert st["run_state"] == "not-run" and "run lock" in st["reason"] and st["status_written"] is False
     assert live.read_text() == '{"run_state": "live"}' and report_store.load(dirs["run"]) == before
+
+
+# ---------------------------------------------------------------- item 21: no Docker is a report, not a traceback
+
+def _no_docker(kind: str) -> object:
+    """A ``subprocess.run`` stand-in: docker not installed (``missing``) or its daemon down (``down``)."""
+    def run(argv: list[str], **kw: object) -> subprocess.CompletedProcess:
+        if kind == "missing":
+            raise FileNotFoundError(2, "No such file or directory", "docker")
+        return subprocess.CompletedProcess(argv, 1, "", "Cannot connect to the Docker daemon")
+    return run
+
+
+@pytest.mark.parametrize("kind", ["missing", "down"])
+def test_agent_selftest_without_docker_reports_why_and_exits_1(dirs: dict[str, Path], kind: str,
+                                                               monkeypatch: pytest.MonkeyPatch,
+                                                               capsys: pytest.CaptureFixture[str]) -> None:
+    from agentteams.vulnscan import __main__ as cli
+    from agentteams.vulnscan import paths
+
+    a = _a(dirs)
+    paths.config_file().parent.mkdir(parents=True, exist_ok=True)
+    paths.config_file().write_text(json.dumps({"agent": {"team_dir": a["team_dir"], "key_file": a["key_file"],
+                                                         "image": "img:t"}}))
+    monkeypatch.setattr(agent_run.subprocess, "run", _no_docker(kind))
+    assert cli.main(["agent-selftest"]) == 1
+    err = capsys.readouterr().err
+    assert "agent-selftest: docker is not reachable or the agent image img:t is not built" in err
+    assert not (dirs["tmp"] / "state" / "agent-selftest.json").exists()
+
+
+@pytest.mark.parametrize("kind", ["missing", "down"])
+def test_agent_image_build_checks_docker_before_pip_wheel(dirs: dict[str, Path], tmp_path: Path, kind: str,
+                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "pyproject.toml").write_text("[project]\nname = 'agentteams'\n")
+    calls: list[list[str]] = []
+    fake = _no_docker(kind)
+
+    def run(argv: list[str], **kw: object) -> subprocess.CompletedProcess:
+        calls.append(argv)
+        return fake(argv, **kw)  # type: ignore[operator]
+    monkeypatch.setattr(agent_run.subprocess, "run", run)
+    with pytest.raises(RuntimeError, match="docker is not reachable"):
+        agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
+                              python_image="python:3.12", source=src)
+    assert all(argv[0] == "docker" for argv in calls) and not any("wheel" in argv for argv in calls), calls

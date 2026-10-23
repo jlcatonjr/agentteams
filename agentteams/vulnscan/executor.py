@@ -293,7 +293,12 @@ def _repo_root(target: str) -> Path:
     if not p.is_absolute():
         raise ExecError("repo targets must be absolute paths")
     p = p.resolve()
-    top = git_proc(p, "rev-parse", "--show-toplevel").stdout.strip()
+    proc = git_proc(p, "rev-parse", "--show-toplevel")
+    if proc.returncode:   # e.g. safe.directory: say why git refuses rather than "not a repository top"
+        problem = fix.git_config_problem(p)
+        if problem:
+            raise ExecError(f"{p}: {problem}")
+    top = proc.stdout.strip()
     if not top or Path(top).resolve() != p:
         raise ExecError(f"{p} is not the top of a git repository")
     return p
@@ -406,14 +411,14 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
             or anything else fails (the worktree is removed, whatever the exception, D4).
         subprocess.SubprocessError: A git or npm step timed out (the worktree is removed too).
     """
+    unsafe = fix.git_config_problem(repo)   # before any git on the repo: checkout would run smudge filters
+    if unsafe:
+        raise ExecError(f"{repo}: {unsafe}")
     git(repo, "fetch", "-q", "origin", push=True)
     head = git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).strip() or "origin/main"
     base = git(repo, "rev-parse", head).strip()
     wt = _worktrees_dir() / f"{_state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}-{os.urandom(3).hex()}"
     wt.parent.mkdir(parents=True, exist_ok=True)
-    unsafe = fix.git_config_problem(repo)   # checkout (worktree add) would run smudge filters
-    if unsafe:
-        raise ExecError(f"{repo}: {unsafe}")
     staged = False
     try:
         git(repo, "worktree", "add", "-q", "--detach", str(wt), base)

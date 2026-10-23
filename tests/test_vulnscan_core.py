@@ -237,6 +237,20 @@ def test_report_round_trip_and_new_keys(feed: Feed, tmp_path: Path) -> None:
     assert "**NEW**" in b.markdown(new_keys=new_finding_keys(b, a))
 
 
+def test_scan_json_carries_an_integer_schema_version(feed: Feed, tmp_path: Path,
+                                                     capsys: pytest.CaptureFixture[str]) -> None:
+    """Item 23: ``scan --format json`` output has ``"schema_version": 1`` beside the unchanged fields."""
+    from agentteams.vulnscan import __main__ as cli
+
+    d = Report(target="t").to_dict()
+    assert d["schema_version"] == 1 and type(d["schema_version"]) is int
+    (tmp_path / "empty").mkdir()
+    cli.main(["scan", str(tmp_path / "empty"), "--format", "json"])
+    out = json.loads(capsys.readouterr().out)
+    assert out["schema_version"] == 1 and type(out["schema_version"]) is int
+    assert {"target", "findings", "checked", "feed_errors", "unscannable", "generated_at"} <= set(out)
+
+
 # ---------------------------------------------------------------- runtimes
 
 def _eol_feed(feed: Feed) -> None:

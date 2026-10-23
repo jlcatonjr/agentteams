@@ -327,3 +327,60 @@ def test_m1_a_change_from_a_special_base_mode_is_refused(env: dict, tmp_path: Pa
     (repo / "requirements.txt").write_text("PyJWT==2.15.0\n")          # a regular 0644 file now
     with pytest.raises(executor.ExecError, match="mode"):
         executor.validate_diff(repo, base)
+
+
+# ---------------------------------------------------------------- item 3: config problems before fetch / root check
+
+_DUBIOUS = "fatal: detected dubious ownership in repository at '/x'"
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_stage_fix_on_a_repo_git_refuses_reports_the_safe_directory_reason(env: dict,
+                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    """safe.directory: the clear 'git refuses to read' reason, not 'is not the top of a git repository'."""
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-fix"], hosts=[])
+
+    def refuse(directory: Path, *args: str, **kw: object) -> subprocess.CompletedProcess:
+        return subprocess.CompletedProcess(["git", *args], 128, "", _DUBIOUS)
+
+    monkeypatch.setattr(executor, "git_proc", refuse)
+    monkeypatch.setattr(executor, "query_git", refuse)
+    res = executor.act("stage-fix", str(repo), env["cfg"], rationale="item3")
+    assert res["status"] == "refused", res
+    assert "git refuses to read this repository" in res["detail"] and "fix it by hand" in res["detail"], res
+    assert "not the top" not in res["detail"]
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_repo_root_still_refuses_a_path_that_is_not_a_repository_top(env: dict, tmp_path: Path) -> None:
+    """A plain directory, and a subdirectory of a repository, keep the 'not the top' refusal."""
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    with pytest.raises(executor.ExecError, match="is not the top of a git repository"):
+        executor._repo_root(str(plain))
+    repo = _git_repo(tmp_path / "r")
+    (repo / "sub").mkdir()
+    with pytest.raises(executor.ExecError, match="is not the top of a git repository"):
+        executor._repo_root(str(repo / "sub"))
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_stage_fix_checks_for_a_filter_driver_before_fetching(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The filter-driver refusal comes first: no fetch (or any other network git) runs on such a repository."""
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-fix"], hosts=[])
+    (repo / ".git" / "info").mkdir(exist_ok=True)
+    (repo / ".git" / "info" / "attributes").write_text("* filter=x\n")
+    _sh(repo, "config", "filter.x.smudge", "cat")
+    calls: list[tuple[str, ...]] = []
+    real = executor.git_proc
+
+    def spy(r: Path, *args: str, **kw: object) -> subprocess.CompletedProcess:
+        calls.append(args)
+        return real(r, *args, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(executor, "git_proc", spy)
+    res = executor.act("stage-fix", str(repo), env["cfg"], rationale="item3")
+    assert res["status"] == "failed" and "defines a filter driver" in res["detail"], res
+    assert not any(a and a[0] == "fetch" for a in calls), calls

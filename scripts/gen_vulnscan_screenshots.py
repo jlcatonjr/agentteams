@@ -24,7 +24,9 @@ Nothing reaches Docker, GitHub or a real host: the demo repositories push to loc
 ``server-audit`` on ``web1`` is refused before any ssh would run. The one network use is the demo
 ``stage-fix``, which reads PyPI release data to pick the fix version (without network it fails, and
 the capture shows that). Interactive prompts (signing, resolving) are answered through a real
-pseudo-terminal when one exists; otherwise those two captures are skipped.
+pseudo-terminal when one exists. Without one, grant signing is confirmed the way its prompt asks
+off a terminal (re-run with ``--confirm-review-sha256 <digest>``, shown in the capture); resolving
+has no such route, so its capture is skipped.
 
 Output is **not** byte-deterministic: ids, digests and timestamps are generated per run. Long
 outputs are cut, and every cut is marked in the frame.
@@ -39,6 +41,7 @@ from __future__ import annotations
 import json
 import os
 import pty
+import re
 import select
 import shutil
 import subprocess
@@ -142,7 +145,8 @@ class Demo:
                 str(Path(sys.executable).resolve()): "<python>", sys.prefix: "<venv>", str(REPO_ROOT): "<agentteams>"}
         for p in sorted(subs, key=len, reverse=True):
             text = text.replace(p, subs[p])
-        return text
+        # launchd domains carry this account's numeric uid (`gui/NNN`): show a placeholder instead.
+        return re.sub(r"\bgui/\d+\b", "gui/<uid>", text)
 
     def run(self, argv: list[str], *, cwd: Path | None = None, stdin: str = "") -> tuple[int, str]:
         """Run a command non-interactively; return (exit code, stdout+stderr)."""
@@ -234,7 +238,7 @@ def write_keys(demo: Demo, key_id: str) -> bool:
 
 
 def _install_demo_grant(demo: Demo, gov: Path) -> None:
-    """Sign and install the demo grant through the Python API (used when no terminal can confirm)."""
+    """Sign and install the demo grant through the Python API (used when the real signing is refused)."""
     code = (
         "import sys; sys.path.insert(0, %r)\n"
         "from pathlib import Path\n"
@@ -279,23 +283,62 @@ def write_scan(demo: Demo, run_date: str) -> Path:
 # ---------------------------------------------------------------- captures
 
 
+_DIGEST_RE = re.compile(r"--confirm-review-sha256 ([0-9a-f]{64})")
+
+
+def run_digest_confirmed(demo: Demo, argv: list[str]) -> list[tuple[list[str], int, str]]:
+    """Confirm a signing prompt with no terminal, the way the real prompt asks.
+
+    Without a terminal the signer prints the review, refuses, and names the review digest to pass
+    back; this runs that, then re-runs with ``--confirm-review-sha256 <digest>``.
+
+    Args:
+        demo: The demo environment.
+        argv: The signing command.
+
+    Returns:
+        One ``(argv, exit code, output)`` per run (one when no digest was offered).
+    """
+    rc, out = demo.run(argv)
+    runs = [(argv, rc, out)]
+    match = _DIGEST_RE.search(out)
+    if rc and match:
+        again = [*argv, "--confirm-review-sha256", match.group(1)]
+        rc2, out2 = demo.run(again)
+        runs.append((again, rc2, out2))
+    return runs
+
+
 def capture(demo: Demo, name: str, title: str, steps: list[tuple[list[str], dict]], *, head: int = MAX_ROWS,
             tail: int = 0) -> list[int]:
-    """Run each (argv, options) step, frame the combined transcript, write ``<name>.svg``."""
+    """Run each (argv, options) step, frame the combined transcript, write ``<name>.svg``.
+
+    A step with ``"pty"`` answers its prompts on a pseudo-terminal. Where none can be allocated, a
+    step that also has ``"digest"`` confirms by review digest (:func:`run_digest_confirmed`); any
+    other such capture is skipped (the previous SVG is kept) rather than faked.
+    """
     text, codes = "", []
     for argv, opts in steps:
+        runs: list[tuple[list[str], int, str]]
         if opts.get("pty"):
             try:
-                rc, out = demo.run_pty(argv, opts["pty"])
-            except OSError as exc:   # no pseudo-terminal here (some sandboxes): keep the previous capture
-                print(f"skipped {name}.svg: no pseudo-terminal ({exc}); run this script in a real terminal")
-                return []
+                runs = [(argv, *demo.run_pty(argv, opts["pty"]))]
+            except OSError as exc:   # no pseudo-terminal here (some sandboxes refuse openpty)
+                if not opts.get("digest"):
+                    print(f"skipped {name}.svg: no pseudo-terminal ({exc}) and no non-interactive "
+                          "confirmation for this prompt; run this script in a real terminal")
+                    return []
+                print(f"{name}.svg: no pseudo-terminal ({exc}); confirming by review digest instead")
+                runs = run_digest_confirmed(demo, argv)
         else:
-            rc, out = demo.run(argv, cwd=opts.get("cwd"))
-        codes.append(rc)
-        shown = opts.get("show", cmd_line(argv, demo))
-        body = "\n".join(shape(out, head=opts.get("head", head), tail=opts.get("tail", tail)))
-        text += f"{shown}\n{body}\n" + (f"[exit {rc}]\n" if opts.get("exit") else "")
+            runs = [(argv, *demo.run(argv, cwd=opts.get("cwd")))]
+        for i, (run_argv, rc, out) in enumerate(runs):
+            codes.append(rc)
+            shown = opts.get("show", cmd_line(argv, demo))
+            if i:   # the digest re-run: the same command plus the confirmation flag
+                shown += " \\\n    " + " ".join(run_argv[len(argv):])
+            body = "\n".join(shape(out, head=opts.get("head", head), tail=opts.get("tail", tail)))
+            text += f"{shown}\n{body}\n" + (f"[exit {rc}]\n" if opts.get("exit") else "")
     lines = text.rstrip("\n").splitlines()
     (OUT_DIR / f"{name}.svg").write_text(frame_svg(title, lines), encoding="utf-8")
     print(f"wrote {name}.svg ({len(lines)} lines; exit codes {codes})")
@@ -432,8 +475,8 @@ def _captures(demo: Demo) -> int:
         shown = ("$ python -m agentteams.vulnscan grant sign --key-id op --days 1 --max-uses 5 \\\n"
                  "    --op stage-fix --repo-root ~/code/shop-api --governance-dir " + rel)
         signed = capture(demo, "06-grant-sign", "Step 8 — sign a standing grant (operator terminal)", [
-            (sign, {"pty": {"[y/N]": "y"}, "show": shown, "exit": True})], head=40)
-        if not signed:   # no terminal, or signing refused in a dev checkout: install an equivalent demo grant
+            (sign, {"pty": {"[y/N]": "y"}, "digest": True, "show": shown, "exit": True})], head=40)
+        if not signed or signed[-1] != 0:   # signing refused (e.g. a dev checkout): install an equivalent demo grant
             _install_demo_grant(demo, gov)
         capture(demo, "06b-grant-list", "The installed grant", [(VS + ["grant", "list"], {})])
 

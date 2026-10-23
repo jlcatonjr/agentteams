@@ -12,20 +12,20 @@
 <text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "op": "escalate",</text>
 <text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "target": "web1",</text>
 <text x="14" y="154" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "status": "done",</text>
-<text x="14" y="171" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "escalation": "ve-0afeb1c5ccff3aa6",</text>
+<text x="14" y="171" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "escalation": "ve-85040767338555a1",</text>
 <text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "scope": "web1"</text>
 <text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"> },</text>
 <text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"> {</text>
 <text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "op": "report",</text>
 <text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "target": "run",</text>
 <text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "status": "done",</text>
-<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "stored": "~/.local/state/agentteams/vulnscan/2026-10-22/agent-report/report.md"</text>
+<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "stored": "~/.local/state/agentteams/vulnscan/2026-10-23/agent-report/report.md"</text>
 <text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"> },</text>
 <text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"> {</text>
 <text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "op": "server-audit",</text>
 <text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "target": "web1",</text>
 <text x="14" y="375" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "status": "refused",</text>
-<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "detail": "blocked by open escalation ve-0afeb1c5ccff3aa6 (other, scope web1); see: vulnscan halts</text>
+<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  "detail": "blocked by open escalation ve-85040767338555a1 (other, scope web1); see: vulnscan halts</text>
 <text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    "</text>
 <text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"> },</text>
 <text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"> {</text>
