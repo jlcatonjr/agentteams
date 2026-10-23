@@ -12,6 +12,8 @@
 # L1 runs : every ioc-*.txt beside this script, then every ioc-*.txt in the config dir, is embedded as
 #           data (never executed); the log is judged by `python -m agentteams.vulnscan inventory`
 #           (skip: AGENTTEAMS_VULNSCAN_NO_REPORT=1; interpreter: AGENTTEAMS_PYTHON, default python3).
+# Exit    : the script's (L1: 0 clean · 1 action · 3 audit incomplete · 4 compromise) · 2 usage/config · 255 ssh
+#           (`all`: the worst over the hosts, an unreachable host counting as 3)
 set -uo pipefail
 KIT="$(cd "$(dirname "$0")" && pwd)"
 CONF="${AGENTTEAMS_SERVER_KIT_CONFIG:-$KIT}"
@@ -26,22 +28,38 @@ if [ -d "$CONF" ] && [ "$(cd "$CONF" && pwd -P)" != "$(cd "$KIT" && pwd -P)" ]; 
   IOC_DIRS+=("$CONF")
 fi
 
-[ $# -ge 2 ] || { sed -n '2,14p' "$0"; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,16p' "$0"; exit 2; }
 HOST="$1"; SCRIPT="$2"; shift 2
+# Only the kit's own L-scripts are streamed: no paths, no `..`, no other file beside this script.
+case "$SCRIPT" in
+  L1-audit.sh|L2-os-patch.sh|L3-node-runtime.sh|L4-python-app.sh|L5-containers.sh) ;;
+  *) echo "refusing script '$SCRIPT': only L1-audit.sh, L2-os-patch.sh, L3-node-runtime.sh, L4-python-app.sh and L5-containers.sh run" >&2; exit 2;;
+esac
 [ -f "$KIT/$SCRIPT" ] || { echo "no such script: $SCRIPT" >&2; exit 2; }
+# Host names: the same grammar as vulnscan's MCP server; `all` is reserved for "every host".
+HOST_RE='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+valid_host(){ [[ $1 =~ $HOST_RE ]] && [ "$1" != "all" ]; }
+HOST_RULE="names match [A-Za-z0-9][A-Za-z0-9._-]{0,63} and are not 'all'"
+if [ "$HOST" != "all" ] && ! valid_host "$HOST"; then echo "invalid host name '$HOST' ($HOST_RULE)" >&2; exit 2; fi
 [ -f "$CONF/hosts.conf" ] || { echo "no $CONF/hosts.conf — copy hosts.conf.example and edit it" >&2; exit 2; }
 
-hosts(){ grep -vE '^[[:space:]]*(#|$)' "$CONF/hosts.conf" | awk -F'|' '{gsub(/^ +| +$/,"",$1); print $1}'; }
-target_of(){ grep -vE '^[[:space:]]*(#|$)' "$CONF/hosts.conf" | awk -F'|' -v h="$1" '{n=$1; gsub(/^ +| +$/,"",n); if(n==h){t=$2; gsub(/^ +| +$/,"",t); print t}}'; }
+# hosts.conf: CR and surrounding blanks/tabs are not part of a field (Python's str.strip(), as executor reads it).
+conf_lines(){ tr -d '\r' < "$CONF/hosts.conf" | grep -vE '^[[:space:]]*(#|$)'; }
+hosts(){ conf_lines | awk -F'|' '{n=$1; gsub(/^[[:space:]]+|[[:space:]]+$/,"",n); print n}'; }
+target_of(){ conf_lines | awk -F'|' -v h="$1" '{n=$1; gsub(/^[[:space:]]+|[[:space:]]+$/,"",n); if(n==h){t=$2; gsub(/^[[:space:]]+|[[:space:]]+$/,"",t); print t}}'; }
 
 IOC_END="__AGENTTEAMS_IOC_DATA_END__"
-# Refuse a planted terminator here, in the main shell and before any host is contacted: inside
-# payload() an `exit` would only end the pipeline's subshell, and ssh would still run.
+# Refuse a planted terminator or a binary file here, in the main shell and before any host is
+# contacted: inside payload() an `exit` would only end the pipeline's subshell, and ssh would still run.
 if [ "$SCRIPT" = "L1-audit.sh" ]; then
   for d in "${IOC_DIRS[@]}"; do
     for f in "$d"/ioc-*.txt; do
       [ -f "$f" ] || continue
       if grep -q "$IOC_END" "$f"; then echo "refusing $f: contains the data terminator" >&2; exit 2; fi
+      # A NUL byte would be dropped by the remote shell; indicator data is text, so refuse instead.
+      if [ "$(tr -d '\000' < "$f" | wc -c | tr -d ' ')" != "$(wc -c < "$f" | tr -d ' ')" ]; then
+        echo "refusing $f: binary content (NUL bytes) — indicator files are plain text" >&2; exit 2
+      fi
     done
   done
 fi
@@ -52,8 +70,8 @@ payload(){  # the script; for the audit, indicator rules are embedded as a *quot
     for d in "${IOC_DIRS[@]}"; do
       for f in "$d"/ioc-*.txt; do
         [ -f "$f" ] || continue
-        cat "$f"
-        [ -n "$(tail -c 1 "$f")" ] && echo   # a missing final newline must not glue onto the terminator
+        tr -d '\r' < "$f"                     # CRLF → LF: a trailing CR would make every rule miss
+        [ -n "$(tr -d '\r' < "$f" | tail -c 1)" ] && echo   # a missing final newline must not glue onto the terminator
       done
     done
     printf '%s\n)\n' "$IOC_END"
@@ -73,6 +91,12 @@ run_one(){
   payload | ssh -o ConnectTimeout=20 -o ServerAliveInterval=30 -o BatchMode=yes "${ssh_args[@]}" "$remote" 2>&1 | tee "$log"
   local rc=${PIPESTATUS[1]}
   [ "$rc" -eq 255 ] && echo "SSH FAILED for $host — check hosts.conf, keys, network" >&2
+  # An audit that never printed its verdict (no sudo, sudo wants a password, the shell died) is
+  # incomplete (exit 3), never clean or "action needed"; indicator lines already printed still win (4).
+  if [ "$SCRIPT" = "L1-audit.sh" ] && [ "$rc" -ne 255 ] && ! grep -qE '^RESULT (clean|action-needed|COMPROMISE)' "$log"; then
+    echo "AUDIT INCOMPLETE for $host: no RESULT line (remote exit $rc)" >&2
+    if [ "$rc" -eq 4 ] || grep -q "^IOC$(printf '\t')" "$log"; then rc=4; else rc=3; fi
+  fi
   if [ "$SCRIPT" = "L1-audit.sh" ] && [ "$rc" -ne 255 ] && [ -z "${AGENTTEAMS_VULNSCAN_NO_REPORT:-}" ]; then
     printf '\n---- vulnerability report (%s) ----\n' "$host"
     "${AGENTTEAMS_PYTHON:-python3}" -m agentteams.vulnscan inventory "$log" --host "$host" --out "${log%.log}-report.md"
@@ -84,8 +108,19 @@ run_one(){
 }
 
 if [ "$HOST" = "all" ]; then
+  # Names are read line by line (never word-split or glob-expanded) and all are checked before any
+  # host is contacted.
+  names=(); bad=""
+  while IFS= read -r h; do
+    if valid_host "$h"; then names+=("$h"); else bad="$bad '$h'"; fi
+  done < <(hosts)
+  [ -z "$bad" ] || { echo "invalid host name(s) in $CONF/hosts.conf:$bad ($HOST_RULE)" >&2; exit 2; }
   worst=0
-  for h in $(hosts); do run_one "$h" "$@"; r=$?; [ "$r" -ne 255 ] && [ "$r" -gt "$worst" ] && worst=$r; done
+  for h in ${names[@]+"${names[@]}"}; do
+    run_one "$h" "$@"; r=$?
+    [ "$r" -eq 255 ] && r=3            # unreachable = unscanned, never clean
+    [ "$r" -gt "$worst" ] && worst=$r
+  done
   exit "$worst"
 fi
 run_one "$HOST" "$@"

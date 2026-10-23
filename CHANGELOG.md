@@ -103,6 +103,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Behaviour change:** the daily server audit runs the packaged server-kit scripts with your
     `hosts.conf`/`apps.conf`; the exported copies are no longer executed by the daily job. Extra
     `ioc-*.txt` files in the server-kit directory are embedded as data.
+- **vulnscan hardening from the test campaign.**
+  - Scanning: an OSV batch reply that is short or malformed makes the run unscanned (exit 3);
+    OSV pagination is bounded; an advisory detail that fails in the parallel fetch is retried once,
+    sequentially; a runtime whose version cannot be read is unscannable, never clean.
+  - Fixes: npm runs on a scratch copy of `package.json` and the lockfile with empty user and global
+    config, the public registry, `--strict-ssl=true` and `--ignore-scripts`, so a repository
+    `.npmrc` is never read (npm workspaces fail closed). A malformed lockfile fails the request with
+    a ledger row. A v1 lockfile's `resolved` URLs are checked against the registry allowlist.
+  - `open-pr` is idempotent: a retry reuses an open same-repository PR whose branch holds the staged
+    tree, or creates the PR without pushing when the remote ref is the staged commit; it refuses
+    other content. After the PR the executor's worktree is removed and the branch kept.
+  - Ledger: an incomplete final row names the recovery; appends fsync; a ledger key error refuses
+    instead of crashing.
+  - A SIGTERM during `agent-run` removes both containers, records `agent-error` and exits 143.
+  - **Behaviour change:** the scheduled job no longer bakes in `SSH_AUTH_SOCK`. A launchd agent
+    gets the login session's socket; under systemd or cron, set `IdentityAgent` in `~/.ssh/config`.
+  - `schedule remove` leaves a user with no crontab without one, and reports a failed crontab write.
+  - The gateway serialises upstream calls (at most one call can overshoot a cap) and validates
+    `--budget-usd`, `--listen` and `--upstream`; a non-numeric `Content-Length` gets 400.
+  - The MCP server bounds request lines, validates `params` and writes spool files atomically;
+    `list_findings` sorts malicious first, then by severity, and returns `total` and `truncated`.
+  - Each grant file must be a regular file you own, not group/world-writable and not a symlink. An
+    unreadable `*.json` file in a grants directory makes repository operations refuse.
+  - `~/.local/state/agentteams` is a protected write root with Claude `Edit(...)` deny rules (see
+    Security). Every vulnscan module is pinned in the integrity manifest.
+- **vulnscan hardening, test round 2.**
+  - **Behaviour change:** `agent-selftest` needs `agent.team_dir`; it no longer falls back to a
+    directory inside the state directory. `team_dir` is also refused at, inside or above the
+    vulnscan state directory, and when it is not yours or is group/world-writable.
+  - A grants directory, the verify-keys directory and the verify-key file are refused when they are
+    a symlink, not a directory (or file), not yours, or group/world-writable.
+  - `review` prints an overdue notice. `review --since` and `--run` (`publish`, `agent-chat`) must
+    be `YYYY-MM-DD` (else exit 2). An unusable `vulnscan.json` exits 2 with the reason, now
+    checked key by key, on every command that reads it. `scan`/`fix` on a missing path and
+    `inventory` with a missing log exit 2.
+  - `daily` takes `<state>/daily.lock`: a second concurrent run exits 3 with a message and writes
+    nothing. The heartbeat is written atomically; a full disk exits 3 and still notifies; an
+    unreadable earlier `summary.json` is skipped with a note. `fix_mode: apply-worktree` clamps the
+    cooldown to at least 14 days, runs `validate_diff`, checks a reused worktree, and refuses a
+    repository without `origin/HEAD`.
+  - **Behaviour change:** the scheduled job bakes in only `PATH`, `HOME`, `XDG_CONFIG_HOME`,
+    `XDG_STATE_HOME`, `AGENTTEAMS_VULNSCAN_CONFIG_DIR`, `AGENTTEAMS_VULNSCAN_STATE_DIR`,
+    `AGENTTEAMS_SERVER_KIT_DIR` and `AGENTTEAMS_SERVER_KIT_LOGS` (`schedule.JOB_ENV_VARS`), so an
+    API key in another `AGENTTEAMS_*` variable never lands in the plain-text job file. `--hour` and
+    `--minute` are range-checked, `%` is escaped for cron, and `schedule remove` under systemd
+    tolerates units that are not installed.
+  - `stage-fix` (`executor.validate_diff`): a pin may change only its version, upward, to a final
+    release; `--hash` files are never edited (`fix` holds them back as `hash-held`); renames,
+    deletions, mode changes and symlinks are refused; an entry with a URL in `version` and no
+    `resolved` is refused; workspace `link`/`file:` entries pass only in-repo and unchanged; a root
+    `workspaces` change is refused.
+  - `fix --apply` and `stage-fix` (`executor.stage_fix`, before any checkout) refuse a repository
+    whose own git config defines a filter driver, or that git refuses to open (e.g.
+    `safe.directory`: "git refuses to read this repository (...) — fix it by hand";
+    `fix.git_config_problem`). git queries run hardened (`executor.query_git`).
+  - **Behaviour change:** `run-host.sh` skips an `apps.conf` entry whose flags carry `--apply`,
+    `--restart-services` or `--reboot` (split on any whitespace) and counts it as a failed step
+    (exit 3): "apps.conf flags may not contain --apply, --restart-services or --reboot (found …)".
+  - A spool request that is not a regular file (e.g. a FIFO) is opened with `O_NONBLOCK`, refused
+    and set aside without blocking the serving loop (`executor._read_request`).
+  - The schedule refuses control characters in a baked environment value
+    (`schedule.job_environment`); `schedule install` reports a plan error and writes nothing.
+  - `agent.debrief_max_tokens` must be an integer 1..100000000; bools, floats and strings raise
+    `ValueError` (`debrief.debrief_max_tokens`).
+  - A run refused for any reason while another run or debrief holds the run lock writes nothing
+    (`agent_run.run_agent` returns `not-run` with `status_written: False`); every other not-run
+    reason is decided under the lock.
+  - **Behaviour change:** `run-host.sh` stops before any change when the first L1 audit exits 2
+    (config, exit 2), 3 or prints no `RESULT` line (exit 3), or cannot reach the host (exit 1), and
+    with exit 4 on compromise; otherwise it exits with the worst step result (0/1/3/4). Host names
+    must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` and `all` is reserved. `remote.sh` streams only
+    `L1-audit.sh` to `L5-containers.sh`. L3/L4/L5 options without a value exit 2. IOC files are
+    embedded with CR stripped, and a binary one exits 2. L1 reports MODERATE without apt/dnf, or
+    with manifests but no `python3`.
+  - Notifications: on macOS the text is passed as an AppleScript string, so non-ASCII shows
+    correctly; `notify.send` never raises.
+  - Gateway: `spend.json` is written atomically; `--max-tokens-total` below 0 exits 2.
+    `debrief_limits` refuses NaN, infinity, booleans and strings. A SIGTERM during `agent-chat`
+    removes its containers.
 
 ### Security
 
@@ -116,7 +195,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not be at, inside or above it (`frameworks/_write_roots.py`), and emitted Claude settings deny
   `Edit(~/.config/agentteams)` and `Edit(~/.config/agentteams/**)`. Before, only `keys/` was refused as a
   write root, and vulnscan's config (whose `notify: command:` the daily job runs), notes and server kit
-  had no protection.
+  had no protection. The operator state directory `~/.local/state/agentteams` (vulnscan's ledger,
+  spool and run lock; server-kit logs; doc-sync state) is protected the same way, with
+  `Edit(~/.local/state/agentteams)` and `Edit(~/.local/state/agentteams/**)`.
+- **macOS `~/Library/LaunchAgents` and `~/Library/Keychains` are protected write roots**
+  (`frameworks/_write_roots.py`). launchd runs a LaunchAgents plist (such as the daily vulnscan job)
+  unsandboxed, so emitted Claude settings also deny `Edit(~/Library/LaunchAgents)` and
+  `Edit(~/Library/LaunchAgents/**)` (`frameworks/_sandbox_emit.py`).
 
 ### Developer tooling
 

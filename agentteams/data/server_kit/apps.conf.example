@@ -8,5 +8,7 @@
 # exact versions from your reviewed repository fix, so server and repo agree.
 #
 # L4 flags: --user-site (packages in the user's ~/.local)  --as USER  --system-pip  --git-pull
+# Never --apply, --restart-services or --reboot here: run-host.sh skips such an entry (only run-host's own
+# --apply decides whether anything changes).
 web1 | myapp.service    | ~deploy/myapp     | ~deploy/myapp/.venv/bin/python | --as deploy             | http://127.0.0.1:8000/health |
 api1 | api.service      | ~svc/api          | /usr/bin/python3               | --user-site --as svc    | -                            |

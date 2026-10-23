@@ -24,7 +24,7 @@
 set -uo pipefail
 declare -a _IF=() _IN=() _IE=() _IG=()
 while IFS= read -r _line; do
-  _line="${_line%%#*}"; read -r _kind _a _b <<< "$_line" || true
+  _line="${_line//$'\r'/}"; _line="${_line%%#*}"; read -r _kind _a _b <<< "$_line" || true   # CRLF data stays live
   case "$_kind" in
     file) [ -n "$_a" ] && _IF+=("$_a");; name) [ -n "$_a" ] && _IN+=("$_a");;
     env)  [ -n "$_a" ] && _IE+=("$_a");; grep) [ -n "$_a" ] && [ -n "$_b" ] && _IG+=("$_a:$_b");;
@@ -77,7 +77,7 @@ os_section(){
     if systemctl is-enabled dnf-automatic.timer >/dev/null 2>&1 || systemctl is-enabled dnf-automatic-install.timer >/dev/null 2>&1; then
       ok "dnf-automatic timer enabled"
     else check MODERATE "no automatic security patching (dnf-automatic not enabled)"; fi
-  else info "unknown package manager"; fi
+  else check MODERATE "unknown package manager — OS security patch state was not assessed (patch this host by hand)"; fi
 }
 
 runtime_section(){
@@ -114,8 +114,14 @@ packages_section(){
     done
     [ "$n" -gt 0 ] && info "$sp: $n packages"
   done
-  command -v python3 >/dev/null 2>&1 || { info "python3 missing — npm/composer inventory skipped"; return; }
-  for f in $(find /var/www /srv /opt /home /root -xdev -maxdepth 7 \( -path '*/node_modules/*/node_modules' -prune \) -o \( -path '*/node_modules/.package-lock.json' -o -path '*/vendor/composer/installed.json' \) -print 2>/dev/null); do
+  local manifests
+  manifests=$(find /var/www /srv /opt /home /root -xdev -maxdepth 7 \( -path '*/node_modules/*/node_modules' -prune \) -o \( -path '*/node_modules/.package-lock.json' -o -path '*/vendor/composer/installed.json' \) -print 2>/dev/null)
+  [ -n "$manifests" ] || return 0
+  if ! command -v python3 >/dev/null 2>&1; then   # unread manifests are a gap in the inventory, never a clean result
+    check MODERATE "python3 missing — $(printf '%s\n' "$manifests" | grep -c .) npm/composer manifest(s) were not inventoried"
+    return
+  fi
+  for f in $manifests; do
     python3 -I - "$f" <<'PY'
 import json, sys
 f = sys.argv[1]
@@ -152,18 +158,19 @@ services_section(){
 
 ioc_section(){
   sec "Compromise indicators (${#_IF[@]} path, ${#_IN[@]} name, ${#_IE[@]} env, ${#_IG[@]} content rules)"
+  # ${a[@]+"${a[@]}"}: an empty array is "unbound" under set -u before bash 4.4 (RHEL 7, Amazon Linux 2)
   local g p name pat e any=0
-  for g in "${_IF[@]}"; do for p in $g; do [ -e "$p" ] && { ioc "indicator path present: $p"; any=1; }; done; done
-  for e in "${_IE[@]}"; do grep -qsl -- "$e" /proc/[0-9]*/environ 2>/dev/null && { ioc "a process has $e in its environment"; any=1; }; done
+  for g in ${_IF[@]+"${_IF[@]}"}; do for p in $g; do [ -e "$p" ] && { ioc "indicator path present: $p"; any=1; }; done; done
+  for e in ${_IE[@]+"${_IE[@]}"}; do grep -qsl -- "$e" /proc/[0-9]*/environ 2>/dev/null && { ioc "a process has $e in its environment"; any=1; }; done
   if [ ${#_IN[@]} -gt 0 ] || [ ${#_IG[@]} -gt 0 ]; then
     local expr=() first=1
-    for name in "${_IN[@]}" "${_IG[@]%%:*}"; do
+    for name in ${_IN[@]+"${_IN[@]}"} ${_IG[@]+"${_IG[@]%%:*}"}; do
       [ $first -eq 1 ] && first=0 || expr+=(-o); expr+=(-name "$name")
     done
     while IFS= read -r p; do
       [ -n "$p" ] || continue
-      for name in "${_IN[@]}"; do [ "$(basename "$p")" = "$name" ] && { ioc "indicator file: $p"; any=1; }; done
-      for g in "${_IG[@]}"; do
+      for name in ${_IN[@]+"${_IN[@]}"}; do [ "$(basename "$p")" = "$name" ] && { ioc "indicator file: $p"; any=1; }; done
+      for g in ${_IG[@]+"${_IG[@]}"}; do
         [ "$(basename "$p")" = "${g%%:*}" ] && grep -qiE -- "${g#*:}" "$p" 2>/dev/null && { ioc "indicator content in $p"; any=1; }
       done
     done < <(find $SCAN_ROOTS -xdev -maxdepth 9 \( "${expr[@]}" \) 2>/dev/null)

@@ -15,8 +15,9 @@
 # carry a compromised release, so a freshly built image is held for the cooldown.
 set -uo pipefail
 APPLY=false; COOLDOWN=14; FRESH=false
+need(){ case "${2-}" in ""|--*) echo "option $1 needs a value" >&2; exit 2;; esac; }   # missing value: usage error (2), never an unbound-variable crash
 while [ $# -gt 0 ]; do case "$1" in
-  --apply) APPLY=true;; --cooldown-days) COOLDOWN="$2"; shift;; --allow-fresh) FRESH=true;;
+  --apply) APPLY=true;; --cooldown-days) need "$@"; COOLDOWN="$2"; shift;; --allow-fresh) FRESH=true;;
   *) echo "unknown option: $1" >&2; exit 2;; esac; shift; done
 
 main(){

@@ -72,6 +72,17 @@ _HOME_PROTECTED: tuple[str, ...] = (
     # server-kit). A write root at, inside or above it would let a sandboxed agent plant a verify key,
     # an operator note, or a `notify: command:` the unsandboxed daily job runs.
     "~/.config/agentteams",
+    # 2026-10-22 (vulnscan-test-campaign M2): the operator state directory — vulnscan's MAC'd ledger, request
+    # spool and run lock, the server kit's logs and agent_doc_sync's per-project copies. A write root there would
+    # let a host agent forge spool requests or corrupt the ledger (which then refuses every grant).
+    "~/.local/state/agentteams",
+    # 2026-10-23 (vulnscan test matrix X5): macOS persistence and credentials — the daily job's launchd plist
+    # lives in LaunchAgents. Only these two: ~/Library itself holds legitimate roots (CloudStorage), and is
+    # refused anyway as an ancestor of both.
+    "~/Library/LaunchAgents", "~/Library/Keychains",
+    # The two operator entries are the DEFAULT locations (== _sandbox_emit.OPERATOR_CONFIG_DIR / OPERATOR_STATE_DIR,
+    # test-locked). Write roots are judged when a team is generated, which cannot see an operator's
+    # XDG_* / AGENTTEAMS_VULNSCAN_* overrides; vulnscan's own team-dir check also refuses the configured dirs.
 )
 #: Public name for other modules (vulnscan's team-dir check) that must refuse the same paths.
 HOME_PROTECTED: tuple[str, ...] = _HOME_PROTECTED

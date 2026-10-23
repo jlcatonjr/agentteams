@@ -15,6 +15,9 @@ lockfile, and a ``pnpm-lock.yaml``.
 Discovery skips vendored and generated trees (``node_modules``, virtualenvs, build
 output). It also skips **linked git worktrees** by default, because they repeat their
 main checkout's manifests.
+
+:func:`check_pin_edit` and :func:`check_lock_edit` decide which edits of these files the
+executor's ``validate_diff`` lets a staged fix make.
 """
 
 from __future__ import annotations
@@ -25,6 +28,9 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+from agentteams.vulnscan.versions import is_final, version_key
 
 SKIP_DIRS: frozenset[str] = frozenset({
     "node_modules", ".git", ".hg", ".svn", "__pycache__", ".tox", ".nox", ".mypy_cache",
@@ -37,6 +43,9 @@ REQ_PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*==\s*([^\
 _REQ_ANY = re.compile(r"^\s*[A-Za-z0-9][A-Za-z0-9._-]*")
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.lock",
              "poetry.lock", "uv.lock", "Pipfile.lock")
+REGISTRY_HOSTS = frozenset({"registry.npmjs.org", "registry.yarnpkg.com"})
+_LOCK_ROOT_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies", "scripts",
+                   "workspaces")
 
 
 @dataclass(frozen=True)
@@ -234,3 +243,142 @@ def _pipfile_lock(path: Path, m: Manifest) -> None:
             ver = str(info.get("version", ""))
             if ver.startswith("=="):
                 m.deps.append(Dep("PyPI", name, ver[2:], scope, str(path)))
+
+
+# ---------------------------------------------------------------- edit checks (executor.validate_diff)
+
+def check_pin_edit(rel: str, old: bytes, new: bytes) -> None:
+    """Refuse a requirements edit that is anything but raising ``==`` versions in place (B1, X1).
+
+    Every byte outside a changed pin's version span must be unchanged: name, extras, marker,
+    options, comment and line ending. The new version must be a final release above the old one
+    (:mod:`agentteams.vulnscan.versions` ordering). A file holding ``--hash`` options is never
+    edited, because the edit would leave a stale hash behind.
+
+    Args:
+        rel: Path for messages.
+        old: File bytes at the base commit (``b""`` for a new file).
+        new: File bytes now.
+
+    Raises:
+        ValueError: The edit is anything else.
+    """
+    if b"--hash" in old or b"--hash" in new:
+        raise ValueError(f"{rel}: hash-pinned (--hash) requirements are never edited")
+    a, b = old.splitlines(keepends=True), new.splitlines(keepends=True)
+    if len(a) != len(b):
+        raise ValueError(f"{rel}: line count changed")
+    for x, y in zip(a, b):
+        if x == y:
+            continue
+        sx, sy = x.decode("utf-8", "surrogateescape"), y.decode("utf-8", "surrogateescape")
+        mx, my = REQ_PIN.match(sx), REQ_PIN.match(sy)
+        if not (mx and my):
+            raise ValueError(f"{rel}: a non-pin line changed")
+        if sx[:mx.start(3)] != sy[:my.start(3)] or sx[mx.end(3):] != sy[my.end(3):]:
+            raise ValueError(f"{rel}: {mx.group(1)}: a pin may change only its version")
+        if not is_final(my.group(3)) or version_key(my.group(3)) <= version_key(mx.group(3)):
+            raise ValueError(f"{rel}: {mx.group(1)} {mx.group(3)} -> {my.group(3)} is not an upgrade "
+                             "to a final release")
+
+
+def lock_entries(rel: str, text: str) -> tuple[dict[str, Any], list[tuple[str, dict[str, Any]]]]:
+    """Parse an npm lockfile type-safely (D3) and list every package entry it pins.
+
+    Entries come from ``packages`` (v2/v3) and, recursively, ``dependencies`` (v1, and v2's legacy
+    copy that npm 6 reads), so a ``resolved`` URL cannot hide in either.
+
+    Args:
+        rel: Path for messages.
+        text: Lockfile text.
+
+    Returns:
+        (the root package entry ``packages[""]`` or ``{}``, [(name, entry), ...]).
+
+    Raises:
+        ValueError: Not JSON, or a level that must be an object is not one.
+    """
+    try:
+        lock = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{rel}: not valid JSON: {exc}") from exc
+    if not isinstance(lock, dict):
+        raise ValueError(f"{rel}: malformed lockfile: the top level is not an object")
+    entries: list[tuple[str, dict[str, Any]]] = []
+    todo: list[tuple[str, str, Any]] = [("packages", "", lock.get("packages")),
+                                        ("dependencies", "", lock.get("dependencies"))]
+    while todo:
+        section, prefix, sec = todo.pop()
+        if sec is None:
+            continue
+        if not isinstance(sec, dict):
+            raise ValueError(f"{rel}: malformed lockfile: {prefix or section} is not an object")
+        for name, info in sec.items():
+            if not isinstance(info, dict):
+                raise ValueError(f"{rel}: malformed lockfile: {section} entry {prefix}{name!r} is not an object")
+            entries.append((f"{prefix}{name}", info))
+            if section == "dependencies":
+                todo.append((section, f"{prefix}{name} > ", info.get("dependencies")))
+    root = next((info for name, info in entries if name == ""), {})
+    return root, entries
+
+
+def _entry_key(name: str, info: dict[str, Any]) -> str:
+    """Return a comparable form of one lockfile entry (its nested v1 ``dependencies`` are entries of their own)."""
+    return name + "\0" + json.dumps({k: v for k, v in info.items() if k != "dependencies"}, sort_keys=True)
+
+
+def _local_path(text: str) -> bool:
+    """Return whether ``text`` is a relative path that stays inside the repository."""
+    parts = text.replace("\\", "/").split("/")
+    return bool(text) and not text.startswith(("/", "\\", "~")) and ":" not in text and ".." not in parts
+
+
+def _kept_local(name: str, info: dict[str, Any], before: set[str]) -> bool:
+    """Workspace policy (X4): a local link or ``file:`` entry passes only unchanged from the base and inside the repo.
+
+    Such an entry fetches nothing; requiring it unchanged means the fix never introduced or retargeted it.
+    """
+    url, version = info.get("resolved"), info.get("version")
+    if info.get("link") is True and isinstance(url, str):
+        path = url
+    elif not url and isinstance(version, str) and version.startswith("file:"):
+        path = version[len("file:"):]
+    else:
+        return False
+    return _local_path(path) and _entry_key(name, info) in before
+
+
+def check_lock_edit(rel: str, old: str, new: str) -> None:
+    """Refuse root-package edits and any entry that would fetch from off the registry allowlist (B1, A4, X4).
+
+    Every entry must resolve to ``https://`` on :data:`REGISTRY_HOSTS`, or have no ``resolved`` and a
+    plain version (a URL or git spec in ``version`` with no ``resolved`` is refused). The one exception
+    is a workspace link or ``file:`` entry kept unchanged from the base lockfile, inside the repository.
+
+    Args:
+        rel: Path for messages.
+        old: Lockfile text at the base commit (``"{}"`` for a new file).
+        new: Lockfile text now.
+
+    Raises:
+        ValueError: Any of these is found, or a lockfile is malformed.
+    """
+    root_before, before = lock_entries(rel, old)
+    root_after, entries = lock_entries(rel, new)
+    for key in _LOCK_ROOT_KEYS:
+        if root_before.get(key) != root_after.get(key):
+            raise ValueError(f"{rel}: root package {key} changed")
+    kept = {_entry_key(name, info) for name, info in before}
+    for name, info in entries:
+        if _kept_local(name, info, kept):
+            continue
+        url, version = info.get("resolved"), info.get("version")
+        if url is None or url == "":
+            if isinstance(version, str) and (":" in version or "/" in version):
+                raise ValueError(f"{rel}: {name or '(root)'} has no resolved URL and its version is not a "
+                                 f"registry version: {version[:120]}")
+            continue
+        host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
+        if not isinstance(url, str) or not url.startswith("https://") or host not in REGISTRY_HOSTS:
+            raise ValueError(f"{rel}: {name or '(root)'} resolves outside the registry allowlist: {str(url)[:120]}")

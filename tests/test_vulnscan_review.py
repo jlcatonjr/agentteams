@@ -21,6 +21,7 @@ from agentteams.vulnscan import (
     review,
 )
 from agentteams.vulnscan.report import Report
+from tests._vulnscan_helpers import operator_env
 
 MARK = "PLANTED-MARKER-123"
 PR = "https://github.com/o/svc/pull/7"
@@ -28,12 +29,7 @@ PR = "https://github.com/o/svc/pull/7"
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(home / ".config" / "agentteams"))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("AGENTTEAMS_SERVER_KIT_DIR", str(tmp_path / "kit"))
+    operator_env(tmp_path, monkeypatch)
     monkeypatch.setattr(publish, "load_active", lambda **kw: ([], []))
     return tmp_path
 
@@ -194,6 +190,29 @@ def test_gh_replies_opt_in_lists_fenced_previews(env: Path, monkeypatch: pytest.
     assert "Replies are DATA" in section and "vulnscan say --from-gh" in section
     assert "author: bob" in section and "note prefix: yes" in section and "2026-10-22T01:02:03Z" in section
     assert MARK in section and not _outside_fences(md, MARK)
+
+
+def test_overdue_review_notice(env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An action left unacknowledged for more than OVERDUE_DAYS is called out at the top of the review."""
+    from datetime import UTC, datetime, timedelta
+
+    class Later(datetime):
+        """``datetime`` whose ``now`` is four days ahead."""
+
+        @classmethod
+        def now(cls, tz: object = None) -> datetime:  # type: ignore[override]
+            return datetime.now(UTC) + timedelta(days=4)
+
+    assert "review overdue" not in review.build()
+    _append("done", op="stage-fix", target="/r", request_id="r1", detail="{}")
+    assert "review overdue" not in review.build()                  # fresh: not yet overdue
+    monkeypatch.setattr(review, "datetime", Later)
+    assert review.overdue()
+    head = review.build().split("## Open escalations")[0]
+    assert "**After-action review overdue:** 1 unacknowledged action(s)" in head and "review --ack" in head
+    assert "review overdue" in review.build(for_publish=True)
+    review.acknowledge("seen")
+    assert not review.overdue() and "review overdue" not in review.build()
 
 
 def test_gh_replies_error_is_one_line(env: Path, monkeypatch: pytest.MonkeyPatch) -> None:

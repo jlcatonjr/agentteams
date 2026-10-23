@@ -135,6 +135,22 @@ def test_symlinked_note_rejected(tmp_path: Path) -> None:
     assert len(problems) == 1
 
 
+def test_a_real_note_moved_out_and_symlinked_back_is_rejected(tmp_path: Path) -> None:
+    """V18: the link's target is a valid, 0600, self-owned note, so only O_NOFOLLOW stands between it and the agent."""
+    n = notes.add("steer triage")
+    path = notes.notes_dir() / f"{n['id']}.json"
+    assert [g["id"] for g in notes.active()[0]] == [n["id"]]             # control: in place, it loads
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    moved = outside / path.name                                          # same name: the id check still matches
+    path.rename(moved)
+    assert stat.S_IMODE(moved.stat().st_mode) == 0o600
+    path.symlink_to(moved)
+    got, problems = notes.active()
+    assert got == [] and len(problems) == 1 and problems[0].startswith(path.name), problems
+    assert "symbolic link" in problems[0] or "not a regular file" in problems[0], problems
+
+
 def test_writable_dir_ignored() -> None:
     notes.add("x")
     os.chmod(notes.notes_dir(), 0o777)
@@ -252,6 +268,29 @@ def test_from_gh_only_the_operators_own_comment_after_confirmation(monkeypatch: 
         notes.from_gh(11, repo="alice/webapp", confirm=lambda d: shown.append(d) and False)
     assert shown[0]["text"].strip() == "do not escalate X" and notes.active() == ([], [])
     assert notes.from_gh(11, repo="alice/webapp", confirm=lambda d: True)["author_id"] == 4242
+
+
+@pytest.mark.parametrize(("comment_user", "me"), [
+    ({"login": "alice", "id": 999}, {"login": "alice", "id": 4242}),     # same login, different id (renamed account)
+    (None, {"login": "alice", "id": 4242}),                              # comment has no user
+    ({"login": "alice"}, {"login": "alice", "id": 4242}),                # comment user without an id
+    ({"login": "alice", "id": "4242"}, {"login": "alice", "id": 4242}),  # id as a string
+    ({"login": "alice", "id": True}, {"login": "alice", "id": True}),    # bools are not ids
+    ({"login": "alice", "id": 1}, {"login": "alice", "id": True}),       # ... on either side (True == 1)
+    ({"login": "alice", "id": True}, {"login": "alice", "id": 1}),       # ... including the comment's side
+    ({"login": "alice", "id": 4242}, {"login": "alice"}),                # user endpoint without an id
+    ({"login": "alice", "id": 4242}, {"login": "alice", "id": "4242"}),  # user endpoint id as a string
+    ({"login": "alice", "id": 4242}, ["not", "a", "dict"]),               # user endpoint wrong shape
+])
+def test_from_gh_author_must_match_by_numeric_id(monkeypatch: pytest.MonkeyPatch, comment_user: Any, me: Any) -> None:
+    """V19: the author check compares numeric ids, never logins, and any missing or odd id refuses."""
+    comment = {**_comment(11, "/vulnscan note trust me"), "user": comment_user}
+    fake = _FakeGh({"repos/alice/webapp/issues/comments/11": comment, "user": me})
+    monkeypatch.setattr(notes.subprocess, "run", fake)
+    asked: list[dict] = []
+    with pytest.raises(ValueError, match="not the authenticated gh user"):
+        notes.from_gh(11, repo="alice/webapp", confirm=lambda d: asked.append(d) or True)
+    assert asked == [] and notes.active() == ([], [])                   # refused before the operator is asked
 
 
 def test_from_gh_bad_refs(monkeypatch: pytest.MonkeyPatch) -> None:

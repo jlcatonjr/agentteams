@@ -105,14 +105,62 @@ def test_symlink_file_refused(run_dir: Path, tmp_path: Path) -> None:
     rs.save(run_dir, "ok", request_id=REQ)
     victim = tmp_path / "victim.txt"
     victim.write_text("keep")
+    os.chmod(victim, 0o600)
     _report(run_dir).unlink()
     _report(run_dir).symlink_to(victim)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="symlink"):
         rs.load(run_dir)
     # save replaces the link itself (rename over it) and never writes through it
     rs.save(run_dir, "new", request_id=REQ)
     assert victim.read_text() == "keep"
     assert not _report(run_dir).is_symlink()
+
+
+def test_symlinked_report_to_a_real_0600_report_is_refused(run_dir: Path, tmp_path: Path) -> None:
+    """V25: the link's target is a genuine 0600 report you own, so only O_NOFOLLOW refuses it."""
+    rs.save(run_dir, "genuine", request_id=REQ)
+    assert rs.load(run_dir) is not None                                  # control: in place, it loads
+    victim = tmp_path / "victim.md"
+    _report(run_dir).rename(victim)
+    assert stat.S_IMODE(victim.stat().st_mode) == 0o600
+    _report(run_dir).symlink_to(victim)
+    before = victim.read_bytes()
+    with pytest.raises(ValueError, match="symlink"):
+        rs.load(run_dir)
+    with pytest.raises(ValueError, match="symlink"):
+        rs.finalize(run_dir, "completed")
+    assert victim.read_bytes() == before and _report(run_dir).is_symlink()
+
+
+def test_loose_report_file_mode_refused(run_dir: Path) -> None:
+    """V28: a 0644 report.md (others could have read the agent's text, or it was replaced) is refused."""
+    rs.save(run_dir, "ok", request_id=REQ)
+    os.chmod(_report(run_dir), 0o644)
+    before = _report(run_dir).read_bytes()
+    with pytest.raises(ValueError, match="mode 600"):
+        rs.load(run_dir)
+    with pytest.raises(ValueError, match="mode 600"):
+        rs.finalize(run_dir, "completed")
+    assert _report(run_dir).read_bytes() == before
+
+
+@pytest.mark.parametrize("mode", [0o755, 0o750, 0o770, 0o701])
+def test_save_and_finalize_into_a_loose_dir_are_refused(run_dir: Path, mode: int) -> None:
+    """V28: neither save nor finalize writes into a report directory others can reach; the content is unchanged."""
+    rs.save(run_dir, "original", request_id=REQ)
+    d = run_dir / rs.REPORT_DIR
+    os.chmod(d, mode)
+    before = _report(run_dir).read_bytes()
+    try:
+        with pytest.raises(ValueError, match="mode 700"):
+            rs.save(run_dir, "replacement", request_id=REQ)
+        with pytest.raises(ValueError, match="mode 700"):
+            rs.finalize(run_dir, "completed")
+        assert _report(run_dir).read_bytes() == before
+        assert sorted(p.name for p in d.iterdir()) == [rs.REPORT_FILE]  # no temp file left behind either
+    finally:
+        os.chmod(d, 0o700)
+    assert "original" in (rs.load(run_dir) or "")
 
 
 def test_symlink_dir_refused(run_dir: Path, tmp_path: Path) -> None:

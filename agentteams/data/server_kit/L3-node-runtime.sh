@@ -23,9 +23,10 @@
 set -uo pipefail
 
 APPLY=false; MAJOR=""; RESTART=false; COOLDOWN=14; FRESH=false; NEEDGPG=false
+need(){ case "${2-}" in ""|--*) echo "option $1 needs a value" >&2; exit 2;; esac; }   # missing value: usage error (2), never an unbound-variable crash
 while [ $# -gt 0 ]; do case "$1" in
-  --apply) APPLY=true;; --major) MAJOR="$2"; shift;; --restart-services) RESTART=true;;
-  --cooldown-days) COOLDOWN="$2"; shift;; --allow-fresh) FRESH=true;; --require-gpg) NEEDGPG=true;;
+  --apply) APPLY=true;; --major) need "$@"; MAJOR="$2"; shift;; --restart-services) RESTART=true;;
+  --cooldown-days) need "$@"; COOLDOWN="$2"; shift;; --allow-fresh) FRESH=true;; --require-gpg) NEEDGPG=true;;
   *) echo "unknown option: $1" >&2; exit 2;; esac; shift; done
 
 SCAN_ROOTS="/usr/bin /usr/local /opt /home /root"

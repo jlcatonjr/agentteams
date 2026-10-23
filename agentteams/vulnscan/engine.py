@@ -73,7 +73,8 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
 
     Args:
         deps: (target label, dependency) pairs.
-        report: Report to extend; feed failures land in ``report.feed_errors``.
+        report: Report to extend; feed failures land in ``report.feed_errors``. Advisory
+            details that fail in the parallel fetch are retried once, sequentially.
         distro_check: Mark Python packages in OS-managed locations as ``distro``.
     """
     by_key: dict[osv.Key, list[tuple[str, Dep]]] = defaultdict(list)
@@ -88,6 +89,8 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
     ids_all = sorted({i for ids in hits.values() for i in ids})
     with _cf.ThreadPoolExecutor(max_workers=8) as pool:
         fetched = dict(zip(ids_all, pool.map(_details_or_none, ids_all)))
+    for vid in sorted(i for i, rec in fetched.items() if rec is None):
+        fetched[vid] = _details_or_none(vid)   # one sequential retry: parallel failures are often transient
     missing = sorted(i for i, rec in fetched.items() if rec is None)
     if missing:
         report.feed_errors.append(f"OSV details unavailable for {len(missing)} advisory(ies): {', '.join(missing[:5])}")
@@ -217,7 +220,7 @@ def local_runtimes(target: str = "localhost") -> Report:
         target: Label for the report.
 
     Returns:
-        The report (runtime findings only).
+        The report: runtime findings, and a runtime whose version cannot be read as unscannable.
     """
     report = Report(target=target)
     items: list[tuple[str, str, str, str]] = []
@@ -232,5 +235,7 @@ def local_runtimes(target: str = "localhost") -> Report:
             ver = _version_of(path, args)
             if ver:
                 items.append((kind, ver, path, _manager_of(path)))
+            else:
+                report.unscannable.append((path, f"could not read the {kind} version"))
     _runtime_findings(target, items, report)
     return report

@@ -19,6 +19,11 @@ Tail truncation would otherwise pass verification: the remaining chain is still 
 dropped rows, an escalation say, are gone. So every append also raises a **high-water mark**
 (``<config>/keys/vulnscan-ledger.hwm``). A ledger whose last ``seq`` is below the mark fails to read.
 That includes a deleted ledger.
+
+Crash safety: every append fsyncs the row before it raises the mark (and fsyncs the mark, and the
+directory entries it creates), so a power loss can leave the mark behind the rows but never ahead
+of them. A crash or a full disk mid-write can still leave an incomplete final row; reading then
+fails closed with a message that says so and names the recovery (:data:`RECOVERY`).
 """
 
 from __future__ import annotations
@@ -38,6 +43,24 @@ from typing import Any
 from agentteams.vulnscan import paths
 
 GENESIS = "0" * 64
+RECOVERY = ("to recover, revoke every grant, then move ledger.jsonl and keys/vulnscan-ledger.hwm aside "
+            "(keep them for investigation) — see 'ledger integrity failure' in the vulnscan automation walkthrough")
+
+
+class LedgerKeyError(PermissionError, ValueError):
+    """The ledger key is not owned by you or is readable by others.
+
+    A :class:`PermissionError` that is also a :class:`ValueError`, so every caller that refuses on a
+    ledger integrity failure (``except ValueError``) refuses on it too instead of crashing.
+    """
+
+
+def _fsync_dir(directory: Path) -> None:
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def ledger_path() -> Path:
@@ -57,9 +80,12 @@ def _key() -> bytes:
         fd = os.open(kfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w") as fh:
             fh.write(secrets.token_hex(32))
+            fh.flush()
+            os.fsync(fh.fileno())
+        _fsync_dir(kdir)            # a lost key after a power loss would fail every row
     st = kfile.stat()
     if st.st_uid != os.getuid() or st.st_mode & 0o077:
-        raise PermissionError(f"{kfile} must be owned by you with mode 600")
+        raise LedgerKeyError(f"{kfile} must be owned by you with mode 600")
     return bytes.fromhex(kfile.read_text().strip())
 
 
@@ -89,7 +115,10 @@ def _raise_high_water(seq: int) -> None:
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(str(seq))
+        fh.flush()
+        os.fsync(fh.fileno())
     tmp.replace(p)
+    _fsync_dir(p.parent)            # make the rename (and, the first time, the file) durable
 
 
 def _mac(key: bytes, prev: str, row: dict[str, Any]) -> str:
@@ -113,6 +142,40 @@ def locked() -> Iterator[None]:
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
+def _parse(path: Path) -> list[dict[str, Any]]:
+    """Return the ledger's rows as parsed JSON objects, unverified.
+
+    Every complete row ends with a newline (an append writes the row and its newline at once), so
+    text after the last newline is a row an interrupted write left behind. It is refused, never
+    skipped or repaired: the next append would otherwise join it to a new row.
+
+    Args:
+        path: The ledger file.
+
+    Returns:
+        One object per row.
+
+    Raises:
+        ValueError: An incomplete final row, or a row that is not a JSON object.
+    """
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    if lines[-1]:
+        raise ValueError(f"the ledger has an incomplete final row (interrupted write?) at row {len(lines)}: "
+                         f"the {len(lines) - 1} rows before it are intact, but nothing can be appended "
+                         f"after it — {RECOVERY}")
+    rows: list[dict[str, Any]] = []
+    for n, line in enumerate(lines[:-1], 1):
+        try:
+            row = json.loads(line)
+        except ValueError as exc:
+            raise ValueError(f"ledger row {n} is not valid JSON — the ledger was altered ({exc})") from exc
+        if not isinstance(row, dict):
+            raise ValueError(f"ledger row {n} is not a JSON object — the ledger was altered")
+        rows.append(row)
+    return rows
+
+
 def read(*, verify: bool = True) -> list[dict[str, Any]]:
     """Return all rows, verifying the MAC chain.
 
@@ -123,8 +186,9 @@ def read(*, verify: bool = True) -> list[dict[str, Any]]:
         The rows in order.
 
     Raises:
-        ValueError: The chain is broken, a MAC does not verify, or rows are missing below the
-            high-water mark (tampering, truncation or corruption).
+        ValueError: The chain is broken, a MAC does not verify, rows are missing below the
+            high-water mark (tampering, truncation or corruption), the final row is incomplete (an
+            interrupted write), or the ledger key is unsafe (:class:`LedgerKeyError`).
     """
     path = ledger_path()
     mark = _high_water() if verify else 0
@@ -135,8 +199,7 @@ def read(*, verify: bool = True) -> list[dict[str, Any]]:
     key = _key() if verify else b""
     rows: list[dict[str, Any]] = []
     prev = GENESIS
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        row = json.loads(line)
+    for n, row in enumerate(_parse(path), 1):
         if verify:
             mac = row.get("mac", "")
             body = {k: v for k, v in row.items() if k != "mac"}
@@ -159,15 +222,25 @@ def append(kind: str, **fields: Any) -> dict[str, Any]:
 
     Returns:
         The written row.
+
+    Raises:
+        ValueError: The ledger fails :func:`read` (nothing is appended to an untrusted chain).
     """
     rows = read()
     prev = rows[-1]["mac"] if rows else GENESIS
     body = {"seq": len(rows) + 1, "ts": datetime.now(UTC).replace(microsecond=0).isoformat(),
             "kind": kind, **fields, "prev": prev}
     body["mac"] = _mac(_key(), prev, {k: v for k, v in body.items() if k != "mac"})
-    fd = os.open(ledger_path(), os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+    path = ledger_path()
+    created = not path.exists()
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(body, sort_keys=True) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())       # the row is durable before the mark claims it
+    if created:                     # and so is the file's directory entry (a lost ledger fails closed)
+        _fsync_dir(path.parent)
+        _fsync_dir(path.parent.parent)
     _raise_high_water(body["seq"])
     return body
 

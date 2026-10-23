@@ -323,9 +323,10 @@ def fold(task: str, notes: list[dict[str, Any]]) -> tuple[str, list[dict[str, st
 # ---------------------------------------------------------------- GitHub (listed, not ingested)
 
 def _gh_api(endpoint: str) -> Any:
+    from agentteams.vulnscan import executor   # lazy: keep notes importable without the executor's imports
+
     proc = subprocess.run(["gh", "api", "-H", "Accept: application/vnd.github+json", endpoint],
-                          capture_output=True, text=True, timeout=GH_TIMEOUT, check=False,
-                          env=os.environ | {"GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"})
+                          capture_output=True, text=True, timeout=GH_TIMEOUT, check=False, env=executor.gh_env())
     if proc.returncode:
         detail = _strip_controls((proc.stderr or proc.stdout or "").strip(), keep_newlines=False)[:400]
         raise RuntimeError(f"gh api {endpoint} failed: {detail}")
@@ -453,7 +454,7 @@ def from_gh(comment_id: int | str, *, repo: str | None = None, target: str | Non
     login, uid = _user(data)
     me = _gh_api("user")
     me_id = me.get("id") if isinstance(me, dict) else None
-    if uid is None or not isinstance(me_id, int) or uid != me_id:
+    if uid is None or isinstance(me_id, bool) or not isinstance(me_id, int) or uid != me_id:   # True == 1
         raise ValueError(f"the comment's author ({login or 'unknown'}) is not the authenticated gh user; "
                          "only your own comments become notes")
     if not confirm({"author_login": login, "html_url": html_url,

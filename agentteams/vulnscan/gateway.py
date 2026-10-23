@@ -16,6 +16,8 @@ internal network the agent container sits on, and a bridge out. It enforces:
   the same way. Replies without a usable ``usage`` are counted as *unmetered*; after
   ``--max-unmetered-calls`` of them (default 20) calls are refused too, unless
   ``--allow-unmetered``. The 402 message says which cap was hit. Totals go to ``spend.json``.
+  Upstream calls are serialised (the cap check and the metering of one call happen before the
+  next call is checked), so concurrent requests cannot overshoot a cap.
 - **No content logging.** Only counts, model, tokens and cost are recorded.
 
 Upstream is the operator's route proxy (``http://host.docker.internal:8791``) or
@@ -27,6 +29,9 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import math
+import os
+import re
 import sys
 import threading
 import urllib.parse
@@ -125,16 +130,34 @@ class Meter:
             self._persist()
 
     def _persist(self) -> None:
-        if self.out:
-            self.out.write_text(json.dumps({"budget_usd": self.budget, "max_tokens": self.max_tokens,
-                                            "spent_usd": round(self.spent, 6),
-                                            "calls": self.calls, "refused": self.refused,
-                                            "unmetered": self.unmetered, "max_unmetered_calls": self.max_unmetered,
-                                            "upstream_errors": self.upstream_errors,
-                                            "allow_unmetered": self.allow_unmetered,
-                                            "prompt_tokens": self.prompt_tokens,
-                                            "completion_tokens": self.completion_tokens,
-                                            "updated": datetime.now(UTC).isoformat()}, indent=2), encoding="utf-8")
+        """Write ``spend.json`` atomically (G12): a temp file beside it, then ``os.replace``.
+
+        A reader (the host launcher) never sees a truncated file; on failure the temp is removed,
+        the previous ``spend.json`` stays, and the error propagates. Called with :attr:`lock` held.
+        """
+        if not self.out:
+            return
+        text = json.dumps({"budget_usd": self.budget, "max_tokens": self.max_tokens,
+                           "spent_usd": round(self.spent, 6),
+                           "calls": self.calls, "refused": self.refused,
+                           "unmetered": self.unmetered, "max_unmetered_calls": self.max_unmetered,
+                           "upstream_errors": self.upstream_errors,
+                           "allow_unmetered": self.allow_unmetered,
+                           "prompt_tokens": self.prompt_tokens,
+                           "completion_tokens": self.completion_tokens,
+                           "updated": datetime.now(UTC).isoformat()}, indent=2)
+        tmp = self.out.with_name(f".{self.out.name}.tmp")
+        replaced = False
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(text)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, self.out)
+            replaced = True
+        finally:
+            if not replaced:   # the error propagates; only the temp is removed
+                tmp.unlink(missing_ok=True)
 
 
 def rewrite_body(raw: bytes, model: str) -> bytes:
@@ -202,6 +225,9 @@ def make_handler(*, model: str, key: str, upstream: str, meter: Meter) -> type[B
         A ``BaseHTTPRequestHandler`` subclass.
     """
     up = urllib.parse.urlparse(upstream)
+    # D7: one upstream call at a time, held from the cap check through metering. Without it two
+    # concurrent requests both pass the check and together overshoot the budget or the token cap.
+    gate = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"   # responses end at connection close (simple streaming relay)
@@ -227,12 +253,13 @@ def make_handler(*, model: str, key: str, upstream: str, meter: Meter) -> type[B
             if self.path != ROUTE:
                 self._deny(403, "only POST /api/v1/chat/completions is relayed")
                 return
-            why = meter.exhausted_reason()
-            if why:
-                meter.refuse()
-                self._deny(402, why)
+            if self._refused():   # early answer: an exhausted run never waits on the gate
                 return
-            length = int(self.headers.get("Content-Length") or 0)
+            raw_length = (self.headers.get("Content-Length") or "0").strip()
+            if not re.fullmatch(r"-?[0-9]{1,20}", raw_length):
+                self._deny(400, "malformed Content-Length")
+                return
+            length = int(raw_length)
             if not 0 < length <= MAX_BODY:
                 self._deny(413, "missing or oversized body")
                 return
@@ -241,6 +268,20 @@ def make_handler(*, model: str, key: str, upstream: str, meter: Meter) -> type[B
             except (ValueError, UnicodeDecodeError) as exc:
                 self._deny(400, str(exc))
                 return
+            with gate:
+                if not self._refused():   # re-checked under the gate: the previous call is metered now
+                    self._relay(body)
+
+        def _refused(self) -> bool:
+            """Answer 402 and count the refusal when a cap is used up; return whether it was."""
+            why = meter.exhausted_reason()
+            if why:
+                meter.refuse()
+                self._deny(402, why)
+            return bool(why)
+
+        def _relay(self, body: bytes) -> None:
+            """Forward one validated body upstream, stream the reply back and meter it."""
             conn_cls = http.client.HTTPSConnection if up.scheme == "https" else http.client.HTTPConnection
             conn = conn_cls(up.hostname, up.port or (443 if up.scheme == "https" else 80), timeout=600)
             status: int | None = None
@@ -299,9 +340,26 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.max_unmetered_calls < 1:
         p.error("--max-unmetered-calls must be >= 1")
+    if a.max_tokens_total < 0:   # X11: a negative cap used to become 0, i.e. no token cap at all
+        p.error("--max-tokens-total must be >= 0 (0: no token cap)")
+    if not (math.isfinite(a.budget_usd) and a.budget_usd >= 0):   # nan would never compare as exhausted
+        p.error("--budget-usd must be a finite number >= 0")
+    listen = re.fullmatch(r"(.*):([0-9]{1,5})", a.listen)
+    if not listen or int(listen.group(2)) > 65535:
+        p.error("--listen must be HOST:PORT")
+    up = urllib.parse.urlparse(a.upstream)
+    if up.scheme not in ("http", "https") or not up.hostname:
+        p.error("--upstream must be an http(s) URL")
+    try:
+        key_text = a.key_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"gateway: cannot read the key file: {type(exc).__name__}", file=sys.stderr)
+        return 2
     key = ""
-    for line in a.key_file.read_text(encoding="utf-8").splitlines():
+    for line in key_text.splitlines():
         line = line.strip().removeprefix("export ").strip()
+        if line.startswith("#"):   # a comment is never the key
+            continue
         if line.startswith("OPENROUTER_API_KEY="):
             key = line.split("=", 1)[1].strip().strip("'\"")
         elif line and "=" not in line and not key:
@@ -309,8 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     if not key:
         print("gateway: no OPENROUTER_API_KEY in the key file", file=sys.stderr)
         return 2
-    host, port = a.listen.rsplit(":", 1)
-    meter = Meter(a.budget_usd, a.spend_file, max_tokens=max(0, a.max_tokens_total),
+    host, port = listen.group(1), listen.group(2)
+    meter = Meter(a.budget_usd, a.spend_file, max_tokens=a.max_tokens_total,
                   max_unmetered=a.max_unmetered_calls, allow_unmetered=a.allow_unmetered)
     server = ThreadingHTTPServer((host, int(port)),
                                  make_handler(model=a.model, key=key, upstream=a.upstream, meter=meter))

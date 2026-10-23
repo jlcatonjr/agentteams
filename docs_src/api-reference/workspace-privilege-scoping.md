@@ -382,7 +382,13 @@ In the project description:
 > - the operator directory `~/.config/agentteams` (the signing keys, verify keys, `mcp-grants`,
 >   `confined`, and vulnscan's config, notes, grants and server kit), and anything at, inside or above
 >   it; the emitted `Edit(...)` deny rules cover the whole directory too;
-> - home credential and persistence paths;
+> - the operator state directory `~/.local/state/agentteams` (vulnscan's ledger, request spool and
+>   run lock; the server kit's logs; doc-sync state), and anything at, inside or above it; emitted
+>   Claude settings deny `Edit(~/.local/state/agentteams)` and `Edit(~/.local/state/agentteams/**)`;
+> - home credential and persistence paths, including macOS `~/Library/LaunchAgents` (where the
+>   daily vulnscan job's plist lives; launchd runs it unsandboxed) and `~/Library/Keychains`;
+>   emitted Claude settings also deny `Edit(~/Library/LaunchAgents)` and
+>   `Edit(~/Library/LaunchAgents/**)`;
 > - `~user`;
 > - the project control plane (`.git`, `.claude`, `.goose`, `.codex`, `.github/agents`,
 >   `.github/hooks`, `sandbox`, `.agentteams`) and any ancestor of the project;

@@ -34,15 +34,19 @@ Every ``docker`` command is built by a pure function, so tests check the flags w
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
 import os
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from importlib import metadata, resources
 from pathlib import Path
@@ -151,6 +155,29 @@ def run_lock_path() -> Path:
 
 
 MAX_TOKENS_TOTAL_CEILING = 100_000_000
+MAX_MINUTES_CEILING = 24 * 60         # a daily run (or a debrief) never needs more than a day
+BUDGET_USD_CEILING = 1000.0           # far above any sane run; a typo like 20000 is refused
+
+
+def positive_number(value: object, name: str, ceiling: float) -> float:
+    """Return ``value`` as a float when it is a real number in ``(0, ceiling]`` (G10, X11).
+
+    Bools, strings and None are refused; NaN and infinity fail the range comparison.
+
+    Args:
+        value: The configured value.
+        name: The setting's name, for the message (e.g. ``agent.max_minutes``).
+        ceiling: The largest value allowed.
+
+    Returns:
+        The value as a float.
+
+    Raises:
+        ValueError: ``value`` is not a number in range.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= ceiling:
+        raise ValueError(f"{name} must be a number greater than 0 and at most {ceiling:g} (got {value!r})")
+    return float(value)
 
 
 def _positive_int(a: dict[str, Any], key: str, ceiling: int | None = None) -> int:
@@ -168,6 +195,9 @@ def run_limits(a: dict[str, Any]) -> tuple[int, int, bool]:
     Args:
         a: Agent settings.
 
+    ``agent.max_minutes`` and ``agent.budget_usd`` are checked too (:func:`positive_number`, G10)
+    although they are not returned.
+
     Returns:
         ``(max_tokens_total, max_unmetered_calls, allow_unmetered)``.
 
@@ -177,14 +207,16 @@ def run_limits(a: dict[str, Any]) -> tuple[int, int, bool]:
     allow = a.get("allow_unmetered", DEFAULT_AGENT["allow_unmetered"])
     if not isinstance(allow, bool):
         raise ValueError(f"agent.allow_unmetered must be true or false (got {allow!r})")
+    positive_number(a.get("max_minutes", DEFAULT_AGENT["max_minutes"]), "agent.max_minutes", MAX_MINUTES_CEILING)
+    positive_number(a.get("budget_usd", DEFAULT_AGENT["budget_usd"]), "agent.budget_usd", BUDGET_USD_CEILING)
     return (_positive_int(a, "max_tokens_total", MAX_TOKENS_TOTAL_CEILING),
             _positive_int(a, "max_unmetered_calls"), allow)
 
 
 #: Paths a team dir may not be at, inside or above (besides home and its ancestors): the write-root
 #: protected home paths, which include credentials, shell persistence and the whole operator dir
-#: ``~/.config/agentteams``. ``team_dir_problem`` also refuses the configured vulnscan config dir and
-#: judges the resolved path, which ``root_problem`` does not; hence its own check.
+#: ``~/.config/agentteams``. ``team_dir_problem`` also refuses the configured vulnscan config and
+#: state dirs and judges the resolved path, which ``root_problem`` does not; hence its own check.
 TEAM_DIR_PROTECTED: tuple[str, ...] = HOME_PROTECTED
 
 
@@ -192,13 +224,41 @@ def _at_or_inside(path: str, base: str) -> bool:
     return path == base or path.startswith(base.rstrip("/") + "/")
 
 
+def _my_uid() -> int:
+    """Return the uid a team dir must be owned by (the operator running vulnscan)."""
+    return os.getuid()
+
+
+def _dir_owner_problem(real: Path) -> str | None:
+    """Return why the directory ``real`` (already resolved) is not safely the operator's, or None (X6).
+
+    The final component itself is judged: it is opened with ``O_NOFOLLOW`` and ``fstat``-ed, so a
+    swap to a symlink after resolution is refused rather than followed.
+    """
+    try:
+        fd = os.open(real, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        return f"agent.team_dir {real} cannot be opened as a directory ({exc.strerror})"
+    try:
+        st = os.fstat(fd)
+    finally:
+        os.close(fd)
+    if st.st_uid != _my_uid():
+        return f"agent.team_dir {real} is not owned by you (uid {st.st_uid})"
+    if st.st_mode & 0o022:
+        return f"agent.team_dir {real} is group- or world-writable (mode {st.st_mode & 0o777:o}); chmod go-w it"
+    return None
+
+
 def team_dir_problem(path: str | Path | None, secrets: tuple[str | Path, ...] = ()) -> str | None:
-    """Return why ``path`` may not be mounted as the team dir, or None when it may (R3-3).
+    """Return why ``path`` may not be mounted as the team dir, or None when it may (R3-3, X6).
 
     It must be an absolute (or ``~/``) path to an existing directory, free of docker-mount syntax
     characters, that is not the home directory or an ancestor of it, and not at, inside or above
-    any :data:`TEAM_DIR_PROTECTED` path or the vulnscan config dir. Both the path as written and its
-    resolved target are judged. Used before every mount (runs, self-test, debrief).
+    any :data:`TEAM_DIR_PROTECTED` path or the configured vulnscan config or state dir. Both the
+    path as written and its resolved target are compared with both forms of each protected path
+    (so ``/var`` and ``/private/var`` match). The directory itself must be owned by the operator
+    and not group- or world-writable. Used before every mount (runs, self-test, debrief).
 
     Args:
         path: ``agent.team_dir`` (or the fallback the caller mounts).
@@ -225,7 +285,7 @@ def team_dir_problem(path: str | Path | None, secrets: tuple[str | Path, ...] = 
     homes = {fold(os.path.normpath(str(home))), fold(str(home.resolve()))}
     if any(_at_or_inside(h, f) for h in homes for f in forms):
         return f"agent.team_dir {real} is the home directory or an ancestor of it"
-    for prot in (*TEAM_DIR_PROTECTED, str(paths.config_dir())):
+    for prot in (*TEAM_DIR_PROTECTED, str(paths.config_dir()), str(paths.state_dir())):
         q = Path(os.path.expanduser(prot))
         for b in {fold(os.path.normpath(str(q))), fold(str(q.resolve()))}:
             if any(_at_or_inside(f, b) or _at_or_inside(b, f) for f in forms):
@@ -238,7 +298,7 @@ def team_dir_problem(path: str | Path | None, secrets: tuple[str | Path, ...] = 
         for b in {fold(os.path.normpath(str(s))), fold(str(s.resolve()))}:
             if any(_at_or_inside(b, f) for f in forms):
                 return f"agent.team_dir {real} contains a key file ({secret}); it would be mounted into the container"
-    return None
+    return _dir_owner_problem(real)
 
 
 def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GATEWAY,
@@ -476,6 +536,8 @@ def _stop_gateway() -> None:
 def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     """Run the isolation self-test and record it against the current image id and container flags.
 
+    Needs ``agent.key_file`` and ``agent.team_dir`` (mounted exactly as a run mounts them).
+
     Args:
         cfg: Daily config.
 
@@ -488,12 +550,15 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     if not a.get("key_file"):   # the gateway mounts it; without it the test can only fail obscurely
         return {"passed": False, "checks": {"key_file_configured": False},
                 "error": "set agent.key_file in vulnscan.json first (the gateway needs it)"}
+    if not str(a.get("team_dir") or "").strip():   # the old fallback (a state-dir scratch dir) is refused (X6)
+        return {"passed": False, "checks": {"team_dir_configured": False},
+                "error": "set agent.team_dir in vulnscan.json first (the self-test mounts it as a run does)"}
     tag = image_tag(a)
     work = paths.state_dir() / "selftest"
     for d in (work / "run", sessions_dir(work / "run"), work / "gateway", executor.spool_dir() / "requests",
               executor.spool_dir() / "results"):
         d.mkdir(parents=True, exist_ok=True)
-    problem = team_dir_problem(a["team_dir"] or (work / "run"), (str(a.get("key_file") or ""),))
+    problem = team_dir_problem(a["team_dir"], (str(a.get("key_file") or ""),))
     if problem:
         return {"passed": False, "checks": {"team_dir_allowed": False}, "error": problem}
     try:
@@ -531,9 +596,16 @@ def selftest_ok(cfg: dict[str, Any]) -> tuple[bool, str]:
         rec = json.loads(f.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return False, f"the self-test record is unreadable ({exc}) — re-run agent-selftest"
-    if not isinstance(rec, dict) or not rec.get("passed"):
+    if not isinstance(rec, dict):   # G11: a list, string, number or null record
+        return False, f"the self-test record is not an object ({type(rec).__name__}) — re-run agent-selftest"
+    if not rec.get("passed"):
         return False, f"the last isolation self-test FAILED: {rec.get('checks')}"
-    if rec.get("image") != _image_id(image_tag(agent_cfg(cfg))):
+    tag = image_tag(agent_cfg(cfg))
+    current = _image_id(tag)
+    if not current:   # `docker image inspect` failed: the daemon is down or the image is absent (D10)
+        return False, (f"docker is not reachable or the agent image {tag} is not built — start Docker "
+                       "(or run agent-image build), then re-run agent-selftest")
+    if rec.get("image") != current:
         return False, "the agent image changed since the last passing self-test — re-run agent-selftest"
     if not rec.get("flags_sha256"):
         return False, "the self-test record predates container-flag binding — re-run agent-selftest"
@@ -577,13 +649,66 @@ class _Server:
                 notify.send(self.cfg, "halt-refusal")
 
 
+#: Exit status after a SIGTERM ended a run (128 + 15, the shell convention).
+SIGTERM_EXIT = 143
+
+
+@contextlib.contextmanager
+def sigterm_raises_exit() -> Iterator[None]:
+    """Turn SIGTERM into :class:`SystemExit` while the block runs, so ``finally`` cleanup still happens (D6).
+
+    launchd (``bootout``, logout) and systemd stop a job with SIGTERM, whose default action ends
+    the process without unwinding: the gateway (it holds the API key) and the agent container
+    would keep running. Only the first SIGTERM raises; later ones are ignored so they cannot
+    interrupt the cleanup. Installed from the main thread only (Python allows no other); the
+    previous handler is restored on exit.
+
+    Yields:
+        None.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    fired = False
+
+    def handler(signum: int, frame: object) -> None:
+        nonlocal fired
+        if not fired:
+            fired = True
+            raise SystemExit(SIGTERM_EXIT)
+
+    previous = signal.signal(signal.SIGTERM, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _not_run_reason(cfg: dict[str, Any], a: dict[str, Any]) -> str:
+    """Return why the agent may not run now, or "" (configuration first: on a first run it is the actionable one)."""
+    if not a.get("team_dir") or not a.get("key_file"):
+        return "agent.team_dir and agent.key_file are required (set them in vulnscan.json)"
+    ok, why = (False, "docker is not installed") if not shutil.which("docker") else selftest_ok(cfg)
+    if not ok:
+        return why
+    problem = team_dir_problem(a["team_dir"], (str(a.get("key_file") or ""),))
+    if problem:
+        return problem
+    try:
+        run_limits(a)
+    except ValueError as exc:
+        return str(exc)
+    return ""
+
+
 def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: str | None = None) -> dict[str, Any]:
     """Run the agent container for one daily run, serving its requests on the host as it goes.
 
     Holds :func:`run_lock_path` for the whole run (a concurrent run or a debrief is refused). On
     timeout the container is removed (``docker rm -f``) **before** anything is captured. Operator
     notes are folded into ``task`` here; at the end the stored report (if any) is finalized with
-    the run state.
+    the run state. A SIGTERM during the run (:func:`sigterm_raises_exit`) still removes both
+    containers, records ``agent-error`` and then exits.
 
     Args:
         cfg: Daily config.
@@ -593,11 +718,16 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
 
     Returns:
         Status dict with ``run_state`` in :data:`RUN_STATES` (also ``state``, the same value) and
-        ``run_id``, written to ``<run_dir>/agent/status.json``.
+        ``run_id``, written to ``<run_dir>/agent/status.json``. Exception (G2): when the run lock is
+        held the status is ``not-run`` with ``status_written: False`` and nothing in ``run_dir`` is
+        written or finalized, since the holder may be a live run of the same directory. A
+        ``spend.json`` that cannot be read gives ``spend: None`` and a ``spend_problem`` (G12).
+
+    Raises:
+        SystemExit: SIGTERM arrived during the run (status :data:`SIGTERM_EXIT`), after the cleanup.
     """
     a = agent_cfg(cfg)
     out = run_dir / "agent"
-    out.mkdir(parents=True, exist_ok=True)
     run_id = run_id or executor.new_run_id(run_dir)
     status: dict[str, Any] = {"started": datetime.now(UTC).isoformat(), "model": a["model"], "run_id": run_id}
 
@@ -607,68 +737,121 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             report_store.finalize(run_dir, state)
         except (OSError, ValueError) as exc:
             status["report_problem"] = str(exc)[:300]
+        out.mkdir(parents=True, exist_ok=True)
         (out / "status.json").write_text(json.dumps(status, indent=2), encoding="utf-8")
         return status
 
-    ok, why = (False, "docker is not installed") if not shutil.which("docker") else selftest_ok(cfg)
-    if not ok or not a.get("team_dir") or not a.get("key_file"):
-        return finish("not-run", reason=why if not ok else "agent.team_dir and agent.key_file are required")
-    problem = team_dir_problem(a["team_dir"], (str(a.get("key_file") or ""),))
-    if problem:
-        return finish("not-run", reason=problem)
-    try:
-        run_limits(a)
-    except ValueError as exc:
-        return finish("not-run", reason=str(exc))
     run_lock_path().parent.mkdir(parents=True, exist_ok=True)
     with open(run_lock_path(), "a+") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return finish("not-run", reason="another agent run or debrief holds the run lock")
+        except BlockingIOError:   # G2: the holder may be a live run of this run dir; touch nothing of it
+            status.update(run_state="not-run", state="not-run", finished=datetime.now(UTC).isoformat(),
+                          reason="another agent run or debrief holds the run lock", status_written=False)
+            return status
+        # Every other refusal is decided under the lock (R8-4): a refused run writes status.json and finalizes
+        # the report, which must never land on a live run's directory.
+        why = _not_run_reason(cfg, a)
+        if why:
+            return finish("not-run", reason=why)
+        out.mkdir(parents=True, exist_ok=True)
         tag = image_tag(a)
         for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results", sessions_dir(run_dir),
                   run_dir / "gateway"):
             d.mkdir(parents=True, exist_ok=True)
         session = f"vulnscan-{run_dir.name}"
         serve = _Server(cfg, run_dir, run_id)
-        timed_out, rc, launch_error = False, -1, ""
-        try:   # a broken ledger (ValueError) here also ends the run as agent-error, never a crash
-            stale = executor.quarantine_pending(f"left over from an earlier run; not served by run {run_id}")
-            if stale:
-                status["stale_requests"] = stale
-            task = fold_notes(task, run_id)
-            _ensure_network()
-            _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
-            _start_gateway(a, tag, run_dir / "gateway")
-            with open(out / "transcript.log", "w", encoding="utf-8") as log:
-                proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task), stdout=log,
-                                        stderr=subprocess.STDOUT)
-                deadline = time.monotonic() + 60 * float(a["max_minutes"])
-                while proc.poll() is None and time.monotonic() < deadline:
-                    serve(deadline)
-                    time.sleep(15)
-                if proc.poll() is None:
-                    timed_out = True
-                    _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)   # the container, not just the client
-                    proc.kill()
-                rc = proc.wait()
-            serve(time.monotonic() + 120)          # requests queued in the final seconds (bounded)
-        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:   # docker / launcher failure
-            launch_error = f"{type(exc).__name__}: {exc}"[:300]
-        finally:
-            try:
-                _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
-                _stop_gateway()
-            except (OSError, subprocess.SubprocessError) as exc:   # cleanup must not mask the run's outcome
-                status["cleanup_error"] = f"{type(exc).__name__}: {exc}"[:300]
-            fcntl.flock(lock, fcntl.LOCK_UN)
+        timed_out, rc, launch_error, terminated = False, -1, "", False
+        with sigterm_raises_exit():
+            try:   # a broken ledger (ValueError) here also ends the run as agent-error, never a crash
+                timed_out, rc = _launch(a, tag, run_dir, session, serve, status, task, run_id)
+            except SystemExit as exc:   # SIGTERM (launchd unload, logout): clean up below, then exit
+                if exc.code != SIGTERM_EXIT:
+                    raise
+                terminated = True
+            except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:   # docker / launcher failure
+                launch_error = f"{type(exc).__name__}: {exc}"[:300]
+            finally:
+                try:
+                    _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
+                    _stop_gateway()
+                except (OSError, subprocess.SubprocessError) as exc:   # cleanup must not mask the run's outcome
+                    status["cleanup_error"] = f"{type(exc).__name__}: {exc}"[:300]
+                fcntl.flock(lock, fcntl.LOCK_UN)
+    if terminated:
+        finish("agent-error", reason="terminated by SIGTERM; the agent and gateway containers were removed")
+        raise SystemExit(SIGTERM_EXIT)
     if launch_error:
         return finish("agent-error", reason=f"launcher failed: {launch_error}")
-    spend = run_dir / "gateway" / "spend.json"
+    spend, spend_problem = read_spend(run_dir / "gateway" / "spend.json")
     state = "timed-out" if timed_out else ("completed" if rc == 0 else "agent-error")
-    return finish(state, exit=rc, timed_out=timed_out,
-                  spend=json.loads(spend.read_text()) if spend.is_file() else None)
+    extra: dict[str, Any] = {"spend_problem": spend_problem} if spend_problem else {}
+    return finish(state, exit=rc, timed_out=timed_out, spend=spend, **extra)
+
+
+def read_spend(path: Path) -> tuple[dict[str, Any] | None, str]:
+    """Read the gateway's ``spend.json`` tolerantly (G12): a bad file never stops the status being written.
+
+    Args:
+        path: ``<run>/gateway/spend.json``.
+
+    Returns:
+        ``(spend, problem)``: the totals and ``""``; ``(None, "")`` when the file is absent; or
+        ``(None, reason)`` when it is unreadable, not JSON or not an object.
+    """
+    if not path.is_file():
+        return None, ""
+    try:
+        spend = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:   # ValueError includes UnicodeDecodeError and JSONDecodeError
+        return None, f"spend.json is unreadable ({type(exc).__name__}: {str(exc)[:200]})"
+    if not isinstance(spend, dict):
+        return None, f"spend.json is not an object ({type(spend).__name__})"
+    return spend, ""
+
+
+def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Server, status: dict[str, Any],
+            task: str, run_id: str) -> tuple[bool, int]:
+    """Start the gateway and the agent container and serve requests until it exits or times out.
+
+    The caller removes both containers afterwards, whatever happens here.
+
+    Args:
+        a: Agent settings.
+        tag: Image tag.
+        run_dir: Today's run directory.
+        session: goose session name.
+        serve: The run's request server.
+        status: The run's status dict (``stale_requests`` is recorded here).
+        task: Task text before notes are folded in.
+        run_id: The run id.
+
+    Returns:
+        ``(timed_out, exit code)``.
+    """
+    out = run_dir / "agent"
+    stale = executor.quarantine_pending(f"left over from an earlier run; not served by run {run_id}")
+    if stale:
+        status["stale_requests"] = stale
+    task = fold_notes(task, run_id)
+    _ensure_network()
+    _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
+    _start_gateway(a, tag, run_dir / "gateway")
+    timed_out = False
+    with open(out / "transcript.log", "w", encoding="utf-8") as log:
+        proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task), stdout=log,
+                                stderr=subprocess.STDOUT)
+        deadline = time.monotonic() + 60 * float(a["max_minutes"])
+        while proc.poll() is None and time.monotonic() < deadline:
+            serve(deadline)
+            time.sleep(15)
+        if proc.poll() is None:
+            timed_out = True
+            _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)   # the container, not just the client
+            proc.kill()
+        rc = proc.wait()
+    serve(time.monotonic() + 120)          # requests queued in the final seconds (bounded)
+    return timed_out, rc
 
 
 def build_image(cfg: dict[str, Any], *, goose_version: str, goose_sha256: str, python_image: str,

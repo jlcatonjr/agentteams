@@ -30,10 +30,11 @@
 set -uo pipefail
 
 UNIT=""; DIR=""; PY=""; AS=""; USERSITE=false; SYSPIP=false; PINS=(); REQ=""; PULL=false; HEALTH=""; APPLY=false; SDIST=false
+need(){ case "${2-}" in ""|--*) echo "option $1 needs a value" >&2; exit 2;; esac; }   # missing value: usage error (2), never an unbound-variable crash
 while [ $# -gt 0 ]; do case "$1" in
-  --unit) UNIT="$2"; shift;; --dir) DIR="$2"; shift;; --python) PY="$2"; shift;; --as) AS="$2"; shift;;
-  --user-site) USERSITE=true;; --system-pip) SYSPIP=true;; --pin) PINS+=("$2"); shift;;
-  --requirements) REQ="$2"; shift;; --git-pull) PULL=true;; --health) HEALTH="$2"; shift;; --apply) APPLY=true;;
+  --unit) need "$@"; UNIT="$2"; shift;; --dir) need "$@"; DIR="$2"; shift;; --python) need "$@"; PY="$2"; shift;; --as) need "$@"; AS="$2"; shift;;
+  --user-site) USERSITE=true;; --system-pip) SYSPIP=true;; --pin) need "$@"; PINS+=("$2"); shift;;
+  --requirements) need "$@"; REQ="$2"; shift;; --git-pull) PULL=true;; --health) need "$@"; HEALTH="$2"; shift;; --apply) APPLY=true;;
   --allow-sdist) SDIST=true;;
   *) echo "unknown option: $1" >&2; exit 2;; esac; shift; done
 
@@ -70,7 +71,7 @@ main(){
     ls "$("$PY" -c 'import sysconfig;print(sysconfig.get_path("stdlib"))')"/EXTERNALLY-MANAGED >/dev/null 2>&1 && pipflags+=(--break-system-packages)
     as=()   # system site-packages are root-owned
   fi
-  local pip=("${as[@]}" "$PY" -m pip)
+  local pip=(${as[@]+"${as[@]}"} "$PY" -m pip)
 
   echo "host: $(hostname)  unit: $UNIT  dir: $DIR  python: $PY ($("$PY" -V 2>&1))  as: $AS  mode: $($APPLY && echo APPLY || echo DRY-RUN)"
   say "Current versions of the targeted packages"
@@ -99,7 +100,7 @@ main(){
 
   local args=("${pipflags[@]}")
   [ -n "$REQ" ] && args+=(-r "$DIR/$REQ")
-  args+=("${PINS[@]}")
+  args+=(${PINS[@]+"${PINS[@]}"})
 
   if ! $APPLY; then
     say "pip dry run"
@@ -138,7 +139,7 @@ main(){
   done
   [ "$okc" -ge 3 ] || { echo "health check failed: ${HEALTH:-unit stability}"; rollback; }
   echo "OK     $UNIT healthy on new packages"
-  for p in "${PINS[@]}"; do "${pip[@]}" show "${p%%[=<>!~]*}" 2>/dev/null | awk '/^(Name|Version):/{printf "%s ", $2} END{print ""}'; done
+  for p in ${PINS[@]+"${PINS[@]}"}; do "${pip[@]}" show "${p%%[=<>!~]*}" 2>/dev/null | awk '/^(Name|Version):/{printf "%s ", $2} END{print ""}'; done
 }
 
 main < /dev/null

@@ -132,6 +132,8 @@ MCP_GRANTS_DIR = "~/.config/agentteams/mcp-grants"
 OPERATOR_VERIFY_KEYS_DIR = "~/.config/agentteams/verify-keys"
 #: Every operator store lives under this directory (keys, verify-keys, mcp-grants, confined, vulnscan).
 OPERATOR_CONFIG_DIR = "~/.config/agentteams"
+#: M2 (2026-10-22): the operator state directory (vulnscan ledger, spool and lock; server-kit logs; doc-sync state).
+OPERATOR_STATE_DIR = "~/.local/state/agentteams"
 #: The proposal ledger's directory; write-denied to every session under write_policy "orchestrator-only".
 LEDGER_DIR_REL = ".agentteams"
 #: The runner's status tree: session-readable, written only by the runner (2026-10-11).
@@ -282,6 +284,8 @@ def permission_deny_rules(framework: str = "claude") -> list[str]:
     # P11 (2026-10-22): the whole operator directory — vulnscan's config (whose `notify: command:` the
     # unsandboxed daily job runs), notes, grants and server kit live beside the stores above.
     rules += [f"Edit({OPERATOR_CONFIG_DIR})", f"Edit({OPERATOR_CONFIG_DIR}/**)"]
+    rules += [f"Edit({OPERATOR_STATE_DIR})", f"Edit({OPERATOR_STATE_DIR}/**)"]
+    rules += ["Edit(~/Library/LaunchAgents)", "Edit(~/Library/LaunchAgents/**)"]   # X5: launchd runs these unsandboxed
     store = _verify_key_store_path(framework)
     for path in protected_write_paths(framework):
         if path == _GATE_HOOK_PATH:

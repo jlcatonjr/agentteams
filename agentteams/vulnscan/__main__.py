@@ -37,7 +37,18 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from agentteams.vulnscan import agent_run, daily, engine, executor, fix, grant, operator_cli, paths, review, schedule
+from agentteams.vulnscan import (
+    agent_run,
+    daily,
+    engine,
+    executor,
+    fix,
+    grant,
+    operator_cli,
+    paths,
+    review,
+    schedule,
+)
 from agentteams.vulnscan.report import Report
 
 KIT_CONFIGS = ("hosts.conf", "apps.conf")
@@ -87,14 +98,26 @@ def export_server_kit(dest: Path) -> list[str]:
     return sorted(written)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run the vulnscan CLI.
-
-    Args:
-        argv: Arguments (defaults to ``sys.argv[1:]``).
+def load_cfg() -> dict | None:
+    """Load the daily config for a command, printing why when it cannot be used.
 
     Returns:
-        Process exit code.
+        The config, or None (the caller exits 2) when there is none or it is malformed.
+    """
+    try:
+        return daily.load_config()
+    except FileNotFoundError:
+        print(f"no config at {paths.config_file()} — run `python -m agentteams.vulnscan init`", file=sys.stderr)
+    except (OSError, ValueError) as exc:   # JSONDecodeError and a non-object file are ValueErrors
+        print(f"config {paths.config_file()} is unusable: {exc}", file=sys.stderr)
+    return None
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the vulnscan argument parser (every command, operator commands included).
+
+    Returns:
+        The parser; parsing does not run anything.
     """
     p = argparse.ArgumentParser(prog="python -m agentteams.vulnscan",
                                 description="Find and remediate known-vulnerable dependencies and runtimes.")
@@ -153,7 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--rationale", default="operator-run")
     sub.add_parser("serve-requests", help="execute spooled agent requests that a grant covers")
     sp = sub.add_parser("review", help="after-action review of unattended remediation")
-    sp.add_argument("--since", default=None, help="YYYY-MM-DD (default: since the last --ack)")
+    sp.add_argument("--since", default=None, type=operator_cli.iso_date,
+                    help="YYYY-MM-DD (default: since the last --ack)")
     sp.add_argument("--ack", action="store_true", help="record that you reviewed everything up to now")
     sp.add_argument("--note", default="")
     sp.add_argument("--gh-replies", action="store_true", help="also list replies on the agents' PRs (uses gh)")
@@ -166,17 +190,35 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("agent-selftest", help="prove the agent container's isolation")
     sub.add_parser("agent-run", help="run the agent team once on the latest scan")
     operator_cli.register(sub)
+    return p
 
-    args = p.parse_args(argv)
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the vulnscan CLI.
+
+    Args:
+        argv: Arguments (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        Process exit code.
+    """
+    args = build_parser().parse_args(argv)
     if args.cmd not in ("daily", "schedule"):
         warn = daily.stale_warning()
         if warn:
             print(warn, file=sys.stderr)
 
+    if args.cmd in ("scan", "fix") and not args.path.exists():
+        print(f"no such path: {args.path}", file=sys.stderr)
+        return 2
     if args.cmd == "scan":
         return _emit(engine.scan_path(args.path, include_worktrees=args.include_worktrees), args)
     if args.cmd == "inventory":
-        text = args.log.read_text(encoding="utf-8", errors="replace")
+        try:
+            text = args.log.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            print(f"cannot read the audit log: {exc}", file=sys.stderr)
+            return 2
         return _emit(engine.scan_inventory(text, args.host or args.log.stem), args)
     if args.cmd == "runtimes":
         return _emit(engine.local_runtimes(), args)
@@ -191,10 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"config: {path}\nEdit it, then: python -m agentteams.vulnscan schedule install --apply")
         return 0
     if args.cmd == "daily":
-        try:
-            cfg = daily.load_config()
-        except FileNotFoundError:
-            print(f"no config at {paths.config_file()} — run `python -m agentteams.vulnscan init`", file=sys.stderr)
+        cfg = load_cfg()
+        if cfg is None:
             return 2
         report, code, run_dir = daily.run_daily(cfg)
         print(f"{len(report.findings)} findings; exit {code}; summary: {run_dir / 'summary.md'}")
@@ -203,11 +243,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.action == "status":
             print(schedule.status())
             return 0
-        when = {}
+        when: dict = {}
         if paths.config_file().exists():
-            when = daily.load_config().get("schedule", {})
-        hour = args.hour if args.hour is not None else int(when.get("hour", 7))
-        minute = args.minute if args.minute is not None else int(when.get("minute", 30))
+            cfg = load_cfg()
+            if cfg is None:
+                return 2
+            when = cfg.get("schedule") if isinstance(cfg.get("schedule"), dict) else {}
+        try:
+            hour = args.hour if args.hour is not None else int(when.get("hour", 7))
+            minute = args.minute if args.minute is not None else int(when.get("minute", 30))
+        except (TypeError, ValueError) as exc:
+            print(f"config schedule is unusable: {exc}", file=sys.stderr)
+            return 2
         plan = (schedule.install(hour, minute, apply=args.apply) if args.action == "install"
                 else schedule.remove(apply=args.apply))
         for path, content in plan.files.items():
@@ -250,10 +297,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"installed {grant.install(signed)}")
         return 0
     if args.cmd in ("act", "serve-requests"):
-        try:
-            cfg = daily.load_config()
-        except FileNotFoundError:
-            print(f"no config at {paths.config_file()} — run `python -m agentteams.vulnscan init`", file=sys.stderr)
+        cfg = load_cfg()
+        if cfg is None:
             return 2
         if args.cmd == "act":
             res = executor.act(args.op, args.target, cfg, rationale=args.rationale)
@@ -272,10 +317,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(results, indent=2))
         return 0
     if args.cmd in ("agent-image", "agent-selftest", "agent-run"):
-        try:
-            cfg = daily.load_config()
-        except FileNotFoundError:
-            print(f"no config at {paths.config_file()} — run `python -m agentteams.vulnscan init`", file=sys.stderr)
+        cfg = load_cfg()
+        if cfg is None:
             return 2
         if args.cmd == "agent-image":
             try:

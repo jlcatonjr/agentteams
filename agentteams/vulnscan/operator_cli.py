@@ -22,7 +22,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -69,13 +69,41 @@ def register(sub: Any) -> None:
     sp.add_argument("--allow-checkout-signing", action="store_true")
     for name, text in (("publish", "publish a run's report now"), ("agent-chat", "talk to a past run's agent")):
         sp = sub.add_parser(name, help=text)
-        sp.add_argument("--run", default=None, help="run date YYYY-MM-DD (default: the latest run)")
+        sp.add_argument("--run", default=None, type=iso_date, help="run date YYYY-MM-DD (default: the latest run)")
 
 
-def _run_dir(date: str | None) -> Path | None:
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def iso_date(text: str) -> str:
+    """Argparse type for a run date: exactly ``YYYY-MM-DD`` and a real calendar date.
+
+    Run dates name directories under the state dir, so anything else (``../x``) is refused.
+
+    Args:
+        text: The argument.
+
+    Returns:
+        ``text`` unchanged.
+
+    Raises:
+        argparse.ArgumentTypeError: Not a ``YYYY-MM-DD`` date.
+    """
+    try:
+        ok = bool(_DATE_RE.match(text)) and date.fromisoformat(text).isoformat() == text
+    except ValueError:
+        ok = False
+    if not ok:
+        raise argparse.ArgumentTypeError(f"expected a date YYYY-MM-DD, not {text!r}")
+    return text
+
+
+def _run_dir(day: str | None) -> Path | None:
     state = paths.state_dir()
-    if date:
-        d = state / date
+    if day:
+        if not _DATE_RE.match(day):   # also for callers that bypass the parser
+            return None
+        d = state / day
         return d if d.is_dir() else None
     runs = paths.run_dirs(state)
     return runs[-1] if runs else None
@@ -304,6 +332,20 @@ def cmd_publish_grant(args: argparse.Namespace) -> int:
     return 0
 
 
+def _status_run_id(run_dir: Path) -> str:
+    """Return the run id recorded in ``<run>/agent/status.json``, or "" when it is absent or malformed."""
+    status = run_dir / "agent" / "status.json"
+    if not status.is_file():
+        return ""
+    try:
+        data = json.loads(status.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:   # a malformed status file: publish under a new run id
+        print(f"ignoring {status}: {exc}", file=sys.stderr)
+        return ""
+    rid = data.get("run_id") if isinstance(data, dict) else None
+    return rid if isinstance(rid, str) else ""
+
+
 def cmd_publish(cfg: dict[str, Any], args: argparse.Namespace) -> int:
     """Publish one run's files now.
 
@@ -320,11 +362,7 @@ def cmd_publish(cfg: dict[str, Any], args: argparse.Namespace) -> int:
     if run_dir is None:
         print("no such run", file=sys.stderr)
         return 2
-    status = run_dir / "agent" / "status.json"
-    run_id = ""
-    if status.is_file():
-        run_id = str(json.loads(status.read_text(encoding="utf-8")).get("run_id") or "")
-    res = daily.publish_run(cfg, run_dir, run_id or executor.new_run_id(run_dir))
+    res = daily.publish_run(cfg, run_dir, _status_run_id(run_dir) or executor.new_run_id(run_dir))
     if res is None:
         print("no active publish grant (see: vulnscan publish-grant sign)", file=sys.stderr)
         return 1
@@ -337,7 +375,8 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
 
     Args:
         args: Parsed arguments (``args.cmd`` in :data:`COMMANDS`).
-        load_cfg: Loads the daily config; raises FileNotFoundError when there is none.
+        load_cfg: Loads the daily config; raises FileNotFoundError when there is none and
+            ValueError (or another OSError) when it is unusable.
 
     Returns:
         Exit code.
@@ -354,6 +393,9 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
         if args.cmd == "halts":
             return cmd_halts(None)
         print(f"no config at {paths.config_file()} — run `python -m agentteams.vulnscan init`", file=sys.stderr)
+        return 2
+    except (OSError, ValueError) as exc:   # halts too: without the config it could miss a governance dir
+        print(f"config {paths.config_file()} is unusable: {exc}", file=sys.stderr)
         return 2
     if args.cmd == "halts":
         return cmd_halts(cfg)

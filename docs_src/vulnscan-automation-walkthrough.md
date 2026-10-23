@@ -92,8 +92,16 @@ web1 | deploy@web1.example.com | Ubuntu; nginx + Python app
 ```
 
 Then list the host names under `"servers"` in `~/.config/agentteams/vulnscan.json`. The name
-(`web1`) is what grants and escalations use. Test one audit by hand:
-`~/.config/agentteams/server-kit/remote.sh web1 L1-audit.sh`.
+(`web1`) is what grants and escalations use. It must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, and
+`all` is reserved (it means every host). Test one audit by hand:
+`~/.config/agentteams/server-kit/remote.sh web1 L1-audit.sh`. `remote.sh` streams only
+`L1-audit.sh` to `L5-containers.sh`.
+
+To patch a host, a person runs `run-host.sh <host> --apply`; the daily job never does. It stops
+before any change when the first audit does not finish cleanly: exit 2 for a config problem, 3 for
+an incomplete audit (also when it printed no `RESULT` line), 1 for an unreachable host, and 4 on
+compromise indicators. Otherwise it exits with the worst step result: 0 clean, 1 action needed, 3 a
+step failed, 4 the post-change audit found compromise indicators.
 
 The daily job and the executor run the scripts packaged with agentteams, reading your `hosts.conf`
 and `apps.conf` from this directory. The exported copies are for running by hand; editing them
@@ -106,7 +114,10 @@ data, next to the packaged ones.
 python -m agentteams.vulnscan daily
 ```
 
-The run writes `~/.local/state/agentteams/vulnscan/<date>/summary.md`:
+A config value of the wrong type or range stops it with exit 2 and a message naming the key. Only
+one daily run works at a time: a second one, started while the first holds
+`~/.local/state/agentteams/vulnscan/daily.lock`, exits 3 and writes nothing. The run writes
+`~/.local/state/agentteams/vulnscan/<date>/summary.md`:
 
 ![summary.md: one table per repository with severity, installed version and the upgrade](book/figures/vulnscan/04b-summary.svg)
 
@@ -125,6 +136,12 @@ python -m agentteams.vulnscan schedule install --apply
 *macOS shown (launchd). Linux gets a systemd user timer, or a crontab line without systemd.
 `<python>` stands for the interpreter running vulnscan.*
 
+The job file bakes in only `PATH`, `HOME`, the `XDG_CONFIG_HOME`/`XDG_STATE_HOME` directories and
+the vulnscan and server-kit location overrides
+([the list](api-reference/vulnscan.md#command-reference)); no other `AGENTTEAMS_*` variable, so an
+API key in your shell never lands in the plain-text plist, unit or crontab. Nor does it get your
+shell's `SSH_AUTH_SOCK`: a launchd agent uses the login session's ssh-agent; under systemd or cron,
+set a stable agent socket with `IdentityAgent` in `~/.ssh/config`.
 `python -m agentteams.vulnscan schedule status` confirms it. From now on, every command warns when
 the last daily run is older than 26 hours.
 
@@ -218,10 +235,12 @@ Add the `agent` block to `~/.config/agentteams/vulnscan.json`, with `enabled` of
   limits are counted separately). If your route proxy does not pass usage through, either make it
   do so or set `"allow_unmetered": true` knowingly (see
   [what leaves your machine](api-reference/vulnscan.md#what-leaves-your-machine)).
-- `team_dir` must be an existing directory that is not your home directory, an ancestor of it, or
-  anything at, inside or above `~/.config/agentteams` or another credential directory, and it must
-  not contain `key_file` (keep the OpenRouter key file outside the team directory, as above) or your
-  signing key. It is mounted into the container, so the run and the self-test refuse anything else.
+- `team_dir` is required. It must be an existing directory you own that is not group- or
+  world-writable, and not your home directory, an ancestor of it, or anything at, inside or above
+  `~/.config/agentteams`, `~/.local/state/agentteams` (vulnscan's state) or another credential
+  directory. It must not contain `key_file` (keep the OpenRouter key file outside the team
+  directory, as above) or your signing key. It is mounted into the container, so the run, the
+  self-test and `agent-chat` refuse anything else.
 
 ### Step 7: Build the agent image and prove its isolation
 
@@ -236,8 +255,9 @@ python -m agentteams.vulnscan agent-image build --source <agentteams checkout> \
 python -m agentteams.vulnscan agent-selftest
 ```
 
-A sha256 mismatch fails the build. The self-test starts the gateway and runs the container with the
-agent's exact flags, then prints `{"passed": ..., "checks": {...}}`. Every check must be `true`; the
+A sha256 mismatch fails the build. The self-test needs `agent.key_file` and `agent.team_dir` from
+Step 6: it mounts `team_dir` exactly as a run does, and refuses (exit 1) when it is unset or fails
+its checks. It starts the gateway and runs the container with the agent's exact flags, then prints `{"passed": ..., "checks": {...}}`. Every check must be `true`; the
 reference [lists what each one proves](api-reference/vulnscan.md#selftestcfg). Agent mode refuses to
 run until a passing self-test exists **for the current image and the current container flags**:
 after every image rebuild, and after an agentteams upgrade that changes how the containers are
@@ -341,7 +361,8 @@ python -m agentteams.vulnscan grant revoke --grant-id <id of the first grant>
 `open-pr` pushes a new `vulnscan/*` branch to the repository's `origin` and opens the pull request
 on that same repository. Before pushing anything, it checks that `origin` has the form
 `HOST/OWNER/REPO` (`https://`, `git@` or `ssh://`); otherwise the request fails. gh must be signed in
-to that host.
+to that host. Once the pull request exists, the executor removes its worktree and keeps the branch;
+a retry after a failed `gh pr create` reuses the pushed branch instead of pushing again.
 
 Finally set `"enabled": true` in the `agent` block. From then on, every daily run ends with an agent
 run.
@@ -444,6 +465,30 @@ hostname and private IP addresses are scrubbed.
 
 ---
 
+## Part D — Acceptance checks on your machine
+
+The test suite covers the code with fakes for Docker, ssh, GitHub and the model. These checks cover
+what only your environment can show. Run each once before you turn agent mode on, and again after
+you change machines, Docker, the model route or your GitHub token.
+
+| # | Check | Command | Passes when |
+|---|---|---|---|
+| 1 | Feeds reachable | `python -m agentteams.vulnscan runtimes; echo $?` | exit 0 or 1; exit 3 names the unreachable feed (OSV.dev, nodejs.org, www.php.net, endoflife.date) |
+| 2 | Scheduled environment | macOS: `launchctl kickstart gui/$(id -u)/io.agentteams.vulnscan`; Linux: `systemctl --user start agentteams-vulnscan.service` | a new `<date>/summary.md` and a fresh `heartbeat.json` appear, and the run reached your servers and GitHub (the job does not inherit your shell's environment) |
+| 3 | One server audit | `~/.config/agentteams/server-kit/remote.sh <host> L1-audit.sh` | a log under `~/.local/state/agentteams/server-kit/logs/`, no password prompt |
+| 4 | Docker isolation | `agent-image build …` then `agent-selftest` ([Step 7](#step-7-build-the-agent-image-and-prove-its-isolation)) | exit 0 and every check `true` |
+| 5 | Model route and metering | a supervised `agent-run` ([Step 9](#step-9-run-once-supervised)), then read `<run>/gateway/spend.json` | `calls` > 0, `prompt_tokens` > 0 and `unmetered` = 0. Unmetered replies mean the route does not pass usage through; the run stops at `max_unmetered_calls` |
+| 6 | GitHub token for pull requests | `gh auth status`, then one `act open-pr` on a test repository under a narrow grant | a pull request opens and the executor's worktree under `~/.local/state/agentteams/vulnscan/worktrees/` is gone. The staged state goes with it, so a second `act open-pr` fails with `no staged fix`. If `gh pr create` failed after the push, retrying `act open-pr` finds or creates the pull request without pushing again; it refuses (`not claiming` / `not overwriting`) when the branch holds other content |
+| 7 | GitHub token for publishing | `gh api repos/<owner>/ops-reports/collaborators --jq length` and `gh api repos/<owner>/ops-reports/keys --jq length` | both print `0`. An error means the token cannot read collaborators or deploy keys (it needs Administration read), and every publish will refuse |
+| 8 | Server kit syntax (contributors) | `shellcheck agentteams/data/server_kit/*.sh` in the source checkout | no errors |
+| 9 | Clean-up after a stop | start `agent-run`, stop it with `kill -TERM <pid>`, then `docker ps -a --filter name=vulnscan` | no vulnscan container is left (a terminated run removes the gateway and the agent before it exits) |
+
+Live checks of the scan itself, the generated goose recipes and goose's flags run from the source
+checkout with `FEATURE_AUDIT_LIVE=1 python -m pytest tests/test_vulnscan_live.py`; they use a
+throwaway home and never read your config.
+
+---
+
 ## Troubleshooting
 
 Search the message for the quoted text.
@@ -455,23 +500,45 @@ Search the message for the quoted text.
 | `HALT in force: ...` | a `@security` HALT on `vulnscan-remediation` | sign a `HALT-RETRACTED` row (see `halts`) |
 | `decision log ... is missing or a symlink` | the grant's governance directory has no decision log | sign a grant naming the team directory that has `references/security-decisions.log.csv` |
 | `set agent.key_file in vulnscan.json first` | `agent-selftest` before Step 6 | do Step 6, then re-run |
+| `set agent.team_dir in vulnscan.json first` | `agent-selftest` without `team_dir` (it no longer falls back to a directory inside the state directory) | set `team_dir` (Step 6), then re-run |
+| `config ... is unusable: ...` | `vulnscan.json` is not valid JSON or a JSON object, or the named key has a wrong type or range | fix the key the message names |
 | agent run state `not-run`, reason mentions the self-test | no passing self-test for this image | `agent-selftest` |
 | `refusing to sign from an install an agent may be able to edit` | `agentteams` runs from a git work tree | sign from a verified install outside agent write roots. `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
 | `no terminal to confirm on` (suggesting `--confirm-review-sha256`) | signing ran without a terminal | check the printed fields, then re-run with `--confirm-review-sha256 <digest>` (see Step 8) |
 | `--confirm-review-sha256 does not match` | your choices differ from the run that printed the digest | re-run without it and read the new digest |
-| `agent.team_dir ... ` (run state `not-run`) | `team_dir` is unset, relative, not a directory, your home or an ancestor, a credential directory, or contains a key file | set it to the team's project directory and keep key files outside it (Step 6) |
+| `agent.team_dir ... ` (run state `not-run`, or a refused self-test) | `team_dir` is unset, relative, not a directory, your home or an ancestor, at, inside or above the vulnscan state directory or a credential directory, or contains a key file | set it to the team's project directory and keep key files outside it (Step 6) |
+| `agent.team_dir ... is not owned by you` / `is group- or world-writable` | the team directory's owner or mode | use a directory you own; `chmod go-w` it |
 | `the container flags or the self-test changed` / `predates container-flag binding` | agentteams changed how containers start since the last self-test | `agent-selftest` |
 | `run token cap reached` / `replies carried no usable usage/cost` | the gateway's backstops (Step 6) | raise `max_tokens_total`, or fix usage reporting upstream |
 | `is the same repository as` (a refused `stage-fix` / `open-pr`) | the target is the agentteams checkout, the team, a governance directory or the ops repository | leave it out of the grant |
 | `no operator verify key ...` | the public key is not in `~/.config/agentteams/verify-keys/` | repeat the `openssl pkey` command in Step 5 |
 | `verify key ... is not owned by you or is group/world-writable` | the public key's mode (your umask) | `chmod 644` it |
+| `verify key ... could not be opened safely (symlink?)` / `verify key ... is not a regular file` | the public key file is a symlink or not a file | put the PEM file itself there (Step 5) |
+| `is a symlink — refused` / `is not a directory — refused` (`refusing all grants`, `refusing all publish grants`, `verify-keys directory ...`) | a grants directory or `~/.config/agentteams/verify-keys` is a symlink or not a directory | replace it with a real directory holding the files |
+| `is not owned by you or is group/world-writable — refused` (a directory, as above) | the directory's owner or mode | `chmod 700` a grants directory, `chmod go-w` the verify-keys directory; it must be yours |
 | `origin is not a GitHub repository URL` | `open-pr` on a repository whose `origin` URL is not `HOST/OWNER/REPO` | give it a GitHub `origin`, or leave it out of `open-pr` grants |
 | `gh pr create failed` | gh is not signed in to `origin`'s host, or `origin` is not on GitHub | `gh auth status`; leave non-GitHub repositories out of `open-pr` grants |
 | `holds the run lock` | an agent run or `agent-chat` is in progress | wait for it to finish |
-| `ledger integrity failure` | the ledger was edited, truncated or deleted | see below |
+| `another daily run holds ... daily.lock` (exit 3) | a daily run is already in progress | wait for it to finish |
+| `origin/HEAD is not set` (`fix_mode: apply-worktree`) | the repository has no default branch recorded | `git remote set-head origin --auto` in that repository |
+| `defines a filter driver` (`fix --apply`, or a refused `stage-fix`, before any checkout) | the repository's own git config defines a `filter.*` driver, which git would run | apply that fix by hand |
+| `git refuses to read this repository (...) — fix it by hand` (`fix --apply` or `stage-fix`) | git will not open the repository, e.g. `safe.directory` rejects it because another user owns it | fix what git reports (e.g. the directory's owner), or apply that fix by hand |
+| `hash-pinned (--hash) requirements are never edited` / `hash-held` | the requirements file pins `--hash` values | regenerate it yourself (`pip-compile --generate-hashes`) |
+| `invalid host name` (exit 2) | a `hosts.conf` name does not match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`, or is `all` | rename the host there and in `servers` |
+| `L1 audit of <host> did not complete (exit N) — stopping before any change` (`run-host.sh`, exit 3) | the audit printed no `RESULT` line (no passwordless sudo, the shell died) | read the audit log; fix access, then re-run |
+| `option ... needs a value` (exit 2) | an `L3`/`L4`/`L5` option, often from an `apps.conf` line, has no value | complete the option |
+| `apps.conf flags may not contain --apply, --restart-services or --reboot (found …)` (`run-host.sh`, exit 3) | an `apps.conf` entry's flags column carries one of those; the entry is skipped as a failed step | remove it from the flags column; pass it to `run-host.sh` instead |
+| `refusing ...: binary content (NUL bytes)` (exit 2) | an `ioc-*.txt` file is not plain text | remove the file or save it as text |
+| `docker is not reachable or the agent image ... is not built` | the Docker daemon is down, or the image for this agentteams version is missing | start Docker, or run `agent-image build`; then `agent-selftest` |
+| `not owned by you or group/world-writable — refused` (a grant file) | the grant file's mode or owner | `chmod 600` the file |
+| `not a regular file (symlink or special) — refused` (a grant file) | the grant file is a symlink | replace the symlink with the file itself |
+| `cannot tell which repositories are protected` | a `*.json` file in a grants directory cannot be read | make the file readable, or remove it |
+| `ledger integrity failure` / `incomplete final row (interrupted write?)` | the ledger was edited, truncated or deleted; or a crash or full disk cut its last append | the recovery the message names; see below |
 
 **A ledger integrity failure** refuses every action until it is resolved. Treat it as an incident:
-something changed a file only you and the executor should write. Do not delete anything in
+something changed a file only you and the executor should write. An incomplete final row
+usually means a crash or a full disk instead: the message says the rows before it are intact. It
+needs the same recovery, because nothing can be appended after it. Do not delete anything in
 `~/.config/agentteams/keys/`; your signing key lives there. To start over, revoke every grant first,
 then move `~/.local/state/agentteams/vulnscan/ledger.jsonl` and
 `~/.config/agentteams/keys/vulnscan-ledger.hwm` aside (keep them for investigation). A new ledger

@@ -60,6 +60,7 @@ _SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 _HOME_PATH_RE = re.compile(r"/(?:Users|home)/[A-Za-z][A-Za-z0-9._-]*(?![A-Za-z0-9._-])")
 _WIN_HOME_RE = re.compile(r"[A-Za-z]:\\Users\\[A-Za-z][A-Za-z0-9._-]*(?![A-Za-z0-9._-])")
 _GH_TIMEOUT = 120
+_HTTP_404_RE = re.compile(r"\(HTTP 404\)")
 _PRIVATE_IP_RE = re.compile(r"(?<![\d.])(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}"
                             r"|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})(?![\d.])")
 
@@ -264,14 +265,18 @@ def load_active(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], l
         Valid records and one message per rejected file.
     """
     d = grants_dir()
-    if not d.is_dir():
+    if not os.path.lexists(d):
         return [], []
-    st = d.stat()
-    if st.st_uid != os.getuid() or st.st_mode & 0o022:
-        return [], [f"{d} is not owned by you or is group/world-writable — refusing all publish grants"]
+    unsafe = grant.dir_problem(d)
+    if unsafe:
+        return [], [f"{d} {unsafe}: refusing all publish grants"]
     valid: list[dict[str, Any]] = []
     problems: list[str] = []
     for f in sorted(d.glob("vp-*.json")):
+        unsafe = grant.file_problem(f)
+        if unsafe:
+            problems.append(f"{f.name}: {unsafe}")
+            continue
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
             verify(rec, now=now)
@@ -477,9 +482,7 @@ def _check_files(files: dict[str, str]) -> tuple[dict[str, str], int]:
 # ---------------------------------------------------------------- preflight
 
 def _gh(*args: str) -> tuple[int, str, str]:
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env = executor.gh_env()
     try:
         proc = subprocess.run(["gh", *args], capture_output=True, text=True, env=env, timeout=_GH_TIMEOUT,
                               check=False)
@@ -646,7 +649,7 @@ def preflight(grant_record: dict[str, Any]) -> list[str]:
         code, out, err = _gh("api", f"repos/{nwo}/pages")
         if code == 0:
             problems.append("GitHub Pages is enabled on the ops repository")
-        elif "404" not in (err + out):
+        elif not _HTTP_404_RE.search(err + out):   # only gh's exact "(HTTP 404)": any other failure is unknown
             problems.append(f"cannot determine the Pages status: {(err or out).strip()[:200]}")
         problems += _access_checks(nwo, pinned_owner)
         problems += _branch_checks(repo)

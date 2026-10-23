@@ -15,11 +15,14 @@ Operations (v1):
 
 - ``stage-fix REPO``: in an executor-owned worktree off ``origin/<default>``, applies
   :func:`agentteams.vulnscan.fix.fix_path` (non-major, cooldown-clean). It then validates the
-  diff: only requirements/lockfiles, only ``==`` version edits, no root-package change, and only
-  allowlisted registries in lockfile URLs. Finally it commits locally. The agent cannot
+  diff: only requirements/lockfiles (regular files, modes unchanged, none deleted), only upward
+  ``==`` version edits, no root-package change, and only allowlisted registries in lockfile URLs.
+  A repository whose own git config defines a filter driver, or that git refuses to open, is refused
+  before any checkout (:func:`agentteams.vulnscan.fix.git_config_problem`). Finally it commits locally. The agent cannot
   influence the content.
-- ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force, refused
-  if the ref already exists) and opens a PR. It never merges.
+- ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
+  ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
+  removes the executor's worktree. It never merges.
 - Both repo ops are refused on any worktree of the agentteams checkout, ``agent.team_dir``, a
   grant's ``governance_dir`` or a publish ops repo (compared by git common dir; P7).
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
@@ -36,6 +39,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -45,12 +49,11 @@ from typing import Any
 
 import agentteams
 from agentteams.vulnscan import engine, escalations, fix, grant, ledger, notify, paths, report_store
-from agentteams.vulnscan.manifests import REQ_NAME, REQ_PIN
+from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
 MIN_COOLDOWN_DAYS = 14                       # Rule S-10 floor: config may raise it, never lower it
 ALLOWED_CHANGED = re.compile(r"(^|/)(requirements[\w.-]*\.txt|package-lock\.json|npm-shrinkwrap\.json)$", re.I)
-REGISTRY_HOSTS = frozenset({"registry.npmjs.org", "registry.yarnpkg.com"})
 REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 #: origin URL forms gh can target: https://HOST/OWNER/REPO, git@HOST:OWNER/REPO, ssh://git@HOST/OWNER/REPO
 _ORIGIN_RE = re.compile(r"^(?:https://([A-Za-z0-9.-]+)/|git@([A-Za-z0-9.-]+):|ssh://git@([A-Za-z0-9.-]+)(?::\d+)?/)"
@@ -90,23 +93,52 @@ def kit_dir() -> Path:
 
 # ---------------------------------------------------------------- hardened git
 
+_GIT_HARDENING = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.sshCommand=ssh",
+                  "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper=")
+
+
+def _clean_git_env(global_config: str) -> dict[str, str]:
+    """Return the environment without ``GIT_*`` variables, system config off and ``global_config`` as global config."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": global_config, "GIT_TERMINAL_PROMPT": "0"})
+    return env
+
+
 def _git_env() -> dict[str, str]:
     gcfg = paths.state_dir() / "executor.gitconfig"
     gcfg.parent.mkdir(parents=True, exist_ok=True)
     gcfg.write_text(f"[user]\n\tname = {GIT_IDENTITY[0]}\n\temail = {GIT_IDENTITY[1]}\n", encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(gcfg), "GIT_TERMINAL_PROMPT": "0"})
+    env = _clean_git_env(str(gcfg))
+    # repository config cannot rename the executor's commits (its branches are recognised by this identity)
+    env.update({"GIT_AUTHOR_NAME": GIT_IDENTITY[0], "GIT_AUTHOR_EMAIL": GIT_IDENTITY[1],
+                "GIT_COMMITTER_NAME": GIT_IDENTITY[0], "GIT_COMMITTER_EMAIL": GIT_IDENTITY[1]})
     return env
 
 
-def _git_proc(repo: Path, *args: str, push: bool = False, timeout: int = 600) -> subprocess.CompletedProcess:
-    """Run git hardened (no hooks, fsmonitor, submodule recursion or stored credentials) and return the process."""
-    pre = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.sshCommand=ssh",
-           "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper="]
-    if push:
-        pre += ["-c", "credential.helper=!gh auth git-credential"]
-    return subprocess.run(["git", *pre, "-C", str(repo), *args], capture_output=True, text=True,
+def git_proc(repo: Path, *args: str, push: bool = False, timeout: int = 600,
+              text: bool = True) -> subprocess.CompletedProcess:
+    """Run git hardened (no hooks, fsmonitor, submodule recursion or stored credentials) and return the process.
+
+    ``text=False`` returns bytes: exact content, line endings included.
+    """
+    pre = [*_GIT_HARDENING, *(["-c", "credential.helper=!gh auth git-credential"] if push else [])]
+    return subprocess.run(["git", *pre, "-C", str(repo), *args], capture_output=True, text=text,
                           env=_git_env(), timeout=timeout, check=False)
+
+
+def query_git(repo: Path, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
+    """Run a read-only git query hardened as :func:`git_proc` does, writing nothing (no executor state needed).
+
+    Args:
+        repo: Directory to run in (git may find its ``.git`` upwards: the tree can be untrusted).
+        *args: git arguments.
+        timeout: Seconds.
+
+    Returns:
+        The completed process (text).
+    """
+    return subprocess.run(["git", *_GIT_HARDENING, "-C", str(repo), *args], capture_output=True, text=True,
+                          env=_clean_git_env(os.devnull), timeout=timeout, check=False)
 
 
 def git(repo: Path, *args: str, check: bool = True, push: bool = False) -> str:
@@ -124,7 +156,7 @@ def git(repo: Path, *args: str, check: bool = True, push: bool = False) -> str:
     Raises:
         ExecError: git failed and ``check`` is set.
     """
-    proc = _git_proc(repo, *args, push=push)
+    proc = git_proc(repo, *args, push=push)
     if check and proc.returncode:
         raise ExecError(f"git {args[0]} failed: {(proc.stderr or proc.stdout).strip()[:400]}")
     return proc.stdout
@@ -160,8 +192,11 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
         raise ExecError(f"blocked by open escalation {esc.id} ({esc.kind}, scope {esc.scope}); "
                         f"see: vulnscan halts")
     if op in ("stage-fix", "open-pr"):
-        _refuse_ops_repo(target)
-        _refuse_protected_repos(target, cfg)
+        try:
+            _refuse_ops_repo(target)
+            _refuse_protected_repos(target, cfg)
+        except grant.GrantError as exc:   # an unreadable grant file could name a protected repo: refuse
+            raise ExecError(f"cannot tell which repositories are protected ({exc}); refusing") from exc
     grants, problems = grant.load_active()
     usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
     if not usable:
@@ -206,7 +241,7 @@ def repo_identity(path: Path) -> Path | None:
     if not p.is_absolute() or not p.exists():
         return None
     base = p if p.is_dir() else p.parent
-    proc = _git_proc(base, "rev-parse", "--path-format=absolute", "--git-common-dir", timeout=30)
+    proc = git_proc(base, "rev-parse", "--path-format=absolute", "--git-common-dir", timeout=30)
     out = proc.stdout.strip()
     return Path(out).resolve() if not proc.returncode and out else None
 
@@ -258,7 +293,7 @@ def _repo_root(target: str) -> Path:
     if not p.is_absolute():
         raise ExecError("repo targets must be absolute paths")
     p = p.resolve()
-    top = _git_proc(p, "rev-parse", "--show-toplevel").stdout.strip()
+    top = git_proc(p, "rev-parse", "--show-toplevel").stdout.strip()
     if not top or Path(top).resolve() != p:
         raise ExecError(f"{p} is not the top of a git repository")
     return p
@@ -268,8 +303,53 @@ def _state_slug(repo: Path) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "-", repo.name) + "-" + hashlib.sha256(str(repo).encode()).hexdigest()[:8]
 
 
+def _worktrees_dir() -> Path:
+    """Return ``<state>/worktrees``: the only place the executor creates (and so may remove) worktrees."""
+    return paths.state_dir() / "worktrees"
+
+
+def _release_own_branch(repo: Path, branch: str) -> None:
+    """Free a local ``branch`` an earlier staging of the same change left behind (D4).
+
+    The branch name is the date plus the diff digest, so an existing one holds the same change.
+    It is released only when its tip was committed by the executor and every worktree holding it is
+    under :func:`_worktrees_dir`: those worktrees are removed and the *local* branch deleted (a
+    pushed copy stays on the remote; nothing is forced there).
+
+    Args:
+        repo: Repository root.
+        branch: ``vulnscan/...`` branch about to be created.
+
+    Raises:
+        ExecError: The branch is checked out elsewhere or was not created by the executor.
+    """
+    ref = f"refs/heads/{branch}"
+    if git_proc(repo, "rev-parse", "--verify", "-q", ref).returncode:
+        return
+    holders: list[Path] = []
+    current: Path | None = None
+    for ln in git(repo, "worktree", "list", "--porcelain").splitlines():
+        if ln.startswith("worktree "):
+            current = Path(ln[len("worktree "):])
+        elif ln == f"branch {ref}" and current is not None:
+            holders.append(current)
+    owned = _worktrees_dir().resolve()
+    if any(not p.resolve().is_relative_to(owned) for p in holders):
+        raise ExecError(f"{branch} is checked out outside the executor's worktrees; not touching it")
+    if git(repo, "log", "-1", "--format=%ce", ref).strip() != GIT_IDENTITY[1]:
+        raise ExecError(f"local branch {branch} exists and was not created by the executor; not touching it")
+    for p in holders:
+        git(repo, "worktree", "remove", "--force", str(p))
+    git(repo, "branch", "-D", branch)
+
+
 def validate_diff(wt: Path, base: str) -> list[str]:
-    """Check that a staged change touches only what fix.py may touch (B1).
+    """Check that a staged change touches only what fix.py may touch (B1, X1, M1).
+
+    Tracked changes are listed with ``--no-renames`` (a rename is a deletion plus an addition, and a
+    deletion is refused). Every changed or new path must be a requirements file or npm lockfile that
+    is still a regular, non-executable file (never read through a symlink) with an unchanged mode.
+    Content is judged byte for byte by :func:`manifests.check_pin_edit` and :func:`manifests.check_lock_edit`.
 
     Args:
         wt: Worktree.
@@ -281,37 +361,33 @@ def validate_diff(wt: Path, base: str) -> list[str]:
     Raises:
         ExecError: Any disallowed change.
     """
-    changed = [p for p in git(wt, "diff", "--name-only", base).splitlines() if p]
-    changed += [p for p in git(wt, "ls-files", "--others", "--exclude-standard").splitlines() if p]
+    raw = git(wt, "diff", "--raw", "-z", "--no-renames", "--no-abbrev", base).split("\0")
+    changed: list[str] = []
+    for meta, rel in zip(raw[0::2], raw[1::2]):
+        fields = meta.lstrip(":").split()
+        old_mode, new_mode, status = (fields[0], fields[1], fields[-1]) if len(fields) >= 5 else ("?", "?", "?")
+        if status == "D":
+            raise ExecError(f"refusing change: {rel} was deleted (or renamed)")
+        if old_mode not in ("100644", "000000") or new_mode != "100644":
+            raise ExecError(f"refusing mode change on {rel} ({old_mode} -> {new_mode}; symlink or exec bit)")
+        changed.append(rel)
+    changed += [p for p in git(wt, "ls-files", "-z", "--others", "--exclude-standard").split("\0") if p]
     for rel in changed:
         if not ALLOWED_CHANGED.search(rel):
             raise ExecError(f"refusing change outside dependency pins/lockfiles: {rel}")
-        new = (wt / rel).read_text(encoding="utf-8", errors="replace")
-        old = git(wt, "show", f"{base}:{rel}", check=False)
-        if REQ_NAME.search(Path(rel).name):
-            a, b = old.splitlines(), new.splitlines()
-            if len(a) != len(b):
-                raise ExecError(f"{rel}: line count changed")
-            for x, y in zip(a, b):
-                if x != y:
-                    mx, my = REQ_PIN.match(x), REQ_PIN.match(y)
-                    if not (mx and my and mx.group(1) == my.group(1)):
-                        raise ExecError(f"{rel}: a non-pin line changed")
-        else:
-            try:
-                before, after = json.loads(old or "{}"), json.loads(new)
-            except json.JSONDecodeError as exc:
-                raise ExecError(f"{rel}: not valid JSON after fix: {exc}") from exc
-            root_before = (before.get("packages") or {}).get("", {})
-            root_after = (after.get("packages") or {}).get("", {})
-            for key in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies", "scripts"):
-                if root_before.get(key) != root_after.get(key):
-                    raise ExecError(f"{rel}: root package {key} changed")
-            for name, info in (after.get("packages") or {}).items():
-                url = str(info.get("resolved") or "")
-                host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if url else ""
-                if url and (not url.startswith("https://") or host not in REGISTRY_HOSTS):
-                    raise ExecError(f"{rel}: {name or '(root)'} resolves outside the registry allowlist: {url[:120]}")
+        st = os.lstat(wt / rel)
+        if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111:
+            raise ExecError(f"refusing {rel}: not a regular file, or its mode changed (symlink or exec bit)")
+        new = (wt / rel).read_bytes()
+        shown = git_proc(wt, "show", f"{base}:{rel}", text=False)
+        old = b"" if shown.returncode else shown.stdout
+        try:
+            if REQ_NAME.search(Path(rel).name):
+                check_pin_edit(rel, old, new)
+            else:
+                check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"))
+        except ValueError as exc:
+            raise ExecError(str(exc)) from exc
     return changed
 
 
@@ -326,15 +402,21 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         Result with worktree, branch, base and the fix plan markdown.
 
     Raises:
-        ExecError: Anything fails (the worktree is removed).
+        ExecError: The repository's own git config defines a filter driver (or git refuses to open it),
+            or anything else fails (the worktree is removed, whatever the exception, D4).
+        subprocess.SubprocessError: A git or npm step timed out (the worktree is removed too).
     """
     git(repo, "fetch", "-q", "origin", push=True)
     head = git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).strip() or "origin/main"
     base = git(repo, "rev-parse", head).strip()
-    wt = paths.state_dir() / "worktrees" / f"{_state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}"
+    wt = _worktrees_dir() / f"{_state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}-{os.urandom(3).hex()}"
     wt.parent.mkdir(parents=True, exist_ok=True)
-    git(repo, "worktree", "add", "-q", "--detach", str(wt), base)
+    unsafe = fix.git_config_problem(repo)   # checkout (worktree add) would run smudge filters
+    if unsafe:
+        raise ExecError(f"{repo}: {unsafe}")
+    staged = False
     try:
+        git(repo, "worktree", "add", "-q", "--detach", str(wt), base)
         cooldown = max(MIN_COOLDOWN_DAYS, int(cfg.get("cooldown_days", MIN_COOLDOWN_DAYS)))
         res = fix.fix_path(wt, apply=True, allow_major=False, cooldown_days=cooldown)
         if res.feed_errors:
@@ -342,15 +424,19 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         changed = validate_diff(wt, base)
         if not changed:
             raise ExecError("nothing fixable without a major jump or cooldown exception")
-        digest = hashlib.sha256(git(wt, "diff", base).encode()).hexdigest()[:10]
+        digest = hashlib.sha256(git(wt, "diff", "--no-ext-diff", "--no-textconv", base).encode()).hexdigest()[:10]
         branch = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
+        _release_own_branch(repo, branch)
         git(wt, "checkout", "-q", "-b", branch)
         git(wt, "add", "--", *changed)
         git(wt, "commit", "-q", "-m", f"security(deps): fix known-vulnerable dependency versions ({digest})",
             "-m", "Staged by the agentteams vulnscan executor (deterministic fix; lockfile/pin changes only).")
-    except (ExecError, OSError) as exc:
-        git(repo, "worktree", "remove", "--force", str(wt), check=False)
+        staged = True
+    except OSError as exc:
         raise ExecError(str(exc)) from exc
+    finally:
+        if not staged:   # any exception, a timeout included (D4)
+            git(repo, "worktree", "remove", "--force", str(wt), check=False)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
               "changed": changed, "plan": res.markdown()}
     _write_json(spool_dir() / "staged" / f"{_state_slug(repo)}.json", result)
@@ -365,27 +451,49 @@ def _sanitize(text: str, limit: int = 2000) -> str:
 def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     """Push the staged branch as a new ref and open a PR (never merge, never force).
 
+    Idempotent (D4): when the remote branch already exists, an open PR for it is returned as is;
+    without one, the PR is created from the remote branch only if it is exactly the staged commit
+    (a push that succeeded before ``gh pr create`` failed). After the PR exists the executor's
+    worktree and staged state are removed; the local branch is kept.
+
     Args:
         repo: Repository root.
         rationale: The agent's rationale (untrusted; quoted and neutralised in the body).
 
     Returns:
-        Result with the PR URL.
+        Result with the PR URL (``existing`` is True when an open PR was found).
 
     Raises:
-        ExecError: No staged change, the ref already exists, or push / PR creation failed.
+        ExecError: No staged change, the remote ref holds another commit with no open PR, or
+            push / PR listing / PR creation failed.
     """
     staged_file = spool_dir() / "staged" / f"{_state_slug(repo)}.json"
     if not staged_file.is_file():
         raise ExecError("no staged fix for this repo — request stage-fix first")
     st = json.loads(staged_file.read_text(encoding="utf-8"))
     wt, branch = Path(st["worktree"]), st["branch"]
-    if not branch.startswith("vulnscan/") or not wt.is_dir():
+    if not branch.startswith("vulnscan/") or not wt.is_dir() or not wt.resolve().is_relative_to(
+            _worktrees_dir().resolve()):
         raise ExecError("staged state is invalid or its worktree is gone")
     target_repo = _origin_repo(wt)   # before anything is pushed; never let gh pick a base repo
-    if git(wt, "ls-remote", "--heads", "origin", branch, push=True).strip():
-        raise ExecError(f"remote branch {branch} already exists — not overwriting (likely already proposed)")
-    git(wt, "push", "origin", f"HEAD:refs/heads/{branch}", push=True)
+    ref = f"refs/heads/{branch}"
+    remote_sha = next((ln.split("\t", 1)[0] for ln in git(wt, "ls-remote", "origin", ref, push=True).splitlines()
+                       if ln.endswith(f"\t{ref}")), "")
+    if remote_sha:
+        url = _open_pr_url(wt, target_repo, branch)
+        if url:
+            # The PR is ours only if its branch holds exactly the staged content (a re-staged fix is a new
+            # commit with the same tree); anything else on the branch is someone else's change (C13).
+            git(wt, "fetch", "--no-tags", "origin", ref, push=True)
+            if git(wt, "rev-parse", f"{remote_sha}^{{tree}}").strip() != git(wt, "rev-parse", "HEAD^{tree}").strip():
+                raise ExecError(f"open PR {url} on {branch} does not hold the staged change — not claiming it")
+            _finish_open_pr(repo, wt, staged_file)
+            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True}
+        if remote_sha != git(wt, "rev-parse", "HEAD").strip():
+            raise ExecError(f"remote branch {branch} already exists at another commit and has no open PR "
+                            "— not overwriting")
+    else:
+        git(wt, "push", "origin", f"HEAD:{ref}", push=True)
     body = (f"Automated security fix staged by the agentteams **vulnscan executor** "
             f"(deterministic; dependency pins and lockfiles only).\n\n{st['plan']}\n\n"
             f"### Agent rationale (untrusted text, quoted)\n\n{_sanitize(rationale)}\n\n"
@@ -396,11 +504,59 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
                            "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
                            "--body-file", str(body_file)], cwd=wt, capture_output=True, text=True,
-                          env=_git_env() | {"GIT_CONFIG_GLOBAL": os.devnull}, timeout=300, check=False)
+                          env=_gh_push_env(), timeout=300, check=False)
     if proc.returncode:
         raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
     url = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    _finish_open_pr(repo, wt, staged_file)
     return {"repo": str(repo), "branch": branch, "pr": url}
+
+
+def gh_env() -> dict[str, str]:
+    """Return the environment for a read-only ``gh`` call made outside a repository operation.
+
+    Inherited ``GIT_*`` variables are dropped, system and global git config are off, and ``gh`` never prompts.
+    Shared by publish and notes (read-only API calls). The executor's own ``gh pr`` calls use
+    :func:`_gh_push_env`, which adds the hardened git environment.
+
+    Returns:
+        The environment.
+    """
+    return _clean_git_env(os.devnull) | {"GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"}
+
+
+def _gh_push_env() -> dict[str, str]:
+    """Return the hardened git environment for gh, with no global git config at all."""
+    return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull}
+
+
+def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
+    """Return the URL of an open PR whose head is ``branch`` in ``target_repo`` itself, or "".
+
+    ``--head`` matches a branch name in any fork, so a PR from a fork with the same branch name is
+    ignored (``isCrossRepository``): the executor always pushes to ``target_repo``.
+
+    Raises:
+        ExecError: gh failed or did not answer with a JSON list.
+    """
+    proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
+                           "--json", "url,isCrossRepository"], cwd=wt, capture_output=True, text=True, env=_gh_push_env(), timeout=120,
+                          check=False)
+    if proc.returncode:
+        raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")
+    try:
+        prs = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError as exc:
+        raise ExecError(f"gh pr list did not return JSON: {exc}") from exc
+    urls = [p.get("url") for p in prs if isinstance(p, dict) and p.get("isCrossRepository") is False] \
+        if isinstance(prs, list) else []
+    return next((u for u in urls if isinstance(u, str) and u.startswith("https://")), "")
+
+
+def _finish_open_pr(repo: Path, wt: Path, staged_file: Path) -> None:
+    """Remove the executor's worktree and staged state once the PR exists (the branch is kept, D4)."""
+    git(repo, "worktree", "remove", "--force", str(wt))
+    staged_file.unlink(missing_ok=True)
 
 
 def _origin_repo(wt: Path) -> str:
@@ -507,7 +663,7 @@ def canonical_target(target: str) -> str | None:
     if not p.is_absolute() or not p.exists():
         return None
     base = p if p.is_dir() else p.parent
-    proc = _git_proc(base, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir")
+    proc = git_proc(base, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir")
     lines = proc.stdout.split("\n")
     if proc.returncode or len(lines) < 2 or not lines[0].strip():
         return None
@@ -617,9 +773,15 @@ def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, reque
         else:
             result = server_op(op, canonical)
     except (ExecError, OSError, subprocess.SubprocessError, ValueError) as exc:
+        detail: str | None = str(exc)
+    except (TypeError, AttributeError, KeyError) as exc:   # malformed input reached shape-trusting code (D3)
+        detail = f"{type(exc).__name__}: {exc}"
+    else:
+        detail = None
+    if detail is not None:
         ledger.append("failed", grant_id=g["grant_id"], op=op, target=canonical, request_id=request_id,
-                      detail=str(exc)[:1000])
-        return {"status": "failed", "detail": str(exc)}
+                      detail=detail[:1000])
+        return {"status": "failed", "detail": detail}
     slim = {k: v for k, v in result.items() if k != "plan"}
     ledger.append("done", grant_id=g["grant_id"], op=op, target=canonical, request_id=request_id,
                   detail=json.dumps(slim)[:2000], rationale=rationale[:2000])
@@ -627,9 +789,11 @@ def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, reque
 
 
 def _read_request(path: Path) -> dict[str, Any]:
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    # O_NONBLOCK: the agent can create a FIFO named <id>.json in its rw spool; a blocking open would
+    # stall the serving loop, and with it the run's time cap (R8-1).
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        if not os.fstat(fd).st_mode & 0o100000:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
             raise ExecError("not a regular file")
         data = os.read(fd, MAX_REPORT_REQUEST_BYTES + 1)
     finally:

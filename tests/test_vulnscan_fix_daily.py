@@ -90,6 +90,60 @@ def test_fix_path_dry_run_writes_nothing(tmp_path: Path, feed: Feed) -> None:
     assert req.read_text() == "PyJWT==2.15.0\n"
 
 
+_FAKE_NPM = """#!/usr/bin/env python3
+import json, os, sys
+rec = {"cwd": os.getcwd(), "args": sys.argv[1:], "npmrc": os.path.exists(".npmrc"),
+       "files": sorted(os.listdir(".")),
+       "env": {k: v for k, v in os.environ.items() if k.lower().startswith("npm_config_")}}
+for key in ("NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG"):
+    p = os.environ.get(key)
+    rec[key + "_bytes"] = open(p).read() if p and os.path.isfile(p) else None
+with open(os.environ["FAKE_NPM_LOG"], "a") as fh:
+    fh.write(json.dumps(rec) + "\\n")
+if "--dry-run" not in sys.argv:
+    with open("package-lock.json", "w") as fh:
+        fh.write('{"lockfileVersion": 3, "packages": {"": {}}, "fixed": true}')
+print("fixed 1 of 1 vulnerabilities")
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="shebang fake npm")
+def test_npm_fix_ignores_the_repositorys_npmrc(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D2: npm runs on a scratch copy (package.json + lockfile only) with pinned registry and TLS."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "npm").write_text(_FAKE_NPM.replace("python3", sys.executable, 1).replace("/usr/bin/env ", "", 1))
+    (bindir / "npm").chmod(0o755)
+    log = tmp_path / "npm.log"
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_NPM_LOG", str(log))
+    monkeypatch.setenv("npm_config_registry", "https://env.example/")      # inherited config is dropped too
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "package.json").write_text('{"name": "x", "version": "1.0.0"}')
+    (repo / "package-lock.json").write_text('{"lockfileVersion": 3, "packages": {"": {}}}')
+    (repo / ".npmrc").write_text("registry=https://evil.example/\nstrict-ssl=false\ncafile=/tmp/evil.pem\n")
+    (repo / "index.js").write_text("// not copied\n")
+    out = fix.npm_fix(repo, apply=True)
+    assert "fixed 1" in out
+    rec = json.loads(log.read_text().splitlines()[-1])
+    assert Path(rec["cwd"]).resolve() != repo.resolve() and not rec["npmrc"]
+    assert rec["files"] == ["package-lock.json", "package.json"]
+    assert "--registry=https://registry.npmjs.org/" in rec["args"] and "--strict-ssl=true" in rec["args"]
+    assert "--ignore-scripts" in rec["args"] and "--package-lock-only" in rec["args"]
+    assert rec["NPM_CONFIG_USERCONFIG_bytes"] == "" and rec["NPM_CONFIG_GLOBALCONFIG_bytes"] == ""
+    assert set(rec["env"]) == {"NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG"}
+    assert '"fixed": true' in (repo / "package-lock.json").read_text()       # lockfile copied back
+    assert not Path(rec["cwd"]).exists()                                      # scratch removed
+    (repo / "package-lock.json").write_text('{"lockfileVersion": 3, "packages": {"": {}}}')
+    fix.npm_fix(repo, apply=False)                                            # dry run: nothing copied back
+    assert "--dry-run" in json.loads(log.read_text().splitlines()[-1])["args"]
+    assert '"fixed"' not in (repo / "package-lock.json").read_text()
+    (repo / "package-lock.json").unlink()
+    (repo / "package-lock.json").symlink_to(tmp_path / "elsewhere.json")
+    assert "symlink" in fix.npm_fix(repo, apply=True) and not (tmp_path / "elsewhere.json").exists()
+
+
 # ---------------------------------------------------------------- daily
 
 def test_init_never_overwrites_and_stale_warning(xdg: Path) -> None:
@@ -309,7 +363,10 @@ BAD_PINS = ["--index-url=https://evil.example.com", "-e " + "g" + "it+https://x"
 def test_l4_rejects_pins_that_are_not_name_equals_version(pin: str) -> None:
     proc = subprocess.run(["bash", str(KIT / "L4-python-app.sh"), "--unit", "x.service", "--dir", "/nonexistent",
                            "--pin", pin], capture_output=True, text=True, check=False)
-    assert proc.returncode == 1 and "invalid --pin" in proc.stdout
+    if pin.startswith("--"):   # an option-shaped value is a usage error before any pin check (round 2)
+        assert proc.returncode == 2 and "needs a value" in proc.stderr
+    else:
+        assert proc.returncode == 1 and "invalid --pin" in proc.stdout
 
 
 def test_ioc_rules_are_data_files_not_scripts() -> None:
@@ -318,3 +375,143 @@ def test_ioc_rules_are_data_files_not_scripts() -> None:
         for ln in f.read_text().splitlines():
             if ln.strip() and not ln.startswith("#"):
                 assert ln.split()[0] in {"file", "name", "env", "grep"}, ln
+
+
+# ---------------------------------------------------------------- round 2, Area P: fix.py (X1, X2, X3, V32, V33)
+
+def _git_tree(path: Path, files: dict[str, str]) -> Path:
+    """A committed git repository holding ``files``."""
+    path.mkdir(parents=True, exist_ok=True)
+    for name, text in files.items():
+        (path / name).parent.mkdir(parents=True, exist_ok=True)
+        (path / name).write_text(text)
+    for args in (["init", "-q"], ["add", "-A"], ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]):
+        subprocess.run(["git", "-C", str(path), *args], check=True, capture_output=True)
+    return path
+
+
+def _vulnerable_pyjwt(feed: Feed) -> None:
+    feed.vulns = {("PyPI", "PyJWT", "2.3.0"): ["G1"]}
+    _pypi(feed, "PyJWT", {"2.15.0": 100})
+
+
+@pytest.mark.parametrize("text", ["PyJWT==2.3.0 \\\n    --hash=sha256:" + "a" * 64 + "\n",
+                                  "PyJWT==2.3.0 --hash=sha256:" + "a" * 64 + "\n",
+                                  "flask==3.0.0 --hash=sha256:" + "b" * 64 + "\nPyJWT==2.3.0\n"])
+def test_x1_fix_holds_back_hash_pinned_requirements(tmp_path: Path, feed: Feed, text: str) -> None:
+    req = tmp_path / "requirements.txt"
+    req.write_text(text)
+    _vulnerable_pyjwt(feed)
+    res = fix.fix_path(tmp_path, apply=True, npm=False)
+    assert [(c.name, c.action) for c in res.changes] == [("PyJWT", "hash-held")] and "--hash" in res.changes[0].note
+    assert req.read_text() == text and res.exit_code() == 1
+
+
+def test_x2_symlinked_manifests_are_refused_never_followed(tmp_path: Path, feed: Feed) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "requirements.txt").write_text("PyJWT==2.3.0\n")
+    (outside / "package-lock.json").write_text('{"lockfileVersion": 3, "packages": {"": {}}}')
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    for name in ("requirements.txt", "package-lock.json"):
+        (tree / name).symlink_to(outside / name)
+    _vulnerable_pyjwt(feed)
+    res = fix.fix_path(tree, apply=True)
+    assert sorted(p for p, _ in res.refused) == ["package-lock.json", "requirements.txt"], res.refused
+    assert all("symlink" in why for _, why in res.refused) and not res.changes and not res.npm
+    assert (outside / "requirements.txt").read_text() == "PyJWT==2.3.0\n" and res.exit_code() == 1
+    with pytest.raises(OSError):                     # the writer itself never follows a link either
+        fix.apply_requirements(tree / "requirements.txt", [fix.PinChange("requirements.txt", "PyJWT", "2.3.0", "2.15.0")])
+    assert (outside / "requirements.txt").read_text() == "PyJWT==2.3.0\n"
+
+
+@pytest.mark.skipif(not shutil.which("git") or sys.platform == "win32", reason="git and a shell hook needed")
+def test_x3_vulnscan_fix_never_runs_the_trees_fsmonitor(xdg: Path, feed: Feed,
+                                                        capsys: pytest.CaptureFixture[str]) -> None:
+    tree = _git_tree(xdg / "untrusted", {"sub/requirements.txt": "PyJWT==2.3.0\n"})
+    marker = xdg / "fsmonitor-ran"
+    hook = xdg / "hook.sh"
+    hook.write_text(f'#!/bin/sh\ntouch "{marker}"\n')
+    hook.chmod(0o755)
+    subprocess.run(["git", "-C", str(tree), "config", "core.fsmonitor", str(hook)], check=True)
+    _vulnerable_pyjwt(feed)
+    assert main(["fix", str(tree / "sub"), "--apply", "--no-npm"]) == 0     # .git found upwards from sub/
+    assert not marker.exists(), "vulnscan fix ran the repository's core.fsmonitor"
+    assert (tree / "sub" / "requirements.txt").read_text() == "PyJWT==2.15.0\n"
+    subprocess.run(["git", "-C", str(tree), "status", "--porcelain"], check=True, capture_output=True)
+    assert marker.exists()                                                  # the hook is live: the test is valid
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git not available")
+@pytest.mark.parametrize("kind", ["clean", "process"])
+def test_x3_vulnscan_fix_never_runs_the_trees_filter_driver(xdg: Path, feed: Feed, kind: str) -> None:
+    """A filter driver in the tree's own git config would run under ``git status``: refuse the tree instead."""
+    tree = _git_tree(xdg / "untrusted", {"requirements.txt": "PyJWT==2.3.0\n", ".gitattributes": "* filter=x\n"})
+    marker = xdg / "filter-ran"
+    hook = xdg / "filter.sh"
+    hook.write_text(f'#!/bin/sh\ntouch "{marker}"\ncat\n')
+    hook.chmod(0o755)
+    subprocess.run(["git", "-C", str(tree), "config", f"filter.x.{kind}", str(hook)], check=True)
+    (tree / "requirements.txt").touch()                        # stat change: status would re-run the filter
+    _vulnerable_pyjwt(feed)
+    res = fix.fix_path(tree, apply=True, npm=False)
+    assert not marker.exists(), "vulnscan fix ran the repository's filter driver"
+    assert res.refused and "filter" in res.refused[0][1], res.refused
+    assert (tree / "requirements.txt").read_text() == "PyJWT==2.3.0\n"
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git not available")
+def test_v32_a_requirements_file_with_uncommitted_changes_is_refused(xdg: Path, feed: Feed) -> None:
+    tree = _git_tree(xdg / "repo", {"requirements.txt": "PyJWT==2.3.0\n"})
+    (tree / "requirements.txt").write_text("PyJWT==2.3.0\n# local edit\n")
+    _vulnerable_pyjwt(feed)
+    res = fix.fix_path(tree, apply=True, npm=False)
+    assert res.refused == [("requirements.txt", "uncommitted changes — commit/stash first or use a worktree")]
+    assert (tree / "requirements.txt").read_text() == "PyJWT==2.3.0\n# local edit\n" and res.exit_code() == 1
+    fix.fix_path(tree, apply=True, npm=False, allow_dirty=True)
+    assert (tree / "requirements.txt").read_text() == "PyJWT==2.15.0\n# local edit\n"
+
+
+_FAKE_NPM_V33 = """
+import json, os, sys
+with open(os.environ["FAKE_NPM_LOG"], "a") as fh:
+    fh.write(json.dumps(sys.argv[1:]) + "\\n")
+for name, body in (("package-lock.json", '{"lockfileVersion": 3, "packages": {"": {}}, "fixed": true}'),
+                   ("package.json", '{"name": "x", "scripts": {"postinstall": "curl evil"}}'),
+                   ("planted.js", "planted")):
+    with open(name, "w") as fh:
+        fh.write(body)
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="shebang fake npm")
+def test_v33_npm_fix_uses_the_cooldown_cutoff_and_copies_back_only_the_lockfile(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import types
+
+    class FrozenDate(dt.date):
+        @classmethod
+        def today(cls) -> FrozenDate:
+            return cls(2026, 10, 22)
+    monkeypatch.setattr(fix, "_dt", types.SimpleNamespace(date=FrozenDate, timedelta=dt.timedelta,
+                                                          datetime=dt.datetime, UTC=dt.UTC))
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "npm").write_text(f"#!{sys.executable}\n{_FAKE_NPM_V33}")
+    (bindir / "npm").chmod(0o755)
+    log = tmp_path / "npm.log"
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("FAKE_NPM_LOG", str(log))
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    pkg = '{"name": "x", "version": "1.0.0"}'
+    (repo / "package.json").write_text(pkg)
+    (repo / "package-lock.json").write_text('{"lockfileVersion": 3, "packages": {"": {}}}')
+    fix.npm_fix(repo, apply=True)
+    fix.npm_fix(repo, cooldown_days=30, apply=True)
+    runs = [json.loads(ln) for ln in log.read_text().splitlines()]
+    assert [[a for a in r if a.startswith("--before=")] for r in runs] == [["--before=2026-10-08"], ["--before=2026-09-22"]]
+    assert '"fixed": true' in (repo / "package-lock.json").read_text()
+    assert (repo / "package.json").read_text() == pkg and sorted(p.name for p in repo.iterdir()) == [
+        "package-lock.json", "package.json"]

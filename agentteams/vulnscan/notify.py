@@ -12,7 +12,6 @@ its last argument; it no longer receives a summary path.
 
 from __future__ import annotations
 
-import json
 import platform
 import re
 import shlex
@@ -24,7 +23,7 @@ from typing import Any
 from agentteams.vulnscan.escalations import FLOOD_KIND, KINDS
 
 TITLE = "agentteams vulnscan"
-_ID = re.compile(r"^[A-Za-z0-9._:-]{1,80}$")
+_ID = re.compile(r"[A-Za-z0-9._:-]{1,80}")   # always used with fullmatch
 
 #: The only messages vulnscan sends. Placeholders take ids / counts / fixed state words only.
 MESSAGES: dict[str, str] = {
@@ -59,15 +58,33 @@ def render(key: str, **fields: Any) -> str:
     for name, value in fields.items():
         if isinstance(value, int) and not isinstance(value, bool):
             safe[name] = str(value)
+        elif not isinstance(value, str):   # X8: an unhashable value would raise TypeError on ``in``
+            raise ValueError(f"notification field {name!r} is not a safe fixed value")
         elif name == "state" and value in _STATES:
-            safe[name] = str(value)
+            safe[name] = value
         elif name == "kind" and value in _KINDS:
-            safe[name] = str(value)
-        elif name == "id" and isinstance(value, str) and _ID.match(value):
+            safe[name] = value
+        elif name == "id" and _ID.fullmatch(value):   # X8: ``match`` + ``$`` let a trailing newline through
             safe[name] = value
         else:
             raise ValueError(f"notification field {name!r} is not a safe fixed value")
     return template.format(**safe)
+
+
+def _applescript_string(text: str) -> str:
+    """Return ``text`` as an AppleScript string literal (G28).
+
+    AppleScript knows only ``\\\\`` and ``\\"`` (plus ``\\n``/``\\t``/``\\r``) as escapes; a JSON
+    ``\\uXXXX`` escape is shown literally, so non-ASCII text (the em dash in the templates) is kept
+    as is and only backslashes and double quotes are escaped.
+
+    Args:
+        text: Fixed message text.
+
+    Returns:
+        The quoted literal.
+    """
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def send(cfg: dict[str, Any], key: str, **fields: Any) -> bool:
@@ -85,7 +102,7 @@ def send(cfg: dict[str, Any], key: str, **fields: Any) -> bool:
     """
     try:
         message = render(key, **fields)
-    except (KeyError, ValueError) as exc:
+    except (KeyError, ValueError, TypeError) as exc:   # TypeError: defence in depth (X8: send never raises)
         print(f"vulnscan: notification {key!r} refused: {exc}", file=sys.stderr)
         return False
     how = str(cfg.get("notify", "desktop"))
@@ -98,7 +115,8 @@ def send(cfg: dict[str, Any], key: str, **fields: Any) -> bool:
             print(f"vulnscan: notify command is malformed: {exc}", file=sys.stderr)
             return False
     elif platform.system() == "Darwin" and shutil.which("osascript"):
-        cmd = ["osascript", "-e", f"display notification {json.dumps(message)} with title {json.dumps(TITLE)}"]
+        cmd = ["osascript", "-e",
+               f"display notification {_applescript_string(message)} with title {_applescript_string(TITLE)}"]
     elif shutil.which("notify-send"):
         cmd = ["notify-send", TITLE, message]
     else:

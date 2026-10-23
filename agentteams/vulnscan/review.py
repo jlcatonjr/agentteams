@@ -17,8 +17,19 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import escalations, grant, ledger, notes, paths, publish, report_store
+from agentteams.vulnscan import (
+    escalations,
+    grant,
+    ledger,
+    notes,
+    paths,
+    publish,
+    report_store,
+)
 from agentteams.vulnscan.report import Report
+
+#: Days an action may stay unacknowledged before the review calls it overdue.
+OVERDUE_DAYS = 3
 
 
 def _headline(detail: str) -> str:
@@ -206,6 +217,7 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
         integrity = f"**LEDGER INTEGRITY FAILURE: {exc}** — treat everything below as untrusted"
     window = [r for r in rows if r["ts"][:10] >= since] if since else _since_last_ack(rows)
     out += [f"- Ledger: {integrity}; {len(window)} rows in this review window.", ""]
+    out += _overdue_notice(rows)
     out += _escalation_section(rows, window, for_publish)
 
     grants, problems = grant.load_active()
@@ -290,21 +302,39 @@ def acknowledge(note: str = "") -> dict[str, Any]:
         return ledger.append("ack", detail=note[:1000])
 
 
-def overdue(days: int = 3) -> bool:
+def _unacked_actions(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [r for r in _since_last_ack(rows) if r.get("kind") in ("done", "failed")]
+
+
+def overdue(days: int = OVERDUE_DAYS, rows: list[dict[str, Any]] | None = None) -> bool:
     """Return whether actions have gone unreviewed for more than ``days``.
 
     Args:
         days: Threshold.
+        rows: Ledger rows already read (default: read and verify the ledger).
 
     Returns:
-        True when the oldest unacknowledged action is older than the threshold.
+        True when the oldest unacknowledged action is older than the threshold, or the ledger
+        cannot be read or verified.
     """
-    try:
-        rows = _since_last_ack(ledger.read())
-    except (ValueError, OSError):
-        return True
-    acts = [r for r in rows if r["kind"] in ("done", "failed")]
+    if rows is None:
+        try:
+            rows = ledger.read()
+        except (ValueError, OSError):
+            return True
+    acts = _unacked_actions(rows)
     if not acts:
         return False
     return datetime.fromisoformat(acts[0]["ts"]) < datetime.now(UTC) - timedelta(days=days)
+
+
+def _overdue_notice(rows: list[dict[str, Any]]) -> list[str]:
+    """Return the review's "overdue" call-out (executor-owned counts and times only), or nothing."""
+    if not overdue(rows=rows):
+        return []
+    acts = _unacked_actions(rows)
+    line = (f"- **After-action review overdue:** {len(acts)} unacknowledged action(s), the oldest at "
+            f"{_code(acts[0]['ts'])} (more than {OVERDUE_DAYS} days ago). Review them, then run "
+            "`python -m agentteams.vulnscan review --ack`.")
+    return [line, ""]
 

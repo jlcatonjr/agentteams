@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import signal
 import subprocess
 from pathlib import Path
 from typing import Any, ClassVar
@@ -133,6 +134,7 @@ def test_run_debrief_refuses_while_the_run_lock_is_held(env: dict[str, Any], mon
         fcntl.flock(held, fcntl.LOCK_UN)
     assert procs == [] and env["calls"] == []
     assert "run lock" in capsys.readouterr().err
+    assert not (env["run"] / "debrief").exists()               # G2: nothing written into the run dir
 
 
 def test_run_debrief_holds_the_lock_and_cleans_up_on_success(env: dict[str, Any],
@@ -157,6 +159,7 @@ def test_run_debrief_holds_the_lock_and_cleans_up_on_success(env: dict[str, Any]
     gw = next(c for c in calls if c[:3] == ["docker", "run", "-d"])
     assert gw[gw.index("--name") + 1] == debrief.DEBRIEF_GATEWAY
     assert gw[gw.index("--budget-usd") + 1] == "0.5"
+    assert gw[gw.index("--max-tokens-total") + 1] == str(debrief.DEFAULT_DEBRIEF_MAX_TOKENS)   # V17
     assert ["docker", "network", "connect", agent_run.NETWORK, debrief.DEBRIEF_GATEWAY] in calls
     assert agent_run.GATEWAY not in [c[-1] for c in calls if c[:3] == ["docker", "rm", "-f"]]  # never a run's gateway
     assert calls[-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
@@ -231,6 +234,47 @@ def test_non_positive_limits_are_rejected(env: dict[str, Any]) -> None:
         debrief.run_debrief(env["cfg"], env["run"])
 
 
+@pytest.mark.parametrize("key", ["debrief_budget_usd", "debrief_max_minutes"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), True, "0.5", None, -1, 10**7])
+def test_debrief_limits_use_the_run_limits_type_rules(key: str, bad: object) -> None:
+    with pytest.raises(ValueError, match=key):                  # X11
+        debrief.debrief_limits({key: bad})
+
+
+def test_debrief_gateway_gets_a_configured_token_cap(env: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    env["cfg"]["agent"]["debrief_max_tokens"] = 1234
+    _popen(monkeypatch)
+    assert debrief.run_debrief(env["cfg"], env["run"]) == 0
+    gw = next(c for c in env["calls"] if c[:3] == ["docker", "run", "-d"])
+    assert gw[gw.index("--max-tokens-total") + 1] == "1234"     # V17
+
+
+def test_sigterm_during_a_debrief_still_removes_container_and_gateway(env: dict[str, Any],
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    before = signal.getsignal(signal.SIGTERM)
+
+    class Terminated(FakePopen):
+        def wait(self, timeout: float | None = None) -> int:
+            if timeout is None:                                 # a wait after the handler: never block
+                return -15
+            handler = signal.getsignal(signal.SIGTERM)
+            assert callable(handler) and handler is not before, "no SIGTERM handler during the debrief"
+            handler(signal.SIGTERM, None)                       # M4: launchd unload / logout / kill
+            raise AssertionError("the SIGTERM handler did not end the debrief")
+
+    monkeypatch.setattr(debrief.subprocess, "Popen", lambda argv, **kw: Terminated(argv))
+    with pytest.raises(SystemExit) as exc:
+        debrief.run_debrief(env["cfg"], env["run"])
+    assert exc.value.code == agent_run.SIGTERM_EXIT
+    assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+                                 ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
+    assert signal.getsignal(signal.SIGTERM) is before
+    status = json.loads(next((env["run"] / "debrief").glob("*/status.json")).read_text())
+    assert status["terminated"] is True and status["exit"] == agent_run.SIGTERM_EXIT
+    with open(agent_run.run_lock_path(), "a+") as probe:       # the lock is released
+        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
 # ---------------------------------------------------------------- goose facts
 
 def test_verify_goose_sessions_cites_sources_and_tracks_version() -> None:
@@ -244,3 +288,12 @@ def test_verify_goose_sessions_cites_sources_and_tracks_version() -> None:
     assert new["resume"]["interactive"][:3] == ["goose", "session", "--resume"]
     assert new["container_path"]["provisional_constant"] == agent_run.GOOSE_SESSIONS_IN_CONTAINER
     assert "unverified" in json.dumps(new)                   # open questions are marked, not guessed
+
+
+@pytest.mark.parametrize("bad", [True, 3.9, "5", 0, -1, None, 10**9])
+def test_debrief_max_tokens_follows_the_run_limit_rules(bad: object) -> None:
+    """Bools, floats, strings, non-positive and over-ceiling values are refused, as in run_limits."""
+    with pytest.raises(ValueError, match="debrief_max_tokens"):
+        debrief.debrief_max_tokens({"debrief_max_tokens": bad})
+    assert debrief.debrief_max_tokens({}) == debrief.DEFAULT_DEBRIEF_MAX_TOKENS
+    assert debrief.debrief_max_tokens({"debrief_max_tokens": 5}) == 5

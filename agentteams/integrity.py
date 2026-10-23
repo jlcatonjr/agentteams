@@ -216,6 +216,19 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # what validate_diff lets stage-fix change.
     "agentteams/vulnscan/__main__.py",
     "agentteams/vulnscan/manifests.py",
+    # 2026-10-22 (vulnscan-test-campaign M1): the rest of the package. Every module runs in the unsandboxed daily
+    # job: _http.py holds the feed allowlist, osv.py/engine.py/versions.py/runtimes.py decide what counts as
+    # vulnerable (a silent edit could fail open), fix.py computes the change stage-fix commits, schedule.py writes
+    # the job the OS runs, report.py renders what the operator reads. Pinned whole, so a new module is a test failure.
+    "agentteams/vulnscan/__init__.py",
+    "agentteams/vulnscan/_http.py",
+    "agentteams/vulnscan/osv.py",
+    "agentteams/vulnscan/engine.py",
+    "agentteams/vulnscan/versions.py",
+    "agentteams/vulnscan/runtimes.py",
+    "agentteams/vulnscan/fix.py",
+    "agentteams/vulnscan/schedule.py",
+    "agentteams/vulnscan/report.py",
     # 2026-10-22 (vulnscan-remediation-2, @security V1-2 / @code-hygiene V3-8): the packaged server kit runs
     # as root on the operator's servers (`sudo -n`), from the executor and, since P12, from the daily job;
     # a silent edit to run-host.sh could turn the dry run into an apply. The agent image's Dockerfile
@@ -227,6 +240,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/data/server_kit/L3-node-runtime.sh",
     "agentteams/data/server_kit/L4-python-app.sh",
     "agentteams/data/server_kit/L5-containers.sh",
+    # M1: remote.sh embeds the IOC lists into the root-run payload; an emptied list silently stops detection.
+    "agentteams/data/server_kit/ioc-2026-10-litellm-1.107.0.txt",
     "agentteams/data/vulnscan_agent/Dockerfile",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class

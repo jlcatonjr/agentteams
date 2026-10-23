@@ -9,8 +9,9 @@ did. **The agent can explain but cannot act**:
 - the container keeps every isolation flag of an agent run (read-only rootfs, ``--cap-drop ALL``,
   ``no-new-privileges``, a non-root uid, the internal-only network);
 - it reaches the model through its *own* gateway (:data:`DEBRIEF_GATEWAY`) with a small budget
-  (``agent.debrief_budget_usd``, default 0.5) and a hard time cap (``agent.debrief_max_minutes``,
-  default 20).
+  (``agent.debrief_budget_usd``, default 0.5), a hard time cap (``agent.debrief_max_minutes``,
+  default 20) and a token cap (``agent.debrief_max_tokens``, an integer 1..100 000 000; bools, floats
+  and strings are refused like :func:`agentteams.vulnscan.agent_run.run_limits` refuses them).
 
 Only one of an agent run or a debrief runs at a time: :func:`run_debrief` takes
 :func:`agentteams.vulnscan.agent_run.run_lock_path` non-blockingly and refuses when it is held.
@@ -98,7 +99,9 @@ def verify_goose_sessions(goose_version: str | None = None) -> dict[str, Any]:
             "legacy_jsonl_exact_layout": "unverified",
             "data_dir_linux": "$XDG_DATA_HOME/goose, else $HOME/.local/share/goose (etcetera XDG strategy)",
             "override_env": "GOOSE_PATH_ROOT (absolute path only) -> data dir becomes <root>/data",
-            "xdg_data_home_honoured": "unverified (inferred from the etcetera XDG strategy, not tested)",
+            "xdg_data_home_honoured": "verified 2026-10-22 with goose 1.37.0 (macOS host build): the store was "
+                                      "$XDG_DATA_HOME/goose/sessions/sessions.db; tests/test_vulnscan_live.py "
+                                      "re-checks it against the installed goose",
             "sources": ["session_management", "paths_source", "session_manager_source"],
         },
         "resume": {
@@ -126,7 +129,9 @@ def verify_goose_sessions(goose_version: str | None = None) -> dict[str, Any]:
             "expected_data_dir": data_dir,
             "provisional_constant": agent_run.GOOSE_SESSIONS_IN_CONTAINER,
             "matches": agent_run.GOOSE_SESSIONS_IN_CONTAINER == data_dir,
-            "note": "valid while HOME is AGENT_HOME and neither XDG_DATA_HOME nor GOOSE_PATH_ROOT is set",
+            "note": "valid while HOME is AGENT_HOME, XDG_DATA_HOME is AGENT_HOME/.local/share (agent_run sets "
+                    "it) and GOOSE_PATH_ROOT is unset; XDG_DATA_HOME was verified on a macOS host build, not "
+                    "inside the Linux container",
         },
         "version_notes": [
             "1.10.0: sessions moved from per-session .jsonl files to sessions/sessions.db (sqlite)",
@@ -199,12 +204,13 @@ def debrief_limits(a: dict[str, Any]) -> tuple[float, float]:
         ``(budget_usd, max_minutes)``.
 
     Raises:
-        ValueError: A configured value is not a positive number.
+        ValueError: A configured value is not a real number in range: the same rules as
+            :func:`agent_run.run_limits` (bools, strings, None, NaN and infinity are refused; X11).
     """
-    budget = float(a.get("debrief_budget_usd", DEFAULT_DEBRIEF_BUDGET_USD))
-    minutes = float(a.get("debrief_max_minutes", DEFAULT_DEBRIEF_MAX_MINUTES))
-    if budget <= 0 or minutes <= 0:
-        raise ValueError("agent.debrief_budget_usd and agent.debrief_max_minutes must be positive")
+    budget = agent_run.positive_number(a.get("debrief_budget_usd", DEFAULT_DEBRIEF_BUDGET_USD),
+                                       "agent.debrief_budget_usd", agent_run.BUDGET_USD_CEILING)
+    minutes = agent_run.positive_number(a.get("debrief_max_minutes", DEFAULT_DEBRIEF_MAX_MINUTES),
+                                        "agent.debrief_max_minutes", agent_run.MAX_MINUTES_CEILING)
     return budget, minutes
 
 
@@ -218,11 +224,13 @@ def debrief_max_tokens(a: dict[str, Any]) -> int:
         The cap (a positive integer).
 
     Raises:
-        ValueError: The configured value is not a positive integer.
+        ValueError: The configured value is not an integer in ``1..MAX_TOKENS_TOTAL_CEILING`` (bools, floats
+            and strings are refused, as in :func:`agent_run.run_limits`).
     """
-    cap = int(a.get("debrief_max_tokens", DEFAULT_DEBRIEF_MAX_TOKENS))
-    if cap <= 0:
-        raise ValueError("agent.debrief_max_tokens must be a positive integer")
+    cap = a.get("debrief_max_tokens", DEFAULT_DEBRIEF_MAX_TOKENS)
+    ceiling = agent_run.MAX_TOKENS_TOTAL_CEILING
+    if isinstance(cap, bool) or not isinstance(cap, int) or not 1 <= cap <= ceiling:
+        raise ValueError(f"agent.debrief_max_tokens must be an integer 1..{ceiling} (got {cap!r})")
     return cap
 
 
@@ -284,6 +292,8 @@ def run_debrief(cfg: dict[str, Any], run_dir: Path) -> int:
     Raises:
         ValueError: The debrief limits are not positive numbers.
         RuntimeError: A ``docker`` command needed to start the gateway failed (cleanup still runs).
+        SystemExit: SIGTERM arrived during the debrief (status :data:`agent_run.SIGTERM_EXIT`), after
+            the container and the gateway were removed and the outcome recorded (M4).
     """
     a = agent_run.agent_cfg(cfg)
     budget, minutes = debrief_limits(a)
@@ -298,13 +308,18 @@ def run_debrief(cfg: dict[str, Any], run_dir: Path) -> int:
         except BlockingIOError:
             return _refuse(EXIT_LOCKED, "an agent run or another debrief holds the run lock")
         try:
-            return _locked_debrief(a, run_dir, budget, minutes)
+            with agent_run.sigterm_raises_exit():   # M4: a SIGTERM still runs the cleanup below
+                return _locked_debrief(a, run_dir, budget, minutes)
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: float) -> int:
-    """Run the debrief; the caller holds the run lock."""
+    """Run the debrief; the caller holds the run lock and has turned SIGTERM into ``SystemExit``.
+
+    A SIGTERM (``SystemExit`` with :data:`agent_run.SIGTERM_EXIT`) is recorded as ``terminated``
+    after the container and the gateway are removed, then re-raised.
+    """
     tag = agent_run.image_tag(a)
     started = datetime.now(UTC)
     out = run_dir / "debrief" / started.strftime("%Y%m%dT%H%M%SZ")
@@ -312,7 +327,7 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
     for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results"):
         d.mkdir(parents=True, exist_ok=True)
     argv = debrief_argv(a, tag, run_dir, session_name(run_dir))
-    timed_out = False
+    timed_out = terminated = False
     rc = EXIT_REFUSED
     agent_run._ensure_network()
     try:
@@ -328,10 +343,14 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
             proc.wait()
             rc = EXIT_TIMED_OUT
             print(f"debrief stopped: the {minutes:g}-minute cap was reached", file=sys.stderr)
+    except SystemExit as exc:
+        if exc.code == agent_run.SIGTERM_EXIT:   # recorded below; the finally removes both containers
+            terminated, rc = True, agent_run.SIGTERM_EXIT
+        raise
     finally:
         _cleanup()
         record = {"session": session_name(run_dir), "started": started.isoformat(),
                   "finished": datetime.now(UTC).isoformat(), "exit": rc, "timed_out": timed_out,
-                  "budget_usd": budget, "max_minutes": minutes}
+                  "terminated": terminated, "budget_usd": budget, "max_minutes": minutes}
         (out / "status.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
     return rc

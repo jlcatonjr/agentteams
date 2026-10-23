@@ -89,6 +89,12 @@ def test_config_dir_deny_does_not_touch_permissions_deny():
         # P11 (2026-10-22): the whole operator directory (vulnscan config, notes, grants, server kit).
         "Edit(~/.config/agentteams)",
         "Edit(~/.config/agentteams/**)",
+        # M2 (2026-10-22): the operator state directory (vulnscan ledger, spool, lock).
+        "Edit(~/.local/state/agentteams)",
+        "Edit(~/.local/state/agentteams/**)",
+        # X5 (2026-10-23): launchd runs LaunchAgents plists unsandboxed (the vulnscan daily job's lives there).
+        "Edit(~/Library/LaunchAgents)",
+        "Edit(~/Library/LaunchAgents/**)",
         "Edit(/.claude/agents/references/agent-privilege.json)",
         "Edit(/.claude/agents/references/authorized-verify-keys/**)",
         "Edit(/.claude/agents/references/security-approvers.txt)",

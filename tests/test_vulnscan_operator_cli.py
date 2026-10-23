@@ -3,28 +3,22 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
 from agentteams.vulnscan import __main__ as cli
 from agentteams.vulnscan import escalations, ledger, notes, operator_cli, publish
+from tests._vulnscan_helpers import operator_env
 
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(home / ".config" / "agentteams"))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("AGENTTEAMS_SERVER_KIT_DIR", str(tmp_path / "kit"))
-    gov = tmp_path / "gov"
-    (gov / "references").mkdir(parents=True)
-    (gov / "references" / "security-decisions.log.csv").write_text(
-        "date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner\n")
-    return {"tmp": tmp_path, "gov": gov, "cfg": {"governance_dir": str(gov)}}
+    world = operator_env(tmp_path, monkeypatch)
+    return {**world, "cfg": {"governance_dir": str(world["gov"])}}
 
 
 def _escalate(kind: str, target: str = "web1", run_id: str = "r1") -> escalations.Escalation:
@@ -118,3 +112,58 @@ def test_publish_grant_and_publish_without_a_grant(env: dict, capsys: pytest.Cap
     monkeypatch.setattr(publish, "load_active", lambda **k: ([], []))
     assert cli.main(["publish"]) == 1
     assert cli.main(["publish", "--run", "2000-01-01"]) == 2
+
+
+# ---------------------------------------------------------------- V23: resolve through main()
+
+def test_resolve_through_main_without_a_terminal_changes_nothing(env: dict, monkeypatch: pytest.MonkeyPatch,
+                                                                capsys: pytest.CaptureFixture) -> None:
+    other = _escalate("other")
+    monkeypatch.setattr(sys, "stdin", io.StringIO("y\n"))          # the real `input` would read this "y"
+    before = ledger.ledger_path().read_bytes()
+    assert cli.main(["resolve", other.id, "--evidence", "checked"]) == 2
+    assert "interactive confirmation" in capsys.readouterr().err
+    assert ledger.ledger_path().read_bytes() == before
+    assert [e.id for e in escalations.open_escalations()] == [other.id]
+
+
+def test_resolve_through_main_refuses_a_tampered_signed_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                               capsys: pytest.CaptureFixture) -> None:
+    pytest.importorskip("cryptography")
+    from agentteams.cli.signed_ledger import ed25519_sign
+    from tests._vulnscan_helpers import operator_home
+
+    world = operator_home(tmp_path, monkeypatch)
+    ioc = _escalate("ioc")
+
+    def sign(rec: dict, **kw: object) -> dict:
+        return {**rec, "signature": ed25519_sign(world["pem"], escalations.resolution_signed_values(rec))}
+
+    monkeypatch.setattr(escalations, "sign_resolution",
+                        lambda rec, **kw: {**sign(rec), "evidence": rec["evidence"] + " (edited after signing)"})
+    before = ledger.ledger_path().read_bytes()
+    argv = ["resolve", ioc.id, "--evidence", "rebuilt host", "--key-id", "op"]
+    assert cli.main(argv) == 2
+    assert "signature does not verify" in capsys.readouterr().err
+    assert ledger.ledger_path().read_bytes() == before
+    assert [e.id for e in escalations.open_escalations()] == [ioc.id]
+    monkeypatch.setattr(escalations, "sign_resolution", sign)                  # control: the untampered record
+    assert cli.main(argv) == 0 and not escalations.open_escalations()
+
+
+# ---------------------------------------------------------------- V29: halts with a real HALT row
+
+def test_halts_through_main_with_a_real_halt_row(env: dict, capsys: pytest.CaptureFixture) -> None:
+    cfg = env["tmp"] / "home" / ".config" / "agentteams" / "vulnscan.json"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(json.dumps({"governance_dir": str(env["gov"])}))
+    assert cli.main(["halts"]) == 0
+    with (env["gov"] / "references" / "security-decisions.log.csv").open("a") as fh:
+        fh.write("2026-10-22,vulnscan,s1,vulnscan-remediation:web1,HALT,,,suspected compromise,security\n")
+    capsys.readouterr()
+    assert cli.main(["halts"]) == 1
+    out = capsys.readouterr().out
+    assert "vulnscan-remediation blocked: " in out and "vulnscan-publish blocked" not in out
+    spec = json.loads(out[out.index("{"):out.index("}") + 1])
+    assert spec["action_reviewed"] == "vulnscan-remediation:web1" and spec["verdict"] == "HALT-RETRACTED"
+    assert f"--output {env['gov'].resolve()}" in out

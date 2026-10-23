@@ -39,7 +39,9 @@ class Feed:
             out = []
             for q in payload["queries"]:
                 key = (q["package"]["ecosystem"], q["package"]["name"], q["version"])
-                out.append({"vulns": [{"id": i} for i in self.vulns.get(key, [])]})
+                ids = self.vulns.get(key, [])
+                # The real OSV querybatch answers a clean package with an empty object, not {"vulns": []}.
+                out.append({"vulns": [{"id": i} for i in ids]} if ids else {})
             return {"results": out}
         if "/v1/vulns/" in url:
             return self.records[url.rsplit("/", 1)[1]]
@@ -272,11 +274,29 @@ def test_runtime_v0_api_fallback_and_unchecked(feed: Feed) -> None:
 
 # ---------------------------------------------------------------- transport
 
-def test_transport_refuses_hosts_off_the_allowlist() -> None:
-    with pytest.raises(_http.FeedError):
-        _http.fetch_json("https://example.com/x")
-    with pytest.raises(_http.FeedError):
-        _http.fetch_json("http://api.osv.dev/v1/query")
+class _NeverOpen:
+    """An opener that fails the test if the transport ever tries to connect."""
+
+    def open(self, req: object, timeout: float = 0) -> object:
+        raise AssertionError(f"the transport opened a connection: {getattr(req, 'full_url', req)}")
+
+
+@pytest.mark.parametrize("url", ["https://example.com/x", "http://api.osv.dev/v1/query",
+                                 "https://api.osv.dev.example.com/v1/query", "https://api.osv.dev@example.com/v1/query",
+                                 "ftp://api.osv.dev/v1/query"])
+def test_transport_refuses_hosts_off_the_allowlist(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    """V4: refused by the allowlist itself (matched message), before any connection is attempted."""
+    monkeypatch.setattr(_http, "_OPENER", _NeverOpen())
+    with pytest.raises(_http.FeedError, match="non-allowlisted"):
+        _http.fetch_json(url)
+
+
+def test_clean_packages_answered_with_empty_objects_are_clean(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V8: OSV's real shape for two clean packages is {"results": [{}, {}]}; that is clean, not malformed."""
+    monkeypatch.setattr(_http, "fetch_json", _batch_reply({"results": [{}, {}]}))
+    assert osv.vulnerable_ids([("npm", "a", "1.0.0"), ("npm", "b", "1.0.0")]) == {}
+    monkeypatch.setattr(_http, "fetch_json", _batch_reply({"results": [{}, {"vulns": [{"id": "GHSA-x"}]}]}))
+    assert osv.vulnerable_ids([("npm", "a", "1.0.0"), ("npm", "b", "1.0.0")]) == {("npm", "b", "1.0.0"): ["GHSA-x"]}
 
 
 # ---------------------------------------------------------------- review regressions (2026-10-22)
@@ -324,3 +344,292 @@ def test_missing_security_flags_keep_runtime_high(feed: Feed) -> None:
     feed.urls["https://www.php.net/releases/index.php?json&max=200&version=8"] = ["unexpected", "shape"]
     v = runtimes.evaluate("php", "8.3.30")
     assert v.verdict == "behind-patch" and v.severity == 3
+
+
+# ---------------------------------------------------------------- test matrix rev 2, area A (2026-W43)
+
+def _batch_reply(reply: object) -> object:
+    """Return a fake ``fetch_json`` that answers every querybatch with ``reply``."""
+    def fake(url: str, payload: dict | None = None, **_: object) -> object:
+        return reply
+    return fake
+
+
+@pytest.mark.parametrize("reply", [
+    {"results": [{"vulns": []}]},                       # one result for two queries
+    ["not", "a", "dict"],
+    {"results": {"0": {"vulns": []}}},
+    {"results": None},
+    {},
+    {"results": [{"vulns": []}, "not a dict"]},
+    {"results": [{"vulns": []}, {"vulns": "nope"}]},
+    {"results": [{"vulns": []}, {"vulns": []}, {"vulns": []}]},
+])
+def test_d1_malformed_or_short_batch_reply_fails_closed(monkeypatch: pytest.MonkeyPatch, reply: object) -> None:
+    monkeypatch.setattr(_http, "fetch_json", _batch_reply(reply))
+    with pytest.raises(_http.FeedError):
+        osv.vulnerable_ids([("npm", "a", "1.0.0"), ("npm", "b", "1.0.0")])
+
+
+def test_d1_short_reply_reaches_the_report_as_unscanned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "requirements.txt").write_text("a==1.0\nb==2.0\n")
+    monkeypatch.setattr(_http, "fetch_json", _batch_reply({"results": [{"vulns": []}]}))
+    rep = engine.scan_path(tmp_path)
+    assert rep.exit_code("none") == EXIT_UNSCANNED
+
+
+class _Pager:
+    """Fake querybatch that always hands back another page token; raises after ``limit`` calls."""
+
+    def __init__(self, same_token: bool, limit: int = 500) -> None:
+        self.calls = 0
+        self.same_token = same_token
+        self.limit = limit
+
+    def __call__(self, url: str, payload: dict | None = None, **_: object) -> dict:
+        self.calls += 1
+        if self.calls > self.limit:
+            raise AssertionError("pagination is unbounded")
+        token = "t" if self.same_token else f"t{self.calls}"
+        return {"results": [{"vulns": [{"id": f"V{self.calls}"}], "next_page_token": token}
+                            for _ in payload["queries"]]}
+
+
+@pytest.mark.parametrize("same_token", [True, False])
+def test_d12_pagination_is_bounded(monkeypatch: pytest.MonkeyPatch, same_token: bool) -> None:
+    pager = _Pager(same_token)
+    monkeypatch.setattr(_http, "fetch_json", pager)
+    with pytest.raises(_http.FeedError):
+        osv.vulnerable_ids([("npm", "p", "1.0.0")])
+    assert pager.calls <= getattr(osv, "MAX_PAGES", 0)
+
+
+def test_d13_transient_detail_failure_is_retried_once(tmp_path: Path, feed: Feed,
+                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "requirements.txt").write_text("a==1.0\nb==2.0\n")
+    feed.vulns = {("PyPI", "a", "1.0"): ["A1"], ("PyPI", "b", "2.0"): ["B1", "B2"]}
+    records = {"A1": _adv("A1", "PyPI", "a", "0", "1.1"), "B1": _adv("B1", "PyPI", "b", "0", "2.1"),
+               "B2": _adv("B2", "PyPI", "b", "0", "2.2")}
+    attempts: dict[str, int] = {}
+
+    def flaky(vuln_id: str) -> dict:
+        attempts[vuln_id] = attempts.get(vuln_id, 0) + 1
+        if attempts[vuln_id] == 1:
+            raise _http.FeedError("connection reset")
+        return records[vuln_id]
+
+    monkeypatch.setattr(osv, "details", flaky)
+    rep = engine.scan_path(tmp_path)
+    assert rep.feed_errors == []
+    assert {(f.name, f.fix) for f in rep.findings} == {("a", "1.1"), ("b", "2.2")}
+    assert set(attempts) == {"A1", "B1", "B2"} and min(attempts.values()) >= 2   # fake is uncached
+
+
+def test_d13_persistent_detail_failure_is_still_reported(tmp_path: Path, feed: Feed,
+                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "requirements.txt").write_text("a==1.0\n")
+    feed.vulns = {("PyPI", "a", "1.0"): ["A1"]}
+    attempts: list[str] = []
+
+    def down(vuln_id: str) -> dict:
+        attempts.append(vuln_id)
+        raise _http.FeedError("down")
+
+    monkeypatch.setattr(osv, "details", down)
+    rep = engine.scan_path(tmp_path)
+    assert rep.exit_code() == EXIT_UNSCANNED and "A1" in rep.feed_errors[0]
+    assert attempts == ["A1", "A1"]
+
+
+# E1: _http.fetch_json against a fake opener
+
+URL = "https://api.osv.dev/v1/vulns/X"
+
+
+class _Resp:
+    """Minimal context-manager response for a fake ``_OPENER``."""
+
+    def __init__(self, body: bytes, url: str = URL) -> None:
+        self.body = body
+        self.url = url
+
+    def __enter__(self) -> "_Resp":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def geturl(self) -> str:
+        return self.url
+
+    def read(self, n: int = -1) -> bytes:
+        return self.body if n < 0 else self.body[:n]
+
+
+class _Opener:
+    """Fake opener: each ``open`` takes the next outcome (the last one repeats)."""
+
+    def __init__(self, *outcomes: object) -> None:
+        self.outcomes = list(outcomes)
+        self.calls = 0
+
+    def open(self, req: object, timeout: float = 0) -> _Resp:
+        self.calls += 1
+        out = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
+        if isinstance(out, BaseException):
+            raise out
+        return out
+
+
+@pytest.fixture
+def no_sleep(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    slept: list[float] = []
+    monkeypatch.setattr(_http.time, "sleep", slept.append)
+    return slept
+
+
+def _http_error(code: int) -> Exception:
+    import urllib.error
+    return urllib.error.HTTPError(URL, code, "x", {}, None)   # type: ignore[arg-type]
+
+
+def test_e1_redirect_is_refused_not_followed(monkeypatch: pytest.MonkeyPatch, no_sleep: list[float]) -> None:
+    import email.message
+    import io
+    import urllib.request
+    import urllib.response
+
+    seen: list[str] = []
+
+    class Fake302(urllib.request.BaseHandler):
+        handler_order = 100
+
+        def https_open(self, req: urllib.request.Request) -> urllib.response.addinfourl:
+            seen.append(req.full_url)
+            hdrs = email.message.Message()
+            hdrs["Location"] = "https://api.osv.dev/v1/elsewhere"
+            resp = urllib.response.addinfourl(io.BytesIO(b"{}"), hdrs, req.full_url, 302)
+            resp.msg = "Found"
+            return resp
+
+    monkeypatch.setattr(_http, "_OPENER", urllib.request.build_opener(_http._NoRedirect, Fake302))
+    with pytest.raises(_http.FeedError, match="refusing redirect 302"):
+        _http.fetch_json(URL)
+    assert seen == [URL]
+
+
+def test_e1_final_url_off_allowlist(monkeypatch: pytest.MonkeyPatch, no_sleep: list[float]) -> None:
+    for final in ("https://evil.example/x", "http://api.osv.dev/v1/vulns/X"):
+        monkeypatch.setattr(_http, "_OPENER", _Opener(_Resp(b"{}", final)))
+        with pytest.raises(_http.FeedError, match="off the allowlist"):
+            _http.fetch_json(URL)
+
+
+def test_e1_body_size_bounds(monkeypatch: pytest.MonkeyPatch, no_sleep: list[float]) -> None:
+    monkeypatch.setattr(_http, "_OPENER", _Opener(_Resp(b"1")))
+    with pytest.raises(_http.FeedError, match="outside"):
+        _http.fetch_json(URL)
+    monkeypatch.setitem(_http.SIZE_BOUNDS, "api.osv.dev", (2, 10))
+    monkeypatch.setattr(_http, "_OPENER", _Opener(_Resp(b'{"a": "' + b"x" * 20 + b'"}')))
+    with pytest.raises(_http.FeedError, match="outside"):
+        _http.fetch_json(URL)
+    monkeypatch.setattr(_http, "_OPENER", _Opener(_Resp(b'{"a": 1}')))
+    assert _http.fetch_json(URL) == {"a": 1}
+
+
+def test_e1_client_error_is_not_retried(monkeypatch: pytest.MonkeyPatch, no_sleep: list[float]) -> None:
+    opener = _Opener(_http_error(404))
+    monkeypatch.setattr(_http, "_OPENER", opener)
+    with pytest.raises(_http.FeedError, match="HTTP 404"):
+        _http.fetch_json(URL, retries=3)
+    assert opener.calls == 1 and no_sleep == []
+
+
+def test_e1_server_error_retried_then_fails(monkeypatch: pytest.MonkeyPatch, no_sleep: list[float]) -> None:
+    opener = _Opener(_http_error(503))
+    monkeypatch.setattr(_http, "_OPENER", opener)
+    with pytest.raises(_http.FeedError, match="failed after 3 attempts"):
+        _http.fetch_json(URL, retries=2)
+    assert opener.calls == 3 and len(no_sleep) == 2
+
+
+def test_e1_non_json_then_json_succeeds(monkeypatch: pytest.MonkeyPatch, no_sleep: list[float]) -> None:
+    opener = _Opener(_Resp(b"<html>oops</html>"), _Resp(b'{"ok": true}'))
+    monkeypatch.setattr(_http, "_OPENER", opener)
+    assert _http.fetch_json(URL, {"q": 1}) == {"ok": True}
+    assert opener.calls == 2 and len(no_sleep) == 1
+
+
+# E3: fix_for edge ranges and MAL ids
+
+def test_e3_fix_for_edge_ranges() -> None:
+    open_ended = _adv("O", "npm", "p", "1.0.0", None)
+    assert osv.fix_for(open_ended, "npm", "p", "1.5.0") is None
+    multi = {"affected": [{"package": {"ecosystem": "npm", "name": "p"}, "ranges": [
+        {"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": "1.2.0"}]},
+        {"type": "SEMVER", "events": [{"introduced": "2.0.0"}, {"fixed": "2.4.1"}]},
+        {"type": "GIT", "events": [{"introduced": "abc"}, {"fixed": "def"}]}]}]}
+    assert osv.fix_for(multi, "npm", "p", "1.1.9") == "1.2.0"
+    assert osv.fix_for(multi, "npm", "p", "2.3.0") == "2.4.1"
+    assert osv.fix_for(multi, "npm", "p", "1.5.0") is None
+    assert osv.fix_for(_adv("E", "npm", "p", "3.0.0", "3.0.2"), "npm", "p", "3.0.0") == "3.0.2"
+    assert osv.fix_for(_adv("E", "npm", "p", "3.0.0", "3.0.2"), "npm", "p", "2.9.9") is None
+    assert osv.fix_for(_adv("E", "npm", "other", "0", "9"), "npm", "p", "1.0.0") is None
+    assert osv.is_malicious("MAL-2026-1") and not osv.is_malicious("GHSA-xxxx")
+
+
+# E6: local runtimes with fake executables on a temporary PATH
+
+def _exe(path: Path, output: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\necho '{output}'\n")
+    path.chmod(0o755)
+    return path
+
+
+def _runtime_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, list[tuple[str, str, str, str]]]:
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    monkeypatch.setenv("PATH", str(bindir))
+    seen: list[tuple[str, str, str, str]] = []
+
+    def evaluate(kind: str, version: str, path: str = "", manager: str = "",
+                 today: object = None) -> runtimes.RuntimeFinding:
+        seen.append((kind, version, Path(path).name, manager))
+        return runtimes.RuntimeFinding(kind, version, path, manager, 0, "ok", "", "")
+
+    monkeypatch.setattr(runtimes, "evaluate", evaluate)
+    return bindir, seen
+
+
+def test_e6_local_runtimes_brew_nvm_tarball(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bindir, seen = _runtime_env(tmp_path, monkeypatch)
+    node = _exe(tmp_path / "Cellar" / "node" / "24.22.1" / "bin" / "node", "v24.22.1")
+    (bindir / "node").symlink_to(node)
+    _exe(bindir / "php", "PHP 8.3.30 (cli) (built: Jan 1 2026)")
+    py = _exe(tmp_path / ".nvm" / "versions" / "x" / "bin" / "python3", "Python 3.12.11")
+    (bindir / "python3").symlink_to(py)
+    rep = engine.local_runtimes("box")
+    assert sorted(seen) == [("node", "24.22.1", "node", "brew"), ("php", "8.3.30", "php", "tarball"),
+                            ("python", "3.12.11", "python3", "nvm")]
+    assert rep.checked == 3 and not rep.findings and not rep.unscannable
+
+
+def test_e6_manager_of_system_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bindir, _ = _runtime_env(tmp_path, monkeypatch)
+    system_py = "/usr/bin/agentteams-test-no-such-python3"
+    assert engine._manager_of(system_py) == "pkg:os"
+    _exe(bindir / "dpkg", "python3.12-minimal: /usr/bin/python3.12")
+    assert engine._manager_of(system_py) == "pkg:python3.12-minimal"
+    assert engine._manager_of("/opt/homebrew/bin/agentteams-test-node") == "brew"
+
+
+def test_e6_unreadable_version_is_unscannable_not_a_crash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    bindir, seen = _runtime_env(tmp_path, monkeypatch)
+    _exe(bindir / "node", "segmentation fault")
+    _exe(bindir / "python3", "Python 3.12.11")
+    assert engine._version_of(str(bindir / "node"), ["-v"]) == ""
+    assert engine._version_of(str(tmp_path / "missing"), ["-v"]) == ""
+    rep = engine.local_runtimes()
+    assert [s[0] for s in seen] == ["python"]
+    assert [Path(p).name for p, _ in rep.unscannable] == ["node"]

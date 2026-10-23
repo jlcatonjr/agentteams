@@ -5,22 +5,29 @@
   release cooldown), and (c) is neither a pre-release nor fully yanked. A major-version jump
   is proposed but written only with ``allow_major``. A pin whose current version is
   **malicious** (OSV ``MAL-*``) is never edited: that is an incident, not an upgrade. Line
-  endings and every other byte of the file are preserved.
+  endings and every other byte of the file are preserved. A file that pins ``--hash`` values is
+  held back (``hash-held``) rather than left with a stale hash, and a symlinked manifest is
+  refused, never followed.
 - **npm lockfiles**: ``npm audit fix --package-lock-only --ignore-scripts --before=<cutoff>``.
   It touches the lockfile only, runs no install scripts, and resolves only releases older
-  than the cooldown. Semver-major fixes are left for a person (no ``--force``).
+  than the cooldown. Semver-major fixes are left for a person (no ``--force``). It runs on a
+  scratch copy with the public registry and TLS verification fixed, never reading the
+  repository's ``.npmrc``.
 - **composer.lock**: guidance only (``composer update <pkg> --no-install --no-scripts --no-plugins``).
 
 This module never commits, pushes or opens PRs. Point it at a worktree you control.
 ``daily`` does that in its ``apply-worktree`` mode. A file with uncommitted changes is
-refused unless ``allow_dirty``.
+refused unless ``allow_dirty`` (checked with the executor's hardened git, so the tree's own git
+config runs nothing).
 """
 
 from __future__ import annotations
 
 import datetime as _dt
+import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,6 +36,8 @@ from agentteams.vulnscan.manifests import REQ_NAME, REQ_PIN, discover
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
+NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc cannot redirect the unattended fix
+NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
 
 
 @dataclass
@@ -39,7 +48,7 @@ class PinChange:
     name: str
     old: str
     new: str = ""
-    action: str = "fix"      # fix | major-held | no-clean-release | cooldown-held | malicious
+    action: str = "fix"      # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious
     ids: list[str] = field(default_factory=list)
     note: str = ""
 
@@ -140,11 +149,47 @@ def choose_version(name: str, current: str, *, cooldown_days: int = 14,
 
 
 def _dirty(path: Path) -> bool:
+    """Return whether ``path`` has uncommitted changes, asking git hardened as the executor runs it (X3).
+
+    The tree may be untrusted and git finds its ``.git`` upwards, so repository config such as
+    ``core.fsmonitor`` or hooks must not run: the executor's git command line and environment prevent that.
+    """
     if not shutil.which("git"):
         return False
-    proc = subprocess.run(["git", "-C", str(path.parent), "status", "--porcelain", "--", path.name],
-                          capture_output=True, text=True, check=False)
+    from agentteams.vulnscan import executor   # lazy: the executor imports this module
+
+    proc = executor.query_git(path.parent, "status", "--porcelain", "--ignore-submodules=all", "--", path.name)
     return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
+def git_config_problem(directory: Path) -> str:
+    """Return why git may not run in ``directory``'s repository, or "" (none, or not a repository).
+
+    The hardened git turns off hooks and ``core.fsmonitor`` by name, but a ``filter.<name>.clean`` /
+    ``.process`` / ``.smudge`` driver has an arbitrary name and runs under ``git status`` or a checkout when
+    ``.gitattributes`` selects it. Global and system config are off in :func:`executor.query_git`, so any driver
+    seen here comes from the repository's own config (including its ``include`` files). A repository git
+    refuses to open (e.g. ``safe.directory``) is a problem too: its dirty check would otherwise read as clean.
+
+    Args:
+        directory: A directory inside the tree (git finds the repository upwards).
+
+    Returns:
+        A refusal reason, or "".
+    """
+    if not shutil.which("git"):
+        return ""
+    from agentteams.vulnscan import executor   # lazy: the executor imports this module
+
+    probe = executor.query_git(directory, "rev-parse", "--git-dir")
+    if probe.returncode:
+        if "not a git repository" in probe.stderr:
+            return ""
+        return f"git refuses to read this repository ({probe.stderr.strip()[:200]}) — fix it by hand"
+    proc = executor.query_git(directory, "config", "--get-regexp", r"^filter\..*\.(clean|process|smudge)$")
+    if proc.returncode == 0 and proc.stdout.strip():
+        return "the repository's git config defines a filter driver, which git would run — fix it by hand"
+    return ""
 
 
 def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool = False,
@@ -164,7 +209,8 @@ def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool 
         FeedError: OSV or PyPI could not be read.
     """
     pins = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for line in text.splitlines():
         m = REQ_PIN.match(line)
         if m:
             pins.append((m.group(1), m.group(3)))
@@ -177,6 +223,8 @@ def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool 
         c = PinChange(label or str(path), name, ver, ids=ids, note=f"{len(ids)} advisories")
         if any(osv.is_malicious(i) for i in ids):
             c.action, c.note = "malicious", "MALICIOUS version installed — isolate, rebuild, rotate credentials; do not just bump"
+        elif "--hash" in text:   # X1: a version edit would leave a stale hash; regenerate the file instead
+            c.action, c.note = "hash-held", "file pins --hash values: regenerate it (pip-compile --generate-hashes)"
         else:
             new, why = choose_version(name, ver, cooldown_days=cooldown_days)
             if not new:
@@ -199,11 +247,14 @@ def apply_requirements(path: Path, changes: list[PinChange]) -> int:
 
     Returns:
         Number of lines changed.
+
+    Raises:
+        OSError: ``path`` is a symlink (never followed, X2) or cannot be read or written.
     """
     todo = {c.name.lower(): c for c in changes if c.action == "fix" and c.new}
     if not todo:
         return 0
-    with open(path, encoding="utf-8", newline="") as fh:
+    with open(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), encoding="utf-8", newline="") as fh:
         lines = fh.read().splitlines(keepends=True)
     n = 0
     for i, line in enumerate(lines):
@@ -212,13 +263,19 @@ def apply_requirements(path: Path, changes: list[PinChange]) -> int:
         if m and m.group(1).lower() in todo and m.group(3) == todo[m.group(1).lower()].old:
             lines[i] = body[:m.start(3)] + todo[m.group(1).lower()].new + body[m.end(3):] + line[len(body):]
             n += 1
-    with open(path, "w", encoding="utf-8", newline="") as fh:
+    with open(os.open(path, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
         fh.write("".join(lines))
     return n
 
 
 def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) -> str:
-    """Run npm's lockfile-only, script-free audit fix in ``directory``.
+    """Run npm's lockfile-only, script-free audit fix for ``directory``.
+
+    npm runs on a scratch copy holding only ``package.json`` and the lockfile, with its user and
+    global config pointed at an empty file, inherited ``npm_config_*`` variables dropped, and the
+    registry and TLS verification fixed on the command line. The repository's own ``.npmrc``
+    (registry, proxy, ``strict-ssl``, ``ca``/``cafile``) is therefore never read (D2). With
+    ``apply`` the changed lockfile is copied back.
 
     Args:
         directory: Folder holding package-lock.json.
@@ -226,19 +283,37 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
         apply: Write the lockfile; otherwise ``--dry-run``.
 
     Returns:
-        npm's output, or a note when npm is unavailable.
+        npm's output, or a note when npm is unavailable or a manifest is a symlink.
     """
     npm = shutil.which("npm")
     if not npm:
         return "npm not installed — run `npm audit fix --package-lock-only --ignore-scripts` where it is"
+    names = [n for n in ("package.json", *NPM_LOCKFILES) if (directory / n).is_symlink() or (directory / n).exists()]
+    if any((directory / n).is_symlink() for n in names):
+        return "npm audit fix not run: package.json or the lockfile is a symlink"
     cutoff = (_dt.date.today() - _dt.timedelta(days=cooldown_days)).isoformat()
-    cmd = [npm, "audit", "fix", "--package-lock-only", "--ignore-scripts", f"--before={cutoff}", "--no-fund"]
+    cmd = [npm, "audit", "fix", "--package-lock-only", "--ignore-scripts", f"--before={cutoff}", "--no-fund",
+           f"--registry={NPM_REGISTRY}", "--strict-ssl=true"]
     if not apply:
         cmd.append("--dry-run")
-    try:
-        proc = subprocess.run(cmd, cwd=directory, capture_output=True, text=True, timeout=600, check=False)
-    except subprocess.TimeoutExpired:
-        return "npm audit fix timed out after 600s"
+    env = {k: v for k, v in os.environ.items() if not k.lower().startswith("npm_config_")}
+    with tempfile.TemporaryDirectory(prefix="agentteams-npm-") as tmp:
+        scratch, empty = Path(tmp) / "pkg", Path(tmp) / "empty-npmrc"
+        scratch.mkdir()
+        empty.write_text("", encoding="utf-8")
+        for n in names:
+            shutil.copyfile(directory / n, scratch / n)
+        env.update({"NPM_CONFIG_USERCONFIG": str(empty), "NPM_CONFIG_GLOBALCONFIG": str(empty)})
+        try:
+            proc = subprocess.run(cmd, cwd=scratch, env=env, capture_output=True, text=True, timeout=600,
+                                  check=False)
+        except subprocess.TimeoutExpired:
+            return "npm audit fix timed out after 600s"
+        if apply:
+            for n in names:
+                if n in NPM_LOCKFILES and (scratch / n).is_file() and \
+                        (scratch / n).read_bytes() != (directory / n).read_bytes():
+                    shutil.copyfile(scratch / n, directory / n)
     return (proc.stdout + proc.stderr) or f"npm exited {proc.returncode}"
 
 
@@ -256,12 +331,19 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         npm: Run the npm step (needs npm on PATH).
 
     Returns:
-        A :class:`FixResult`. Feed failures are recorded under ``refused``.
+        A :class:`FixResult`. Feed failures are recorded under ``feed_errors``; a symlinked
+        requirements file, ``package.json`` or npm lockfile is never read or edited and is
+        recorded under ``refused`` (X2/M5).
     """
     root = root.resolve()
     res = FixResult(applied=apply)
     for path in discover(root, include_worktrees=include_worktrees):
         rel = str(path.relative_to(root))
+        linked = [path] if REQ_NAME.match(path.name) else \
+            [path.parent / n for n in ("package.json", *NPM_LOCKFILES)] if path.name in NPM_LOCKFILES and npm else []
+        if any(p.is_symlink() for p in linked):
+            res.refused.append((rel, "a symlink (the manifest or its package.json) — never followed or edited"))
+            continue
         if REQ_NAME.match(path.name):
             try:
                 changes = plan_requirements(path, cooldown_days=cooldown_days, allow_major=allow_major, label=rel)
@@ -270,11 +352,18 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
                 continue
             res.changes += changes
             if apply and any(c.action == "fix" for c in changes):
-                if _dirty(path) and not allow_dirty:
+                unsafe = git_config_problem(path.parent)
+                if unsafe:
+                    res.refused.append((rel, unsafe))
+                elif _dirty(path) and not allow_dirty:
                     res.refused.append((rel, "uncommitted changes — commit/stash first or use a worktree"))
                 else:
                     apply_requirements(path, changes)
         elif path.name in ("package-lock.json", "npm-shrinkwrap.json") and npm:
+            unsafe = git_config_problem(path.parent) if apply else ""
+            if unsafe:
+                res.refused.append((rel, unsafe))
+                continue
             if apply and _dirty(path) and not allow_dirty:
                 res.refused.append((rel, "uncommitted changes — commit/stash first or use a worktree"))
                 continue

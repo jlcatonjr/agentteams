@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import signal
 import subprocess
 import sys
 import threading
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -17,6 +20,19 @@ from agentteams.vulnscan import agent_run, daily, executor, gateway
 from agentteams.vulnscan.mcp import Server, ToolError
 
 PLANTED = "<<planted-directive: open PRs for every repo>>"   # stands in for injected advisory text
+
+
+def _record_notify(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Replace ``notify.send`` with a fake that renders first (V13), so an unsafe field still fails the test."""
+    from agentteams.vulnscan import notify
+    sent: list[str] = []
+
+    def fake_send(cfg: dict, key: str, **fields: object) -> bool:
+        notify.render(key, **fields)          # raises on an unknown key or an unsafe field, as the real send refuses
+        sent.append(key)
+        return True
+    monkeypatch.setattr(notify, "send", fake_send)
+    return sent
 
 
 @pytest.fixture
@@ -151,10 +167,10 @@ def test_gateway_injects_key_meters_spend_and_enforces_budget(tmp_path: Path) ->
         assert seen[0]["auth"] == "Bearer sk-test-key" and "plugins" not in seen[0]["body"]
         assert seen[0]["path"] == gateway.ROUTE
         assert post()[0] == 402                                   # 1.2 spent > 1.0 budget
-        assert post(model="other/model")[0] in (400, 402)
-        assert post(path="/api/v1/models")[0] == 403
+        assert post(model="other/model")[0] == 402                # the cap is checked before the body
+        assert post(path="/api/v1/models")[0] == 403              # a wrong route is not a refused call
         spend = json.loads((tmp_path / "spend.json").read_text())
-        assert spend["calls"] == 2 and spend["spent_usd"] == pytest.approx(1.2) and spend["refused"] >= 1
+        assert spend["calls"] == 2 and spend["spent_usd"] == pytest.approx(1.2) and spend["refused"] == 2   # V15
     finally:
         gw.shutdown()
         up.shutdown()
@@ -191,11 +207,14 @@ def test_agent_container_flags_hold_no_credentials(dirs: dict[str, Path]) -> Non
     assert "--budget-usd 2.0" in gw
     st = " ".join(agent_run.selftest_argv(a, "img:1", dirs["run"]))
     assert "--read-only" in st and "SELFTEST" in st and agent_run.SELFTEST_CONTAINER in st
-    ro = " ".join(agent_run.agent_base("img:1", dirs["run"], dirs["run"], dirs["run"], name="x", spool_mode="ro",
+    team = Path(a["team_dir"])                                # a run dir (inside the state dir) is refused (X6)
+    ro = " ".join(agent_run.agent_base("img:1", dirs["run"], dirs["run"], team, name="x", spool_mode="ro",
                                        interactive=True))
     assert ":/work/spool/requests:ro" in ro and " -it " in f" {ro} "
-    with pytest.raises(ValueError):
-        agent_run.agent_base("img:1", dirs["run"], dirs["run"], dirs["run"], name="x", spool_mode="bogus")
+    with pytest.raises(ValueError, match="spool_mode"):
+        agent_run.agent_base("img:1", dirs["run"], dirs["run"], team, name="x", spool_mode="bogus")
+    with pytest.raises(ValueError, match="protected"):
+        agent_run.agent_base("img:1", dirs["run"], dirs["run"], dirs["run"], name="x")
 
 
 def test_agent_mode_refused_without_a_passing_selftest_for_this_image(dirs: dict[str, Path],
@@ -464,9 +483,7 @@ def test_notes_are_folded_and_ledgered_by_id_and_hash(dirs: dict[str, Path]) -> 
 
 
 def test_halt_refusal_notifies_once_per_run(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
-    from agentteams.vulnscan import notify
-    sent: list[str] = []
-    monkeypatch.setattr(notify, "send", lambda cfg, key, **f: sent.append(key) or True)
+    sent = _record_notify(monkeypatch)
     seen: list[tuple] = []
 
     def fake_serve(cfg: dict, *, run_dir: Path, run_id: str, deadline: float | None = None) -> list[dict]:
@@ -482,7 +499,9 @@ def test_halt_refusal_notifies_once_per_run(dirs: dict[str, Path], monkeypatch: 
 def test_finish_finalizes_the_stored_report(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
     from agentteams.vulnscan import report_store
     report_store.save(dirs["run"], "# report", request_id="a" * 32)
-    st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])          # no docker on PATH in tests → not-run
+    monkeypatch.setattr(agent_run.shutil, "which", lambda name: None)    # V22: no docker, whatever the host has
+    st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
+    assert st["reason"] == "docker is not installed"
     assert st["run_state"] == "not-run" and st["run_id"].startswith(dirs["run"].name)
     assert "not-run" in report_store.render_for_review(dirs["run"])
 
@@ -508,9 +527,8 @@ def test_a_launcher_failure_ends_as_agent_error_and_still_finalizes(dirs: dict[s
 
 def test_publish_run_only_with_a_grant_and_notifies_fixed_text(dirs: dict[str, Path],
                                                                monkeypatch: pytest.MonkeyPatch) -> None:
-    from agentteams.vulnscan import notify, publish, review
-    sent: list[str] = []
-    monkeypatch.setattr(notify, "send", lambda cfg, key, **f: sent.append(key) or True)
+    from agentteams.vulnscan import publish, review
+    sent = _record_notify(monkeypatch)
     monkeypatch.setattr(publish, "load_active", lambda **k: ([], []))
     assert daily.publish_run({}, dirs["run"], "r1") is None and not sent
     got: dict = {}
@@ -536,3 +554,329 @@ def test_daily_notifications_are_fixed_text(dirs: dict[str, Path], monkeypatch: 
     msgs = [c[-1] for c in calls]
     assert msgs == [notify.render("run-done", state="new findings", findings=0, new=1),
                     notify.render("agent-not-completed", state="timed-out")]
+
+
+# ---------------------------------------------------------------- Area D1: lifecycle, signals, first run, build
+
+class _Watchdog(BaseException):
+    """Raised by a test watchdog; a BaseException so the launcher's ``except`` clauses cannot absorb it."""
+
+
+@contextlib.contextmanager
+def _hard_timeout(seconds: int) -> Iterator[None]:
+    """Fail (never hang) when the block runs longer than ``seconds`` (K-A6): SIGALRM raises :class:`_Watchdog`."""
+    def alarm(signum: int, frame: object) -> None:
+        raise _Watchdog(f"test exceeded its {seconds}s hard timeout")
+    previous = signal.signal(signal.SIGALRM, alarm)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+class _FakeProc:
+    """A ``subprocess.Popen`` stand-in for the agent container's docker client."""
+
+    def __init__(self, calls: list[list[str]], argv: list[str], rc: int | None) -> None:
+        self.calls, self.rc = calls, rc
+        calls.append(["popen", *argv])
+
+    def poll(self) -> int | None:
+        return self.rc
+
+    def kill(self) -> None:
+        self.calls.append(["kill"])
+        self.rc = -9
+
+    def wait(self) -> int:
+        return -9 if self.rc is None else self.rc
+
+
+def _launchable(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch, *, rc: int | None = 0) -> list[list[str]]:
+    """Make run_agent get past its preconditions with fake docker / Popen; return the recorded calls."""
+    calls: list[list[str]] = []
+    monkeypatch.setattr(agent_run.shutil, "which", lambda name: "/usr/bin/docker")
+    monkeypatch.setattr(agent_run, "selftest_ok", lambda cfg: (True, "ok"))
+    monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: calls.append(argv) or
+                        subprocess.CompletedProcess(argv, 0, stdout="", stderr=""))
+    monkeypatch.setattr(agent_run.subprocess, "Popen", lambda argv, **kw: _FakeProc(calls, argv, rc))
+    monkeypatch.setattr(agent_run.time, "sleep", lambda s: None)
+    return calls
+
+
+def test_sigterm_during_a_run_still_removes_gateway_and_agent(dirs: dict[str, Path],
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    import fcntl
+    import signal
+    calls = _launchable(dirs, monkeypatch, rc=None)               # the agent never exits on its own
+    before = signal.getsignal(signal.SIGTERM)
+    seen: list[object] = []
+
+    def sleep(s: float) -> None:
+        if s == 15:                                                # the run loop, after the agent started
+            if seen:                                               # K-A6: the handler did not end the run
+                raise _Watchdog("SIGTERM did not end the run loop")
+            handler = signal.getsignal(signal.SIGTERM)
+            seen.append(handler)
+            assert callable(handler) and handler is not before, "no SIGTERM handler during the run"
+            handler(signal.SIGTERM, None)                          # what launchd unload / logout delivers
+    monkeypatch.setattr(agent_run.time, "sleep", sleep)
+    with _hard_timeout(30), pytest.raises(SystemExit) as exc:
+        agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
+    assert exc.value.code == agent_run.SIGTERM_EXIT
+    started = next(i for i, c in enumerate(calls) if c[0] == "popen")
+    after = calls[started:]
+    assert ["docker", "rm", "-f", agent_run.AGENT_CONTAINER] in after
+    assert ["docker", "rm", "-f", agent_run.GATEWAY] in after      # the gateway holds the API key
+    assert signal.getsignal(signal.SIGTERM) is before and len(seen) == 1
+    status = json.loads((dirs["run"] / "agent" / "status.json").read_text())
+    assert status["run_state"] == "agent-error" and "SIGTERM" in status["reason"]
+    with open(agent_run.run_lock_path(), "a+") as lock:            # the run lock was released
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def test_selftest_ok_says_docker_is_unreachable_not_image_changed(dirs: dict[str, Path],
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    rec = dirs["tmp"] / "state" / "agent-selftest.json"
+    rec.write_text(json.dumps({"passed": True, "image": "sha256:old", "checks": {},
+                               "flags_sha256": agent_run.flags_sha256()}))
+    monkeypatch.setattr(agent_run, "_image_id", lambda tag: "")              # docker down / image not built
+    ok, why = agent_run.selftest_ok({"agent": _a(dirs)})
+    assert not ok and "image changed" not in why
+    assert "not reachable" in why and "not built" in why
+
+
+def test_folded_notes_reach_the_task_param_of_the_container_argv(dirs: dict[str, Path],
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import notes
+    calls = _launchable(dirs, monkeypatch)
+    notes.add("skip repo X today; it is being migrated")
+    st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
+    assert st["run_state"] == "completed"
+    argv = next(c[1:] for c in calls if c[0] == "popen")
+    task = argv[argv.index("--params") + 1]
+    assert task.startswith("task=" + agent_run.TASK) and "being migrated" in task
+    assert argv[argv.index("--params") - 1] == "python -m agentteams.vulnscan.mcp"   # one element, not split
+
+
+def test_max_minutes_timeout_removes_the_container_and_ends_timed_out(dirs: dict[str, Path],
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _launchable(dirs, monkeypatch, rc=None)               # never exits
+    clock = iter(range(0, 10**9, 3600))                            # every reading is an hour later
+    monkeypatch.setattr(agent_run.time, "monotonic", lambda: float(next(clock)))
+    st = agent_run.run_agent({"agent": {**_a(dirs), "max_minutes": 1}}, dirs["run"])
+    assert st["run_state"] == "timed-out" and st["timed_out"] is True
+    started = next(i for i, c in enumerate(calls) if c[0] == "popen")
+    rm = calls.index(["docker", "rm", "-f", agent_run.AGENT_CONTAINER], started)
+    assert rm < calls.index(["kill"])                              # the container goes before the client
+
+
+def _fresh_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Point vulnscan at empty dirs (first run) and record notifications."""
+    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(tmp_path / "fresh-cfg"))
+    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "fresh-state"))
+    return _record_notify(monkeypatch)
+
+
+def test_first_run_with_agent_enabled_but_unconfigured_records_why(tmp_path: Path,
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import ledger
+    sent = _fresh_state(tmp_path, monkeypatch)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(agent_run.shutil, "which", lambda name: "/usr/bin/docker")
+    monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: calls.append(argv) or
+                        subprocess.CompletedProcess(argv, 1, stdout="", stderr=""))
+    cfg = {**daily.DEFAULT_CONFIG, "local_runtimes": False, "notify": "none", "agent": {"enabled": True}}
+    _, code, run_dir = daily.run_daily(cfg, today="2026-10-22")
+    assert code == 0 and calls == []                               # nothing touched docker
+    hb = json.loads(daily.heartbeat_path().read_text())
+    assert hb["agent"]["state"] == "not-run" and "agent.team_dir" in hb["agent"]["reason"]
+    assert hb["publish"] is None                                   # no publish grant
+    summary = (run_dir / "summary.md").read_text()
+    assert "## Agent run" in summary and "agent.team_dir" in summary
+    assert sent == ["agent-not-completed"] and ledger.read() == []
+
+
+def test_a_launcher_exception_through_daily_ends_agent_error(dirs: dict[str, Path], tmp_path: Path,
+                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import report_store
+    a = _a(dirs)
+    sent = _fresh_state(tmp_path, monkeypatch)
+    _launchable(dirs, monkeypatch)
+
+    def popen(argv: list[str], **kw: object) -> None:
+        raise FileNotFoundError("docker vanished")
+    monkeypatch.setattr(agent_run.subprocess, "Popen", popen)
+    run = tmp_path / "fresh-state" / "2026-10-22"
+    run.mkdir(parents=True)
+    report_store.save(run, "# report", request_id="b" * 32)
+    cfg = {**daily.DEFAULT_CONFIG, "local_runtimes": False, "notify": "none", "agent": {**a, "enabled": True}}
+    daily.run_daily(cfg, today="2026-10-22")
+    hb = json.loads(daily.heartbeat_path().read_text())
+    assert hb["agent"]["state"] == "agent-error" and "docker vanished" in hb["agent"]["reason"]
+    assert "agent-error" in report_store.render_for_review(run) and sent == ["agent-not-completed"]
+
+
+def test_second_daily_run_on_one_date_has_one_agent_section(dirs: dict[str, Path],
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(agent_run, "run_agent", lambda cfg, run_dir: {"state": "not-run", "reason": "r", "run_id": "x"})
+    monkeypatch.setattr(daily, "publish_run", lambda cfg, run_dir, run_id: None)
+    cfg = {**daily.DEFAULT_CONFIG, "local_runtimes": False, "notify": "none", "agent": {"enabled": True}}
+    for _ in range(2):
+        _, _, run_dir = daily.run_daily(cfg, today="2026-10-25")
+    assert (run_dir / "summary.md").read_text().count("## Agent run") == 1
+
+
+def test_build_image_refuses_without_a_source_checkout(dirs: dict[str, Path], tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="no agentteams source checkout"):
+        agent_run.build_image({}, goose_version="1.37.0", goose_sha256="ab" * 32, python_image="python:3.12",
+                              source=tmp_path / "nowhere")
+
+
+def test_build_image_argv_and_unpinned_base_warning(dirs: dict[str, Path], tmp_path: Path,
+                                                    monkeypatch: pytest.MonkeyPatch,
+                                                    capsys: pytest.CaptureFixture[str]) -> None:
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "pyproject.toml").write_text("[project]\nname = 'agentteams'\n")
+    docker: list[list[str]] = []
+    pip: list[list[str]] = []
+    monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: docker.append(argv))
+    monkeypatch.setattr(agent_run.subprocess, "run", lambda argv, **kw: pip.append(argv))
+    tag = agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
+                                python_image="python:3.12-slim", source=src)
+    assert tag == "img:t" and "not pinned by digest" in capsys.readouterr().err
+    ctx = dirs["tmp"] / "state" / "agent-image"
+    assert pip[0][-1] == str(src) and "--no-deps" in pip[0] and pip[0][pip[0].index("-w") + 1] == str(ctx / "dist")
+    assert (ctx / "Dockerfile").is_file()
+    assert docker == [agent_run.build_argv(ctx, "img:t", "1.37.0", "ab" * 32, "python:3.12-slim")]
+    for arg in ("GOOSE_VERSION=1.37.0", f"GOOSE_SHA256={'ab' * 32}", "PYTHON_IMAGE=python:3.12-slim"):
+        assert docker[0][docker[0].index(arg) - 1] == "--build-arg"
+    agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
+                          python_image="python:3.12@sha256:" + "c" * 64, source=src)
+    assert "not pinned" not in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- Round 2 (Area R)
+
+def test_every_run_state_is_a_notifiable_state() -> None:
+    from agentteams.vulnscan import notify
+    assert set(agent_run.RUN_STATES) <= notify._STATES                      # V13: daily sends these as {state}
+
+
+def test_lock_held_run_leaves_the_live_runs_status_and_report_alone(dirs: dict[str, Path],
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    import fcntl
+    from agentteams.vulnscan import report_store
+    report_store.save(dirs["run"], "# live report", request_id="c" * 32)
+    live = dirs["run"] / "agent" / "status.json"
+    live.parent.mkdir(parents=True)
+    live.write_text('{"run_state": "live"}')
+    before = report_store.load(dirs["run"])
+    _launchable(dirs, monkeypatch)
+    with open(agent_run.run_lock_path(), "a+") as held:                     # G2: another run holds the lock
+        fcntl.flock(held, fcntl.LOCK_EX)
+        st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
+    assert st["run_state"] == "not-run" and "run lock" in st["reason"]
+    assert live.read_text() == '{"run_state": "live"}' and report_store.load(dirs["run"]) == before
+
+
+def test_run_limits_validate_minutes_and_budget(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    a = _a(dirs)
+    assert agent_run.run_limits({**a, "max_minutes": 0.5, "budget_usd": 3}) == (10_000_000, 20, False)
+    for key in ("max_minutes", "budget_usd"):                                # G10
+        for bad in (0, -1, float("nan"), float("inf"), True, "45", None, [1], 10**7):
+            with pytest.raises(ValueError, match=key):
+                agent_run.run_limits({**a, key: bad})
+    monkeypatch.setattr(agent_run.shutil, "which", lambda name: "/usr/bin/docker")
+    monkeypatch.setattr(agent_run, "selftest_ok", lambda cfg: (True, "ok"))
+    calls: list[list[str]] = []
+    monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: calls.append(argv))
+    st = agent_run.run_agent({"agent": {**a, "max_minutes": float("nan")}}, dirs["run"])
+    assert st["run_state"] == "not-run" and "max_minutes" in st["reason"] and calls == []
+
+
+@pytest.mark.parametrize("record", ["[1, 2]", '"passed"', "null", "{not json", "7"])
+def test_selftest_ok_refuses_a_non_object_record(dirs: dict[str, Path], record: str) -> None:
+    (dirs["tmp"] / "state" / "agent-selftest.json").write_text(record)     # G11
+    ok, why = agent_run.selftest_ok({"agent": _a(dirs)})
+    assert ok is False and "agent-selftest" in why
+
+
+@pytest.mark.parametrize("spend", [b'{"budget_usd": 2.0, "spent', b"[1]", b"\xff"])
+def test_a_truncated_spend_file_still_writes_the_status(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch,
+                                                        spend: bytes) -> None:
+    _launchable(dirs, monkeypatch)
+    (dirs["run"] / "gateway").mkdir()
+    (dirs["run"] / "gateway" / "spend.json").write_bytes(spend)             # G12
+    st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
+    assert st["run_state"] == "completed" and st["spend"] is None and "spend.json" in st["spend_problem"]
+    assert json.loads((dirs["run"] / "agent" / "status.json").read_text())["spend"] is None
+
+
+def test_team_dir_problem_round_2(dirs: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home = tmp_path / "home"
+    team = home / "code" / "team"
+    team.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    assert agent_run.team_dir_problem(team) is None
+    comma = home / "code" / "team,x"                                         # K-A3
+    comma.mkdir()
+    assert "mount syntax" in (agent_run.team_dir_problem(comma) or "")
+    state = tmp_path / "ops" / "state"                                       # X6: the configured state dir
+    (state / "sub").mkdir(parents=True)
+    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(state))
+    for bad in (state, state / "sub", tmp_path / "ops"):
+        assert "protected" in (agent_run.team_dir_problem(bad) or ""), bad
+    real = str(state.resolve())
+    if real.startswith(("/private/var/", "/private/tmp/")):                  # macOS: /var -> /private/var
+        monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", real.removeprefix("/private"))
+        assert "protected" in (agent_run.team_dir_problem(state / "sub") or "")
+        monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", real)
+        assert "protected" in (agent_run.team_dir_problem(real.removeprefix("/private") + "/sub") or "")
+    for mode in (0o775, 0o757, 0o777):                                       # X6: writable by others
+        team.chmod(mode)
+        assert "writable" in (agent_run.team_dir_problem(team) or ""), oct(mode)
+    link = home / "code" / "via-link"
+    link.symlink_to(team)                                                    # judged by the dir it names
+    assert "writable" in (agent_run.team_dir_problem(link) or "")
+    team.chmod(0o755)
+    assert agent_run.team_dir_problem(link) is None
+    uid = agent_run.os.getuid()
+    with monkeypatch.context() as m:
+        m.setattr(agent_run, "_my_uid", lambda: uid + 1)
+        assert "owned" in (agent_run.team_dir_problem(team) or "")
+
+
+def test_selftest_refuses_without_a_team_dir(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: calls.append(argv))
+    res = agent_run.selftest({"agent": {**_a(dirs), "team_dir": ""}})
+    assert res["passed"] is False and "team_dir" in res["error"] and calls == []
+
+
+@pytest.mark.parametrize("broken", ["no-team-dir", "no-docker", "selftest", "limits"])
+def test_r8_4_every_refusal_is_decided_under_the_lock(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch,
+                                                      broken: str) -> None:
+    """A run refused for any reason while another holds the lock leaves the live run's files alone."""
+    import fcntl
+    from agentteams.vulnscan import report_store
+    report_store.save(dirs["run"], "# live report", request_id="d" * 32)
+    live = dirs["run"] / "agent" / "status.json"
+    live.parent.mkdir(parents=True)
+    live.write_text('{"run_state": "live"}')
+    before = report_store.load(dirs["run"])
+    a = _a(dirs)
+    monkeypatch.setattr(agent_run.shutil, "which", lambda name: None if broken == "no-docker" else "/usr/bin/docker")
+    monkeypatch.setattr(agent_run, "selftest_ok", lambda cfg: (broken != "selftest", "self-test failed"))
+    if broken == "no-team-dir":
+        a = {**a, "team_dir": ""}
+    if broken == "limits":
+        a = {**a, "max_minutes": -1}
+    with open(agent_run.run_lock_path(), "a+") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        st = agent_run.run_agent({"agent": a}, dirs["run"])
+    assert st["run_state"] == "not-run" and "run lock" in st["reason"] and st["status_written"] is False
+    assert live.read_text() == '{"run_state": "live"}' and report_store.load(dirs["run"]) == before

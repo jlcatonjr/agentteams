@@ -28,6 +28,7 @@ import json
 import os
 import re
 import secrets
+import stat
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -256,12 +257,56 @@ def verify_key(key_id: str) -> str:
 
     directory = Path(os.path.expanduser(G.VERIFY_KEYS_DIR))
     path = directory / f"{key_id}.pub.pem"
-    if not _KEY_ID_RE.match(key_id) or not path.is_file():
+    if not _KEY_ID_RE.match(key_id):
         raise GrantError(f"no operator verify key {path}")
-    st = path.stat()
+    # X7: whoever can write the directory can swap the key, so the directory is judged too. Each check looks at
+    # the final component only (lstat / O_NOFOLLOW), never resolve() against a full path: /var → /private/var.
+    unsafe = dir_problem(directory)
+    if unsafe:
+        raise GrantError(f"verify-keys directory {directory}: {unsafe}")
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError as exc:
+        raise GrantError(f"no operator verify key {path}") from exc
+    except OSError as exc:   # ELOOP: the key file is a symlink
+        raise GrantError(f"verify key {path} could not be opened safely (symlink?): {exc}") from exc
+    with os.fdopen(fd, "rb") as fh:
+        st = os.fstat(fh.fileno())
+        if not stat.S_ISREG(st.st_mode):
+            raise GrantError(f"verify key {path} is not a regular file")
+        if st.st_uid != os.getuid() or st.st_mode & 0o022:
+            raise GrantError(f"verify key {path} is not owned by you or is group/world-writable")
+        data = fh.read(65536)
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise GrantError(f"verify key {path} is not UTF-8 text") from exc
+
+
+def dir_problem(directory: Path) -> str | None:
+    """Return why an operator directory (grants, verify keys) may not be trusted, or ``None``.
+
+    Judges the directory's own final component with ``lstat``: a symlink is refused even when its
+    target is a 0700 directory you own, because the link's target can be changed by whoever owns the
+    link's parent. Group/world-*readable* is fine; writable is not.
+
+    Args:
+        directory: The directory (it must exist; callers treat a missing one separately).
+
+    Returns:
+        A short reason, or ``None``.
+    """
+    try:
+        st = os.lstat(directory)
+    except OSError as exc:
+        return f"cannot stat ({exc})"
+    if stat.S_ISLNK(st.st_mode):
+        return "is a symlink — refused"
+    if not stat.S_ISDIR(st.st_mode):
+        return "is not a directory — refused"
     if st.st_uid != os.getuid() or st.st_mode & 0o022:
-        raise GrantError(f"verify key {path} is not owned by you or is group/world-writable")
-    return path.read_text(encoding="utf-8")
+        return "is not owned by you or is group/world-writable — refused"
+    return None
 
 
 def verify(record: dict[str, Any], *, now: datetime | None = None) -> None:
@@ -309,12 +354,16 @@ def load_active(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], l
     d = grants_dir()
     valid: list[dict[str, Any]] = []
     problems: list[str] = []
-    if not d.is_dir():
+    if not os.path.lexists(d):
         return [], []
-    st = d.stat()
-    if st.st_uid != os.getuid() or st.st_mode & 0o022:
-        return [], [f"{d} is not owned by you or is group/world-writable — refusing all grants"]
+    unsafe = dir_problem(d)
+    if unsafe:
+        return [], [f"{d} {unsafe}: refusing all grants"]
     for f in sorted(d.glob("vg-*.json")):
+        unsafe = file_problem(f)
+        if unsafe:
+            problems.append(f"{f.name}: {unsafe}")
+            continue
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
             verify(rec, now=now)
@@ -325,6 +374,30 @@ def load_active(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], l
     if len(valid) > MAX_ACTIVE:
         return [], problems + [f"{len(valid)} valid grants exceed the aggregate cap of {MAX_ACTIVE} — refusing all"]
     return valid, problems
+
+
+def file_problem(path: Path) -> str | None:
+    """Return why one grant file may not be trusted, or ``None``.
+
+    The directory check alone is not enough: a group/world-writable file inside a 0700 directory could be
+    overwritten with another validly signed grant (for example one the operator revoked). A symlink is refused
+    because its target's permissions are not the grants directory's.
+
+    Args:
+        path: A grant file.
+
+    Returns:
+        A short reason, or ``None`` when the file is a regular file owned by you and not group/world-writable.
+    """
+    try:
+        st = path.lstat()
+    except OSError as exc:
+        return f"cannot stat ({exc})"
+    if not stat.S_ISREG(st.st_mode):
+        return "not a regular file (symlink or special) — refused"
+    if st.st_uid != os.getuid() or st.st_mode & 0o022:
+        return "not owned by you or group/world-writable — refused"
+    return None
 
 
 def unverified_values(directory: Path, key: str) -> list[str]:
@@ -340,9 +413,14 @@ def unverified_values(directory: Path, key: str) -> list[str]:
 
     Returns:
         The non-empty string values, in file-name order.
+
+    Raises:
+        GrantError: A grant file exists but cannot be read (callers refuse rather than skip it).
     """
     out: list[str] = []
     for f in sorted(directory.glob("*.json")) if directory.is_dir() else []:
+        if not f.is_file():   # a directory or dangling link holds no value
+            continue
         value = _json_field(f, key)
         if value:
             out.append(value)
@@ -350,10 +428,19 @@ def unverified_values(directory: Path, key: str) -> list[str]:
 
 
 def _json_field(path: Path, key: str) -> str:
+    """Return ``key`` from one grant file read unverified; malformed JSON has no value to read.
+
+    Raises:
+        GrantError: The file cannot be read. Skipping it would shorten a refusal list (fail open).
+    """
     try:
-        rec = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ""   # unreadable: nothing to refuse by
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise GrantError(f"cannot read grant file {path.name}: {exc}") from exc
+    try:
+        rec = json.loads(text)
+    except ValueError:
+        return ""   # not JSON: it names nothing to refuse by
     value = rec.get(key) if isinstance(rec, dict) else None
     return value if isinstance(value, str) else ""
 

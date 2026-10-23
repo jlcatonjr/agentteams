@@ -11,46 +11,42 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 pytest.importorskip("cryptography")
-from cryptography.hazmat.primitives import serialization  # noqa: E402
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 
-from agentteams.cli import operator_signing as ops_  # noqa: E402
-from agentteams.vulnscan import escalations, grant, ledger  # noqa: E402
+from agentteams.cli import operator_signing as ops_
+from agentteams.vulnscan import escalations, grant, ledger, publish
+from tests._vulnscan_helpers import operator_home
 
 _DIGEST = re.compile(r"review sha256\s*:\s*([0-9a-f]{64})")
 
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(home / ".config" / "agentteams"))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "state"))
-    key = Ed25519PrivateKey.generate()
-    vk = home / ".config" / "agentteams" / "verify-keys"
-    vk.mkdir(parents=True)
-    (vk / "op.pub.pem").write_bytes(key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
-    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                            serialization.NoEncryption()).decode()
-    gov = tmp_path / "gov"
-    (gov / "references").mkdir(parents=True)
-    (gov / "references" / "security-decisions.log.csv").write_text(
-        "date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner\n")
+    """The shared operator home (0700 verify-keys dir, 0600 key), a code root, and a counting key reader.
+
+    Returns:
+        ``{"tmp", "gov", "reads"}``; ``reads`` lists every private-key read (one entry per read).
+    """
+    world = operator_home(tmp_path, monkeypatch)
     (tmp_path / "code").mkdir()
+    reads: list[str] = []
+
+    def read_key(path: str) -> str:
+        reads.append(path)
+        return world["pem"]
+
     # The preflight (env key file, integrity, install location) is covered by test_sign_confirm.py;
     # here it passes, and the key read returns the test key. _confirm is the real one, without a terminal.
     monkeypatch.setattr(ops_, "_signing_preflight", lambda *a: ("keyfile", False))
-    monkeypatch.setattr(ops_, "_read_operator_private_key", lambda path: pem)
+    monkeypatch.setattr(ops_, "_read_operator_private_key", read_key)
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-    return {"tmp": tmp_path, "gov": gov}
+    return {"tmp": tmp_path, "gov": world["gov"], "reads": reads}
 
 
 def _grant(env: dict, **over: object) -> dict:
@@ -77,12 +73,19 @@ def test_a_printed_digest_confirms_the_next_run(env: dict, capsys: pytest.Captur
 
 
 def test_the_digest_still_binds_every_choice_and_the_lifetime(env: dict, capsys: pytest.CaptureFixture) -> None:
+    gov2 = env["tmp"] / "gov2"
+    (gov2 / "references").mkdir(parents=True)
+    (gov2 / "references" / "security-decisions.log.csv").write_text("date\n")
     grant.sign(_grant(env))
     digest = _printed_digest(capsys)
     for change in ({"max_uses": 6}, {"days": 2}, {"ops": ["stage-fix", "open-pr"]},
-                   {"repo_roots": [str(env["tmp"])]}):
+                   {"repo_roots": [str(env["tmp"])]}, {"hosts": ["web1"]}, {"governance_dir": str(gov2)},
+                   {"key_id": "op2"}):
         assert grant.sign(_grant(env, **change), confirm_sha256=digest) is None, change
         assert "does not match" in capsys.readouterr().err
+    assert env["reads"] == []                                    # a mismatch never reads the key
+    assert grant.sign(_grant(env), confirm_sha256=digest) is not None    # control: the unchanged choice signs
+    assert len(env["reads"]) == 1
 
 
 def test_the_digest_does_not_depend_on_the_working_directory(env: dict, capsys: pytest.CaptureFixture,
@@ -123,6 +126,63 @@ def test_a_serious_resolution_is_confirmable_by_a_printed_digest(env: dict, caps
     assert signed is not None
     escalations.apply_signed_resolution(signed)
     assert not escalations.open_escalations()
+
+
+def _ops_repo(env: dict) -> Path:
+    repo = env["tmp"] / "ops"
+    repo.mkdir(exist_ok=True)
+    if not (repo / ".git").exists():
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", "https://github.com/acme/ops.git"],
+                       check=True)
+    return repo
+
+
+def _publish_grant(env: dict, **over: object) -> dict:
+    args = {"ops_repo": str(_ops_repo(env)), "remote_url": "https://github.com/acme/ops.git", "node_id": "R_kgDOabc",
+            "owner_id": 42, "governance_dir": str(env["gov"]), "days": 7, "max_uses": 30, "key_id": "op"}
+    args.update(over)
+    return publish.build(**args)  # type: ignore[arg-type]
+
+
+def test_a_printed_digest_confirms_the_next_publish_grant_run(env: dict, capsys: pytest.CaptureFixture) -> None:
+    assert publish.sign(_publish_grant(env)) is None             # no terminal: prints the digest, refuses
+    digest = _printed_digest(capsys)
+    fresh = _publish_grant(env)
+    signed = publish.sign(fresh, confirm_sha256=digest)
+    assert signed is not None and signed["grant_id"] == fresh["grant_id"]
+    publish.verify(signed)
+    publish.install(signed)
+    assert [g["grant_id"] for g in publish.load_active()[0]] == [fresh["grant_id"]]
+
+
+def test_the_publish_grant_digest_binds_every_choice(env: dict, capsys: pytest.CaptureFixture) -> None:
+    publish.sign(_publish_grant(env))
+    digest = _printed_digest(capsys)
+    for change in ({"max_uses": 31}, {"days": 8}, {"node_id": "R_other"}, {"owner_id": 43},
+                   {"remote_url": "https://github.com/acme/other.git"}, {"governance_dir": str(env["tmp"] / "gov2")}):
+        if "governance_dir" in change:
+            (env["tmp"] / "gov2" / "references").mkdir(parents=True, exist_ok=True)
+            (env["tmp"] / "gov2" / "references" / "security-decisions.log.csv").write_text("date\n")
+        assert publish.sign(_publish_grant(env, **change), confirm_sha256=digest) is None, change
+        assert "does not match" in capsys.readouterr().err
+
+
+def test_a_remediation_grant_digest_does_not_confirm_a_publish_grant(env: dict, capsys: pytest.CaptureFixture) -> None:
+    grant.sign(_grant(env))
+    digest = _printed_digest(capsys)
+    assert publish.sign(_publish_grant(env), confirm_sha256=digest) is None
+    assert "does not match" in capsys.readouterr().err and env["reads"] == []
+
+
+def test_a_publish_grant_digest_does_not_confirm_a_remediation_grant(env: dict, capsys: pytest.CaptureFixture) -> None:
+    """V7, the reverse direction: the digest kind is bound, so neither record type confirms the other."""
+    publish.sign(_publish_grant(env))
+    digest = _printed_digest(capsys)
+    assert grant.sign(_grant(env), confirm_sha256=digest) is None
+    assert "does not match" in capsys.readouterr().err and env["reads"] == []
+    assert publish.sign(_publish_grant(env), confirm_sha256=digest) is not None   # control: its own kind signs
+    assert len(env["reads"]) == 1
 
 
 def test_core_mcp_direct_grant_digest_is_reproducible(env: dict, capsys: pytest.CaptureFixture,

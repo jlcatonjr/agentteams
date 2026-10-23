@@ -18,14 +18,17 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-)
 
 from agentteams.cli.signed_ledger import ed25519_sign
 from agentteams.scan import scan_content
-from agentteams.vulnscan import executor, grant, ledger, publish, report_store
+from agentteams.vulnscan import (
+    executor,
+    grant,
+    ledger,
+    publish,
+    report_store,
+)
+from tests._vulnscan_helpers import operator_home
 
 pytestmark = pytest.mark.skipif(not shutil.which("git"), reason="git not available")
 
@@ -46,6 +49,9 @@ def out(key):
     val = cfg.get(key)
     if val is None:
         sys.stderr.write("gh: Not Found (HTTP 404)\\n")
+        sys.exit(1)
+    if isinstance(val, dict) and "__fail__" in val:
+        sys.stderr.write(val["__fail__"] + "\\n")
         sys.exit(1)
     if isinstance(val, dict) and "__raw__" in val:
         sys.stdout.write(val["__raw__"])
@@ -79,23 +85,8 @@ def _git(repo: Path, *args: str) -> str:
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(home / ".config" / "agentteams"))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "state"))
-    key = Ed25519PrivateKey.generate()
-    vk = home / ".config" / "agentteams" / "verify-keys"
-    vk.mkdir(parents=True)
-    os.chmod(vk, 0o700)
-    (vk / "op.pub.pem").write_bytes(key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
-    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                            serialization.NoEncryption()).decode()
-    gov = tmp_path / "govteam"
-    (gov / "references").mkdir(parents=True)
-    (gov / "references" / "security-decisions.log.csv").write_text(
-        "date,plan_slug,step,decision,status,conditions,conditions_verified,evidence,owner\n")
+    world = operator_home(tmp_path, monkeypatch)
+    pem, home, gov = world["pem"], world["home"], world["gov"]
     remote = tmp_path / "ops.git"
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
     ops = tmp_path / "ops"
@@ -281,12 +272,29 @@ def test_preflight_access_checks_fail_closed(env: dict, over: dict, match: str) 
     ({"pages": {"html_url": "https://alice.github.io/ops"}}, "Pages"),
     ({"view": {"id": NODE, "isPrivate": True, "nameWithOwner": "../evil"}}, "malformed"),
     ({"user": None}, "preflight failed"),
+    # V34: the REST view must agree with the pinned node id and privacy, whatever `gh repo view` said
+    ({"repo": {"node_id": "R_other", "private": True, "owner": {"id": OWNER, "login": "alice"}}}, "REST view"),
+    ({"repo": {"node_id": NODE, "private": False, "owner": {"id": OWNER, "login": "alice"}}}, "REST view"),
+    ({"repo": {"node_id": NODE, "owner": {"id": OWNER, "login": "alice"}}}, "REST view"),
+    # V34: a Pages status that is not a clean 404 fails closed
+    ({"pages": {"__fail__": "gh: Server Error (HTTP 500)"}}, "cannot determine the Pages status"),
+    ({"pages": {"__fail__": "gh: Bad Gateway (HTTP 502)"}}, "cannot determine the Pages status"),
+    ({"pages": {"__fail__": "gh: Server Error (HTTP 500) request 4F04:4044:1A2B"}}, "cannot determine the Pages"),
+    ({"pages": {"__fail__": "error connecting to api.github.com"}}, "cannot determine the Pages status"),
 ])
 def test_preflight_failures(env: dict, over: dict, match: str) -> None:
     g = _install(env)
     _set_gh(env, **over)
     problems = publish.preflight(g)
     assert problems and any(match in p for p in problems), problems
+
+
+def test_pages_404_is_the_only_pages_answer_that_passes(env: dict) -> None:
+    """V34 control: the fake gh's default 404 for Pages passes; so does gh's exact '(HTTP 404)' wording."""
+    g = _install(env)
+    assert publish.preflight(g) == []
+    _set_gh(env, pages={"__fail__": "gh: Not Found (HTTP 404)"})
+    assert publish.preflight(g) == []
 
 
 def test_preflight_remote_mismatch_and_redirects(env: dict) -> None:
@@ -473,6 +481,82 @@ def test_preflight_again_before_push(env: dict, monkeypatch: pytest.MonkeyPatch)
     res = publish.publish(g, env["tmp"] / DAY, RUN, FILES)
     assert res["status"] == "failed" and "before push" in res["detail"] and len(res["local_commit"]) == 40
     assert _no_remote_reports(env)
+
+
+def _on_git(monkeypatch: pytest.MonkeyPatch, verb: str, hook: object) -> None:
+    """Run ``hook()`` once, just before the executor's first ``git <verb>`` call (the real git then runs)."""
+    real = executor.git
+    fired: list[bool] = []
+
+    def spy(repo: Path, *args: str, **kw: object) -> str:
+        if args and args[0] == verb and not fired:
+            fired.append(True)
+            hook()  # type: ignore[operator]
+        return real(repo, *args, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(executor, "git", spy)
+
+
+def test_a_repo_turned_public_after_the_commit_is_refused_at_push_time(env: dict,
+                                                                     monkeypatch: pytest.MonkeyPatch) -> None:
+    """K-P3: the real second preflight (no stub) sees the repository flip to public between commit and push."""
+    g = _install(env)
+    public = {"view": {"id": NODE, "isPrivate": False, "nameWithOwner": "alice/ops"},
+              "repo": {"node_id": NODE, "private": False, "owner": {"id": OWNER, "login": "alice"}}}
+    _on_git(monkeypatch, "commit-tree", lambda: _set_gh(env, **public))
+    res = publish.publish(g, env["tmp"] / DAY, RUN, FILES)
+    assert res["status"] == "failed" and "before push" in res["detail"] and "not private" in res["detail"], res
+    assert len(res["local_commit"]) == 40 and _no_remote_reports(env)
+    rows = ledger.read()
+    assert [r["kind"] for r in rows] == ["publish-begun", "publish-failed"]
+    assert _git(env["ops"], "rev-parse", f"refs/vulnscan-publish/{RUN}").strip() == res["local_commit"]
+
+
+def test_a_push_race_on_reports_is_rejected_without_force(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    """V35: another writer moves ``reports`` between our commit and push; the push fails, their tip survives."""
+    g = _install(env)
+    assert publish.publish(g, env["tmp"] / DAY, f"{DAY}-aaaaaa", FILES)["status"] == "done"
+    other = env["tmp"] / "racer"
+    subprocess.run(["git", "clone", "-q", "-b", "reports", str(env["remote"]), str(other)], check=True)
+
+    def race() -> None:
+        (other / "theirs.md").write_text("pushed by someone else\n")
+        subprocess.run(["git", "-C", str(other), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(other), "-c", "user.email=r@example.com", "-c", "user.name=r",
+                        "commit", "-q", "-m", "race"], check=True)
+        subprocess.run(["git", "-C", str(other), "push", "-q", "origin", "reports"], check=True)
+
+    _on_git(monkeypatch, "push", race)
+    res = publish.publish(g, env["tmp"] / DAY, RUN, FILES)
+    theirs = _git(other, "rev-parse", "HEAD").strip()
+    assert res["status"] == "failed" and len(res["local_commit"]) == 40, res
+    assert _git(env["remote"], "rev-parse", "refs/heads/reports").strip() == theirs     # remote tip unchanged
+    assert f"reports/{DAY}/{RUN}/report.md" not in _remote_files(env)
+    last = ledger.read()[-1]
+    assert last["kind"] == "publish-failed" and last["local_commit"] == res["local_commit"]
+    assert _git(env["ops"], "rev-parse", f"refs/vulnscan-publish/{RUN}").strip() == res["local_commit"]
+    assert "report.md" in _git(env["ops"], "ls-tree", "-r", "--name-only", res["local_commit"])
+
+
+@pytest.mark.parametrize("shape", ["missing-governance_dir", "missing-owner_id", "extra-field"])
+def test_an_old_or_extended_publish_grant_is_refused_and_listed(env: dict, shape: str) -> None:
+    """G33: a publish grant from an older (or newer) schema is never honoured, and the operator sees why."""
+    rec = _build(env)
+    if shape == "extra-field":
+        rec["branch"] = "main"
+    else:
+        del rec[shape.removeprefix("missing-")]
+    body = {k: rec.get(k) for k in publish.FIELDS}           # what an old signer would have covered
+    signed = {**rec, "signature": ed25519_sign(env["pem"], [publish.PUBLISH_PURPOSE,
+                                                             json.dumps(body, sort_keys=True, separators=(",", ":"))])}
+    with pytest.raises(publish.PublishError, match="unexpected or missing fields"):
+        publish.verify(signed)
+    publish.install(signed)
+    valid, problems = publish.load_active()
+    assert valid == [] and len(problems) == 1
+    assert problems[0].startswith(f"{signed['grant_id']}.json:") and "unexpected or missing fields" in problems[0]
+    res = publish.publish(signed, env["tmp"] / DAY, RUN, FILES)
+    assert res["status"] == "refused" and "unexpected or missing fields" in res["detail"]
 
 
 def test_uses_cap_refuses(env: dict) -> None:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 from agentteams.cli.signed_ledger import ed25519_sign
 from agentteams.vulnscan import escalations as E
 from agentteams.vulnscan import ledger
+from tests._vulnscan_helpers import operator_home
 
 REPO = "/srv/repos/alice-app"
 
@@ -33,20 +35,13 @@ def _canon(target: str) -> str | None:
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(home / ".config" / "agentteams"))
-    monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "state"))
-    key = Ed25519PrivateKey.generate()
-    vk = home / ".config" / "agentteams" / "verify-keys"
-    vk.mkdir(parents=True)
-    os.chmod(vk, 0o700)
-    (vk / "op.pub.pem").write_bytes(key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
-    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                            serialization.NoEncryption()).decode()
-    return {"pem": pem, "home": home, "tmp": tmp_path, "vk": vk}
+    """The shared operator home (frozen helper), plus the verify-keys directory path.
+
+    Returns:
+        ``{"pem", "home", "tmp", "gov", "vk"}``.
+    """
+    world = operator_home(tmp_path, monkeypatch)
+    return {**world, "vk": world["home"] / ".config" / "agentteams" / "verify-keys"}
 
 
 def _rec(kind: str, target: str = REPO, evidence: str = "seen", *, run_id: str = "2026-10-22-aaaaaa",
@@ -125,6 +120,23 @@ def test_flood_triggers_once_per_run(env: dict) -> None:
     # another run is unaffected by this run's count (but still blocked by the open flood)
     other = rec(200, run_id="run-b")
     assert other.kind == "other" and other.run_id == "run-b"
+    # V21: the open flood still blocks every target, including the one run-b scoped and ones never escalated
+    rows = ledger.read()
+    for target in ("/r/200", "/r/0", "web1", "/srv/repos/never-escalated", ""):
+        assert E.blocking(target, rows) == flood, target
+    with ledger.locked():
+        assert E.record_flood("spool overflow", run_id="run-c") == (flood, False)   # no second flood row
+
+
+def test_a_flood_blocks_executor_actions_on_other_targets(env: dict) -> None:
+    """V21 through the executor: with a flood open, an action on an unrelated target is refused before any grant."""
+    from agentteams.vulnscan import executor
+    with ledger.locked():
+        flood, new = E.record_flood("spool overflow", run_id="run-a")
+    assert new
+    out = executor.act("server-audit", "web9", {}, request_id="r-flood")
+    assert out["status"] == "refused" and f"blocked by open escalation {flood.id}" in out["detail"], out
+    assert [r["kind"] for r in ledger.read()] == ["escalation", "refused"]
 
 
 def test_blocking_star_and_target(env: dict) -> None:
@@ -231,7 +243,9 @@ def test_sign_resolution_operator_flow(env: dict, monkeypatch: pytest.MonkeyPatc
     esc = _rec("injection", REPO)
     rec = E.build_resolution(esc.id, "reviewed the diff", "op")
     assert E.sign_resolution(rec, confirm_sha256="0" * 64) is None
-    from agentteams.vulnscan import paths   # the digest covers the operator's choices; its base is the config dir
+    from agentteams.vulnscan import (
+        paths,  # the digest covers the operator's choices; its base is the config dir
+    )
 
     digest = ops_.review_digest("vulnscan-escalation-resolution", ops_.review_choices(rec), paths.config_dir(), "op")
     signed = E.sign_resolution(rec, confirm_sha256=digest)
@@ -265,3 +279,69 @@ def test_tampered_row_raises(env: dict) -> None:
     p.write_text(json.dumps(row) + "\n")
     with pytest.raises(ValueError, match="altered"):
         E.open_escalations()
+
+
+# ---------------------------------------------------------------- verify_resolution (E15)
+
+def _other_pem() -> str:
+    return Ed25519PrivateKey.generate().private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+
+
+@pytest.mark.parametrize("case", ["wrong key", "tampered evidence", "extra field", "missing field",
+                                  "renamed field", "swapped values", "not a dict"])
+def test_verify_resolution_refusals(env: dict, case: str) -> None:
+    esc = _rec("malicious", REPO)
+    signed = _signed(env, esc.id)
+    E.verify_resolution(signed)
+    missing = {k: v for k, v in signed.items() if k != "issued"}
+    cases: dict[str, tuple[object, str]] = {
+        "wrong key": ({**signed, "signature": ed25519_sign(_other_pem(), E.resolution_signed_values(signed))},
+                      "does not verify"),
+        "tampered evidence": ({**signed, "evidence": signed["evidence"] + "."}, "does not verify"),
+        "extra field": ({**signed, "note": "x"}, "fields"),
+        "missing field": (missing, "fields"),
+        "renamed field": ({**missing, "issued_at": signed["issued"]}, "fields"),
+        "swapped values": ({**signed, "esc_id": signed["key_id"], "key_id": signed["esc_id"]}, "malformed"),
+        "not a dict": ([signed], "fields"),
+    }
+    rec, why = cases[case]
+    with pytest.raises(E.EscalationError, match=why):
+        E.verify_resolution(rec)  # type: ignore[arg-type]
+    with pytest.raises(E.EscalationError):
+        E.apply_signed_resolution(rec)  # type: ignore[arg-type]
+    assert E.blocking(REPO) == esc
+
+
+def test_verify_resolution_key_order_is_canonical(env: dict) -> None:
+    """Key order is not signed (canonical JSON), so a reordered record verifies; only content is bound."""
+    esc = _rec("malicious", REPO)
+    signed = _signed(env, esc.id)
+    E.verify_resolution(dict(reversed(list(signed.items()))))
+
+
+def test_verify_resolution_future_issued(env: dict) -> None:
+    esc = _rec("malicious", REPO)
+    now = datetime.now(UTC).replace(microsecond=0)
+
+    def signed_at(issued: str) -> dict:
+        rec = {"esc_id": esc.id, "evidence": "x", "issued": issued, "key_id": "op"}
+        return {**rec, "signature": ed25519_sign(env["pem"], E.resolution_signed_values(rec))}
+
+    E.verify_resolution(signed_at((now + timedelta(minutes=4)).isoformat()), now=now)     # within the skew
+    for issued in ((now + timedelta(minutes=6)).isoformat(), (now + timedelta(days=1)).isoformat(),
+                   now.replace(tzinfo=None).isoformat()):
+        with pytest.raises(E.EscalationError, match="not in the future"):
+            E.verify_resolution(signed_at(issued), now=now)
+    with pytest.raises(E.EscalationError, match="malformed issued"):
+        E.verify_resolution(signed_at("yesterday"), now=now)
+
+
+def test_apply_signed_resolution_twice_refuses_the_second(env: dict) -> None:
+    esc = _rec("integrity", REPO)
+    signed = _signed(env, esc.id)
+    E.apply_signed_resolution(signed)
+    n = len(ledger.read())
+    with pytest.raises(E.EscalationError, match="not an open"):
+        E.apply_signed_resolution(signed)
+    assert len(ledger.read()) == n                      # nothing ledgered for the refused replay
