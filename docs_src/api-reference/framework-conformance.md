@@ -8,7 +8,7 @@ ceiling). This module holds the agent-side complement to the daily
 records* upstream drift into an observation-stanza PR, this decides — at most
 once per window — whether observed drift warrants routing
 `@framework-adapters-expert` to the Stage-2 adapter triage in
-[`provider-adapter-refresh.procedure.md`](../../references/provider-adapter-refresh.procedure.md)
+[`provider-adapter-refresh.procedure.md`](https://github.com/jlcatonjr/agentteams/blob/main/references/provider-adapter-refresh.procedure.md)
 §7. It never fetches and never edits adapter code (Constitutional C-4); its only
 write is a small best-effort local ledger that degrades safely on a read-only
 tree. It imports the snapshot helpers from
@@ -106,6 +106,6 @@ python scripts/research_claude_code_docs.py --agent-check   # repo daily-pipelin
 ```
 
 On `ROUTE=true`, route the named frameworks to `@framework-adapters-expert` to
-work the [`provider-adapter-refresh.procedure.md`](../../references/provider-adapter-refresh.procedure.md)
+work the [`provider-adapter-refresh.procedure.md`](https://github.com/jlcatonjr/agentteams/blob/main/references/provider-adapter-refresh.procedure.md)
 §5 Stage-2 edit-site table as a human-reviewed PR. The check itself never
 authorizes an unattended adapter edit (C-4).

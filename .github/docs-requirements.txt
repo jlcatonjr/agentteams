@@ -1,0 +1,5 @@
+# Docs toolchain, pinned exactly. The single source for both .github/workflows/docs.yml (deploy)
+# and the docs-build job in .github/workflows/ci.yml, so the PR check and the deploy build agree.
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+pymdown-extensions==12.1

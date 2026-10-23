@@ -56,13 +56,15 @@ Writes all rendered files to the target framework directory:
 - `copilot-cli` -> `.github/copilot/`
 - `claude` -> `.claude/agents/`
 - `goose` **(beta)** -> `.goose/recipes/`
-- `agents-md` -> `.agents/`
+- `agents-md` **(beta)** -> `.agents/`
+- `codex` **(beta)** -> `.codex/agents/`
+- `grok` **(beta)** -> `.grok/agents/`
 
 Also writes framework instructions at the parent of the framework agents directory:
 
 - `copilot-vscode` and `copilot-cli` -> `.github/copilot-instructions.md`
 - `claude` -> `.claude/CLAUDE.md`
-- `goose` and `agents-md` -> repo-root `AGENTS.md`
+- `goose`, `agents-md`, `codex` and `grok` -> repo-root `AGENTS.md`
 
 It also generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
 
@@ -166,7 +168,7 @@ See [Template Authoring](template-authoring.md) for placeholder conventions and 
 
 ## Framework Adapters
 
-The same template library targets five frameworks via adapters in `agentteams/frameworks/`:
+The same template library targets every registered framework through adapters in `agentteams/frameworks/`. Which adapters are Stable and which are Beta is set by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md):
 
 | Framework | Agent Format | Entry Point |
 |-----------|-------------|-------------|
@@ -175,6 +177,8 @@ The same template library targets five frameworks via adapters in `agentteams/fr
 | `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) + repo-root `AGENTS.md`/`.goosehints` | `goose run --recipe` |
 | `agents-md` **(beta)** | Cross-tool `AGENTS.md` standard (plain `.md`) + `.agents/` | Any AGENTS.md-aware tool |
+| `codex` **(beta)** | Codex custom agents (`.codex/agents/*.toml`) + repo-root `AGENTS.md` | Codex CLI |
+| `grok` **(beta)** | Grok Build custom agents (`.grok/agents/*.md`) + repo-root `AGENTS.md` | `grok --agent .grok/agents/<slug>.md` |
 
 Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar. **Goose support is in beta** (generate, convert, bridge and interop), and its adapter is **Beta** under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
 

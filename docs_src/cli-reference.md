@@ -1186,7 +1186,7 @@ from a trusted install (see `SECURITY.md`, "Signing from a trusted install").
 
 ### `--verify-directives`
 
-Read-only: report the validity (signature, expiry, use-limit, manager roster, and allowed non-destructive scope) of every **management directive** in `references/management-directives.log.csv` under `--output`/`--project` (else CWD). Never consumes a directive. Exits non-zero if any directive is invalid. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`. A managed agent runs this before acting on a manager-relayed task; only a verifying, exact-scope, non-destructive directive lets it proceed without re-asking the operator. See [Instruction Authority](api-reference/instruction-authority.md) (C-4 Management-authority) and the fourth authority axis.
+Read-only: report the validity (signature, expiry, use-limit, manager roster, and allowed non-destructive scope) of every **management directive** in `references/management-directives.log.csv` under `--output`/`--project` (else CWD). Never consumes a directive. Exits non-zero if any directive is invalid. Requires `AGENTTEAMS_MANAGEMENT_SIGNING_KEY`. A managed agent runs this before acting on a manager-relayed task; only a verifying, exact-scope, non-destructive directive lets it proceed without re-asking the operator. See [Instruction Authority](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/universal/instruction-authority.reference.template.md) (C-4 Management-authority) and the fourth authority axis.
 
 ### `--issue-directive`
 

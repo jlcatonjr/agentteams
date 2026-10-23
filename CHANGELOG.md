@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (site restructure, phase 0: integrity baseline)
+
+- The docs site now builds with `mkdocs build --strict`. The 4 warnings that made a strict build fail are
+  fixed:
+  - `cli-reference.md` linked to `api-reference/instruction-authority.md`, which never existed. The link now
+    points at the shipped instruction-authority template.
+  - `verification-environment.md` and `api-reference/framework-conformance.md` linked outside `docs_src/`.
+    Those links now point at the files on GitHub.
+- New `docs-build` job in `ci.yml` runs on every PR and push. Until now the site was built only after merge,
+  in `docs.yml`. The job:
+  - runs the strict build;
+  - runs `scripts/check_docs_site.py`, which checks unique page titles, the skip link, image alt text,
+    heading structure and link text. Pages outside the enforced set are held to a ratchet baseline.
+  - checks that every site URL cited in README, the man page and `pyproject.toml` still resolves;
+  - checks that every page URL of the base build still exists in the new build. Deliberate removals are
+    listed in `.github/docs-removed-urls.txt`.
+- The docs toolchain pins move to `.github/docs-requirements.txt`, which both workflows install from, so the
+  PR check and the deploy build use the same versions.
+- Corrected stale contributor docs:
+  - `contributing.md` gave the template path as `templates/` and said templates are registered in
+    `emit.py`; they live in `agentteams/templates/` and are registered in `analyze.py`. Its test map listed
+    10 of 400+ test files and is replaced by how to run a subset and the docs guard tests. The install line
+    now uses the `test` extra.
+  - `template-authoring.md` had the same stale `templates/` paths.
+  - `how-it-works.md` listed 5 of the 7 framework adapters, with inconsistent Beta labels. It now matches
+    `STABILITY.md`.
+  - `references/git-procedures.md` documented `mkdocs build --clean` into `docs/`. It now gives the strict
+    `_site` build CI uses.
+
 ### docs (site build: mkdocs-material 9.7.7)
 
 - `.github/workflows/docs.yml` pins `mkdocs-material==9.7.7` (was 9.7.6) and `pymdown-extensions==12.1` (was

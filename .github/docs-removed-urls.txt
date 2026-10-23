@@ -1,0 +1,9 @@
+# Published docs URLs that were removed ON PURPOSE. The docs-build CI job fails when a URL in the
+# base build is missing from a change's build, unless that URL is listed here.
+#
+# One URL path per line, relative to the site root, with a reason:
+#   api-reference/old-module/   # module deleted in #NNN; content now in api-reference/new-module/
+#
+# An entry whose page exists again also fails the job: remove it when a page is restored.
+# Prefer keeping a page (or a stub that links onward) over listing it here; URLs are cited from
+# outside this repository.

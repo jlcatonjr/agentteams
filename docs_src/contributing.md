@@ -6,12 +6,12 @@ Thank you for your interest in contributing to Agent Teams Module. This guide co
 
 ## Development Setup
 
-Agent Teams Module has one runtime dependency (`jsonschema`); otherwise it uses only the Python 3.11+ stdlib. The only dev dependency is `pytest`.
+Agent Teams Module has one runtime dependency (`jsonschema`); otherwise it uses only the Python 3.11+ stdlib. The tools needed to run the test suite (`pytest`, `pyyaml` and the wheel-build tooling for the packaging test) are the `test` extra in `pyproject.toml`. CI's main test job also installs the `research` extra, for the tests of that optional subpackage.
 
 ```bash
 git clone https://github.com/jlcatonjr/agentteams
 cd agentteams
-pip install -e . pytest
+pip install -e ".[test]"
 ```
 
 ---
@@ -22,28 +22,26 @@ pip install -e . pytest
 pytest tests/
 ```
 
-All tests live in `tests/`. The suite runs in under 5 seconds with no network access and no filesystem side effects (all I/O is patched or uses `tmp_path`).
+All tests live in `tests/`, one `test_<module>.py` per module or feature, so the file that covers a module is usually named after it. To run only the tests for the area you changed:
 
-### Test coverage map
+```bash
+pytest tests/test_render.py          # one module
+pytest tests/ -k "fence"             # every test whose name matches
+```
 
-| Test file | What it tests |
-|-----------|--------------|
-| `test_ingest.py` | JSON/YAML loading, schema validation, normalization |
-| `test_analyze.py` | Manifest building, archetype selection, tool classification |
-| `test_render.py` | Placeholder resolution, template loading, cross-reference validation |
-| `test_emit.py` | File write, overwrite protection, SETUP-REQUIRED generation |
-| `test_drift.py` | Hash comparison, drift detection, impact classification |
-| `test_scan.py` | Security findings, severity classification, pattern detection |
-| `test_audit.py` | Static audit checks, AI audit availability detection |
-| `test_remediate.py` | Remediation plan generation and application |
-| `test_graph.py` | Graph construction, serialization (Mermaid/DOT/JSON/Markdown) |
-| `test_integration.py` | End-to-end pipeline smoke tests against example briefs |
+Some tests guard documentation rather than code. If you change a docs page, the API reference or a CLI flag, run these before opening a PR:
+
+```bash
+pytest tests/test_docs_nav_completeness.py tests/test_api_doc_parity.py \
+       tests/test_api_doc_signatures.py tests/test_module_doc_ratchet.py \
+       tests/test_cli_reference_flag_parity.py
+```
 
 ---
 
 ## Authoring Templates
 
-Templates live in `templates/` and follow the placeholder conventions defined in [`templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/PLACEHOLDER-CONVENTIONS.md).
+Templates live in `agentteams/templates/` and follow the placeholder conventions defined in [`agentteams/templates/PLACEHOLDER-CONVENTIONS.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/PLACEHOLDER-CONVENTIONS.md).
 
 See the [Template Authoring Guide](template-authoring.md) for full instructions.
 
@@ -54,7 +52,7 @@ See the [Template Authoring Guide](template-authoring.md) for full instructions.
 3. Every `.template.md` file must include a valid YAML front matter block with `name`, `description`, `user-invocable`, `tools`, and `model` fields
 4. Every agent template must contain an **Invariant Core** section marked with ⛔
 
-To register a new template for use in the rendering pipeline, add it to the appropriate section in `agentteams/emit.py`'s template routing logic.
+To register a new domain archetype, add it to the `select_archetypes()` selector in `agentteams/analyze.py` and to the team-manifest schema. The full checklist is in [Registering a new template](template-authoring.md#registering-a-new-template).
 
 ---
 

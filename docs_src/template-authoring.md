@@ -73,13 +73,13 @@ Every template must have:
 
 ## Registering a New Template
 
-1. Create the file in the appropriate subdirectory under `templates/`:
+1. Create the file in the appropriate subdirectory under `agentteams/templates/`:
    - `universal/` — governance agents
    - `domain/` — domain archetypes
    - `builder/` — per-framework builder agents
    - Root level — orchestrator and copilot-instructions
 2. Register the archetype in the `select_archetypes()` selector in `agentteams/analyze.py` — for simple keyword matching add a `(keywords, archetype)` row to the `_ARCHETYPE_TRIGGERS` table it iterates; for contextual matching add an inline selection rule in `select_archetypes()` directly (the approach the canonical [`AUTHORING-GUIDE.md`](https://github.com/jlcatonjr/agentteams/blob/main/agentteams/templates/AUTHORING-GUIDE.md) shows)
-3. Add the new placeholder to `templates/PLACEHOLDER-CONVENTIONS.md` if introducing a new placeholder
+3. Add the new placeholder to `agentteams/templates/PLACEHOLDER-CONVENTIONS.md` if introducing a new placeholder
 4. Add the archetype slug to `selected_archetypes.items.enum` in `agentteams/schemas/team-manifest.schema.json` (and update `agentteams/schemas/project-description.schema.json` only if your intake schema explicitly validates allowed archetype labels)
 5. Update `template-library-expert.agent.md` sections count
 
