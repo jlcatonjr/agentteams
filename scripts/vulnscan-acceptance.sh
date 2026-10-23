@@ -40,7 +40,7 @@ if "$PY" -P -c 'import agentteams.vulnscan' 2>/dev/null; then
   where="$("$PY" -P -c 'import agentteams,sys; print(agentteams.__file__)')"
   res PASS "agentteams importable" "$where"
   if "$PY" -P -c 'import cryptography' 2>/dev/null; then res PASS "signing extra" "cryptography present"
-  else res FAIL "signing extra" "cryptography missing: install agentteams[signing]"; fi
+  else res FAIL "signing extra" "cryptography missing: re-run scripts/vulnscan-operator/01-install.sh (it installs the [signing] extra)"; fi
 else
   res FAIL "agentteams importable" "not importable with $PY (set VULNSCAN_PY or pipx install it)"
 fi

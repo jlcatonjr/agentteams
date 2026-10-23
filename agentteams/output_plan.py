@@ -242,6 +242,17 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Sandbox operator handoff (always — @orchestrator's Sandbox Operator Handoff sub-protocol,
+    # Workflow 0's capability-gap check, Workflow 11's closeout gates, @git-operations). How a
+    # sandboxed agent hands refused work to the operator as a reviewable .sh script plus the complete
+    # command to run it; backed by agentteams.sandbox_handoff.
+    files.append({
+        "path": "references/sandbox-handoff.reference.md",
+        "template": f"{agents_dir}sandbox-handoff.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Instruction-authority ordering (always). The project's authority_sources hierarchy ranks
     # sources of *fact*; this ranks sources of *instruction*, which is the ordering a prompt
     # injection actually attacks. Deliberately fenceless so emit wraps it whole — see the note at

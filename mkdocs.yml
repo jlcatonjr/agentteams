@@ -228,6 +228,7 @@ nav:
       - plan_steps: api-reference/plan_steps.md
       - plan-steps-todo: api-reference/plan-steps-todo.md
       - parallel-plan: api-reference/parallel-plan.md
+      - sandbox_handoff: api-reference/sandbox-handoff.md
       - liaison-logs: api-reference/liaison-logs.md
       - mcp_need: api-reference/mcp-need.md
       - mcp_need_report: api-reference/mcp-need-report.md

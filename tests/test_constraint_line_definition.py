@@ -175,7 +175,12 @@ def test_the_real_library_still_measures_what_it_measured() -> None:
     # in the `content` fence at emit, and the rule is enforced by the blocking env-file-guard hook
     # (git_hooks) and `python -m agentteams.env_hygiene`. A named fence was tried and rejected: it
     # unwraps the rest of the body. The predicate did not move.
-    assert (len(current), sum(current.values())) == (43, 175), (
+    # 175 -> 176 (2026-10-21, sandbox operator handoff): +1 constraint line, git-operations.template.md
+    # Invariant rule 10 (sandbox refusals become operator handoffs; never retry with the sandbox
+    # disabled); per-file baseline raised 4 -> 5. Same reasoning as rules 8/9: the template is wrapped
+    # whole in the `content` fence at emit. The new sandbox-handoff.reference.template.md carries its
+    # own explicit fence, so it adds no file to the count. The predicate did not move.
+    assert (len(current), sum(current.values())) == (43, 176), (
         f"library measurement moved to {len(current)} files / {sum(current.values())} lines; "
         "it was 43 / 168 after the Rule-11 addition. Explain the move, do not re-baseline."
     )

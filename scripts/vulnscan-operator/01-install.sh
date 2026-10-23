@@ -4,7 +4,8 @@
 # Installs a COMMITTED revision of this checkout with pipx and the [signing] extra. It installs from
 # `git archive <ref>` (never the working tree, whose build/ and __pycache__ leftovers would end up in the
 # wheel), so the install lives in pipx's venv, outside every git work tree: signing accepts it.
-# After a merge or a release, re-run this (or `pipx install agentteams[signing]` from a verified release).
+# After a merge or a release, re-run this, or pipx-install the [signing] extra from a verified release checkout
+# (docs: release-and-branching.md, "Verified install"); never a bare package name.
 #
 # Usage:   bash scripts/vulnscan-operator/01-install.sh [REF]      (default REF: HEAD)
 set -euo pipefail
