@@ -133,6 +133,8 @@ def test_npm_fix_ignores_the_repositorys_npmrc(tmp_path: Path, monkeypatch: pyte
     assert "--ignore-scripts" in rec["args"] and "--package-lock-only" in rec["args"]
     assert rec["NPM_CONFIG_USERCONFIG_bytes"] == "" and rec["NPM_CONFIG_GLOBALCONFIG_bytes"] == ""
     assert set(rec["env"]) == {"NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG"}
+    # real npm exits "double-loading config" when one file is both, and every npm stage-fix found nothing
+    assert rec["env"]["NPM_CONFIG_USERCONFIG"] != rec["env"]["NPM_CONFIG_GLOBALCONFIG"]
     assert '"fixed": true' in (repo / "package-lock.json").read_text()       # lockfile copied back
     assert not Path(rec["cwd"]).exists()                                      # scratch removed
     (repo / "package-lock.json").write_text('{"lockfileVersion": 3, "packages": {"": {}}}')
