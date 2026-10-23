@@ -35,10 +35,18 @@ def test_a_run_without_a_single_model_call_is_an_agent_error_not_completed(dirs:
 
 
 def test_the_agent_container_gives_goose_a_writable_state_dir() -> None:
-    """XDG_STATE_HOME is set outside $HOME/.local, whose parents the sessions bind mount makes root-owned."""
+    """XDG_STATE_HOME is inside the writable sessions mount (its logs survive the run), never $HOME/.local/state,
+    whose parent the sessions bind mount makes root-owned."""
     argv = agent_run._base_argv(Path("/run"), Path("/sessions"), Path("/team"), Path("/spool"), name="x")
     envs = [argv[i + 1] for i, a in enumerate(argv) if a == "-e"]
     assert f"XDG_STATE_HOME={agent_run.GOOSE_STATE_IN_CONTAINER}" in envs
-    assert not agent_run.GOOSE_STATE_IN_CONTAINER.startswith(f"{agent_run.AGENT_HOME}/.local")
+    assert agent_run.GOOSE_STATE_IN_CONTAINER.startswith(agent_run.GOOSE_SESSIONS_IN_CONTAINER + "/")
+    assert f"/sessions:{agent_run.GOOSE_SESSIONS_IN_CONTAINER}:rw" in argv
     assert 'r["goose_dirs_writable"]' in agent_run.SELFTEST                   # the self-test now proves it
+
+
+def test_the_default_recipe_is_the_remediation_recipe_whose_prompt_is_the_task() -> None:
+    """The orchestrator's generated prompt is a role check; a one-shot run of it answers that and stops."""
+    assert agent_run.DEFAULT_AGENT["recipe"] == ".goose/recipes/vuln-remediation.yaml"
+    assert "{recipe}" in agent_run.DEFAULT_AGENT["command"] and any(a == "task={task}" for a in agent_run.DEFAULT_AGENT["command"])
 

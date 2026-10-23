@@ -64,16 +64,17 @@ AGENT_HOME = "/agenthome"
 AGENT_CONTAINER = "agentteams-vulnscan-agent"
 SELFTEST_CONTAINER = "agentteams-vulnscan-selftest"
 GOOSE_SESSIONS_IN_CONTAINER = f"{AGENT_HOME}/.local/share/goose"
-#: goose's XDG state dir (logs) in the container. Not under ``.local``: the sessions bind mount makes Docker
-#: create ``$HOME/.local`` and ``.local/share`` owned by root, so the agent uid cannot add ``.local/state``
-#: there and goose stops with "failed to create directory .../.local/state/goose/logs" (first live run).
-GOOSE_STATE_IN_CONTAINER = f"{AGENT_HOME}/state"
+#: goose's XDG state dir (its logs) in the container: inside the writable sessions mount, so the logs survive
+#: the container as ``<run>/agent/goose-data/state/goose/logs`` for the review. Not ``$HOME/.local/state``: the
+#: sessions bind mount makes Docker create ``$HOME/.local`` and ``.local/share`` owned by root, so the agent uid
+#: cannot add ``.local/state`` and goose stops before its first model call (first live run, 2026-10-23).
+GOOSE_STATE_IN_CONTAINER = f"{GOOSE_SESSIONS_IN_CONTAINER}/state"
 RUN_STATES = ("completed", "agent-error", "timed-out", "not-run")
 DEFAULT_AGENT: dict[str, Any] = {
     "enabled": False,
     "framework": "goose",
     "team_dir": "",                       # workspace whose generated team runs the job
-    "recipe": ".goose/recipes/orchestrator.yaml",
+    "recipe": ".goose/recipes/vuln-remediation.yaml",   # its prompt is the task; the orchestrator's is a role check
     "model": "z-ai/glm-5.3",
     "upstream": "http://host.docker.internal:8791",   # the operator's route proxy; or https://openrouter.ai
     "key_file": "",                       # file containing OPENROUTER_API_KEY=... (mounted into the GATEWAY only)

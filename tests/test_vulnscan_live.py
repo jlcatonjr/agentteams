@@ -137,6 +137,8 @@ def test_live_goose_validates_generated_recipes(tmp_path: Path) -> None:
         v = subprocess.run(["goose", "recipe", "validate", str(recipes / name)], cwd=team, env=env,
                            capture_output=True, text=True, timeout=120)
         assert v.returncode == 0, (name, v.stdout + v.stderr)
+    # vulnscan runs vuln-remediation.yaml one-shot: its prompt must carry the run's task.
+    assert "{{ task }}" in (recipes / "vuln-remediation.yaml").read_text().split("instructions:")[0]
     orch = (recipes / "orchestrator.yaml").read_text().replace('"', "")
     assert "key: task" in orch and "vuln-remediation.yaml" in orch
 

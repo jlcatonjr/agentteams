@@ -206,7 +206,8 @@ on, unless the CISA KEV snapshot is then stale: generation stops with
 You need two paths later:
 
 - **`team_dir`**: the project root (`~/ops-team`). The container runs
-  `.goose/recipes/orchestrator.yaml` from it.
+  `.goose/recipes/vuln-remediation.yaml` from it: its prompt is the run's task. (The orchestrator recipe
+  opens with a role-check prompt, so a one-shot `goose run` of it answers that and stops.)
 - **The governance directory**: the team directory holding `references/security-decisions.log.csv`,
   for a goose team `~/ops-team/.goose/recipes`. The executor checks it for HALTs before every action.
 

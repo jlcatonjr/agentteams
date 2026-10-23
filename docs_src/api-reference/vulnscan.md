@@ -187,7 +187,7 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 | `enabled` | `false` | Run the agent team after the daily scan |
 | `framework` | `"goose"` | The only framework agent mode runs |
 | `team_dir` | `""` | Root of the generated goose team's project (it contains `.goose/recipes/`). Required by agent runs, `agent-selftest` and `agent-chat`. Must be an existing directory you own, not group/world-writable; not home, an ancestor of home, or at, inside or above `~/.config/agentteams`, the vulnscan config or state directory, or a credential directory (so at, inside or above `~/.config/agentteams/keys` is always refused); and must not contain `key_file`, nor the operator signing key when `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set (a key kept elsewhere is checked only then) |
-| `recipe` | `".goose/recipes/orchestrator.yaml"` | Recipe the container runs, relative to `team_dir` |
+| `recipe` | `".goose/recipes/vuln-remediation.yaml"` | Recipe the container runs, relative to `team_dir`; its prompt must carry the `task` parameter (the generated orchestrator's opens with a role check, so a one-shot run of it stops after answering that) |
 | `model` | `"z-ai/glm-5.3"` | The one model the gateway allows (an OpenRouter model id) |
 | `upstream` | `"http://host.docker.internal:8791"` | Where the gateway sends requests. Without a local route proxy, use `"https://openrouter.ai"` |
 | `key_file` | `""` | File holding `OPENROUTER_API_KEY=...` (or the bare key). Mounted read-only into the gateway only |
@@ -912,7 +912,7 @@ and exits 1). A `docker` failure part-way through raises; the CLI prints
 | `gateway_reachable` | the gateway answers on the internal network |
 | `readonly_rootfs`, `readonly_run_dir`, `readonly_results` | the root filesystem, run directory and results are read-only |
 | `spool_writable` | the agent can queue requests |
-| `goose_dirs_writable` | goose can create its log, session and config directories (`XDG_STATE_HOME` is `/agenthome/state`, outside the root-owned `.local` the sessions mount creates); without them goose stops before its first model call |
+| `goose_dirs_writable` | goose can create its log, session and config directories (`XDG_STATE_HOME` is `<sessions mount>/state`, so goose's logs survive as `<run>/agent/goose-data/state/goose/logs`; not under the root-owned `.local` the sessions mount creates); without them goose stops before its first model call |
 | `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, a non-root uid (the image runs as 10001) |
 
 #### `selftest_ok(cfg)`
