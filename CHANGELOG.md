@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (site restructure, phase 1: navigation)
+
+- The site nav is regrouped from 21 top-level entries into 7 tabs: Home, Guides, Why agentteams,
+  Interoperability, Security, Reference and Contribute.
+  - Guides is split into Get started, Run your team, Update and maintain, Cross-repo and bridges, and
+    Framework notes.
+  - The security guides and both handbooks get their own tab.
+  - The ~120 API pages are grouped into the 9 sections of `api-reference/index.md`.
+- **No URL changes.** No file moved, and the nav's page set is identical. The `docs-build` URL check
+  confirms that every published file is still there.
+- **Every page title is now unique.** 89 pages shared a browser-tab title, such as "Privileges",
+  "Contents" or "Part I — What It Is & Why". Nav titles are now sentence case. Handbook parts put the
+  topic first and their handbook and edition after it, e.g. "IV. The gates (security, developers)", so the
+  topic survives tab truncation. Framework notes take a suffix, e.g. "Privileges (Goose)".
+- `api-reference/index.md` headings are sentence case. Their anchors are unchanged.
+- New guard `tests/test_docs_api_nav_groups.py`: the API nav groups must equal the table-bearing
+  sections of `api-reference/index.md`, and every API page must sit in the group whose table lists it.
+- Theme features added: section index pages, breadcrumbs, nav pruning, previous/next footer and an
+  "Edit this page" button. The Markdown extensions `attr_list` and `md_in_html` are enabled.
+- Visible side effect: in the handbooks, sections whose first page is a `README.md` now open that page
+  when clicked, instead of listing an "Overview"/"Contents" entry.
+
 ### docs (site restructure, phase 0: integrity baseline)
 
 - The docs site now builds with `mkdocs build --strict`. The 4 warnings that made a strict build fail are
