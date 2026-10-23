@@ -219,6 +219,20 @@ def test_a_crafted_path_cannot_inject_a_stage_fix_target(xdg: Path, problem: str
     assert ("stage-fix target `" in text) is (not problem)
 
 
+def test_a_second_scan_the_same_day_removes_the_first_scans_plans(xdg: Path, feed: Feed) -> None:
+    root = xdg / "roots" / "app"
+    (root / ".git").mkdir(parents=True)
+    (root / "requirements.txt").write_text("PyJWT==2.3.0\n")
+    feed.vulns[("PyPI", "PyJWT", "2.3.0")] = ["G1"]
+    feed.records["G1"] = _adv("G1", "PyPI", "PyJWT", "0", "2.15.0")
+    _pypi(feed, "PyJWT", {"2.15.0": 100})
+    _, _, run_dir = daily.run_daily(_cfg(root), today="2026-10-21")
+    (run_dir / "fixplan-app.md").write_text("# an older format plan naming a fix that is gone\n")
+    (root / "requirements.txt").write_text("PyJWT==2.15.0\n")                # fixed since
+    _, _, again = daily.run_daily(_cfg(root), today="2026-10-21")
+    assert again == run_dir and not list(run_dir.glob("fixplan-*.md"))
+
+
 def _git_dir(repo: Path, origin: str | None) -> None:
     (repo / ".git").mkdir(parents=True)
     remote = f'[remote "origin"]\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\turl = {origin}\n' if origin else ""
