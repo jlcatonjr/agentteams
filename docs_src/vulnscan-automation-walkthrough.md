@@ -354,6 +354,11 @@ python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 1 --max-use
 you sign from cannot stand in for the installed `agentteams`. Without it the install-location check
 prints a warning (criterion e) but still signs. Use it for every signing and resolving command.
 
+Sign from a directory that does not contain your `agentteams` install: an install inside the current
+directory is refused. A `pipx` install lives under `~/.local/pipx`, so **do not sign from your home
+directory**; an empty directory works (`cd "$(mktemp -d)"`), as does any project-free folder outside
+`~/.local`.
+
 What you see, in order:
 
 1. any warnings from the integrity and install-location checks. Signing **refuses** to run from an
@@ -654,6 +659,7 @@ Search the message for the quoted text.
 | agent run state `not-run`, reason mentions the self-test | no passing self-test for this image | `agent-selftest` |
 | `refusing to sign from an install an agent may be able to edit` | `agentteams`, its venv or its interpreter is inside the current directory, a git work tree or an agent-writable root; the next lines name which | sign from a verified install outside agent write roots (`pipx install`). `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
 | `the agentteams package (...) is inside a git work tree` / `sys.prefix (...) is inside a git work tree` / `sys.executable (...) is inside a git work tree` | an editable checkout, a venv kept in a repository, a `pip install` into Homebrew's Python without a venv, or an interpreter git tracks or does not ignore. An interpreter in a git-ignored path (Homebrew's `Cellar/`) is not refused; only the work tree's own ignore rules count (inherited `GIT_*` variables and a global `core.excludesFile` do not) | `pipx install` from a verified release (works on Homebrew's Python) |
+| `the agentteams package (...) is inside the current directory` / `sys.prefix (...) is inside the current directory` | you signed from a directory that contains the install, typically your home directory with a `pipx` install under `~/.local/pipx` | sign from an empty directory: `cd "$(mktemp -d)"`, then re-run the signing command |
 | `<project>/.claude/settings.json cannot be read or parsed, so the agent-writable roots it grants are unknown` | a project's settings file exists but is unreadable, not JSON, or its `sandbox`/`filesystem` is not an object or `allowWrite` not a list (a missing file or no sandbox block is fine) | fix the file, then sign again |
 | `no terminal to confirm on` (suggesting `--confirm-review-sha256`) | signing ran without a terminal | check the printed fields, then re-run with `--confirm-review-sha256 <digest>` (see Step 8) |
 | `--confirm-review-sha256 does not match` | your choices differ from the run that printed the digest | re-run without it and read the new digest |
