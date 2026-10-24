@@ -256,6 +256,7 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
     latest_run = paths.run_dirs()[-1:]
     anomalies += _gateway_dlp_lines(latest_run[0] / "gateway" / "spend.json") if latest_run else []
     anomalies += _gateway_note_lines(latest_run[0] / "gateway" / "dlp" / "notes") if latest_run else []
+    anomalies += _removed_key_lines(latest_run[0] / "agent" / "status.json") if latest_run else []
     rejected =sorted((paths.state_dir() / "spool" / "processed").glob("rejected-*")) \
         if (paths.state_dir() / "spool" / "processed").exists() else []
     names = [p.name for p in rejected[-20:]]   # file names the agent may have chosen: untrusted
@@ -359,6 +360,19 @@ def _gateway_note_lines(notes_path: Path) -> list[str]:
         out.append(f"- gateway DLP: {notes['secrets_skip_ok_unmatched']} agent.dlp_skip_ok entr(ies) match no current "
                    "file (moved, or edited since)")
     return out
+
+
+def _removed_key_lines(status_path: Path) -> list[str]:
+    """Return the anomaly line for agent-definition keys the run's copy removed (``status.json``; R1, key names only)."""
+    try:
+        entry = json.loads(status_path.read_text(encoding="utf-8")).get("agent_definition") or {}
+    except (OSError, ValueError, AttributeError):   # absent (no agent run yet) or unreadable: nothing to report
+        return []
+    keys = [k for k in entry.get("removed_keys") or [] if isinstance(k, str) and k.replace("-", "_").isidentifier()]
+    if not keys:
+        return []
+    return [f"- agent definition: the run's copy removed {', '.join(keys[:20])} from the front matter "
+            "(vulnscan's own flags apply instead)"]
 
 
 def _dlp_skip_section(for_publish: bool) -> list[str]:

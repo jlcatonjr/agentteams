@@ -352,3 +352,28 @@ def test_the_self_test_writes_the_copy_and_records_it(tmp_path: Path, state: Pat
     _copilot_team(tmp_path, "no front matter\n")
     res = agent_run.selftest(cfg)
     assert res["checks"] == {"agent_definition_valid": False} and "no front matter" in res["error"]
+
+
+def test_review_lists_the_keys_the_copy_removed(tmp_path: Path) -> None:
+    """R1: review shows the removed front-matter keys (names only, identifier-like) from the run's status.json."""
+    from agentteams.vulnscan import review
+
+    status = tmp_path / "status.json"
+    assert review._removed_key_lines(status) == []                       # no agent run yet
+    status.write_text(json.dumps({"agent_definition": {"removed_keys": ["tools", "user-invocable", "x y`z"]}}))
+    (line,) = review._removed_key_lines(status)
+    assert "removed tools, user-invocable from the front matter" in line and "`" not in line
+    status.write_text(json.dumps({"agent_definition": {"removed_keys": []}}))
+    assert review._removed_key_lines(status) == []
+    status.write_text("not json")
+    assert review._removed_key_lines(status) == []
+
+
+def test_a_goose_command_override_may_not_name_the_team() -> None:
+    """R7: an override naming /work/team would run the team's recipe, not the checked copy {recipe} names."""
+    goose = agent_drivers.get_driver("goose")
+    assert goose.command_problem(["goose", "run", "--recipe", "{recipe}", "--name", "{session}"]) == ""
+    bad = ["goose", "run", "--recipe", "/work/team/.goose/recipes/vuln-remediation.yaml"]
+    assert "must not name /work/team" in goose.command_problem(bad)
+    with pytest.raises(ValueError, match="must not name /work/team"):
+        agent_run.validate_agent({"framework": "goose", "command": bad})

@@ -540,6 +540,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **vulnscan rc.4: every operator re-runs `vulnscan agent-selftest` once after installing,** whatever the runtime.
+  The R5 secrets mounts and the R6 masks below change the container flags that `flags_sha256` binds, so an rc.3
+  self-test no longer vouches for an rc.4 run.
+- **vulnscan: secrets the DLP check cannot use now fail closed (R5).** The gateway gets each configured secrets
+  directory (`~/.config/agentteams-secrets`) as one read-only directory mount (`--mount type=bind,...,readonly`,
+  CSV-quoted, at `/run/secrets/dlp/<n>`; new gateway flags `--dlp-secrets-mount` and `--dlp-skip-ok-file`), not
+  one `-v` per file, so files named `.env` and paths with `,` or `:` are no longer skipped. A run or a debrief
+  ends `not-run` when a configured directory exists but cannot be read, when it holds a `*.env` file the gateway
+  cannot use (unreadable, not a regular file, a symlink out of the directory), or when the gateway itself counts
+  an unreadable or non-UTF-8 file (it exits 2 and writes a count to `<gateway dir>/dlp-refused`). A missing
+  directory is fine. New setting `agent.dlp_skip_ok` (default `[]`): `{"path", "sha256"}` entries, each
+  acknowledging one exact version of one file; editing the file makes its entry stop matching; `review` lists
+  them (paths on the terminal, a count in the published copy). Paths appear only on the operator's terminal;
+  `dlp/notes` gains counts only.
+- **vulnscan: the agent can no longer read the gateway's files (R6).** The agent, self-test and debrief
+  containers mount an empty read-only tmpfs over `/work/run/gateway` and `/work/run/debrief`
+  (`agent_run.MASKED_RUN_DIRS`), so the DLP host-name list, the acknowledgements and `spend.json` are hidden
+  inside the read-only run mount. The mountpoints are created on the host before every `docker run`.
+- **vulnscan: malformed OSV records no longer break the fix lookup (R8).** `osv.fix_for` walks a record without
+  assuming any type (a malformed `affected`, package, `ranges`, range, `events`, event or non-string version is
+  skipped) and never pairs a fix with a range start it could not read. A fix version must match
+  `[A-Za-z0-9.+~:_-]{1,64}` (`osv.FIX_VERSION`); any other is never shown or offered: the finding notes "fix
+  version not shown (unusual format)". New `Finding.malformed` / `Finding.fix_hidden` (from `osv.quirks`, passed
+  by the engine), shown in the finding's notes and in a line at the top of the report; 0 in an older report.
+
 - **vulnscan: the @security review of the rc.4 candidate, every finding fixed.** *Medium (blocked Copilot agent
   mode):* (1) Copilot reads its agent file's YAML front matter as configuration (`tools`, `model`,
   `mcp-servers` ...), and the self-test used the default file while a run loaded `agent.recipe`. Now a run refuses

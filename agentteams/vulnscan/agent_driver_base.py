@@ -124,7 +124,14 @@ class Driver:
         raise NotImplementedError
 
     def command_problem(self, command: list[str]) -> str:
-        """Return why an ``agent.command`` override may not be used with this runtime, or ``""`` (default: none)."""
+        """Return why an ``agent.command`` override may not be used with this runtime, or ``""``.
+
+        Default (goose): any override, except one naming the team mount, which would hand the CLI the team's
+        own definition instead of the checked copy that ``{recipe}`` names (R7).
+        """
+        if any(TEAM_IN_CONTAINER in str(part) for part in command):
+            return (f"agent.command must not name {TEAM_IN_CONTAINER}: use {{recipe}}, the checked copy of the "
+                    f"agent definition (R7)")
         return ""
 
     def settings_problem(self, a: dict[str, Any]) -> str:
