@@ -6,41 +6,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.0-rc.1] - 2026-10-23
+## [1.1.0-rc.2] - 2026-10-23
 
 ### release notes
 
-agentteams 1.1.0-rc.1 is the first release candidate of the 1.1 line, cut from `main` as `release/1.1`. It is a
-prerelease: install it to try 1.1, and keep pinning `v1.0.1` where you need the stable line. The final `v1.1.0`
-will be signed from `release/1.1` after the candidate has run in daily use.
+agentteams 1.1.0-rc.2 is the second release candidate of the 1.1 line. It makes the daily vulnerability scan and
+remediation part of every agentteams project, new and existing, without committing anything about your machines or
+servers. It also closes a security gap in the remediation executor. Keep pinning `v1.0.x` where you need the stable
+line; the final `v1.1.0` will be signed from `release/1.1`.
 
-- **`python -m agentteams.vulnscan`: daily known-vulnerability scanning and remediation** for your repositories
-  (PyPI, npm, Composer; OSV.dev) and, through the packaged read-only server kit, your servers. It writes a
-  summary, per-repository fix plans and a desktop notification, and can be scheduled with launchd, systemd or cron.
-- **Agent-driven remediation, opt-in and bounded by operator-signed grants.** A credential-free agent container
-  queues requests (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`) that a host-side executor performs
-  only within an Ed25519-signed standing grant (repositories, hosts, operations, uses, expiry). A gateway holds the
-  model key and enforces the spend and token caps. Every action is recorded in a MAC-chained ledger, and
-  `vulnscan review` produces an after-action review. The operator loop adds escalations, notes, debriefs and an
-  optional report publish to a private ops repository.
-- **Safe by default on servers.** The read-only audit never reads process environments, unit files, journals or
-  `.env` contents, and shows services by executable path only.
-- **Guides:** "Automated Remediation: Step-by-Step Setup" (`docs_src/vulnscan-automation-walkthrough.md`), the
-  vulnerability remediation guide and the vulnscan API reference, with operator scripts under
-  `scripts/vulnscan-operator/`.
-- **Security fixes:** `--sign-mcp-direct-grant --confirm-review-sha256` can now confirm; the operator directory
-  `~/.config/agentteams` is protected as a whole; macOS `~/Library/LaunchAgents` and `~/Library/Keychains` are
-  protected write roots.
-- **Sandbox operator handoff:** a sandboxed agent hands work it may not do to the operator as a checked script
-  and one complete command.
-- **Re-pins:** `references/enforcement-integrity.json` pins the vulnscan modules and the server kit. Re-render,
-  then run `--verify-integrity`.
-- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.1` tag (release key
-  `SHA256:IPdnLwlF…`, as in `SECURITY.md`); pin its peeled commit.
+- **Projects declare their scan intent in the brief.** The new `vulnerability_scanning` block holds:
+  - `level` (`off`, `scan` or `remediate`);
+  - `exclude_paths` and `private_packages` (never sent to OSV, PyPI or npm);
+  - `include_dev`, `delivery` and `base_branch`.
 
-The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
+  The schema rejects hosts, IP addresses, outside paths and catch-all patterns. New projects are asked at intake
+  (recommended: `scan`), and `agentteams --set-vulnscan` changes it, showing a diff first.
+- **The operator enrols projects on each machine.**
+  - `python -m agentteams.vulnscan enroll --discover <dir>` finds agentteams workspaces and groups them by origin,
+    so clones and worktrees collapse to one checkout.
+  - You answer unanswered projects in bulk, per owner.
+  - Only that command writes the machine registry (`~/.config/agentteams/projects.json`), and it refuses on CI.
+  - `--update` and fleet runs list unanswered projects.
+- **The daily scan covers every enrolled project** plus your explicit `repo_roots`, with a Coverage section in the
+  summary and review. `vulnscan roots` and `vulnscan status --project .` show where things stand.
+  - A brief can narrow what leaves the machine.
+  - A brief cannot reduce what you chose to check.
+- **Grants follow enrolment, under review.** `grant sign --from-registry` shows only additions and removals since your
+  last signed grant, and you confirm each owner's additions. The registry never authorizes anything.
+- **The executor is stricter.** It refuses:
+  - clones of protected repositories, matched by origin, including the push URL;
+  - repositories enrolled below `remediate`, or whose origin changed;
+  - pull requests when the project asks for plans only.
 
-### Added
+  It scrubs home paths, hostnames and private IP addresses from PR bodies.
+- **Security fix.** A repository's own git config (`remote.origin.uploadpack`, `ext::` remotes) could make the
+  executor's fetch or push run a program. The executor now:
+  - passes git's own upload-pack and receive-pack explicitly;
+  - accepts only https, ssh, scp-like and local-path origins;
+  - uses only the https, ssh and file transports.
+- **Re-pins:** `references/enforcement-integrity.json` pins the new vulnscan modules (`registry`, `coverage`,
+  `project_cli`, `project_policy`, `executor_guard`). Re-render, then run `--verify-integrity`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.2` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`); pin its peeled commit.
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.2]`.
+
+### Changes since 1.1.0-rc.1
 
 - **vulnscan: enrol every project on the machine.**
   - `vulnscan enroll [DIR…] [--discover DIR] [--level L]` (operator only: a terminal, refused on CI)
@@ -106,6 +118,56 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
     leaves the machine. Rule S-VM now reads `vulnscan status --project .` (`coverage_state`,
     `last_scan_partial`; `security_rules_invariant` bumped to v=13). The orchestrator gains a review
     protocol for `vulnscan/*` PRs.
+- **vulnscan: a repository's config can no longer make the executor's fetch, ls-remote or push run a
+  program.** git keeps the first `remote.origin.uploadpack` / `receivepack` it reads (the repository's), so
+  the executor now passes `--upload-pack=git-upload-pack` / `--receive-pack=git-receive-pack` explicitly. It
+  also refuses any origin URL that is not https, ssh, scp-like or a local path (no `ext::` or other
+  `<helper>::` remotes, which a per-protocol `protocol.<name>.allow` in repository config would otherwise
+  allow), and allows only the https, ssh and file transports. Pre-existing; found by `@security` review.
+- **vulnscan: protected repositories are matched by origin.** A separate clone of the agentteams
+  checkout, `agent.team_dir`, a grant's `governance_dir` or a publish ops repository (same
+  `host/owner/name` origin) is refused like a worktree of it; before, only the git common directory was
+  compared. The checks moved into the new module `agentteams.vulnscan.executor_guard`.
+- **vulnscan: PR bodies are scrubbed.** `open-pr` passes the body through the publish scrubber
+  (`publish.rewrite_paths`): home paths, this host's name and private IPv4 addresses no longer reach the
+  repository's pull request.
+
+## [1.1.0-rc.1] - 2026-10-23
+
+### release notes
+
+agentteams 1.1.0-rc.1 is the first release candidate of the 1.1 line, cut from `main` as `release/1.1`. It is a
+prerelease: install it to try 1.1, and keep pinning `v1.0.1` where you need the stable line. The final `v1.1.0`
+will be signed from `release/1.1` after the candidate has run in daily use.
+
+- **`python -m agentteams.vulnscan`: daily known-vulnerability scanning and remediation** for your repositories
+  (PyPI, npm, Composer; OSV.dev) and, through the packaged read-only server kit, your servers. It writes a
+  summary, per-repository fix plans and a desktop notification, and can be scheduled with launchd, systemd or cron.
+- **Agent-driven remediation, opt-in and bounded by operator-signed grants.** A credential-free agent container
+  queues requests (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`) that a host-side executor performs
+  only within an Ed25519-signed standing grant (repositories, hosts, operations, uses, expiry). A gateway holds the
+  model key and enforces the spend and token caps. Every action is recorded in a MAC-chained ledger, and
+  `vulnscan review` produces an after-action review. The operator loop adds escalations, notes, debriefs and an
+  optional report publish to a private ops repository.
+- **Safe by default on servers.** The read-only audit never reads process environments, unit files, journals or
+  `.env` contents, and shows services by executable path only.
+- **Guides:** "Automated Remediation: Step-by-Step Setup" (`docs_src/vulnscan-automation-walkthrough.md`), the
+  vulnerability remediation guide and the vulnscan API reference, with operator scripts under
+  `scripts/vulnscan-operator/`.
+- **Security fixes:** `--sign-mcp-direct-grant --confirm-review-sha256` can now confirm; the operator directory
+  `~/.config/agentteams` is protected as a whole; macOS `~/Library/LaunchAgents` and `~/Library/Keychains` are
+  protected write roots.
+- **Sandbox operator handoff:** a sandboxed agent hands work it may not do to the operator as a checked script
+  and one complete command.
+- **Re-pins:** `references/enforcement-integrity.json` pins the vulnscan modules and the server kit. Re-render,
+  then run `--verify-integrity`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.1` tag (release key
+  `SHA256:IPdnLwlF…`, as in `SECURITY.md`); pin its peeled commit.
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
+
+### Added
+
 - **`python -m agentteams.vulnscan`: known-vulnerability scanning and remediation for repositories and
   servers.**
   - It reads PyPI, npm and Packagist lockfiles and pins, and checks every exact version against OSV.dev,
@@ -395,19 +457,6 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
 
 ### Security
 
-- **vulnscan: a repository's config can no longer make the executor's fetch, ls-remote or push run a
-  program.** git keeps the first `remote.origin.uploadpack` / `receivepack` it reads (the repository's), so
-  the executor now passes `--upload-pack=git-upload-pack` / `--receive-pack=git-receive-pack` explicitly. It
-  also refuses any origin URL that is not https, ssh, scp-like or a local path (no `ext::` or other
-  `<helper>::` remotes, which a per-protocol `protocol.<name>.allow` in repository config would otherwise
-  allow), and allows only the https, ssh and file transports. Pre-existing; found by `@security` review.
-- **vulnscan: protected repositories are matched by origin.** A separate clone of the agentteams
-  checkout, `agent.team_dir`, a grant's `governance_dir` or a publish ops repository (same
-  `host/owner/name` origin) is refused like a worktree of it; before, only the git common directory was
-  compared. The checks moved into the new module `agentteams.vulnscan.executor_guard`.
-- **vulnscan: PR bodies are scrubbed.** `open-pr` passes the body through the publish scrubber
-  (`publish.rewrite_paths`): home paths, this host's name and private IPv4 addresses no longer reach the
-  repository's pull request.
 - **`--sign-mcp-direct-grant --confirm-review-sha256` could never confirm.** Each run minted a fresh
   `grant_id` and timestamps inside the digested record. The digest now covers the operator's choices
   plus the lifetime and the target project (`operator_signing.review_choices`), as `--sign-grant`
