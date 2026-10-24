@@ -110,6 +110,7 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
         sev = max(rated, UNSCORED_DEFAULT if unscored else 0)
         known = [i for i in ids if fetched.get(i) is not None]
         fix, unfixed = osv.minimal_fix(known, eco, name, ver) if known else (None, 0)
+        malformed, hidden = osv.quirks(known, eco, name, ver)   # R8: counted in the report, never silent
         malicious = any(osv.is_malicious(i) for i in ids)
         per_target: dict[str, list[Dep]] = defaultdict(list)
         for target, d in by_key[key]:
@@ -122,6 +123,7 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
                 kind="package", target=target, name=name, version=ver, ecosystem=eco, scope=scope,
                 severity=4 if malicious else sev, fix=fix or "", unfixed=unfixed, ids=ids,
                 locations=locs, malicious=malicious, distro=distro, rated=rated, unscored=unscored,
+                malformed=malformed, fix_hidden=hidden,
                 count_dev=dev_policy.get(target) if scope == "dev" else None,
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
 

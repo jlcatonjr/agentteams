@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime as _dt
 from dataclasses import asdict, dataclass, field
 
-from agentteams.vulnscan import REPORT_SCHEMA_VERSION, osv
+from agentteams.vulnscan import REPORT_SCHEMA_VERSION
 from agentteams.vulnscan.osv import SEVERITY_NAME, SEVERITY_RANK, UNSCORED_AS
 
 EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
@@ -42,19 +42,8 @@ class Finding:
     detail: str = ""
     rated: int = 0                  # highest rank the advisories publish (CVSS or label); 0 = none of them does
     unscored: int = 0               # advisories with neither a CVSS vector nor a severity label
-    malformed: int | None = None    # advisories whose record had malformed parts (skipped); None: from osv.quirks
-    fix_hidden: int | None = None   # advisories whose fix version has an unusual format (not shown, counted unfixed)
-
-    def __post_init__(self) -> None:
-        """Count a new package finding's malformed advisories and hidden fix versions (R8, :func:`osv.quirks`).
-
-        Left unset (None), both come from what :func:`osv.minimal_fix` recorded for this package version in
-        this process; a report read back (:meth:`Report.from_dict`) keeps its own counts (0 for an older one).
-        """
-        if self.malformed is None or self.fix_hidden is None:
-            m, h = osv.quirks(self.ids, self.ecosystem, self.name, self.version) if self.kind == "package" else (0, 0)
-            self.malformed = m if self.malformed is None else self.malformed
-            self.fix_hidden = h if self.fix_hidden is None else self.fix_hidden
+    malformed: int = 0              # advisories whose record had malformed parts, skipped (osv.quirks; R8)
+    fix_hidden: int = 0             # advisories whose fix version has an unusual format (not shown, counted unfixed)
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).

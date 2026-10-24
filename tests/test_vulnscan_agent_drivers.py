@@ -79,6 +79,15 @@ def _revision_7(old: list[str]) -> list[str]:
     new[i:i] = ["--tmpfs", "/work/cwd:rw,size=16m,uid=10001,gid=10001,mode=0700", "-w", "/work/cwd"]
     j = new.index("XDG_STATE_HOME=/agenthome/.local/share/goose/state") + 1
     new[j:j] = ["-e", "XDG_CONFIG_HOME=/agenthome/.config"]
+    return _r6(new)
+
+
+def _r6(old: list[str]) -> list[str]:
+    """The old argv plus exactly the rc.4 R6 change (deliberate): two empty read-only tmpfs masks over the
+    gateway's files under ``/work/run``, right after the request-spool mount."""
+    new = list(old)
+    i = next(k for k, x in enumerate(new) if x.startswith("/spool/requests:/work/spool/requests:")) + 1
+    new[i:i] = ["--tmpfs", "/work/run/gateway:ro,size=1k", "--tmpfs", "/work/run/debrief:ro,size=1k"]
     return new
 
 
@@ -117,23 +126,25 @@ def test_golden_debrief_argv(fixed: dict) -> None:
 def _b2(old: list[str], secrets: tuple[str, ...] = ()) -> list[str]:
     """The old gateway argv plus exactly the roadmap-B2 change (deliberate, 2026-10-24): the host's DLP
     context. One read-only mount of ``<spend dir>/dlp`` at ``/run/dlp`` (after the spend mount) and one per
-    secrets file, and the flags naming only fixed in-container paths, appended at the end. No host name,
+    secrets directory (rc.4 R5), and the flags naming only fixed in-container paths, appended at the end. No host name,
     package name or secret value is in the argv."""
     new = list(old)
     i = new.index("img:t")
     mounts = ["-v", "/spend/dlp:/run/dlp:ro"]
     flags = ["--dlp-hostnames-file", "/run/dlp/hostnames", "--dlp-private-names-file", "/run/dlp/private-names"]
-    for path in secrets:
-        mounts += ["-v", f"{path}:/run/secrets/dlp/{Path(path).name}:ro"]
-        flags += ["--dlp-secrets-file", f"/run/secrets/dlp/{Path(path).name}"]
+    for n, path in enumerate(secrets):   # rc.4 R5 (deliberate): one read-only directory mount per secrets dir
+        mounts += ["--mount", f"type=bind,source={path},target=/run/secrets/dlp/{n},readonly"]
+        flags += ["--dlp-secrets-mount", f"/run/secrets/dlp/{n}"]
+    if secrets:
+        flags += ["--dlp-skip-ok-file", "/run/dlp/skip-ok"]
     new[i:i] = mounts
     return new + flags
 
 
 def test_golden_gateway_argv_is_the_old_one_plus_b2(fixed: dict) -> None:
     assert agent_run.gateway_argv(fixed, "img:t", Path("/spend")) == _b2(OLD_GATEWAY)
-    ctx = agent_run.gateway_context.Context(Path("/spend/dlp"), (Path("/s/a.env"), Path("/s/b.env")))
-    assert agent_run.gateway_argv(fixed, "img:t", Path("/spend"), dlp=ctx) == _b2(OLD_GATEWAY, ("/s/a.env", "/s/b.env"))
+    ctx = agent_run.gateway_context.Context(Path("/spend/dlp"), (Path("/s/a"), Path("/s/b")))
+    assert agent_run.gateway_argv(fixed, "img:t", Path("/spend"), dlp=ctx) == _b2(OLD_GATEWAY, ("/s/a", "/s/b"))
 
 
 def test_the_command_override_still_substitutes_its_placeholders(fixed: dict) -> None:

@@ -279,12 +279,18 @@ def _preflight(cfg: dict[str, Any], a: dict[str, Any], run_dir: Path) -> str:
 
 
 def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, budget_usd: float) -> None:
+    """Start the debrief's gateway, as :func:`agent_run._start_gateway` (gateway_context.DlpRefused; R5)."""
     agent_run._docker(["docker", "rm", "-f", DEBRIEF_GATEWAY], check=False)
+    dlp = gateway_context.prepare(spend_dir, skip_ok=a.get("dlp_skip_ok") or [])   # B2: the host's DLP context
     agent_run._docker(agent_run.gateway_argv(a, tag, spend_dir, name=DEBRIEF_GATEWAY, budget_usd=budget_usd,
-                                             max_tokens_total=debrief_max_tokens(a),
-                                             dlp=gateway_context.prepare(spend_dir)))   # B2: the host's DLP context
-    agent_run._docker(["docker", "network", "connect", agent_run.NETWORK, DEBRIEF_GATEWAY])
+                                             max_tokens_total=debrief_max_tokens(a), dlp=dlp))
+    try:
+        agent_run._docker(["docker", "network", "connect", agent_run.NETWORK, DEBRIEF_GATEWAY])
+    except RuntimeError:   # the gateway already exited: its DLP-context refusal, if any, is the reason
+        gateway_context.raise_if_refused(spend_dir)
+        raise
     time.sleep(2)
+    gateway_context.raise_if_refused(spend_dir)
 
 
 def _cleanup() -> None:
@@ -367,6 +373,8 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
             proc.wait()
             rc = EXIT_TIMED_OUT
             print(f"debrief stopped: the {minutes:g}-minute cap was reached", file=sys.stderr)
+    except gateway_context.DlpRefused as exc:   # R5: the DLP check cannot cover every secret; no debrief started
+        print(f"debrief not started: {exc}", file=sys.stderr)
     except SystemExit as exc:
         if exc.code == agent_run.SIGTERM_EXIT:   # recorded below; the finally removes both containers
             terminated, rc = True, agent_run.SIGTERM_EXIT

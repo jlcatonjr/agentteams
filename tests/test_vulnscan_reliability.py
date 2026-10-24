@@ -113,6 +113,23 @@ def test_cvss_only_advisory_is_ranked_from_its_vector(tmp_path: Path, feed: Feed
     assert "CRITICAL" in rep.markdown() and "UNSCORED" not in rep.markdown()
 
 
+def test_a_scan_counts_malformed_records_and_hidden_fix_versions(tmp_path: Path, feed: Feed,  # noqa: F811
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """R8 end to end: engine passes osv.quirks to the finding explicitly; the report shows both counts."""
+    monkeypatch.setattr(osv, "_QUIRKS", {})
+    (tmp_path / "requirements.txt").write_text("a==1.0\n")
+    feed.vulns = {("PyPI", "a", "1.0"): ["PYSEC-1", "PYSEC-2", "PYSEC-3"]}
+    feed.records = {"PYSEC-1": _adv("PYSEC-1", "PyPI", "a", "0", "1.1"),
+                    "PYSEC-2": _adv("PYSEC-2", "PyPI", "a", "0", "1.2 <b>see notes</b>"),
+                    "PYSEC-3": {**_adv("PYSEC-3", "PyPI", "a", "0", "1.3"), "affected": "broken"}}
+    rep = engine.scan_path(tmp_path)
+    f = rep.findings[0]
+    assert (f.fix, f.malformed, f.fix_hidden) == ("1.1", 1, 1)
+    md = rep.markdown()
+    assert "fix version not shown (unusual format)" in md and "see notes" not in md
+    assert "1 advisory record(s) from OSV were malformed" in md
+
+
 def test_missing_severity_is_unscored_counted_as_high_and_shown_separately(tmp_path: Path, feed: Feed) -> None:  # noqa: F811
     (tmp_path / "requirements.txt").write_text("a==1.0\nb==2.0\n")
     feed.vulns = {("PyPI", "a", "1.0"): ["PYSEC-1"], ("PyPI", "b", "2.0"): ["G-LOW", "PYSEC-2"]}

@@ -202,8 +202,8 @@ def test_quirks_reach_the_finding_and_the_report(feed: dict[str, object]) -> Non
     assert osv.quirks(["A", "B", "C", "D"], "npm", "P", "1.0.0") == (1, 1)
     assert osv.quirks(["A", "C"], "npm", "p", "9.9.9") == (0, 0)   # another version: not seen
     f = Finding(kind="package", target="web", name="p", version="1.0.0", ecosystem="npm", severity=3,
-                fix=fix or "", unfixed=unfixed, ids=["A", "B", "C", "D"])
-    assert (f.malformed, f.fix_hidden) == (1, 1)
+                fix=fix or "", unfixed=unfixed, ids=["A", "B", "C", "D"],
+                malformed=1, fix_hidden=1)   # engine.py passes osv.quirks explicitly
     rep = Report(target="t", findings=[f])
     md = rep.markdown()
     assert "1 advisory(ies): fix version not shown (unusual format)" in md
