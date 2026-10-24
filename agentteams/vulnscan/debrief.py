@@ -184,7 +184,8 @@ def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> li
     """Return the ``docker run`` command for the debrief container.
 
     Same isolation as an agent run (via :func:`agent_run.agent_base`), with ``-it``, its own name,
-    the request spool mounted read-only, and its own gateway.
+    the request spool mounted read-only, and its own gateway. As in a run, ``/work/run/gateway`` and
+    ``/work/run/debrief`` (this debrief's own gateway files) are masked by an empty read-only tmpfs (R6).
 
     Args:
         a: Agent settings (:func:`agent_run.agent_cfg`).
@@ -346,7 +347,8 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
     started = datetime.now(UTC)
     out = run_dir / "debrief" / started.strftime("%Y%m%dT%H%M%SZ")
     out.mkdir(parents=True, exist_ok=True)
-    for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results"):
+    for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results",
+              *(run_dir / m for m in agent_run.MASKED_RUN_DIRS)):   # R6: the masks' mountpoints, before docker run
         d.mkdir(parents=True, exist_ok=True)
     argv = debrief_argv(a, tag, run_dir, session_name(run_dir))
     timed_out = terminated = False

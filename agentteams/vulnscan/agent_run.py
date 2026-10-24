@@ -72,6 +72,7 @@ GW_PORT = 8080
 AGENT_UID = "10001:10001"
 AGENT_HOME = agent_drivers.AGENT_HOME
 CWD_IN_CONTAINER = agent_drivers.CWD_IN_CONTAINER
+MASKED_RUN_DIRS = ("gateway", "debrief")   # R6: under /work/run, masked by an empty read-only tmpfs (the DLP list)
 AGENT_CONTAINER = "agentteams-vulnscan-agent"
 SELFTEST_CONTAINER = "agentteams-vulnscan-selftest"
 GOOSE_SESSIONS_IN_CONTAINER = agent_drivers.GOOSE_SESSIONS    # goose's sessions mount (see agent_drivers)
@@ -243,6 +244,7 @@ def _base_argv(run_dir: Path, sessions_dir: Path, team_dir: Path, spool: Path, *
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", AGENT_UID,
             "--pids-limit", "256", "--memory", "2g",
             "-v", f"{run_dir}:/work/run:ro", "-v", f"{spool / 'requests'}:/work/spool/requests:{spool_mode}",
+            *(x for m in MASKED_RUN_DIRS for x in ("--tmpfs", f"/work/run/{m}:ro,size=1k")),   # mountpoints: mkdir first
             "-v", f"{spool / 'results'}:/work/spool/results:ro",
             "-v", f"{team_dir}:{agent_drivers.TEAM_IN_CONTAINER}:ro",
             *(x for host, inside in state_mounts(sessions_dir, d) for x in ("-v", f"{host}:{inside}:rw")),
@@ -439,7 +441,8 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
         return {"passed": False, "checks": {"framework_supported": False}, "error": str(exc)}
     tag = image_tag(a)
     work = paths.state_dir() / "selftest"
-    for d in (work / "run", *(h for h, _ in state_mounts(sessions_dir(work / "run", driver), driver)),
+    for d in (work / "run", *(work / "run" / m for m in MASKED_RUN_DIRS),
+              *(h for h, _ in state_mounts(sessions_dir(work / "run", driver), driver)),
               work / "gateway", executor.spool_dir() / "requests", executor.spool_dir() / "results"):
         d.mkdir(parents=True, exist_ok=True)
     problem = team_dir_problem(a["team_dir"], agent_upstreams.secret_paths(a))
@@ -676,8 +679,8 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         out.mkdir(parents=True, exist_ok=True)
         tag = image_tag(a)
         driver = driver_of(a)   # _not_run_reason refused an unknown framework
-        for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results", run_dir / "gateway",
-                  *(h for h, _ in state_mounts(sessions_dir(run_dir, driver), driver))):
+        for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results",
+                  *(run_dir / m for m in MASKED_RUN_DIRS), *(h for h, _ in state_mounts(sessions_dir(run_dir, driver), driver))):
             d.mkdir(parents=True, exist_ok=True)
         session = f"vulnscan-{run_dir.name}"
         serve = _Server(cfg, run_dir, run_id)

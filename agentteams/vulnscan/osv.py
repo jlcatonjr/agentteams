@@ -5,7 +5,8 @@ works in chunks of 100 and follows ``next_page_token`` (at most ``MAX_PAGES`` pa
 repeated token). A reply that does not answer every query raises ``FeedError``. ``details`` hydrates one
 advisory from ``/v1/vulns/{id}``, cached per process. ``severity`` ranks it from its CVSS vectors
 (:mod:`.cvss`) and its ``database_specific.severity`` label, whichever is higher. ``fix_for`` returns the fixed
-version of the affected range that contains the installed version.
+version of the affected range that contains the installed version; it skips malformed parts of a record and
+never returns a fix version of unusual format (``quirks`` counts both for the report).
 ``minimal_fix`` takes the highest of those across all advisories, which is the smallest
 upgrade that clears every one of them.
 """
@@ -28,6 +29,10 @@ UNSCORED_AS = {"critical": 4, "high": 3, "moderate": 2, "low": 1}
 
 Key = tuple[str, str, str]   # (ecosystem, name, version)
 _DETAILS: dict[str, dict] = {}
+#: (advisory id, ecosystem, normalized name, version) -> (malformed record, fix version not shown): :func:`quirks`.
+_QUIRKS: dict[tuple[str, str, str, str], tuple[bool, bool]] = {}
+#: A fix version a report may show; any other is "fix version not shown (unusual format)" (R8).
+FIX_VERSION = re.compile(r"[A-Za-z0-9.+~:_-]{1,64}")
 
 
 def normalize_name(ecosystem: str, name: str) -> str:
@@ -177,8 +182,53 @@ def is_malicious(vuln_id: str) -> bool:
     return vuln_id.startswith("MAL-")
 
 
+def _walk_fix(record: object, ecosystem: str, name: str, version: str) -> tuple[str | None, bool, bool]:
+    """Return ``(fix, malformed, hidden)`` for the affected range containing ``version`` (R8).
+
+    Every field comes from the feed and is untrusted JSON, so no type is assumed. An entry of the wrong
+    type (``affected``, an affected entry, its package or package name, ``ranges``, a range, its ``events``,
+    an event, or a non-string version in one) is skipped and sets ``malformed``. A fix version outside
+    :data:`FIX_VERSION` is never returned: ``hidden`` is set instead.
+    """
+    affected = record.get("affected", []) if isinstance(record, dict) else None
+    if not isinstance(affected, list):
+        return None, True, False
+    cur, want, malformed = version_key(version), normalize_name(ecosystem, name), False
+    for aff in affected:
+        pkg = aff.get("package") if isinstance(aff, dict) else None
+        if not isinstance(pkg, dict) or not isinstance(pkg.get("name", ""), str):
+            malformed = True
+            continue
+        if pkg.get("ecosystem") != ecosystem or normalize_name(ecosystem, pkg.get("name", "")) != want:
+            continue
+        ranges = aff.get("ranges", [])
+        malformed = malformed or not isinstance(ranges, list)
+        for rng in ranges if isinstance(ranges, list) else []:
+            events = rng.get("events", []) if isinstance(rng, dict) else None
+            if not isinstance(events, list):
+                malformed = True
+                continue
+            if rng.get("type") == "GIT":
+                continue
+            intro: str | None = None
+            for ev in events:
+                if not isinstance(ev, dict) or any(not isinstance(ev[k], str) for k in ("introduced", "fixed") if k in ev):
+                    malformed, intro = True, None   # never pair a fix with a range start it cannot read
+                elif "introduced" in ev:
+                    intro = ev["introduced"]
+                elif "fixed" in ev and intro is not None:
+                    if (intro == "0" or version_key(intro) <= cur) and cur < version_key(ev["fixed"]):
+                        hidden = not FIX_VERSION.fullmatch(ev["fixed"])
+                        return (None if hidden else ev["fixed"]), malformed, hidden
+                    intro = None
+    return None, malformed, False
+
+
 def fix_for(record: dict, ecosystem: str, name: str, version: str) -> str | None:
     """Return the fixed version for the affected range containing ``version``.
+
+    Malformed parts of the record are skipped, and a fix version of unusual format (outside
+    :data:`FIX_VERSION`) is never returned (:func:`_walk_fix`).
 
     Args:
         record: OSV advisory.
@@ -187,27 +237,25 @@ def fix_for(record: dict, ecosystem: str, name: str, version: str) -> str | None
         version: Installed version.
 
     Returns:
-        The fixing version, or None when the containing range has no fix.
+        The fixing version, or None when the containing range has no fix, or none that may be shown.
     """
-    cur = version_key(version)
-    for aff in record.get("affected", []):
-        pkg = aff.get("package") or {}
-        if pkg.get("ecosystem") != ecosystem or \
-                normalize_name(ecosystem, str(pkg.get("name", ""))) != normalize_name(ecosystem, name):
-            continue
-        for rng in aff.get("ranges", []):
-            if rng.get("type") == "GIT":
-                continue
-            intro: str | None = None
-            for ev in rng.get("events", []):
-                if "introduced" in ev:
-                    intro = ev["introduced"]
-                elif "fixed" in ev and intro is not None:
-                    inside = (intro == "0" or version_key(intro) <= cur) and cur < version_key(ev["fixed"])
-                    if inside:
-                        return ev["fixed"]
-                    intro = None
-    return None
+    return _walk_fix(record, ecosystem, name, version)[0]
+
+
+def quirks(ids: Iterable[str], ecosystem: str, name: str, version: str) -> tuple[int, int]:
+    """Return how many of ``ids`` :func:`minimal_fix` found malformed, or with a fix version not shown (R8).
+
+    Args:
+        ids: Advisory IDs of one finding.
+        ecosystem: Package ecosystem.
+        name: Package name.
+        version: Installed version.
+
+    Returns:
+        ``(malformed, fix_hidden)``; ``(0, 0)`` for advisories :func:`minimal_fix` has not seen in this process.
+    """
+    found = [_QUIRKS.get((vid, ecosystem, normalize_name(ecosystem, name), version), (False, False)) for vid in ids]
+    return sum(m for m, _ in found), sum(h for _, h in found)
 
 
 def minimal_fix(ids: list[str], ecosystem: str, name: str, version: str) -> tuple[str | None, int]:
@@ -228,7 +276,9 @@ def minimal_fix(ids: list[str], ecosystem: str, name: str, version: str) -> tupl
     fixes: list[str] = []
     unfixed = 0
     for vid in ids:
-        f = fix_for(details(vid), ecosystem, name, version)
+        f, malformed, hidden = _walk_fix(details(vid), ecosystem, name, version)
+        if malformed or hidden:   # read back by report.Finding (quirks): counted in the report, never silent
+            _QUIRKS[(vid, ecosystem, normalize_name(ecosystem, name), version)] = (malformed, hidden)
         if f is None:
             unfixed += 1
         else:
