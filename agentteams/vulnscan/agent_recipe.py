@@ -72,6 +72,11 @@ def selected(a: dict[str, Any], d: Driver) -> str:
     return str(a.get("recipe") or d.default_recipe).lstrip("/")
 
 
+#: Characters a YAML reader may treat as a line break, or that have no place in an agent file: C0 controls but tab
+#: and LF, DEL, C1 controls (NEL U+0085 among them) and the Unicode line and paragraph separators (@audit #277).
+_HIDDEN_BREAK = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f  ]")
+
+
 def normalise(text: str) -> str:
     """Return ``text`` without a leading BOM and with CRLF (and lone CR) line ends as LF (R2)."""
     return text.removeprefix("﻿").replace("\r\n", "\n").replace("\r", "\n")
@@ -317,7 +322,13 @@ def read_source(a: dict[str, Any], d: Driver) -> str:
             os.close(fd)
         if len(data) > MAX_BYTES:
             raise ValueError(f"the {d.name} agent file {rel} is larger than {MAX_BYTES} bytes")
-        return normalise(data.decode("utf-8"))
+        text = normalise(data.decode("utf-8"))
+        bad = _HIDDEN_BREAK.search(text)
+        if bad:   # a YAML reader breaks lines where this parser does not: a key could hide from the allowlist
+            line = text.count("\n", 0, bad.start()) + 1
+            raise ValueError(f"the {d.name} agent file {rel} has a control character or line separator "
+                             f"(U+{ord(bad.group()):04X}) on line {line}; only LF and tab are allowed")
+        return text
     except (OSError, UnicodeDecodeError) as exc:   # absent, a symlink (ELOOP), unreadable, not UTF-8: fail closed
         raise ValueError(f"the {d.name} agent file {rel} cannot be read ({type(exc).__name__})") from exc
 

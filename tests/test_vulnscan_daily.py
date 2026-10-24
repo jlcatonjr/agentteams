@@ -124,6 +124,7 @@ def test_stale_warning_survives_an_undecodable_heartbeat(xdg: Path) -> None:
     ({"allow_major": "true"}, "allow_major"),
     ({"fix_mode": "apply"}, "fix_mode"),
     ({"fix_mode": None}, "fix_mode"),
+    ({"unscored_as": ["high"]}, "unscored_as"),
     ({"scan_workers": 0}, "scan_workers"),
     ({"scan_workers": 9}, "scan_workers"),
     ({"scan_workers": "4"}, "scan_workers"),

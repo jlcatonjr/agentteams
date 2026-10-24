@@ -88,7 +88,7 @@ def vulnerable_ids(items: Iterable[Key]) -> dict[Key, list[str]]:
                 vulns = result.get("vulns", []) if isinstance(result, dict) else None
                 if not isinstance(vulns, list):
                     raise _http.FeedError(f"OSV querybatch: malformed result for {chunk[i][1]}")
-                ids = [v["id"] for v in vulns if isinstance(v, dict) and "id" in v]
+                ids = [v["id"] for v in vulns if isinstance(v, dict) and isinstance(v.get("id"), str)]   # untrusted
                 if ids:
                     found.setdefault(chunk[i], []).extend(ids)
                 token = result.get("next_page_token")

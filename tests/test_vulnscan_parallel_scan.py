@@ -80,7 +80,8 @@ def test_workers_keep_the_callers_context() -> None:
     assert seen == [(i, "confined") for i in range(8)]   # in order, every one confined
 
 
-def test_a_failing_root_stops_the_run_as_before(xdg: Path, feed: Feed, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+def test_a_failing_root_costs_only_its_own_findings(xdg: Path, feed: Feed, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+    """@audit #277: the other roots are kept and the run is partially unscanned (it used to keep nothing)."""
     roots = _roots(xdg, 4)
     real = engine.scan_path
 
@@ -90,9 +91,27 @@ def test_a_failing_root_stops_the_run_as_before(xdg: Path, feed: Feed, monkeypat
         return real(path, **kwargs)
 
     monkeypatch.setattr(engine, "scan_path", broken)
-    report, code, _ = daily.run_daily(_cfg(repo_roots=roots, scan_workers=4), today="2026-10-21")
+    report, code, run_dir = daily.run_daily(_cfg(repo_roots=roots, scan_workers=4), today="2026-10-21")
     assert code == daily.EXIT_UNSCANNED
-    assert any("daily run stopped early: OSError: disk went away" in e for e in report.feed_errors)
+    assert any(e.startswith("scan of ") and "project-2 stopped: OSError: disk went away" in e for e in report.feed_errors)
+    assert not any("stopped early" in e for e in report.feed_errors)
+    assert len([f for f in report.findings if f.kind == "package"]) == 3            # the other three roots are kept
+    assert len(list(run_dir.glob("fixplan-*.md"))) == 3
+
+
+def test_a_failing_fix_plan_costs_only_its_own_plan(xdg: Path, feed: Feed, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+    roots = _roots(xdg, 3)
+    real = daily.fix.fix_path
+
+    def broken(repo: Path, **kwargs: Any) -> Any:
+        if Path(repo).name == "project-1":
+            raise ValueError("registry answered nonsense")
+        return real(repo, **kwargs)
+
+    monkeypatch.setattr(daily.fix, "fix_path", broken)
+    report, _, run_dir = daily.run_daily(_cfg(repo_roots=roots, scan_workers=4), today="2026-10-21")
+    assert any("fix plan for" in e and "project-1 stopped: ValueError" in e for e in report.feed_errors)
+    assert len(list(run_dir.glob("fixplan-*.md"))) == 2
 
 
 def test_a_failure_cancels_the_calls_not_yet_started() -> None:

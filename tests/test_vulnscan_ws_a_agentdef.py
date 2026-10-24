@@ -47,6 +47,21 @@ def _a(team: Path, framework: str = "copilot", **extra: object) -> dict:
 
 # ---------------------------------------------------------------- R2: reading the source strictly
 
+@pytest.mark.parametrize("sep", [" ", " ", "\x85", "\x0b", "\x0c", "\x00", "\x7f"])
+def test_a_hidden_line_break_cannot_smuggle_a_key_past_the_allowlist(tmp_path: Path, sep: str) -> None:
+    """@audit #277: goose's YAML reader breaks lines at U+2028/U+2029/NEL, so `title: t<sep>retry: ...` would hide
+    a `retry` key from a parser that splits on LF only. Any such character refuses the file, before any parsing."""
+    team = tmp_path / "team"
+    recipe = goose_recipe(team)
+    recipe.write_text(recipe.read_text(encoding="utf-8").replace("title:", f"title: t{sep}retry:{sep}  max_retries: 1\nx_title:", 1),
+                      encoding="utf-8")
+    with pytest.raises(ValueError, match=r"control character or line separator \(U\+"):
+        agent_recipe.make_copy(_a(team, "goose"), agent_drivers.get_driver("goose"))
+    copilot = _copilot_team(tmp_path, GENERATED.replace("description:", f"description: a{sep}tools: [shell]\nx:", 1))
+    with pytest.raises(ValueError, match="line separator"):
+        agent_recipe.make_copy(_a(copilot), agent_drivers.get_driver("copilot"))
+
+
 def test_crlf_and_bom_are_normalised_before_parsing(tmp_path: Path) -> None:
     team = _copilot_team(tmp_path, b"\xef\xbb\xbf" + GENERATED.replace("\n", "\r\n").encode("utf-8"))
     copy = agent_recipe.make_copy(_a(team), COPILOT)

@@ -388,6 +388,14 @@ def test_d1_malformed_or_short_batch_reply_fails_closed(monkeypatch: pytest.Monk
         osv.vulnerable_ids([("npm", "a", "1.0.0"), ("npm", "b", "1.0.0")])
 
 
+def test_a_non_string_advisory_id_is_ignored_not_a_crash(monkeypatch: pytest.MonkeyPatch) -> None:
+    """@audit #277: `{"id": 123}` used to reach is_malicious() and raise AttributeError past the daily run's handler."""
+    reply = {"results": [{"vulns": [{"id": 123}, {"id": None}, {"id": "GHSA-ok"}]}, {}]}
+    monkeypatch.setattr(_http, "fetch_json", _batch_reply(reply))
+    found = osv.vulnerable_ids([("npm", "a", "1.0.0"), ("npm", "b", "1.0.0")])
+    assert found == {("npm", "a", "1.0.0"): ["GHSA-ok"]}
+
+
 def test_d1_short_reply_reaches_the_report_as_unscanned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "requirements.txt").write_text("a==1.0\nb==2.0\n")
     monkeypatch.setattr(_http, "fetch_json", _batch_reply({"results": [{"vulns": []}]}))

@@ -273,6 +273,8 @@ def _unusable(f: Path, root: Path) -> str:
     """Why the gateway could not use ``f``, or "" (the bytes are not read: the gateway checks the text itself)."""
     if f.is_symlink() and not f.resolve().is_relative_to(root):
         return "a symlink out of the directory (the gateway cannot follow it)"
+    if f.is_symlink() and os.path.isabs(os.readlink(f)):   # a host path: it does not exist inside the gateway
+        return "an absolute symlink (the gateway sees the directory elsewhere; use a relative link)"
     if not f.is_file():
         return "not a regular file"
     return "" if os.access(f, os.R_OK) else "cannot be read"

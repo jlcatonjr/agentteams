@@ -49,7 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run that many at a time, network-bound work that used to wait in series. Results are merged in root order on the
   calling thread, so `summary.json` and the fix plans are the same as a serial run's. Each worker runs in a copy of
   the caller's context (a `subproc_confine` scope is a ContextVar, so it applies as it would serially), and the
-  first error still stops the run as `daily run stopped early`. `apply-worktree` staging, servers and local
+  a root or fix plan that fails is recorded on its own
+  (`scan of <root> stopped: ...`, `fix plan for <repo> stopped: ...`; the run is partially unscanned) while the other
+  roots are kept, where one failing root used to end the whole collection. `apply-worktree` staging, servers and local
   runtimes stay serial.
 - **vulnscan: the remediation agent runs on the GitHub Copilot CLI and the Codex CLI (agent-runtimes plan,
   phase 4).** `agent.framework: "copilot"` (new `vulnscan/agent_drivers_copilot.py`): Copilot CLI 1.0.95 with
@@ -583,6 +585,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **vulnscan: the PR #277 audit.** (1) A goose recipe or Copilot agent file containing a C0/C1 control, NEL
+  (U+0085) or a Unicode line or paragraph separator (U+2028, U+2029) is refused when it is read: goose's YAML reader
+  breaks lines there, so `title: t<U+2028>retry: ...` could hide a key from the allowlist (R2, R7). (2) A non-string
+  OSV advisory `id` is ignored instead of crashing the daily run. (3) A list or other non-string `unscored_as` is a
+  config error, not a traceback. (4) An absolute symlink inside a secrets directory is refused by name on the host
+  (its host path does not exist inside the gateway); a relative link still works.
 - **vulnscan rc.4: every operator re-runs `vulnscan agent-selftest` once after installing,** whatever the runtime.
   The R5 secrets mounts and the R6 masks below change the container flags that `flags_sha256` binds, so an rc.3
   self-test no longer vouches for an rc.4 run.
