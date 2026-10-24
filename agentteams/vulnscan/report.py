@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime as _dt
 from dataclasses import asdict, dataclass, field
 
-from agentteams.vulnscan import REPORT_SCHEMA_VERSION
+from agentteams.vulnscan import REPORT_SCHEMA_VERSION, osv
 from agentteams.vulnscan.osv import SEVERITY_NAME, SEVERITY_RANK, UNSCORED_AS
 
 EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
@@ -42,6 +42,19 @@ class Finding:
     detail: str = ""
     rated: int = 0                  # highest rank the advisories publish (CVSS or label); 0 = none of them does
     unscored: int = 0               # advisories with neither a CVSS vector nor a severity label
+    malformed: int | None = None    # advisories whose record had malformed parts (skipped); None: from osv.quirks
+    fix_hidden: int | None = None   # advisories whose fix version has an unusual format (not shown, counted unfixed)
+
+    def __post_init__(self) -> None:
+        """Count a new package finding's malformed advisories and hidden fix versions (R8, :func:`osv.quirks`).
+
+        Left unset (None), both come from what :func:`osv.minimal_fix` recorded for this package version in
+        this process; a report read back (:meth:`Report.from_dict`) keeps its own counts (0 for an older one).
+        """
+        if self.malformed is None or self.fix_hidden is None:
+            m, h = osv.quirks(self.ids, self.ecosystem, self.name, self.version) if self.kind == "package" else (0, 0)
+            self.malformed = m if self.malformed is None else self.malformed
+            self.fix_hidden = h if self.fix_hidden is None else self.fix_hidden
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -196,7 +209,8 @@ class Report:
         rep.opted_out, rep.excluded, rep.withheld, rep.brief_off = (
             [str(i) for i in data.get(k, [])] for k in ("opted_out", "excluded", "withheld", "brief_off"))
         known = Finding.__dataclass_fields__
-        rep.findings = [Finding(**{k: v for k, v in f.items() if k in known}) for f in data.get("findings", [])]
+        rep.findings = [Finding(**{"malformed": 0, "fix_hidden": 0, **{k: v for k, v in f.items() if k in known}})
+                        for f in data.get("findings", [])]   # an older report counted neither (R8)
         return rep
 
     def markdown(self, new_keys: set[str] | None = None) -> str:
@@ -218,6 +232,10 @@ class Report:
         if unscored:
             out += [f"> **{len(unscored)} finding(s) UNSCORED**: no advisory gives a CVSS vector or a severity label; "
                     f"each counts as {self.unscored_as.upper()} (`unscored_as`) — see *Unscored advisories*.", ""]
+        malformed = sum(f.malformed or 0 for f in self.findings)
+        if malformed:
+            out += [f"> {malformed} advisory record(s) from OSV were malformed: their unreadable parts were skipped, "
+                    "so a fix may be missing (see each finding's notes).", ""]
         if self.feed_errors:
             out += ["> **Partially unscanned** — a feed failed; absence of findings proves nothing for:", ""]
             out += [f"> - {e}" for e in self.feed_errors] + [""]
@@ -239,8 +257,12 @@ class Report:
                                                False: " (not counted: project brief)"}.get(f.count_dev, ""))
                 if f.distro:
                     notes.append("OS-managed: apply OS security updates")
-                if f.unfixed:
-                    notes.append(f"{f.unfixed} advisory(ies) without a fix")
+                if f.unfixed - (f.fix_hidden or 0) > 0:
+                    notes.append(f"{f.unfixed - (f.fix_hidden or 0)} advisory(ies) without a fix")
+                if f.fix_hidden:
+                    notes.append(f"{f.fix_hidden} advisory(ies): fix version not shown (unusual format)")
+                if f.malformed:
+                    notes.append(f"{f.malformed} advisory record(s) malformed (unreadable parts skipped)")
                 if f.unscored and not f.malicious:
                     notes.append(f"{f.unscored} advisory(ies) unscored")
                 if f.ids:
