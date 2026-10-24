@@ -19,6 +19,10 @@ One run:
    state of every enrolled workspace.
 5. Updates ``<state>/heartbeat.json`` (atomically) and sends a notification.
 
+Staging (step 1, ``apply-worktree``) and the server audits (step 3) run git, npm and the server kit in the tools
+container (:mod:`.subproc_confine`); when it is unavailable they fail closed (nothing staged, the host unscanned).
+Fix planning only parses files and stays on the host.
+
 Only one daily run works at a time: a second one finds ``<state>/daily.lock`` held and exits 3
 without touching the first run's files. A host that cannot be reached, a feed that fails, or a
 summary / heartbeat that cannot be written makes the run *unscanned* (exit 3). It is never
@@ -41,7 +45,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import coverage, engine, executor, fix, notify, paths, registry
+from agentteams.vulnscan import coverage, engine, executor, fix, notify, paths, registry, subproc_confine
+from agentteams.vulnscan import subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -79,6 +84,9 @@ DEFAULT_CONFIG: dict = {
     # Agent mode (off by default): after the scan, the team runs in an isolated container and
     # requests actions that the executor performs only under a signed grant. See agent_run.DEFAULT_AGENT.
     "agent": {"enabled": False, "team_dir": "", "key_file": "", "budget_usd": 2.0},
+    # Tools container for git, npm and the server kit in executor ops and apply-worktree staging (subproc_confine):
+    # {} = the defaults (subprocesses on, fail closed); "subprocesses": false is the operator's opt-out.
+    "confine": {},
 }
 
 
@@ -131,6 +139,8 @@ def _config_problem(cfg: dict[str, Any]) -> str:
             agent_run.validate_agent(agent)
         except ValueError as exc:
             return str(exc)
+    if problem := subproc_confine.config_problem(cfg):
+        return problem
     when = cfg["schedule"]
     if not isinstance(when, dict):
         return f"schedule must be an object with hour and minute{got(when)}"
@@ -355,6 +365,19 @@ def _discard_worktree(repo: Path, wt: Path, branch: str) -> None:
 
 
 def stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
+    """Stage fixes for ``repo`` (:func:`_stage_worktree_fixes`) with git and npm in the tools container.
+
+    Fail closed: when confinement is on and the tools container is unavailable, nothing is staged and the
+    reason is returned (``confine.subprocesses: false`` runs them on the host, as before).
+    """
+    try:
+        with subproc_confine.scope(cfg, scratch=[repo.parent / f"{repo.name}.worktrees"]):
+            return _stage_worktree_fixes(repo, cfg, date)
+    except subproc_confine.Unavailable as exc:
+        return "", f"{repo}: nothing staged: {exc}"
+
+
+def _stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
     """Create ``<repo>.worktrees/vulnscan-<date>`` off ``origin/HEAD`` and apply fixes there.
 
     The cooldown is never below :data:`executor.MIN_COOLDOWN_DAYS` and the result must pass
@@ -433,11 +456,19 @@ def _scan_server(host: str, kit: Path, out_dir: Path) -> Report:
     env.update({"AGENTTEAMS_SERVER_KIT_CONFIG": str(kit), "AGENTTEAMS_SERVER_KIT_LOGS": str(out_dir),
                 "AGENTTEAMS_VULNSCAN_NO_REPORT": "1"})
     try:
-        proc = subprocess.run(["bash", str(remote), host, "L1-audit.sh"], capture_output=True, text=True,
-                              env=env, timeout=1800, check=False)
+        if subproc_confine.active():   # in the tools container; its logs in a subdirectory of the run
+            proc = subproc_confine_ssh.run_kit(remote, host, ["L1-audit.sh"], conf_dir=kit,
+                                               logs=out_dir / "server-kit-logs", timeout=1800)
+        else:
+            proc = subprocess.run(["bash", str(remote), host, "L1-audit.sh"], capture_output=True, text=True,
+                                  env=env, timeout=1800, check=False)
     except subprocess.TimeoutExpired:
         rep = Report(target=host)
         rep.feed_errors.append(f"{host}: audit timed out")
+        return rep
+    except subproc_confine.Unavailable as exc:   # fail closed: unscanned, never run on the host instead
+        rep = Report(target=host)
+        rep.feed_errors.append(f"{host}: not scanned: {exc}")
         return rep
     (out_dir / f"server-{host}.log").write_text(proc.stdout + proc.stderr, encoding="utf-8")
     rep = engine.scan_inventory(proc.stdout, host)
@@ -611,7 +642,11 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
 
     kit = paths.server_kit_dir()
     for host in cfg.get("servers", []):
-        total.merge(_scan_server(host, kit, run_dir))
+        try:
+            with subproc_confine.scope(cfg):
+                total.merge(_scan_server(host, kit, run_dir))
+        except subproc_confine.Unavailable as exc:   # fail closed: the host is reported unscanned
+            total.feed_errors.append(f"{host}: not scanned: {exc}")
 
 
 def _operator_excluded(cfg: dict, path: Path) -> bool:

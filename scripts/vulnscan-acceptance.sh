@@ -88,6 +88,10 @@ import json, sys
 sys.exit(0 if json.load(open(sys.argv[1])).get("passed") is True else 1)
 PY
 else res SKIP "agent self-test record" "none yet (Step 7)"; fi
+if "$PY" -P -c 'import sys; from agentteams.vulnscan import daily, subproc_confine as sc
+cfg = daily.load_config(); sys.exit(0 if not sc.enabled(cfg) or not sc.unavailable_reason(sc.image_tag(sc.settings(cfg))) else 1)' 2>/dev/null
+then res PASS "tools container" "ready, or opted out (see review banner)"
+else res FAIL "tools container" "no passing tools-selftest for this image: executor ops refuse (Step 7b: bash scripts/vulnscan-tools-image.sh)"; fi
 
 # 5. GitHub token
 if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then

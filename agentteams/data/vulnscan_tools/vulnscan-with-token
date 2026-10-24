@@ -1,0 +1,7 @@
+#!/bin/sh
+# Read one line (the operator's GitHub token, handed over by the executor on stdin) into this process's
+# environment only, then run the command with stdin closed. The token is never written anywhere.
+# git-credential-vulnscan gives it to git, only for VULNSCAN_GIT_HOST over https.
+IFS= read -r VULNSCAN_GIT_TOKEN || true
+export VULNSCAN_GIT_TOKEN
+exec "$@" </dev/null

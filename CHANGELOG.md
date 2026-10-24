@@ -8,6 +8,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **vulnscan: the executor's git, npm and server-kit runs move into a hardened tools container
+  (baseAgent hardening plan, W1; decision D1).** New `vulnscan/subproc_confine.py`,
+  `vulnscan/subproc_confine_ssh.py`, `vulnscan/tools_image.py` and the image context
+  `agentteams/data/vulnscan_tools/` (Dockerfile, `egress_proxy.py`, `selftest.py`,
+  `vulnscan-with-token`, `git-credential-vulnscan`).
+  - Every git command of a granted op (`stage-fix`, `open-pr` and the checks before them) and of
+    `apply-worktree` staging, `npm audit fix`, and the server kit (`server-audit`, `server-dryrun`,
+    the daily `servers` audits) run in a throwaway container: `--read-only`, `--cap-drop ALL`,
+    `no-new-privileges`, your uid (never root), empty tmpfs `$HOME` and `/tmp`, and only the mounts
+    the command needs (git dirs read-only for queries; the worktree writable only under a scratch
+    root; never the home directory or `~/.ssh`, `~/.config/gh`, `~/.aws`, signing keys ...).
+  - Network per operation: none, or an internal network whose only exit is a CONNECT proxy allowing
+    exactly origin's host (git), `registry.npmjs.org:443` (npm) or the hosts.conf target's first hop
+    (ssh, with a generated ssh config, the target's known_hosts lines and its identity files only).
+  - Push credentials: `gh auth token` on the host, handed to the container on stdin and given by an
+    in-image credential helper to origin's host only; never in an argv, a file or the container
+    config. ssh origins are rewritten to https. `gh pr list` / `gh pr create` stay on the host.
+  - New commands `tools-image build` and `tools-selftest`, `scripts/vulnscan-tools-image.sh`
+    (Node.js 24.21.0 pinned by sha256 per architecture from its GPG-signed `SHASUMS256.txt`, base
+    image by digest), and `scripts/vulnscan-operator/10-accept-tools-container.sh` (live acceptance:
+    build, self-test, one confined stage-fix in the sandbox repository, one open-pr readiness check).
+  - New config block `confine` (`subprocesses`, `image`, `ssh_identity`), validated at load.
+- **Breaking (fail closed):** with `confine.subprocesses` unset (default true), executor ops are
+  **refused** (`tools container unavailable: ...`), `apply-worktree` stages nothing and `servers`
+  hosts are reported unscanned until the tools image is built and `tools-selftest` has passed for it.
+  Nothing falls back to the host. `"confine": {"subprocesses": false}` restores the host behaviour as
+  an explicit opt-out, announced on stderr and at the top of every `review`. The test suite turns the
+  default off explicitly (`tests/conftest.py`) because it drives host git; the confined path has its
+  own tests with Docker mocked.
+
+- **vulnscan gateway: DLP on every model request, and a peer-credential Unix listener (baseAgent
+  hardening plan, W2; decision D3).**
+  - New `vulnscan/gateway_dlp.py`, always on, on the chat, Messages and Responses routes after the
+    deny-by-default policy. **Blocks** (400, `refused`, reason `dlp: <class>`, counted in `spend.json`
+    `dlp_blocks`; the matched text is never echoed or written) private keys, AWS, GitHub, GitLab,
+    Anthropic, OpenRouter, OpenAI, Slack, Google, Stripe, npm and PyPI credentials, signed JWTs, bearer
+    tokens, passwords in URLs, secret-named assignments of random-looking values, high-entropy
+    `UPPER_SNAKE=` assignments, and by exact match the gateway's upstream keys and every secret value
+    of its key files, `--dlp-secrets-file` files and `~/.config/agentteams-secrets/*.env` when present.
+    **Redacts and flags** (`dlp_redactions`) home paths (to `~`, which the executor expands back),
+    email addresses, private IPv4/IPv6 addresses, host names (`--dlp-hostname` plus its own) and
+    private package names (`--dlp-private-names[-file]`, fnmatch) in message text only: tool-call
+    arguments, `tool_use` inputs, ids and signed thinking/reasoning blocks are never changed. Digests,
+    git SHAs, `sha256:`/`sha512-`/`h1:` pins, UUIDs, CVE/GHSA ids, versions and `data:` base64 media
+    are not blocked; the regexes are linear and repeated history is not rescanned.
+    `--dlp-responses` flags secrets in replies (`dlp_response_flags`) without altering them.
+  - `vulnscan review` lists DLP blocks and reply flags of the latest run under Anomalies, with redaction
+    counts beside them.
+  - New `vulnscan/gateway_peer.py`: `--listen unix:PATH` binds a 0600 socket in an owner-only
+    directory and admits only `--peer-uid` (default: its own), read from the kernel (`SO_PEERCRED` /
+    `LOCAL_PEERCRED`), for host-side use. Runs and debriefs keep TCP on the container network.
+  - Not yet wired: runs pass no host names or private package names to the gateway.
+
 - **vulnscan: the remediation agent runs on Claude Code (agent-runtimes plan, phase 3).**
   - `agent.framework: "claude"`: a Claude Code 2.1.296 runtime driver. The image's `cli-claude` stage
     installs the native linux binary, sha256-pinned; `vulnscan-agent-image.sh FRAMEWORK=claude` takes the

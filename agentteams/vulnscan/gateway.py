@@ -32,6 +32,15 @@ internal network the agent container sits on, and a bridge out. It enforces:
   a call that could cross a cap is refused (402) before it is sent. When the
   client hangs up mid-stream, the upstream reply is still read to its end (``--drain-timeout``) so
   the billed usage is metered.
+- **DLP (bounds T6, never closes it).** Every request that passes the policy is scanned
+  (:mod:`.gateway_dlp`): a secret or key (the upstream keys and the secrets files' values by exact
+  match, known credential formats, secret-like assignments) is refused (400, ``refused``, reason
+  ``dlp: <class>``, counted in ``dlp_blocks``); private package names, home paths, email addresses,
+  host names and private IP addresses in message text are redacted and counted in ``dlp_redactions``.
+  ``--dlp-responses`` also flags secrets in replies (``dlp_response_flags``) without altering them.
+- **Listener.** TCP ``--listen HOST:PORT`` on the container network (default), or for host-side use
+  ``--listen unix:PATH``: a 0600 Unix socket admitting only ``--peer-uid`` by kernel peer credentials
+  (:mod:`.gateway_peer`).
 - **No content logging.** Only counts, model, tokens and cost are recorded.
 
 The chat upstream is the operator's route proxy (``http://host.docker.internal:8791``) or
@@ -51,6 +60,7 @@ import sys
 import threading
 import time
 import urllib.parse
+from collections import Counter
 from collections.abc import Collection, Mapping
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -58,6 +68,8 @@ from pathlib import Path
 from typing import Any
 
 from . import gateway_dialects as d
+from . import gateway_dlp as dlp
+from . import gateway_peer
 
 # The chat helpers live in gateway_dialects; these names stay importable from here.
 ROUTE, STRIP_KEYS, rewrite_body, usage_from = d.ROUTE, d.STRIP_KEYS, d.rewrite_body, d.usage_from
@@ -90,6 +102,10 @@ class Meter:
         self.reserved_usd, self.reserved_tokens = 0.0, 0
         self.drained = self.drain_cut = 0   # replies read on after a client hang-up; drains cut by the timeout
         self.reasons: list[str] = []        # the last distinct refusal reasons (refuse)
+        # DLP (gateway_dlp): blocked requests and redactions per class; secrets flagged in replies (--dlp-responses)
+        self.dlp_blocks: Counter[str] = Counter()
+        self.dlp_redactions: Counter[str] = Counter()
+        self.dlp_response_flags: Counter[str] = Counter()
         self.lock = threading.Lock()
 
     def exhausted_reason(self) -> str:
@@ -184,17 +200,34 @@ class Meter:
             self.upstream_errors += 1
             self._persist()
 
-    def refuse(self, reason: str = "") -> None:
+    def refuse(self, reason: str = "", *, dlp_class: str = "") -> None:
         """Count a refused call; keep its reason (policy text: key, tool or beta names, never content).
 
         The last :data:`MAX_REASONS` distinct reasons go to ``spend.json`` as ``refusal_reasons``, so the
         operator can see which allowlist entry a CLI needs (the acceptance script prints them).
+        ``dlp_class``: a DLP block; counted per class in ``dlp_blocks`` (the class name only, never the match).
         """
         with self.lock:
             self.refused += 1
+            if dlp_class:
+                self.dlp_blocks[dlp_class] += 1
             reason = reason[:200]
             if reason and reason not in self.reasons:
                 self.reasons = [*self.reasons, reason][-MAX_REASONS:]
+            self._persist()
+
+    def dlp_redacted(self, counts: Mapping[str, int]) -> None:
+        """Count a relayed request's DLP redactions per class (``dlp_redactions``)."""
+        if not any(counts.values()):
+            return
+        with self.lock:
+            self.dlp_redactions.update(counts)
+            self._persist()
+
+    def dlp_response(self, cls: str) -> None:
+        """Count an upstream reply in which a DLP block class was seen (``dlp_response_flags``; not altered)."""
+        with self.lock:
+            self.dlp_response_flags[cls] += 1
             self._persist()
 
     def _persist(self) -> None:
@@ -216,6 +249,9 @@ class Meter:
                            "reserved_usd": round(self.reserved_usd, 6), "reserved_tokens": self.reserved_tokens,
                            "drained": self.drained, "drain_cut": self.drain_cut,
                            "refusal_reasons": self.reasons,
+                           "dlp_blocks": dlp.from_mapping(self.dlp_blocks),
+                           "dlp_redactions": dlp.from_mapping(self.dlp_redactions),
+                           "dlp_response_flags": dlp.from_mapping(self.dlp_response_flags),
                            "updated": datetime.now(UTC).isoformat()}, indent=2)
         tmp = self.out.with_name(f".{self.out.name}.tmp")
         replaced = False
@@ -237,7 +273,9 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                  max_output_tokens: int = d.DEFAULT_MAX_OUTPUT_TOKENS,
                  drain_timeout: float = DEFAULT_DRAIN_TIMEOUT,
                  anthropic_betas: Collection[str] = (),
-                 chat_reserve_tokens: int = d.DEFAULT_CHAT_RESERVE_TOKENS) -> type[BaseHTTPRequestHandler]:
+                 chat_reserve_tokens: int = d.DEFAULT_CHAT_RESERVE_TOKENS,
+                 dlp_filter: dlp.Filter | None = None,
+                 dlp_responses: bool = False) -> type[BaseHTTPRequestHandler]:
     """Build the request handler class bound to this gateway's settings.
 
     Args:
@@ -252,6 +290,10 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
         drain_timeout: Seconds to keep reading an upstream reply after the client hung up.
         anthropic_betas: ``anthropic-beta`` values allowed on the Messages route (default: none).
         chat_reserve_tokens: Output tokens reserved for a chat call that names no ``max_tokens``.
+        dlp_filter: The DLP filter applied to every request (default: one that blocks the secret classes and
+            the upstream keys and redacts the lesser classes; there is no way to turn it off).
+        dlp_responses: Also scan each upstream reply for the block classes and count a hit in
+            ``dlp_response_flags`` (the reply is relayed unchanged).
 
     Returns:
         A ``BaseHTTPRequestHandler`` subclass.
@@ -260,6 +302,7 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
     if not allowed:
         raise ValueError("at least one allowed model is required")
     ups = dict(upstreams) if upstreams is not None else {d.CHAT: d.Upstream(upstream, key)}
+    scanner = dlp_filter if dlp_filter is not None else dlp.Filter(secrets=[u.key for u in ups.values()])
     table = prices or {}
     served = ", ".join(f"POST {r}" for r, dialect in d.ROUTES.items() if dialect in ups)
     # D7: one upstream call at a time, held from the cap check through metering. Without it two
@@ -317,8 +360,13 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                 return
             try:
                 checked = d.check_request(dialect, self.rfile.read(length), models=allowed,
-                                          max_output_tokens=max_output_tokens, chat_reserve_tokens=chat_reserve_tokens)
+                                          max_output_tokens=max_output_tokens, chat_reserve_tokens=chat_reserve_tokens,
+                                          dlp=scanner.apply)
                 headers = d.upstream_headers(dialect, self.headers, ups[dialect], anthropic_betas)
+            except dlp.DlpBlocked as exc:   # the class name only: the matched text is never kept or echoed
+                meter.refuse(f"{dialect}: dlp: {exc.cls}", dlp_class=exc.cls)
+                self._deny(400, str(exc), dialect)
+                return
             except d.PolicyError as exc:
                 meter.refuse(f"{dialect}: {exc}")
                 self._deny(400, str(exc), dialect)
@@ -327,6 +375,7 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                 msg = "request nested too deeply" if isinstance(exc, RecursionError) else str(exc)
                 self._deny(400, msg, dialect)
                 return
+            meter.dlp_redacted(checked.redactions)
             tokens, usd = d.reservation(table, checked) if checked.max_output else (0, 0.0)
             with gate:
                 if self._refused(dialect):   # re-checked under the gate: the previous call is metered now
@@ -382,6 +431,10 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                     meter.add_error()
                 elif status is not None:
                     self._meter(dialect, checked.model, bytes(seen))
+                if dlp_responses and status is not None:   # flag only: the reply was already relayed as is
+                    hit = scanner.scan_response(bytes(seen[-MAX_BODY:]))
+                    if hit:
+                        meter.dlp_response(hit)
 
         def _stream(self, conn: Any, resp: Any, seen: bytearray, *, client_gone: bool = False) -> None:
             """Copy the reply to the client chunk by chunk; after a client hang-up, drain it (revision 9).
@@ -496,7 +549,55 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--max-unmetered-calls", type=int, default=20,
                    help="refuse after this many replies without usable usage/cost (>= 1)")
     p.add_argument("--allow-unmetered", action="store_true", help="never refuse for unmetered replies")
+    p.add_argument("--peer-uid", type=int, default=None,
+                   help="with --listen unix:PATH: the only uid admitted (default: the gateway's own)")
+    p.add_argument("--dlp-secrets-file", type=Path, action="append", default=[],
+                   help="env file whose secret values are blocked by exact match (repeatable; never logged)")
+    p.add_argument("--dlp-secrets-dir", default=dlp.SECRETS_DIR,
+                   help="directory whose *.env files are loaded like --dlp-secrets-file when present ('' : none)")
+    p.add_argument("--dlp-hostname", action="append", default=[], help="a host name to redact (repeatable)")
+    p.add_argument("--dlp-private-names", default="", help="private package name patterns to redact (fnmatch, CSV)")
+    p.add_argument("--dlp-private-names-file", type=Path, default=None, help="the same, one pattern per line")
+    p.add_argument("--dlp-responses", action="store_true",
+                   help="also scan upstream replies for secrets and count hits (dlp_response_flags; not altered)")
     return p
+
+
+def _dlp_filter(a: argparse.Namespace, keys: Collection[str], key_files: Collection[Path]) -> dlp.Filter:
+    """Build the DLP filter: the upstream keys, every secret value of the key files and the secrets files.
+
+    Raises:
+        OSError / UnicodeDecodeError: The private-names file cannot be read.
+    """
+    files = [*key_files, *a.dlp_secrets_file, *(dlp.secrets_dir_files(a.dlp_secrets_dir) if a.dlp_secrets_dir else [])]
+    values, unreadable = dlp.load_secret_files(files)
+    if unreadable:
+        print(f"gateway: dlp: {unreadable} secrets file(s) could not be read", file=sys.stderr)
+    names = _csv(a.dlp_private_names)
+    if a.dlp_private_names_file is not None:
+        names += dlp.read_private_names(a.dlp_private_names_file)
+    return dlp.Filter(secrets={*keys, *values}, hostnames=[*dlp.default_hostnames(), *a.dlp_hostname],
+                      private_names=names)
+
+
+def _server(p: argparse.ArgumentParser, a: argparse.Namespace, handler: type, meter: Meter) -> Any:
+    """Bind the listener: TCP ``HOST:PORT`` (default), or ``unix:PATH`` admitting one uid (:mod:`.gateway_peer`)."""
+    if a.listen.startswith("unix:"):
+        uid = os.getuid() if a.peer_uid is None else a.peer_uid
+
+        def denied(peer: int | None) -> None:
+            meter.refuse(f"unix socket: a connection from uid {peer if peer is not None else '(unknown)'} was "
+                         f"refused (only uid {uid} is admitted)")
+        try:
+            return gateway_peer.UnixGatewayServer(Path(a.listen[5:]), handler, allowed_uid=uid, on_deny=denied)
+        except ValueError as exc:
+            p.error(f"--listen {a.listen}: {exc}")
+    if a.peer_uid is not None:
+        p.error("--peer-uid needs --listen unix:PATH")
+    listen = re.fullmatch(r"(.*):([0-9]{1,5})", a.listen)
+    if not listen or int(listen.group(2)) > 65535:
+        p.error("--listen must be HOST:PORT or unix:PATH")
+    return ThreadingHTTPServer((listen.group(1), int(listen.group(2))), handler)
 
 
 def _validate(p: argparse.ArgumentParser, a: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
@@ -540,8 +641,8 @@ def main(argv: list[str] | None = None) -> int:
     p = _parser()
     a = p.parse_args(argv)
     listen = re.fullmatch(r"(.*):([0-9]{1,5})", a.listen)
-    if not listen or int(listen.group(2)) > 65535:
-        p.error("--listen must be HOST:PORT")
+    if not a.listen.startswith("unix:") and (not listen or int(listen.group(2)) > 65535):
+        p.error("--listen must be HOST:PORT or unix:PATH")
     dialects, urls = _validate(p, a)
     key_files = {d.CHAT: a.key_file, d.MESSAGES: a.key_file_messages or a.key_file,
                  d.RESPONSES: a.key_file_responses or a.key_file}
@@ -571,16 +672,25 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as exc:   # ValueError covers bad JSON and a bad entry
             print(f"gateway: unusable price table: {exc}", file=sys.stderr)
             return 2
+    try:
+        scanner = _dlp_filter(a, [u.key for u in upstreams.values()],
+                              {key_files[k] for k in dialects if key_files[k] is not None})
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"gateway: cannot read the private-names file: {type(exc).__name__}", file=sys.stderr)
+        return 2
     meter = Meter(a.budget_usd, a.spend_file, max_tokens=a.max_tokens_total,
                   max_unmetered=a.max_unmetered_calls, allow_unmetered=a.allow_unmetered)
     handler = make_handler(model=a.model, models=_csv(a.models), meter=meter, upstreams=upstreams, prices=prices,
                            max_output_tokens=a.max_output_tokens, drain_timeout=a.drain_timeout,
                            anthropic_betas=frozenset(_csv(a.anthropic_betas)),
-                           chat_reserve_tokens=a.chat_reserve_tokens)
-    server = ThreadingHTTPServer((listen.group(1), int(listen.group(2))), handler)
+                           chat_reserve_tokens=a.chat_reserve_tokens, dlp_filter=scanner,
+                           dlp_responses=a.dlp_responses)
+    server = _server(p, a, handler, meter)
     models = ",".join(m for m in (a.model, *_csv(a.models)) if m)
     routes = " ".join(f"{k}={v}" for k, v in urls.items())
-    print(f"gateway: models={models} {routes} budget=${a.budget_usd:.2f} listening {a.listen}", flush=True)
+    print(f"gateway: models={models} {routes} budget=${a.budget_usd:.2f} listening {a.listen} "
+          f"dlp: {len(scanner.secrets)} exact secret(s), {len(scanner.hostnames)} host name(s), "
+          f"{len(scanner.private_names)} private-name pattern(s)", flush=True)
     server.serve_forever()
     return 0
 

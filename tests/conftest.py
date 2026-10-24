@@ -79,6 +79,21 @@ def _no_research_cache(monkeypatch):
     monkeypatch.setenv("AGENTTEAMS_RESEARCH_NO_CACHE", "1")
 
 
+@pytest.fixture(autouse=True)
+def _vulnscan_subprocesses_on_host(monkeypatch):
+    """Run vulnscan's git, npm and server-kit subprocesses on the host in tests, EXPLICITLY.
+
+    In production ``confine.subprocesses`` defaults to true: executor ops and apply-worktree staging run them in
+    the tools container and refuse when Docker is unavailable. The existing executor / daily / fix tests drive
+    real host git against temporary repositories, and CI has no tools image, so here the *default* is off. A
+    config that sets ``confine.subprocesses`` itself still wins, which is how
+    ``tests/test_vulnscan_subproc_confine.py`` exercises the confined path (with Docker mocked).
+    """
+    from agentteams.vulnscan import subproc_confine
+
+    monkeypatch.setattr(subproc_confine, "ENABLED_BY_DEFAULT", False)
+
+
 # --- live MODEL-BEHAVIOUR gate (2026-07-30) ---------------------------------
 #
 # Distinct from the credential gates above, and additive to them. Those answer "can this run at

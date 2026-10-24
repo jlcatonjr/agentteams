@@ -17,6 +17,7 @@
 | ``agent-image build`` | Build the credential-free agent container image (goose pinned by version + sha256) |
 | ``agent-selftest`` | Prove the container's isolation; agent mode is refused until this passes for the image |
 | ``agent-run`` | Run the agent team once on today's scan (normally done by ``daily`` when ``agent.enabled``) |
+| ``tools-image build`` / ``tools-selftest`` | Build the tools image git, npm and the server kit run in, and prove its isolation (:mod:`.tools_image`) |
 | ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
 
@@ -24,7 +25,7 @@ Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 c
 or above ``--fail-on`` (``fix``: something held back or refused), 3 partially unscanned (a feed or host
 failed), 4 malicious package or compromise indicator. Every command uses 2 for usage or setup
 errors (no config, refused signing). ``act`` gives 0 done, 1 refused, 3 failed. ``agent-run`` gives 0
-completed, 3 not run or agent error. ``agent-selftest`` gives 0 pass, 1 fail.
+completed, 3 not run or agent error. ``agent-selftest`` and ``tools-selftest`` give 0 pass, 1 fail.
 
 Kept separate from the ``agentteams`` console script, like ``python -m agentteams.research``.
 """
@@ -50,6 +51,7 @@ from agentteams.vulnscan import (
     project_cli,
     review,
     schedule,
+    tools_image,
 )
 from agentteams.vulnscan.report import Report
 
@@ -198,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("agent-run", help="run the agent team once on the latest scan")
     operator_cli.register(sub)
     project_cli.register(sub)
+    tools_image.register(sub)
     return p
 
 
@@ -371,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
         return project_cli.dispatch(args, daily.load_config)
     if args.cmd in operator_cli.COMMANDS:
         return operator_cli.dispatch(args, daily.load_config)
+    if args.cmd in tools_image.COMMANDS:
+        return tools_image.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":
         dest = args.dest or paths.server_kit_dir()
         names = export_server_kit(dest)
