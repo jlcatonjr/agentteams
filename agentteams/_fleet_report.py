@@ -9,6 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from agentteams._fleet_shrink_grants import shrink_grant_summary
+from agentteams.vulnscan.project_policy import ENROLL_HINT
 
 
 def write_report(results, report_root: Path, parent: Path, apply: bool, frameworks: str) -> int:
@@ -31,19 +32,24 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
             rows.append(asdict(tr))
             counts[tr.status] = counts.get(tr.status, 0) + 1
 
+    # Projects whose brief states no vulnerability_scanning level: reported, never enrolled here.
+    unanswered = [w.path for w in results if getattr(w, "vulnscan_unanswered", False)]
     report_root.mkdir(parents=True, exist_ok=True)
     payload = {
         "parent": str(parent),
         "frameworks": frameworks,
         "applied": apply,
         "summary": counts,
+        "vulnscan_unanswered": len(unanswered),
         "workspaces": [asdict(w) for w in results],
     }
     (report_root / "report.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
     lines = [f"# Fleet update report ({'apply' if apply else 'dry-run'})", "",
              f"- Parent: `{parent}`", f"- Frameworks: {frameworks}",
-             f"- Status counts: {counts}", "",
+             f"- Status counts: {counts}",
+             f"- Vulnerability scanning unanswered: {len(unanswered)}"
+             + (f" (answer with `{ENROLL_HINT} --discover {parent}`)" if unanswered else ""), "",
              "| workspace | target | status | +/- | shrink | grant warnings | UE-del | detail |",
              "|---|---|---|---|---|---|---|---|"]
     for r in rows:
@@ -57,6 +63,9 @@ def write_report(results, report_root: Path, parent: Path, apply: bool, framewor
     print("\n" + "=" * 70)
     print(f"Fleet {'apply' if apply else 'dry-run'} complete: {counts}")
     print(f"Report: {report_root}")
+    if unanswered:
+        print(f"  vulnerability scanning: {len(unanswered)} project(s) unanswered — answer with "
+              f"`{ENROLL_HINT} --discover {parent}`")
     review = [r for r in rows if r["status"] in ("REVIEW", "FAIL")]
     if review:
         print(f"  ⚠  {len(review)} target(s) need review:")

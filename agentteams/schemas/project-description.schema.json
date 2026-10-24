@@ -265,12 +265,69 @@
     },
     "capabilities": {
       "type": "array",
-      "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection. `vulnerability_remediation` adds the request-only `vuln-remediation` agent (goose: an orchestrator sub-recipe, plus a `task` recipe parameter) that triages the daily `python -m agentteams.vulnscan` scan and queues requests for the operator's grant-gated executor.",
+      "description": "Explicit, opt-in capabilities this project wants beyond archetype selection. `research_verification` selects the `research-analyst` archetype, which orchestrates the optional `agentteams[research]` runtime library (real, installable Python — not a design-time-only template) — a project must deliberately choose this, since it adds a real runtime dependency to the generated project, unlike every other archetype selection. `vulnerability_remediation` adds the request-only `vuln-remediation` agent (goose: an orchestrator sub-recipe, plus a `task` recipe parameter) that triages the daily `python -m agentteams.vulnscan` scan and queues requests for the operator's grant-gated executor. Whether THIS project's own dependencies are scanned (and offered for remediation) is the separate `vulnerability_scanning.level`.",
       "items": {
         "type": "string",
         "enum": ["research_verification", "vulnerability_remediation"]
       }
     },
+  "vulnerability_scanning": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "level"
+    ],
+    "description": "Per-project dependency vulnerability scanning intent (python -m agentteams.vulnscan), committed with the project; machine facts (where the project is checked out, servers, keys, grants) never go here. level: off = never scanned; scan = the operator's daily scan sends dependency names and versions to OSV.dev (and asks PyPI/nodejs.org for release data); remediate = scan, plus the operator's grant-gated remediation agent may propose fixes as PRs to this repository's own origin (findings and repository paths then reach the configured model provider). A brief without this block is 'unanswered': not scanned unless the operator lists it, and reported by --update and fleet runs. Answer with `agentteams --set-vulnscan LEVEL` (shows a diff; needs its own confirmation) or `python -m agentteams.vulnscan enroll`. Separate from capabilities: `level: remediate` states this project's scan intent, while the `vulnerability_remediation` capability still selects the vuln-remediation agent for the operator's ops team. Every value is privacy-guarded: no host names, IP addresses, URLs, absolute paths, `..` or `~`; an exclude_paths or private_packages entry made only of wildcards and separators (`*`, `**`, `*/**`, `.*`) is refused. The brief only narrows what leaves the machine: when the operator enrols the project or lists it in repo_roots, `level: off` here does not stop the scan (it is reported as a mismatch); only the operator's enrolment at off does.",
+    "properties": {
+      "level": {
+        "type": "string",
+        "enum": [
+          "off",
+          "scan",
+          "remediate"
+        ],
+        "description": "off | scan (recommended) | remediate."
+      },
+      "exclude_paths": {
+        "type": "array",
+        "maxItems": 100,
+        "uniqueItems": true,
+        "description": "Repository-relative globs (fnmatch; a match on a directory covers everything below it) whose manifests are not scanned.",
+        "items": {
+          "type": "string",
+          "pattern": "^(?!.*\\n)(?!/)(?!.*(?:\\.\\.|~|:|//|\\\\))(?!(?:.*[^0-9.])?[0-9]{1,3}(?:\\.[0-9]{1,3}){3}(?![0-9]))(?!(?:.*[./@])?[lL][oO][cC][aA][lL][hH][oO][sS][tT](?:[./]|$))(?!.*\\.(?:[cC][oO][mM]|[nN][eE][tT]|[oO][rR][gG]|[lL][oO][cC][aA][lL]|[lL][aA][nN]|[iI][nN][tT][eE][rR][nN][aA][lL]|[cC][oO][rR][pP]|[iI][nN][tT][rR][aA][nN][eE][tT]|[lL][oO][cC][aA][lL][dD][oO][mM][aA][iI][nN])(?:/|$))(?=(?:\\[[^\\]]*\\]|[^A-Za-z0-9\\[])*[A-Za-z0-9])[A-Za-z0-9_.*?\\[\\]!/+ -]{1,200}$"
+        }
+      },
+      "private_packages": {
+        "type": "array",
+        "maxItems": 100,
+        "uniqueItems": true,
+        "description": "Package-name patterns (fnmatch, case-insensitive; e.g. `@acme/*`, `acme-*`) never sent to OSV, PyPI or npm; reported as 'not checked (private)'.",
+        "items": {
+          "type": "string",
+          "pattern": "^(?!.*\\n)(?!/)(?!.*(?:\\.\\.|~|:|//|\\\\))(?!(?:.*[^0-9.])?[0-9]{1,3}(?:\\.[0-9]{1,3}){3}(?![0-9]))(?!(?:.*[./@])?[lL][oO][cC][aA][lL][hH][oO][sS][tT](?:[./]|$))(?!.*\\.(?:[cC][oO][mM]|[nN][eE][tT]|[oO][rR][gG]|[lL][oO][cC][aA][lL]|[lL][aA][nN]|[iI][nN][tT][eE][rR][nN][aA][lL]|[cC][oO][rR][pP]|[iI][nN][tT][rR][aA][nN][eE][tT]|[lL][oO][cC][aA][lL][dD][oO][mM][aA][iI][nN])(?:/|$))(?=(?:\\[[^\\]]*\\]|[^A-Za-z0-9\\[])*[A-Za-z0-9])@?[A-Za-z0-9_.*?\\[\\]!-]{1,200}(?:/[A-Za-z0-9_.*?\\[\\]!-]{1,200})?$"
+        }
+      },
+      "include_dev": {
+        "type": "boolean",
+        "description": "Whether this project's dev-only findings count toward the scan's exit threshold (overrides the operator's include_dev for this project)."
+      },
+      "delivery": {
+        "type": "string",
+        "enum": [
+          "pr",
+          "plan"
+        ],
+        "default": "pr",
+        "description": "How remediation delivers fixes: pr (a vulnscan/* branch and PR; vulnscan never merges) or plan (a fix plan only)."
+      },
+      "base_branch": {
+        "type": "string",
+        "pattern": "^(?!.*\\n)(?!/)(?!.*(?:\\.\\.|~|:|//|\\\\))(?!(?:.*[^0-9.])?[0-9]{1,3}(?:\\.[0-9]{1,3}){3}(?![0-9]))(?!(?:.*[./@])?[lL][oO][cC][aA][lL][hH][oO][sS][tT](?:[./]|$))(?!.*\\.(?:[cC][oO][mM]|[nN][eE][tT]|[oO][rR][gG]|[lL][oO][cC][aA][lL]|[lL][aA][nN]|[iI][nN][tT][eE][rR][nN][aA][lL]|[cC][oO][rR][pP]|[iI][nN][tT][rR][aA][nN][eE][tT]|[lL][oO][cC][aA][lL][dD][oO][mM][aA][iI][nN])(?:/|$))(?!-)(?!.*(?:\\.lock(?:/|$)|/\\.|/$|@\\{))[A-Za-z0-9._/-]{1,200}$",
+        "description": "Branch fix PRs target (default: the repository's default branch)."
+      }
+    }
+  },
     "privilege_profile": {
       "type": "string",
       "enum": ["cooperative", "confined", "exclusive"],

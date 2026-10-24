@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import _http, executor, fix, grant, ledger, osv, review  # noqa: E402
+from agentteams.vulnscan import _http, executor, executor_guard, fix, grant, ledger, osv, review  # noqa: E402
 from tests._vulnscan_helpers import operator_home, sign_grant  # noqa: E402
 
 GIT = shutil.which("git")
@@ -532,7 +532,7 @@ def test_p7_repo_ops_refuse_protected_repositories_by_common_dir(env: dict, monk
     with ledger.locked():                                    # an unrelated repo only lacks a grant
         with pytest.raises(executor.ExecError, match="not authorized"):
             executor.authorize("open-pr", str(unrelated), "x", cfg)
-    assert executor.repo_identity(tmp / "missing") is None and executor.repo_identity(Path("relative")) is None
+    assert executor_guard.repo_identity(tmp / "missing") is None and executor_guard.repo_identity(Path("relative")) is None
     res = executor.act("stage-fix", str(wt), cfg)
     assert res["status"] == "refused" and "same repository" in res["detail"]
 
@@ -576,9 +576,9 @@ def test_open_pr_checks_origin_before_pushing(env: dict, monkeypatch: pytest.Mon
 def test_a_hung_repository_check_refuses_instead_of_crashing(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     def hang(path: Path) -> Path:
         raise subprocess.TimeoutExpired("git", 30)
-    monkeypatch.setattr(executor, "repo_identity", hang)
+    monkeypatch.setattr(executor_guard, "repo_identity", hang)
     with pytest.raises(executor.ExecError, match="in time; refusing"):
-        executor._refuse_protected_repos(str(env["tmp"]), env["cfg"])
+        executor_guard.refuse_protected_repos(str(env["tmp"]), env["cfg"])
 
 
 # ---------------------------------------------------------------- test campaign Area B (D3, D4, I4, I6, A3, A4)

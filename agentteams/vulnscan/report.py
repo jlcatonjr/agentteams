@@ -38,6 +38,7 @@ class Finding:
     locations: list[str] = field(default_factory=list)
     malicious: bool = False
     distro: bool = False            # managed by the OS package manager
+    count_dev: bool | None = None   # dev scope: the project's include_dev (None = the run's setting)
     detail: str = ""
 
     def key(self) -> str:
@@ -62,6 +63,10 @@ class Report:
     unscannable: list[tuple[str, str]] = field(default_factory=list)   # (path, reason)
     feed_errors: list[str] = field(default_factory=list)
     checked: int = 0
+    opted_out: list[str] = field(default_factory=list)   # repos the operator enrolled at level off (not scanned)
+    excluded: list[str] = field(default_factory=list)    # "repo: path": manifests matching a brief's exclude_paths
+    withheld: list[str] = field(default_factory=list)    # "repo: name (ecosystem)": private, not checked
+    brief_off: list[str] = field(default_factory=list)   # repos whose brief says off, scanned by operator enrolment
     generated_at: str = field(default_factory=lambda: _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat())
 
     def merge(self, other: Report) -> None:
@@ -74,13 +79,30 @@ class Report:
         self.unscannable += other.unscannable
         self.feed_errors += other.feed_errors
         self.checked += other.checked
+        self.opted_out += other.opted_out
+        self.excluded += other.excluded
+        self.withheld += other.withheld
+        self.brief_off += other.brief_off
+
+    def policy_counts(self) -> dict[str, tuple[int, int]]:
+        """Return, per repository, how many manifests its brief excluded and how many packages it withheld.
+
+        Returns:
+            ``{repo: (excluded manifests, withheld private packages)}``, sorted by repo.
+        """
+        counts: dict[str, list[int]] = {}
+        for i, labels in enumerate((self.excluded, self.withheld)):
+            for label in labels:
+                counts.setdefault(label.partition(": ")[0], [0, 0])[i] += 1
+        return {k: (v[0], v[1]) for k, v in sorted(counts.items())}
 
     def exit_code(self, fail_on: str = "high", include_dev: bool = False) -> int:
         """Return the shared exit code for this report.
 
         Args:
             fail_on: Lowest severity that fails: critical|high|moderate|low|any|none.
-            include_dev: Count dev-scope package findings toward the threshold.
+            include_dev: Count dev-scope package findings toward the threshold (a finding's
+                ``count_dev``, set from its project's brief, overrides it).
 
         Returns:
             One of the module's EXIT_* codes.
@@ -93,19 +115,26 @@ class Report:
             return EXIT_CLEAN
         floor = 0 if fail_on == "any" else SEVERITY_RANK.get(fail_on.upper(), 3)
         for f in self.findings:
-            if f.distro or (f.scope == "dev" and not include_dev):
+            counts_dev = include_dev if f.count_dev is None else f.count_dev
+            if f.distro or (f.scope == "dev" and not counts_dev):
                 continue
             if f.severity >= floor:
                 return EXIT_FINDINGS
         return EXIT_CLEAN
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, private_names: bool = True) -> dict:
         """Return a JSON-serialisable form.
+
+        Args:
+            private_names: False replaces each withheld package's name with ``(private)`` (the count per
+                repository stays): ``summary.json`` is read by the agent's MCP server, so it never names them.
 
         Returns:
             The report as plain data, tagged with the schema version.
         """
         d = asdict(self)
+        if not private_names:
+            d["withheld"] = [f"{label.partition(': ')[0]}: (private)" for label in self.withheld]
         d["schema_version"] = REPORT_SCHEMA_VERSION
         d["unscannable"] = [{"path": p, "reason": r} for p, r in self.unscannable]
         return d
@@ -124,6 +153,8 @@ class Report:
                   feed_errors=list(data.get("feed_errors", [])),
                   generated_at=data.get("generated_at", ""))
         rep.unscannable = [(u["path"], u["reason"]) for u in data.get("unscannable", [])]
+        rep.opted_out, rep.excluded, rep.withheld, rep.brief_off = (
+            [str(i) for i in data.get(k, [])] for k in ("opted_out", "excluded", "withheld", "brief_off"))
         known = Finding.__dataclass_fields__
         rep.findings = [Finding(**{k: v for k, v in f.items() if k in known}) for f in data.get("findings", [])]
         return rep
@@ -158,7 +189,8 @@ class Report:
                 item = f"{f.name} ({f.ecosystem})" if f.ecosystem else f.name
                 notes = []
                 if f.scope == "dev":
-                    notes.append("dev-only")
+                    notes.append("dev-only" + {True: " (counted: project brief)",
+                                               False: " (not counted: project brief)"}.get(f.count_dev, ""))
                 if f.distro:
                     notes.append("OS-managed: apply OS security updates")
                 if f.unfixed:
@@ -174,6 +206,15 @@ class Report:
         if self.unscannable:
             out += ["## Not scannable (no exact versions)", ""]
             out += [f"- `{p}` — {r}" for p, r in self.unscannable] + [""]
+        private = [(repo, n) for repo, (_e, n) in self.policy_counts().items() if n]
+        for title, items in (("Opted out (operator enrolment: level off)", [f"`{i}`" for i in self.opted_out]),
+                             ("Brief says off; scanned by operator enrolment", [f"`{i}`" for i in self.brief_off]),
+                             ("Excluded by the project brief (exclude_paths)", [f"`{i}`" for i in self.excluded]),
+                             # names never appear here: this text reaches the agent (get_summary)
+                             ("Not checked (private, per the project brief)",
+                              [f"`{repo}`: {n} package(s)" for repo, n in private])):
+            if items:
+                out += [f"## {title}", ""] + [f"- {i}" for i in items] + [""]
         return "\n".join(out)
 
 

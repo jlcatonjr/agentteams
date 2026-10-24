@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.frameworks._write_roots import HOME_PROTECTED
-from agentteams.vulnscan import executor, ledger, notes, notify, paths, report_store, run_records, selftest_probe
+from agentteams.vulnscan import executor, executor_guard, ledger, notes, notify, paths, report_store, run_records, selftest_probe
 
 NETWORK = "agentteams-vulnscan-net"
 GATEWAY = "agentteams-vulnscan-gw"
@@ -908,6 +908,7 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
     stale = executor.quarantine_pending(f"left over from an earlier run; not served by run {run_id}")
     if stale:
         status["stale_requests"] = stale
+    executor_guard.write_plan_levels(run_dir)   # which plans are scan-only (the container cannot read the registry)
     task = fold_notes(task, run_id)
     _ensure_network()
     _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
