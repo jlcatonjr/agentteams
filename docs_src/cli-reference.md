@@ -1131,6 +1131,25 @@ missing ledger is an empty report (exit 0).
 With `--mcp-need-report`: the register to read. It must be inside the project and not a symlink. Without it,
 the report looks for `references/mcp-needs.csv`, then under `.claude/agents/`, `.github/agents/` and `.goose/`.
 
+### `--set-vulnscan LEVEL`
+
+Writes the project's dependency-scanning level (`off`, `scan` or `remediate`) into the `vulnerability_scanning`
+block of `--project`'s brief (else the current directory's). The brief is found the same way fleet updates find
+it. Only that block's text changes; every other key keeps its order and indentation. A brief is never
+created: without one, it exits 1. It shows the unified diff and its sha256, then asks `y/N` on the terminal.
+
+`--yes` never answers this prompt. The level decides what leaves the machine: with `scan`, dependency names and
+versions go to OSV.dev; with `remediate`, findings and repository paths also reach the model provider. That
+needs its own confirmation, not a build's blanket yes. Without a terminal, it prints the diff and its sha256
+and writes nothing (exit 1). To apply a reviewed diff from a script, rerun with
+`--set-vulnscan-confirm-sha256 <sha256>`. Already at that level: exit 0, nothing written. The command only
+records the project's intent. The operator enrols the project on a machine with
+`python -m agentteams.vulnscan enroll <dir>`.
+
+### `--set-vulnscan-confirm-sha256 SHA256`
+
+With `--set-vulnscan`: apply the change only when its diff's sha256 equals `SHA256`; a mismatch exits 1.
+
 ### `--confined-path`
 
 Read-only (P5b). Prints the operator-owned `confined_programs` file for `--project` (else the current

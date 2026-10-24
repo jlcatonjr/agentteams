@@ -88,6 +88,20 @@ python -m agentteams.vulnscan init --repo-root ~/code
 `--repo-root` can be repeated. The config lives in your user config directory, never in a
 repository.
 
+**Enrol every project.** agentteams projects need no `--repo-root`: enrol them instead, so clones and
+worktrees of one repository are scanned once and each project's own answer (its brief's level) is used:
+
+```bash
+python -m agentteams.vulnscan enroll --discover ~/code
+python -m agentteams.vulnscan roots
+```
+
+`enroll` asks once per owner (enrol at brief levels / set a level for the unanswered ones, showing each
+brief diff / choose fix checkouts / skip) and writes `~/.config/agentteams/projects.json`. It runs only
+in a terminal, never on CI. `roots` lists each scan root with its source; add paths you never want
+scanned to `"exclude"` in `vulnscan.json`. Every summary ends with a **Coverage** section naming
+projects that are unanswered, not covered by a grant, or missing, so none is left out silently.
+
 ![init prints the config path; the file holds every top-level default](book/figures/vulnscan/02-init.svg)
 
 *Demo account. `init` never overwrites an existing config.*
@@ -200,6 +214,11 @@ Pick a directory for your ops team, for example `~/ops-team`, and put a brief th
 ```
 
 Unknown fields are refused (`agentteams/schemas/project-description.schema.json`).
+
+The capability gives the *ops team* the remediation agent. It does not decide which projects are scanned.
+Each scanned project states that in its own brief's `vulnerability_scanning` block (`level`: `off`,
+`scan` or `remediate`), and you enrol it with `python -m agentteams.vulnscan enroll`. See
+[Per-project settings](vulnerability-remediation-guide.md#per-project-settings).
 
 Then render a goose team from inside that directory:
 

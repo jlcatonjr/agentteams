@@ -23,8 +23,11 @@ Operations (v1):
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
   removes the executor's worktree. It never merges.
-- Both repo ops are refused on any worktree of the agentteams checkout, ``agent.team_dir``, a
-  grant's ``governance_dir`` or a publish ops repo (compared by git common dir; P7).
+- Both repo ops are refused on any worktree or clone of the agentteams checkout, ``agent.team_dir``, a
+  grant's ``governance_dir`` or a publish ops repo (compared by git common dir and by origin; P7), and on
+  a repository the project registry enrols at a level other than ``remediate`` or whose brief says so
+  (``delivery: plan`` refuses ``open-pr``; ``base_branch`` is the PR base) (:mod:`.executor_guard`).
+  The PR body passes the publish scrubber (home paths, host name, private IPs).
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
 
@@ -48,8 +51,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-import agentteams
-from agentteams.vulnscan import engine, escalations, fix, grant, ledger, notify, paths, report_store
+from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
@@ -96,7 +98,36 @@ def kit_dir() -> Path:
 
 _GIT_HARDENING = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.sshCommand=ssh",
                   "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper=",
-                  "-c", "commit.gpgsign=false", "-c", "tag.gpgSign=false")   # never a repo-configured gpg.program
+                  "-c", "commit.gpgsign=false", "-c", "tag.gpgSign=false",   # never a repo-configured gpg.program
+                  # Transports: https, ssh and file only (no ext::, no remote helpers).
+                  "-c", "protocol.allow=never", "-c", "protocol.https.allow=always",
+                  "-c", "protocol.ssh.allow=always", "-c", "protocol.file.allow=always")
+# A repository's remote.<name>.uploadpack / receivepack would run a program on fetch or push, and git keeps the
+# FIRST value it reads (the repository's), so `-c` cannot override them; the explicit options can.
+_PACK_PROGRAM = {"fetch": "--upload-pack=git-upload-pack", "ls-remote": "--upload-pack=git-upload-pack",
+                 "push": "--receive-pack=git-receive-pack"}
+
+
+def _pinned_pack(args: tuple[str, ...]) -> tuple[str, ...]:
+    """Insert git's own upload-pack / receive-pack after a network subcommand."""
+    opt = _PACK_PROGRAM.get(args[0]) if args else None
+    return (args[0], opt, *args[1:]) if opt else args
+
+
+# A repository's config can name a remote helper (`ext::<command>`, `<helper>::...`) and allow it per protocol,
+# which outranks `protocol.allow=never`; so origin's URLs are checked before any network command.
+_SAFE_URL = re.compile(r"(?:https|ssh)://[^\s:]+[^\s]*|[\w.-]+@[\w.-]+:[^\s:][^\s]*|/[^\s:]*")
+
+
+def _unsafe_origin(repo: Path, env: dict[str, str]) -> str:
+    """Return why origin's fetch or push URL is not an https, ssh, scp-like or local-path URL, else ""."""
+    for extra in ((), ("--push",)):
+        proc = subprocess.run(["git", *_GIT_HARDENING, "-C", str(repo), "remote", "get-url", *extra, "origin"],
+                              capture_output=True, text=True, env=env, timeout=30, check=False)
+        url = proc.stdout.strip()
+        if proc.returncode or "::" in url or not _SAFE_URL.fullmatch(url):
+            return f"origin URL {url[:80]!r} is not an https, ssh or local path URL; refusing to contact it"
+    return ""
 
 
 def _clean_git_env(global_config: str) -> dict[str, str]:
@@ -124,8 +155,11 @@ def git_proc(repo: Path, *args: str, push: bool = False, timeout: int = 600,
     ``text=False`` returns bytes: exact content, line endings included.
     """
     pre = [*_GIT_HARDENING, *(["-c", "credential.helper=!gh auth git-credential"] if push else [])]
-    return subprocess.run(["git", *pre, "-C", str(repo), *args], capture_output=True, text=text,
-                          env=_git_env(), timeout=timeout, check=False)
+    env = _git_env()
+    if args and args[0] in _PACK_PROGRAM and (why := _unsafe_origin(repo, env)):
+        return subprocess.CompletedProcess(["git", *args], 128, b"" if not text else "", why if text else why.encode())
+    return subprocess.run(["git", *pre, "-C", str(repo), *_pinned_pack(args)], capture_output=True, text=text,
+                          env=env, timeout=timeout, check=False)
 
 
 def query_git(repo: Path, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -181,7 +215,8 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
 
     Raises:
         ExecError: An open escalation blocks the target; a repo op targets the publish grant's
-            ops repository or a protected repository (:func:`_refuse_protected_repos`); no grant
+            ops repository, a protected repository (by common dir or origin) or a repository the
+            registry enrols below ``remediate`` (:mod:`.executor_guard`); no grant
             covers the action, uses are exhausted, the decision log is missing,
             or a HALT is open on the ``vulnscan-remediation`` action. That includes target-tagged
             HALTs such as ``vulnscan-remediation:<repo-or-host>``: the action matcher treats a suffix as
@@ -195,10 +230,12 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
                         f"see: vulnscan halts")
     if op in ("stage-fix", "open-pr"):
         try:
-            _refuse_ops_repo(target)
-            _refuse_protected_repos(target, cfg)
+            executor_guard.refuse_ops_repo(target)
+            executor_guard.refuse_protected_repos(target, cfg)
         except grant.GrantError as exc:   # an unreadable grant file could name a protected repo: refuse
             raise ExecError(f"cannot tell which repositories are protected ({exc}); refusing") from exc
+        executor_guard.refuse_scan_only(target)
+        executor_guard.refuse_by_brief(op, target)
     grants, problems = grant.load_active()
     usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
     if not usable:
@@ -217,75 +254,6 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
         raise ExecError(f"HALT in force: {exc}") from exc
     ledger.append("begun", grant_id=g["grant_id"], op=op, target=target, request_id=request_id)
     return g
-
-
-def _refuse_ops_repo(target: str) -> None:
-    """Refuse repo ops on any publish grant's ops repository, valid or not (reports go there by ``publish`` only)."""
-    from agentteams.vulnscan import publish   # lazy: publish imports this module
-
-    if {Path(target).resolve(), Path(canonical_target(target) or target).resolve()} & publish.all_ops_repos():
-        raise ExecError(f"{target} is a publish grant's ops repository; remediation ops never touch it")
-
-
-def repo_identity(path: Path) -> Path | None:
-    """Return the git common dir of the repository containing ``path`` (shared by all its worktrees).
-
-    Args:
-        path: An existing absolute file or directory.
-
-    Returns:
-        The resolved common dir, or None when ``path`` is relative, missing or not in a repository.
-
-    Raises:
-        subprocess.TimeoutExpired: git did not answer within 30 s.
-    """
-    p = path.expanduser()
-    if not p.is_absolute() or not p.exists():
-        return None
-    base = p if p.is_dir() else p.parent
-    proc = git_proc(base, "rev-parse", "--path-format=absolute", "--git-common-dir", timeout=30)
-    out = proc.stdout.strip()
-    return Path(out).resolve() if not proc.returncode and out else None
-
-
-def protected_repo_paths(cfg: dict[str, Any]) -> list[Path]:
-    """Return the paths whose repositories remediation never touches (P7).
-
-    These are the checkout this ``agentteams`` package runs from, ``agent.team_dir``, the
-    ``governance_dir`` of every remediation- and publish-grant *file* (valid or not), and every
-    publish grant's ops repository. Unsigned or unverified sources can only add paths here, so they
-    narrow what the executor does and never widen it.
-
-    Args:
-        cfg: Daily config.
-
-    Returns:
-        Candidate paths (each may or may not be inside a repository).
-    """
-    from agentteams.vulnscan import publish   # lazy: publish imports this module
-
-    out = [Path(agentteams.__file__).resolve().parent]
-    agent = cfg.get("agent")
-    team = agent.get("team_dir") if isinstance(agent, dict) else None
-    if isinstance(team, str) and team:
-        out.append(Path(team).expanduser())
-    for d in (grant.grants_dir(), publish.grants_dir()):
-        out.extend(Path(gov).expanduser() for gov in grant.unverified_values(d, "governance_dir"))
-    out.extend(sorted(publish.all_ops_repos()))
-    return out
-
-
-def _refuse_protected_repos(target: str, cfg: dict[str, Any]) -> None:
-    """Refuse repo ops whose target shares a repository (any worktree) with a protected path."""
-    try:
-        mine = repo_identity(Path(target))
-        protected = [(p, repo_identity(p)) for p in protected_repo_paths(cfg)] if mine is not None else []
-    except subprocess.TimeoutExpired as exc:   # cannot tell: refuse rather than crash the serving loop (V2-7)
-        raise ExecError(f"could not identify the repository of {target} or a protected path in time; refusing") from exc
-    for p, ident in protected:
-        if ident == mine:
-            raise ExecError(f"{target} is the same repository as {p} (the agentteams checkout, agent.team_dir, "
-                            "a grant's governance_dir or a publish ops repo); remediation ops never touch it")
 
 
 # ---------------------------------------------------------------- repo operations
@@ -449,7 +417,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     if unsafe:
         raise ExecError(f"{repo}: {unsafe}")
     git(repo, "fetch", "-q", "origin", push=True)
-    head = git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).strip() or "origin/main"
+    head = executor_guard.brief_base_ref(repo) or \
+        git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).strip() or "origin/main"
     base = git(repo, "rev-parse", head).strip()
     wt = _worktrees_dir() / f"{_state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}-{os.urandom(3).hex()}"
     wt.parent.mkdir(parents=True, exist_ok=True)
@@ -522,6 +491,8 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
             _worktrees_dir().resolve()):
         raise ExecError("staged state is invalid or its worktree is gone")
     target_repo = _origin_repo(wt)   # before anything is pushed; never let gh pick a base repo
+    base_branch = st["base_ref"].split("/", 1)[-1]   # the brief's base_branch, else origin's default branch
+    executor_guard.require_remote_branch(wt, base_branch)
     ref = f"refs/heads/{branch}"
     remote_sha = next((ln.split("\t", 1)[0] for ln in git(wt, "ls-remote", "origin", ref, push=True).splitlines()
                        if ln.endswith(f"\t{ref}")), "")
@@ -544,9 +515,11 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
             f"(deterministic; dependency pins and lockfiles only).\n\n{st['plan']}\n\n"
             f"### Agent rationale (untrusted text, quoted)\n\n{_sanitize(rationale)}\n\n"
             "Tests run in CI. This PR is never merged automatically.\n")
+    from agentteams.vulnscan import publish   # lazy: publish imports this module
+
+    body = publish.rewrite_paths(body)   # the same scrubber as published reports (home, host name, private IPs)
     body_file = wt.parent / f"{wt.name}.pr.md"
     body_file.write_text(body, encoding="utf-8")
-    base_branch = st["base_ref"].split("/", 1)[-1]
     proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
                            "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
                            "--body-file", str(body_file)], cwd=wt, capture_output=True, text=True,
