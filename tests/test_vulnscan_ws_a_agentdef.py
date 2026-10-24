@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import agent_drivers, agent_recipe, agent_run, executor
+from agentteams.vulnscan import agent_drivers, agent_recipe, agent_run, docker_mode, executor
 from tests._vulnscan_helpers import goose_recipe
 
 COPILOT = agent_drivers.COPILOT
@@ -259,6 +259,8 @@ def state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("AGENTTEAMS_VULNSCAN_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setattr(agent_run.shutil, "which", lambda name: "/usr/bin/docker")
     monkeypatch.setattr(agent_run, "team_dir_problem", lambda *a, **k: None)
+    # Never the host's real `docker info`: on a Linux CI runner it reports a rootful Engine (R4).
+    monkeypatch.setattr(agent_run, "detect_docker_mode", lambda: docker_mode.DockerMode(docker_mode.DESKTOP))
     run = tmp_path / "state" / "2026-10-24"
     run.mkdir(parents=True)
     return run
