@@ -16,6 +16,7 @@ is `../vulnscan-agent-image.sh`, run between `03` and `05`.
 | `06-sigterm-check.sh` | Part D #9 | starts `agent-run`, sends SIGTERM after `DELAY` s, checks exit 143, no container left, status `agent-error` |
 | `07-schedule.sh [--remove]` | Step 3 | dry run of the daily job, then (after you confirm) `schedule install --apply` and `schedule status` |
 | `08-enable-agent.sh` | Step 10 | sign the unattended grant (`REPO_ROOT`, `DAYS`, `USES`; with two grants already valid it first offers to revoke the one that expires first, and stops if you decline), set `agent.enabled: true`, install the daily job at `HOUR:MINUTE` |
+| `09-accept-framework.sh` | Using another framework | live acceptance of one runtime driver (`FRAMEWORK=`, default `claude`; `MODEL=`): switch `agent.framework`/`agent.model` (asks; keeps a backup), build that image and run `agent-selftest` (prints the checks and the CLI's tool inventory), sign a stage-fix-only grant (1 repo root, 1 day, 5 uses), `daily`, one supervised `agent-run`, then the outcome, spend and the gateway's refusal reasons |
 
 Your keys never pass through these scripts' output: the signing key is named only on the signing
 command, and the OpenRouter key goes straight into a mode-600 file outside the

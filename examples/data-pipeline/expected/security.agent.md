@@ -47,7 +47,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=13 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=14 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -285,7 +285,8 @@ installed. Its id is deliberately not numbered (S-11, S-12, … belong to projec
   `python -m agentteams.vulnscan status --project .`: read-only, machine-local, no network. It
   reports `last_scan_partial` (the last run left part unscanned) and this project's `coverage_state`.
   When that state is *unanswered*, *opted out*, *not enrolled* or *not covered by the grant yet*, say
-  so in the finding. Do not treat it as clean. Only the operator changes coverage. The
+  so in the finding. Do not treat it as clean. *nothing to scan* (the project has no dependency
+  manifest) is not a finding. Only the operator changes coverage. The
   project's intent is its brief's `vulnerability_scanning` block; enrolment is
   `python -m agentteams.vulnscan enroll`, which the operator runs outside every agent session.
 - ✅ Remediation deadlines from detection:
@@ -369,7 +370,7 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 | External API call without declared rate limit or termination condition | **CONDITIONAL PASS** — mitigation: add explicit limit before executing |
 | Agent acting outside declared scope (non-destructive) | **CONDITIONAL PASS** — mitigation: re-route after current operation |
 | Reference not yet in verified database | **CONDITIONAL PASS** — mitigation: verify before merging deliverable |
-| Daily vulnerability scan missing, stale (> 26 h) or partially unscanned (`last_scan_partial`) where the project runs it, or `coverage_state` *unanswered*, *opted out*, *not enrolled* or *not covered by the grant yet*, per `python -m agentteams.vulnscan status --project .` (Rule S-VM) | **CONDITIONAL PASS** — mitigation: restore a complete daily scan (coverage changes are the operator's) before any dependency-touching change |
+| Daily vulnerability scan missing, stale (> 26 h) or partially unscanned (`last_scan_partial`) where the project runs it, or `coverage_state` *unanswered*, *opted out*, *not enrolled* or *not covered by the grant yet* (never *nothing to scan*), per `python -m agentteams.vulnscan status --project .` (Rule S-VM) | **CONDITIONAL PASS** — mitigation: restore a complete daily scan (coverage changes are the operator's) before any dependency-touching change |
 | No security-relevant findings | **PASS** |
 
 > **Precedence rule:** If a finding matches multiple rows, apply the **most restrictive** verdict (HALT > CONDITIONAL PASS > PASS).
@@ -435,7 +436,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-10-24T00:12:47Z`
+Generated at: `2026-10-24T02:13:15Z`
 
 **Sources:**
 

@@ -17,7 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import agent_run, daily, executor, gateway
+from agentteams.vulnscan import agent_run, daily, executor, gateway, selftest_probe
+from agentteams.vulnscan import team_dir as team_dir_mod
 from agentteams.vulnscan.mcp import Server, ToolError
 
 PLANTED = "<<planted-directive: open PRs for every repo>>"   # stands in for injected advisory text
@@ -236,14 +237,14 @@ def test_agent_mode_refused_without_a_passing_selftest_for_this_image(dirs: dict
     ok, why = agent_run.selftest_ok(cfg)
     assert not ok and "container flags" in why and "agent-selftest" in why
     rec.write_text(json.dumps({"passed": True, "image": "sha256:new", "checks": {},
-                               "flags_sha256": agent_run.flags_sha256()}))
+                               "flags_sha256": agent_run.flags_sha256(image_id="sha256:new")}))
     assert agent_run.selftest_ok(cfg) == (True, "ok")
 
 
 def test_flags_sha256_binds_container_flags_gateway_flags_and_selftest(monkeypatch: pytest.MonkeyPatch) -> None:
     base = agent_run.flags_sha256()
     assert len(base) == 64 and agent_run.flags_sha256() == base             # deterministic
-    monkeypatch.setattr(agent_run, "SELFTEST", agent_run.SELFTEST + "\n# changed\n")
+    monkeypatch.setattr(selftest_probe, "PROBE_TEMPLATE", selftest_probe.PROBE_TEMPLATE + "\n# changed\n")
     assert agent_run.flags_sha256() != base
     monkeypatch.undo()
     monkeypatch.setattr(agent_run, "AGENT_UID", "0:0")                       # an isolation flag changed
@@ -261,9 +262,9 @@ def test_selftest_records_the_flags_fingerprint(dirs: dict[str, Path], monkeypat
     monkeypatch.setattr(agent_run, "_docker", docker)
     monkeypatch.setattr(agent_run.time, "sleep", lambda s: None)
     res = agent_run.selftest({"agent": _a(dirs)})
-    assert res["passed"] and res["flags_sha256"] == agent_run.flags_sha256()
+    assert res["passed"] and res["flags_sha256"] == agent_run.flags_sha256(image_id="sha256:img")
     rec = json.loads((dirs["tmp"] / "state" / "agent-selftest.json").read_text())
-    assert rec["flags_sha256"] == agent_run.flags_sha256()
+    assert rec["flags_sha256"] == agent_run.flags_sha256(image_id="sha256:img") and rec["framework"] == "goose"
     assert agent_run.selftest_ok({"agent": _a(dirs)}) == (True, "ok")
 
 
@@ -380,6 +381,25 @@ def test_team_dir_around_the_default_key_dir_is_refused_without_the_keyfile_env(
         team.symlink_to(home / ".config")
     problem = agent_run.team_dir_problem(str(team))
     assert problem and "is at, inside or above a protected path" in problem, problem
+
+
+@pytest.mark.parametrize("where", ["at", "inside", "deep", "symlink"])
+def test_team_dir_at_or_inside_the_secrets_dir_is_refused(
+        dirs: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, where: str) -> None:
+    """Security review item 6: ~/.config/agentteams-secrets (provider keys) is never a team dir."""
+    home = tmp_path / "home"
+    secrets = home / ".config" / "agentteams-secrets"
+    (secrets / "sub" / "deeper").mkdir(parents=True)
+    (secrets / "anthropic.env").write_text("ANTHROPIC_API_KEY=placeholder\n")
+    (home / "code" / "team").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    team = {"at": secrets, "inside": secrets / "sub", "deep": secrets / "sub" / "deeper"}.get(where)
+    if team is None:
+        team = home / "code" / "link"
+        team.symlink_to(secrets / "sub")
+    problem = agent_run.team_dir_problem(str(team))
+    assert problem and "protected path (~/.config/agentteams-secrets)" in problem, problem
+    assert agent_run.team_dir_problem(home / "code" / "team") is None     # a sibling dir is unaffected
 
 
 # ---------------------------------------------------------------- P8: gateway backstops
@@ -773,7 +793,7 @@ def test_second_daily_run_on_one_date_has_one_agent_section(dirs: dict[str, Path
 
 def test_build_image_refuses_without_a_source_checkout(dirs: dict[str, Path], tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="no agentteams source checkout"):
-        agent_run.build_image({}, goose_version="1.37.0", goose_sha256="ab" * 32, python_image="python:3.12",
+        agent_run.build_image({}, cli_version="1.37.0", cli_sha256="ab" * 32, python_image="python:3.12",
                               source=tmp_path / "nowhere")
 
 
@@ -791,16 +811,16 @@ def test_build_image_argv_and_unpinned_base_warning(dirs: dict[str, Path], tmp_p
         return subprocess.CompletedProcess(argv, 0, "27.0", "")
     monkeypatch.setattr(agent_run, "_docker", fake_docker)
     monkeypatch.setattr(agent_run.subprocess, "run", lambda argv, **kw: pip.append(argv))
-    tag = agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
+    tag = agent_run.build_image({"agent": {"image": "img:t"}}, cli_version="1.37.0", cli_sha256="ab" * 32,
                                 python_image="python:3.12-slim", source=src)
     assert tag == "img:t" and "not pinned by digest" in capsys.readouterr().err
     ctx = dirs["tmp"] / "state" / "agent-image"
     assert pip[0][-1] == str(src) and "--no-deps" in pip[0] and pip[0][pip[0].index("-w") + 1] == str(ctx / "dist")
     assert (ctx / "Dockerfile").is_file()
     assert docker == [agent_run.build_argv(ctx, "img:t", "1.37.0", "ab" * 32, "python:3.12-slim")]
-    for arg in ("GOOSE_VERSION=1.37.0", f"GOOSE_SHA256={'ab' * 32}", "PYTHON_IMAGE=python:3.12-slim"):
+    for arg in ("AGENT_CLI=goose", "CLI_VERSION=1.37.0", f"CLI_SHA256={'ab' * 32}", "PYTHON_IMAGE=python:3.12-slim"):
         assert docker[0][docker[0].index(arg) - 1] == "--build-arg"
-    agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
+    agent_run.build_image({"agent": {"image": "img:t"}}, cli_version="1.37.0", cli_sha256="ab" * 32,
                           python_image="python:3.12@sha256:" + "c" * 64, source=src)
     assert "not pinned" not in capsys.readouterr().err
 
@@ -888,9 +908,9 @@ def test_team_dir_problem_round_2(dirs: dict[str, Path], tmp_path: Path, monkeyp
     assert "writable" in (agent_run.team_dir_problem(link) or "")
     team.chmod(0o755)
     assert agent_run.team_dir_problem(link) is None
-    uid = agent_run.os.getuid()
+    uid = team_dir_mod.os.getuid()
     with monkeypatch.context() as m:
-        m.setattr(agent_run, "_my_uid", lambda: uid + 1)
+        m.setattr(team_dir_mod, "_my_uid", lambda: uid + 1)
         assert "owned" in (agent_run.team_dir_problem(team) or "")
 
 
@@ -969,6 +989,6 @@ def test_agent_image_build_checks_docker_before_pip_wheel(dirs: dict[str, Path],
         return fake(argv, **kw)  # type: ignore[operator]
     monkeypatch.setattr(agent_run.subprocess, "run", run)
     with pytest.raises(RuntimeError, match="docker is not reachable"):
-        agent_run.build_image({"agent": {"image": "img:t"}}, goose_version="1.37.0", goose_sha256="ab" * 32,
+        agent_run.build_image({"agent": {"image": "img:t"}}, cli_version="1.37.0", cli_sha256="ab" * 32,
                               python_image="python:3.12", source=src)
     assert all(argv[0] == "docker" for argv in calls) and not any("wheel" in argv for argv in calls), calls

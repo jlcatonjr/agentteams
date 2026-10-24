@@ -158,7 +158,7 @@ def test_live_goose_accepts_every_flag_vulnscan_passes(tmp_path: Path) -> None:
         return [f for f in flags if f.startswith("--")
                 and not re.search(rf"(?<![\w-]){re.escape(f)}(?![\w-])", help_text)]
 
-    assert missing(agent_run.DEFAULT_AGENT["command"], help_of("run")) == []
+    assert missing(agent_run.agent_drivers.GOOSE.command_template(), help_of("run")) == []
     resume = debrief.resume_command("vulnscan-2026-01-01")
     assert missing(resume, help_of(*[a for a in resume[1:] if not a.startswith("-")][:1])) == []
 

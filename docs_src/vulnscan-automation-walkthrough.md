@@ -578,6 +578,32 @@ a retry after a failed `gh pr create` reuses the pushed branch instead of pushin
 Finally set `"enabled": true` in the `agent` block. From then on, every daily run ends with an agent
 run.
 
+### Using Claude Code instead of goose
+
+The remediation agent can run on Claude Code (`agent.framework: "claude"`). Everything else in this
+walkthrough stays the same: the grants, the executor, the review and the isolation. Differences:
+
+- **Models.** Claude Code runs Anthropic models only: `agent.model` must be a Claude model id, such as
+  `anthropic/claude-sonnet-4.5` through OpenRouter (the default upstream, `agent.upstream_messages`
+  `https://openrouter.ai/api/v1`, using your OpenRouter `key_file`) or `claude-sonnet-4-5` with
+  `"upstream_messages": "https://api.anthropic.com/v1"` and an Anthropic key in
+  `~/.config/agentteams-secrets/anthropic.env` (`ANTHROPIC_API_KEY=...`, mode 600). Anthropic's API
+  reports no cost, so that route also needs a price table, `agent.prices` (a JSON file of USD per million
+  tokens per model; see the [API reference](api-reference/vulnscan.md)).
+- **The team.** Generate a Claude team with the remediation capability (`--framework claude`); its agent
+  definition is `.claude/agents/vuln-remediation.md`, passed to Claude Code by its path. Sign grants with
+  `--governance-dir <team>/.claude/agents`.
+- **The image and the self-test.** `FRAMEWORK=claude bash scripts/vulnscan-agent-image.sh` installs the
+  pinned Claude Code release (its digest checked against Anthropic's GPG-signed release manifest; `gpg`
+  must be installed to verify any other version). The self-test then also runs Claude Code once against a
+  local stub and fails unless the only tools it reports are the vulnscan ones and planted `.mcp.json`,
+  hook, `CLAUDE.md` and `AGENTS.md` files have no effect.
+- **The acceptance run.** `FRAMEWORK=claude MODEL=<claude model> bash
+  scripts/vulnscan-operator/09-accept-framework.sh` does all of this in order, signs a one-day stage-fix
+  grant, runs one supervised agent run and prints the outcome, the spend and any request the gateway
+  refused (report those: each names what to add to the gateway's allowlist). Keep `agent.enabled` false
+  until that run is clean.
+
 ---
 
 ## Part C — Operating the loop

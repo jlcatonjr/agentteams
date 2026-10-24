@@ -4,17 +4,18 @@ The isolation design (operator decision, plan R5):
 
 | Piece | Where | Holds |
 |---|---|---|
-| Agent container (goose + vulnscan MCP) | internal-only Docker network | nothing secret; a dummy model key |
-| Gateway container (:mod:`.gateway`) | internal network + bridge | the OpenRouter key (read-only file mount), the spend cap |
+| Agent container (the framework's CLI + vulnscan MCP) | internal-only Docker network | nothing secret; a dummy model key |
+| Gateway container (:mod:`.gateway`) | internal network + bridge | the model API key (read-only file mount; per dialect, :mod:`.agent_upstreams`), the spend cap |
 | Executor (:mod:`.executor`) | the operator's host account | git / gh / ssh credentials, the signed grants |
 
-Agent container flags: a fixed name, ``--read-only``, tmpfs ``/tmp`` and ``$HOME``
-(``/agenthome``), ``--cap-drop ALL``, ``no-new-privileges``, a non-root uid, pids and memory
-limits. Its **only** writable mounts are the request spool and its own goose sessions dir
-(``<run>/agent/goose-data``, mounted at :data:`GOOSE_SESSIONS_IN_CONTAINER`). goose's state dir
-(``XDG_STATE_HOME``, its logs) is :data:`GOOSE_STATE_IN_CONTAINER`, inside that mount, so the logs
-survive as ``<run>/agent/goose-data/state/goose/logs``. The run executes ``agent.recipe`` from the
-team dir, by default ``.goose/recipes/vuln-remediation.yaml`` (its prompt is the task). The transcript is
+``agent.framework`` selects the runtime driver (:mod:`.agent_drivers`): the CLI's env, command, state dirs,
+transcript parsing, self-test checks and debrief. Agent container flags: a fixed name, ``--read-only``,
+tmpfs ``/tmp``, ``$HOME`` (``/agenthome``) and the working directory (``/work/cwd``, empty: never the team
+mount), ``--cap-drop ALL``, ``no-new-privileges``, a non-root uid, pids and memory limits. Its **only**
+writable mounts are the request spool and the driver's state dirs (``<run>/agent/<framework>-data``; goose:
+its sessions, with its logs under ``state/goose/logs``). The run executes ``agent.recipe`` (default: the
+driver's, goose ``.goose/recipes/vuln-remediation.yaml``) by its absolute path under the read-only team
+mount. The transcript is
 captured host-side from stdout, and the gateway's ``spend.json`` lives in ``<run>/gateway``,
 which only the gateway mounts. One run at a time: :data:`run_lock_path` is held for the whole run.
 
@@ -23,14 +24,16 @@ an ancestor of it, or a credential/config path). The run's gateway always has a 
 (``agent.max_tokens_total``) and refuses after ``agent.max_unmetered_calls`` replies without usage
 (:func:`run_limits`).
 
-Agent mode is refused until :func:`selftest` has passed for the *current* image and the current
+Agent mode is refused until :func:`selftest` has passed for the *current* image, runtime driver and
 container flags (:func:`flags_sha256`). The test proves, from inside the container:
 
 - no credential paths or token variables;
-- the internet unreachable, including OpenRouter directly;
+- the internet unreachable, including OpenRouter, Anthropic, OpenAI and xAI directly;
 - the gateway reachable;
-- read-only mounts and filesystem;
-- goose's log, session and config directories writable (``goose_dirs_writable``);
+- read-only mounts and filesystem, and an empty working directory (``cwd_empty``);
+- the driver's own checks (goose: its log, session and config directories writable, ``goose_dirs_writable``;
+  claude: a headless run against a local stub reports only vulnscan tools and ignores a planted canary,
+  :mod:`.selftest_canary`);
 - zero effective capabilities, ``no_new_privs`` set, and a non-root uid.
 
 Every ``docker`` command is built by a pure function, so tests check the flags without Docker.
@@ -42,7 +45,6 @@ import contextlib
 import fcntl
 import hashlib
 import json
-import os
 import shlex
 import shutil
 import signal
@@ -57,28 +59,27 @@ from importlib import metadata, resources
 from pathlib import Path
 from typing import Any
 
-from agentteams.frameworks._write_roots import HOME_PROTECTED
-from agentteams.vulnscan import executor, executor_guard, ledger, notes, notify, paths, report_store, run_records, selftest_probe
+from agentteams.vulnscan import (agent_drivers, agent_upstreams, executor, executor_guard, ledger, notes, notify, paths,
+                                 report_store, run_records, selftest_probe)
+from agentteams.vulnscan.agent_drivers import Driver
+from agentteams.vulnscan.team_dir import TEAM_DIR_PROTECTED, team_dir_problem  # noqa: F401  (TEAM_DIR_PROTECTED: re-export)
 
 NETWORK = "agentteams-vulnscan-net"
 GATEWAY = "agentteams-vulnscan-gw"
 GW_PORT = 8080
 AGENT_UID = "10001:10001"
-AGENT_HOME = "/agenthome"
+AGENT_HOME = agent_drivers.AGENT_HOME
+CWD_IN_CONTAINER = agent_drivers.CWD_IN_CONTAINER
 AGENT_CONTAINER = "agentteams-vulnscan-agent"
 SELFTEST_CONTAINER = "agentteams-vulnscan-selftest"
-GOOSE_SESSIONS_IN_CONTAINER = f"{AGENT_HOME}/.local/share/goose"
-#: goose's XDG state dir (its logs) in the container: inside the writable sessions mount, so the logs survive
-#: the container as ``<run>/agent/goose-data/state/goose/logs`` for the review. Not ``$HOME/.local/state``: the
-#: sessions bind mount makes Docker create ``$HOME/.local`` and ``.local/share`` owned by root, so the agent uid
-#: cannot add ``.local/state`` and goose stops before its first model call (first live run, 2026-10-23).
-GOOSE_STATE_IN_CONTAINER = f"{GOOSE_SESSIONS_IN_CONTAINER}/state"
+GOOSE_SESSIONS_IN_CONTAINER = agent_drivers.GOOSE_SESSIONS    # goose's sessions mount (see agent_drivers)
+GOOSE_STATE_IN_CONTAINER = agent_drivers.GOOSE_STATE          # goose's logs, inside that mount
 RUN_STATES = ("completed", "agent-error", "timed-out", "not-run")
 DEFAULT_AGENT: dict[str, Any] = {
     "enabled": False,
-    "framework": "goose",
+    "framework": "goose",                 # selects the runtime driver (agent_drivers.get_driver)
     "team_dir": "",                       # workspace whose generated team runs the job
-    "recipe": ".goose/recipes/vuln-remediation.yaml",   # its prompt is the task; the orchestrator's is a role check
+    "recipe": "",                         # "": the driver's agent definition (goose: .goose/recipes/vuln-remediation.yaml)
     "model": "z-ai/glm-5.3",
     "upstream": "http://host.docker.internal:8791",   # the operator's route proxy; or https://openrouter.ai
     "key_file": "",                       # file containing OPENROUTER_API_KEY=... (mounted into the GATEWAY only)
@@ -87,9 +88,8 @@ DEFAULT_AGENT: dict[str, Any] = {
     "max_unmetered_calls": 20,            # replies without usage/cost before the gateway refuses (integer >= 1)
     "allow_unmetered": False,             # true: never refuse for unmetered replies (still counted)
     "max_minutes": 45,
-    "image": "",                          # default agentteams-vulnscan-agent:<agentteams version>
-    "command": ["goose", "run", "--recipe", "{recipe}", "--name", "{session}",
-                "--with-extension", "python -m agentteams.vulnscan.mcp", "--params", "task={task}"],
+    "image": "",                          # default agentteams-vulnscan-agent:<agentteams version> (goose)
+    "command": [],                        # []: the driver's command; advanced override with {recipe} {session} {task} {run_id}
 }
 TASK = ("Daily vulnerability remediation: follow your Daily Remediation workflow. "
         "Use the vulnscan tools: read get_summary and "
@@ -112,6 +112,11 @@ def agent_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
     return {**DEFAULT_AGENT, **(cfg.get("agent") or {})}
 
 
+def driver_of(a: dict[str, Any]) -> Driver:
+    """Return the runtime driver ``agent.framework`` selects (ValueError: unknown, or not in this release)."""
+    return agent_drivers.get_driver(str(a.get("framework") or DEFAULT_AGENT["framework"]))
+
+
 def image_tag(a: dict[str, Any]) -> str:
     """Return the agent image tag.
 
@@ -119,7 +124,8 @@ def image_tag(a: dict[str, Any]) -> str:
         a: Agent settings.
 
     Returns:
-        ``agentteams-vulnscan-agent:<agentteams version>`` unless configured.
+        ``agentteams-vulnscan-agent:<agentteams version>`` for goose, ``agentteams-vulnscan-agent-<framework>:...``
+        for another framework, unless ``agent.image`` is configured.
     """
     if a.get("image"):
         return str(a["image"])
@@ -127,7 +133,8 @@ def image_tag(a: dict[str, Any]) -> str:
         ver = metadata.version("agentteams")
     except metadata.PackageNotFoundError:
         ver = "dev"
-    return f"agentteams-vulnscan-agent:{ver}"
+    fw = str(a.get("framework") or "goose")
+    return f"agentteams-vulnscan-agent{'' if fw == 'goose' else '-' + fw}:{ver}"
 
 
 def dockerfile_dir() -> Path:
@@ -139,22 +146,28 @@ def dockerfile_dir() -> Path:
     return Path(str(resources.files("agentteams") / "data" / "vulnscan_agent"))
 
 
-def build_argv(context: Path, tag: str, goose_version: str, goose_sha256: str, python_image: str) -> list[str]:
+def build_argv(context: Path, tag: str, cli_version: str, cli_sha256: str, python_image: str, *,
+               framework: str = "goose") -> list[str]:
     """Return the ``docker build`` command.
 
     Args:
         context: Build context (Dockerfile + ``dist/`` wheel).
         tag: Image tag.
-        goose_version: goose release version.
-        goose_sha256: Expected sha256 of the release tarball.
+        cli_version: The agent CLI's release version.
+        cli_sha256: Expected checksum of the CLI's release asset.
         python_image: Base image (pin by digest).
+        framework: Selects the Dockerfile's install stage (build arg ``AGENT_CLI``).
 
     Returns:
         argv.
+
+    Raises:
+        ValueError: The framework has no driver in this release.
     """
+    cli = agent_drivers.get_driver(framework).image.cli
     return ["docker", "build", "--pull", "-t", tag, "--build-arg", f"PYTHON_IMAGE={python_image}",
-            "--build-arg", f"GOOSE_VERSION={goose_version}", "--build-arg", f"GOOSE_SHA256={goose_sha256}",
-            str(context)]
+            "--build-arg", f"AGENT_CLI={cli}", "--build-arg", f"CLI_VERSION={cli_version}",
+            "--build-arg", f"CLI_SHA256={cli_sha256}", str(context)]
 
 
 def run_lock_path() -> Path:
@@ -230,9 +243,10 @@ def validate_agent(a: dict[str, Any]) -> None:
 
     Numbers follow :func:`run_limits` and the debrief rules (:func:`debrief.debrief_limits`,
     :func:`debrief.debrief_max_tokens`). ``team_dir``, ``key_file`` and ``image`` must be strings
-    (possibly empty); ``model``, ``framework`` and ``recipe`` non-empty strings; ``upstream`` an
-    ``http(s)://host`` URL; ``command`` a non-empty list of strings. Paths are not checked against the
-    filesystem here (:func:`team_dir_problem` runs before every mount).
+    (possibly empty); ``model`` and ``framework`` non-empty strings, the framework one with a driver in
+    this release (:func:`agent_drivers.get_driver`); ``recipe`` a string (empty: the driver's); ``upstream``
+    an ``http(s)://host`` URL; ``command`` a list of strings (empty: the driver's). Paths are not checked
+    against the filesystem here (:func:`team_dir_problem` runs before every mount).
 
     Args:
         a: The ``agent`` block as written (keys absent from it take their defaults).
@@ -240,7 +254,7 @@ def validate_agent(a: dict[str, Any]) -> None:
     Raises:
         ValueError: A value has the wrong type or range; the message names ``agent.<key>``.
     """
-    from agentteams.vulnscan import debrief   # lazy: debrief imports this module
+    from agentteams.vulnscan import debrief  # lazy: debrief imports this module
 
     merged = {**DEFAULT_AGENT, **a}
     run_limits(merged)
@@ -249,104 +263,23 @@ def validate_agent(a: dict[str, Any]) -> None:
     for key in ("team_dir", "key_file", "image"):
         if not isinstance(merged[key], str):
             raise ValueError(f"agent.{key} must be a string (got {repr(merged[key])[:80]})")
-    for key in ("model", "framework", "recipe"):
+    for key in ("model", "framework"):
         if not isinstance(merged[key], str) or not merged[key].strip():
             raise ValueError(f"agent.{key} must be a non-empty string (got {repr(merged[key])[:80]})")
+    # an unknown framework or one without a driver; the dialect's keys and model rule (agent_upstreams)
+    agent_upstreams.validate(merged, driver_of(merged).dialect)
+    if not isinstance(merged["recipe"], str):
+        raise ValueError(f"agent.recipe must be a string (got {repr(merged['recipe'])[:80]})")
     up = merged["upstream"]
     parts = urllib.parse.urlsplit(up) if isinstance(up, str) else None
     if parts is None or parts.scheme not in ("http", "https") or not parts.hostname:
         raise ValueError(f"agent.upstream must be an http:// or https:// URL with a host (got {repr(up)[:80]})")
     cmd = merged["command"]
-    if not isinstance(cmd, list) or not cmd or not all(isinstance(c, str) for c in cmd):
-        raise ValueError(f"agent.command must be a non-empty list of strings (got {repr(cmd)[:80]})")
-
-
-#: Paths a team dir may not be at, inside or above (besides home and its ancestors): the write-root
-#: protected home paths, which include credentials, shell persistence and the whole operator dir
-#: ``~/.config/agentteams``. ``team_dir_problem`` also refuses the configured vulnscan config and
-#: state dirs and judges the resolved path, which ``root_problem`` does not; hence its own check.
-TEAM_DIR_PROTECTED: tuple[str, ...] = HOME_PROTECTED
-
-
-def _at_or_inside(path: str, base: str) -> bool:
-    return path == base or path.startswith(base.rstrip("/") + "/")
-
-
-def _my_uid() -> int:
-    """Return the uid a team dir must be owned by (the operator running vulnscan)."""
-    return os.getuid()
-
-
-def _dir_owner_problem(real: Path) -> str | None:
-    """Return why the directory ``real`` (already resolved) is not safely the operator's, or None (X6).
-
-    The final component itself is judged: it is opened with ``O_NOFOLLOW`` and ``fstat``-ed, so a
-    swap to a symlink after resolution is refused rather than followed.
-    """
-    try:
-        fd = os.open(real, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    except OSError as exc:
-        return f"agent.team_dir {real} cannot be opened as a directory ({exc.strerror})"
-    try:
-        st = os.fstat(fd)
-    finally:
-        os.close(fd)
-    if st.st_uid != _my_uid():
-        return f"agent.team_dir {real} is not owned by you (uid {st.st_uid})"
-    if st.st_mode & 0o022:
-        return f"agent.team_dir {real} is group- or world-writable (mode {st.st_mode & 0o777:o}); chmod go-w it"
-    return None
-
-
-def team_dir_problem(path: str | Path | None, secrets: tuple[str | Path, ...] = ()) -> str | None:
-    """Return why ``path`` may not be mounted as the team dir, or None when it may (R3-3, X6).
-
-    It must be an absolute (or ``~/``) path to an existing directory, free of docker-mount syntax
-    characters, that is not the home directory or an ancestor of it, and not at, inside or above
-    any :data:`TEAM_DIR_PROTECTED` path or the configured vulnscan config or state dir. Both the
-    path as written and its resolved target are compared with both forms of each protected path
-    (so ``/var`` and ``/private/var`` match). The directory itself must be owned by the operator
-    and not group- or world-writable. Used before every mount (runs, self-test, debrief).
-
-    Args:
-        path: ``agent.team_dir`` (or the fallback the caller mounts).
-        secrets: Files that must stay outside the mount (``agent.key_file``). The operator signing key
-            named by ``AGENTTEAMS_DECISION_ED25519_KEYFILE`` is always added (V2-3).
-
-    Returns:
-        A reason, or None.
-    """
-    raw = str(path or "").strip()
-    if not raw:
-        return "agent.team_dir is not set"
-    p = Path(raw).expanduser()
-    if not p.is_absolute():
-        return f"agent.team_dir {raw!r} must be an absolute path"
-    real = p.resolve()
-    if any(c in s for s in (raw, str(real)) for c in ":,") or any(ord(c) < 0x20 for c in raw + str(real)):
-        return f"agent.team_dir {raw!r} contains ':', ',' or a control character (docker mount syntax)"
-    if not real.is_dir():
-        return f"agent.team_dir {real} is not an existing directory"
-    fold = str.lower if sys.platform == "darwin" else str
-    forms = {fold(os.path.normpath(str(p))), fold(str(real))}
-    home = Path(os.path.expanduser("~"))
-    homes = {fold(os.path.normpath(str(home))), fold(str(home.resolve()))}
-    if any(_at_or_inside(h, f) for h in homes for f in forms):
-        return f"agent.team_dir {real} is the home directory or an ancestor of it"
-    for prot in (*TEAM_DIR_PROTECTED, str(paths.config_dir()), str(paths.state_dir())):
-        q = Path(os.path.expanduser(prot))
-        for b in {fold(os.path.normpath(str(q))), fold(str(q.resolve()))}:
-            if any(_at_or_inside(f, b) or _at_or_inside(b, f) for f in forms):
-                return f"agent.team_dir {real} is at, inside or above a protected path ({prot})"
-    keyfile = os.environ.get("AGENTTEAMS_DECISION_ED25519_KEYFILE", "")
-    for secret in (*secrets, *((keyfile,) if keyfile else ())):
-        if not str(secret).strip():
-            continue
-        s = Path(str(secret)).expanduser()
-        for b in {fold(os.path.normpath(str(s))), fold(str(s.resolve()))}:
-            if any(_at_or_inside(b, f) for f in forms):
-                return f"agent.team_dir {real} contains a key file ({secret}); it would be mounted into the container"
-    return _dir_owner_problem(real)
+    if not isinstance(cmd, list) or not all(isinstance(c, str) for c in cmd):
+        raise ValueError(f"agent.command must be a list of strings (got {repr(cmd)[:80]})")
+    problem = driver_of(merged).command_problem(cmd) if cmd else ""   # claude: no override at all
+    if problem:
+        raise ValueError(problem)
 
 
 def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GATEWAY,
@@ -372,34 +305,34 @@ def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GA
     cap = run_cap if max_tokens_total is None else int(max_tokens_total)
     if cap < 1:
         raise ValueError("the gateway token cap must be a positive integer")
-    key = Path(str(a["key_file"])).expanduser()
+    mounts, routes = agent_upstreams.gateway_routes(a, driver_of(a).dialect)   # chat: the pre-driver argv
     budget = a["budget_usd"] if budget_usd is None else budget_usd
     return ["docker", "run", "-d", "--rm", "--name", name, "--read-only", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--user", AGENT_UID, "--pids-limit", "64", "--memory", "256m",
-            "--add-host", "host.docker.internal:host-gateway",
-            "-v", f"{key}:/run/secrets/openrouter.env:ro", "-v", f"{spend_dir}:/work/out:rw",
+            "--add-host", "host.docker.internal:host-gateway", *mounts, "-v", f"{spend_dir}:/work/out:rw",
             tag, "python", "-m", "agentteams.vulnscan.gateway", "--listen", f"0.0.0.0:{GW_PORT}",
-            "--model", str(a["model"]), "--key-file", "/run/secrets/openrouter.env",
-            "--upstream", str(a["upstream"]), "--budget-usd", str(budget),
+            *routes, "--budget-usd", str(budget),
             "--spend-file", "/work/out/spend.json", "--max-tokens-total", str(cap),
             "--max-unmetered-calls", str(max_unmetered), *(["--allow-unmetered"] if allow_unmetered else [])]
 
 
 def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, name: str,
-               gateway: str = GATEWAY, spool_mode: str = "rw", interactive: bool = False) -> list[str]:
+               gateway: str = GATEWAY, spool_mode: str = "rw", interactive: bool = False,
+               driver: Driver | None = None) -> list[str]:
     """Return the isolation flags and mounts shared by the agent, self-test and debrief containers.
 
     Args:
         tag: Image tag (unused here; kept so callers build argv uniformly).
         run_dir: Run directory, mounted read-only at ``/work/run``.
-        sessions_dir: Host dir mounted read-write at :data:`GOOSE_SESSIONS_IN_CONTAINER` (the only
-            other writable mount besides the spool).
+        sessions_dir: Host dir backing the driver's first state dir (:func:`sessions_dir`); with the spool,
+            the driver's state dirs are the only writable mounts (:func:`state_mounts`).
         team_dir: The team workspace, mounted read-only at ``/work/team`` (must pass
             :func:`team_dir_problem`).
         name: Container name.
         gateway: Gateway container the agent reaches.
         spool_mode: ``rw`` for runs; ``ro`` for a debrief, which can explain but not act.
         interactive: Add ``-it`` (debrief).
+        driver: The runtime driver (default: goose).
 
     Returns:
         argv up to (not including) the image.
@@ -411,87 +344,125 @@ def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, n
     if problem:
         raise ValueError(f"refusing to mount the team dir: {problem}")
     return _base_argv(run_dir, sessions_dir, team_dir, executor.spool_dir(), name=name, gateway=gateway,
-                      spool_mode=spool_mode, interactive=interactive)
+                      spool_mode=spool_mode, interactive=interactive, driver=driver)
+
+
+def state_mounts(sessions: Path, driver: Driver) -> list[tuple[Path, str]]:
+    """Return ``(host dir, container dir)`` for each of the driver's state dirs.
+
+    The first is backed by ``sessions`` (``<run>/agent/<framework>-data``), the n-th (n >= 2) by its
+    sibling ``<framework>-data-<n>``.
+    """
+    return [(sessions if i == 0 else sessions.with_name(f"{sessions.name}-{i + 1}"), d)
+            for i, d in enumerate(driver.state_dirs())]
 
 
 def _base_argv(run_dir: Path, sessions_dir: Path, team_dir: Path, spool: Path, *, name: str,
-               gateway: str = GATEWAY, spool_mode: str = "rw", interactive: bool = False) -> list[str]:
+               gateway: str = GATEWAY, spool_mode: str = "rw", interactive: bool = False,
+               driver: Driver | None = None) -> list[str]:
     """Build :func:`agent_base`'s argv without the team-dir check (also hashed by :func:`flags_sha256`)."""
     if spool_mode not in ("rw", "ro"):
         raise ValueError("spool_mode must be rw or ro")
+    d = driver or agent_drivers.GOOSE
+    env = {**d.env({}, f"http://{gateway}:{GW_PORT}"), "VULNSCAN_RUN_DIR": "/work/run",
+           "VULNSCAN_SPOOL": "/work/spool/requests", "VULNSCAN_RESULTS": "/work/spool/results"}
     return ["docker", "run", "--rm", *(["-it"] if interactive else []), "--name", name,
             "--network", NETWORK, "--read-only",
             "--tmpfs", "/tmp:rw,size=256m", "--tmpfs", f"{AGENT_HOME}:rw,size=256m,uid=10001,gid=10001",
+            "--tmpfs", f"{CWD_IN_CONTAINER}:rw,size=16m,uid=10001,gid=10001,mode=0700", "-w", CWD_IN_CONTAINER,
             "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", AGENT_UID,
             "--pids-limit", "256", "--memory", "2g",
             "-v", f"{run_dir}:/work/run:ro", "-v", f"{spool / 'requests'}:/work/spool/requests:{spool_mode}",
-            "-v", f"{spool / 'results'}:/work/spool/results:ro", "-v", f"{team_dir}:/work/team:ro",
-            "-v", f"{sessions_dir}:{GOOSE_SESSIONS_IN_CONTAINER}:rw",
-            "-e", "GOOSE_PROVIDER=openrouter", "-e", f"OPENROUTER_HOST=http://{gateway}:{GW_PORT}",
-            "-e", "OPENROUTER_API_KEY=injected-by-gateway", "-e", "GOOSE_MODE=auto",
-            "-e", "GOOSE_DISABLE_KEYRING=1", "-e", f"XDG_DATA_HOME={AGENT_HOME}/.local/share",
-            "-e", f"XDG_STATE_HOME={GOOSE_STATE_IN_CONTAINER}",
-            "-e", "VULNSCAN_RUN_DIR=/work/run",
-            "-e", "VULNSCAN_SPOOL=/work/spool/requests", "-e", "VULNSCAN_RESULTS=/work/spool/results"]
+            "-v", f"{spool / 'results'}:/work/spool/results:ro",
+            "-v", f"{team_dir}:{agent_drivers.TEAM_IN_CONTAINER}:ro",
+            *(x for host, inside in state_mounts(sessions_dir, d) for x in ("-v", f"{host}:{inside}:rw")),
+            *(x for k, v in env.items() for x in ("-e", f"{k}={v}"))]
 
 
-def sessions_dir(run_dir: Path) -> Path:
-    """Return the host dir holding a run's goose sessions (mounted into the agent and a debrief).
-
-    Args:
-        run_dir: Run directory.
-
-    Returns:
-        ``<run>/agent/goose-data``.
-    """
-    return run_dir / "agent" / "goose-data"
+def sessions_dir(run_dir: Path, driver: Driver | None = None) -> Path:
+    """Return ``<run>/agent/<framework>-data`` (default goose): the host dir of the driver's first state dir."""
+    return run_dir / "agent" / f"{(driver or agent_drivers.GOOSE).name}-data"
 
 
-def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task: str = TASK) -> list[str]:
+def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task: str = TASK,
+               run_id: str = "") -> list[str]:
     """Return the ``docker run`` command for the agent container.
+
+    The command is the driver's (:meth:`Driver.command`) unless ``agent.command`` overrides it (advanced:
+    a template with ``{recipe}``, ``{session}``, ``{task}`` and ``{run_id}``). The agent definition is passed
+    by its absolute path under the read-only team mount; the working directory is an empty tmpfs.
 
     Args:
         a: Agent settings.
         tag: Image tag.
         run_dir: Today's run directory (mounted read-only).
-        session: goose session name (named, so the dead-turn wrapper and a debrief can resume it).
+        session: Session name (named, so the dead-turn wrapper and a debrief can resume it).
         task: Task text (the launcher folds operator notes into it).
+        run_id: The run id.
 
     Returns:
         argv.
 
     Raises:
-        ValueError: ``agent.team_dir`` may not be mounted (:func:`team_dir_problem`).
+        ValueError: ``agent.team_dir`` may not be mounted (:func:`team_dir_problem`), or the framework has
+            no driver.
     """
-    problem = team_dir_problem(a["team_dir"], (str(a.get("key_file") or ""),))
+    d = driver_of(a)
+    problem = team_dir_problem(a["team_dir"], agent_upstreams.secret_paths(a))
     if problem:
         raise ValueError(f"refusing to mount the team dir: {problem}")
     team = Path(str(a["team_dir"])).expanduser().resolve()
-    recipe = "/work/team/" + str(a["recipe"]).lstrip("/")
-    cmd = [part.replace("{recipe}", recipe).replace("{session}", session).replace("{task}", task)
-           for part in a["command"]]
-    return [*agent_base(tag, run_dir, sessions_dir(run_dir), team, name=AGENT_CONTAINER),
-            "-e", f"GOOSE_MODEL={a['model']}", tag, *cmd]
+    recipe = f"{agent_drivers.TEAM_IN_CONTAINER}/" + str(a.get("recipe") or d.default_recipe).lstrip("/")
+    if a.get("command"):
+        cmd = [part.replace("{recipe}", recipe).replace("{session}", session).replace("{run_id}", run_id)
+               .replace("{task}", task) for part in a["command"]]
+    else:
+        cmd = d.command(a, recipe=recipe, session=session, task=task, run_id=run_id)
+    return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=AGENT_CONTAINER, driver=d),
+            *agent_drivers.run_env_args(d, a), tag, *cmd]
 
 
-SELFTEST = selftest_probe.render(GATEWAY, GW_PORT)
+def selftest_script(driver: Driver | None = None, command: list[str] | None = None) -> str:
+    """Return the self-test probe for a driver (default goose): the shared checks plus the driver's own,
+    whose CLI probe runs ``command`` (the ``agent.command`` override) when given, as a run would."""
+    d = driver or agent_drivers.GOOSE
+    return selftest_probe.render(GATEWAY, GW_PORT, key_env=d.key_env, dummy=agent_drivers.DUMMY_KEY,
+                                 entries=d.selftest_entries(list(command or []) or None), cwd=CWD_IN_CONTAINER)
 
 
-def flags_sha256() -> str:
-    """Return the fingerprint of the container flags and the self-test that a passing self-test vouches for (P9).
+SELFTEST = selftest_script()   # goose's probe (the default framework)
+
+
+def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
+    """Return the fingerprint of the runtime and container flags that a passing self-test vouches for (P9, rev. 10).
 
     sha256 over the JSON of the :func:`agent_base` argv and the :func:`gateway_argv` argv, both built
-    with fixed placeholder paths, tag ``img`` and :data:`DEFAULT_AGENT` settings (so only *code*
-    changes move it, not the operator's config), plus the :data:`SELFTEST` script text.
+    with fixed placeholder paths, tag ``img`` and :data:`DEFAULT_AGENT` settings (so the operator's model,
+    budget or paths do not move it), plus the runtime: the driver's name, dialect, env, command template
+    (``agent.command`` when overridden), model variable, default agent definition and image recipe (CLI and
+    pinned version), the self-test script for that driver, and ``image_id``. One framework's passing
+    self-test therefore never vouches for another's, nor for another image.
+
+    Args:
+        a: Agent settings (default :data:`DEFAULT_AGENT`): only ``framework`` and ``command`` are read.
+        image_id: The local image id the self-test ran against.
 
     Returns:
         Hex digest.
+
+    Raises:
+        ValueError: The framework has no driver.
     """
-    placeholder = {**DEFAULT_AGENT, "key_file": "/key"}
+    a = {**DEFAULT_AGENT, **(a or {})}
+    d = driver_of(a)
+    placeholder = {**DEFAULT_AGENT, "key_file": "/key", "key_file_messages": "/key-messages", "framework": d.name}
+    runtime = {"name": d.name, "dialect": d.dialect, "env": d.env({}, f"http://{GATEWAY}:{GW_PORT}"),
+               "command": list(a["command"]) or d.command_template(), "model_env": d.model_env,
+               "recipe": d.default_recipe, "image": [d.image.cli, d.image.version, list(d.image.sha256)]}
     blob = json.dumps({"agent_base": _base_argv(Path("/run"), Path("/sessions"), Path("/team"), Path("/spool"),
-                                                name=AGENT_CONTAINER),
+                                                name=AGENT_CONTAINER, driver=d),
                        "gateway": gateway_argv(placeholder, "img", Path("/spend")),
-                       "selftest": SELFTEST}, sort_keys=True)
+                       "selftest": selftest_script(d, a["command"]), "runtime": runtime, "image_id": image_id}, sort_keys=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
@@ -507,11 +478,13 @@ def selftest_argv(a: dict[str, Any], tag: str, run_dir: Path) -> list[str]:
         argv.
 
     Raises:
-        ValueError: The team dir (``agent.team_dir``, else ``run_dir``) may not be mounted.
+        ValueError: The team dir (``agent.team_dir``, else ``run_dir``) may not be mounted, or the framework
+            has no driver.
     """
+    d = driver_of(a)
     team = Path(str(a["team_dir"] or run_dir)).expanduser().resolve()
-    return [*agent_base(tag, run_dir, sessions_dir(run_dir), team, name=SELFTEST_CONTAINER),
-            tag, "python", "-I", "-c", SELFTEST]
+    return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=SELFTEST_CONTAINER, driver=d),
+            tag, "python", "-I", "-c", selftest_script(d, a.get("command"))]
 
 
 def _docker(argv: list[str], *, check: bool = True, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -590,12 +563,16 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     if not str(a.get("team_dir") or "").strip():   # the old fallback (a state-dir scratch dir) is refused (X6)
         return {"passed": False, "checks": {"team_dir_configured": False},
                 "error": "set agent.team_dir in vulnscan.json first (the self-test mounts it as a run does)"}
+    try:
+        driver = driver_of(a)
+    except ValueError as exc:
+        return {"passed": False, "checks": {"framework_supported": False}, "error": str(exc)}
     tag = image_tag(a)
     work = paths.state_dir() / "selftest"
-    for d in (work / "run", sessions_dir(work / "run"), work / "gateway", executor.spool_dir() / "requests",
-              executor.spool_dir() / "results"):
+    for d in (work / "run", *(h for h, _ in state_mounts(sessions_dir(work / "run", driver), driver)),
+              work / "gateway", executor.spool_dir() / "requests", executor.spool_dir() / "results"):
         d.mkdir(parents=True, exist_ok=True)
-    problem = team_dir_problem(a["team_dir"], (str(a.get("key_file") or ""),))
+    problem = team_dir_problem(a["team_dir"], agent_upstreams.secret_paths(a))
     if problem:
         return {"passed": False, "checks": {"team_dir_allowed": False}, "error": problem}
     try:
@@ -608,14 +585,17 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     _ensure_network()
     try:
         _start_gateway(a, tag, work / "gateway")
-        proc = _docker(selftest_argv(a, tag, work / "run"), check=False, timeout=120)
+        proc = _docker(selftest_argv(a, tag, work / "run"), check=False, timeout=300)   # + a headless CLI run
     finally:
         _docker(["docker", "rm", "-f", SELFTEST_CONTAINER], check=False)
         _stop_gateway()
     line = next((ln for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST ")), "")
     checks = json.loads(line[9:]) if line else {"selftest_ran": False}
-    result = {"passed": bool(checks) and all(checks.values()), "checks": checks, "image": _image_id(tag),
-              "flags_sha256": flags_sha256(), "at": datetime.now(UTC).isoformat(), "stderr": proc.stderr[-1000:]}
+    detail = next((ln[16:] for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-DETAIL ")), "")
+    image = _image_id(tag)
+    result = {"passed": bool(checks) and all(checks.values()), "checks": checks, "framework": driver.name,
+              "image": image, "flags_sha256": flags_sha256(a, image), "at": datetime.now(UTC).isoformat(),
+              "detail": json.loads(detail) if detail else None, "stderr": proc.stderr[-1000:]}
     (paths.state_dir() / "agent-selftest.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result
 
@@ -640,7 +620,12 @@ def selftest_ok(cfg: dict[str, Any]) -> tuple[bool, str]:
         return False, f"the self-test record is not an object ({type(rec).__name__}) — re-run agent-selftest"
     if not rec.get("passed"):
         return False, f"the last isolation self-test FAILED: {rec.get('checks')}"
-    tag = image_tag(agent_cfg(cfg))
+    a = agent_cfg(cfg)
+    try:
+        driver_of(a)
+    except ValueError as exc:
+        return False, str(exc)
+    tag = image_tag(a)
     current = _image_id(tag)
     if not current:   # `docker image inspect` failed: the daemon is down or the image is absent (D10)
         return False, f"{_unreachable(tag)}, then re-run agent-selftest"
@@ -648,8 +633,9 @@ def selftest_ok(cfg: dict[str, Any]) -> tuple[bool, str]:
         return False, "the agent image changed since the last passing self-test — re-run agent-selftest"
     if not rec.get("flags_sha256"):
         return False, "the self-test record predates container-flag binding — re-run agent-selftest"
-    if rec.get("flags_sha256") != flags_sha256():
-        return False, "the container flags or the self-test changed since the last passing self-test — re-run agent-selftest"
+    if rec.get("flags_sha256") != flags_sha256(a, current):
+        return False, ("the runtime (framework, CLI, command), the container flags or the self-test changed since "
+                       "the last passing self-test — re-run agent-selftest")
     return True, "ok"
 
 
@@ -727,10 +713,14 @@ def _not_run_reason(cfg: dict[str, Any], a: dict[str, Any]) -> str:
     """Return why the agent may not run now, or "" (configuration first: on a first run it is the actionable one)."""
     if not a.get("team_dir") or not a.get("key_file"):
         return "agent.team_dir and agent.key_file are required (set them in vulnscan.json)"
+    try:
+        driver_of(a)
+    except ValueError as exc:
+        return str(exc)
     ok, why = (False, "docker is not installed") if not shutil.which("docker") else selftest_ok(cfg)
     if not ok:
         return why
-    problem = team_dir_problem(a["team_dir"], (str(a.get("key_file") or ""),))
+    problem = team_dir_problem(a["team_dir"], agent_upstreams.secret_paths(a))
     if problem:
         return problem
     try:
@@ -777,10 +767,10 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         mine = None
         try:   # only this run's report (an earlier run's was archived under the lock)
             mine = report_store.finalize(run_dir, state, since=status["started"])
-            if state == "completed" and mine is None:   # goose exits 0 after "Ran into this error"
+            if state == "completed" and mine is None:   # e.g. goose exits 0 after "Ran into this error"
                 state = "agent-error"
                 status["reason"] = ("the agent submitted no report of its own"
-                                    + _transcript_error(run_dir / "agent" / "transcript.log"))
+                                    + _transcript_error(run_dir / "agent" / "transcript.log", a))
         except (OSError, ValueError) as exc:
             status["report_problem"] = str(exc)[:300]
             if state == "completed":   # an unverifiable report is not a completed run (fail closed)
@@ -815,8 +805,9 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             return finish("not-run", reason=why)
         out.mkdir(parents=True, exist_ok=True)
         tag = image_tag(a)
-        for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results", sessions_dir(run_dir),
-                  run_dir / "gateway"):
+        driver = driver_of(a)   # _not_run_reason refused an unknown framework
+        for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results", run_dir / "gateway",
+                  *(h for h, _ in state_mounts(sessions_dir(run_dir, driver), driver))):
             d.mkdir(parents=True, exist_ok=True)
         session = f"vulnscan-{run_dir.name}"
         serve = _Server(cfg, run_dir, run_id)
@@ -850,18 +841,17 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             # goose exits 0 after "Ran into this error": a run that never reached the model did nothing.
             state = "agent-error"
             extra["reason"] = ("the agent exited without a single model call (no gateway spend recorded)"
-                               + _transcript_error(run_dir / "agent" / "transcript.log"))
+                               + _transcript_error(run_dir / "agent" / "transcript.log", a))
         return finish(state, exit=rc, timed_out=timed_out, spend=spend, **extra)
 
 
-def _transcript_error(path: Path) -> str:
-    """Return ``": <goose's error line>"`` from a run transcript, or "" (the line is goose's, capped)."""
+def _transcript_error(path: Path, a: dict[str, Any]) -> str:
+    """Return ``": <the CLI's error line>"`` from a run transcript (:meth:`Driver.parse_outcome`), or ""."""
     try:
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
+        hit = driver_of(a).parse_outcome(path.read_text(encoding="utf-8", errors="replace")).error
+    except (OSError, ValueError):
         return ""
-    hit = next((ln.strip() for ln in reversed(lines) if "error" in ln.lower()), "")
-    return f": {hit[:300]}" if hit else ""
+    return f": {hit}" if hit else ""
 
 
 def read_spend(path: Path) -> tuple[dict[str, Any] | None, str]:
@@ -895,7 +885,7 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
         a: Agent settings.
         tag: Image tag.
         run_dir: Today's run directory.
-        session: goose session name.
+        session: Session name.
         serve: The run's request server.
         status: The run's status dict (``stale_requests`` is recorded here).
         task: Task text before notes are folded in.
@@ -915,7 +905,7 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
     _start_gateway(a, tag, run_dir / "gateway")
     timed_out = False
     with open(out / "transcript.log", "w", encoding="utf-8") as log:
-        proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task), stdout=log,
+        proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task, run_id=run_id), stdout=log,
                                 stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 60 * float(a["max_minutes"])
         while proc.poll() is None and time.monotonic() < deadline:
@@ -930,24 +920,30 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
     return timed_out, rc
 
 
-def build_image(cfg: dict[str, Any], *, goose_version: str, goose_sha256: str, python_image: str,
-                source: Path | None = None) -> str:
-    """Build the agent image from this agentteams checkout.
+def build_image(cfg: dict[str, Any], *, cli_version: str, cli_sha256: str, python_image: str,
+                source: Path | None = None, framework: str | None = None) -> str:
+    """Build the agent image for one framework from this agentteams checkout.
 
     Args:
         cfg: Daily config.
-        goose_version: goose release version.
-        goose_sha256: sha256 of the matching linux tarball (from the release page).
+        cli_version: The agent CLI's release version.
+        cli_sha256: Checksum of the matching linux release asset (from the release metadata).
         python_image: Base image, ideally pinned by digest.
         source: agentteams source checkout (default: the one this module runs from).
+        framework: The framework whose CLI to install (default ``agent.framework``).
 
     Returns:
-        The image tag.
+        The image tag (:func:`image_tag` for that framework).
 
     Raises:
-        RuntimeError: Docker is not reachable (checked before ``pip wheel`` runs on the host), the
-            build failed, or no source checkout was found.
+        RuntimeError: The framework has no driver, Docker is not reachable (both checked before ``pip wheel``
+            runs on the host), the build failed, or no source checkout was found.
     """
+    a = {**agent_cfg(cfg), **({"framework": framework} if framework else {})}
+    try:
+        fw = driver_of(a).name
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
     src = source or Path(__file__).resolve().parents[2]
     if not (src / "pyproject.toml").is_file():
         raise RuntimeError(f"no agentteams source checkout at {src} — pass --source")
@@ -962,6 +958,6 @@ def build_image(cfg: dict[str, Any], *, goose_version: str, goose_sha256: str, p
     shutil.copytree(dockerfile_dir(), ctx)
     subprocess.run([sys.executable, "-m", "pip", "wheel", "--no-deps", "-q", "-w", str(ctx / "dist"), str(src)],
                    check=True)
-    tag = image_tag(agent_cfg(cfg))
-    _docker(build_argv(ctx, tag, goose_version, goose_sha256, python_image), timeout=3600)
+    tag = image_tag(a)
+    _docker(build_argv(ctx, tag, cli_version, cli_sha256, python_image, framework=fw), timeout=3600)
     return tag

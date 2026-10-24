@@ -30,7 +30,7 @@ and only within what you signed.
 | Deterministic scan | `engine`, `osv`, `runtimes`, `daily` | your account | nothing secret | read lockfiles, query OSV.dev and release feeds, audit servers over ssh (read-only) |
 | Agent team (goose orchestrator + `vuln-remediation`) | your generated team | Docker container on an internal-only network | a dummy model key | read today's scan; write requests into the spool |
 | `vulnscan` MCP server | `mcp` | inside the agent container | nothing | the agents' tools: read the scan, `request`, `escalate`, `submit_report` |
-| Egress gateway | `gateway` | sidecar container | the model API key (read-only mount) | relay one route and one model; enforce the spend cap and a token cap on every run and debrief (`--max-tokens-total`, from `agent.max_tokens_total` or `agent.debrief_max_tokens`) |
+| Egress gateway | `gateway` | sidecar container | the model API key(s) (read-only mounts) | relay the configured dialect routes (chat; Anthropic Messages and OpenAI Responses when enabled) for the allowed models only, deny by default; enforce the spend cap and a token cap on every run and debrief (`--max-tokens-total`, from `agent.max_tokens_total` or `agent.debrief_max_tokens`) |
 | Executor | `executor` | your account | git, `gh` and ssh credentials; the signed grants | perform a request only under a grant, after the HALT and escalation checks |
 | Ledger | `ledger` | your account | the MAC key, never mounted into a container | record every decision; the review trusts nothing else |
 | Operator CLI | `operator_cli`, `review`, `grant`, `publish` | your terminal | your Ed25519 signing key (read only while signing) | review, resolve, leave notes, sign grants |
@@ -100,8 +100,10 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
 | Your private ops repo (publish grant) | the run's report, review and summary | agent text fenced; home paths, hostname and private IPs scrubbed; content scan; preflight |
 
 **The spend cap** counts the `usage.cost` the upstream reports with each response, after the
-response. Upstream calls are serialised, so at most one call is in flight: the one that crosses a
-cap can overshoot it. Two backstops do not depend on reported
+response (on the Messages and Responses routes: else the operator's price table, else the reply is
+unmetered). Upstream calls are serialised, so at most one call is in flight. On the chat route the
+one that crosses a cap can overshoot it; Messages and Responses calls are reserved first (input
+estimate plus output ceiling), so they cannot. Two backstops do not depend on reported
 cost: a run token cap (`max_tokens_total`), and a refusal after `max_unmetered_calls` replies that
 carry no usable usage (unless `allow_unmetered`). `spend.json` records the unmetered count and is
 written atomically (a temporary file, then a rename). The gateway asks the upstream to include
@@ -156,9 +158,18 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 
 - `team_dir`, `key_file`, `image`: strings, empty allowed (paths are checked against the filesystem
   only before a mount, by `team_dir_problem`);
-- `model`, `framework`, `recipe`: non-empty strings;
+- `model`, `framework`: non-empty strings; `framework` one of `goose`, `claude`, `copilot`, `codex`,
+  `grok` whose runtime driver is in this release (`goose` and `claude` now; the others are refused with
+  `agent.framework <name>: driver not available in this release`);
+- with `framework: claude` (plan revision 13), `model` and every `models` entry must be an Anthropic
+  model id (`claude-...`, or OpenRouter's `anthropic/...`), and an `upstream_messages` of
+  `api.anthropic.com` needs `prices` (or `allow_unmetered`);
+- `upstream_messages`: empty or an `http://` / `https://` URL with a host; `key_file_messages`,
+  `prices`: strings; `models`: a list of model ids; `anthropic_betas`: `null` or a list of beta names;
+  `max_output_tokens`: an integer 1–128 000; `max_turns`: an integer 1–1000;
+- `recipe`: a string (empty: the driver's agent definition);
 - `upstream`: an `http://` or `https://` URL with a host;
-- `command`: a non-empty list of strings;
+- `command`: a list of strings (empty: the driver's command);
 - as in `run_limits`: `budget_usd` a number > 0 and ≤ 1000, `max_minutes` > 0 and ≤ 1440 (no
   booleans, strings, `null`, NaN or infinity); `max_tokens_total` an integer 1–100 000 000;
   `max_unmetered_calls` an integer ≥ 1;
@@ -189,9 +200,9 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Run the agent team after the daily scan |
-| `framework` | `"goose"` | The only framework agent mode runs |
+| `framework` | `"goose"` | Selects the runtime driver ([`agent_drivers`](#agentteamsvulnscanagent_drivers)): the CLI the image installs, its env, command, state dir, self-test checks and debrief. `goose` and `claude` (Claude Code) have drivers in this release |
 | `team_dir` | `""` | Root of the generated goose team's project (it contains `.goose/recipes/`). Required by agent runs, `agent-selftest` and `agent-chat`. Must be an existing directory you own, not group/world-writable; not home, an ancestor of home, or at, inside or above `~/.config/agentteams`, the vulnscan config or state directory, or a credential directory (so at, inside or above `~/.config/agentteams/keys` is always refused); and must not contain `key_file`, nor the operator signing key when `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set (a key kept elsewhere is checked only then) |
-| `recipe` | `".goose/recipes/vuln-remediation.yaml"` | Recipe the container runs, relative to `team_dir`; its prompt must carry the `task` parameter (the generated orchestrator's opens with a role check, so a one-shot run of it stops after answering that) |
+| `recipe` | `""` | Agent definition the container runs, relative to `team_dir` and passed by its absolute path under the read-only team mount; empty means the driver's (goose: `.goose/recipes/vuln-remediation.yaml`, whose prompt must carry the `task` parameter; the generated orchestrator's opens with a role check, so a one-shot run of it stops after answering that) |
 | `model` | `"z-ai/glm-5.3"` | The one model the gateway allows (an OpenRouter model id) |
 | `upstream` | `"http://host.docker.internal:8791"` | Where the gateway sends requests. Without a local route proxy, use `"https://openrouter.ai"` |
 | `key_file` | `""` | File holding `OPENROUTER_API_KEY=...` (or the bare key). Mounted read-only into the gateway only |
@@ -200,13 +211,45 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 | `max_unmetered_calls` | `20` | The gateway refuses after this many successful replies without usable (non-zero) usage or cost (integer ≥ 1). Upstream errors (4xx/5xx replies, and calls that got no reply: DNS failure, connection refused, timeout) are counted separately (`upstream_errors` in `spend.json`) and do not count here |
 | `allow_unmetered` | `false` | Accept replies without usage (then only the token cap, if usage has tokens, and the time cap bound a run) |
 | `max_minutes` | `45` | Time cap per run; the container is removed at the cap |
-| `image` | `""` | Image tag; default `agentteams-vulnscan-agent:<agentteams version>` |
-| `command` | goose `run --recipe {recipe} --name {session} --with-extension "python -m agentteams.vulnscan.mcp" --params task={task}` | Command run in the container |
+| `image` | `""` | Image tag; default `agentteams-vulnscan-agent:<agentteams version>` for goose, `agentteams-vulnscan-agent-<framework>:<agentteams version>` for another framework |
+| `command` | `[]` | Empty: the driver's command (goose: `goose run --recipe {recipe} --name {session} --with-extension "python -m agentteams.vulnscan.mcp" --params task={task}`). **Advanced:** a list overrides it, with `{recipe}`, `{session}`, `{task}` and `{run_id}` substituted; the override is part of `flags_sha256`, so it needs a fresh self-test |
 | `debrief_budget_usd` | `0.5` | Spend cap for `agent-chat` |
 | `debrief_max_minutes` | `20` | Time cap for `agent-chat` |
 | `debrief_max_tokens` | `400000` | Prompt + completion token cap for `agent-chat` (integer 1–100 000 000) |
 
+Keys for runtimes on another gateway dialect ([`agent_upstreams`](#agentteamsvulnscanagent_upstreams);
+goose ignores them, and its gateway command is unchanged):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `upstream_messages` | `""` (`https://openrouter.ai/api/v1`) | Anthropic Messages API base the gateway forwards `claude` to: OpenRouter's Anthropic-compatible route, or `https://api.anthropic.com/v1` |
+| `key_file_messages` | `""` | That upstream's key file (mounted into the gateway only). Empty: `~/.config/agentteams-secrets/anthropic.env` (`ANTHROPIC_API_KEY=...`) for `api.anthropic.com`, else `key_file` (`OPENROUTER_API_KEY=...`) |
+| `models` | `[]` | Further model ids the gateway allows besides `model`. Claude Code's helper models are pinned to `model`, so this is normally empty |
+| `prices` | `""` | Price table file ([format](#agentteamsvulnscangateway)) for upstreams that report no `usage.cost`. **Required for `api.anthropic.com`** (else every reply is unmetered and the run stops after `max_unmetered_calls`); also check whether OpenRouter's Messages route reports `cost` in your acceptance run (`unmetered` in `spend.json`) |
+| `anthropic_betas` | `null` | `anthropic-beta` values the gateway's Messages route allows; `null`: `claude-code-20250219`, `interleaved-thinking-2025-05-14`, `effort-2025-11-24`, `context-1m-2025-08-07` (header-only capabilities Claude Code still sends with experimental betas off). A refused value shows in `spend.json` `refusal_reasons` |
+| `max_output_tokens` | `32000` | The gateway's output ceiling (`--max-output-tokens`) and Claude Code's `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, kept equal so every call fits |
+| `max_turns` | `100` | Claude Code's `--max-turns` |
+
 ---
+
+## Supported manifests
+
+`manifests.discover(root)` lists, and `manifests.parse(path)` reads:
+
+| Ecosystem | Files | Notes |
+|---|---|---|
+| PyPI | `requirements*.txt` (`REQ_NAME`) | `==` pins; the only requirements files a staged fix edits (`check_pin_edit`) |
+| PyPI | `requirements*.lock`, `requirements*.in` (`REQ_SCAN_NAME`) | `==` pins, scanned only, never edited; a `.in` with loose specs is unscannable |
+| PyPI | `poetry.lock`, `uv.lock`, `Pipfile.lock` | |
+| PyPI | `pyproject.toml` next to requirements files (no lockfile) | PEP 621 `[project].dependencies` and `optional-dependencies` `==` pins (groups named like dev/test/lint/doc/type are dev). A pin a requirements file alongside already lists (PEP 503 name and version) is not counted twice; loose entries no requirements file pins make it unscannable for that part |
+| PyPI | `pyproject.toml` alone (no lockfile, no requirements) | unscannable: "pyproject.toml without a lockfile" |
+| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile and `pnpm-lock.yaml` are unscannable |
+| Packagist | `composer.lock` | |
+| not supported | `Cargo.lock`, `environment.yml` / `environment.yaml`, `lake-manifest.json` (`UNSUPPORTED`) | unscannable with the reason (`Rust/crates.io: not supported`, `conda: not supported`, `Lean: not supported`) |
+
+Every manifest kind honours the operator's `exclude`, the skipped directories (`SKIP_DIRS`) and each
+brief's `exclude_paths` and `private_packages`. Unscannable entries are listed in the report; they do not
+make a run partial.
 
 ## Command reference
 
@@ -227,7 +270,7 @@ All commands are `python -m agentteams.vulnscan <command>`. Every command except
 | `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
-| `agent-image build --goose-version V --goose-sha256 S [--python-image IMG] [--source DIR]` | Build the agent image from an agentteams source checkout |
+| `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose` or `claude` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose: against GitHub's release metadata; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this |
 | `agent-selftest` | Prove the container's isolation for the current image ([checks](#selftestcfg)) |
 | `agent-run` | One agent run on the latest scan |
 | `enroll [DIR]… [--discover DIR]… [--level off\|scan\|remediate]` | Enrol projects in the daily scan (operator only: needs a terminal, refuses on CI; exit 2). See [Project registry](#project-registry) |
@@ -393,7 +436,9 @@ sent to OSV, and repositories enrolled at `off` are skipped (`engine.scan_path(.
 **Coverage.** The daily `summary.md` and `review` have a `## Coverage` section: totals per state, then
 names per state grouped by owner (the published review has totals only). Each entry's fix checkout is in
 exactly one state, in this order of precedence: `missing on disk`, `not a git repository`, `excluded`,
-then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
+`nothing to scan` (the checkout holds no dependency manifest that `manifests.discover` lists, unsupported
+lockfiles included; `coverage.nothing_to_scan(path)`; not a coverage gap, and Rule S-VM does not report
+it), then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
 grant yet` (remediate, no such grant), `scan-only`, `opted out` (`off`), `unanswered`. Every further
 checkout is a `duplicate checkout` (or `missing on disk`). A `### Project briefs` part then lists each
 `brief says off; scanned by operator enrolment` mismatch and, per repository, how many manifests its
@@ -402,7 +447,7 @@ published review has totals only).
 
 `status --project DIR [--json]` reports the same vocabulary as `coverage_state` (plus `not enrolled` for
 a project the registry does not know and no `repo_roots` entry scans; one an explicit root scans is
-`fixable` or `scan-only` by the grant), `last_scan_partial` / `last_scan_unscanned` (the last run's feed
+`fixable` or `scan-only` by the grant; one with no dependency manifest is `nothing to scan` either way), `last_scan_partial` / `last_scan_unscanned` (the last run's feed
 errors), `brief_level`, and a `mismatch:` problem for a brief that says `off` on a scanned project.
 
 Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_identity(repo) -> (str, str)`,
@@ -847,16 +892,123 @@ flag; you never run it by hand.
 | Flag | Default | Meaning |
 |---|---|---|
 | `--listen HOST:PORT` | `0.0.0.0:8080` | where it listens |
-| `--model M` | required | the only model relayed |
-| `--key-file PATH` | required | file holding `OPENROUTER_API_KEY=...` or the bare key |
-| `--upstream URL` | `https://openrouter.ai` | http(s) URL requests go to |
+| `--model M` | none | an allowed model (exact match); `--model` and/or `--models` is required |
+| `--models A,B` | none | further allowed models, e.g. a CLI's helper model |
+| `--dialects LIST` | `chat` | routes served: `chat`, `messages`, `responses` (comma-separated, distinct) |
+| `--key-file PATH` | none | the chat upstream's key file (`OPENROUTER_API_KEY=...` or the bare key); also the default key file of the other upstreams. Required for every dialect without its own key file |
+| `--key-file-messages PATH` | `--key-file` | the Messages upstream's key file: `ANTHROPIC_API_KEY=`, else `OPENROUTER_API_KEY=`, else a bare key |
+| `--key-file-responses PATH` | `--key-file` | the Responses upstream's key file: `OPENAI_API_KEY=`, else `XAI_API_KEY=`, else `OPENROUTER_API_KEY=`, else a bare key |
+| `--upstream URL` (alias `--upstream-chat`) | `https://openrouter.ai` | chat upstream; requests go to `<URL>/api/v1/chat/completions` |
+| `--upstream-messages URL` | none | Messages API base, e.g. `https://api.anthropic.com/v1` or `https://openrouter.ai/api/v1`; requests go to `<URL>/messages`. Required with `messages`, refused without it |
+| `--upstream-responses URL` | none | Responses API base, e.g. `https://api.openai.com/v1` or `https://openrouter.ai/api/v1`; requests go to `<URL>/responses`. Required with `responses`, refused without it |
+| `--messages-auth MODE` | `auto` | `x-api-key` or `bearer`; `auto` is `bearer` for an `openrouter.ai` upstream, else `x-api-key` |
+| `--anthropic-betas A,B` | none | `anthropic-beta` values allowed on the Messages route |
+| `--prices PATH` | none | price table (below) |
+| `--max-output-tokens N` | `64000` | ceiling for `max_tokens` (Messages, chat), `max_completion_tokens` (chat) and `max_output_tokens` (Responses); ≥ 1 |
+| `--chat-reserve-tokens N` | `8192` | output tokens reserved for a chat call that names no `max_tokens`; ≥ 1 |
+| `--drain-timeout S` | `120` | seconds to keep reading a reply after the client hung up; finite, ≥ 0 |
 | `--budget-usd X` | `2.0` | spend cap; finite and ≥ 0 |
 | `--spend-file PATH` | none | where `spend.json` is written |
-| `--max-tokens-total N` | `0` | prompt + completion token cap; 0 means none (runs and debriefs always pass a positive cap) |
-| `--max-unmetered-calls N` | `20` | refuse after this many replies without usable usage or cost; ≥ 1 |
+| `--max-tokens-total N` | `0` | prompt + completion token cap across all routes; 0 means none (runs and debriefs always pass a positive cap) |
+| `--max-unmetered-calls N` | `20` | refuse after this many unmetered replies; ≥ 1 |
 | `--allow-unmetered` | off | never refuse for unmetered replies (they are still counted) |
 
-A bad flag value exits 2; so does a key file that cannot be read or holds no key.
+A bad flag value exits 2; so does a key file that cannot be read or holds no key, and a price table
+that cannot be read or is malformed.
+
+**Routes.** Each route is passed through, untranslated, to an upstream that speaks its dialect
+(`gateway_dialects`). Every other path is 403; so is a route whose dialect is not in `--dialects`.
+Paths match exactly: the one query string accepted is `?beta=true` on the Messages routes (Claude Code
+posts to `/v1/messages?beta=true`); it is not forwarded.
+
+| Route | Dialect | Upstream auth |
+|---|---|---|
+| `POST /api/v1/chat/completions` | OpenRouter chat | `Authorization: Bearer` |
+| `POST /v1/messages`, `POST /api/v1/messages` | Anthropic Messages | `x-api-key` and `anthropic-version`, or `Bearer` (`--messages-auth`) |
+| `POST /v1/responses`, `POST /api/v1/responses` | OpenAI Responses | `Authorization: Bearer` |
+| `POST /v1/messages/count_tokens` (and `/api/v1/…`) | — | not served: 404 with a message saying so (clients fall back to their own estimate) |
+| `GET /healthz` | — | 200 |
+
+The agent container's dummy key is never forwarded. Of the client's headers only `Accept` is
+forwarded, plus on Messages `anthropic-version` (only `2023-06-01`) and `anthropic-beta` (only values in
+`--anthropic-betas`); any other value of those two is refused. Errors on the Messages route use
+Anthropic's shape (`{"type": "error", "error": {...}}`); every error body has `error.message`.
+
+**Chat route rewrites.** The model must be allowed; OpenRouter `plugins`, `web_search_options` and
+`transforms` are stripped and `usage: {include: true}` is forced. These rewrites are OpenRouter-only
+and never applied to the other routes.
+
+**Deny by default (every route).** A request is refused with HTTP 400 and counted as `refused`; nothing
+(beyond the chat rewrites above) is stripped. Each refusal's reason is kept in `spend.json`
+(`refusal_reasons`, the last 20 distinct, 200 characters each: key, tool or beta names, never content).
+
+| | Chat (after the rewrites) | Messages | Responses |
+|---|---|---|---|
+| Body keys allowed | `model`, `messages`, `tools`, `tool_choice`, `parallel_tool_calls`, `stream`, `stream_options`, `max_tokens`, `max_completion_tokens`, `temperature`, `top_p`, `top_k`, `min_p`, `top_a`, `stop`, `seed`, `frequency_penalty`, `presence_penalty`, `repetition_penalty`, `response_format`, `reasoning`, `reasoning_effort`, `include_reasoning`, `usage`, `provider`, `user`, `verbosity`, `logprobs`, `top_logprobs` | `model`, `messages`, `system`, `max_tokens`, `metadata`, `stop_sequences`, `stream`, `temperature`, `top_p`, `top_k`, `tools`, `tool_choice`, `thinking`, `output_config` (only `effort`, `format`) | `model`, `input`, `instructions`, `max_output_tokens`, `tools`, `tool_choice`, `parallel_tool_calls`, `temperature`, `top_p`, `stream`, `store` (false only), `background` (false only), `reasoning`, `text`, `metadata`, `truncation`, `include` (only `reasoning.encrypted_content`), `prompt_cache_key` |
+| Refused by name | `models`, `route` (OpenRouter fallbacks would bypass the model allowlist), `n` | `mcp_servers`, `container` | `background: true`, `store: true` (an absent `store` is forced to false), `previous_response_id`, `conversation`, `prompt` |
+| Tool types allowed | `function` | custom tools (no `type`, or `custom`) | `function`, `custom` |
+| Server tools refused | `web_search*`, `openrouter:*`, `file_search`, `code_interpreter`, `mcp`, `computer*`, `image_generation` (and every other type) | `web_search*`, `web_fetch*`, `code_execution*` (and every other typed tool, such as `bash_*`) | `mcp`, `web_search*`, `file_search`, `code_interpreter`, `computer_use*`, `image_generation` (and every other type, such as `local_shell`) |
+| `tool_choice` | `auto`, `none`, `required`, or an object of type `function` | an object of type `auto`, `any`, `tool` or `none` | `auto`, `none`, `required`, or an object of type `function` or `custom` |
+| Output ceiling | `max_tokens` / `max_completion_tokens` optional, 1 … `--max-output-tokens` | `max_tokens` required, 1 … `--max-output-tokens` | `max_output_tokens` required, 1 … `--max-output-tokens` |
+| Content the upstream would fetch | `file_url`, `file_id`, an `image_url` that is not a `data:` URL, a `source` of type `url` or `file` | a `source` of type `url` or `file` | `file_url`, `file_id`, an `image_url` that is not a `data:` URL |
+
+The model must equal one of `--model` / `--models` on every route.
+
+**Metering.** Usage is parsed from every successful reply, JSON or SSE stream:
+
+| Dialect | Usage read from | Prompt tokens | Completion tokens |
+|---|---|---|---|
+| chat | the last `usage` object | `prompt_tokens` | `completion_tokens` |
+| Messages | `message_start.message.usage`, then each `message_delta.usage` (or the message's `usage`) | `input_tokens` + `cache_read_input_tokens` + `cache_creation_input_tokens` | `output_tokens` (the last, cumulative value) |
+| Responses | `response.usage` of `response.completed` (or `.incomplete`, `.failed`), or of the non-streamed response | `input_tokens` (`input_tokens_details.cached_tokens` priced as cache reads) | `output_tokens` |
+
+Spend is the reply's `usage.cost` when the upstream reports one; else the price table's price for the
+model; else unknown. On Messages and Responses, a reply with unknown spend (or nothing non-zero) is
+**unmetered**; on chat the original rule holds (unmetered only when neither cost nor tokens are
+non-zero). Tokens always count toward `--max-tokens-total`, on every route.
+
+**Reservation.** Before any call is relayed, the gateway reserves its worst case:
+tokens = request bytes / 3 (an input over-estimate) + the output ceiling (chat without `max_tokens`:
+`--chat-reserve-tokens`, an estimate rather than a bound); USD = those tokens at the
+model's price-table price (input at the dearer of the input and cache-write prices; 0 without an
+entry). A call whose reservation would cross the budget or the token cap is refused with HTTP 402
+(`reservation refused: ...`) and counted as `refused`. The reservation is released once the call is
+metered.
+
+**Client hang-up.** When the client disconnects mid-reply, the gateway keeps reading the upstream reply
+to its end, for at most `--drain-timeout` seconds, and meters it. A drain the timeout cuts short
+usually has no usage and counts as unmetered (fail closed).
+
+**Price table** (`--prices`), USD per million tokens:
+
+```json
+{
+  "anthropic/model-a": {"input_per_mtok": 3.0, "output_per_mtok": 15.0,
+                        "cache_read_per_mtok": 0.3, "cache_write_per_mtok": 3.75}
+}
+```
+
+`input_per_mtok` and `output_per_mtok` are required; `cache_read_per_mtok` defaults to the input
+price and `cache_write_per_mtok` to twice it. Any other field, or a value that is not a finite number
+≥ 0, makes the gateway exit 2.
+
+**`spend.json`** adds `reserved_usd` and `reserved_tokens` (0 between calls), `drained` (replies read
+on after a client hang-up), `drain_cut` (drains cut short by the timeout) and `refusal_reasons`.
+
+#### `gateway_dialects`
+
+The per-dialect policy and parsers behind the gateway: `ROUTES`, the allowlists above,
+`check_request(dialect, raw, *, models, max_output_tokens, chat_reserve_tokens)` (raises `PolicyError`
+for a refusal),
+`upstream_headers(dialect, client, upstream, anthropic_betas)`, `usage_for(dialect, payload)`
+(returns `(Usage, found)`), `load_prices(path)`, `priced(prices, model, usage)` and
+`reservation(prices, checked)`.
+
+**Live probe.** `scripts/vulnscan-gateway-probe.sh [--model M] [--anthropic-model M]
+[--openai-model M] [--key-file FILE]` (operator-run, outside the sandbox; 8 small paid calls) sends one
+tool-calling request to OpenRouter's `/api/v1/messages` and `/api/v1/responses` with the non-native
+model and with a native model, streamed and not, and prints per call whether a tool call and usage came
+back. The key comes from `~/.config/agentteams-secrets/openrouter.env` and is never printed.
 
 ### `agentteams.vulnscan.executor`
 
@@ -1176,8 +1328,11 @@ Fold the active notes into the task and ledger which ones went in.
 #### `selftest(cfg)`
 
 Run the isolation self-test container (with the gateway it needs) and record the result against
-the image id and `flags_sha256` (a hash of the container and gateway flags and the self-test
-itself). Refuses without `agent.key_file` or `agent.team_dir`, or with a `team_dir` that fails
+the framework, the image id and `flags_sha256`: a hash of the container and gateway flags, the
+self-test itself, the runtime (driver name, dialect, env, command template or the `agent.command`
+override, model variable, default agent definition, CLI and pinned version) and the image id, so one
+framework's passing self-test never vouches for another's (plan revision 10). Self-test records
+written before the driver refactor no longer match: re-run `agent-selftest` once after upgrading. Refuses without `agent.key_file` or `agent.team_dir`, or with a `team_dir` that fails
 `team_dir_problem` (the same check a run makes); there is no fallback directory. It also refuses,
 before starting any container, when Docker is not reachable or the image is not built
 (`checks.docker_reachable: false`; the CLI prints
@@ -1189,17 +1344,28 @@ and exits 1). A `docker` failure part-way through raises; the CLI prints
 |---|---|
 | `no_credential_paths` | no `~/.ssh`, `~/.config/gh`, `.git-credentials`, `.netrc`, `.docker`, `.npmrc`, `.pypirc`, `.aws`, `.gnupg`, `.config/agentteams/keys` |
 | `no_token_env` | no `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `AWS_ACCESS_KEY_ID`; the model key is the dummy |
-| `internet_blocked` | neither example.com nor OpenRouter is reachable directly |
+| `internet_blocked` | neither example.com nor OpenRouter is reachable directly (an HTTP error status counts as reachable) |
+| `provider_apis_blocked` | neither `api.anthropic.com`, `api.openai.com` nor `api.x.ai` is reachable directly, whichever framework is configured |
 | `gateway_reachable` | the gateway answers on the internal network |
 | `readonly_rootfs`, `readonly_run_dir`, `readonly_results` | the root filesystem, run directory and results are read-only |
 | `spool_writable` | the agent can queue requests |
-| `goose_dirs_writable` | goose can create its log, session and config directories (`XDG_STATE_HOME` is `<sessions mount>/state`, so goose's logs survive as `<run>/agent/goose-data/state/goose/logs`; not under the root-owned `.local` the sessions mount creates); without them goose stops before its first model call |
+| `cwd_empty` | the working directory is the empty tmpfs `/work/cwd`, never the team mount (no CLI auto-loads instruction, hook or MCP files from it) |
+| `goose_dirs_writable` (goose driver) | goose can create its log, session and config directories (`XDG_STATE_HOME` is `<sessions mount>/state`, so goose's logs survive as `<run>/agent/goose-data/state/goose/logs`; not under the root-owned `.local` the sessions mount creates); without them goose stops before its first model call |
+| `claude_config_writable` (claude driver) | Claude Code can write its config dir (`CLAUDE_CONFIG_DIR`, `<run>/agent/claude-data`) |
+| `claude_headless_ran` (claude) | the headless probe run ([`selftest_canary`](#agentteamsvulnscanselftest_canary)) exited 0 with a successful `result` event after reaching the local stub |
+| `claude_mcp_attached` (claude) | the CLI's `system/init` event lists exactly one MCP server, `vulnscan`, connected |
+| `claude_tool_inventory` (claude) | every tool in the `system/init` event and in every request is a `mcp__vulnscan__*` tool (or `EndConversation`); a CLI update that adds a built-in tool fails here |
+| `claude_canary_inert` (claude) | the planted `.mcp.json`, `~/.claude.json`, settings hooks, agent, skill, `CLAUDE.md` and `AGENTS.md` had no effect: no marker file, no canary server, the canary token reached neither the model nor the output |
 | `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, a non-root uid (the image runs as 10001) |
+
+The record also keeps `detail` (the claude probe's tool inventory: `init_tools`, `request_tools`,
+`unexpected_tools`, `mcp_servers`, `markers_fired`, `rc`), which `09-accept-framework.sh` prints. The
+self-test container may run for up to 300 s (the headless CLI run).
 
 #### `selftest_ok(cfg)`
 
-`(ok, reason)`: whether a passing self-test exists for the current image and the current container
-flags (`flags_sha256`). When Docker cannot be used the reason is `docker is not reachable or the
+`(ok, reason)`: whether a passing self-test exists for the current image, framework and container
+flags (`flags_sha256`). A framework without a driver in this release is refused with its reason. When Docker cannot be used the reason is `docker is not reachable or the
 agent image <tag> is not built — start Docker (or run agent-image build) first, then re-run
 agent-selftest`.
 
@@ -1218,28 +1384,130 @@ Check every `agent.*` value's type and range ([the rules](#configuration-vulnsca
 
 #### `team_dir_problem(path, secrets)`
 
-Why `path` may not be mounted as the team directory, or `None`. Always refuses a path at, inside or
+Defined in `agentteams.vulnscan.team_dir` and re-exported here. Why `path` may not be mounted as the
+team directory, or `None`. Always refuses a path at, inside or
 above `~/.config/agentteams` (so its `keys/`), home or an ancestor of it, and the vulnscan config and
-state directories. `secrets` (`agent.key_file`) must lie outside it; the signing key named by
+state directories. `secrets` (`agent_upstreams.secret_paths`: `agent.key_file`, the Messages key file
+when it is not `key_file`, and `agent.prices`) must lie outside it; the signing key named by
 `AGENTTEAMS_DECISION_ED25519_KEYFILE` is added only when that variable is set.
+
+#### `flags_sha256(a=None, image_id="")`
+
+The fingerprint above, for agent settings `a` (default `DEFAULT_AGENT`; only `framework` and
+`command` are read) and the image id. Raises `ValueError` for a framework without a driver.
+
+#### `driver_of(a)`
+
+The runtime driver `agent.framework` selects ([`agent_drivers.get_driver`](#agentteamsvulnscanagent_drivers)).
+
+### `agentteams.vulnscan.agent_drivers`
+
+One runtime driver per agent framework, chosen by `agent.framework`. `agent_run` keeps what every
+runtime shares (isolation flags, mounts, gateway, run lock, self-test record); a driver supplies the
+rest. For every driver (plan revision 7) the container's working directory is an empty tmpfs
+(`/work/cwd`), the team is mounted read-only at `/work/team` and the agent definition is passed by
+its absolute path there, and every config home of the CLI points into the tmpfs `$HOME`. For goose this
+changed only the working directory (it was the image's `WORKDIR`, `/work`) and made `XDG_CONFIG_HOME`
+(goose's default, `$HOME/.config`) explicit: goose reads nothing from its working directory.
+
+| Member | Meaning |
+|---|---|
+| `name`, `dialect` | the framework; the gateway route its CLI speaks (`chat`, `messages`, `responses`) |
+| `image` | `ImageRecipe(cli, version, sha256, checksum_source, install)`: the Dockerfile stage (`cli-<cli>`, build arg `AGENT_CLI`), the pinned version and the release-asset digest per `TARGETARCH` |
+| `default_recipe` | the team-relative agent definition (goose `.goose/recipes/vuln-remediation.yaml`) |
+| `key_env`, `model_env` | the dummy-key variable the self-test checks; the variable carrying `agent.model` |
+| `env(a, gw_url)` | the container env (dummy key, provider variables, config homes in the tmpfs home) |
+| `run_env(a)` | per-run env from the settings, passed with `-e` by a run and a debrief (`run_env_args`); default `model_env` = `agent.model` |
+| `state_dirs()` | in-container dirs the CLI writes, host-backed under `<run>/agent/<name>-data` (goose: its sessions) |
+| `command(a, *, recipe, session, task, run_id)` | the CLI argv; `command_template()` gives it with placeholders |
+| `mcp_attach()` | `McpAttach(kind, command)`: how the vulnscan MCP server is attached (goose: a stdio extension) |
+| `parse_outcome(transcript)` | `Outcome(error, model_calls)`: the CLI's error line for an `agent-error` reason |
+| `selftest_entries(command=None)` | probe checks specific to the runtime (goose: `goose_dirs_writable`); a probe that runs the CLI (claude) runs the `agent.command` override when one is set, so the self-test vouches for the command a run uses |
+| `command_problem(command)` | why an `agent.command` override may not be used, or `""`. claude refuses every override: its lockdown (`--bare`, `--tools ""`, `--strict-mcp-config`, the one vulnscan MCP server, `--allowedTools mcp__vulnscan__*`, `--permission-mode dontAsk`) is part of the driver; tune it with `agent.model` and `agent.max_turns`. Checked by `validate_agent` |
+| `debrief()` | `DebriefSupport(resume, note)`, or `None` (then `agent-chat` says `no debrief for <framework>`) |
+
+**The claude driver** (Claude Code, `CLAUDE`). Dialect `messages`; agent definition
+`.claude/agents/vuln-remediation.md`; state dir `/agenthome/.claude-state` (`CLAUDE_CONFIG_DIR`).
+
+- **Image.** Claude Code 2.1.296 (the newest release past the 14-day cooldown when pinned: npm
+  publish time 2026-10-09). The `cli-claude` stage downloads the native linux binary from
+  `https://downloads.claude.ai/claude-code-releases/<version>/linux-<x64|arm64>/claude` and checks its
+  sha256; `vulnscan-agent-image.sh` takes that digest from the release's `manifest.json` after verifying
+  its GPG signature (`manifest.json.sig`, Anthropic's release key
+  `31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`), and compares it with the digest the driver pins.
+- **Env.** `ANTHROPIC_BASE_URL=http://<gateway>:8080` (the gateway's Messages route), the dummy
+  `ANTHROPIC_API_KEY`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`,
+  `DISABLE_AUTOUPDATER`, `DISABLE_UPDATES`, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`,
+  `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` (no pre-release beta headers or paired body fields),
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY`, `ENABLE_TOOL_SEARCH=false`. Per run: `ANTHROPIC_MODEL`,
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL`, `ANTHROPIC_SMALL_FAST_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`,
+  `ANTHROPIC_DEFAULT_OPUS_MODEL` and `CLAUDE_CODE_SUBAGENT_MODEL` all equal `agent.model` (one-model
+  pin), and `CLAUDE_CODE_MAX_OUTPUT_TOKENS` equals the gateway's ceiling (`agent.max_output_tokens`).
+- **Command** ([CLI reference](https://code.claude.com/docs/en/cli-reference),
+  [headless](https://code.claude.com/docs/en/headless)): `claude --bare -p <task> --name <session>
+  --append-system-prompt-file <agent definition> --tools "" --strict-mcp-config --mcp-config <json>
+  --allowedTools "mcp__vulnscan__*" --permission-mode dontAsk --disable-slash-commands
+  --output-format stream-json --verbose --max-turns <agent.max_turns> --model <agent.model>`. `--bare`
+  skips auto-discovery of hooks, skills, plugins, MCP servers, auto memory and `CLAUDE.md` and reads no
+  OAuth or keychain credential; `--tools ""` removes the built-in tools; `--permission-mode dontAsk`
+  denies everything the allow rule does not cover.
+- **MCP.** `--mcp-config` takes the JSON inline (so it is part of the hashed command):
+  one stdio server `vulnscan`, `/usr/local/bin/python -m agentteams.vulnscan.mcp`, with the
+  `VULNSCAN_*` paths in its `env`.
+- **Outcome.** From the stream-json transcript: the `result` event (`is_error`, `subtype`, `errors`),
+  else the last `system/api_retry`; `model_calls` counts distinct assistant message ids.
+- **Debrief.** `claude --bare --resume <session>` with the same tool lockdown (the spool is read-only).
+  Not yet exercised live.
+
+#### `get_driver(name)`
+
+The driver for a framework. Raises `ValueError`: `agent.framework <name>: driver not available in
+this release` for `copilot`, `codex` and `grok`; `agent.framework must be one of ...` for anything
+else.
+
+### `agentteams.vulnscan.agent_upstreams`
+
+The gateway's upstream wiring per driver dialect and the `agent.*` keys it reads (the second key
+table under [Configuration](#configuration-vulnscanjson)). `gateway_routes(a, dialect)` returns the
+`docker run` mounts and gateway flags: for `chat` exactly the pre-driver ones (`--model`, `--key-file`,
+`--upstream`); for `messages`, `--dialects messages --upstream-messages --key-file-messages
+--max-output-tokens --anthropic-betas`, plus `--models` and `--prices` (mounted read-only at
+`/run/secrets/prices.json`) when set. `validate(a, dialect)` checks those keys and the
+Anthropic-models-only rule; `secret_paths(a)` lists every host file the gateway mounts (for
+`team_dir_problem`).
+
+### `agentteams.vulnscan.selftest_canary`
+
+The self-test's headless CLI run, executed inside the agent container. `stub_run(argv, env, *, cwd,
+dialect, base_env, timeout)` starts a loopback stub of the model API (canned Messages or chat replies;
+`count_tokens` 404) and runs the CLI against it. `plant_canary(work, config, markers, token)` plants
+the files the CLI must ignore. `claude_checks(argv, run_env, *, recipe)` runs Claude Code with the
+driver's exact command, the canary planted in its working directory and config home, and returns the
+four `claude_*` checks and the detail dict. Nothing contacts the network beyond the loopback stub, and
+nothing is billed.
 
 ### `agentteams.vulnscan.selftest_probe`
 
 The in-container probe the [self-test](#selftestcfg) runs with the agent's exact flags. It prints one
 line, `SELFTEST {json}`, with one boolean per check; its text is part of `flags_sha256`.
 
-`PROBE_TEMPLATE`: the probe's Python source, with `%s` / `%d` for the gateway host name and port.
+`PROBE_TEMPLATE`: the probe's Python source, with `%(gateway)s`, `%(port)d`, `%(key_env)s`,
+`%(dummy)s`, `%(cwd)s` and `%(entries)s` placeholders.
 
-#### `selftest_probe.render(gateway, port)`
+#### `selftest_probe.render(gateway, port, *, key_env, dummy, entries, cwd)`
 
-The probe source for one gateway: `PROBE_TEMPLATE` filled with the gateway container name and port.
+The probe source for one gateway and one driver: the shared checks, the driver's model-key variable
+(default `OPENROUTER_API_KEY`) holding the dummy key, and the driver's own checks (`entries`).
 
 ### `agentteams.vulnscan.debrief`
 
 #### `run_debrief(cfg, run_dir)`
 
-Resume a past run's goose session with the terminal attached, a read-only spool, and its own
-gateway with the debrief caps.
+Resume a past run's session with the driver's resume command (goose: `goose session --resume --name`;
+claude: `claude --bare --resume <session>`),
+the terminal attached, a read-only spool, and its own gateway with the debrief caps. A framework whose
+driver has no debrief is refused (exit 2) with `no debrief for <framework>`; the debrief is advisory and
+never part of the safety path.
 
 All three debrief limits are checked before anything starts: a bad one returns 2 with
 `debrief refused: agent.debrief_budget_usd must be …` (or the key at fault). The config load

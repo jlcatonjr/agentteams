@@ -16,11 +16,14 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import registry
+from agentteams.vulnscan.manifests import discover
 
 #: Coverage states, in display order. ``not enrolled`` is only reported by ``vulnscan status --project``
 #: (:func:`project_state`): the coverage section lists registry entries, which are enrolled by definition.
+#: ``nothing to scan`` is a workspace with no dependency manifest at all (:func:`nothing_to_scan`); it is not a
+#: coverage gap, so Rule S-VM does not report it.
 STATES = ("fixable", "scan-only", "not covered by the grant yet", "opted out", "excluded", "unanswered",
-          "duplicate checkout", "missing on disk", "not a git repository", "not enrolled")
+          "nothing to scan", "duplicate checkout", "missing on disk", "not a git repository", "not enrolled")
 
 #: Root sources that are scanned.
 SCANNED = ("repo_roots", "registry (scan)", "registry (remediate)")
@@ -158,13 +161,30 @@ def _grant_covers(grants: list[dict[str, Any]], path: str) -> bool:
     return any(grant.covers(g, "stage-fix", str(_real(path))) for g in grants)
 
 
+def nothing_to_scan(path: str | Path) -> bool:
+    """Return whether a workspace directory holds no dependency manifest the scanner would list.
+
+    Unsupported lockfiles (``Cargo.lock`` and the like) count as manifests: they are reported as
+    unscannable, never as nothing to scan. Vendored and generated trees are skipped as in a scan.
+
+    Args:
+        path: The workspace directory (anything but an existing directory is not "nothing to scan").
+
+    Returns:
+        True when :func:`~agentteams.vulnscan.manifests.discover` finds nothing under it.
+    """
+    p = Path(path).expanduser()
+    return p.is_dir() and not discover(p)
+
+
 def states(cfg: dict[str, Any], entries: Iterable[registry.Entry],
            grants: list[dict[str, Any]]) -> list[tuple[str, str, str, str]]:
     """Return the coverage state of every known workspace.
 
     Each registry entry gives one row for its fix checkout; each further checkout gives a
     ``duplicate checkout`` row. Precedence for the fix checkout: missing on disk, not a git repository,
-    excluded, then the level (remediate splits into fixable and not covered by the grant yet).
+    excluded, nothing to scan (no dependency manifest), then the level (remediate splits into fixable and
+    not covered by the grant yet).
 
     Args:
         cfg: Daily config.
@@ -184,6 +204,8 @@ def states(cfg: dict[str, Any], entries: Iterable[registry.Entry],
             state = "not a git repository"
         elif any(within(e.fix_checkout, x) for x in excl):
             state = "excluded"
+        elif nothing_to_scan(e.fix_checkout):
+            state = "nothing to scan"
         elif e.level == "remediate":
             state = "fixable" if _grant_covers(grants, e.fix_checkout) else "not covered by the grant yet"
         else:
@@ -224,6 +246,8 @@ def markdown(rows: list[tuple[str, str, str, str]], *, names: bool = True) -> st
                     for s in STATES if by_owner[owner][s]]
     if counts["unanswered"]:
         out += ["", "Answer the unanswered ones: `python -m agentteams.vulnscan enroll --discover <dir>`."]
+    if counts["nothing to scan"]:
+        out += ["", "Nothing to scan: no dependency manifest in the workspace (not a coverage gap)."]
     if counts["not covered by the grant yet"]:
         out += ["", "Extend the grant to them (operator): `python -m agentteams.vulnscan grant sign ...`."]
     return "\n".join(out) + "\n"
@@ -299,11 +323,14 @@ def project_state(cfg: dict[str, Any] | None, entry: registry.Entry | None, path
         grants: Valid remediation grants.
 
     Returns:
-        The enrolled entry's :func:`states` row state; for a project the registry does not know, ``fixable`` or
-        ``scan-only`` when an explicit ``repo_roots`` entry scans it (the grant decides), else ``not enrolled``.
+        The enrolled entry's :func:`states` row state; for a project the registry does not know, ``nothing to
+        scan`` when it holds no dependency manifest, ``fixable`` or ``scan-only`` when an explicit ``repo_roots``
+        entry scans it (the grant decides), else ``not enrolled``.
     """
     if entry is not None:
         return states(cfg or {}, [entry], grants)[0][1]
+    if nothing_to_scan(path):
+        return "nothing to scan"
     roots = [r for r in effective_roots(cfg or {}, []) if r.scanned]
     if not any(within(path, r.path) for r in roots):
         return "not enrolled"
