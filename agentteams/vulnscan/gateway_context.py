@@ -9,7 +9,7 @@ host's context at run time and passes it to the gateway as read-only file mounts
 |---|---|---|
 | host names | ``socket.gethostname()`` (full and short); on macOS ``scutil --get ComputerName`` / ``LocalHostName`` (and ``<LocalHostName>.local``), best effort; the host part of every ``<server kit>/hosts.conf`` ssh target (destination and ``-J`` hops) and, for ssh-config aliases, the ``hostname`` / ``proxyjump`` that ``ssh -G`` resolves (contacts nothing; best effort) | ``<gateway dir>/dlp/hostnames`` mounted at ``/run/dlp/hostnames:ro``; ``--dlp-hostnames-file`` |
 | private package names | ``private_packages`` of every registry entry's brief (:func:`.registry.load` → :func:`.project_policy.read_policy` of the fix checkout) | ``<gateway dir>/dlp/private-names`` (same mount); ``--dlp-private-names-file`` |
-| secrets | ``~/.config/agentteams-secrets/*.env`` | each file mounted read-only at ``/run/secrets/dlp/<name>``; ``--dlp-secrets-file`` per file |
+| secrets | every ``*.env`` (and ``.env``) file of ``~/.config/agentteams-secrets`` | the directory mounted read-only at ``/run/secrets/dlp/<n>`` (``--mount``, CSV-quoted: any name or path works); ``--dlp-secrets-mount`` per directory, ``--dlp-skip-ok-file`` |
 
 The upstream key file(s) the gateway already mounts are blocked too (the gateway reads their values).
 The gateway is the only container that sees any of this; the agent container mounts none of it.
@@ -20,8 +20,17 @@ break server operations. A name that reveals a host anyway (a fully qualified na
 machine's own name: :func:`revealing_names`) is warned about at every gateway start (stderr) and counted in
 ``<gateway dir>/dlp/notes`` (``hosts_conf_unredacted=N``), which ``review`` shows as an anomaly.
 
-**Unreadable context fails closed.** The gateway exits 2 when a names file or a secrets file cannot be read
-(:class:`agentteams.vulnscan.gateway.DlpContextError`). It runs as uid 10001: Docker Desktop (macOS) maps file
+**Unusable secrets fail closed (R5).** :func:`prepare` raises :class:`DlpRefused` (the run ends ``not-run``) when a
+configured secrets directory exists but cannot be listed, or holds a ``*.env`` file the gateway could not use
+(unreadable, not a regular file, or a symlink out of the directory) that ``agent.dlp_skip_ok`` does not acknowledge
+by path and sha256 (:func:`validate_skip_ok`). Only an acknowledged file's bytes are read here, to hash them; the
+gateway checks the text of the rest (a file that is not UTF-8 makes it exit 2). A missing directory is fine (counted
+in the notes). The paths are printed on the operator's terminal only; the notes, the reason and the run record hold
+counts.
+
+**Unreadable context fails closed.** The gateway exits 2 when a names file or a secrets file or directory cannot be
+read (:class:`agentteams.vulnscan.gateway.DlpContextError`), and records a count in ``<gateway dir>/dlp-refused``
+(:func:`raise_if_refused`). It runs as uid 10001: Docker Desktop (macOS) maps file
 ownership, a Linux Docker Engine bind mount does not (the files keep the operator's uid and 0700/0600 modes), so
 on Linux the gateway refuses to start; :func:`prepare` prints :data:`LINUX_NOTE` there. Making the files
 world-readable is not done: the secrets would then be readable by every local account.
@@ -30,12 +39,16 @@ world-readable is not done: the secrets would then be readable by every local ac
 refused) under the run's gateway dir and regenerated at every start; the argv carries only fixed
 in-container paths, so ``docker inspect`` / ``ps`` show no host name or package name. The self-test
 fingerprint (:func:`agentteams.vulnscan.agent_run.flags_sha256`) hashes the gateway argv built with
-:func:`placeholder` (one fixed secrets file): it covers the presence and paths of these flags and
-mounts, never the machine's values or its number of secrets files, so it does not churn.
+:func:`placeholder` (one fixed secrets directory): it covers the presence and paths of these flags and
+mounts, never the machine's values or its secrets files, so it does not churn. A secrets directory mount names
+its host path (as the key file mounts do); file names stay out of argv (:data:`SKIP_OK` is a file).
 """
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
 import os
 import re
 import shutil
@@ -58,8 +71,10 @@ HOSTNAMES = "hostnames"
 PRIVATE_NAMES = "private-names"
 #: Launcher notes for the operator's review (counts only), regenerated at every start: ``key=value`` lines.
 NOTES = "notes"
-#: In-gateway directory of the mounted secrets files.
+#: In-gateway parent of the mounted secrets directories (the configured directory ``n`` is at ``<this>/<n>``).
 SECRETS_IN_GW = "/run/secrets/dlp"
+#: The acknowledged files (``agent.dlp_skip_ok`` entries that match), one in-gateway path per line.
+SKIP_OK = "skip-ok"
 #: Printed at every gateway start on Linux (@security rc.4 Low 5): the gateway refuses to start (exit 2) on an
 #: unreadable DLP file, and a rootful Linux bind mount keeps the host's owner and modes (0700 / 0600 here).
 LINUX_NOTE = ("on Linux the gateway container (uid 10001) must be able to read the DLP context dir, the key "
@@ -67,7 +82,7 @@ LINUX_NOTE = ("on Linux the gateway container (uid 10001) must be able to read t
               "modes, so the gateway then refuses to start (exit 2) rather than run with an incomplete filter. "
               "Agent mode is verified with Docker Desktop on macOS only (docs: 'Gateway DLP context')")
 HEADER = "# agentteams vulnscan gateway DLP context: machine-local, regenerated at every gateway start\n"
-_SAFE_ENV = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.env")
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 _HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{2,252}")
 _LOCAL = frozenset({"localhost", "localhost.localdomain", "local"})
 
@@ -77,32 +92,53 @@ class Context:
     """Where the gateway's DLP context lives on the host.
 
     Attributes:
-        directory: Host directory holding :data:`HOSTNAMES` and :data:`PRIVATE_NAMES`.
-        secrets_files: Host secrets files, each mounted read-only into the gateway.
+        directory: Host directory holding :data:`HOSTNAMES`, :data:`PRIVATE_NAMES` and :data:`SKIP_OK`.
+        secrets_dirs: Host secrets directories, each mounted read-only into the gateway (R5).
     """
 
     directory: Path
-    secrets_files: tuple[Path, ...] = ()
+    secrets_dirs: tuple[Path, ...] = ()
+
+
+class DlpRefused(RuntimeError):
+    """The gateway's DLP context is incomplete, so no gateway starts and the run ends ``not-run`` (R5).
+
+    The message holds counts only: it reaches the run record. The paths went to the operator's terminal.
+    """
 
 
 def for_dir(spend_dir: Path) -> Context:
-    """Return the context location for a gateway dir, with no secrets files (nothing is read or written)."""
+    """Return the context location for a gateway dir, with no secrets directories (nothing is read or written)."""
     return Context(spend_dir / DIR_NAME)
 
 
 def placeholder() -> Context:
     """The fixed context :func:`agentteams.vulnscan.agent_run.flags_sha256` hashes (no machine values)."""
-    return Context(Path("/spend") / DIR_NAME, (Path("/secrets/secret.env"),))
+    return Context(Path("/spend") / DIR_NAME, (Path("/secrets"),))
+
+
+def bind_spec(source: Path, target: str) -> str:
+    """Return a read-only ``--mount`` value, CSV-quoted so a comma, colon or quote in ``source`` stays one path.
+
+    Raises:
+        ValueError: ``source`` holds a line break (docker's CSV parser cannot take one).
+    """
+    if "\n" in str(source) or "\r" in str(source):
+        raise ValueError("a mount source with a line break cannot be passed to docker")
+    buf = io.StringIO()
+    csv.writer(buf, lineterminator="").writerow(["type=bind", f"source={source}", f"target={target}", "readonly"])
+    return buf.getvalue()
 
 
 def argv_parts(ctx: Context) -> tuple[list[str], list[str]]:
     """Return ``(docker mounts, gateway flags)`` for a context: every mount read-only, only fixed paths in flags."""
     mounts = ["-v", f"{ctx.directory}:{IN_GW}:ro"]
     flags = ["--dlp-hostnames-file", f"{IN_GW}/{HOSTNAMES}", "--dlp-private-names-file", f"{IN_GW}/{PRIVATE_NAMES}"]
-    for f in ctx.secrets_files:
-        inside = f"{SECRETS_IN_GW}/{f.name}"
-        mounts += ["-v", f"{f}:{inside}:ro"]
-        flags += ["--dlp-secrets-file", inside]
+    for n, d in enumerate(ctx.secrets_dirs):
+        mounts += ["--mount", bind_spec(d, f"{SECRETS_IN_GW}/{n}")]
+        flags += ["--dlp-secrets-mount", f"{SECRETS_IN_GW}/{n}"]
+    if ctx.secrets_dirs:
+        flags += ["--dlp-skip-ok-file", f"{IN_GW}/{SKIP_OK}"]
     return mounts, flags
 
 
@@ -208,12 +244,107 @@ def private_names(entries: Iterable[registry.Entry] | None = None) -> tuple[list
     return sorted(pats), ""
 
 
-# ---------------------------------------------------------------- secrets files
+# ---------------------------------------------------------------- secrets directories (R5)
 
-def secrets_files(directory: str | Path = SECRETS_DIR) -> tuple[Path, ...]:
-    """The secrets directory's ``*.env`` files whose names and paths are safe in a ``-v`` mount spec."""
-    return tuple(p for p in gateway_dlp.secrets_dir_files(directory)
-                 if _SAFE_ENV.fullmatch(p.name) and ":" not in str(p) and "," not in str(p))
+def validate_skip_ok(value: object) -> list[tuple[str, str]]:
+    """Check ``agent.dlp_skip_ok``: a list of ``{"path": str, "sha256": 64 lower-case hex}`` objects.
+
+    Returns:
+        ``(absolute path with ~ expanded, sha256)`` per entry.
+
+    Raises:
+        ValueError: The value or an entry has the wrong shape; the message names ``agent.dlp_skip_ok[i]``.
+    """
+    if not isinstance(value, list):
+        raise ValueError(f"agent.dlp_skip_ok must be a list of {{path, sha256}} objects (got {repr(value)[:80]})")
+    out = []
+    for i, e in enumerate(value):
+        path, digest = (e.get("path"), e.get("sha256")) if isinstance(e, dict) else (None, None)
+        if not isinstance(e, dict) or set(e) != {"path", "sha256"} or not isinstance(path, str) or not path.strip() \
+                or "\0" in path or not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+            raise ValueError(f"agent.dlp_skip_ok[{i}] must be {{\"path\": <file>, \"sha256\": <64 lower-case hex>}} "
+                             f"(got {repr(e)[:80]})")
+        out.append((os.path.abspath(os.path.expanduser(path)), digest))
+    return out
+
+
+def _unusable(f: Path, root: Path) -> str:
+    """Why the gateway could not use ``f``, or "" (the bytes are not read: the gateway checks the text itself)."""
+    if f.is_symlink() and not f.resolve().is_relative_to(root):
+        return "a symlink out of the directory (the gateway cannot follow it)"
+    if not f.is_file():
+        return "not a regular file"
+    return "" if os.access(f, os.R_OK) else "cannot be read"
+
+
+def _norm(path: str) -> str:
+    """A file path with its directory resolved (``/var`` and ``/private/var`` agree), the name itself kept."""
+    return os.path.join(os.path.realpath(os.path.dirname(path)), os.path.basename(path))
+
+
+def _sha256(f: Path) -> str:
+    """The sha256 of a regular file's bytes, or "" (unreadable, or not a regular file: a FIFO would block)."""
+    try:
+        return hashlib.sha256(f.read_bytes()).hexdigest() if f.is_file() else ""
+    except OSError:   # an acknowledgement needs the bytes: without them the file is not acknowledged
+        return ""
+
+
+def check_secrets(directories: Iterable[str | Path], skip_ok: Iterable[tuple[str, str]] = ()
+                  ) -> tuple[tuple[Path, ...], list[str], list[str], dict[str, int]]:
+    """Check the configured secrets directories on the host before they are mounted (R5).
+
+    Args:
+        directories: The configured secrets directories (``~`` expanded here).
+        skip_ok: :func:`validate_skip_ok` entries; one that matches a file's path and current sha256 lets
+            that file go unchecked (the gateway skips it too when it cannot read it).
+
+    Returns:
+        ``(directories to mount, problems (each names a path: terminal only), acknowledged in-gateway paths,
+        counts for the notes)``.
+    """
+    acks = {_norm(p): digest for p, digest in skip_ok}
+    mounts: list[Path] = []
+    problems: list[str] = []
+    acked: list[str] = []
+    counts = {"secrets_dirs_missing": 0, "secrets_files": 0}
+    for raw in directories:
+        d = Path(os.path.abspath(os.path.expanduser(str(raw))))
+        if not os.path.lexists(d):   # not configured on this machine: fine
+            counts["secrets_dirs_missing"] += 1
+            continue
+        try:
+            root = d.resolve(strict=True)
+            files = gateway_dlp.env_candidates(d) if d.is_dir() and "\n" not in str(d) and "\r" not in str(d) else None
+        except OSError:
+            files = None
+        if files is None:
+            problems.append(f"{d}: a configured secrets directory that cannot be read")
+            continue
+        inside = f"{SECRETS_IN_GW}/{len(mounts)}"
+        mounts.append(d)
+        for f in files:
+            counts["secrets_files"] += 1
+            if _norm(str(f)) in acks and _sha256(f) == acks[_norm(str(f))]:   # only an acknowledged file is read
+                acked.append(f"{inside}/{f.name}")
+                continue
+            why = _unusable(f, root)
+            if why:
+                problems.append(f"{f}: {why}")
+    counts["secrets_skip_ok"] = len(acked)
+    counts["secrets_skip_ok_unmatched"] = len(acks) - len(acked)
+    return tuple(mounts), problems, acked, counts
+
+
+def raise_if_refused(spend_dir: Path) -> None:
+    """Raise :class:`DlpRefused` when the gateway recorded a DLP-context refusal (it exited 2) in ``spend_dir``."""
+    marker = spend_dir / gateway_dlp.REFUSED_NAME
+    try:
+        why = marker.read_text(encoding="utf-8", errors="replace").strip()[:300] if marker.is_file() else ""
+    except OSError as exc:   # present but unreadable: still a refusal
+        why = f"its record could not be read ({type(exc).__name__})"
+    if why:
+        raise DlpRefused(f"the gateway refused to start (exit 2): {why}; see 'Gateway DLP context' in the docs")
 
 
 # ---------------------------------------------------------------- writing
@@ -227,21 +358,25 @@ def _write(path: Path, lines: Iterable[str]) -> None:
         fh.write(HEADER + "".join(f"{ln}\n" for ln in lines))
 
 
-def prepare(spend_dir: Path, *, kit_dir: Path | None = None, secrets_dir: str | Path = SECRETS_DIR,
-            entries: Iterable[registry.Entry] | None = None) -> Context:
+def prepare(spend_dir: Path, *, kit_dir: Path | None = None,
+            secrets_dir: str | Path | Iterable[str | Path] = SECRETS_DIR,
+            entries: Iterable[registry.Entry] | None = None, skip_ok: object = None) -> Context:
     """Gather the host's DLP context and write it under ``spend_dir`` (the gateway dir) for one gateway start.
 
     Args:
         spend_dir: The gateway's host dir (``<run>/gateway``, the self-test's or a debrief's).
         kit_dir: Server-kit config dir (default :func:`.paths.server_kit_dir`).
-        secrets_dir: The agentteams secrets directory.
+        secrets_dir: The agentteams secrets directory, or several (each mounted at ``/run/secrets/dlp/<n>``).
         entries: Registry entries (default: :func:`.registry.load`).
+        skip_ok: ``agent.dlp_skip_ok`` (:func:`validate_skip_ok`).
 
     Returns:
         The context to pass to :func:`agentteams.vulnscan.agent_run.gateway_argv`.
 
     Raises:
-        ValueError: The context dir is a symlink or not a directory (refused, never followed).
+        ValueError: The context dir is a symlink or not a directory (refused, never followed), or ``skip_ok``
+            is malformed.
+        DlpRefused: A secrets directory or file the gateway could not use (R5; the paths are printed on stderr).
         OSError: The context cannot be written (the gateway is not started without it).
     """
     d = spend_dir / DIR_NAME
@@ -258,8 +393,23 @@ def prepare(spend_dir: Path, *, kit_dir: Path | None = None, secrets_dir: str | 
         print(f"vulnscan: gateway DLP: warning: {unredacted_note(len(revealing))}", file=sys.stderr)
     _write(d / HOSTNAMES, _hostnames(kit, local))
     _write(d / PRIVATE_NAMES, names)
-    _write(d / NOTES, [f"hosts_conf_unredacted={len(revealing)}"])
-    files = secrets_files(secrets_dir)
+    dirs = [secrets_dir] if isinstance(secrets_dir, (str, Path)) else list(secrets_dir)
+    mounts, problems, acked, counts = check_secrets(dirs, validate_skip_ok([] if skip_ok is None else skip_ok))
+    _write(d / SKIP_OK, acked)
+    _write(d / NOTES, [f"hosts_conf_unredacted={len(revealing)}", *(f"{k}={v}" for k, v in counts.items()),
+                       f"secrets_problems={len(problems)}"])   # counts only: the review may be published
+    refused = spend_dir / gateway_dlp.REFUSED_NAME
+    if os.path.lexists(refused):   # an earlier start's refusal must not end this one
+        refused.unlink()
     if sys.platform.startswith("linux"):
         print(f"vulnscan: gateway DLP: {LINUX_NOTE}", file=sys.stderr)
-    return Context(d, files)
+    if counts["secrets_skip_ok_unmatched"]:
+        print(f"vulnscan: gateway DLP: {counts['secrets_skip_ok_unmatched']} agent.dlp_skip_ok entr(ies) match no "
+              "current file (moved, or edited since: an edited file needs its new sha256)", file=sys.stderr)
+    for line in problems:   # the operator's terminal only: never the notes, the reason or the run record
+        print(f"vulnscan: gateway DLP: {line}", file=sys.stderr)
+    if problems:
+        raise DlpRefused(f"gateway DLP: {len(problems)} secrets director(ies) or file(s) the gateway cannot use "
+                         "(paths on the terminal); fix their permissions, or acknowledge one exact file version in "
+                         "agent.dlp_skip_ok ({\"path\": ..., \"sha256\": ...})")
+    return Context(d, mounts)

@@ -27,6 +27,7 @@ DEFAULT_AGENT: dict[str, Any] = {
     "max_minutes": 45,
     "image": "",                          # default agentteams-vulnscan-agent:<agentteams version> (goose)
     "command": [],                        # []: the driver's command; advanced override with {recipe} {session} {task} {run_id}
+    "dlp_skip_ok": [],                    # [{"path", "sha256"}]: secrets files the DLP check may skip (R5; that exact version)
 }
 
 
@@ -122,7 +123,7 @@ def validate_agent(a: dict[str, Any]) -> None:
     Raises:
         ValueError: A value has the wrong type or range; the message names ``agent.<key>``.
     """
-    from agentteams.vulnscan import debrief  # lazy: debrief imports this module
+    from agentteams.vulnscan import debrief, gateway_context  # lazy: debrief imports this module
 
     merged = {**DEFAULT_AGENT, **a}
     run_limits(merged)
@@ -148,3 +149,4 @@ def validate_agent(a: dict[str, Any]) -> None:
     problem = driver_of(merged).command_problem(cmd) if cmd else ""   # claude, copilot, codex: no override at all
     if problem:
         raise ValueError(problem)
+    gateway_context.validate_skip_ok(merged["dlp_skip_ok"])   # R5: a list of {path, sha256}

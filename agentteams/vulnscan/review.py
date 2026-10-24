@@ -233,6 +233,7 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
                    f"roots {len(g['repo_roots'])}, hosts {', '.join(g['hosts']) or '—'}")
     out += [f"- problem: {_line(p)}" for p in problems] + [""]
     out += _coverage_section(for_publish)
+    out += _dlp_skip_section(for_publish)
 
     by_kind: dict[str, list[dict[str, Any]]] = {}
     for r in window:
@@ -345,9 +346,37 @@ def _gateway_note_lines(notes_path: Path) -> list[str]:
         text = notes_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):   # absent (no gateway start yet) or unreadable: nothing to report
         return []
-    count = next((int(v) for k, _, v in (ln.partition("=") for ln in text.splitlines())
-                  if k == "hosts_conf_unredacted" and v.isdigit()), 0)
-    return [f"- gateway DLP: {gateway_context.unredacted_note(count)}"] if count else []
+    notes = {k: int(v) for k, _, v in (ln.partition("=") for ln in text.splitlines()) if v.isdigit()}
+    count = notes.get("hosts_conf_unredacted", 0)
+    out = [f"- gateway DLP: {gateway_context.unredacted_note(count)}"] if count else []
+    if notes.get("secrets_problems"):   # R5: the run was refused (not-run); the paths were on the terminal
+        out.append(f"- gateway DLP: {notes['secrets_problems']} secrets director(ies) or file(s) the gateway could not "
+                   "use; the agent did not run")
+    if notes.get("secrets_skip_ok"):
+        out.append(f"- gateway DLP: {notes['secrets_skip_ok']} secrets file(s) not checked (acknowledged in "
+                   "agent.dlp_skip_ok): their secrets are not blocked")
+    if notes.get("secrets_skip_ok_unmatched"):
+        out.append(f"- gateway DLP: {notes['secrets_skip_ok_unmatched']} agent.dlp_skip_ok entr(ies) match no current "
+                   "file (moved, or edited since)")
+    return out
+
+
+def _dlp_skip_section(for_publish: bool) -> list[str]:
+    """Return the ``agent.dlp_skip_ok`` entries (R5): path and sha256 on the terminal, a count when published."""
+    from agentteams.vulnscan import agent_settings, daily, gateway_context   # lazy, as in _coverage_section
+
+    try:
+        entries = gateway_context.validate_skip_ok(agent_settings.agent_cfg(daily.load_config())["dlp_skip_ok"])
+    except FileNotFoundError:   # no config yet: no acknowledgements
+        return []
+    except (OSError, ValueError) as exc:   # shown, not hidden: the coverage section reports the config too
+        return ["## DLP skip acknowledgements", "", f"- config unusable, entries unknown: {_line(exc)}", ""]
+    if not entries:
+        return []
+    out = ["## DLP skip acknowledgements (`agent.dlp_skip_ok`)", ""]
+    if for_publish:
+        return [*out, f"- {len(entries)} secrets file version(s) the DLP check may skip.", ""]
+    return [*out, *(f"- `{_code(path)}` sha256 `{digest}`" for path, digest in entries), ""]
 
 
 def _confinement_notice() -> list[str]:

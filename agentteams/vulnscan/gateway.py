@@ -40,7 +40,9 @@ internal network the agent container sits on, and a bridge out. It enforces:
   host names and private IP addresses in message text are redacted and counted in ``dlp_redactions``.
   In a container the launcher supplies the host's context (:mod:`.gateway_context`): its host names
   (``--dlp-hostnames-file``), the enrolled projects' private package names (``--dlp-private-names-file``)
-  and the host's secrets files (``--dlp-secrets-file``), all as read-only file mounts.
+  and the host's secrets directories (``--dlp-secrets-mount``, each a read-only directory mount; files the
+  operator acknowledged in ``agent.dlp_skip_ok`` are listed in ``--dlp-skip-ok-file``). A secrets directory or
+  file it cannot read stops it (exit 2, after writing a count to ``dlp-refused`` next to the spend file).
   ``--dlp-responses`` also flags secrets in replies (``dlp_response_flags``) without altering them.
 - **Listener.** TCP ``--listen HOST:PORT`` on the container network (default), or for host-side use
   ``--listen unix:PATH``: a 0600 Unix socket admitting only ``--peer-uid`` by kernel peer credentials
@@ -563,6 +565,10 @@ def _parser() -> argparse.ArgumentParser:
                    help="env file whose secret values are blocked by exact match (repeatable; never logged)")
     p.add_argument("--dlp-secrets-dir", default=dlp.SECRETS_DIR,
                    help="directory whose *.env files are loaded like --dlp-secrets-file when present ('' : none)")
+    p.add_argument("--dlp-secrets-mount", type=Path, action="append", default=[],
+                   help="mounted secrets directory whose *.env files are all loaded (repeatable; R5)")
+    p.add_argument("--dlp-skip-ok-file", type=Path, default=None,
+                   help="acknowledged unreadable secrets files, one in-gateway path per line (agent.dlp_skip_ok)")
     p.add_argument("--dlp-hostname", action="append", default=[], help="a host name to redact (repeatable)")
     p.add_argument("--dlp-hostnames-file", type=Path, default=None,
                    help="host names to redact, one per line (the launcher's host context; kept out of argv)")
@@ -592,6 +598,12 @@ def _dlp_filter(a: argparse.Namespace, keys: Collection[str], key_files: Collect
     """
     files = [*key_files, *a.dlp_secrets_file, *(dlp.secrets_dir_files(a.dlp_secrets_dir) if a.dlp_secrets_dir else [])]
     values, unreadable = dlp.load_secret_files(files)
+    skip_ok = dlp.read_private_names(a.dlp_skip_ok_file) if a.dlp_skip_ok_file is not None else []
+    mounted, bad_dirs, bad_files, _ = dlp.load_secret_mounts(a.dlp_secrets_mount, skip_ok)
+    values |= mounted
+    unreadable += bad_files
+    if bad_dirs:   # R5: a mounted secrets directory the gateway cannot list hides every secret in it
+        raise DlpContextError(f"{bad_dirs} DLP secrets director(ies) and {unreadable} file(s) could not be read")
     if unreadable:   # fail closed like the names files: a secret the filter cannot load is a secret it lets out
         raise DlpContextError(f"{unreadable} DLP secrets file(s) could not be read")
     names = _csv(a.dlp_private_names)
@@ -601,6 +613,20 @@ def _dlp_filter(a: argparse.Namespace, keys: Collection[str], key_files: Collect
     if a.dlp_hostnames_file is not None:
         hosts += dlp.read_private_names(a.dlp_hostnames_file)   # the same one-entry-per-line format
     return dlp.Filter(secrets={*keys, *values}, hostnames=hosts, private_names=names)
+
+
+def _dlp_refused(spend_file: Path | None, why: str) -> int:
+    """Record a DLP-context refusal next to the spend file (counts only; the launcher ends the run not-run, R5).
+
+    Returns:
+        2, the gateway's exit status.
+    """
+    if spend_file is not None:
+        try:
+            (spend_file.parent / dlp.REFUSED_NAME).write_text(why[:300] + "\n", encoding="utf-8")
+        except OSError as exc:   # exit 2 still refuses: the launcher's network connect then fails
+            print(f"gateway: cannot record the refusal: {type(exc).__name__}", file=sys.stderr)
+    return 2
 
 
 def _server(p: argparse.ArgumentParser, a: argparse.Namespace, handler: type, meter: Meter) -> Any:
@@ -702,11 +728,11 @@ def main(argv: list[str] | None = None) -> int:
                               {key_files[k] for k in dialects if key_files[k] is not None})
     except DlpContextError as exc:
         print(f"gateway: {exc}; refusing to start ({DLP_UNREADABLE_HINT})", file=sys.stderr)
-        return 2
+        return _dlp_refused(a.spend_file, str(exc))
     except (OSError, UnicodeDecodeError) as exc:
         print(f"gateway: cannot read a DLP names file (private names or host names): {type(exc).__name__}; "
               f"refusing to start ({DLP_UNREADABLE_HINT})", file=sys.stderr)
-        return 2
+        return _dlp_refused(a.spend_file, f"a DLP names file could not be read ({type(exc).__name__})")
     meter = Meter(a.budget_usd, a.spend_file, max_tokens=a.max_tokens_total,
                   max_unmetered=a.max_unmetered_calls, allow_unmetered=a.allow_unmetered)
     handler = make_handler(model=a.model, models=_csv(a.models), meter=meter, upstreams=upstreams, prices=prices,

@@ -405,10 +405,17 @@ def _ensure_network() -> None:
 
 
 def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path) -> None:
+    """Start the gateway (gateway_context.DlpRefused: an unusable secrets dir or file, or its exit 2; R5)."""
     _docker(["docker", "rm", "-f", GATEWAY], check=False)
-    _docker(gateway_argv(a, tag, spend_dir, dlp=gateway_context.prepare(spend_dir)))   # B2: the host's DLP context
-    _docker(["docker", "network", "connect", NETWORK, GATEWAY])
+    dlp = gateway_context.prepare(spend_dir, skip_ok=a.get("dlp_skip_ok") or [])   # B2: the host's DLP context
+    _docker(gateway_argv(a, tag, spend_dir, dlp=dlp))
+    try:
+        _docker(["docker", "network", "connect", NETWORK, GATEWAY])
+    except RuntimeError:   # the gateway already exited: its DLP-context refusal, if any, is the reason
+        gateway_context.raise_if_refused(spend_dir)
+        raise
     time.sleep(2)
+    gateway_context.raise_if_refused(spend_dir)
 
 
 def _stop_gateway() -> None:
@@ -684,7 +691,7 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             d.mkdir(parents=True, exist_ok=True)
         session = f"vulnscan-{run_dir.name}"
         serve = _Server(cfg, run_dir, run_id)
-        timed_out, rc, launch_error, terminated = False, -1, "", False
+        timed_out, rc, launch_error, terminated, refused = False, -1, "", False, ""
         with sigterm_raises_exit():
             try:   # a broken ledger (ValueError) here also ends the run as agent-error, never a crash
                 timed_out, rc = _launch(a, tag, run_dir, session, serve, status, task, run_id)
@@ -692,6 +699,8 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
                 if exc.code != SIGTERM_EXIT:
                     raise
                 terminated = True
+            except gateway_context.DlpRefused as exc:   # R5: the DLP check cannot cover every secret; no agent started
+                refused = str(exc)[:300]
             except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:   # docker / launcher failure
                 launch_error = f"{type(exc).__name__}: {exc}"[:300]
             finally:
@@ -705,6 +714,8 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         if terminated:
             finish("agent-error", reason="terminated by SIGTERM; the agent and gateway containers were removed")
             raise SystemExit(SIGTERM_EXIT)
+        if refused:
+            return finish("not-run", reason=refused)
         if launch_error:
             return finish("agent-error", reason=f"launcher failed: {launch_error}")
         spend, spend_problem = read_spend(run_dir / "gateway" / "spend.json")
