@@ -6,6 +6,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.4] - 2026-10-24
+
+### release notes
+
+agentteams 1.1.0-rc.4 is the fourth release candidate of the 1.1 line. It adds the Copilot and Codex runtimes for the
+vulnscan remediation agent, closes the problems left open by the rc.4 security reviews, scores severity from CVSS,
+and scans repositories in parallel. Keep pinning `v1.0.x` where you need the stable line.
+
+- **Two more runtimes for `agent.framework`.**
+  - **GitHub Copilot CLI 1.0.95:** bring your own key through the gateway, offline, with no GitHub sign-in. It
+    offers only the vulnscan tools; every built-in tool is excluded.
+  - **Codex CLI 0.162.1:** opt-in. Its one built-in tool that no switch removes, `apply_patch`, must be accepted in
+    `agent.accept_residual_tools`; the self-test shows that the read-only sandbox rejects its writes.
+  - **Claude Code** runs on an Anthropic Console API key through the gateway. Signing in with a Claude.ai
+    subscription is not supported: Anthropic's terms do not allow third-party software to hold or forward those
+    credentials.
+- **The agent reads a checked copy of its definition.**
+  - Copilot gets a copy that vulnscan writes, with only `name` and `description` in its front matter, and never
+    sees the team's other agent files. The generated team file now works unchanged; the keys removed from it are
+    listed by `review`.
+  - goose reads a copy of its recipe, bound to the self-test by sha256. Its top-level keys must be on an allowlist,
+    and its extensions must equal the block agentteams renders.
+  - Agent files are read strictly. Control characters and Unicode line separators are refused, so a key cannot
+    hide from the checks.
+- **Secrets the DLP check cannot use now stop the run.**
+  - Secrets directories are mounted whole.
+  - A directory or file the gateway cannot read ends the run as `not-run`, unless `agent.dlp_skip_ok` acknowledges
+    that exact version of the file.
+  - The agent can no longer see the gateway's files.
+- **Severity and coverage.**
+  - Severity comes from CVSS v3.1/v4 vectors. An advisory with no score counts as HIGH (`unscored_as`) and is
+    flagged in the report.
+  - A daily run missed while the Mac was off is caught up at login.
+  - Unsupported ecosystems (Go, Maven, Gradle, RubyGems, NuGet and others) are reported, not silently skipped.
+  - Malformed OSV records and hostile version strings no longer crash the scan.
+- **Faster daily scans.** Repositories are looked up in parallel: the new `scan_workers` setting, default 4, up to
+  8. A repository that fails is recorded on its own; the others are kept.
+- **Accepted risk, not new in rc.4.** goose's `developer` and `summon` extensions remain in the rendered recipe. The
+  executor checks every request on its own, so the agent's MCP server is not the security boundary.
+- **After upgrading:** every operator runs `python -m agentteams.vulnscan agent-selftest` once, whatever the
+  runtime. The new mounts and masks change the container flags the self-test vouches for, so runs refuse until it
+  passes again.
+- **Linux:** agent mode on Linux Docker Engine is not supported in rc.4. It fails closed, and follows in rc.5.
+- **Re-pins:** `references/enforcement-integrity.json` pins the new modules. Re-render, then run
+  `--verify-integrity`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.4` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`). Then build the agent and tools images, and run the self-tests.
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.4]`.
+
+### Changes since 1.1.0-rc.3
+
 ### Added
 
 - **vulnscan: the daily scan looks up repositories in parallel.** New config key `scan_workers` (default 4, 1–8;
