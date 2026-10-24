@@ -35,7 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, executor
+from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, executor, gateway_context
 from agentteams.vulnscan.agent_drivers import Driver
 
 DEBRIEF_CONTAINER = "agentteams-vulnscan-debrief"
@@ -184,7 +184,8 @@ def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> li
     """Return the ``docker run`` command for the debrief container.
 
     Same isolation as an agent run (via :func:`agent_run.agent_base`), with ``-it``, its own name,
-    the request spool mounted read-only, and its own gateway.
+    the request spool mounted read-only, and its own gateway. As in a run, ``/work/run/gateway`` and
+    ``/work/run/debrief`` (this debrief's own gateway files) are masked by an empty read-only tmpfs (R6).
 
     Args:
         a: Agent settings (:func:`agent_run.agent_cfg`).
@@ -278,11 +279,18 @@ def _preflight(cfg: dict[str, Any], a: dict[str, Any], run_dir: Path) -> str:
 
 
 def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, budget_usd: float) -> None:
+    """Start the debrief's gateway, as :func:`agent_run._start_gateway` (gateway_context.DlpRefused; R5)."""
     agent_run._docker(["docker", "rm", "-f", DEBRIEF_GATEWAY], check=False)
+    dlp = gateway_context.prepare(spend_dir, skip_ok=a.get("dlp_skip_ok") or [])   # B2: the host's DLP context
     agent_run._docker(agent_run.gateway_argv(a, tag, spend_dir, name=DEBRIEF_GATEWAY, budget_usd=budget_usd,
-                                             max_tokens_total=debrief_max_tokens(a)))
-    agent_run._docker(["docker", "network", "connect", agent_run.NETWORK, DEBRIEF_GATEWAY])
+                                             max_tokens_total=debrief_max_tokens(a), dlp=dlp))
+    try:
+        agent_run._docker(["docker", "network", "connect", agent_run.NETWORK, DEBRIEF_GATEWAY])
+    except RuntimeError:   # the gateway already exited: its DLP-context refusal, if any, is the reason
+        gateway_context.raise_if_refused(spend_dir)
+        raise
     time.sleep(2)
+    gateway_context.raise_if_refused(spend_dir)
 
 
 def _cleanup() -> None:
@@ -345,7 +353,8 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
     started = datetime.now(UTC)
     out = run_dir / "debrief" / started.strftime("%Y%m%dT%H%M%SZ")
     out.mkdir(parents=True, exist_ok=True)
-    for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results"):
+    for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results",
+              *(run_dir / m for m in agent_run.MASKED_RUN_DIRS)):   # R6: the masks' mountpoints, before docker run
         d.mkdir(parents=True, exist_ok=True)
     argv = debrief_argv(a, tag, run_dir, session_name(run_dir))
     timed_out = terminated = False
@@ -364,6 +373,8 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
             proc.wait()
             rc = EXIT_TIMED_OUT
             print(f"debrief stopped: the {minutes:g}-minute cap was reached", file=sys.stderr)
+    except gateway_context.DlpRefused as exc:   # R5: the DLP check cannot cover every secret; no debrief started
+        print(f"debrief not started: {exc}", file=sys.stderr)
     except SystemExit as exc:
         if exc.code == agent_run.SIGTERM_EXIT:   # recorded below; the finally removes both containers
             terminated, rc = True, agent_run.SIGTERM_EXIT

@@ -5,7 +5,9 @@ The ``OLD_*`` literals are the full ``docker run`` argv the launcher built *befo
 ``gateway_argv`` with fixed placeholder paths). The goose driver must reproduce them exactly, except for the
 two revision-7 changes, which the tests spell out: the working directory is an empty tmpfs (``/work/cwd``,
 was the image's ``WORKDIR`` ``/work``), and ``XDG_CONFIG_HOME`` is set to goose's own default
-(``$HOME/.config``, inside the tmpfs home). The self-test probe gains one check, ``cwd_empty``. Docker-free.
+(``$HOME/.config``, inside the tmpfs home). The self-test probe gains one check, ``cwd_empty``. The gateway
+argv additionally carries the roadmap-B2 DLP context mounts and flags (:func:`_b2`; deliberate), and since rc.4 (R7)
+the agent's goose is given the run's checked copy of the recipe (:data:`GOOSE_COPY`). Docker-free.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from agentteams.vulnscan import (
 )
 
 RUN = Path("/state/2026-10-22")
+GOOSE_COPY = "/work/run/agentdef/recipe.yaml"   # rc.4 R7: the recipe the CLI is given (agent_recipe.in_container)
 SESSION = "vulnscan-2026-10-22"
 
 _PREFIX = ["--network", "agentteams-vulnscan-net", "--read-only", "--tmpfs", "/tmp:rw,size=256m",
@@ -78,6 +81,15 @@ def _revision_7(old: list[str]) -> list[str]:
     new[i:i] = ["--tmpfs", "/work/cwd:rw,size=16m,uid=10001,gid=10001,mode=0700", "-w", "/work/cwd"]
     j = new.index("XDG_STATE_HOME=/agenthome/.local/share/goose/state") + 1
     new[j:j] = ["-e", "XDG_CONFIG_HOME=/agenthome/.config"]
+    return _r6(new)
+
+
+def _r6(old: list[str]) -> list[str]:
+    """The old argv plus exactly the rc.4 R6 change (deliberate): two empty read-only tmpfs masks over the
+    gateway's files under ``/work/run``, right after the request-spool mount."""
+    new = list(old)
+    i = next(k for k, x in enumerate(new) if x.startswith("/spool/requests:/work/spool/requests:")) + 1
+    new[i:i] = ["--tmpfs", "/work/run/gateway:ro,size=1k", "--tmpfs", "/work/run/debrief:ro,size=1k"]
     return new
 
 
@@ -91,7 +103,9 @@ def fixed(monkeypatch: pytest.MonkeyPatch) -> dict:
 # ---------------------------------------------------------------- golden: no goose behaviour change
 
 def test_golden_agent_argv_is_the_old_one_plus_revision_7(fixed: dict) -> None:
-    assert agent_run.agent_argv(fixed, "img:t", RUN, SESSION, task="TASK TEXT") == _revision_7(OLD_AGENT)
+    # rc.4 R7 (deliberate): goose reads the run's checked copy of the recipe (agent_recipe), not the team's file.
+    new = [GOOSE_COPY if p == "/work/team/.goose/recipes/vuln-remediation.yaml" else p for p in _revision_7(OLD_AGENT)]
+    assert agent_run.agent_argv(fixed, "img:t", RUN, SESSION, task="TASK TEXT") == new
 
 
 def test_golden_selftest_argv_and_probe(fixed: dict) -> None:
@@ -113,15 +127,35 @@ def test_golden_debrief_argv(fixed: dict) -> None:
     assert debrief.debrief_argv(fixed, "img:t", RUN, SESSION) == _revision_7(OLD_DEBRIEF)
 
 
-def test_golden_gateway_argv_unchanged(fixed: dict) -> None:
-    assert agent_run.gateway_argv(fixed, "img:t", Path("/spend")) == OLD_GATEWAY
+def _b2(old: list[str], secrets: tuple[str, ...] = ()) -> list[str]:
+    """The old gateway argv plus exactly the roadmap-B2 change (deliberate, 2026-10-24): the host's DLP
+    context. One read-only mount of ``<spend dir>/dlp`` at ``/run/dlp`` (after the spend mount) and one per
+    secrets directory (rc.4 R5), and the flags naming only fixed in-container paths, appended at the end. No host name,
+    package name or secret value is in the argv."""
+    new = list(old)
+    i = new.index("img:t")
+    mounts = ["-v", "/spend/dlp:/run/dlp:ro"]
+    flags = ["--dlp-hostnames-file", "/run/dlp/hostnames", "--dlp-private-names-file", "/run/dlp/private-names"]
+    for n, path in enumerate(secrets):   # rc.4 R5 (deliberate): one read-only directory mount per secrets dir
+        mounts += ["--mount", f"type=bind,source={path},target=/run/secrets/dlp/{n},readonly"]
+        flags += ["--dlp-secrets-mount", f"/run/secrets/dlp/{n}"]
+    if secrets:
+        flags += ["--dlp-skip-ok-file", "/run/dlp/skip-ok"]
+    new[i:i] = mounts
+    return new + flags
+
+
+def test_golden_gateway_argv_is_the_old_one_plus_b2(fixed: dict) -> None:
+    assert agent_run.gateway_argv(fixed, "img:t", Path("/spend")) == _b2(OLD_GATEWAY)
+    ctx = agent_run.gateway_context.Context(Path("/spend/dlp"), (Path("/s/a"), Path("/s/b")))
+    assert agent_run.gateway_argv(fixed, "img:t", Path("/spend"), dlp=ctx) == _b2(OLD_GATEWAY, ("/s/a", "/s/b"))
 
 
 def test_the_command_override_still_substitutes_its_placeholders(fixed: dict) -> None:
     a = {**fixed, "command": ["goose", "run", "--recipe", "{recipe}", "--name", "{session}", "--x", "{run_id}",
                               "--params", "task={task}"], "recipe": "custom/r.yaml"}
     argv = agent_run.agent_argv(a, "img:t", RUN, SESSION, task="T {run_id}", run_id="R1")
-    assert argv[argv.index("img:t") + 1:] == ["goose", "run", "--recipe", "/work/team/custom/r.yaml", "--name",
+    assert argv[argv.index("img:t") + 1:] == ["goose", "run", "--recipe", GOOSE_COPY, "--name",   # the copy (R7)
                                              SESSION, "--x", "R1", "--params", "task=T {run_id}"]
 
 
@@ -130,7 +164,9 @@ def test_the_command_override_still_substitutes_its_placeholders(fixed: dict) ->
 def test_get_driver_and_validate_agent_refuse_unknown_and_unavailable_frameworks() -> None:
     assert agent_drivers.get_driver("goose") is agent_drivers.GOOSE
     assert agent_drivers.get_driver("claude") is agent_drivers.CLAUDE   # phase 3
-    for fw in ("copilot", "codex", "grok"):
+    assert agent_drivers.get_driver("copilot") is agent_drivers.COPILOT  # phase 4
+    assert agent_drivers.get_driver("codex") is agent_drivers.CODEX      # phase 4
+    for fw in ("grok",):
         with pytest.raises(ValueError, match=f"framework {fw}: driver not available in this release"):
             agent_drivers.get_driver(fw)
         with pytest.raises(ValueError, match="driver not available"):
@@ -191,7 +227,7 @@ def test_a_goose_selftest_record_does_not_vouch_for_another_framework(monkeypatc
 
 
 def test_an_unavailable_framework_is_not_run_and_has_no_debrief(tmp_path: Path) -> None:
-    a = {**agent_run.DEFAULT_AGENT, "framework": "codex", "team_dir": str(tmp_path), "key_file": "/k"}
+    a = {**agent_run.DEFAULT_AGENT, "framework": "grok", "team_dir": str(tmp_path), "key_file": "/k"}
     assert "driver not available" in agent_run._not_run_reason({"agent": a}, a)
     assert "driver not available" in debrief._preflight({"agent": a}, a, tmp_path)
     fields = {f.name: getattr(agent_drivers.GOOSE, f.name) for f in dataclasses.fields(agent_drivers.GOOSE)}
@@ -222,7 +258,7 @@ def test_build_argv_is_driver_parameterised() -> None:
     for arg in ("PYTHON_IMAGE=py@sha256:1", "AGENT_CLI=goose", "CLI_VERSION=1.56.0", f"CLI_SHA256={'ab' * 32}"):
         assert argv[argv.index(arg) - 1] == "--build-arg"
     with pytest.raises(ValueError, match="driver not available"):
-        agent_run.build_argv(Path("/ctx"), "img:t", "1", "x", "py", framework="copilot")
+        agent_run.build_argv(Path("/ctx"), "img:t", "1", "x", "py", framework="grok")
     assert agent_run.image_tag({"framework": "goose"}).startswith("agentteams-vulnscan-agent:")
     assert agent_run.image_tag({"framework": "claude"}).startswith("agentteams-vulnscan-agent-claude:")
 
@@ -241,7 +277,7 @@ def test_the_dockerfile_has_one_install_stage_per_framework() -> None:
 
 def test_the_image_script_refuses_frameworks_without_a_driver() -> None:
     script = Path(__file__).resolve().parents[1] / "scripts" / "vulnscan-agent-image.sh"
-    for fw, msg in (("copilot", "driver not available"), ("nope", "FRAMEWORK must be one of")):
+    for fw, msg in (("grok", "driver not available"), ("nope", "FRAMEWORK must be one of")):
         proc = subprocess.run(["bash", str(script)], env={"FRAMEWORK": fw, "PATH": "/usr/bin:/bin"},
                               capture_output=True, text=True, timeout=60, check=False)
         assert proc.returncode == 2 and msg in proc.stderr, proc.stderr

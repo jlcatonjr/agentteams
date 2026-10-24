@@ -7,7 +7,7 @@
 | ``runtimes`` | Node/PHP/Python on this machine vs live release data |
 | ``fix PATH [--apply]`` | Plan, or make, dependency fixes in a working tree you control |
 | ``init`` | Write a starter ``vulnscan.json`` (user config dir) |
-| ``daily`` | One full scheduled run (repos, runtimes, servers) |
+| ``daily [--catch-up]`` | One full scheduled run (repos, runtimes, servers); ``--catch-up`` only when the last run is stale |
 | ``schedule install\\|remove\\|status [--apply]`` | Manage the daily job |
 | ``server-kit [DEST]`` | Export the Linux server scripts (keeps an existing ``hosts.conf`` / ``apps.conf``) |
 | ``grant sign\\|list\\|revoke`` | Operator-signed standing remediation grants (sign: operator only, outside agent sessions; ``--from-registry`` proposes enrolled ``remediate`` projects, reviewed per owner) |
@@ -59,6 +59,7 @@ KIT_CONFIGS = ("hosts.conf", "apps.conf")
 
 
 def _emit(report: Report, args: argparse.Namespace) -> int:
+    report.apply_unscored(args.unscored_as)
     text = json.dumps(report.to_dict(), indent=2) if args.format == "json" else report.markdown()
     if args.out:
         Path(args.out).write_text(text + "\n", encoding="utf-8")
@@ -132,6 +133,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--out", help="write the report here instead of stdout")
         sp.add_argument("--fail-on", default="high", choices=("critical", "high", "moderate", "low", "any", "none"))
         sp.add_argument("--include-dev", action="store_true", help="dev-only dependencies count toward --fail-on")
+        sp.add_argument("--unscored-as", default="high", choices=("critical", "high", "moderate", "low"),
+                        help="what an advisory with no CVSS vector or severity label counts as (default high)")
 
     sp = sub.add_parser("scan", help="scan manifests under a repo or a folder of repos")
     sp.add_argument("path", type=Path)
@@ -154,7 +157,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("init", help="write a starter config (never overwrites)")
     sp.add_argument("--repo-root", action="append", default=[])
     sp.add_argument("--server", action="append", default=[])
-    sub.add_parser("daily", help="one scheduled run over the configured repos and servers")
+    sp = sub.add_parser("daily", help="one scheduled run over the configured repos and servers")
+    sp.add_argument("--catch-up", action="store_true",
+                    help="run only when the last completed run is older than stale_after_hours (or there is none)")
     sp = sub.add_parser("schedule", help="install/remove/status of the daily job")
     sp.add_argument("action", choices=("install", "remove", "status"))
     sp.add_argument("--apply", action="store_true")
@@ -214,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         Process exit code.
     """
     args = build_parser().parse_args(argv)
-    if args.cmd not in ("daily", "schedule"):
+    if args.cmd != "schedule" or args.action == "status":   # install/remove print their own plan only
         warn = daily.stale_warning()
         if warn:
             print(warn, file=sys.stderr)
@@ -247,7 +252,13 @@ def main(argv: list[str] | None = None) -> int:
         cfg = load_cfg()
         if cfg is None:
             return 2
-        report, code, run_dir = daily.run_daily(cfg)
+        if args.catch_up:
+            result = daily.catch_up(cfg)
+            if result is None:
+                return 0   # the last run is recent: nothing to catch up, quietly
+            report, code, run_dir = result
+        else:
+            report, code, run_dir = daily.run_daily(cfg)
         print(f"{len(report.findings)} findings; exit {code}; summary: {run_dir / 'summary.md'}")
         return code
     if args.cmd == "schedule":

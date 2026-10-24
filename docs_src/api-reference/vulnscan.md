@@ -38,8 +38,12 @@ and only within what you signed.
 **Invariants the code enforces:**
 
 - The agent container mounts no credentials. Its only writable mounts are the request spool and its
-  own goose session directory (plus tmpfs `/tmp` and home). Agent mode refuses to start until
-  `agent-selftest` has passed for the current image.
+  own goose session directory (plus tmpfs `/tmp` and home). The run directory is mounted read-only at
+  `/work/run`; `/work/run/gateway` and `/work/run/debrief` are masked by an empty read-only tmpfs
+  (`agent_run.MASKED_RUN_DIRS`), so the agent never sees the gateway's or a debrief's files (the DLP
+  host-name list, the acknowledgements and `spend.json` among them). The launcher creates both directories on
+  the host before `docker run`, because Docker cannot create a mountpoint inside a read-only bind mount. Agent
+  mode refuses to start until `agent-selftest` has passed for the current image.
 - A request is executed only when a valid, unexpired, operator-signed grant covers the exact
   operation, target and remaining use count; no `@security` HALT is open on `vulnscan-remediation`
   in the decision log named **inside the grant**; and no open escalation blocks the target.
@@ -159,14 +163,24 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 - `team_dir`, `key_file`, `image`: strings, empty allowed (paths are checked against the filesystem
   only before a mount, by `team_dir_problem`);
 - `model`, `framework`: non-empty strings; `framework` one of `goose`, `claude`, `copilot`, `codex`,
-  `grok` whose runtime driver is in this release (`goose` and `claude` now; the others are refused with
-  `agent.framework <name>: driver not available in this release`);
-- with `framework: claude` (plan revision 13), `model` and every `models` entry must be an Anthropic
-  model id (`claude-...`, or OpenRouter's `anthropic/...`), and an `upstream_messages` of
-  `api.anthropic.com` needs `prices` (or `allow_unmetered`);
-- `upstream_messages`: empty or an `http://` / `https://` URL with a host; `key_file_messages`,
-  `prices`: strings; `models`: a list of model ids; `anthropic_betas`: `null` or a list of beta names;
-  `max_output_tokens`: an integer 1–128 000; `max_turns`: an integer 1–1000;
+  `grok` whose runtime driver is in this release (`goose`, `claude`, `copilot` and `codex` now; `grok` is
+  refused with `agent.framework grok: driver not available in this release`);
+- model rules (plan revision 13, decision D2: each dialect is passed through to an upstream that speaks
+  it, never translated): with `framework: claude`, or `copilot` with `copilot_provider_type: anthropic`,
+  `model` and every `models` entry must be an Anthropic model id (`claude-...`, or OpenRouter's
+  `anthropic/...`), and an `upstream_messages` of `api.anthropic.com` needs `prices` (or
+  `allow_unmetered`); with `framework: codex`, an OpenAI model id (`gpt-...`, `o1`/`o3`/`o4`...,
+  `codex-...`, or OpenRouter's `openai/...`), and an `upstream_responses` of `api.openai.com` needs `prices`
+  (or `allow_unmetered`); goose and copilot (default `openai` provider type) keep any OpenRouter model over
+  chat completions;
+- `framework: codex` also needs `accept_residual_tools` to contain `apply_patch` (decision D4: Codex keeps
+  one built-in tool no switch removes; its writes are rejected by the read-only sandbox, which the
+  self-test proves); `framework: copilot` needs `recipe` (if set) to be `.github/agents/<name>.agent.md`;
+- `upstream_messages`, `upstream_responses`: empty or an `http://` / `https://` URL with a host;
+  `key_file_messages`, `key_file_responses`, `prices`: strings; `models`: a list of model ids;
+  `anthropic_betas`: `null` or a list of beta names; `copilot_provider_type`: `openai` or `anthropic`;
+  `accept_residual_tools`: a list of tool names; `max_output_tokens`: an integer 1–128 000; `max_turns`: an
+  integer 1–1000;
 - `recipe`: a string (empty: the driver's agent definition);
 - `upstream`: an `http://` or `https://` URL with a host;
 - `command`: a list of strings (empty: the driver's command);
@@ -184,14 +198,16 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `include_worktrees` | `false` | Also scan linked git worktrees |
 | `servers` | `[]` | `hosts.conf` names audited each day |
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
+| `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
 | `cooldown_days` | `14` | A fix release must be at least this old (Rule S-10). The executor never goes below 14 |
 | `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
 | `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with the cooldown clamped to at least 14 days. The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
+| `scan_workers` | `4` | How many scan roots, and then how many fix plans, are looked up at once (1–8; `1` = one after another; each scan already sends up to 8 OSV requests at once). The lookups are network-bound (OSV, the package registries); results are merged in root order, so the report and the fix plans do not depend on it. Each worker runs in a copy of the caller's context, so a confinement scope applies as it would serially. `apply-worktree` staging, servers and local runtimes stay serial |
 | `notify` | `"desktop"` | `none`, `desktop`, or `command:<program and args>` (the program gets the fixed message as its last argument) |
 | `schedule` | `{"hour": 7, "minute": 30}` | When `schedule install` runs the job |
-| `stale_after_hours` | `26` | Age after which commands warn that no daily run completed |
+| `stale_after_hours` | `26` | Age after which commands (`daily` and `schedule status` included) warn that no daily run completed, and after which `daily --catch-up` runs the missed scan |
 | `governance_dir` | `""` | Used only by `halts`, to find a decision log when no grant names one. The executor uses the directory **signed into the grant** |
 | `agent` | see below | Agent mode |
 | `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
@@ -201,9 +217,9 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 | Key | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Run the agent team after the daily scan |
-| `framework` | `"goose"` | Selects the runtime driver ([`agent_drivers`](#agentteamsvulnscanagent_drivers)): the CLI the image installs, its env, command, state dir, self-test checks and debrief. `goose` and `claude` (Claude Code) have drivers in this release |
+| `framework` | `"goose"` | Selects the runtime driver ([`agent_drivers`](#agentteamsvulnscanagent_drivers)): the CLI the image installs, its env, command, state dir, self-test checks and debrief. `goose`, `claude` (Claude Code), `copilot` (GitHub Copilot CLI, bring-your-own-key, offline) and `codex` (Codex CLI) have drivers in this release |
 | `team_dir` | `""` | Root of the generated goose team's project (it contains `.goose/recipes/`). Required by agent runs, `agent-selftest` and `agent-chat`. Must be an existing directory you own, not group/world-writable; not home, an ancestor of home, or at, inside or above `~/.config/agentteams`, the vulnscan config or state directory, or a credential directory (so at, inside or above `~/.config/agentteams/keys` is always refused); and must not contain `key_file`, nor the operator signing key when `AGENTTEAMS_DECISION_ED25519_KEYFILE` is set (a key kept elsewhere is checked only then) |
-| `recipe` | `""` | Agent definition the container runs, relative to `team_dir` and passed by its absolute path under the read-only team mount; empty means the driver's (goose: `.goose/recipes/vuln-remediation.yaml`, whose prompt must carry the `task` parameter; the generated orchestrator's opens with a role check, so a one-shot run of it stops after answering that) |
+| `recipe` | `""` | Agent definition the container runs, relative to `team_dir`. claude and codex: passed by its absolute path under the read-only team mount; copilot and goose: a checked copy in `<run>/agentdef` is passed instead ([`agent_recipe`](#agentteamsvulnscanagent_recipe)). Empty means the driver's (goose: `.goose/recipes/vuln-remediation.yaml`, whose prompt must carry the `task` parameter, copied to `/work/run/agentdef/recipe.yaml`, its top-level keys and `extensions` checked (R7); the generated orchestrator's opens with a role check, so a one-shot run of it stops after answering that; claude: `.claude/agents/vuln-remediation.md`; copilot: `.github/agents/vuln-remediation.agent.md`, copied to `/work/run/agentdef/.github/agents/vuln-remediation.agent.md` (`--agent=vuln-remediation --add-dir=/work/run/agentdef`); it must be a custom agent file `.github/agents/<name>.agent.md`; codex: `.codex/agents/vuln-remediation.toml`, given as `model_instructions_file`) |
 | `model` | `"z-ai/glm-5.3"` | The one model the gateway allows (an OpenRouter model id) |
 | `upstream` | `"http://host.docker.internal:8791"` | Where the gateway sends requests. Without a local route proxy, use `"https://openrouter.ai"` |
 | `key_file` | `""` | File holding `OPENROUTER_API_KEY=...` (or the bare key). Mounted read-only into the gateway only |
@@ -213,13 +229,15 @@ The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 | `allow_unmetered` | `false` | Accept replies without usage (then only the token cap, if usage has tokens, and the time cap bound a run) |
 | `max_minutes` | `45` | Time cap per run; the container is removed at the cap |
 | `image` | `""` | Image tag; default `agentteams-vulnscan-agent:<agentteams version>` for goose, `agentteams-vulnscan-agent-<framework>:<agentteams version>` for another framework |
-| `command` | `[]` | Empty: the driver's command (goose: `goose run --recipe {recipe} --name {session} --with-extension "python -m agentteams.vulnscan.mcp" --params task={task}`). **Advanced:** a list overrides it, with `{recipe}`, `{session}`, `{task}` and `{run_id}` substituted; the override is part of `flags_sha256`, so it needs a fresh self-test |
+| `command` | `[]` | Empty: the driver's command (goose: `goose run --recipe {recipe} --name {session} --with-extension "python -m agentteams.vulnscan.mcp" --params task={task}`). **Advanced:** a list overrides it, with `{recipe}`, `{session}`, `{task}` and `{run_id}` substituted; the override is part of `flags_sha256`, so it needs a fresh self-test. A goose override may not name `/work/team`: that would hand goose the team's recipe instead of the checked copy `{recipe}` names (R7). `claude`, `copilot` and `codex` refuse every override (their lockdown is the command) |
+| `dlp_skip_ok` | `[]` | Secrets files the gateway's DLP check may skip, as `{"path": ..., "sha256": ...}` objects (`sha256`: 64 lower-case hex of the file's bytes, e.g. from `shasum -a 256`). The secrets directory is mounted whole into the gateway; a run ends `not-run` when the directory exists but cannot be read, or holds a `*.env` file the gateway cannot use (unreadable, not UTF-8, not a regular file, a symlink out of the directory) that no entry acknowledges. An entry covers that one file version only: editing the file makes it stop matching. `review` lists the entries; the paths appear only on the terminal |
 | `debrief_budget_usd` | `0.5` | Spend cap for `agent-chat` |
 | `debrief_max_minutes` | `20` | Time cap for `agent-chat` |
 | `debrief_max_tokens` | `400000` | Prompt + completion token cap for `agent-chat` (integer 1–100 000 000) |
 
-Keys for runtimes on another gateway dialect ([`agent_upstreams`](#agentteamsvulnscanagent_upstreams);
-goose ignores them, and its gateway command is unchanged):
+Keys for runtimes on another gateway dialect, and for copilot and codex
+([`agent_upstreams`](#agentteamsvulnscanagent_upstreams); goose ignores them, and its gateway command is
+unchanged):
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -228,8 +246,12 @@ goose ignores them, and its gateway command is unchanged):
 | `models` | `[]` | Further model ids the gateway allows besides `model`. Claude Code's helper models are pinned to `model`, so this is normally empty |
 | `prices` | `""` | Price table file ([format](#agentteamsvulnscangateway)) for upstreams that report no `usage.cost`. **Required for `api.anthropic.com`** (else every reply is unmetered and the run stops after `max_unmetered_calls`); also check whether OpenRouter's Messages route reports `cost` in your acceptance run (`unmetered` in `spend.json`) |
 | `anthropic_betas` | `null` | `anthropic-beta` values the gateway's Messages route allows; `null`: `claude-code-20250219`, `interleaved-thinking-2025-05-14`, `effort-2025-11-24`, `context-1m-2025-08-07` (header-only capabilities Claude Code still sends with experimental betas off). A refused value shows in `spend.json` `refusal_reasons` |
-| `max_output_tokens` | `32000` | The gateway's output ceiling (`--max-output-tokens`) and Claude Code's `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, kept equal so every call fits |
+| `max_output_tokens` | `32000` | The gateway's output ceiling (`--max-output-tokens`) and the CLI's own output setting (Claude Code's `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, Copilot's `COPILOT_PROVIDER_MAX_OUTPUT_TOKENS`), kept equal so every call fits; for codex, which sends no output ceiling, also the per-call reservation (`--responses-reserve-tokens`) |
 | `max_turns` | `100` | Claude Code's `--max-turns` |
+| `upstream_responses` | `""` (`https://openrouter.ai/api/v1`) | OpenAI Responses API base the gateway forwards `codex` to: OpenRouter's Responses route (verify it in your acceptance run: tool calls, and whether it reports `cost`), or `https://api.openai.com/v1` |
+| `key_file_responses` | `""` | That upstream's key file (gateway only). Empty: `~/.config/agentteams-secrets/openai.env` (`OPENAI_API_KEY=...`) for `api.openai.com`, else `key_file` |
+| `copilot_provider_type` | `"openai"` | copilot's BYOK provider type: `openai` (chat completions through the chat route, `upstream`/`key_file`, any OpenRouter model) or `anthropic` (Messages through the Messages route, `upstream_messages`, Claude models only) |
+| `accept_residual_tools` | `[]` | Built-in tools you accept although no switch removes them (decision D4). codex requires `["apply_patch"]`; its writes are rejected by the read-only sandbox, which the self-test checks (`codex_residual_write_blocked`) |
 
 The `confine` block (`subproc_confine.settings`; any other key, or a wrong type, is refused at load):
 
@@ -252,9 +274,43 @@ The `confine` block (`subproc_confine.settings`; any other key, or a wrong type,
 | PyPI | `poetry.lock`, `uv.lock`, `Pipfile.lock` | |
 | PyPI | `pyproject.toml` next to requirements files (no lockfile) | PEP 621 `[project].dependencies` and `optional-dependencies` `==` pins (groups named like dev/test/lint/doc/type are dev). A pin a requirements file alongside already lists (PEP 503 name and version) is not counted twice; loose entries no requirements file pins make it unscannable for that part |
 | PyPI | `pyproject.toml` alone (no lockfile, no requirements) | unscannable: "pyproject.toml without a lockfile" |
-| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile and `pnpm-lock.yaml` are unscannable |
+| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml`) |
 | Packagist | `composer.lock` | |
-| not supported | `Cargo.lock`, `environment.yml` / `environment.yaml`, `lake-manifest.json` (`UNSUPPORTED`) | unscannable with the reason (`Rust/crates.io: not supported`, `conda: not supported`, `Lean: not supported`) |
+
+Manifests of ecosystems vulnscan does not read are discovered too (`manifests.unsupported_ecosystem(name)`)
+and reported unscannable with the reason `unsupported ecosystem: <name>`:
+
+| Ecosystem | Files |
+|---|---|
+| Go | `go.sum` (`go.mod` when there is no `go.sum`) |
+| Maven | `pom.xml` |
+| Gradle | `gradle.lockfile` (`build.gradle` / `build.gradle.kts` when there is no lockfile) |
+| RubyGems | `Gemfile.lock` |
+| NuGet | `packages.lock.json` (`*.csproj` when there is no lockfile) |
+| pnpm (npm packages) | `pnpm-lock.yaml` (run `pnpm audit` there) |
+| Rust/crates.io, conda, Lean | `Cargo.lock`, `environment.yml` / `environment.yaml`, `lake-manifest.json` |
+| container images | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile`, `Containerfile`, `compose.yml` / `compose.yaml`, `docker-compose*.yml` / `.yaml` |
+
+A workspace whose only manifests are these is in the coverage state `unsupported ecosystem` (a coverage
+gap: nothing in it is checked), never `nothing to scan`. A workspace that also has supported manifests
+keeps its state, and the coverage section lists its unsupported files.
+
+### Severity
+
+A package finding's severity is the highest over its advisories (`osv.severity(record)`), each the higher of:
+
+1. its CVSS vectors: every `CVSS_V3` / `CVSS_V4` entry of the OSV `severity` array (and of
+   `affected[].severity`), scored by `agentteams.vulnscan.cvss` — v3.0/v3.1 with the specification's base
+   equations and `Roundup`; v4.0 with the official FIRST algorithm (macro vectors, look-up table,
+   severity-distance interpolation; threat and environmental metrics honoured as the FIRST calculator
+   does) — and banded LOW (< 4.0), MODERATE (4.0–6.9), HIGH (7.0–8.9), CRITICAL (≥ 9.0);
+2. its `database_specific.severity` label (GitHub's), when present.
+
+An advisory with neither (common for PyPA `PYSEC-*` records), or one whose record could not be read, is
+**unscored**: it counts as the config's `unscored_as` (default HIGH, so it fails `fail_on: high`), never
+as MODERATE by default. `summary.md` marks such findings `UNSCORED (as HIGH)`, counts them in a banner and
+lists them under *Unscored advisories*; `review` counts them; `status --project` shows them as `UNSCORED`.
+A malicious (`MAL-*`) finding stays 4 and exits 4.
 
 Every manifest kind honours the operator's `exclude`, the skipped directories (`SKIP_DIRS`) and each
 brief's `exclude_paths` and `private_packages`. Unscannable entries are listed in the report; they do not
@@ -262,8 +318,9 @@ make a run partial.
 
 ## Command reference
 
-All commands are `python -m agentteams.vulnscan <command>`. Every command except `daily` and
-`schedule` first warns when the last daily run is stale.
+All commands are `python -m agentteams.vulnscan <command>`. Every command except `schedule install`
+and `schedule remove` first warns (on stderr) when the last daily run is stale or missing, partially
+scanned, or found compromise indicators (`daily.stale_warning`).
 
 | Command | Purpose |
 |---|---|
@@ -272,14 +329,15 @@ All commands are `python -m agentteams.vulnscan <command>`. Every command except
 | `runtimes` | Node.js, PHP and Python on this machine |
 | `fix PATH [--apply]` | Plan, or make, dependency fixes in a working tree you control. git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver, or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
 | `init [--repo-root DIR]… [--server NAME]…` | Write a starter config (never overwrites) |
-| `daily` | One full run (scan; with agent mode, the agent run and publishing) |
-| `schedule install\|remove\|status [--apply] [--hour H] [--minute M]` | Manage the daily job (launchd on macOS, else a systemd user timer, else cron). Dry run without `--apply` |
+| `daily [--catch-up]` | One full run (scan; with agent mode, the agent run and publishing). `--catch-up` runs it only when the last completed run is older than `stale_after_hours` or there is none, after a `run-stale` / `run-missing` notification; otherwise it exits 0 without output (`daily.catch_up`) |
+| `schedule install\|remove\|status [--apply] [--hour H] [--minute M]` | Manage the daily job (launchd on macOS, else a systemd user timer, else cron). Dry run without `--apply`. On macOS, `install` also installs the catch-up agent `io.agentteams.vulnscan.catchup` (`daily --catch-up` at login and every 6 hours), so a run missed while the Mac was powered off is caught up; systemd's `Persistent=true` does the same on Linux; cron does not catch up (add an `@reboot` line running `daily --catch-up` yourself) |
+| `scan`, `inventory`, `runtimes`: `--unscored-as critical\|high\|moderate\|low` | What an unscored advisory counts as for `--fail-on` (default `high`; `daily` uses the config's `unscored_as`) |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
 | `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
-| `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose` or `claude` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose: against GitHub's release metadata; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this |
+| `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
 | `agent-selftest` | Prove the container's isolation for the current image ([checks](#selftestcfg)) |
 | `agent-run` | One agent run on the latest scan |
 | `tools-image build [--python-image IMG] [--node-version V --node-sha256-amd64 S --node-sha256-arm64 S]` | Build the tools image ([Subprocess confinement](#subprocess-confinement-tools-container)): git, OpenSSH, netcat, Node.js + npm (pinned in `tools_image.NODE_*`), the egress proxy and the probe. `scripts/vulnscan-tools-image.sh` checks the Node.js pin against the release's GPG-signed `SHASUMS256.txt`, resolves the python base image to a digest and runs this, then `tools-selftest` |
@@ -373,9 +431,13 @@ A Finding (`report.Finding`):
 | `version` | string | installed version (`""` when not applicable) |
 | `ecosystem` | string | OSV ecosystem (`PyPI`, `npm`, …); `""` for runtimes and host checks |
 | `scope` | string | `runtime` or `dev` |
-| `severity` | integer 0–4 | 0 unrated, 1 low, 2 moderate, 3 high, 4 critical (`osv.SEVERITY_NAME`). A package advisory without a severity label counts as 2; a malicious package or `ioc` is 4 |
+| `severity` | integer 0–4 | 1 low, 2 moderate, 3 high, 4 critical (`osv.SEVERITY_NAME`; 0 `UNSCORED` only for an old report). The effective rank: see [Severity](#severity). A malicious package or `ioc` is 4 |
+| `rated` | integer 0–4 | highest rank the finding's advisories publish (CVSS or label); 0 when none does |
+| `unscored` | integer | advisories with neither a CVSS vector nor a severity label (each counts as `unscored_as`) |
 | `fix` | string | smallest version that fixes every advisory with a fix; `""` when none is known |
-| `unfixed` | integer | advisories with no fixed version |
+| `unfixed` | integer | advisories with no fixed version that may be shown (includes `fix_hidden`) |
+| `malformed` | integer | advisories whose OSV record had malformed parts, which were skipped (0 in a report written before rc.4) |
+| `fix_hidden` | integer | advisories whose fix version has an unusual format (outside `[A-Za-z0-9.+~:_-]{1,64}`): not shown and not offered; also counted in `unfixed` |
 | `ids` | array of strings | advisory ids (GHSA, PYSEC, CVE, `MAL-*`, …) |
 | `locations` | array of strings | manifest paths or install locations |
 | `malicious` | boolean | an OSV `MAL-*` record matches (exit 4) |
@@ -448,17 +510,23 @@ sent to OSV, and repositories enrolled at `off` are skipped (`engine.scan_path(.
 names per state grouped by owner (the published review has totals only). Each entry's fix checkout is in
 exactly one state, in this order of precedence: `missing on disk`, `not a git repository`, `excluded`,
 `nothing to scan` (the checkout holds no dependency manifest that `manifests.discover` lists, unsupported
-lockfiles included; `coverage.nothing_to_scan(path)`; not a coverage gap, and Rule S-VM does not report
-it), then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
+ones included; `coverage.nothing_to_scan(path)`; not a coverage gap, and Rule S-VM does not report
+it), `unsupported ecosystem` (every manifest it holds is of an ecosystem vulnscan does not read, see
+[Supported manifests](#supported-manifests); `coverage.unsupported_only(path)`; a coverage gap that Rule
+S-VM reports), then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
 grant yet` (remediate, no such grant), `scan-only`, `opted out` (`off`), `unanswered`. Every further
-checkout is a `duplicate checkout` (or `missing on disk`). A `### Project briefs` part then lists each
+checkout is a `duplicate checkout` (or `missing on disk`). The unsupported manifests of every workspace
+that has some are listed under *Not scanned (unsupported ecosystem)* (`coverage.unsupported_manifests(path)`;
+the published review has the counts only). A `### Project briefs` part then lists each
 `brief says off; scanned by operator enrolment` mismatch and, per repository, how many manifests its
 brief excluded and how many private packages it withheld (counts only, never package names; the
 published review has totals only).
 
 `status --project DIR [--json]` reports the same vocabulary as `coverage_state` (plus `not enrolled` for
 a project the registry does not know and no `repo_roots` entry scans; one an explicit root scans is
-`fixable` or `scan-only` by the grant; one with no dependency manifest is `nothing to scan` either way), `last_scan_partial` / `last_scan_unscanned` (the last run's feed
+`fixable` or `scan-only` by the grant; one with no dependency manifest is `nothing to scan` either way, one with
+only unsupported manifests `unsupported ecosystem`), `unsupported_manifests` (`"<path> (<ecosystem>)"`, printed
+as `not scanned` lines), `last_scan_partial` / `last_scan_unscanned` (the last run's feed
 errors), `brief_level`, and a `mismatch:` problem for a brief that says `off` on a scanned project.
 
 Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_identity(repo) -> (str, str)`,
@@ -467,7 +535,9 @@ Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_id
 `save(entries, path=None) -> Path` (raises `PermissionError` on CI), `find(entries, path) -> Entry | None`,
 `discover(root) -> dict[str, list[Path]]`, `pick_fix_checkout(paths) -> Path`, `registry_path()`,
 `is_ci()`, `LEVELS`, `SCANNED_LEVELS`. `agentteams.vulnscan.coverage`: `effective_roots(cfg, entries)
--> list[Root]`, `operator_skips(cfg, entries)`, `states(cfg, entries, grants)`, `markdown(rows, *, names)`,
+-> list[Root]`, `operator_skips(cfg, entries)`, `states(cfg, entries, grants, unsupported=None)`,
+`markdown(rows, *, names, unsupported=None)`, `nothing_to_scan(path)`, `unsupported_manifests(path)`,
+`unsupported_only(path)`,
 `brief_lines(entries, report, *, names)`, `section(cfg, *, names, report=None)`,
 `project_state(cfg, entry, path, grants)`.
 
@@ -712,6 +782,11 @@ or kind word; otherwise nothing is sent.
 | `agent-not-completed` | Agent run {state}. Run: vulnscan review |
 | `publish-failed` | Publishing the run report FAILED (kept locally). Run: vulnscan review |
 | `publish-done` | Run report published to the ops repository. |
+| `run-stale` | No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status |
+| `run-missing` | No daily run has completed yet: running it now. Check: vulnscan schedule status |
+
+`run-stale` and `run-missing` are sent by `daily --catch-up` (the macOS catch-up agent) before it runs the
+missed scan.
 
 ---
 
@@ -848,14 +923,20 @@ ignored). Returns a `Report` for host `target`.
 #### `Report`
 
 Dataclass: `target`, `findings`, `unscannable` (`(path, reason)` tuples), `feed_errors`, `checked`,
-`generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code; `to_dict()` /
+`unscored_as`, `generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code;
+`apply_unscored(level)` counts every unscored advisory as `level` (raises `ValueError` for another
+value); `unscored_findings()` lists the findings whose severity comes from it; `to_dict()` /
 `from_dict(data)` convert to and from the [JSON shape](#json-output); `markdown(new_keys)` renders
 `summary.md`; `merge(other)` folds another report in.
 
 #### `Finding`
 
 Dataclass with the fields listed under [JSON output](#json-output). `key()` is the identity used for
-NEW marks: `target|kind|ecosystem|name|version|ids or detail`.
+NEW marks: `target|kind|ecosystem|name|version|ids or detail`. `malformed` and `fix_hidden` default to 0;
+the engine passes them explicitly for each package finding, from `osv.quirks` after `osv.minimal_fix`
+(`Finding` reads nothing at construction). `Report.from_dict` sets both to 0 when an older report lacks
+them. A finding's notes show both counts, and `summary.md` adds a line at the top with the run's total of
+malformed records.
 
 #### `report.new_finding_keys(current, previous)`
 
@@ -874,10 +955,34 @@ or endless pagination: nothing is concluded about the items.
 
 The full OSV record (cached per process). Raises `FeedError`.
 
+#### `osv.severity(record)` / `osv.cvss_rank(record)`
+
+The advisory's rank 0–4: the higher of its CVSS rank (`cvss_rank`: the highest band of its `CVSS_V3` /
+`CVSS_V4` vectors) and its `database_specific.severity` label; 0 when it has neither (unscored). Malformed
+fields (a scalar or object `severity`, a non-object `database_specific`, a non-list `affected`) count as absent:
+the advisory is unscored, never a crash.
+
+### `agentteams.vulnscan.cvss`
+
+`score(vector) -> float | None` (v3.0, v3.1 or v4.0; None for another version or a malformed vector),
+`score_v3(vector)`, `score_v4(vector)`, `roundup_v31(value)`, `band(score) -> "LOW" | "MODERATE" | "HIGH" |
+"CRITICAL"` (a 0.0 score is LOW: a published advisory is never unscored). No dependency; v4.0 is a port
+of the FIRST reference calculator (BSD-2-Clause).
+
 #### `osv.fix_for(record, ecosystem, name, version)`
 
 The `fixed` version of the affected range that contains `version`, or `None` when that range has no
-fix. `GIT` ranges are ignored.
+fix. `GIT` ranges are ignored. The record is untrusted: a part of the wrong type (`affected`, a package,
+`ranges`, a range, `events`, an event, a non-string version) is skipped, never a crash, and a fix is never
+paired with a range start that could not be read. A fix version outside `osv.FIX_VERSION`
+(`[A-Za-z0-9.+~:_-]{1,64}`) is never returned.
+
+#### `osv.quirks(ids, ecosystem, name, version)`
+
+`(malformed, fix_hidden)`: how many of `ids` `osv.minimal_fix` found malformed, or with a fix version of
+unusual format, for that package version in this process; `(0, 0)` for advisories it has not seen.
+`engine` calls it for each package finding and passes the two counts to `Finding` as `malformed=` and
+`fix_hidden=` (R8).
 
 ### `agentteams.vulnscan.fix`
 
@@ -942,13 +1047,27 @@ Install the daily job (launchd, else a systemd user timer, else cron). Returns a
 `commands`, `notes`, `errors`); without `apply=True` nothing is written or run. A bad time or a
 control character in a baked variable is a plan error, and nothing is written.
 
+On macOS it writes two launchd agents: `LABEL` (`io.agentteams.vulnscan`, the calendar time) and
+`CATCH_UP_LABEL` (`io.agentteams.vulnscan.catchup`: `daily --catch-up` with `RunAtLoad` and a
+`StartInterval` of `CATCH_UP_INTERVAL`, 6 hours). When the first one fails to load, the second is not
+installed. `launchd_plist(hour, minute, *, catch_up=False)` returns either definition.
+
 #### `schedule.remove(*, apply)`
 
-Remove the daily job. Returns a `Plan`.
+Remove the daily job (on macOS, both agents). Returns a `Plan`.
 
 #### `schedule.status()`
 
-Text: the mechanism, whether the job is installed, the config and state paths, and the heartbeat.
+Text: the mechanism, whether the job is installed (on macOS also the catch-up job), the config and state
+paths, and the heartbeat. The CLI prints the staleness warning before it.
+
+#### `daily.catch_up_due(cfg)` / `daily.catch_up(cfg)`
+
+`catch_up_due` gives `(due, hours since the last completed run)`: due when the heartbeat is missing,
+unreadable (hours `None`) or older than `stale_after_hours`. `catch_up` first checks the daily run lock
+(`daily.run_in_progress()`): while another daily run holds it, it prints one line on stderr and returns `None`
+without notifying. Otherwise it sends `run-missing` or `run-stale` and runs `run_daily` when due, else returns
+`None` and does nothing.
 
 #### `schedule.job_environment()`
 
@@ -988,6 +1107,7 @@ flag; you never run it by hand.
 | `--prices PATH` | none | price table (below) |
 | `--max-output-tokens N` | `64000` | ceiling for `max_tokens` (Messages, chat), `max_completion_tokens` (chat) and `max_output_tokens` (Responses); ≥ 1 |
 | `--chat-reserve-tokens N` | `8192` | output tokens reserved for a chat call that names no `max_tokens`; ≥ 1 |
+| `--responses-reserve-tokens N` | `0` | output tokens reserved for a Responses call that names no `max_output_tokens`, and set as that call's `max_output_tokens` upstream (Codex sends none; runs of `framework: codex` pass `agent.max_output_tokens`); 0 refuses such a call; at most `--max-output-tokens` |
 | `--drain-timeout S` | `120` | seconds to keep reading a reply after the client hung up; finite, ≥ 0 |
 | `--budget-usd X` | `2.0` | spend cap; finite and ≥ 0 |
 | `--spend-file PATH` | none | where `spend.json` is written |
@@ -996,13 +1116,17 @@ flag; you never run it by hand.
 | `--allow-unmetered` | off | never refuse for unmetered replies (they are still counted) |
 | `--dlp-secrets-file PATH` | none | env file whose secret values are blocked by exact match (repeatable) |
 | `--dlp-secrets-dir DIR` | `~/.config/agentteams-secrets` | its `*.env` files are loaded the same way when the directory exists (absent in the gateway container); `''` turns it off |
+| `--dlp-secrets-mount DIR` | none | a mounted secrets directory: every `*.env` (and `.env`) file in it is loaded; a directory it cannot list, or a file it cannot read as UTF-8 text, makes it exit 2 (repeatable) |
+| `--dlp-skip-ok-file PATH` | none | in-gateway paths of acknowledged files (`agent.dlp_skip_ok`), one per line: one of them it cannot read is skipped, not counted |
 | `--dlp-hostname NAME` | none | a host name to redact, besides the gateway's own (repeatable) |
+| `--dlp-hostnames-file PATH` | none | host names to redact, one per line (`#` comments); how runs pass the host's names without putting them in argv ([host context](#agentteamsvulnscangateway)) |
 | `--dlp-private-names A,B` / `--dlp-private-names-file PATH` | none | private package names to redact: case-insensitive fnmatch patterns (the file: one per line, `#` comments) |
 | `--dlp-responses` | off | also scan each upstream reply for the block classes; a hit is counted in `dlp_response_flags`, the reply is relayed unchanged |
 
 A bad flag value exits 2; so does a key file that cannot be read or holds no key, a price table
-that cannot be read or is malformed, an unreadable `--dlp-private-names-file`, and a `unix:` path
-whose directory is not usable.
+that cannot be read or is malformed, an unreadable `--dlp-private-names-file` or `--dlp-hostnames-file`, and a `unix:` path
+whose directory is not usable. On a DLP-context refusal (a secrets directory or file, or a names file, it cannot read) the gateway
+also writes one line of counts to `dlp-refused` next to `--spend-file` (`gateway_dlp.REFUSED_NAME`).
 
 **Routes.** Each route is passed through, untranslated, to an upstream that speaks its dialect
 (`gateway_dialects`). Every other path is 403; so is a route whose dialect is not in `--dialects`.
@@ -1032,12 +1156,12 @@ and never applied to the other routes.
 
 | | Chat (after the rewrites) | Messages | Responses |
 |---|---|---|---|
-| Body keys allowed | `model`, `messages`, `tools`, `tool_choice`, `parallel_tool_calls`, `stream`, `stream_options`, `max_tokens`, `max_completion_tokens`, `temperature`, `top_p`, `top_k`, `min_p`, `top_a`, `stop`, `seed`, `frequency_penalty`, `presence_penalty`, `repetition_penalty`, `response_format`, `reasoning`, `reasoning_effort`, `include_reasoning`, `usage`, `provider`, `user`, `verbosity`, `logprobs`, `top_logprobs` | `model`, `messages`, `system`, `max_tokens`, `metadata`, `stop_sequences`, `stream`, `temperature`, `top_p`, `top_k`, `tools`, `tool_choice`, `thinking`, `output_config` (only `effort`, `format`) | `model`, `input`, `instructions`, `max_output_tokens`, `tools`, `tool_choice`, `parallel_tool_calls`, `temperature`, `top_p`, `stream`, `store` (false only), `background` (false only), `reasoning`, `text`, `metadata`, `truncation`, `include` (only `reasoning.encrypted_content`), `prompt_cache_key` |
+| Body keys allowed | `model`, `messages`, `tools`, `tool_choice`, `parallel_tool_calls`, `stream`, `stream_options`, `max_tokens`, `max_completion_tokens`, `temperature`, `top_p`, `top_k`, `min_p`, `top_a`, `stop`, `seed`, `frequency_penalty`, `presence_penalty`, `repetition_penalty`, `response_format`, `reasoning`, `reasoning_effort`, `include_reasoning`, `usage`, `provider`, `user`, `verbosity`, `logprobs`, `top_logprobs` | `model`, `messages`, `system`, `max_tokens`, `metadata`, `stop_sequences`, `stream`, `temperature`, `top_p`, `top_k`, `tools`, `tool_choice`, `thinking`, `output_config` (only `effort`, `format`) | `model`, `input`, `instructions`, `max_output_tokens`, `tools`, `tool_choice`, `parallel_tool_calls`, `temperature`, `top_p`, `stream`, `store` (false only), `background` (false only), `reasoning`, `text`, `metadata`, `truncation`, `include` (only `reasoning.encrypted_content`), `prompt_cache_key`, `client_metadata` (a flat object of at most 32 strings of at most 4096 characters: Codex's thread, turn and installation ids) |
 | Refused by name | `models`, `route` (OpenRouter fallbacks would bypass the model allowlist), `n` | `mcp_servers`, `container` | `background: true`, `store: true` (an absent `store` is forced to false), `previous_response_id`, `conversation`, `prompt` |
-| Tool types allowed | `function` | custom tools (no `type`, or `custom`) | `function`, `custom` |
+| Tool types allowed | `function` | custom tools (no `type`, or `custom`) | `function`, `custom`, `namespace` (holding `function` / `custom` tools only: Codex groups MCP tools in one), `tool_search` with `execution: client` only (Codex searching its own deferred MCP tools). Tool lists carried in `input` items (Codex's `additional_tools`) are checked the same way |
 | Server tools refused | `web_search*`, `openrouter:*`, `file_search`, `code_interpreter`, `mcp`, `computer*`, `image_generation` (and every other type) | `web_search*`, `web_fetch*`, `code_execution*` (and every other typed tool, such as `bash_*`) | `mcp`, `web_search*`, `file_search`, `code_interpreter`, `computer_use*`, `image_generation` (and every other type, such as `local_shell`) |
 | `tool_choice` | `auto`, `none`, `required`, or an object of type `function` | an object of type `auto`, `any`, `tool` or `none` | `auto`, `none`, `required`, or an object of type `function` or `custom` |
-| Output ceiling | `max_tokens` / `max_completion_tokens` optional, 1 … `--max-output-tokens` | `max_tokens` required, 1 … `--max-output-tokens` | `max_output_tokens` required, 1 … `--max-output-tokens` |
+| Output ceiling | `max_tokens` / `max_completion_tokens` optional, 1 … `--max-output-tokens` | `max_tokens` required, 1 … `--max-output-tokens` | `max_output_tokens` 1 … `--max-output-tokens`; required unless `--responses-reserve-tokens` is set |
 | Content the upstream would fetch | `file_url`, `file_id`, an `image_url` that is not a `data:` URL, a `source` of type `url` or `file` | a `source` of type `url` or `file` | `file_url`, `file_id`, an `image_url` that is not a `data:` URL |
 
 The model must equal one of `--model` / `--models` on every route.
@@ -1057,7 +1181,10 @@ non-zero). Tokens always count toward `--max-tokens-total`, on every route.
 
 **Reservation.** Before any call is relayed, the gateway reserves its worst case:
 tokens = request bytes / 3 (an input over-estimate) + the output ceiling (chat without `max_tokens`:
-`--chat-reserve-tokens`, an estimate rather than a bound); USD = those tokens at the
+`--chat-reserve-tokens`, an estimate rather than a bound, since the upstream is not told the ceiling, and the
+caps are re-checked after metering; Responses without `max_output_tokens`: `--responses-reserve-tokens`, which
+the gateway also writes into the forwarded body as its `max_output_tokens`, so the upstream cannot exceed it);
+USD = those tokens at the
 model's price-table price (input at the dearer of the input and cache-write prices; 0 without an
 entry). A call whose reservation would cross the budget or the token cap is refused with HTTP 402
 (`reservation refused: ...`) and counted as `refused`. The reservation is released once the call is
@@ -1089,6 +1216,57 @@ a secret, or leak through what it writes.
 |---|---|---|
 | **Block** | `known-secret` (exact match: each upstream key, every secret-looking value in the key files, `--dlp-secrets-file` and the secrets directory); `private-key` (PEM, OpenSSH, PuTTY); `aws-access-key`, `aws-secret-key`; `github-token` (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), `gitlab-token`; `anthropic-key`, `openrouter-key`, `openai-key`; `slack-token`, `slack-webhook`; `google-api-key`, `stripe-key`, `npm-token`, `pypi-token`; `jwt` (signed); `bearer-token`; `url-credentials` (`scheme://user:password@`); `secret-assignment` (a password/secret/token/api-key/credential name assigned a random-looking value of 12+ characters, or 32+ hex digits); `high-entropy-assignment` (`UPPER_SNAKE=` and a 32+ character high-entropy value that is not hex or a digest) | HTTP 400, counted as `refused` and in `dlp_blocks`; reason `<dialect>: dlp: <class>`. The matched text is never echoed, logged or written |
 | **Redact and flag** | `private-package` → `[REDACTED:private-package]`; `home-path` (`/Users/<name>`, `/home/<name>`, `C:\Users\<name>`) → `~`, which the executor expands back, so a target the agent names still resolves; `email` → `[REDACTED:email]` (not `git@` remotes); `hostname` → `[REDACTED:hostname]`; `private-ip` (RFC 1918 and link-local IPv4, ULA and link-local IPv6) → `[REDACTED:private-ip]` | the call continues; counted per class in `dlp_redactions` |
+
+**Host context (roadmap B2).** The gateway runs in a container, where on its own it would know only the
+container's hostname and no secrets files or private package names. Before every gateway start (a run,
+`agent-selftest`, a debrief) the launcher calls `gateway_context.prepare(<gateway dir>)`, which gathers
+the host's context at that moment and hands it over as read-only file mounts:
+
+| Context | Gathered from (host side, each start) | Reaches the gateway as |
+|---|---|---|
+| host names | `socket.gethostname()` (full and short); on macOS `scutil --get ComputerName` and `LocalHostName` (plus `<LocalHostName>.local`), best effort; the host part of every server-kit `hosts.conf` ssh target (destination and `-J` hops) and, for ssh-config aliases, the `hostname` / `proxyjump` that `ssh -G` resolves (reads config, contacts nothing; best effort) | `<gateway dir>/dlp/hostnames` mounted at `/run/dlp/hostnames:ro`; `--dlp-hostnames-file` |
+| private package names | the union of `private_packages` over every registry entry's brief (fix checkout), whatever its level | `<gateway dir>/dlp/private-names` (same mount); `--dlp-private-names-file` |
+| secrets | every `*.env` (and `.env`) file of `~/.config/agentteams-secrets`, any name | the directory mounted read-only at `/run/secrets/dlp/<n>` (`--mount`, CSV-quoted); `--dlp-secrets-mount` per directory, `--dlp-skip-ok-file` |
+
+The upstream key file(s) the gateway already mounts are blocked as well. Only the gateway sees any of
+this; the agent container mounts none of it. The files are written fresh at every start (directory
+0700, files 0600; a planted symlink is removed, never followed; a symlinked `dlp` directory is refused)
+and are machine-local: never in argv (so not in `docker inspect` or `ps`), never in a repository. A
+`hosts.conf` *name* (first column), and any gathered name equal to one, is never redacted: the agent
+names servers by those names for `server-audit` / `server-dryrun`. A name that reveals a host anyway (it
+has a dot, so a fully qualified name or an address, or it equals this machine's name;
+`gateway_context.revealing_names`) is warned about on stderr at every gateway start and counted in
+`<gateway dir>/dlp/notes` (`hosts_conf_unredacted=N`), which `review` lists under *Anomalies* (a count,
+never the names): rename such entries to short aliases. An unreadable registry only drops
+the private names (a warning on stderr); an unreadable context file (host names, private names **or a
+secrets file**) makes the gateway exit 2 (`gateway.DlpContextError` for a secrets file) with a hint, so the
+run does not start without it.
+
+Before the gateway starts, `prepare` checks each configured secrets directory (`gateway_context.check_secrets`).
+If a directory exists but cannot be read, the run ends `not-run` (`gateway_context.DlpRefused`). So does a
+`*.env` file in it that is unreadable, not a regular file or a symlink out of the directory, unless
+`agent.dlp_skip_ok` acknowledges that file by path and sha256 (`validate_skip_ok`; the acknowledged in-gateway
+paths go to `<gateway dir>/dlp/skip-ok`). A missing directory is fine. The paths go to stderr only; the run
+record holds counts, and `dlp/notes` gains `secrets_dirs_missing`, `secrets_files`, `secrets_skip_ok`,
+`secrets_skip_ok_unmatched` and `secrets_problems`. When the gateway itself refuses (exit 2), `_start_gateway`
+reads `dlp-refused` (`raise_if_refused`), and the run also ends `not-run`. The debrief's gateway applies the
+same check with the same `agent.dlp_skip_ok`; a refusal there ends the debrief with exit 2 and
+`debrief not started: …` before its container starts. `prepare(spend_dir, *, kit_dir, secrets_dir, entries,
+skip_ok)` takes one secrets directory or several, and returns a `Context(directory, secrets_dirs)`;
+`bind_spec(source, target)` builds the CSV-quoted read-only `--mount` value.
+
+**Gateway DLP context on Linux.** The gateway runs as uid 10001. Docker Desktop on macOS maps the ownership
+of bind-mounted files, so the operator's 0700 directory and 0600 files are readable; a Linux Docker Engine
+bind mount keeps the operator's uid and modes, so uid 10001 cannot read the DLP context, the key file(s) or
+the secrets files, and the gateway refuses to start (exit 2) rather than run with an incomplete filter.
+`prepare` prints this on Linux at every start. The files are not made world-readable to work around it
+(every local account could then read the secrets); agent mode is verified with Docker Desktop on macOS only.
+
+`flags_sha256` hashes the gateway argv built with
+`gateway_context.placeholder()` (fixed paths, one placeholder secrets directory): it covers the presence and
+paths of these mounts and flags, never the machine's names, packages or secrets files, so the
+self-test is not invalidated by them. Adding the context changed the fingerprint once: run
+`agent-selftest` again after upgrading.
 
 Every string and object key in the body is scanned for the block classes, except base64 media `data`
 and `data:…;base64,` URIs. Redaction applies only to message text: chat `messages[].content` (strings
@@ -1122,7 +1300,10 @@ blocks and reply flags of the latest run under **Anomalies**, with the redaction
 `gateway_dlp.Filter(*, secrets, hostnames, private_names, redact)`: `apply(dialect, body)` (scans in
 place, raises `DlpBlocked`, a `PolicyError` whose `cls` names the class, and returns the redactions per
 class), `scan_block(text)`, `scan_response(payload)`; `secret_values(text)`, `load_secret_files(paths)`,
-`secrets_dir_files(directory)`, `read_private_names(path)`. `gateway_peer.peer_uid(conn)`,
+`secrets_dir_files(directory)`, `read_private_names(path)`, `env_candidates(directory)` (a directory's
+`*.env` and `.env` entries that are not directories, dangling symlinks included, so they are counted),
+`load_secret_mounts(directories, skip_ok)` (returns the values and the counts of directories and files it
+could not read and of acknowledged files skipped) and `REFUSED_NAME` (`dlp-refused`). `gateway_peer.peer_uid(conn)`,
 `peer_allowed(conn, allowed_uid)`, `socket_path_problem(path)` and `UnixGatewayServer(path, handler, *,
 allowed_uid, on_deny)`.
 
@@ -1449,8 +1630,11 @@ finalized (the holder may be a live run of that directory); the same holds when 
 record cannot be archived. Every other not-run reason is decided under the lock. The status also
 carries `report` (`{"request_id", "submitted"}` of the report this run submitted, or `null`) and,
 when an earlier run's record was moved aside, `archived_previous` (its name under
-`<run>/agent/runs/`). A run whose agent exits 0 without submitting a report of its own is
-`agent-error`, not `completed`.
+`<run>/agent/runs/`), and, for copilot and goose, `agent_definition`: `{source, copy, sha256,
+removed_keys}` of the copy the CLI read (no content). A run ends `not-run` if its copy cannot be written, or
+if the copy no longer matches the fingerprint the self-test vouched for (R9). It also ends `not-run` when the
+gateway's DLP check cannot cover every secret (`gateway_context.DlpRefused`, R5). A run whose agent exits 0
+without submitting a report of its own is `agent-error`, not `completed`.
 
 #### `fold_notes(task, run_id)`
 
@@ -1461,8 +1645,17 @@ Fold the active notes into the task and ledger which ones went in.
 Run the isolation self-test container (with the gateway it needs) and record the result against
 the framework, the image id and `flags_sha256`: a hash of the container and gateway flags, the
 self-test itself, the runtime (driver name, dialect, env, command template or the `agent.command`
-override, model variable, default agent definition, CLI and pinned version) and the image id, so one
-framework's passing self-test never vouches for another's (plan revision 10). Self-test records
+override, model variable, the selected agent definition, CLI and pinned version) and the image id, so one
+framework's passing self-test never vouches for another's (plan revision 10). The self-test runs with the agent
+definition a run loads (`agent.recipe`, else the driver's), and the fingerprint binds its path. For copilot and
+goose, the CLI reads a copy that vulnscan owns. `agent_recipe.write_copy` writes it into the self-test's run
+directory, as it does for a run, and the fingerprint also binds the copy's sha256. So any edit that changes the
+copy asks for a new self-test; for copilot, an edit only to a removed front-matter key does not. claude
+(`--append-system-prompt-file`) and codex (`model_instructions_file`) read the team's file as prompt text only,
+so only its path is bound (`agent_recipe`; @security rc.4, Medium 1; rc.4 residuals R1, R7). A refused or
+unreadable definition fails the self-test before any container starts (`checks.agent_definition_valid: false`).
+The record carries `agent_definition`: the source path, the copy path, the sha256 and the removed keys, with no
+content. Self-test records
 written before the driver refactor no longer match: re-run `agent-selftest` once after upgrading. Refuses without `agent.key_file` or `agent.team_dir`, or with a `team_dir` that fails
 `team_dir_problem` (the same check a run makes); there is no fallback directory. It also refuses,
 before starting any container, when Docker is not reachable or the image is not built
@@ -1487,11 +1680,27 @@ and exits 1). A `docker` failure part-way through raises; the CLI prints
 | `claude_mcp_attached` (claude) | the CLI's `system/init` event lists exactly one MCP server, `vulnscan`, connected |
 | `claude_tool_inventory` (claude) | every tool in the `system/init` event and in every request is a `mcp__vulnscan__*` tool (or `EndConversation`); a CLI update that adds a built-in tool fails here |
 | `claude_canary_inert` (claude) | the planted `.mcp.json`, `~/.claude.json`, settings hooks, agent, skill, `CLAUDE.md` and `AGENTS.md` had no effect: no marker file, no canary server, the canary token reached neither the model nor the output |
+| `copilot_home_fresh` (copilot driver) | `COPILOT_HOME` is `/agenthome/.copilot` on the tmpfs home and absent or empty at start; `COPILOT_CACHE_HOME` is the image's `/opt/copilot-cache`, populated at build time (`pkg/`) and not writable |
+| `copilot_state_writable` (copilot) | the CLI's log dir (`--log-dir`, `<run>/agent/copilot-data/logs`) is writable: the only host-backed writable mount, holding logs only |
+| `copilot_agent_file_clean` (copilot) | the copy a run reads (written from `agent.recipe`) exists and its front matter holds only `name` and `description`; otherwise the CLI is not run and every copilot probe check fails |
+| `copilot_headless_ran` (copilot) | the headless probe run ([`selftest_cli`](#agentteamsvulnscanselftest_cli)) exited 0, reached the local stub, emitted no `session.error` and a final `result` with `exitCode` 0 |
+| `copilot_mcp_attached` (copilot) | the requests offered the vulnscan tools (`vulnscan-<tool>`) |
+| `copilot_tool_inventory` (copilot) | every tool offered in every request is a vulnscan tool; a CLI update that adds a built-in tool fails here |
+| `copilot_canary_inert` (copilot) | the planted `.mcp.json`, `.github/mcp.json`, `.vscode/mcp.json`, `~/.copilot/mcp-config.json`, hooks, custom agents, skills and instruction files (`AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md` ...), in the working directory, in a team directory the CLI is not given and in `$HOME`, had no effect; a same-name decoy agent in that team directory stays unseen (R1) |
+| `codex_home_fresh` (codex driver) | `CODEX_HOME` is the tmpfs home and holds nothing Codex reads (`AGENTS.md`, `AGENTS.override.md`, `config.toml`, skills, rules ...): Codex reads `$CODEX_HOME/AGENTS.override.md` even with project docs off |
+| `codex_state_writable` (codex) | Codex can write its log and state-DB dir (`<run>/agent/codex-data`) |
+| `codex_headless_ran` (codex) | the headless probe run exited 0 with a `turn.completed` event after reaching the local stub |
+| `codex_mcp_attached` (codex) | the requests offered the vulnscan tools (`mcp__vulnscan` namespace) or a client-run `tool_search` over them (the MCP server is `required`, so a failed server fails the run) |
+| `codex_tool_inventory` (codex) | every tool offered (top-level, inside namespaces, and in `input` tool lists) is a vulnscan tool, a read-only MCP resource tool (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`), the client-run `tool_search`, or the accepted residual `apply_patch`. The probe runs with `agent.model`: the tool set follows the model (code-mode models, offered a JavaScript `exec` tool, fail here) |
+| `codex_residual_write_blocked` (codex) | when `apply_patch` was offered, the stub answered with an `apply_patch` call adding four files (in a temp dir, the working directory, the request spool `/work/spool/requests` and the state dir `/agenthome/.codex-state`, the writable mounts), Codex returned the rejection to the model, and none of them exists (one that does is removed again before the record is written) |
+| `codex_canary_inert` (codex) | the planted files had no effect: no marker file was written, and neither the canary token nor the canary MCP server reached the requests or the output |
 | `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, a non-root uid (the image runs as 10001) |
 
-The record also keeps `detail` (the claude probe's tool inventory: `init_tools`, `request_tools`,
-`unexpected_tools`, `mcp_servers`, `markers_fired`, `rc`), which `09-accept-framework.sh` prints. The
-self-test container may run for up to 300 s (the headless CLI run).
+The record also keeps `detail` (the probe's tool inventory: claude `init_tools`, `request_tools`,
+`mcp_servers`; copilot and codex `offered_tools`, codex `residual_tools`, `residual_outputs`, `written`,
+copilot `cli_info` (the CLI's `session.info` lines, e.g. the tools it disabled) and `request_paths`; all
+`unexpected_tools`, `markers_fired`, `rc`), which `09-accept-framework.sh` prints. The self-test container
+may run for up to 300 s (the headless CLI run).
 
 #### `selftest_ok(cfg)`
 
@@ -1524,20 +1733,25 @@ when it is not `key_file`, and `agent.prices`) must lie outside it; the signing 
 
 #### `agent_run.flags_sha256(a=None, image_id="")`
 
-The fingerprint above, for agent settings `a` (default `DEFAULT_AGENT`; only `framework` and
-`command` are read) and the image id. Raises `ValueError` for a framework without a driver.
+The fingerprint above, for agent settings `a` (default `DEFAULT_AGENT`; only `framework`, `command`,
+`recipe`, `team_dir` (copilot and goose: to read the copy's sha256), `copilot_provider_type` and, for codex,
+`model` are read) and the image id. Raises `ValueError` for a
+framework without a driver.
 
 #### `driver_of(a)`
 
-The runtime driver `agent.framework` selects ([`agent_drivers.get_driver`](#agentteamsvulnscanagent_drivers)).
+The runtime driver the settings select ([`agent_drivers.driver_for`](#agentteamsvulnscanagent_drivers)):
+copilot's dialect follows `copilot_provider_type`, codex's self-test probes with `agent.model`.
 
 ### `agentteams.vulnscan.agent_drivers`
 
 One runtime driver per agent framework, chosen by `agent.framework`. `agent_run` keeps what every
 runtime shares (isolation flags, mounts, gateway, run lock, self-test record); a driver supplies the
 rest. For every driver (plan revision 7) the container's working directory is an empty tmpfs
-(`/work/cwd`), the team is mounted read-only at `/work/team` and the agent definition is passed by
-its absolute path there, and every config home of the CLI points into the tmpfs `$HOME`. For goose this
+(`/work/cwd`), the team is mounted read-only at `/work/team`, the agent definition is passed by
+its absolute path (claude and codex: the team's file there; copilot and goose: the run's checked copy under
+`/work/run/agentdef`, [`agent_recipe`](#agentteamsvulnscanagent_recipe)), and every config home of the CLI
+points into the tmpfs `$HOME`. For goose this
 changed only the working directory (it was the image's `WORKDIR`, `/work`) and made `XDG_CONFIG_HOME`
 (goose's default, `$HOME/.config`) explicit: goose reads nothing from its working directory.
 
@@ -1554,7 +1768,8 @@ changed only the working directory (it was the image's `WORKDIR`, `/work`) and m
 | `mcp_attach()` | `McpAttach(kind, command)`: how the vulnscan MCP server is attached (goose: a stdio extension) |
 | `parse_outcome(transcript)` | `Outcome(error, model_calls)`: the CLI's error line for an `agent-error` reason |
 | `selftest_entries(command=None)` | probe checks specific to the runtime (goose: `goose_dirs_writable`); a probe that runs the CLI (claude) runs the `agent.command` override when one is set, so the self-test vouches for the command a run uses |
-| `command_problem(command)` | why an `agent.command` override may not be used, or `""`. claude refuses every override: its lockdown (`--bare`, `--tools ""`, `--strict-mcp-config`, the one vulnscan MCP server, `--allowedTools mcp__vulnscan__*`, `--permission-mode dontAsk`) is part of the driver; tune it with `agent.model` and `agent.max_turns`. Checked by `validate_agent` |
+| `command_problem(command)` | why an `agent.command` override may not be used, or `""`. goose accepts an override unless it names `/work/team` (`TEAM_IN_CONTAINER`), which would bypass the checked copy `{recipe}` names (R7). claude, copilot and codex refuse every override: their lockdown (claude: `--bare`, `--tools ""`, `--strict-mcp-config`, the one vulnscan MCP server, `--allowedTools mcp__vulnscan__*`, `--permission-mode dontAsk`) is part of the driver; tune it with `agent.model` (and claude's `agent.max_turns`). Checked by `validate_agent` |
+| `settings_problem(a)` | why the `agent.*` settings cannot run with this runtime, or `""` (codex: the residual-tool opt-in; copilot: the custom-agent `recipe`). Checked by `validate_agent` through `validate_settings` |
 | `debrief()` | `DebriefSupport(resume, note)`, or `None` (then `agent-chat` says `no debrief for <framework>`) |
 
 **The claude driver** (Claude Code, `CLAUDE`). Dialect `messages`; agent definition
@@ -1590,11 +1805,120 @@ changed only the working directory (it was the image's `WORKDIR`, `/work`) and m
 - **Debrief.** `claude --bare --resume <session>` with the same tool lockdown (the spool is read-only).
   Not yet exercised live.
 
+**The copilot driver** (GitHub Copilot CLI, `COPILOT`, `agent_drivers_copilot`). Dialect `chat`
+(`copilot_provider_type: openai`) or `messages` (`anthropic`); agent definition
+`.github/agents/vuln-remediation.agent.md`; `COPILOT_HOME` is `/agenthome/.copilot` on the tmpfs home (empty at
+every start); state dir `/agenthome/.copilot-state` (logs only, `--log-dir`); code cache `/opt/copilot-cache` in
+the image (read-only). Sources:
+the [command reference](https://docs.github.com/en/copilot/reference/cli-command-reference), the
+[programmatic reference](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference),
+[BYOK models](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-byok-models) and the pinned
+release's own `copilot help`, `help environment` and `help providers`, plus a run of its macOS build against a loopback
+stub (2026-10-24).
+
+- **Image.** Copilot CLI 1.0.95 (npm, published 2026-10-09; newest past the 14-day cooldown). No checksum is
+  published, so (plan revision 12) the `copilot-build` stage, on `node:24.21.0-bookworm-slim` pinned by digest
+  (`ImageRecipe.build_args`), runs `npm ci --ignore-scripts` from the committed
+  `agentteams/data/vulnscan_agent/copilot/package-lock.json` (every tarball's sha512), `npm audit signatures`, and
+  checks a sha256 over the whole installed tree (`find node_modules -type f ! -name .package-lock.json ... | sha256sum`)
+  against the driver's per-architecture value; only the platform package's native binary goes into the image.
+  The binary unpacks its bundled package (about 190 MB) into `COPILOT_CACHE_HOME` on first start; the `cli-copilot`
+  stage does that once (`copilot --version` with `COPILOT_CACHE_HOME=/opt/copilot-cache`), checks
+  `pkg/linux-<arch>/<version>` exists and leaves it root-owned and read-only. A run reads it from the read-only
+  rootfs, so no code is unpacked onto a writable or host-backed mount (@security rc.4, Medium 2). Verified
+  2026-10-24 by running the integrity-checked linux-arm64 build as uid 10001 with `--read-only`, `--cap-drop ALL`
+  and the populated cache read-only: a headless run against a stub succeeded; with an empty read-only cache it
+  fails at the cache `mkdir`, so the run uses the pre-unpacked package.
+- **Agent file.** `agent.recipe` must be `.github/agents/<name>.agent.md` in the team. Copilot reads YAML front
+  matter as configuration (`tools`, `model`, `mcp-servers`, `handoffs` ...), so a run never hands it the team's
+  file. Instead it writes a copy, `<run>/agentdef/.github/agents/vuln-remediation.agent.md` (mode 0444, alone in
+  that directory). The copy's front matter is `name: vuln-remediation` and the original `description`
+  (JSON-quoted), and its body is the original's, byte for byte. Every other key is removed. Each one could only
+  narrow the run, because vulnscan's flags and `COPILOT_MODEL` take precedence. The removed keys are printed at
+  run start, recorded in `status.json` (`agent_definition.removed_keys`) and listed by `review` under *Anomalies*
+  (key names only). So the generated `vuln-remediation.agent.md` runs unchanged. Still refused, with `not-run`
+  for a run and `agent_definition_valid` failing in the self-test: no front matter (line 1 must be exactly
+  `---`); no closing `---`, or an empty block; an unparseable line or a duplicate key; a missing or multi-line
+  `description`; a symlink, or a file outside the team; more than 256 KiB, or not UTF-8. The copy's sha256 is in
+  `flags_sha256`. Probe of Copilot CLI 1.0.95 in the Linux image (2026-10-24): `--agent` matches the file stem or
+  `name:`, and the stem wins when both match. The copy makes them equal.
+- **Env.** `COPILOT_PROVIDER_BASE_URL` (`http://<gateway>:8080/api/v1` for `openai`, the CLI posting
+  `/api/v1/chat/completions`; `http://<gateway>:8080` for `anthropic`, `/v1/messages`), `COPILOT_PROVIDER_TYPE`,
+  the dummy `COPILOT_PROVIDER_API_KEY`, `COPILOT_OFFLINE=true` (no GitHub authentication, telemetry, web tools,
+  GitHub MCP server or auto-update), `COPILOT_AUTO_UPDATE=false`, `COPILOT_HOME=/agenthome/.copilot`,
+  `COPILOT_CACHE_HOME=/opt/copilot-cache`, `XDG_STATE_HOME=/agenthome/.local/state`, `COPILOT_MCP_TOOL_CACHE=false`. Per run: `COPILOT_MODEL` and `COPILOT_PROVIDER_MAX_OUTPUT_TOKENS`
+  (= `agent.max_output_tokens`; it is the `max_tokens` the CLI sends).
+- **Command.** `copilot -p <task> --agent=vuln-remediation --add-dir=/work/run/agentdef --output-format json -s --no-ask-user
+  --allow-tool=vulnscan --available-tools=<the vulnscan tools> --excluded-tools=<every built-in of 1.0.95>
+  --disable-builtin-mcps --additional-mcp-config=<json> --no-custom-instructions --no-auto-update --disallow-temp-dir
+  --no-color --stream on --log-dir=/agenthome/.copilot-state/logs`. `--available-tools` is the allowlist; `--excluded-tools` lists `bash`, `list_bash`,
+  `read_bash`, `stop_bash`, the PowerShell four, `apply_patch`, `create`, `edit`, `view`, `list_agents`, `read_agent`,
+  `task`, `write_agent`, `ask_user`, `glob`, `grep`, `rg`, `skill`, `web_fetch`, `fetch_copilot_cli_documentation`,
+  `sql`, `session_store_sql`, `tool_search_tool`, `update_todo` (the docs' list and the default inventory the pinned
+  build showed). Prompt mode loads no workspace MCP servers, repository hooks or extensions. `--attachment` takes
+  images and documents only, so the agent definition is loaded as a custom agent (`--agent` + `--add-dir`).
+  `--add-dir` names only the copy's directory: the team is never named to the CLI, and an `agent.command`
+  override is refused. Probe of 1.0.95: `--add-dir` loads no instruction, skill or other agent file into the
+  prompt; `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` would load instructions, but it is never set, and
+  `--no-custom-instructions` stops it; a same-name agent in the working directory would win, and that directory
+  is the empty tmpfs.
+- **MCP.** `--additional-mcp-config` with the JSON inline: one local server `vulnscan`, `/usr/local/bin/python -m
+  agentteams.vulnscan.mcp`, the `VULNSCAN_*` paths in its `env`, `tools: ["*"]`, `deferTools: never`.
+- **Outcome.** From the JSONL events: `session.error` (`data.message`), else the final `result`'s `exitCode`;
+  `model_calls` counts `model.call_finished` events.
+- **Debrief.** None in this release.
+
+**The codex driver** (Codex CLI, `CODEX`, `agent_drivers_codex`). Dialect `responses`; agent definition
+`.codex/agents/vuln-remediation.toml`; `CODEX_HOME` is the tmpfs home (empty at every start); state dir
+`/agenthome/.codex-state` (logs and the sqlite state DB only). Sources: the pinned release's `codex --help`,
+`codex exec --help`, `codex features list` and its `config-schema.json` asset, plus runs of its macOS build against a
+loopback stub (2026-10-24).
+
+- **Image.** Codex CLI 0.162.1 (tag `rust-v0.162.1`, published 2026-10-09; newest past the cooldown):
+  `codex-<x86_64|aarch64>-unknown-linux-musl.tar.gz`, sha256 from the release's asset digests;
+  `vulnscan-agent-image.sh` also verifies the binary's sigstore bundle (`codex-<arch>-unknown-linux-musl.sigstore`,
+  certificate identity: openai/codex's `rust-release.yml` workflow at the release tag, issuer
+  `https://token.actions.githubusercontent.com`) when `cosign` is installed; without it, the script prints a
+  `NOTICE` on stderr that only the sha256 pin was checked.
+- **Env.** The dummy `OPENAI_API_KEY` (the provider's `env_key`), `OPENAI_BASE_URL` = the gateway,
+  `CODEX_HOME=/agenthome`.
+- **Command.** `codex exec --json --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules
+  --strict-config --color never -s read-only -m <agent.model> -c ... --disable <feature> ... <task>`. The `-c`
+  overrides: `approval_policy="never"`; the provider `vulnscan_gateway` (`base_url=http://<gateway>:8080/v1`,
+  `wire_api="responses"`, `env_key="OPENAI_API_KEY"`, no websockets, no standalone web search, local compaction);
+  the MCP server (below); `model_instructions_file=<agent definition>`; `project_doc_max_bytes=0`,
+  `project_root_markers=[]`; `log_dir` and `sqlite_home` in the state dir; `web_search="disabled"`, history,
+  analytics, feedback and update checks off, `agents.enabled=false`, skills' instructions and bundled skills off,
+  `tools.update_plan` and request-user-input off, `notify=[]`. `--disable` turns off every stable feature that adds
+  a tool or a side channel (`shell_tool`, `unified_exec`, `multi_agent`, `apps`, `plugins`, `browser_use`,
+  `computer_use`, `image_generation`, `view_image`, `hooks`, `memories`, `code_mode_host`, `api_key_model_discovery`,
+  `enable_request_compression` and the rest of `agent_drivers_codex.DISABLED_FEATURES`). `--strict-config` turns a
+  renamed setting into an error, so it fails the self-test.
+- **MCP.** `-c mcp_servers.vulnscan={command, args, env, required=true, enabled_tools=[the vulnscan tools],
+  default_tools_approval_mode="auto"}`.
+- **Residual tool (decision D4).** For models whose catalog entry names one (e.g. `gpt-5.5`, `openai/gpt-5.5`), Codex
+  offers `apply_patch`, and no setting removes it. It is accepted only with `agent.accept_residual_tools:
+  ["apply_patch"]` and a self-test showing the read-only sandbox rejects its writes (observed: `patch rejected:
+  writing is blocked by read-only sandbox; rejected by user approval settings`).
+- **Gateway.** Codex sends no `max_output_tokens`, so its gateway reserves `agent.max_output_tokens` per call
+  (`--responses-reserve-tokens`); its bodies carry `client_metadata`, a `namespace` tool and a client-run
+  `tool_search`, all allowed on the Responses route.
+- **Outcome.** From the `--json` events: `turn.failed` / `error`, else `turn.completed` is success; `item.completed`
+  errors (e.g. unknown model metadata) are warnings.
+- **Debrief.** None (`--ephemeral`).
+
 #### `get_driver(name)`
 
-The driver for a framework. Raises `ValueError`: `agent.framework <name>: driver not available in
-this release` for `copilot`, `codex` and `grok`; `agent.framework must be one of ...` for anything
-else.
+The driver for a framework. Raises `ValueError`: `agent.framework grok: driver not available in this
+release`; `agent.framework must be one of ...` for anything else.
+
+#### `driver_for(a, default="goose")`, `validate_settings(a, driver)`
+
+`driver_for` returns the driver specialised for the settings (`default` names the framework used when `agent.framework`
+is unset; copilot's dialect from `copilot_provider_type`,
+codex's probe model from `model`); `validate_settings` runs `agent_upstreams.validate` for the driver's dialect and
+the driver's `settings_problem`. The shared contract (`Driver`, `ImageRecipe`, the container constants) lives in
+`agent_driver_base` and is re-exported by `agent_drivers`.
 
 ### `agentteams.vulnscan.agent_upstreams`
 
@@ -1602,10 +1926,12 @@ The gateway's upstream wiring per driver dialect and the `agent.*` keys it reads
 table under [Configuration](#configuration-vulnscanjson)). `gateway_routes(a, dialect)` returns the
 `docker run` mounts and gateway flags: for `chat` exactly the pre-driver ones (`--model`, `--key-file`,
 `--upstream`); for `messages`, `--dialects messages --upstream-messages --key-file-messages
---max-output-tokens --anthropic-betas`, plus `--models` and `--prices` (mounted read-only at
-`/run/secrets/prices.json`) when set. `validate(a, dialect)` checks those keys and the
-Anthropic-models-only rule; `secret_paths(a)` lists every host file the gateway mounts (for
-`team_dir_problem`).
+--max-output-tokens --anthropic-betas`; for `responses`, `--dialects responses --upstream-responses
+--key-file-responses --max-output-tokens --responses-reserve-tokens` (the key file mounted at
+`/run/secrets/responses.env`); plus `--models` and `--prices` (mounted read-only at
+`/run/secrets/prices.json`) when set. `validate(a, dialect)` checks those keys and the dialect's model rule
+(Messages: Anthropic models only; Responses: OpenAI models only); `secret_paths(a)` lists every host file the
+gateway mounts (for `team_dir_problem`).
 
 ### `agentteams.vulnscan.selftest_canary`
 
@@ -1614,8 +1940,53 @@ dialect, base_env, timeout)` starts a loopback stub of the model API (canned Mes
 `count_tokens` 404) and runs the CLI against it. `plant_canary(work, config, markers, token)` plants
 the files the CLI must ignore. `claude_checks(argv, run_env, *, recipe)` runs Claude Code with the
 driver's exact command, the canary planted in its working directory and config home, and returns the
-four `claude_*` checks and the detail dict. Nothing contacts the network beyond the loopback stub, and
-nothing is billed.
+four `claude_*` checks and the detail dict. The stub also answers the Responses dialect
+(`canned_responses`) and takes a scripted `reply` per request. Nothing contacts the network beyond the loopback
+stub, and nothing is billed.
+
+### `agentteams.vulnscan.selftest_cli`
+
+The Copilot and Codex headless runs of the self-test (same stub). Neither CLI reports a tool inventory event, so
+the inventory is what the model is offered: `offered_tools(requests)` flattens every request's `tools`, Responses
+`namespace` children and tool lists carried in `input` items. `copilot_checks(argv, run_env, *, recipe, dialect)`
+and `codex_checks(argv, *, recipe, argv_url, write_targets=None)` plant a canary (`plant_copilot`, `plant_codex`)
+and return the `copilot_*` / `codex_*` checks and the detail dict; Codex's run answers its first request with an
+`apply_patch` call when that tool is offered (`codex_residual_write_blocked`), adding files in a temp dir, the
+working directory and each of `write_targets` (default: the request spool and Codex's state dir). `copilot_checks`
+runs the driver's command with `{agentdef}` replaced by a directory that holds only the copy. `recipe` is
+`/work/run/agentdef/.github/agents/vuln-remediation.agent.md`, written by `selftest`. The check plants the canary
+in the working directory and in a team directory the CLI is not given, and puts a same-name decoy agent in that
+team directory. It refuses an absent copy, or one whose front matter carries configuration, before starting the
+CLI (`copilot_agent_file_clean`). `plant_copilot(roots, home, markers, token, decoy=None)` takes the decoy as
+`(root, name)`. `copilot_home_fresh(env, home, copilot_home, cache)` is the probe's
+`copilot_home_fresh` check.
+
+### `agentteams.vulnscan.agent_recipe`
+
+The selected agent definition (`agent.recipe`, else the driver's), and the copy that a copilot or goose run reads.
+
+- `selected(a, driver)`: the definition's path in the team.
+- `read_source(a, driver)` (R2): reads it strictly. It must be a regular file (not a symlink), under the resolved
+  team, at most `MAX_BYTES` (256 KiB), and UTF-8. BOM and CRLF are normalised. Otherwise it raises `ValueError`.
+- `copilot_copy(text, source)`: returns the Copilot copy as an `AgentCopy` (`data`, `dropped`, `sha256`, `path`,
+  `bound()`, `record()`). The copy has `name: vuln-remediation`, the original `description` and the body byte
+  for byte. Every other key goes into `dropped`.
+- `front_matter_problem(text)`: the strict check the self-test applies to the copy. Only `name` and
+  `description` are allowed, as one-line strings, and `description` is required (a strict YAML subset, no YAML
+  library).
+- `goose_recipe_problem(text)` (R7): the top-level keys must be in `GOOSE_KEYS` or be `extensions`, and
+  `extensions` must equal `rendered_goose_extensions()`. That is the block agentteams' renderer emits for
+  `GOOSE_EXTENSIONS` (`developer`, `summon`).
+- `make_copy(a, driver)`: returns the copy, or None for claude and codex.
+- `write_copy(a, driver, run_dir)`: writes the copy to a fresh `<run_dir>/agentdef` with mode 0444.
+- `in_container(a, driver)`: the path the CLI is given.
+- `problem(a, driver)`: why the definition may not run (`""` means it may).
+- `binding(a, driver)`: what `flags_sha256` binds. That is the path, plus the copy's sha256 for copilot and goose
+  (`"refused"` when there is no copy).
+- `notice(copy)`: the run-start line that names the removed keys.
+
+`agent_drivers` re-exports `problem` and `binding` as `recipe_problem` and `recipe_binding`. `Driver.recipe`
+(set by `driver_for`) and `Driver.selected_recipe()` carry the selection.
 
 ### `agentteams.vulnscan.selftest_probe`
 
@@ -1638,7 +2009,10 @@ Resume a past run's session with the driver's resume command (goose: `goose sess
 claude: `claude --bare --resume <session>`),
 the terminal attached, a read-only spool, and its own gateway with the debrief caps. A framework whose
 driver has no debrief is refused (exit 2) with `no debrief for <framework>`; the debrief is advisory and
-never part of the safety path.
+never part of the safety path. Its container masks `/work/run/gateway` and `/work/run/debrief` as a run's does
+(R6). Its gateway gets the host's DLP context like a run's and honours `agent.dlp_skip_ok`; when the DLP check
+cannot cover every secret (`gateway_context.DlpRefused`, R5), the debrief exits 2 with
+`debrief not started: …` before its container starts, the way a run ends `not-run`.
 
 All three debrief limits are checked before anything starts: a bad one returns 2 with
 `debrief refused: agent.debrief_budget_usd must be …` (or the key at fault). The config load
@@ -1741,7 +2115,9 @@ range, every `agent.*` key included ([`validate_agent`](#validate_agenta)).
 
 Render the after-action review. `for_publish=True` puts every agent- or repository-derived text
 inside a fence and scrubs local identity; `gh_replies=True` lists replies on the agents' pull
-requests (it calls `gh`).
+requests (it calls `gh`). *Anomalies* also lists the agent-definition keys the latest run's copy removed
+(`status.json` `agent_definition.removed_keys`; key names only, R1) and the gateway DLP secrets counts; the
+`agent.dlp_skip_ok` entries are listed with path and sha256 on the terminal, as a count in the published copy.
 
 #### `acknowledge(note)`
 

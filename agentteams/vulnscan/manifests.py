@@ -9,11 +9,22 @@ Supported formats:
 | Packagist | ``composer.lock`` |
 
 A manifest that yields no exact versions is reported as *unscannable*, not skipped
-silently. Examples are an unpinned ``requirements.txt``, a ``pyproject.toml`` with no
-lockfile, and a ``pnpm-lock.yaml``. Lockfiles of ecosystems the scanner does not read
-(:data:`UNSUPPORTED`: ``Cargo.lock``, conda ``environment.yml``, Lean ``lake-manifest.json``)
-are reported as unscannable with the reason, so a workspace that holds only those is not
-mistaken for one with nothing to scan.
+silently. Examples are an unpinned ``requirements.txt`` and a ``pyproject.toml`` with no
+lockfile. Manifests of ecosystems the scanner does not read are discovered too and reported as
+unscannable with the reason ``unsupported ecosystem: <name>`` (:func:`unsupported_ecosystem`), so a
+workspace that holds only those is in the coverage state ``unsupported ecosystem``, never mistaken for
+one with nothing to scan:
+
+| Ecosystem | Files |
+|---|---|
+| Go | ``go.sum`` (``go.mod`` when there is no ``go.sum``) |
+| Maven | ``pom.xml`` |
+| Gradle | ``gradle.lockfile`` (``build.gradle`` / ``build.gradle.kts`` when there is no lockfile) |
+| RubyGems | ``Gemfile.lock`` |
+| NuGet | ``packages.lock.json`` (``*.csproj`` when there is no lockfile) |
+| pnpm (npm) | ``pnpm-lock.yaml`` |
+| Rust/crates.io, conda, Lean | ``Cargo.lock``, ``environment.yml`` / ``.yaml``, ``lake-manifest.json`` |
+| container images | ``Dockerfile``, ``Dockerfile.*``, ``*.Dockerfile``, ``Containerfile``, ``compose.y(a)ml``, ``docker-compose*.y(a)ml`` |
 
 Only ``requirements*.txt`` (:data:`REQ_NAME`) is ever edited by a staged fix; the ``.lock``
 and ``.in`` variants are read, never edited (:data:`REQ_SCAN_NAME`).
@@ -55,13 +66,32 @@ REQ_PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*==\s*([^\
 _REQ_ANY = re.compile(r"^\s*[A-Za-z0-9][A-Za-z0-9._-]*")
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.lock",
              "poetry.lock", "uv.lock", "Pipfile.lock")
-#: Lockfiles of ecosystems that are not scanned: discovered and reported as unscannable with this reason.
+#: Manifests of ecosystems that are not scanned (file name -> ecosystem): discovered, reported unscannable.
 UNSUPPORTED: dict[str, str] = {
-    "Cargo.lock": "Rust/crates.io: not supported",
-    "environment.yml": "conda: not supported",
-    "environment.yaml": "conda: not supported",
-    "lake-manifest.json": "Lean: not supported",
+    "Cargo.lock": "Rust/crates.io",
+    "environment.yml": "conda",
+    "environment.yaml": "conda",
+    "lake-manifest.json": "Lean",
+    "go.sum": "Go",
+    "pom.xml": "Maven",
+    "gradle.lockfile": "Gradle",
+    "Gemfile.lock": "RubyGems",
+    "packages.lock.json": "NuGet",
+    "pnpm-lock.yaml": "pnpm (npm packages; run `pnpm audit` here)",
+    "Containerfile": "container images",
+    "compose.yml": "container images",
+    "compose.yaml": "container images",
 }
+#: Listed only when the directory has no lockfile of the same ecosystem (it would report the same packages).
+_UNSUPPORTED_FALLBACK: dict[str, tuple[str, str]] = {
+    "go.mod": ("Go", "go.sum"),
+    "build.gradle": ("Gradle", "gradle.lockfile"),
+    "build.gradle.kts": ("Gradle", "gradle.lockfile"),
+}
+_DOCKERFILE = re.compile(r"^(Dockerfile([.-][\w.-]+)?|[\w.-]+\.Dockerfile|docker-compose[\w.-]*\.ya?ml)$")
+_CSPROJ = re.compile(r"^[\w.-]+\.csproj$")
+#: Prefix of the unscannable reason of every unsupported-ecosystem manifest (coverage keys on it).
+UNSUPPORTED_REASON = "unsupported ecosystem: "
 _DEV_GROUP = re.compile(r"dev|test|lint|doc|type", re.I)
 REGISTRY_HOSTS = frozenset({"registry.npmjs.org", "registry.yarnpkg.com"})
 _LOCK_ROOT_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies", "scripts",
@@ -109,6 +139,26 @@ def is_linked_worktree(directory: Path) -> bool:
     return text.startswith("gitdir:") and "/worktrees/" in text.replace("\\", "/")
 
 
+def unsupported_ecosystem(name: str) -> str:
+    """Return the ecosystem of a manifest the scanner does not read, by file name.
+
+    Args:
+        name: File name.
+
+    Returns:
+        The ecosystem (``Go``, ``Maven``, ``container images``, ...), or "" for a scanned format.
+    """
+    if name in UNSUPPORTED:
+        return UNSUPPORTED[name]
+    if name in _UNSUPPORTED_FALLBACK:
+        return _UNSUPPORTED_FALLBACK[name][0]
+    if _CSPROJ.match(name):
+        return "NuGet"
+    if _DOCKERFILE.match(name):
+        return "container images"
+    return ""
+
+
 def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
     """List manifest files under ``root``.
 
@@ -119,8 +169,9 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
     Returns:
         Sorted manifest paths. ``package.json`` and ``pyproject.toml`` are listed only when
         their directory has no lockfile (a ``pyproject.toml`` next to requirements files is listed
-        too: :func:`parse` reads its PEP 621 pins). :data:`UNSUPPORTED` lockfiles are listed so they
-        can be reported as unscannable.
+        too: :func:`parse` reads its PEP 621 pins). Manifests of unsupported ecosystems
+        (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable; ``go.mod``,
+        ``build.gradle*`` and ``*.csproj`` only when their directory has no lockfile of the same ecosystem.
     """
     found: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -135,15 +186,17 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         dirnames[:] = sorted(keep)
         names = set(filenames)
         for name in sorted(names):
-            if name in LOCKFILES or name in UNSUPPORTED or REQ_SCAN_NAME.match(name):
+            if name in LOCKFILES or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) or _DOCKERFILE.match(name):
+                found.append(here / name)
+            elif name in _UNSUPPORTED_FALLBACK and _UNSUPPORTED_FALLBACK[name][1] not in names:
+                found.append(here / name)
+            elif _CSPROJ.match(name) and "packages.lock.json" not in names:
                 found.append(here / name)
         has_lock = bool(names & set(LOCKFILES))
         if "pyproject.toml" in names and not has_lock:
             found.append(here / "pyproject.toml")
-        if "package.json" in names and not has_lock:
+        if "package.json" in names and not has_lock and "pnpm-lock.yaml" not in names:
             found.append(here / "package.json")
-        if "pnpm-lock.yaml" in names:
-            found.append(here / "pnpm-lock.yaml")
     return sorted(set(found))
 
 
@@ -172,14 +225,12 @@ def parse(path: Path) -> Manifest:
             _toml_lock(path, m)
         elif name == "Pipfile.lock":
             _pipfile_lock(path, m)
-        elif name == "pnpm-lock.yaml":
-            m.unscannable = "pnpm-lock.yaml is not parsed yet — run `pnpm audit` here"
-        elif name in UNSUPPORTED:
-            m.unscannable = f"{name}: {UNSUPPORTED[name]}"
         elif name == "pyproject.toml":
             _pyproject(path, m)
         elif name == "package.json":
             m.unscannable = "package.json without a lockfile — run `npm install --package-lock-only`"
+        elif eco := unsupported_ecosystem(name):
+            m.unscannable = f"{UNSUPPORTED_REASON}{eco}"
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, tomllib.TOMLDecodeError,
             KeyError, TypeError, AttributeError) as exc:
         m.deps.clear()

@@ -83,7 +83,7 @@ set +e
 OUT="$("${VS[@]}" act stage-fix "$REPO" --rationale "W1 acceptance: confined stage-fix")"; rc=$?
 set -e
 echo "$OUT"
-echo "act exit $rc (0 done, 1 refused, 3 failed)"
+echo "act exit $rc (exit codes: 0 done, 1 refused, 3 failed)"
 [ "$rc" -eq 0 ] || { echo "stage-fix did not complete: report the detail above (a refusal naming the tools container is the fail-closed path)" >&2; exit 1; }
 WT="$("$PY" -P -c 'import json, sys; print(json.loads(sys.stdin.read()).get("worktree", ""))' <<<"$OUT")"
 if [ -n "$WT" ] && [ -d "$WT" ]; then
