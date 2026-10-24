@@ -35,7 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, executor, gateway_context
+from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, docker_mode, executor, gateway_context, paths
 from agentteams.vulnscan.agent_drivers import Driver
 
 DEBRIEF_CONTAINER = "agentteams-vulnscan-debrief"
@@ -180,7 +180,7 @@ def resume_command(session: str, driver: Driver | None = None) -> list[str]:
     return support.resume(session)
 
 
-def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> list[str]:
+def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, user: str | None = None) -> list[str]:
     """Return the ``docker run`` command for the debrief container.
 
     Same isolation as an agent run (via :func:`agent_run.agent_base`), with ``-it``, its own name,
@@ -192,6 +192,7 @@ def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> li
         tag: Image tag.
         run_dir: The past run's directory (mounted read-only; its goose sessions dir read-write).
         session: Session name to resume.
+        user: The container user for the Docker mode (R4, :func:`agent_run.container_user`); None: the default.
 
     Returns:
         argv.
@@ -202,7 +203,7 @@ def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> li
     d = agent_run.driver_of(a)
     team = Path(str(a["team_dir"] or run_dir)).expanduser().resolve()
     base = agent_run.agent_base(tag, run_dir, agent_run.sessions_dir(run_dir, d), team, name=DEBRIEF_CONTAINER,
-                                gateway=DEBRIEF_GATEWAY, spool_mode="ro", interactive=True, driver=d)
+                                gateway=DEBRIEF_GATEWAY, spool_mode="ro", interactive=True, driver=d, user=user)
     return [*base, *agent_drivers.run_env_args(d, a), tag, *resume_command(session, d)]
 
 
@@ -278,12 +279,12 @@ def _preflight(cfg: dict[str, Any], a: dict[str, Any], run_dir: Path) -> str:
     return "" if ok else why
 
 
-def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, budget_usd: float) -> None:
+def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, budget_usd: float, user: str | None = None) -> None:
     """Start the debrief's gateway, as :func:`agent_run._start_gateway` (gateway_context.DlpRefused; R5)."""
     agent_run._docker(["docker", "rm", "-f", DEBRIEF_GATEWAY], check=False)
     dlp = gateway_context.prepare(spend_dir, skip_ok=a.get("dlp_skip_ok") or [])   # B2: the host's DLP context
     agent_run._docker(agent_run.gateway_argv(a, tag, spend_dir, name=DEBRIEF_GATEWAY, budget_usd=budget_usd,
-                                             max_tokens_total=debrief_max_tokens(a), dlp=dlp))
+                                             max_tokens_total=debrief_max_tokens(a), dlp=dlp, user=user))
     try:
         agent_run._docker(["docker", "network", "connect", agent_run.NETWORK, DEBRIEF_GATEWAY])
     except RuntimeError:   # the gateway already exited: its DLP-context refusal, if any, is the reason
@@ -350,19 +351,24 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
     after the container and the gateway are removed, then re-raised.
     """
     tag = agent_run.image_tag(a)
+    mode = agent_run.detect_docker_mode()   # R4: the user the self-test ran as, or no debrief (as a run)
+    user = agent_run.container_user(mode.user)
+    if mode.problem or user != docker_mode.recorded_user(paths.state_dir() / "agent-selftest.json", agent_run.AGENT_UID):
+        return _refuse(EXIT_REFUSED, mode.problem or "the Docker mode changed since the last passing self-test — "
+                                                     "re-run agent-selftest")   # before any directory is made
     started = datetime.now(UTC)
     out = run_dir / "debrief" / started.strftime("%Y%m%dT%H%M%SZ")
     out.mkdir(parents=True, exist_ok=True)
     for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results",
               *(run_dir / m for m in agent_run.MASKED_RUN_DIRS)):   # R6: the masks' mountpoints, before docker run
         d.mkdir(parents=True, exist_ok=True)
-    argv = debrief_argv(a, tag, run_dir, session_name(run_dir))
+    argv = debrief_argv(a, tag, run_dir, session_name(run_dir), user=user)
     timed_out = terminated = False
     rc = EXIT_REFUSED
     agent_run._ensure_network()
     try:
         _cleanup()
-        _start_gateway(a, tag, out, budget)
+        _start_gateway(a, tag, out, budget, user)
         proc = subprocess.Popen(argv)                    # inherited stdio: the operator's terminal
         try:
             rc = proc.wait(timeout=60 * minutes)
