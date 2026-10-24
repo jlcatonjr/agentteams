@@ -42,6 +42,70 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
 
 ### Added
 
+- **vulnscan: enrol every project on the machine.**
+  - `vulnscan enroll [DIR…] [--discover DIR] [--level L]` (operator only: a terminal, refused on CI)
+    finds agentteams workspaces, groups clones and worktrees by normalised origin (`host/owner/name`,
+    read from the repository config as text), asks once per owner, and writes the machine-local registry
+    `~/.config/agentteams/projects.json` (mode 600). Levels come from each brief; setting one shows the
+    brief diff first.
+  - `daily` scans `repo_roots` plus each enrolled project's fix checkout at `scan` or `remediate`, minus
+    the new `exclude` config key and duplicates. `vulnscan roots` shows each root's source.
+  - The daily summary and `review` gain a Coverage section: fixable, scan-only, not covered by the grant
+    yet, opted out, excluded, unanswered, duplicate checkout, missing on disk, not a git repository.
+  - `vulnscan status --project DIR [--json]`: one project's level, last scan, open findings, recorded fix
+    branches and PRs, and grant coverage; read-only, no network.
+  - `grant sign --from-registry` proposes the fix checkout of every project enrolled at `remediate`
+    (never `scan`, `off` or unanswered; never a clone of a protected repository). It shows only the
+    change since the previous signed grant (additions and removals by owner, unchanged as a count) and
+    asks y/N per owner for the additions; it needs a terminal and refuses on CI. The signing review is
+    unchanged and its digest covers every root.
+  - The executor refuses `stage-fix` and `open-pr` on a repository the registry enrols below `remediate`
+    ("enrolled at `<level>`: scanning only"), and `get_fix_plans` heads those plans "scan only".
+    Repositories not in the registry keep the grant as their only scope. An unreadable registry refuses
+    repo operations. The registry only narrows what is scanned and proposed; it never authorizes a
+    change (signed grants do), and the terminal check of `enroll` and `--from-registry` is not
+    authentication.
+  - Hardening from the security review. The protected-repository check also compares the push URL git
+    itself would use (`remote.origin.pushurl`, `url.*.pushInsteadOf`; hardened `git remote get-url
+    --push`). An enrolled checkout whose origin changed since enrolment, or an unregistered repository
+    nested in one, is refused ("re-run enroll"). `registry.load` refuses a registry file that is a
+    symlink, not yours or group/world-writable; the identity reader refuses a `.git` file, `commondir`
+    or `config` that is not a regular file of at most 1 MiB, and the executor then refuses. `grant sign
+    --from-registry` groups roots by the owner of their current origin and marks `ORIGIN CHANGED`.
+  - `vulnscan status --project` adds `coverage_state` (the coverage vocabulary, plus `not enrolled`),
+    `last_scan_partial`, `brief_level` and a `mismatch:` problem. `enroll` skips a project whose brief
+    block is invalid and shows why, instead of treating it as unanswered.
+- **Per-project vulnerability-scanning intent in the brief.**
+  - New `vulnerability_scanning` block in `project-description.schema.json`: `level` (`off`, `scan`,
+    `remediate`), `exclude_paths`, `private_packages`, `include_dev`, `delivery` (`pr` or `plan`) and
+    `base_branch`. Unknown keys are refused. A privacy guard refuses host names, IP addresses, URLs,
+    absolute paths, `..`, `~`, and catch-all `exclude_paths`/`private_packages` entries made only of
+    wildcards and separators (`*`, `**`, `*/**`, `.*`). The `vulnerability_remediation` capability is
+    unchanged: it still selects the ops team's vuln-remediation agent.
+  - New module `agentteams.vulnscan.project_policy`: `read_policy`, `find_brief`, `is_private` and
+    `set_level`. `read_policy` never raises; a missing, invalid or unreadable block counts as
+    unanswered.
+  - Operator choices win: a brief only narrows what leaves the machine, never what is checked. A
+    repository the operator enrols at `scan`/`remediate` or lists in `repo_roots` is scanned even when
+    its brief says `level: off` (`brief_off`; the Coverage section reports "brief says off; scanned by
+    operator enrolment"). Only an enrolment at `off` skips it (`opted_out`). The operator's `exclude`
+    paths go into the scan itself, so those manifests are never read or sent to OSV.
+  - `exclude_paths` manifests are skipped (`excluded`). `private_packages` are never sent to OSV, PyPI
+    or npm (PyPI names compared per PEP 503); the summary and the Coverage section only count them per
+    repository (`withheld`), and `summary.json`, which the agent's MCP server reads, never names them. A
+    lockfile that holds private packages is not given to `npm audit fix`. `include_dev` decides, per
+    project, whether dev-only findings count (`Finding.count_dev`). The executor refuses `stage-fix` and
+    `open-pr` when the brief's level is set below `remediate`, refuses `open-pr` for `delivery: plan`,
+    and uses `base_branch` as the PR base (refusing when origin has no such branch).
+  - `agentteams --set-vulnscan LEVEL` writes the level into the brief. It shows a diff and needs its
+    own y/N on a terminal; `--yes` does not answer it. Without a terminal, it writes only with a
+    matching `--set-vulnscan-confirm-sha256`.
+  - `--update` and fleet runs print "vulnerability scanning: unanswered" for each project that has no
+    level, and the fleet report counts them. Neither command writes machine state.
+  - The team-builder intake asks for the level. `scan` is recommended, and the question explains what
+    leaves the machine. Rule S-VM now reads `vulnscan status --project .` (`coverage_state`,
+    `last_scan_partial`; `security_rules_invariant` bumped to v=13). The orchestrator gains a review
+    protocol for `vulnscan/*` PRs.
 - **`python -m agentteams.vulnscan`: known-vulnerability scanning and remediation for repositories and
   servers.**
   - It reads PyPI, npm and Packagist lockfiles and pins, and checks every exact version against OSV.dev,
@@ -69,7 +133,7 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
   - New commands: `vulnscan review` (after-action review and acknowledgement) and `agent-selftest`
     (isolation proof, a precondition for agent mode).
   - `@security` gains **Rule S-VM** (continuous vulnerability monitoring and standing grants;
-    `security_rules_invariant` v=12).
+    `security_rules_invariant` v=13, which includes the `status --project` rows above).
 - **The vulnscan operator loop: escalations, notes, debriefs and reports.** See "When the agents
   stop" in `docs_src/vulnerability-remediation-guide.md`.
   - The agent's new MCP `escalate` tool records a ledger escalation that blocks remediation. The
@@ -331,6 +395,19 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
 
 ### Security
 
+- **vulnscan: a repository's config can no longer make the executor's fetch, ls-remote or push run a
+  program.** git keeps the first `remote.origin.uploadpack` / `receivepack` it reads (the repository's), so
+  the executor now passes `--upload-pack=git-upload-pack` / `--receive-pack=git-receive-pack` explicitly. It
+  also refuses any origin URL that is not https, ssh, scp-like or a local path (no `ext::` or other
+  `<helper>::` remotes, which a per-protocol `protocol.<name>.allow` in repository config would otherwise
+  allow), and allows only the https, ssh and file transports. Pre-existing; found by `@security` review.
+- **vulnscan: protected repositories are matched by origin.** A separate clone of the agentteams
+  checkout, `agent.team_dir`, a grant's `governance_dir` or a publish ops repository (same
+  `host/owner/name` origin) is refused like a worktree of it; before, only the git common directory was
+  compared. The checks moved into the new module `agentteams.vulnscan.executor_guard`.
+- **vulnscan: PR bodies are scrubbed.** `open-pr` passes the body through the publish scrubber
+  (`publish.rewrite_paths`): home paths, this host's name and private IPv4 addresses no longer reach the
+  repository's pull request.
 - **`--sign-mcp-direct-grant --confirm-review-sha256` could never confirm.** Each run minted a fresh
   `grant_id` and timestamps inside the digested record. The digest now covers the operator's choices
   plus the lifetime and the target project (`operator_signing.review_choices`), as `--sign-grant`

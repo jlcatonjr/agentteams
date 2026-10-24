@@ -128,6 +128,25 @@ def test_a_repo_configured_signing_program_never_runs(env: dict, monkeypatch: py
     assert not marker.exists()
 
 
+def test_a_repo_configured_upload_pack_or_ext_transport_never_runs(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A repository's config cannot make the executor's fetch run a program (uploadpack, ext:: remote)."""
+    repo = _repo_with_remote(env["tmp"])
+    marker = env["tmp"] / "ran"
+    prog = env["tmp"] / "evil-upload-pack"
+    prog.write_text(f"#!/bin/sh\ntouch '{marker}'\nexec git-upload-pack \"$@\"\n")
+    prog.chmod(0o755)
+    _sh(repo, "config", "remote.origin.uploadpack", str(prog))
+    _install(env, ops=["stage-fix"], hosts=[], max_uses=5)
+    monkeypatch.setattr(fix, "fix_path", _pin_fix)
+    res = executor.act("stage-fix", str(repo), env["cfg"])
+    assert res["status"] == "done", res
+    assert not marker.exists()                                         # git's own upload-pack ran
+    _sh(repo, "config", "remote.origin.url", f"ext::sh -c touch% {marker}")
+    _sh(repo, "config", "protocol.ext.allow", "always")
+    executor.act("stage-fix", str(repo), env["cfg"])
+    assert not marker.exists()                                         # ext:: is not an allowed transport
+
+
 def test_an_npm_that_failed_to_run_is_reported_as_such(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _repo_with_remote(env["tmp"])
     _install(env, ops=["stage-fix"], hosts=[])

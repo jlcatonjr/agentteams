@@ -5,7 +5,8 @@ dir. That file names the user's own repos and hosts, so it is never inside a rep
 
 One run:
 
-1. Scans each ``repo_roots`` entry, writes a fix plan per git repository (``fixplan-<name>-<digest>.md``,
+1. Scans each effective root (:func:`coverage.effective_roots`: the explicit ``repo_roots``, plus the fix
+   checkout of every registry entry at ``scan`` or ``remediate``, minus ``exclude`` paths and duplicates), writes a fix plan per git repository (``fixplan-<name>-<digest>.md``,
    naming the repository as the ``stage-fix`` target), and in
    ``fix_mode = "apply-worktree"`` stages non-major, cooldown-clean fixes in a fresh git
    worktree per repository. It never commits, pushes or merges.
@@ -14,7 +15,8 @@ One run:
    config) on each ``servers`` host and analyzes
    its inventory. Server *changes* are never automatic; they remain a person running
    ``run-host.sh --apply``.
-4. Writes ``<state>/<date>/summary.{md,json}``, marking findings new since the last run.
+4. Writes ``<state>/<date>/summary.{md,json}``, marking findings new since the last run, with the coverage
+   state of every enrolled workspace.
 5. Updates ``<state>/heartbeat.json`` (atomically) and sends a notification.
 
 Only one daily run works at a time: a second one finds ``<state>/daily.lock`` held and exits 3
@@ -39,7 +41,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import engine, executor, fix, notify, paths
+from agentteams.vulnscan import coverage, engine, executor, fix, notify, paths, registry
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -60,7 +62,8 @@ _FIX_MODES = ("plan", "apply-worktree")
 _BOOL_KEYS = ("include_worktrees", "include_dev", "local_runtimes", "allow_major")
 
 DEFAULT_CONFIG: dict = {
-    "repo_roots": [],            # e.g. ["~/code"] — a repo or a folder of repos
+    "repo_roots": [],            # e.g. ["~/code"] — a repo or a folder of repos (enrolled projects come from the registry)
+    "exclude": [],               # paths never scanned: a root inside one is skipped, findings inside a root dropped
     "include_worktrees": False,
     "servers": [],               # host names from <server kit>/hosts.conf
     "fail_on": "high",           # critical | high | moderate | low | any | none
@@ -95,7 +98,7 @@ def _config_problem(cfg: dict[str, Any]) -> str:
     def got(value: Any) -> str:
         return f" (got {repr(value)[:80]})"
 
-    for key in ("repo_roots", "servers"):
+    for key in ("repo_roots", "servers", "exclude"):
         value = cfg[key]
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             return f"{key} must be a list of strings{got(value)}"
@@ -395,8 +398,9 @@ def stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
         if made.returncode:
             return "", f"{repo}: worktree add failed: {made.stderr.strip()}"
     cooldown = max(executor.MIN_COOLDOWN_DAYS, int(cfg.get("cooldown_days", executor.MIN_COOLDOWN_DAYS)))
+    found = [m for m in discover(wt) if not _operator_excluded(cfg, repo / m.relative_to(wt))]
     res = fix.fix_path(wt, apply=True, allow_major=False,   # unattended: never a major jump
-                       cooldown_days=cooldown)
+                       cooldown_days=cooldown, manifests=found)
     try:
         executor.validate_diff(wt, base)
     except executor.ExecError as exc:
@@ -570,18 +574,29 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     """
     for old in [*run_dir.glob("fixplan-*.md"), *run_dir.glob("fix-*.md")]:
         old.unlink()   # unlink never follows a symlink
-    for root_s in cfg.get("repo_roots", []):
-        root = Path(root_s).expanduser()
+    try:
+        entries = registry.load()
+    except (OSError, ValueError) as exc:   # enrolled projects are then unscanned: say so, scan the explicit roots
+        total.feed_errors.append(f"project registry unreadable, enrolled projects not scanned: {exc}")
+        entries = []
+    exclude, opted_out = coverage.operator_skips(cfg, entries)
+    for root_spec in coverage.effective_roots(cfg, entries):
+        if not root_spec.scanned:
+            continue
+        root_s, root = root_spec.label, root_spec.path
         if not root.is_dir():
             total.feed_errors.append(f"repo root missing: {root_s}")
             continue
-        rep = engine.scan_path(root, include_worktrees=bool(cfg["include_worktrees"]))
-        slug = root.name or "root"
+        rep = engine.scan_path(root, include_worktrees=bool(cfg["include_worktrees"]), exclude=exclude,
+                               opted_out=opted_out)   # excluded manifests are never read or sent
+        _drop_excluded(cfg, root, rep)   # defence in depth only
+        slug = (root.name or "root") if root_spec.source == "repo_roots" else plan_slug(root.resolve())
         (run_dir / f"repos-{slug}.json").write_text(json.dumps(rep.to_dict(), indent=2), encoding="utf-8")
+        _prefix_policy_labels(rep, root_s)
         total.merge(rep)
         repos = sorted({f.target for f in rep.findings if f.kind == "package" and f.fix and not f.malicious})
         for f in rep.findings:
-            f.target = f"{root_s}/{f.target}" if f.target != "." else root_s
+            f.target = _under(root_s, f.target)
         if cfg.get("fix_mode") == "apply-worktree":
             for t in (f"{root_s}/{r}" if r != "." else root_s for r in repos):
                 repo = Path(t).expanduser()
@@ -597,6 +612,46 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     kit = paths.server_kit_dir()
     for host in cfg.get("servers", []):
         total.merge(_scan_server(host, kit, run_dir))
+
+
+def _operator_excluded(cfg: dict, path: Path) -> bool:
+    """Return whether ``path`` is inside one of the operator's ``exclude`` paths."""
+    return any(coverage.within(path, x) for x in coverage.exclusions(cfg))
+
+
+def _under(root_s: str, target: str) -> str:
+    """Return a scan target (relative to its root, ``"."`` for the root) named under the root's label."""
+    return f"{root_s}/{target}" if target != "." else root_s
+
+
+def _prefix_policy_labels(rep: Report, root_s: str) -> None:
+    """Name the repositories in ``opted_out``, ``brief_off``, ``excluded`` and ``withheld`` under the root, as findings are."""
+    rep.opted_out = [_under(root_s, t) for t in rep.opted_out]
+    rep.brief_off = [_under(root_s, t) for t in rep.brief_off]
+    for name in ("excluded", "withheld"):
+        setattr(rep, name, [f"{_under(root_s, t)}: {rest}" for t, _s, rest in
+                            (label.partition(": ") for label in getattr(rep, name))])
+
+
+def _drop_excluded(cfg: dict, root: Path, rep: Report) -> None:
+    """Drop whatever of a scanned ``root`` lies inside an ``exclude`` path (defence in depth: ``scan_path`` skips them).
+
+    Findings, unscannable files and the brief lists (``opted_out``, ``brief_off``, ``excluded``, ``withheld``).
+    """
+    inner = coverage.excluded_inside(cfg, root)
+    if not inner:
+        return
+    base = root.resolve()
+
+    def kept(rel: str) -> bool:
+        return not any(x == base / rel or x in (base / rel).parents for x in inner)
+
+    rep.findings = [f for f in rep.findings if kept(f.target) and (not f.locations or any(map(kept, f.locations)))]
+    rep.unscannable = [u for u in rep.unscannable if kept(u[0])]
+    rep.opted_out = [t for t in rep.opted_out if kept(t)]
+    rep.brief_off = [t for t in rep.brief_off if kept(t)]
+    rep.excluded = [x for x in rep.excluded if kept(x.partition(": ")[0]) and kept("/".join(x.split(": ", 1)))]
+    rep.withheld = [x for x in rep.withheld if kept(x.partition(": ")[0])]
 
 
 def plan_slug(repo: Path) -> str:
@@ -670,7 +725,8 @@ def _write_fix_plans(cfg: dict, root: Path, repos: list[str], run_dir: Path, tot
     root = root.resolve()
     groups: dict[str, list[Path]] = defaultdict(list)
     for path in discover(root, include_worktrees=bool(cfg["include_worktrees"])):
-        groups[engine.repo_of(path, root)].append(path)
+        if not _operator_excluded(cfg, path):   # an excluded manifest is never read or looked up
+            groups[engine.repo_of(path, root)].append(path)
     for rel in repos:
         repo = root / rel
         plan = fix.fix_path(repo, apply=False, allow_major=bool(cfg["allow_major"]),
@@ -698,12 +754,15 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     md = total.markdown(new_keys=new)
     if notes:
         md += "\n## Notes\n\n" + "".join(f"- {n}\n" for n in notes)
+    md += "\n" + coverage.section(cfg, report=total)
     if staged:
         md += "\n## Fixes staged in worktrees (review, test, commit, open a PR)\n\n" + "\n".join(staged) + "\n"
     written = True
     try:
         (run_dir / "summary.md").write_text(md, encoding="utf-8")
-        (run_dir / "summary.json").write_text(json.dumps(total.to_dict(), indent=2), encoding="utf-8")
+        # private package names stay in the machine-local repos-*.json; the MCP server reads summary.json
+        (run_dir / "summary.json").write_text(json.dumps(total.to_dict(private_names=False), indent=2),
+                                              encoding="utf-8")
         _write_atomic(heartbeat_path(), json.dumps({
             "last_run": _dt.datetime.now(_dt.UTC).isoformat(), "exit": code, "findings": len(total.findings),
             "new": len(new), "unscanned": len(total.feed_errors), "summary": str(run_dir / "summary.md")}, indent=2))

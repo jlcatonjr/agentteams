@@ -111,6 +111,12 @@ def _main_dispatch(
         from agentteams.mcp_servers import run_server
         return run_server(args.serve_mcp, Path(getattr(args, "project", None) or os.getcwd()).resolve())
 
+    # --set-vulnscan: standalone; writes one block of the brief after its own confirmation.
+    if getattr(args, "set_vulnscan", None) or getattr(args, "set_vulnscan_confirm_sha256", None):
+        if not getattr(args, "set_vulnscan", None):
+            parser.error("--set-vulnscan-confirm-sha256 requires --set-vulnscan LEVEL")
+        return _run_set_vulnscan(args)
+
     # --sync-agent-docs: standalone, dispatched before anything reads a brief/pin/config.
     if getattr(args, "sync_agent_docs", False):
         from agentteams.cli.agent_doc_sync_switch import run_agent_doc_sync_cli
@@ -622,6 +628,54 @@ def _main_dispatch(
     return run_generate(
         args, strict_manual_placeholders, migrate_exemption=migrate_exemption
     )
+
+
+def _run_set_vulnscan(args: argparse.Namespace) -> int:
+    """``--set-vulnscan LEVEL``: write the brief's scan level after its own confirmation.
+
+    ``--yes`` is deliberately not an answer here: the level decides what leaves the machine, so a
+    build's blanket yes must not enrol a project. On a terminal the diff is shown and y/N asked;
+    otherwise the diff and its sha256 are printed and the brief is written only when
+    ``--set-vulnscan-confirm-sha256`` names that sha256 (a diff someone reviewed).
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        0 when written (or already at that level), 1 otherwise.
+    """
+    import hashlib
+
+    from agentteams.vulnscan import project_policy as pp
+
+    repo = Path(getattr(args, "project", None) or os.getcwd()).resolve()
+    _brief, old, new, problem = pp.plan_level(repo, args.set_vulnscan)
+    if not problem and new == old:
+        print(f"vulnerability scanning level is already {args.set_vulnscan}")
+        return 0
+    expected = getattr(args, "set_vulnscan_confirm_sha256", None)
+
+    def confirm(diff: str) -> bool:
+        sha = hashlib.sha256(diff.encode("utf-8")).hexdigest()
+        print(diff + f"\ndiff sha256: {sha}")
+        if expected:
+            if expected.strip().lower() != sha:
+                print("Error: --set-vulnscan-confirm-sha256 does not match this diff", file=sys.stderr)
+            return expected.strip().lower() == sha
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            print("Not a terminal: review the diff, then rerun with --set-vulnscan-confirm-sha256 " + sha,
+                  file=sys.stderr)
+            return False
+        try:
+            return input("Write this change to the brief? [y/N] ").strip().lower() in ("y", "yes")
+        except EOFError:
+            return False
+
+    written = pp.set_level(repo, args.set_vulnscan, confirm=confirm)
+    if written:
+        print(f"vulnerability scanning level set to {args.set_vulnscan}; to scan it daily on this machine, "
+              f"the operator runs `{pp.ENROLL_HINT} {repo}`")
+    return 0 if written else 1
 
 
 def _description_brief(args: argparse.Namespace) -> tuple[dict | None, bool]:

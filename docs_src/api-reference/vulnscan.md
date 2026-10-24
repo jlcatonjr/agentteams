@@ -124,6 +124,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | What | Default path | Notes |
 |---|---|---|
 | Config | `~/.config/agentteams/vulnscan.json` | `$XDG_CONFIG_HOME` honoured; `AGENTTEAMS_VULNSCAN_CONFIG_DIR` |
+| Project registry | `~/.config/agentteams/projects.json` | mode 600; written only by `vulnscan enroll` (never on CI, never by builds, `--update` or fleet runs). See [Project registry](#project-registry) |
 | Server kit, `hosts.conf`, `apps.conf` | `~/.config/agentteams/server-kit/` | `AGENTTEAMS_SERVER_KIT_DIR` |
 | Remediation grants | `~/.config/agentteams/vulnscan-grants/vg-*.json` | mode 600; each file must be a regular file you own, not group/world-writable, not a symlink. The directory must be a real directory (not a symlink) you own, not group/world-writable, or every grant is refused |
 | Publish grants | `~/.config/agentteams/vulnscan-publish-grants/vp-*.json` | as for remediation grants |
@@ -167,7 +168,8 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 
 | Key | Default | Meaning |
 |---|---|---|
-| `repo_roots` | `[]` | Directories whose git repositories are scanned |
+| `repo_roots` | `[]` | Directories whose git repositories are scanned, besides the enrolled projects of the [registry](#project-registry) |
+| `exclude` | `[]` | Paths never scanned: a root (explicit or enrolled) inside one is skipped; findings of repositories in one inside a scanned root are dropped from the report (their manifests are still read) |
 | `include_worktrees` | `false` | Also scan linked git worktrees |
 | `servers` | `[]` | `hosts.conf` names audited each day |
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
@@ -221,13 +223,16 @@ All commands are `python -m agentteams.vulnscan <command>`. Every command except
 | `daily` | One full run (scan; with agent mode, the agent run and publishing) |
 | `schedule install\|remove\|status [--apply] [--hour H] [--minute M]` | Manage the daily job (launchd on macOS, else a systemd user timer, else cron). Dry run without `--apply` |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
-| `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)) |
+| `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
 | `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --goose-version V --goose-sha256 S [--python-image IMG] [--source DIR]` | Build the agent image from an agentteams source checkout |
 | `agent-selftest` | Prove the container's isolation for the current image ([checks](#selftestcfg)) |
 | `agent-run` | One agent run on the latest scan |
+| `enroll [DIR]… [--discover DIR]… [--level off\|scan\|remediate]` | Enrol projects in the daily scan (operator only: needs a terminal, refuses on CI; exit 2). See [Project registry](#project-registry) |
+| `roots` | Every candidate scan root with its source: `repo_roots`, `registry (scan)`, `registry (remediate)`, `excluded`, `opted out`, `unanswered` or `duplicate` (`SCAN` or `SKIP` per line) |
+| `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
 | `resolve ID --evidence TEXT [--key-id ID]` | Resolve an escalation ([Escalations](#escalations)) |
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
@@ -295,6 +300,13 @@ config's `governance_dir`) and exits 0 or 1 as above; with an unusable one it ex
 | `unscannable` | array of `{"path": string, "reason": string}` | manifests without exact versions |
 | `feed_errors` | array of strings | feeds or hosts that failed; non-empty means partially unscanned (exit 3) |
 | `checked` | integer | items checked (distinct package versions plus runtimes) |
+| `opted_out` | array of strings | repositories the operator enrolled at `off` (not scanned) |
+| `brief_off` | array of strings | repositories whose brief says `vulnerability_scanning.level: off` but that the operator enrolled or listed in `repo_roots`: scanned anyway, reported as a mismatch |
+| `excluded` | array of strings | `"repo: path in repo"`: manifests skipped by a brief's `exclude_paths` |
+| `withheld` | array of strings | `"repo: name (ecosystem)"`: private packages (a brief's `private_packages`), not checked and never sent. The daily `summary.json` (which the agent's MCP server reads) writes `"repo: (private)"` instead, one per package; only the machine-local `repos-*.json` keeps the names |
+
+In the daily aggregate these four lists name each repository under its root, as findings do
+(`<root>/<repo>`). A path inside the operator's `exclude` never appears in them.
 | `generated_at` | string | UTC ISO-8601 time, whole seconds |
 
 A Finding (`report.Finding`):
@@ -314,7 +326,94 @@ A Finding (`report.Finding`):
 | `locations` | array of strings | manifest paths or install locations |
 | `malicious` | boolean | an OSV `MAL-*` record matches (exit 4) |
 | `distro` | boolean | a Python package in an OS-managed location (ignored by `--fail-on`) |
+| `count_dev` | boolean or null | dev scope only: the project's `include_dev`, which overrides the run's `--include-dev` for this finding; null follows the run |
 | `detail` | string | host-check or runtime message, or the malicious-package note |
+
+---
+
+## Project registry
+
+Which repositories exist on this machine is a machine fact, kept in `~/.config/agentteams/projects.json`
+(mode 600) and written only by the operator command `enroll`. A project's *level* is project intent,
+kept in its brief's `vulnerability_scanning` block; `enroll` copies it into the registry.
+
+**The registry only narrows what is scanned and proposed. It never authorizes a change: signed grants
+do.** `enroll`'s terminal check keeps it off CI and out of pipes; it is not authentication. `load`
+refuses a registry file that is a symlink, not owned by you, or group/world-writable (as for grant
+files), and the identity reader refuses a `.git` file, `commondir` or `config` that is not a regular
+file of at most 1 MiB (`registry.checked_identity` says why; the executor then refuses repo operations).
+
+**Operator choices win.** A brief may only narrow what leaves the machine, never what is checked: a
+repository the operator enrols at `scan` or `remediate`, or lists in `repo_roots`, is scanned even when
+its brief says `level: off` (reported as `brief says off; scanned by operator enrolment`). Only an
+enrolment at `off`, confirmed by the operator in `enroll`, skips it. The brief's `exclude_paths` and
+`private_packages` always apply.
+
+**Identity.** A repository is identified by its `origin` URL, read from the repository's config file as
+text (no repository command is run): `git@host:owner/name.git`, `ssh://git@host:22/owner/name` and
+`https://user@host/owner/name/` all become `host/owner/name` (lowercase; no scheme, user, port, `.git`
+or trailing `/`). A linked worktree's config is found through its `.git` file and `commondir`. Without
+an origin the identity is `local:<common dir>`; an origin that is a local path gives `file:<path>`; a
+directory that is not a checkout gives `dir:<path>`. Clones and worktrees of one origin collapse to one
+entry.
+
+**Fix checkout.** Each entry names the one checkout the daily run scans and a grant may cover: by
+default a main checkout (a `.git` directory) without a `-wt-`, `.wt-`, `worktrees` or `*.worktrees`
+path segment, shortest path first. `enroll` lets you choose another (`[c]hoose fix checkouts`).
+
+**`enroll`.** Projects come from the `DIR` arguments and from fleet discovery under each `--discover DIR`
+(every framework; linked worktrees are kept as further checkouts). They are grouped by owner
+(`host/owner`). For each owner it lists every identity with its brief level and checkouts, and asks once:
+
+- `e`: enrol all at their brief levels (no level in the brief: `unanswered`);
+- `s`: set a level for the unanswered ones (`--level`, or asked). Each brief is changed through
+  `project_policy.set_level`, which shows the diff; answer `y`, `n`, or `a` to apply the rest of this
+  owner's diffs;
+- `c`: choose fix checkouts, then ask again;
+- `k`: skip. An enrolled project keeps its entry unchanged; a new one is recorded as `unanswered`, so the
+  coverage section shows it.
+
+A project whose brief has an invalid or unreadable `vulnerability_scanning` block is not unanswered: it
+is skipped with the problem shown (`skipped <identity>: fix its brief first (…)`), its brief is never
+rewritten, and a new one is not enrolled.
+
+The registry is written once, at the end. Re-running updates entries and keeps each first `enrolled` date.
+
+**Entry fields:** `identity`, `fix_checkout`, `checkouts`, `level` (`off`, `scan`, `remediate`,
+`unanswered`), `owner`, `enrolled` (ISO time), `brief` (the brief's path, or null). A malformed file is
+refused with a message naming it: `enroll` exits 2, and `daily` scans only the explicit roots and
+reports the run as partially unscanned.
+
+**Effective roots.** `daily` scans each `repo_roots` entry, then the fix checkout of every entry at
+`scan` or `remediate`. An entry inside a scanned explicit root, or with the same fix checkout as an
+earlier entry, is a duplicate and is not scanned again. A root inside an `exclude` path is skipped.
+`roots` prints the result. Inside a scanned root, manifests under an `exclude` path are never read or
+sent to OSV, and repositories enrolled at `off` are skipped (`engine.scan_path(..., exclude=, opted_out=)`).
+
+**Coverage.** The daily `summary.md` and `review` have a `## Coverage` section: totals per state, then
+names per state grouped by owner (the published review has totals only). Each entry's fix checkout is in
+exactly one state, in this order of precedence: `missing on disk`, `not a git repository`, `excluded`,
+then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
+grant yet` (remediate, no such grant), `scan-only`, `opted out` (`off`), `unanswered`. Every further
+checkout is a `duplicate checkout` (or `missing on disk`). A `### Project briefs` part then lists each
+`brief says off; scanned by operator enrolment` mismatch and, per repository, how many manifests its
+brief excluded and how many private packages it withheld (counts only, never package names; the
+published review has totals only).
+
+`status --project DIR [--json]` reports the same vocabulary as `coverage_state` (plus `not enrolled` for
+a project the registry does not know and no `repo_roots` entry scans; one an explicit root scans is
+`fixable` or `scan-only` by the grant), `last_scan_partial` / `last_scan_unscanned` (the last run's feed
+errors), `brief_level`, and a `mismatch:` problem for a brief that says `off` on a scanned project.
+
+Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_identity(repo) -> (str, str)`,
+`origin_identity(url) -> str | None`,
+`owner_of(identity) -> str`, `short_name(identity) -> str`, `load(path=None) -> list[Entry]`,
+`save(entries, path=None) -> Path` (raises `PermissionError` on CI), `find(entries, path) -> Entry | None`,
+`discover(root) -> dict[str, list[Path]]`, `pick_fix_checkout(paths) -> Path`, `registry_path()`,
+`is_ci()`, `LEVELS`, `SCANNED_LEVELS`. `agentteams.vulnscan.coverage`: `effective_roots(cfg, entries)
+-> list[Root]`, `operator_skips(cfg, entries)`, `states(cfg, entries, grants)`, `markdown(rows, *, names)`,
+`brief_lines(entries, report, *, names)`, `section(cfg, *, names, report=None)`,
+`project_state(cfg, entry, path, grants)`.
 
 ---
 
@@ -328,7 +427,7 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated` |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository path to give `stage-fix` as `target` |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository path to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way |
 | `request` | `op` (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
@@ -381,14 +480,66 @@ for one can never verify as the other.
 - `governance_dir` must contain `references/security-decisions.log.csv`.
 
 **Scope.** A repository is covered when its path is inside one of the `repo_roots`, so a root covers
-every repository below it. Name roots explicitly. Whatever a grant says, the executor refuses
-repo operations in the same repository (compared by git common directory, so worktrees count) as:
-the agentteams installation it runs from, `agent.team_dir`, the `governance_dir` of every grant file
-(remediation and publish, valid or not), and any publish grant's ops repository. Third-party clones
-are not excluded; leave them out of your roots. If agentteams runs from a virtual environment inside a
-repository, that repository is refused too. A repository check that does not answer within 30 s
-refuses the request, and so does an unreadable `*.json` file in either grants directory ("cannot
-tell which repositories are protected").
+every repository below it. Name roots explicitly, or let `grant sign --from-registry` propose them
+([Grants from the registry](#grants-from-the-registry)). Whatever a grant says, the executor
+(`executor_guard`) refuses repo operations on:
+
+- **a protected repository**: the agentteams installation it runs from, `agent.team_dir`, the
+  `governance_dir` of every grant file (remediation and publish, valid or not), and any publish grant's
+  ops repository. A target is the same repository when it shares the git common directory (worktrees)
+  **or** has the same origin (`host/owner/name`): a separate clone of a protected repository is refused
+  too ("`<target>` is a clone of `<origin>`"). The target's origins are both the config file's `origin`
+  URL (`registry.identity`) and the push URL git itself would use (`git remote get-url --push origin`,
+  run hardened: hooks and fsmonitor off, no global or system config), so `remote.origin.pushurl` and
+  `url.*.pushInsteadOf` cannot point a push at a protected repository. An identity that cannot be read
+  is refused. Repositories without a host origin are compared by common directory only. If agentteams
+  runs from a virtual environment inside a repository, that repository is refused too. Other
+  third-party clones are not excluded; leave them out of your roots;
+- **a repository enrolled below `remediate`**: when the project registry has an entry for the target
+  (by identity, or by a registered checkout path containing it) at `scan`, `off` or `unanswered`,
+  `stage-fix` and `open-pr` are refused ("enrolled at `<level>`: scanning only"). A registered checkout
+  whose origin is no longer the enrolled one is refused ("origin changed since enrolment; re-run
+  enroll"), as is an unregistered repository nested inside a registered checkout. A repository the
+  registry does not know (explicit `repo_roots`) keeps the grant as its only scope. An unreadable
+  registry refuses every repo operation. The registry only narrows: it never authorizes anything;
+- **what the project's brief does not ask for** (narrowing only): a `vulnerability_scanning.level` set
+  to anything but `remediate` refuses both operations; `delivery: plan` refuses `open-pr` ("project asks
+  for plans only"). `base_branch`, when set, is the PR base: `stage-fix` bases the fix on
+  `origin/<base_branch>` after fetching and refuses when origin has no such branch, and `open-pr`
+  checks it again with `ls-remote` before pushing (without `base_branch`, origin's default branch).
+
+A repository check that does not answer within 30 s refuses the request, and so does an unreadable
+`*.json` file in either grants directory ("cannot tell which repositories are protected").
+
+**PR bodies** pass the same scrubber as published reports (`publish.rewrite_paths`): home paths become
+`~`, this machine's host name `<this-host>`, RFC 1918 addresses `<private-ip>`. The fix plan and the
+agent's quoted rationale are both inside the body.
+
+### Grants from the registry
+
+`grant sign --from-registry` proposes the repo roots instead of you typing them:
+
+1. **Proposal.** The fix checkout of every registry entry at level `remediate`, each once. Entries at
+   `scan`, `off` or `unanswered` are never proposed. An entry whose enrolled identity, or the identity its
+   fix checkout has now, is the origin of a protected repository (above, plus the `--governance-dir`
+   being signed) is left out and listed as "not proposed (protected)". `--repo-root` values are added
+   as given. Each root is grouped under the owner of its **current** origin (where a PR would go); when
+   that is not the enrolled identity, its owner reads `<owner> (ORIGIN CHANGED: enrolled as …)` (the
+   executor refuses it until it is re-enrolled).
+2. **Change review.** Against the previous grant: the most recently issued grant file in
+   `vulnscan-grants/` whose signature verifies with your key, expired or not (an unsigned or forged file
+   is ignored, so it cannot make additions look unchanged; with none, every root is an addition). The
+   additions and removals are listed grouped by owner (`host/owner`); unchanged roots are only counted.
+3. **Per-owner confirmation.** Each owner's registry additions need `y` at `Add these N repositories of
+   <owner> to the grant? [y/N]`; any other answer drops them. `--repo-root` additions are shown, not
+   asked. The command refuses on CI (`CI` set) and without a terminal (exit 2), and when the registry or
+   a grant file cannot be read.
+4. **Signing, unchanged.** The resulting full list goes through `grant.build` (≤ 30 days, the
+   aggregate cap of 2 valid grants) and the usual signing flow: the display shows every root and the
+   review digest covers every root, unchanged ones included. `--confirm-review-sha256` works as before.
+
+The registry only proposes. Nothing it holds reaches a grant without your answer here and your
+signature.
 
 **Directories and keys** (`grant.dir_problem`, `verify_key`). Whoever can write these can plant or
 swap a grant or a key, so each is judged by its own final component (`lstat`, `O_NOFOLLOW`):
@@ -515,16 +666,51 @@ vulnscan or to test an integration.
 
 ### `agentteams.vulnscan.engine`
 
-#### `engine.scan_path(root, *, include_worktrees)`
+#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=())`
 
 Scan every manifest under `root` (a repository or a folder of repositories). Returns a
 [`Report`](#json-output) whose targets are repositories relative to `root`. A feed failure lands
-in `feed_errors`; it never raises for one.
+in `feed_errors`; it never raises for one. The operator's choices apply first: a manifest inside an
+`exclude` path is never read or queried, and a repository in `opted_out` (enrolled at `off`) is
+skipped (`opted_out`). Each repository's brief then narrows what is sent, never what is checked
+([`project_policy`](#agentteamsvulnscanproject_policy)): `level: off` does **not** skip it (it is
+scanned and listed in `brief_off`), manifests under `exclude_paths` are skipped (`excluded`), packages
+matching `private_packages` are never sent to OSV (`withheld`), and `include_dev` sets `count_dev` on
+its dev-only findings.
 
-#### `engine.analyze(deps, report, *, distro_check)`
+#### `engine.analyze(deps, report, *, distro_check, dev_policy=None)`
 
 Look up `(target, Dep)` pairs in OSV and append findings to `report` in place. Feed failures go to
 `report.feed_errors`. `distro_check=True` marks Python packages in OS-managed locations `distro`.
+`dev_policy` maps a target to its project's `include_dev`, recorded as `Finding.count_dev`.
+
+### `agentteams.vulnscan.project_policy`
+
+A project's own scanning intent: the brief's `vulnerability_scanning` block
+(`project-description.schema.json`). The module reads and writes that block and nothing machine-local.
+
+| Name | Behaviour |
+|---|---|
+| `POLICY_KEY`, `LEVELS` | `"vulnerability_scanning"`; `("off", "scan", "remediate")` |
+| `ProjectPolicy` | Frozen: `level` (None = unanswered), `exclude_paths`, `private_packages`, `include_dev`, `delivery` (`"pr"`), `base_branch`, `brief_path`, `problem` (why an invalid block was ignored; never echoes its values) |
+| `find_brief(repo)` | The brief, resolved like fleet updates (`fleet._resolve_descriptor`): the rich brief first, then the thin stub |
+| `read_policy(repo)` | Never raises. A missing brief, a missing block, an unreadable brief (deep nesting included) or an invalid block (unknown key, bad enum, a value failing the privacy guard) gives `level=None` |
+| `is_private(name, patterns, ecosystem="")` | fnmatch, case-insensitive; for `PyPI` the name and every pattern are first normalised per PEP 503 (runs of `-`, `_`, `.` become one `-`) |
+| `is_excluded(rel, patterns)` | The repository-relative path, or any directory above it, matches |
+| `set_level(repo, level, *, confirm, say=None)` | Creates or updates the block. Only the block's text changes; the rest keeps its key order and indentation. `confirm(diff)` sees the unified diff, and the brief is written only when it returns True. A brief is never created, never written through a symlink, and never written when it resolves outside the project. `say` receives the reason when nothing is written. Returns whether it wrote |
+| `plan_level(repo, level)` | `(brief, old text, new text, problem)` without writing |
+| `unanswered_line(project, policy)`, `report_unanswered(description)` | The one-line "unanswered" notice that `--update` and fleet runs print |
+
+The privacy guard is the regex `NO_LEAK`, shared by `EXCLUDE_PATH_PATTERN`, `PRIVATE_PACKAGE_PATTERN`
+and `BASE_BRANCH_PATTERN`. The schema carries the same strings, and a test keeps them identical. It
+refuses newlines, a leading `/`, `..`, `~`, `:`, `//`, backslashes, IPv4 addresses, `localhost`, and
+dotted names ending in `.com`, `.net`, `.org`, `.local`, `.lan`, `.internal`, `.corp`, `.intranet` or
+`.localdomain`. `NOT_CATCH_ALL` (in both list patterns) refuses an `exclude_paths` or `private_packages`
+entry without a letter or digit outside a `[...]` set: `*`, `**`, `*/**`, `?*`, `.*` or `@*/*` would
+exclude or withhold everything.
+
+`delivery` and `base_branch` are applied by the executor ([Scope](#grants)): `delivery: plan` refuses
+`open-pr`, and `base_branch` is the PR base (it must exist on origin).
 
 #### `engine.scan_inventory(text, target)`
 
@@ -576,8 +762,12 @@ Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=F
 `manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
 never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
+Each repository's brief applies here as in `scan_path`. A manifest in an `off` repository or under
+`exclude_paths` is recorded in `refused` and never read. Private packages are never looked up
+(`plan_requirements` and `plan_npm_lock` take `private=`). An npm lockfile that holds a private package is
+refused, because `npm audit` would send it to the registry.
 
-#### `fix.plan_npm_lock(path, *, cooldown_days, label)`
+#### `fix.plan_npm_lock(path, *, cooldown_days, label, private=())`
 
 `(rows, note)` for one `package-lock.json` / `npm-shrinkwrap.json`, from OSV; npm is not run. One
 `PinChange` per vulnerable package version, with `new` the smallest version the advisories call fixed.
@@ -688,7 +878,8 @@ is also written to `<spool>/results/<id>.json`. Without `run_dir`, `report` requ
 #### `authorize(op, target, request_id, cfg)`
 
 Call inside `ledger.locked()`. Refuses a target an open escalation blocks, a repo operation on a
-publish grant's ops repository, a target no grant covers, exhausted uses, a missing decision log or
+publish grant's ops repository, a protected repository (common directory or origin) or a repository
+enrolled below `remediate` (`executor_guard`), a target no grant covers, exhausted uses, a missing decision log or
 an open HALT; otherwise appends the `begun` row and returns the grant. Raises `ExecError`.
 
 #### `open_pr(repo, rationale)`
@@ -704,6 +895,8 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   failed); otherwise it refuses (`not overwriting`).
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
+- The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
+  written: home paths, this host's name and private IPv4 addresses are scrubbed.
 
 Re-staging the same change on the same day releases the earlier local branch only when the executor
 created it and every worktree holding it is executor-owned; otherwise `stage-fix` refuses. When
@@ -743,6 +936,27 @@ Returns how many were moved. Called at the start of each agent run.
 #### `new_run_id(run_dir)`
 
 `"<run date>-<6 hex>"`.
+
+### `agentteams.vulnscan.executor_guard`
+
+The executor's refusals that only narrow a grant, called by `authorize` for `stage-fix` and `open-pr`.
+
+| Function | Does |
+|---|---|
+| `refuse_ops_repo(target)` | Refuses a publish grant's ops repository (by path) |
+| `refuse_protected_repos(target, cfg)` | Refuses a target in the same repository as a protected path, by git common dir (`repo_identity`) or by origin (any of `target_origins`); a git check that takes over 30 s refuses |
+| `target_origins(target)` | The target's origin identities: the config text's `origin` URL and the push URL git itself would use (hardened `remote get-url --push origin`); refuses an unreadable identity |
+| `refuse_scan_only(target)` | Refuses a target whose registry entry (by identity, or by a registered checkout containing it) is not at `remediate`, whose origin changed since enrolment, or that is an unregistered repository nested in a registered checkout; an unreadable registry or identity refuses |
+| `refuse_by_brief(op, target)` | Refuses when the brief's level is set and is not `remediate`, and `open-pr` when `delivery` is `plan` |
+| `brief_base_ref(repo)` | `origin/<base_branch>` when the brief sets one (refuses when origin lacks it), else `None` |
+| `require_remote_branch(wt, branch)` | Refuses `open-pr` unless origin has `branch` now (`ls-remote`) |
+| `protected_repo_paths(cfg)` | The agentteams checkout, `agent.team_dir`, every grant file's `governance_dir`, every publish ops repo |
+| `protected_identities(cfg, extra=())` | `{origin identity: path}` of those (and `extra`); used by `grant sign --from-registry` |
+| `origin_of(path)` | `host/owner/name` of the checkout containing `path` (nearest `.git` upwards; git is not run), or `None` for a repository without a host origin |
+| `repo_identity(path)` | The git common dir of the repository containing `path`, or `None` |
+| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str}`) for the MCP server; called before the agent container starts |
+
+All raise `executor.ExecError` when they refuse.
 
 ### `agentteams.vulnscan.grant`
 
@@ -786,6 +1000,31 @@ not yours, or group- or world-writable. Raises `GrantError`.
 
 Why a grants or verify-keys directory may not be trusted (`is a symlink — refused`, `is not a
 directory — refused`, `is not owned by you or is group/world-writable — refused`), or `None`.
+
+#### `roots_from_registry(cfg, explicit, governance_dir, *, ask, say, tty)`
+
+The repo roots for `grant sign --from-registry`: refuses (returns `None`, after saying why) on CI,
+without a terminal, or when the registry or a grant file cannot be read; otherwise
+`registry_proposal`, then `review_registry_roots` against `previous_grant()`. The terminal check keeps
+the per-owner answers interactive; it is not authentication. The registry only proposes: the signed
+grant is what authorizes.
+
+#### `registry_proposal(entries, protected)`
+
+`({root: owner}, [left-out descriptions])`: the fix checkouts of `remediate` entries, each once,
+without those whose identity is in `protected` (`executor_guard.protected_identities`). `owner` is the
+owner of the root's current origin, suffixed `(ORIGIN CHANGED: enrolled as <identity>, owner <owner>)`
+when it is not the enrolled identity.
+
+#### `review_registry_roots(proposed, explicit, previous, *, ask, say)`
+
+Prints additions and removals grouped by owner and the unchanged count, asks `y/N` per owner for the
+registry additions, and returns the sorted list to sign (unchanged, accepted, explicit).
+
+#### `previous_grant()`
+
+The most recently issued grant file whose signature verifies as of its own issue time (expired
+allowed), or `None`. Unsigned, forged or unreadable files are ignored.
 
 #### `operator_sign(record, *, digest_kind, banner, fields, values, confirm_sha256, allow_checkout)`
 

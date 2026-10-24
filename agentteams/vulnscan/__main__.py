@@ -10,13 +10,14 @@
 | ``daily`` | One full scheduled run (repos, runtimes, servers) |
 | ``schedule install\\|remove\\|status [--apply]`` | Manage the daily job |
 | ``server-kit [DEST]`` | Export the Linux server scripts (keeps an existing ``hosts.conf`` / ``apps.conf``) |
-| ``grant sign\\|list\\|revoke`` | Operator-signed standing remediation grants (sign: operator only, outside agent sessions) |
+| ``grant sign\\|list\\|revoke`` | Operator-signed standing remediation grants (sign: operator only, outside agent sessions; ``--from-registry`` proposes enrolled ``remediate`` projects, reviewed per owner) |
 | ``act OP TARGET`` | Run one grant-covered action through the executor (ledgered) |
 | ``serve-requests`` | Execute the agents' spooled requests that a grant covers |
 | ``review [--ack]`` | After-action review of what unattended agents did; ``--ack`` records your review |
 | ``agent-image build`` | Build the credential-free agent container image (goose pinned by version + sha256) |
 | ``agent-selftest`` | Prove the container's isolation; agent mode is refused until this passes for the image |
 | ``agent-run`` | Run the agent team once on today's scan (normally done by ``daily`` when ``agent.enabled``) |
+| ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
 
 Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 clean, 1 findings at
@@ -46,6 +47,7 @@ from agentteams.vulnscan import (
     grant,
     operator_cli,
     paths,
+    project_cli,
     review,
     schedule,
 )
@@ -162,6 +164,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("action", choices=("sign", "list", "revoke"))
     sp.add_argument("--op", action="append", default=[], choices=sorted(grant.OPS_V1 | grant.OPS_RESERVED))
     sp.add_argument("--repo-root", action="append", default=[])
+    sp.add_argument("--from-registry", action="store_true",
+                    help="propose the fix checkouts of registry entries at remediate (reviewed per owner)")
     sp.add_argument("--host", action="append", default=[])
     sp.add_argument("--days", type=int, default=14)
     sp.add_argument("--max-uses", type=int, default=50)
@@ -190,6 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("agent-selftest", help="prove the agent container's isolation")
     sub.add_parser("agent-run", help="run the agent team once on the latest scan")
     operator_cli.register(sub)
+    project_cli.register(sub)
     return p
 
 
@@ -280,8 +285,14 @@ def main(argv: list[str] | None = None) -> int:
             ok = grant.revoke(args.grant_id)
             print("revoked" if ok else "no such grant")
             return 0 if ok else 1
+        roots = args.repo_root
+        if args.from_registry:
+            cfg = load_cfg() if paths.config_file().exists() else {}
+            roots = None if cfg is None else grant.roots_from_registry(cfg, args.repo_root, args.governance_dir)
+            if roots is None:
+                return 2
         try:
-            rec = grant.build(ops=args.op, repo_roots=args.repo_root, hosts=args.host, days=args.days,
+            rec = grant.build(ops=args.op, repo_roots=roots, hosts=args.host, days=args.days,
                               max_uses=args.max_uses, key_id=args.key_id, governance_dir=args.governance_dir)
         except grant.GrantError as exc:
             print(f"refused: {exc}", file=sys.stderr)
@@ -352,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         print(review.build(since=args.since, gh_replies=args.gh_replies))
         return 0
+    if args.cmd in project_cli.COMMANDS:
+        return project_cli.dispatch(args, daily.load_config)
     if args.cmd in operator_cli.COMMANDS:
         return operator_cli.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":

@@ -24,9 +24,10 @@ import re
 import shutil
 import subprocess
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
 
-from agentteams.vulnscan import _http, osv, runtimes
+from agentteams.vulnscan import _http, osv, project_policy, runtimes
 from agentteams.vulnscan.manifests import Dep, discover, parse
 from agentteams.vulnscan.report import Finding, Report
 
@@ -68,7 +69,8 @@ def _details_or_none(vuln_id: str) -> dict | None:
         return None
 
 
-def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool = False) -> None:
+def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool = False,
+            dev_policy: dict[str, bool] | None = None) -> None:
     """Look up every (target, dep) in OSV and append findings to ``report``.
 
     Args:
@@ -76,7 +78,10 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
         report: Report to extend; feed failures land in ``report.feed_errors``. Advisory
             details that fail in the parallel fetch are retried once, sequentially.
         distro_check: Mark Python packages in OS-managed locations as ``distro``.
+        dev_policy: Per target, whether its dev-only findings count toward the exit threshold
+            (a project's ``include_dev``); targets not listed follow the caller's setting.
     """
+    dev_policy = dev_policy or {}
     by_key: dict[osv.Key, list[tuple[str, Dep]]] = defaultdict(list)
     for target, d in deps:
         by_key[(d.ecosystem, d.name, d.version)].append((target, d))
@@ -112,15 +117,30 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
                 kind="package", target=target, name=name, version=ver, ecosystem=eco, scope=scope,
                 severity=4 if malicious else sev, fix=fix or "", unfixed=unfixed, ids=ids,
                 locations=locs, malicious=malicious, distro=distro,
+                count_dev=dev_policy.get(target) if scope == "dev" else None,
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
 
 
-def scan_path(root: Path, *, include_worktrees: bool = False) -> Report:
-    """Scan every manifest under ``root``.
+def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[str | Path] = (),
+              opted_out: Iterable[str | Path] = ()) -> Report:
+    """Scan every manifest under ``root``: the operator decides what is checked, each brief narrows what is sent.
+
+    The operator's choices come first and apply before any manifest is read: a manifest inside an
+    ``exclude`` path is never read or queried (and not listed: the operator chose it), and a repository in
+    ``opted_out`` (enrolled by the operator at ``off``) is skipped and listed under ``opted_out``.
+
+    Each repository's ``vulnerability_scanning`` block (:mod:`.project_policy`) then narrows what leaves
+    the machine, never what is checked: ``level: off`` does **not** skip a repository the operator asked to
+    scan (it is scanned and listed under ``brief_off``, a mismatch); manifests matching ``exclude_paths``
+    are skipped (``excluded``, ``"<repo>: <path in repo>"``); packages matching ``private_packages`` are never
+    sent to OSV (``withheld``, ``"<repo>: <name> (<ecosystem>)"``); ``include_dev`` decides whether the
+    repository's dev-only findings count.
 
     Args:
         root: Repository or parent directory.
-        include_worktrees: Also scan linked git worktrees (normally duplicates).
+        include_worktrees: Also scan linked worktrees (normally duplicates).
+        exclude: The operator's ``exclude`` paths (``~`` allowed); symlinks are resolved on both sides.
+        opted_out: Repository paths the operator enrolled at ``off``.
 
     Returns:
         The report; targets are repositories relative to ``root``.
@@ -128,14 +148,41 @@ def scan_path(root: Path, *, include_worktrees: bool = False) -> Report:
     root = root.resolve()
     report = Report(target=str(root))
     deps: list[tuple[str, Dep]] = []
+    policies = project_policy.PolicyCache()
+    dev_policy: dict[str, bool] = {}
+    excl = [Path(os.path.realpath(Path(x).expanduser())) for x in exclude]
+    off = {Path(os.path.realpath(Path(x).expanduser())) for x in opted_out}
     for path in discover(root, include_worktrees=include_worktrees):
-        m = parse(path)
+        real = Path(os.path.realpath(path))
+        if any(x == real or x in real.parents for x in excl):
+            continue   # the operator's exclusion: never read, never queried
         rel = str(path.relative_to(root))
+        target = repo_of(path, root)
+        repo = project_policy.repo_dir(path, root)
+        if Path(os.path.realpath(repo)) in off:
+            if target not in report.opted_out:
+                report.opted_out.append(target)
+            continue
+        pol = policies.get(repo)
+        if pol.level == "off" and target not in report.brief_off:
+            report.brief_off.append(target)   # a brief cannot switch off what the operator scans
+        in_repo = path.relative_to(repo).as_posix()
+        if pol.exclude_paths and project_policy.is_excluded(in_repo, pol.exclude_paths):
+            report.excluded.append(f"{target}: {in_repo}")
+            continue
+        m = parse(path)
         if m.unscannable:
             report.unscannable.append((rel, m.unscannable))
-        target = repo_of(path, root)
-        deps += [(target, Dep(d.ecosystem, d.name, d.version, d.scope, rel)) for d in m.deps]
-    analyze(deps, report)
+        if pol.include_dev is not None:
+            dev_policy[target] = pol.include_dev
+        for d in m.deps:
+            if pol.private_packages and project_policy.is_private(d.name, pol.private_packages, d.ecosystem):
+                label = f"{target}: {d.name} ({d.ecosystem})"
+                if label not in report.withheld:
+                    report.withheld.append(label)
+            else:
+                deps.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel)))
+    analyze(deps, report, dev_policy=dev_policy)
     return report
 
 
