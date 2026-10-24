@@ -202,6 +202,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
     "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
     "agentteams/vulnscan/executor_guard.py",   # protected repos by origin; scan-only refusal
+    "agentteams/vulnscan/agent_drivers.py",    # per-framework agent runtime (image pin, env, command, lockdown)
+    "agentteams/vulnscan/team_dir.py",         # the remediation team directory check
+    "agentteams/vulnscan/gateway_dialects.py", # per-dialect allowlists, usage parsing, reservation
+    "agentteams/vulnscan/agent_upstreams.py",  # per-driver gateway upstreams, key files, model rules
+    "agentteams/vulnscan/selftest_canary.py",  # headless CLI tool-inventory and planted-file canary
     "agentteams/vulnscan/gateway.py",
     "agentteams/vulnscan/mcp.py",
     # R6 operator loop (2026-10-22, metaplan vulnscan-r6 T1): escalations.py and publish.py sign through the operator
@@ -250,6 +255,19 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # M1: remote.sh embeds the IOC lists into the root-run payload; an emptied list silently stops detection.
     "agentteams/data/server_kit/ioc-2026-10-litellm-1.107.0.txt",
     "agentteams/data/vulnscan_agent/Dockerfile",
+    # W1 (baseagent-security-hardening): the tools container that confines the executor's git, npm and ssh;
+    # its egress proxy is the only exit, and its credential helper the only holder of the push token.
+    "agentteams/vulnscan/subproc_confine.py",
+    "agentteams/vulnscan/subproc_confine_ssh.py",
+    "agentteams/vulnscan/tools_image.py",
+    "agentteams/data/vulnscan_tools/Dockerfile",
+    "agentteams/data/vulnscan_tools/egress_proxy.py",
+    "agentteams/data/vulnscan_tools/selftest.py",
+    "agentteams/data/vulnscan_tools/vulnscan-with-token",
+    "agentteams/data/vulnscan_tools/git-credential-vulnscan",
+    # W2: the gateway's DLP filter (blocks secrets, redacts private data) and its peer-credential listener.
+    "agentteams/vulnscan/gateway_dlp.py",
+    "agentteams/vulnscan/gateway_peer.py",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use

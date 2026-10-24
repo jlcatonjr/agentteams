@@ -24,6 +24,11 @@ docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 2; }
 "$PY" -P -c 'import sys; from agentteams.vulnscan import daily, agent_run
 ok, why = agent_run.selftest_ok(daily.load_config()); print("self-test:", why); sys.exit(0 if ok else 1)' \
   || { echo "no passing self-test for this image (run scripts/vulnscan-agent-image.sh)" >&2; exit 2; }
+"$PY" -P -c 'import sys; from agentteams.vulnscan import daily, subproc_confine as sc
+cfg = daily.load_config()
+why = sc.unavailable_reason(sc.image_tag(sc.settings(cfg))) if sc.enabled(cfg) else ""
+print("tools container:", why or ("ready" if sc.enabled(cfg) else "opted out (runs on the host)")); sys.exit(1 if why else 0)' \
+  || { echo "the executor would refuse: build the tools image first (bash scripts/vulnscan-tools-image.sh)" >&2; exit 2; }
 
 # Sign from an empty directory: never from inside a repository or the team directory, and not from $HOME
 # either, because a pipx install lives under ~/.local and the install-location check refuses an install

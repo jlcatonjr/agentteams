@@ -12,6 +12,7 @@ covering everything up to that point.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -218,6 +219,7 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
         integrity = f"**LEDGER INTEGRITY FAILURE: {exc}** — treat everything below as untrusted"
     window = [r for r in rows if r["ts"][:10] >= since] if since else _since_last_ack(rows)
     out += [f"- Ledger: {integrity}; {len(window)} rows in this review window.", ""]
+    out += _confinement_notice()
     out += _overdue_notice(rows)
     out += _escalation_section(rows, window, for_publish)
 
@@ -250,7 +252,9 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
     dangling = sorted(begun - closed)
     out += ["", "## Anomalies", ""]
     anomalies = [f"- action begun but never finished: {rid}" for rid in dangling]
-    rejected = sorted((paths.state_dir() / "spool" / "processed").glob("rejected-*")) \
+    latest_run = paths.run_dirs()[-1:]
+    anomalies += _gateway_dlp_lines(latest_run[0] / "gateway" / "spend.json") if latest_run else []
+    rejected =sorted((paths.state_dir() / "spool" / "processed").glob("rejected-*")) \
         if (paths.state_dir() / "spool" / "processed").exists() else []
     names = [p.name for p in rejected[-20:]]   # file names the agent may have chosen: untrusted
     if for_publish:
@@ -292,6 +296,55 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
     if for_publish:
         text = publish.rewrite_paths(text)
     return text
+
+
+#: DLP class names as the gateway writes them (anything else in spend.json is shown as ``other``).
+_DLP_CLASS = re.compile(r"[a-z][a-z0-9-]{1,40}")
+
+
+def _gateway_dlp_lines(spend_path: Path) -> list[str]:
+    """Return anomaly lines for the latest run's gateway DLP counts (``spend.json``): class names and counts only.
+
+    A blocked request (``dlp_blocks``) or a secret flagged in a reply (``dlp_response_flags``) is an anomaly;
+    redactions (``dlp_redactions``) are reported beside them. The matched text is never in ``spend.json``.
+    """
+    try:
+        spend = json.loads(spend_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):   # absent or unreadable: agent_run records that as spend_problem
+        return []
+    if not isinstance(spend, dict):
+        return []
+
+    def counts(key: str) -> str:
+        raw = spend.get(key)
+        items = raw.items() if isinstance(raw, dict) else ()
+        shown = [f"{k if isinstance(k, str) and _DLP_CLASS.fullmatch(k) else 'other'} {v}"
+                 for k, v in sorted(items, key=lambda kv: str(kv[0])) if isinstance(v, int) and v > 0]
+        return ", ".join(shown)
+
+    out = []
+    if counts("dlp_blocks"):
+        out.append(f"- gateway DLP refused request(s) carrying a secret or key (by class): {counts('dlp_blocks')}")
+    if counts("dlp_response_flags"):
+        out.append(f"- gateway DLP saw a secret or key in model replies (by class): {counts('dlp_response_flags')}")
+    if counts("dlp_redactions"):
+        out.append(f"- gateway DLP redactions in requests (by class; not an anomaly): {counts('dlp_redactions')}")
+    return out
+
+
+def _confinement_notice() -> list[str]:
+    """Return a loud warning when the operator opted out of the tools container (``confine.subprocesses: false``)."""
+    from agentteams.vulnscan import daily, subproc_confine   # lazy, as in _coverage_section
+
+    try:
+        cfg = daily.load_config()
+    except (OSError, ValueError):   # a missing or unusable config is reported by the coverage section
+        return []
+    if not subproc_confine.opted_out(cfg):
+        return []
+    return [f"> **{subproc_confine.OPT_OUT_WARNING}.** Every executor op, apply-worktree staging and server-kit audit in "
+            "this window ran untrusted-repository tooling with this account's files and network. Remove the opt-out once "
+            "`tools-selftest` passes.", ""]
 
 
 def _coverage_section(for_publish: bool) -> list[str]:

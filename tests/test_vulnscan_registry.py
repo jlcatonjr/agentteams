@@ -281,26 +281,32 @@ def test_daily_with_an_unreadable_registry_scans_explicit_roots_and_says_so(xdg:
 # ---------------------------------------------------------------- coverage
 
 def test_every_workspace_gets_exactly_one_coverage_state(xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def repo(name: str) -> Path:
-        return _repo(xdg / name, f"git@example.org:acme/{name}.git")
+    def repo(name: str, manifest: bool = True) -> Path:
+        path = _repo(xdg / name, f"git@example.org:acme/{name}.git")
+        if manifest:
+            (path / "requirements.txt").write_text("lib-a==1.0\n")
+        return path
     fixable, nogrant, scan_only, off, unans, excl, dup_main = (repo(n) for n in
                                                                ("fx", "ng", "so", "of", "un", "ex", "dm"))
     dup_clone = repo("dm-wt-2")
+    empty = repo("em", manifest=False)
     plain = xdg / "plain"
     plain.mkdir()
     entries = [_entry("example.org/acme/fx", fixable, "remediate"), _entry("example.org/acme/ng", nogrant, "remediate"),
                _entry("example.org/acme/so", scan_only, "scan"), _entry("example.org/acme/of", off, "off"),
                _entry("example.org/acme/un", unans, "unanswered"), _entry("example.org/acme/ex", excl, "scan"),
                _entry("example.org/acme/dm", dup_main, "scan", [dup_main, dup_clone]),
+               _entry("example.org/acme/em", empty, "unanswered"),
                _entry("example.org/acme/gone", xdg / "gone", "scan"), _entry(f"dir:{plain}", plain, "scan")]
     grants = [{"ops": ["stage-fix"], "repo_roots": [str(fixable)], "hosts": []}]
     rows = coverage.states({**daily.DEFAULT_CONFIG, "exclude": [str(excl)]}, entries, grants)
     got = {name: state for _o, state, name, _p in rows}
     assert got == {"fx": "fixable", "ng": "not covered by the grant yet", "so": "scan-only", "of": "opted out",
                    "un": "unanswered", "ex": "excluded", "dm": "scan-only", "dm (dm-wt-2)": "duplicate checkout",
-                   "gone": "missing on disk", "plain": "not a git repository"}
+                   "em": "nothing to scan", "gone": "missing on disk", "plain": "not a git repository"}
     md = coverage.markdown(rows)
     assert "### example.org/acme" in md and "fixable: 1" in md and "- unanswered (1): un" in md
+    assert "- nothing to scan (1): em" in md and "not a coverage gap" in md
     assert "enroll --discover" in md
     counts_only = coverage.markdown(rows, names=False)
     assert "### " not in counts_only and "fx" not in counts_only
@@ -308,6 +314,7 @@ def test_every_workspace_gets_exactly_one_coverage_state(xdg: Path, monkeypatch:
 
 def test_summary_and_review_carry_the_coverage_section(xdg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     w = _repo(xdg / "w")
+    (w / "requirements.txt").write_text("lib-a==1.0\n")
     registry.save([_entry(ORIGIN, w, "scan")])
     monkeypatch.setattr(daily, "_collect", lambda *a, **k: None)
     _rep, _code, run_dir = daily.run_daily({**daily.DEFAULT_CONFIG, "local_runtimes": False, "notify": "none"},
@@ -585,6 +592,7 @@ def test_summary_and_mcp_never_name_private_packages(xdg: Path, monkeypatch: pyt
 def test_status_reports_coverage_state_and_a_partial_last_scan(xdg: Path, monkeypatch: pytest.MonkeyPatch,
                                                                capsys: pytest.CaptureFixture[str]) -> None:
     w = _repo(xdg / "w")
+    (w / "requirements.txt").write_text("lib-a==1.0\n")
     registry.save([_entry(ORIGIN, w, "remediate")])
     run = xdg / "state" / "2026-01-05"
     run.mkdir(parents=True)
@@ -599,8 +607,15 @@ def test_status_reports_coverage_state_and_a_partial_last_scan(xdg: Path, monkey
     assert "coverage     not covered by the grant yet" in out and "PARTIAL: 1 part(s) unscanned" in out
     other = xdg / "other"
     other.mkdir()
+    (other / "package-lock.json").write_text("{}")
     assert main(["status", "--project", str(other), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["coverage_state"] == "not enrolled"
+    empty = xdg / "empty"                      # no dependency manifest at all: not a coverage gap
+    empty.mkdir()
+    assert main(["status", "--project", str(empty), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["coverage_state"] == "nothing to scan"
+    assert main(["status", "--project", str(empty)]) == 0
+    assert "coverage     nothing to scan (no dependency manifest found" in capsys.readouterr().out
 
 
 def test_status_flags_a_brief_off_mismatch(xdg: Path, monkeypatch: pytest.MonkeyPatch,

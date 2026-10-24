@@ -265,5 +265,5 @@ def test_an_old_selftest_record_without_flags_sha256_is_refused(env: dict[str, P
     ok, reason = agent_run.selftest_ok({})
     assert not ok and "predates container-flag binding" in reason
     f.write_text(json.dumps({"passed": True, "image": "sha256:img", "checks": [],
-                             "flags_sha256": agent_run.flags_sha256()}), encoding="utf-8")
+                             "flags_sha256": agent_run.flags_sha256(image_id="sha256:img")}), encoding="utf-8")
     assert agent_run.selftest_ok({}) == (True, "ok")
