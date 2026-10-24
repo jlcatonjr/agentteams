@@ -230,6 +230,7 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
         out.append(f"- `{g['grant_id']}`: ops {', '.join(g['ops'])}; {used}/{g['max_uses']} uses; expires {g['expires']}; "
                    f"roots {len(g['repo_roots'])}, hosts {', '.join(g['hosts']) or '—'}")
     out += [f"- problem: {_line(p)}" for p in problems] + [""]
+    out += _coverage_section(for_publish)
 
     by_kind: dict[str, list[dict[str, Any]]] = {}
     for r in window:
@@ -291,6 +292,25 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
     if for_publish:
         text = publish.rewrite_paths(text)
     return text
+
+
+def _coverage_section(for_publish: bool) -> list[str]:
+    """Return the coverage section (:mod:`.coverage`); the published copy has totals only, no project names."""
+    from agentteams.vulnscan import coverage, daily   # lazy: daily imports this module's callers
+
+    try:
+        cfg = daily.load_config()
+    except FileNotFoundError:
+        cfg = dict(daily.DEFAULT_CONFIG)
+    except (OSError, ValueError) as exc:
+        return ["## Coverage", "", f"- config unusable, coverage unknown: {_line(exc)}", ""]
+    runs = paths.run_dirs()
+    latest = None   # the latest scan adds the per-repository brief counts (summary.json never names private packages)
+    try:
+        latest = Report.from_dict(json.loads((runs[-1] / "summary.json").read_text(encoding="utf-8"))) if runs else None
+    except (OSError, ValueError, KeyError, TypeError):
+        latest = None   # counts are then left out; the coverage states do not depend on them
+    return [*coverage.section(cfg, names=not for_publish, report=latest).rstrip("\n").split("\n"), ""]
 
 
 def acknowledge(note: str = "") -> dict[str, Any]:

@@ -197,6 +197,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/agent_run.py",
     "agentteams/vulnscan/selftest_probe.py",   # the self-test probe a passing self-test vouches for
     "agentteams/vulnscan/run_records.py",      # archives earlier runs' status, transcript and report
+    "agentteams/vulnscan/registry.py",         # machine registry: what is scanned and proposed for grants
+    "agentteams/vulnscan/coverage.py",         # effective scan roots and coverage states
+    "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
+    "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
+    "agentteams/vulnscan/executor_guard.py",   # protected repos by origin; scan-only refusal
     "agentteams/vulnscan/gateway.py",
     "agentteams/vulnscan/mcp.py",
     # R6 operator loop (2026-10-22, metaplan vulnscan-r6 T1): escalations.py and publish.py sign through the operator

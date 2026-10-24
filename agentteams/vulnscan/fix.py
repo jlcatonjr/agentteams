@@ -34,7 +34,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, osv
+from agentteams.vulnscan import _http, osv, project_policy
 from agentteams.vulnscan.manifests import REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -219,7 +219,7 @@ def git_config_problem(directory: Path) -> str:
 
 
 def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool = False,
-                      label: str = "") -> list[PinChange]:
+                      label: str = "", private: tuple[str, ...] = ()) -> list[PinChange]:
     """Return the edits needed for one requirements file.
 
     Args:
@@ -227,6 +227,7 @@ def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool 
         cooldown_days: Minimum release age for a replacement.
         allow_major: Whether a major-version jump counts as ``fix`` (else ``major-held``).
         label: Path shown in the plan (defaults to ``path``).
+        private: The project's ``private_packages`` patterns: those pins are never looked up.
 
     Returns:
         One :class:`PinChange` per vulnerable pin.
@@ -238,7 +239,7 @@ def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool 
     text = path.read_text(encoding="utf-8", errors="replace")
     for line in text.splitlines():
         m = REQ_PIN.match(line)
-        if m:
+        if m and not project_policy.is_private(m.group(1), private, "PyPI"):
             pins.append((m.group(1), m.group(3)))
     hits = osv.vulnerable_ids(("PyPI", n, v) for n, v in pins)
     changes: list[PinChange] = []
@@ -321,7 +322,8 @@ def _npm_workspaces(lockfile: Path) -> bool:
     return False
 
 
-def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "") -> tuple[list[PinChange], str]:
+def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "",
+                  private: tuple[str, ...] = ()) -> tuple[list[PinChange], str]:
     """List what ``stage-fix``'s ``npm audit fix`` is there to fix in one lockfile (dry run; npm is not run).
 
     npm fixes a lockfile as a whole and chooses the versions itself, so a row's ``new`` is the smallest
@@ -336,6 +338,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "") -> tu
         path: package-lock.json or npm-shrinkwrap.json.
         cooldown_days: The release cooldown npm is given (``--before``), named in the note.
         label: Path shown in the plan (defaults to ``path``).
+        private: The project's ``private_packages`` patterns: those packages are never looked up.
 
     Returns:
         (one :class:`PinChange` per vulnerable package version, the note for the lockfile's section).
@@ -349,6 +352,8 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "") -> tu
         return [], f"not read: {m.unscannable}"
     scopes: dict[tuple[str, str], str] = {}
     for d in m.deps:
+        if project_policy.is_private(d.name, private, "npm"):
+            continue
         if scopes.get((d.name, d.version)) != "runtime":
             scopes[(d.name, d.version)] = d.scope
     hits = osv.vulnerable_ids(("npm", n, v) for n, v in scopes)
@@ -461,8 +466,20 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
     root = root.resolve()
     res = FixResult(applied=apply)
     found = discover(root, include_worktrees=include_worktrees) if manifests is None else sorted(manifests)
+    policies = project_policy.PolicyCache()
     for path in found:
         rel = str(path.relative_to(root))
+        repo = project_policy.repo_dir(path, root)
+        pol = policies.get(repo)
+        private = pol.private_packages
+        if pol.level == "off" or project_policy.is_excluded(path.relative_to(repo).as_posix(), pol.exclude_paths):
+            res.refused.append((rel, "left out by the project brief (vulnerability_scanning: level off or exclude_paths)"))
+            continue
+        if private and path.name in NPM_LOCKFILES and any(project_policy.is_private(d.name, private, d.ecosystem)
+                                                          for d in parse(path).deps):
+            res.refused.append((rel, ("lists private packages (project brief): npm would send them to the registry "
+                                      "— fix this lockfile by hand")))
+            continue
         linked = [path] if REQ_NAME.match(path.name) else \
             [path.parent / n for n in ("package.json", *NPM_LOCKFILES)] if path.name in NPM_LOCKFILES else []
         if any(p.is_symlink() for p in linked):
@@ -470,7 +487,8 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             continue
         if REQ_NAME.match(path.name):
             try:
-                changes = plan_requirements(path, cooldown_days=cooldown_days, allow_major=allow_major, label=rel)
+                changes = plan_requirements(path, cooldown_days=cooldown_days, allow_major=allow_major, label=rel,
+                                            private=private)
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
                 continue
@@ -485,7 +503,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
                     apply_requirements(path, changes)
         elif path.name in NPM_LOCKFILES and not apply:
             try:
-                rows, res.npm_notes[rel] = plan_npm_lock(path, cooldown_days=cooldown_days, label=rel)
+                rows, res.npm_notes[rel] = plan_npm_lock(path, cooldown_days=cooldown_days, label=rel, private=private)
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
                 continue

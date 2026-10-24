@@ -1203,6 +1203,27 @@ def _build_parser() -> argparse.ArgumentParser:
         help="With --mcp-need-report: the need register (mcp-needs.csv) to read, instead of auto-detecting it.",
     )
     parser.add_argument(
+        "--set-vulnscan",
+        metavar="LEVEL",
+        dest="set_vulnscan",
+        choices=("off", "scan", "remediate"),
+        default=None,
+        help="Write the project's dependency-scanning level (off | scan | remediate) into the "
+             "vulnerability_scanning block of --project's brief (else CWD's): shows the diff and asks y/N on the "
+             "terminal. --yes never answers this prompt: the level decides what leaves the machine (scan: "
+             "dependency names and versions to OSV.dev; remediate: also findings and repository paths to the "
+             "model provider), so it needs its own confirmation. Without a terminal it prints the diff and its "
+             "sha256 and writes nothing unless --set-vulnscan-confirm-sha256 matches. Never creates a brief.",
+    )
+    parser.add_argument(
+        "--set-vulnscan-confirm-sha256",
+        metavar="SHA256",
+        dest="set_vulnscan_confirm_sha256",
+        default=None,
+        help="With --set-vulnscan: apply the change only if its diff's sha256 equals SHA256 (a reviewed diff, "
+             "for scripts and non-interactive runs).",
+    )
+    parser.add_argument(
         "--verify-grants",
         action="store_true",
         dest="verify_grants",

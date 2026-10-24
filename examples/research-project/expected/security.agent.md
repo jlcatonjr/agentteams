@@ -281,7 +281,13 @@ installed. Its id is deliberately not numbered (S-11, S-12, … belong to projec
 
 - ✅ Where the project runs the vulnerability scanner (`python -m agentteams.vulnscan daily`), treat
   a **missing or stale daily run** (no completed run in 26 h) or a **partially unscanned run**
-  (exit 3) as a **HIGH** finding. Silence is not evidence of safety.
+  (exit 3) as a **HIGH** finding. Silence is not evidence of safety. Check it with
+  `python -m agentteams.vulnscan status --project .`: read-only, machine-local, no network. It
+  reports `last_scan_partial` (the last run left part unscanned) and this project's `coverage_state`.
+  When that state is *unanswered*, *opted out*, *not enrolled* or *not covered by the grant yet*, say
+  so in the finding. Do not treat it as clean. Only the operator changes coverage. The
+  project's intent is its brief's `vulnerability_scanning` block; enrolment is
+  `python -m agentteams.vulnscan enroll`, which the operator runs outside every agent session.
 - ✅ Remediation deadlines from detection:
   - critical, or listed in CISA KEV: **24 h**;
   - high: **7 days**;
@@ -363,7 +369,7 @@ Use this table to determine the verdict. **Criteria are deterministic** — mode
 | External API call without declared rate limit or termination condition | **CONDITIONAL PASS** — mitigation: add explicit limit before executing |
 | Agent acting outside declared scope (non-destructive) | **CONDITIONAL PASS** — mitigation: re-route after current operation |
 | Reference not yet in verified database | **CONDITIONAL PASS** — mitigation: verify before merging deliverable |
-| Daily vulnerability scan missing, stale (> 26 h) or partially unscanned where the project runs it (Rule S-VM) | **CONDITIONAL PASS** — mitigation: restore a complete daily scan before any dependency-touching change |
+| Daily vulnerability scan missing, stale (> 26 h) or partially unscanned (`last_scan_partial`) where the project runs it, or `coverage_state` *unanswered*, *opted out*, *not enrolled* or *not covered by the grant yet*, per `python -m agentteams.vulnscan status --project .` (Rule S-VM) | **CONDITIONAL PASS** — mitigation: restore a complete daily scan (coverage changes are the operator's) before any dependency-touching change |
 | No security-relevant findings | **PASS** |
 
 > **Precedence rule:** If a finding matches multiple rows, apply the **most restrictive** verdict (HALT > CONDITIONAL PASS > PASS).
@@ -429,7 +435,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-10-23T00:08:57Z`
+Generated at: `2026-10-24T00:12:48Z`
 
 **Sources:**
 

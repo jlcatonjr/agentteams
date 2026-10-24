@@ -79,6 +79,14 @@ Ask for:
 - A list of components the team will produce (one workstream expert agent is created per component)
 - For each component: slug, brief description, key sections or functions, and any known sources
 
+### Section 8: Dependency Vulnerability Scanning
+Ask (recommended answer: `scan`):
+> "Should this project's dependencies be checked daily for known vulnerabilities? `off`, `scan` (recommended) or `remediate`?"
+
+Explain before they answer: the operator's daily scan (`python -m agentteams.vulnscan`) runs on their own machine. With `scan`, the name and version of every dependency in the project's lockfiles and pinned manifests are sent to OSV.dev (and release data is read from PyPI and nodejs.org); nothing else leaves the machine. With `remediate`, the operator's remediation agent may also propose fixes as `vulnscan/*` pull requests to this repository's own origin, so findings and repository paths reach the configured model provider; it acts only inside the operator's signed grant and does not merge. Package names listed in `private_packages` (patterns such as `@acme/*`) stay on the machine and are reported as "not checked (private)". With `off`, the project asks not to be scanned; the operator decides, and a project the operator enrols anyway is still scanned (the mismatch is reported). The brief only narrows what leaves the machine.
+
+Record the answer in the brief as `"vulnerability_scanning": {"level": "<answer>"}`, adding `private_packages` or `exclude_paths` (repository-relative) if the user names any. Keep host names, IP addresses, URLs and absolute paths out of this block. The build does not enrol the project: the operator does, with `python -m agentteams.vulnscan enroll <project dir>`.
+
 ---
 
 ## After Intake
@@ -110,7 +118,8 @@ Use `Write` to save the collected information as `.agentteams/brief.json` (the c
       "sections": ["..."],
       "sources": ["..."]
     }
-  ]
+  ],
+  "vulnerability_scanning": {"level": "scan"}
 }
 ```
 

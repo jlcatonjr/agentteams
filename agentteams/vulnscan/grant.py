@@ -463,3 +463,174 @@ def covers(record: dict[str, Any], op: str, target: str) -> bool:
     if op.startswith("server-"):
         return target in record["hosts"]
     return any(path_within(target, root) for root in record["repo_roots"])
+
+
+# ---------------------------------------------------------------- grant sign --from-registry
+
+def previous_grant() -> dict[str, Any] | None:
+    """Return the most recently issued grant in :func:`grants_dir` that carries a valid operator signature.
+
+    Expired grants count (the previous grant is usually expired or about to be); unsigned, forged or
+    unreadable files do not, so a planted file cannot make additions look unchanged. With no baseline every
+    proposed root is an addition, which asks for more confirmation, never less.
+
+    Returns:
+        The grant record, or None.
+    """
+    d = grants_dir()
+    if not d.is_dir() or dir_problem(d):
+        return None
+    best: dict[str, Any] | None = None
+    for f in sorted(d.glob("vg-*.json")):
+        rec = _signed_record(f)
+        if rec is not None and (best is None or rec["issued"] > best["issued"]):
+            best = rec
+    return best
+
+
+def _signed_record(path: Path) -> dict[str, Any] | None:
+    """Return one grant file's record when it verifies as of its own issue time, else None."""
+    if file_problem(path):
+        return None
+    try:
+        rec = json.loads(path.read_text(encoding="utf-8"))
+        verify(rec, now=datetime.fromisoformat(rec["issued"]))
+    except (OSError, ValueError, TypeError, KeyError):   # GrantError is a ValueError
+        return None
+    return rec
+
+
+def registry_proposal(entries: list[Any], protected: dict[str, Path]) -> tuple[dict[str, str], list[str]]:
+    """Return the roots the registry proposes and the ones left out because they are protected.
+
+    A proposal is the fix checkout of every entry at level ``remediate`` (each once). An entry whose
+    enrolled identity, or the identity its fix checkout has now, is a protected origin is left out.
+    Each root is grouped under the owner of its **current** origin (what a PR would reach); when that
+    differs from the registry's, the owner label says so (the executor refuses it until it is re-enrolled).
+
+    Args:
+        entries: :func:`registry.load` entries.
+        protected: :func:`executor_guard.protected_identities`.
+
+    Returns:
+        ``({resolved root: owner}, [left-out descriptions])``.
+    """
+    from agentteams.vulnscan import registry
+
+    roots: dict[str, str] = {}
+    left_out: list[str] = []
+    for e in entries:
+        if e.level != "remediate":
+            continue
+        root = str(Path(e.fix_checkout).expanduser().resolve())
+        now = registry.identity(Path(root))
+        hit = next((i for i in (e.identity, now) if i in protected), None)
+        if hit is not None:
+            left_out.append(f"{root} ({hit} is protected: {protected[hit]})")
+            continue
+        owner = registry.owner_of(now)
+        if now != e.identity:
+            owner += f" (ORIGIN CHANGED: enrolled as {e.identity}, owner {e.owner or registry.owner_of(e.identity)})"
+        roots.setdefault(root, owner)
+    return roots, left_out
+
+
+def _owner_of_root(root: str, proposed: dict[str, str]) -> str:
+    from agentteams.vulnscan import registry
+
+    return proposed.get(root) or registry.owner_of(registry.identity(Path(root)))
+
+
+def review_registry_roots(proposed: dict[str, str], explicit: list[str], previous: list[str], *,
+                          ask: Callable[[str], str] = input, say: Callable[[str], None] = print) -> list[str]:
+    """Show the change versus the previous grant and ask, per owner, for the registry's additions.
+
+    Additions and removals are listed grouped by owner; unchanged roots only as a count. Each owner's
+    registry additions need an explicit ``y``; anything else drops them. ``--repo-root`` additions were
+    typed by the operator and are shown, not asked. The caller then signs the full list through the
+    usual review (its digest covers every root).
+
+    Args:
+        proposed: ``{root: owner}`` from :func:`registry_proposal`.
+        explicit: Roots given with ``--repo-root``.
+        previous: The previous grant's ``repo_roots`` ([] when there is none).
+        ask: Prompt function (terminal ``input``).
+        say: Output function.
+
+    Returns:
+        The roots to sign: unchanged, accepted additions and explicit roots (sorted, each once).
+    """
+    explicit_r = {str(Path(r).expanduser().resolve()) for r in explicit}
+    prev = set(previous)
+    wanted = set(proposed) | explicit_r
+    added = sorted(set(proposed) - prev - explicit_r)
+    removed = sorted(prev - wanted)
+    unchanged = sorted(wanted & prev)
+    say(f"Remediation roots versus the previous grant: {len(added) + len(explicit_r - prev)} to add, "
+        f"{len(removed)} to remove, {len(unchanged)} unchanged.")
+    by_owner: dict[str, list[str]] = {}
+    for root in added:
+        by_owner.setdefault(proposed[root], []).append(root)
+    for label, roots in (("given with --repo-root", sorted(explicit_r - prev)), ("removed", removed)):
+        if roots:
+            say(f"\n{label}:")
+            groups: dict[str, list[str]] = {}
+            for root in roots:
+                groups.setdefault(_owner_of_root(root, proposed), []).append(root)
+            for owner in sorted(groups):
+                say(f"  {owner}: " + ", ".join(groups[owner]))
+    accepted: set[str] = set()
+    for owner in sorted(by_owner):
+        say(f"\nadd ({owner}):")
+        for root in by_owner[owner]:
+            say(f"  + {root}")
+        answer = ask(f"Add these {len(by_owner[owner])} repositories of {owner} to the grant? [y/N] ")
+        if answer.strip().lower() in ("y", "yes"):
+            accepted.update(by_owner[owner])
+        else:
+            say(f"  dropped {len(by_owner[owner])} additions of {owner}")
+    return sorted(set(unchanged) | accepted | explicit_r)
+
+
+def roots_from_registry(cfg: dict[str, Any], explicit: list[str], governance_dir: str, *,
+                        ask: Callable[[str], str] = input, say: Callable[[str], None] = print,
+                        tty: Callable[[], bool] | None = None) -> list[str] | None:
+    """Return the repo roots for ``grant sign --from-registry`` after the operator's per-owner review.
+
+    The registry only proposes: nothing it says reaches a grant without the per-owner answer here and the
+    signing review after it. Refused on CI and without a terminal (the answers must be the operator's).
+
+    Args:
+        cfg: Daily config (``agent.team_dir`` is protected).
+        explicit: ``--repo-root`` values.
+        governance_dir: The governance dir about to be signed (protected too).
+        ask: Prompt function.
+        say: Output function.
+        tty: Terminal check (default: stdin and stdout are terminals).
+
+    Returns:
+        The roots, or None after saying why nothing can be proposed.
+    """
+    import sys
+
+    from agentteams.vulnscan import executor_guard, registry
+
+    if registry.is_ci():
+        say("refused: grant sign --from-registry never runs on CI (CI is set)")
+        return None
+    if not (tty() if tty else sys.stdin.isatty() and sys.stdout.isatty()):
+        say("refused: grant sign --from-registry asks per owner on a terminal; run it interactively")
+        return None
+    try:
+        entries = registry.load()
+        protected = executor_guard.protected_identities(cfg, extra=(governance_dir,))
+    except (OSError, ValueError) as exc:   # GrantError is a ValueError
+        say(f"refused: {exc}")
+        return None
+    proposed, left_out = registry_proposal(entries, protected)
+    for line in left_out:
+        say(f"not proposed (protected): {line}")
+    prev = previous_grant()
+    if prev is None:
+        say("no previous signed grant: every root is an addition")
+    return review_registry_roots(proposed, explicit, list(prev["repo_roots"]) if prev else [], ask=ask, say=say)
