@@ -277,6 +277,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/agent_drivers_codex.py",
     "agentteams/vulnscan/selftest_cli.py",
     "agentteams/vulnscan/agent_recipe.py",
+    "agentteams/vulnscan/agent_settings.py",
     "agentteams/data/vulnscan_agent/copilot/package.json",
     "agentteams/data/vulnscan_agent/copilot/package-lock.json",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
