@@ -103,6 +103,18 @@ def test_unusable_files_refuse_with_their_paths_on_the_terminal_only(tmp_path: P
     (secrets / "locked.env").chmod(0o600)
 
 
+def test_an_absolute_symlink_inside_the_directory_is_named_not_left_to_the_gateway(
+        tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """@audit #277: the link resolves inside the directory on the host, but its host path does not exist in the gateway."""
+    secrets = _secrets(tmp_path, **{"real.env": "X_TOKEN=" + fake(20) + "\n"})
+    (secrets / "abs.env").symlink_to(secrets / "real.env")              # absolute target, inside the directory
+    (secrets / "rel.env").symlink_to("real.env")                         # relative: fine in the gateway too
+    with pytest.raises(gateway_context.DlpRefused, match="1 secrets"):
+        _prepare(tmp_path, secrets)
+    err = capsys.readouterr().err
+    assert "abs.env: an absolute symlink" in err and "rel.env" not in err
+
+
 def test_an_acknowledgement_binds_one_file_version(tmp_path: Path) -> None:
     secrets = _secrets(tmp_path, **{"vendor.env": "X_TOKEN=" + fake(20) + "\n"})
     outside = tmp_path / "elsewhere.txt"

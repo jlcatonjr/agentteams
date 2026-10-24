@@ -67,6 +67,8 @@ _GIT_TIMEOUT = 600            # seconds for any other git step
 
 _FAIL_ON = ("critical", "high", "moderate", "low", "any", "none")
 _FIX_MODES = ("plan", "apply-worktree")
+#: What stops one scan root or one fix plan (recorded for it; the others are kept). The same as stops a whole run.
+_ITEM_ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 MAX_SCAN_WORKERS = 8         # each scan already sends up to 8 OSV requests at once: a ceiling, not a target
 _BOOL_KEYS = ("include_worktrees", "include_dev", "local_runtimes", "allow_major")
 
@@ -121,7 +123,7 @@ def _config_problem(cfg: dict[str, Any]) -> str:
             return f"{key} must be true or false{got(cfg[key])}"
     if not isinstance(cfg["fail_on"], str) or cfg["fail_on"] not in _FAIL_ON:
         return f"fail_on must be one of {', '.join(_FAIL_ON)}{got(cfg['fail_on'])}"
-    if cfg["unscored_as"] not in osv.UNSCORED_AS:
+    if not isinstance(cfg["unscored_as"], str) or cfg["unscored_as"] not in osv.UNSCORED_AS:
         return f"unscored_as must be one of {', '.join(osv.UNSCORED_AS)}{got(cfg['unscored_as'])}"
     if not _is_int(cfg["cooldown_days"]) or cfg["cooldown_days"] < 0:
         return f"cooldown_days must be a whole number of days >= 0{got(cfg['cooldown_days'])}"
@@ -682,12 +684,19 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             total.feed_errors.append(f"repo root missing: {root_spec.label}")
         elif root_spec.scanned:
             specs.append(root_spec)
-    scans = _parallel(cfg, lambda spec: engine.scan_path(   # network-bound: the roots are looked up at once
-        spec.path, include_worktrees=bool(cfg["include_worktrees"]), exclude=exclude,
-        opted_out=opted_out), specs)   # excluded manifests are never read or sent
+    def scan(spec: Any) -> Report | Exception:   # network-bound: the roots are looked up at once
+        try:
+            return engine.scan_path(spec.path, include_worktrees=bool(cfg["include_worktrees"]), exclude=exclude,
+                                    opted_out=opted_out)   # excluded manifests are never read or sent
+        except _ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
+            return exc
+
     plan_jobs: list[tuple[Path, list[str]]] = []
-    for root_spec, rep in zip(specs, scans, strict=True):   # merged on this thread, in root order
+    for root_spec, rep in zip(specs, _parallel(cfg, scan, specs), strict=True):   # merged here, in root order
         root_s, root = root_spec.label, root_spec.path
+        if isinstance(rep, Exception):
+            total.feed_errors.append(f"scan of {root_s} stopped: {type(rep).__name__}: {rep}"[:400])
+            continue
         _drop_excluded(cfg, root, rep)   # defence in depth only
         slug = (root.name or "root") if root_spec.source == "repo_roots" else plan_slug(root.resolve())
         (run_dir / f"repos-{slug}.json").write_text(json.dumps(rep.to_dict(), indent=2), encoding="utf-8")
@@ -857,8 +866,11 @@ def _write_fix_plans(cfg: dict, jobs: list[tuple[Path, list[str]]], run_dir: Pat
 
     def one(task: tuple[Path, list[Path]]) -> tuple[Path, str, list[str]]:   # looks up only; the caller writes
         repo, manifests = task
-        plan = fix.fix_path(repo, apply=False, allow_major=bool(cfg["allow_major"]),
-                            cooldown_days=int(cfg["cooldown_days"]), npm=False, manifests=manifests)
+        try:
+            plan = fix.fix_path(repo, apply=False, allow_major=bool(cfg["allow_major"]),
+                                cooldown_days=int(cfg["cooldown_days"]), npm=False, manifests=manifests)
+        except _ITEM_ERRORS as exc:   # no plan for this repository (recorded); the others are kept
+            return repo, "", [f"fix plan for {repo} stopped: {type(exc).__name__}: {exc}"[:400]]
         plan.target = str(repo)
         if not (repo / ".git").exists():
             plan.target_problem = "not a git repository — fix these files by hand"
@@ -867,7 +879,8 @@ def _write_fix_plans(cfg: dict, jobs: list[tuple[Path, list[str]]], run_dir: Pat
         return repo, plan.markdown(), [f"fix plan: {e}" for e in plan.feed_errors]
 
     for repo, markdown, errors in _parallel(cfg, one, tasks):   # written here, in order, once each
-        (run_dir / f"fixplan-{plan_slug(repo)}.md").write_text(markdown, encoding="utf-8")
+        if markdown:
+            (run_dir / f"fixplan-{plan_slug(repo)}.md").write_text(markdown, encoding="utf-8")
         total.feed_errors += errors
 
 
