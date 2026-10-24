@@ -196,7 +196,8 @@ def test_load_config_accepts_valid_shapes(xdg: Path, data: dict[str, Any]) -> No
     ({"image": 1}, "agent.image"),
     ({"command": "goose run"}, "agent.command"),
     ({"command": ["goose", 1]}, "agent.command"),
-    ({"framework": "codex"}, "agent.framework"),       # known, but its driver is not in this release
+    ({"framework": "grok"}, "agent.framework"),        # known, but its driver is not in this release
+    ({"framework": "codex"}, "agent.framework"),       # the default model is not an OpenAI model (revision 13)
     ({"framework": "goose2"}, "agent.framework"),
 ])
 def test_load_config_validates_every_agent_value(xdg: Path, agent: dict[str, Any], key: str) -> None:

@@ -92,15 +92,15 @@ def test_pyproject_alone_or_empty_beside_requirements(tmp_path: Path) -> None:
     assert "could not parse" in manifests.parse(bad / "pyproject.toml").unscannable
 
 
-@pytest.mark.parametrize(("name", "reason"), [
-    ("Cargo.lock", "Rust/crates.io: not supported"), ("environment.yml", "conda: not supported"),
-    ("environment.yaml", "conda: not supported"), ("lake-manifest.json", "Lean: not supported")])
-def test_unsupported_lockfiles_are_reported_unscannable(tmp_path: Path, name: str, reason: str) -> None:
+@pytest.mark.parametrize(("name", "eco"), [
+    ("Cargo.lock", "Rust/crates.io"), ("environment.yml", "conda"), ("environment.yaml", "conda"),
+    ("lake-manifest.json", "Lean")])
+def test_unsupported_lockfiles_are_reported_unscannable(tmp_path: Path, name: str, eco: str) -> None:
     (tmp_path / name).write_text("content\n")
     (tmp_path / "target").mkdir()
     assert _rel(manifests.discover(tmp_path), tmp_path) == {name}
     m = manifests.parse(tmp_path / name)
-    assert not m.deps and m.unscannable == f"{name}: {reason}"
+    assert not m.deps and m.unscannable == f"unsupported ecosystem: {eco}"
 
 
 def test_scan_reports_unsupported_and_honours_the_brief_for_new_manifests(tmp_path: Path, rec: Recorder) -> None:
@@ -124,7 +124,7 @@ def test_scan_reports_unsupported_and_honours_the_brief_for_new_manifests(tmp_pa
     rep = engine.scan_path(tmp_path)
     assert sorted(rec.sent) == [("lib-a", "1.0"), ("lib-b", "3.0"), ("lib-c", "4.0")]   # lib-a once
     assert rep.withheld == ["app: acme-core (PyPI)"] and rep.excluded == ["app: skipped/requirements.lock"]
-    assert rep.unscannable == [("app/crate/Cargo.lock", "Cargo.lock: Rust/crates.io: not supported")]
+    assert rep.unscannable == [("app/crate/Cargo.lock", "unsupported ecosystem: Rust/crates.io")]
 
 
 def test_fix_never_plans_or_edits_scan_only_requirements(tmp_path: Path, rec: Recorder) -> None:

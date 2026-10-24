@@ -30,7 +30,7 @@ and ``input``), never in tool-call arguments, ``tool_use`` inputs, thinking/reas
 | ``private-package`` | ``[REDACTED:private-package]`` (names matching ``--dlp-private-names`` fnmatch patterns) |
 | ``home-path`` | ``~`` (``/Users/<name>``, ``/home/<name>``, ``C:\\Users\\<name>``: the executor expands ``~`` back, so a target the agent names stays usable) |
 | ``email`` | ``[REDACTED:email]`` (not ``git@…`` remotes) |
-| ``hostname`` | ``[REDACTED:hostname]`` (the gateway's own hostname and ``--dlp-hostname`` names) |
+| ``hostname`` | ``[REDACTED:hostname]`` (the gateway's own hostname, ``--dlp-hostname`` names and ``--dlp-hostnames-file`` lines; a containerized gateway gets the host's from :mod:`.gateway_context`) |
 | ``private-ip`` | ``[REDACTED:private-ip]`` (RFC 1918, link-local IPv4; ULA and link-local IPv6) |
 
 **False-positive guards.** Hex digests and git SHAs, ``sha256:``/``sha512-``/``h1:`` digests, UUIDs,

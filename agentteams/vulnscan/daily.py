@@ -45,7 +45,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import coverage, engine, executor, fix, notify, paths, registry, subproc_confine
+from agentteams.vulnscan import coverage, engine, executor, fix, notify, osv, paths, registry, subproc_confine
 from agentteams.vulnscan import subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
@@ -72,6 +72,7 @@ DEFAULT_CONFIG: dict = {
     "include_worktrees": False,
     "servers": [],               # host names from <server kit>/hosts.conf
     "fail_on": "high",           # critical | high | moderate | low | any | none
+    "unscored_as": "high",       # what an advisory with no CVSS vector or severity label counts as
     "include_dev": False,
     "cooldown_days": 14,         # Rule S-10 release cooldown
     "local_runtimes": True,
@@ -115,6 +116,8 @@ def _config_problem(cfg: dict[str, Any]) -> str:
             return f"{key} must be true or false{got(cfg[key])}"
     if not isinstance(cfg["fail_on"], str) or cfg["fail_on"] not in _FAIL_ON:
         return f"fail_on must be one of {', '.join(_FAIL_ON)}{got(cfg['fail_on'])}"
+    if cfg["unscored_as"] not in osv.UNSCORED_AS:
+        return f"unscored_as must be one of {', '.join(osv.UNSCORED_AS)}{got(cfg['unscored_as'])}"
     if not _is_int(cfg["cooldown_days"]) or cfg["cooldown_days"] < 0:
         return f"cooldown_days must be a whole number of days >= 0{got(cfg['cooldown_days'])}"
     if not isinstance(cfg["fix_mode"], str) or cfg["fix_mode"] not in _FIX_MODES:
@@ -289,6 +292,61 @@ def stale_warning(max_hours: float | None = None) -> str:
     if last_exit == EXIT_COMPROMISE:
         return "vulnscan: the last daily run found MALICIOUS packages or compromise indicators — see its summary.md"
     return ""
+
+
+def catch_up_due(cfg: dict) -> tuple[bool, int | None]:
+    """Return whether a catch-up run is due: no completed run within ``stale_after_hours``.
+
+    Args:
+        cfg: Daily config.
+
+    Returns:
+        ``(due, hours since the last completed run)``; the hours are None when there is no usable heartbeat
+        (none yet, or unreadable: due as well).
+    """
+    if not heartbeat_path().exists():
+        return True, None
+    beat = _read_heartbeat()
+    if isinstance(beat, str):
+        return True, None
+    age = (_dt.datetime.now(_dt.UTC) - beat[0]).total_seconds() / 3600
+    return age > float(cfg.get("stale_after_hours", DEFAULT_CONFIG["stale_after_hours"])), max(int(age), 0)
+
+
+def run_in_progress() -> bool:
+    """Return whether another daily run holds :func:`run_lock_path` (probed without blocking, released at once)."""
+    if not run_lock_path().is_file():
+        return False
+    with open(run_lock_path(), "a+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(lock, fcntl.LOCK_UN)
+    return False
+
+
+def catch_up(cfg: dict) -> tuple[Report, int, Path] | None:
+    """Run a missed daily scan (``daily --catch-up``: the login / interval job), after notifying the operator.
+
+    Args:
+        cfg: Daily config.
+
+    Returns:
+        :func:`run_daily`'s result, or None when the last run is recent or a daily run is in progress (nothing
+        done, nothing sent: the lock is checked first, so no "running now" message precedes a refused run).
+    """
+    if run_in_progress():
+        print("vulnscan daily --catch-up: a daily run is in progress; not starting another", file=sys.stderr)
+        return None
+    due, hours = catch_up_due(cfg)
+    if not due:
+        return None
+    if hours is None:
+        notify.send(cfg, "run-missing")
+    else:
+        notify.send(cfg, "run-stale", hours=hours)
+    return run_daily(cfg)
 
 
 def _previous_summary(state: Path, today: str) -> tuple[Report | None, list[str]]:
@@ -785,6 +843,7 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     """
     previous, notes = _previous_summary(state, today)
     new = new_finding_keys(total, previous)
+    total.apply_unscored(str(cfg.get("unscored_as", "high")))
     code = total.exit_code(cfg.get("fail_on", "high"), bool(cfg.get("include_dev")))
     md = total.markdown(new_keys=new)
     if notes:

@@ -17,7 +17,8 @@ rewrites (``plugins``/web search stripped, ``usage: {include: true}`` forced; th
 routes), then the same deny-by-default checks (:data:`CHAT_KEYS`, ``function`` tools only, no
 OpenRouter ``models``/``route`` fallbacks, ``data:`` image URLs only). Every route reserves its call
 before relaying: the output ceiling it names (chat: ``max_tokens`` / ``max_completion_tokens`` when
-present, else :data:`DEFAULT_CHAT_RESERVE_TOKENS`). A request that passes is then handed to the DLP hook
+present, else :data:`DEFAULT_CHAT_RESERVE_TOKENS`; responses: ``max_output_tokens``, else the gateway's
+``--responses-reserve-tokens`` when configured, since Codex sends none). A request that passes is then handed to the DLP hook
 (``dlp``; :mod:`.gateway_dlp`), which refuses a secret and redacts the lesser classes in message text.
 
 **Usage** is parsed per dialect from a JSON reply or an SSE stream (:func:`usage_for`); spend is the
@@ -81,8 +82,14 @@ ANTHROPIC_VERSIONS = frozenset({"2023-06-01"})
 
 RESPONSES_KEYS = frozenset({"model", "input", "instructions", "max_output_tokens", "tools", "tool_choice",
                             "parallel_tool_calls", "temperature", "top_p", "stream", "store", "background",
-                            "reasoning", "text", "metadata", "truncation", "include", "prompt_cache_key"})
-RESPONSES_TOOL_TYPES = frozenset({"function", "custom"})
+                            "reasoning", "text", "metadata", "truncation", "include", "prompt_cache_key",
+                            "client_metadata"})
+#: ``namespace`` groups function tools (Codex puts its MCP tools in one); ``tool_search`` is allowed only when
+#: the client runs it (``execution: client``: Codex searching its own deferred MCP tools). Both are checked
+#: recursively (:func:`_check_tools`), also where a tool list rides in an ``input`` item (``additional_tools``).
+RESPONSES_TOOL_TYPES = frozenset({"function", "custom", "namespace", "tool_search"})
+#: ``client_metadata`` (Codex: thread, turn and installation ids): a flat object of short strings only.
+CLIENT_METADATA_MAX = (32, 4096)
 RESPONSES_TOOL_CHOICE = frozenset({"auto", "none", "required"})
 RESPONSES_SERVER_TOOLS = ("mcp", "web_search", "file_search", "code_interpreter", "computer_use",
                           "image_generation")
@@ -300,6 +307,11 @@ def _check_tools(dialect: str, tools: object, allowed: frozenset[str], server: t
         if kind not in allowed:
             raise PolicyError(f"tool type {safe(kind)} is not allowed on the {dialect} route (deny by default; "
                               f"allowed: {sorted(allowed)})")
+        if kind == "tool_search" and tool.get("execution") != "client":
+            raise PolicyError(f"tool_search with execution {safe(tool.get('execution'))} is refused on the {dialect} "
+                              "route: only a search the client runs over its own tools is allowed")
+        if kind == "namespace":                       # its tools: no further namespace, no tool_search
+            _check_tools(dialect, tool.get("tools"), allowed - {"namespace", "tool_search"}, server)
 
 
 def _check_tool_choice(dialect: str, choice: object, allowed: frozenset[str], tool_types: frozenset[str]) -> None:
@@ -351,7 +363,8 @@ def _check_chat(raw: bytes, models: Collection[str], max_output_tokens: int, res
 
 def check_request(dialect: str, raw: bytes, *, models: Collection[str],
                   max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
-                  chat_reserve_tokens: int = DEFAULT_CHAT_RESERVE_TOKENS, dlp: Dlp | None = None) -> Checked:
+                  chat_reserve_tokens: int = DEFAULT_CHAT_RESERVE_TOKENS, dlp: Dlp | None = None,
+                  responses_reserve_tokens: int = 0) -> Checked:
     """Validate one request body for its dialect (deny by default) and return what to forward.
 
     Args:
@@ -362,6 +375,8 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
             ``max_completion_tokens``).
         chat_reserve_tokens: Output tokens reserved for a chat call that names no output ceiling.
         dlp: The DLP hook, run on the body once the policy passed (blocks secrets, redacts the rest).
+        responses_reserve_tokens: Output tokens reserved for a Responses call without ``max_output_tokens``,
+            and written into the forwarded body as its ``max_output_tokens`` (0: such a call is refused).
 
     Returns:
         The body to forward, its model, the reservation inputs and the DLP redaction counts.
@@ -395,7 +410,14 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
         include = body.get("include", [])
         if not isinstance(include, list) or any(i not in RESPONSES_INCLUDE for i in include):
             raise PolicyError(f"include may hold only {sorted(RESPONSES_INCLUDE)}")
-        max_out = _max_output(body, "max_output_tokens", max_output_tokens)
+        _check_client_metadata(body.get("client_metadata", {}))
+        for item in body.get("input") if isinstance(body.get("input"), list) else []:
+            if isinstance(item, dict) and "tools" in item:   # tools carried in the input (Codex additional_tools)
+                _check_tools(RESPONSES, item["tools"], RESPONSES_TOOL_TYPES, RESPONSES_SERVER_TOOLS)
+        unnamed = "max_output_tokens" not in body and responses_reserve_tokens > 0
+        max_out = responses_reserve_tokens if unnamed else _max_output(body, "max_output_tokens", max_output_tokens)
+        if unnamed:   # enforced, not just reserved: the upstream may not answer with more (@security rc.4 Low 4)
+            body["max_output_tokens"] = responses_reserve_tokens
         where = _remote_reference([body.get("input"), body.get("instructions")])
         body["store"] = False                          # the API defaults to true: forced off
     else:
@@ -405,6 +427,15 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
     redactions = dlp(dialect, body) if dlp else {}
     return Checked(json.dumps(body).encode("utf-8"), body["model"], max_out, math.ceil(len(raw) / BYTES_PER_TOKEN),
                    redactions)
+
+
+def _check_client_metadata(meta: object) -> None:
+    """Refuse a ``client_metadata`` that is not a small flat object of short strings."""
+    count, size = CLIENT_METADATA_MAX
+    if not isinstance(meta, dict) or len(meta) > count or not all(
+            isinstance(k, str) and SAFE_TOKEN.fullmatch(k) and isinstance(v, str) and len(v) <= size
+            for k, v in meta.items()):
+        raise PolicyError(f"client_metadata must be an object of at most {count} short strings on the responses route")
 
 
 def upstream_headers(dialect: str, client: Mapping[str, str], up: Upstream,

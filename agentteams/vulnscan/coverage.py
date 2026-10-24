@@ -16,14 +16,17 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import registry
-from agentteams.vulnscan.manifests import discover
+from agentteams.vulnscan.manifests import discover, unsupported_ecosystem
 
 #: Coverage states, in display order. ``not enrolled`` is only reported by ``vulnscan status --project``
 #: (:func:`project_state`): the coverage section lists registry entries, which are enrolled by definition.
 #: ``nothing to scan`` is a workspace with no dependency manifest at all (:func:`nothing_to_scan`); it is not a
-#: coverage gap, so Rule S-VM does not report it.
+#: coverage gap, so Rule S-VM does not report it. ``unsupported ecosystem`` is a workspace whose only manifests
+#: are of ecosystems vulnscan does not read (Go, Maven, Gradle, RubyGems, NuGet, pnpm, containers, ...:
+#: :func:`unsupported_only`): nothing in it is checked, so it IS a coverage gap and Rule S-VM reports it.
 STATES = ("fixable", "scan-only", "not covered by the grant yet", "opted out", "excluded", "unanswered",
-          "nothing to scan", "duplicate checkout", "missing on disk", "not a git repository", "not enrolled")
+          "unsupported ecosystem", "nothing to scan", "duplicate checkout", "missing on disk", "not a git repository",
+          "not enrolled")
 
 #: Root sources that are scanned.
 SCANNED = ("repo_roots", "registry (scan)", "registry (remediate)")
@@ -177,19 +180,51 @@ def nothing_to_scan(path: str | Path) -> bool:
     return p.is_dir() and not discover(p)
 
 
-def states(cfg: dict[str, Any], entries: Iterable[registry.Entry],
-           grants: list[dict[str, Any]]) -> list[tuple[str, str, str, str]]:
+def unsupported_manifests(path: str | Path) -> tuple[list[str], bool]:
+    """Return a workspace's manifests of unsupported ecosystems, and whether they are all it has.
+
+    Args:
+        path: The workspace directory.
+
+    Returns:
+        ``(["<path in workspace> (<ecosystem>)", ...], only)``: ``only`` is True when the workspace has
+        manifests and every one is of an unsupported ecosystem (the ``unsupported ecosystem`` state).
+    """
+    p = Path(path).expanduser()
+    if not p.is_dir():
+        return [], False
+    found = discover(p)
+    labels = [f"{m.relative_to(p).as_posix()} ({eco})" for m in found if (eco := unsupported_ecosystem(m.name))]
+    return labels, bool(found) and len(labels) == len(found)
+
+
+def unsupported_only(path: str | Path) -> bool:
+    """Return whether every manifest of a workspace is of an unsupported ecosystem (and it has some).
+
+    Args:
+        path: The workspace directory.
+
+    Returns:
+        True for the ``unsupported ecosystem`` coverage state.
+    """
+    return unsupported_manifests(path)[1]
+
+
+def states(cfg: dict[str, Any], entries: Iterable[registry.Entry], grants: list[dict[str, Any]],
+           unsupported: dict[str, list[str]] | None = None) -> list[tuple[str, str, str, str]]:
     """Return the coverage state of every known workspace.
 
     Each registry entry gives one row for its fix checkout; each further checkout gives a
     ``duplicate checkout`` row. Precedence for the fix checkout: missing on disk, not a git repository,
-    excluded, nothing to scan (no dependency manifest), then the level (remediate splits into fixable and
-    not covered by the grant yet).
+    excluded, nothing to scan (no dependency manifest), unsupported ecosystem (only manifests vulnscan cannot
+    read), then the level (remediate splits into fixable and not covered by the grant yet).
 
     Args:
         cfg: Daily config.
         entries: Registry entries.
         grants: Valid remediation grants (:func:`grant.load_active`).
+        unsupported: When given, filled with ``{display name: unsupported manifests}`` for every fix
+            checkout that has some (mixed workspaces keep their state; their unsupported files are listed).
 
     Returns:
         ``(owner, state, display name, path)`` rows.
@@ -197,6 +232,7 @@ def states(cfg: dict[str, Any], entries: Iterable[registry.Entry],
     rows: list[tuple[str, str, str, str]] = []
     excl = exclusions(cfg)
     for e in entries:
+        found: tuple[list[str], bool] = ([], False)
         name = registry.short_name(e.identity)
         if not Path(e.fix_checkout).exists():
             state = "missing on disk"
@@ -206,11 +242,15 @@ def states(cfg: dict[str, Any], entries: Iterable[registry.Entry],
             state = "excluded"
         elif nothing_to_scan(e.fix_checkout):
             state = "nothing to scan"
+        elif (found := unsupported_manifests(e.fix_checkout))[1]:
+            state = "unsupported ecosystem"
         elif e.level == "remediate":
             state = "fixable" if _grant_covers(grants, e.fix_checkout) else "not covered by the grant yet"
         else:
             state = {"scan": "scan-only", "off": "opted out"}.get(e.level, "unanswered")
         rows.append((e.owner, state, name, e.fix_checkout))
+        if unsupported is not None and found[0]:
+            unsupported[name] = found[0]
         for c in e.checkouts:
             if _real(c) != _real(e.fix_checkout):
                 rows.append((e.owner, "missing on disk" if not Path(c).exists() else "duplicate checkout",
@@ -218,12 +258,14 @@ def states(cfg: dict[str, Any], entries: Iterable[registry.Entry],
     return rows
 
 
-def markdown(rows: list[tuple[str, str, str, str]], *, names: bool = True) -> str:
+def markdown(rows: list[tuple[str, str, str, str]], *, names: bool = True,
+             unsupported: dict[str, list[str]] | None = None) -> str:
     """Render the coverage section: totals, then names per state grouped by owner.
 
     Args:
         rows: :func:`states` output.
         names: List names (False: totals only, for the published copy).
+        unsupported: :func:`states`' ``unsupported`` map: the manifests no scan reads, per workspace.
 
     Returns:
         Markdown starting with ``## Coverage``.
@@ -246,6 +288,16 @@ def markdown(rows: list[tuple[str, str, str, str]], *, names: bool = True) -> st
                     for s in STATES if by_owner[owner][s]]
     if counts["unanswered"]:
         out += ["", "Answer the unanswered ones: `python -m agentteams.vulnscan enroll --discover <dir>`."]
+    if counts["unsupported ecosystem"]:
+        out += ["", "Unsupported ecosystem: the workspace's only manifests are of ecosystems vulnscan does not read "
+                "(a coverage gap: nothing in it is checked)."]
+    if unsupported:
+        n_files = sum(len(v) for v in unsupported.values())
+        out += ["", f"Not scanned (unsupported ecosystem): {n_files} manifest(s) in {len(unsupported)} workspace(s)"
+                + (":" if names else ".")]
+        if names:
+            out += [f"- {name}: {', '.join(files[:8])}{' …' if len(files) > 8 else ''}"
+                    for name, files in sorted(unsupported.items())]
     if counts["nothing to scan"]:
         out += ["", "Nothing to scan: no dependency manifest in the workspace (not a coverage gap)."]
     if counts["not covered by the grant yet"]:
@@ -309,7 +361,9 @@ def section(cfg: dict[str, Any], *, names: bool = True, report: Any = None) -> s
         return f"## Coverage\n\n- the project registry is unreadable: {exc}\n"
     grants, _problems = grant.load_active()
     extra = brief_lines(entries, report, names=names)
-    return markdown(states(cfg, entries, grants), names=names) + ("\n".join(extra) + "\n" if extra else "")
+    unsupported: dict[str, list[str]] = {}
+    rows = states(cfg, entries, grants, unsupported)
+    return markdown(rows, names=names, unsupported=unsupported) + ("\n".join(extra) + "\n" if extra else "")
 
 
 def project_state(cfg: dict[str, Any] | None, entry: registry.Entry | None, path: Path,
@@ -324,13 +378,16 @@ def project_state(cfg: dict[str, Any] | None, entry: registry.Entry | None, path
 
     Returns:
         The enrolled entry's :func:`states` row state; for a project the registry does not know, ``nothing to
-        scan`` when it holds no dependency manifest, ``fixable`` or ``scan-only`` when an explicit ``repo_roots``
+        scan`` when it holds no dependency manifest, ``unsupported ecosystem`` when it holds only manifests
+        vulnscan cannot read, ``fixable`` or ``scan-only`` when an explicit ``repo_roots``
         entry scans it (the grant decides), else ``not enrolled``.
     """
     if entry is not None:
         return states(cfg or {}, [entry], grants)[0][1]
     if nothing_to_scan(path):
         return "nothing to scan"
+    if unsupported_only(path):
+        return "unsupported ecosystem"
     roots = [r for r in effective_roots(cfg or {}, []) if r.scanned]
     if not any(within(path, r.path) for r in roots):
         return "not enrolled"

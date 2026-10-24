@@ -35,7 +35,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, executor
+from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, executor, gateway_context
 from agentteams.vulnscan.agent_drivers import Driver
 
 DEBRIEF_CONTAINER = "agentteams-vulnscan-debrief"
@@ -280,7 +280,8 @@ def _preflight(cfg: dict[str, Any], a: dict[str, Any], run_dir: Path) -> str:
 def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, budget_usd: float) -> None:
     agent_run._docker(["docker", "rm", "-f", DEBRIEF_GATEWAY], check=False)
     agent_run._docker(agent_run.gateway_argv(a, tag, spend_dir, name=DEBRIEF_GATEWAY, budget_usd=budget_usd,
-                                             max_tokens_total=debrief_max_tokens(a)))
+                                             max_tokens_total=debrief_max_tokens(a),
+                                             dlp=gateway_context.prepare(spend_dir)))   # B2: the host's DLP context
     agent_run._docker(["docker", "network", "connect", agent_run.NETWORK, DEBRIEF_GATEWAY])
     time.sleep(2)
 

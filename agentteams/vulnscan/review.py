@@ -254,6 +254,7 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
     anomalies = [f"- action begun but never finished: {rid}" for rid in dangling]
     latest_run = paths.run_dirs()[-1:]
     anomalies += _gateway_dlp_lines(latest_run[0] / "gateway" / "spend.json") if latest_run else []
+    anomalies += _gateway_note_lines(latest_run[0] / "gateway" / "dlp" / "notes") if latest_run else []
     rejected =sorted((paths.state_dir() / "spool" / "processed").glob("rejected-*")) \
         if (paths.state_dir() / "spool" / "processed").exists() else []
     names = [p.name for p in rejected[-20:]]   # file names the agent may have chosen: untrusted
@@ -273,6 +274,10 @@ def build(*, since: str | None = None, for_publish: bool = False, gh_replies: bo
                          if f.kind == "package" and f.fix and _same_path(f.target) not in acted]
         out += ["", f"## Findings not acted on (latest scan {runs[-1].name})", ""]
         found = [f"{f.target}: {f.name} {f.version} → {f.fix}" for f in open_findings[:50]]   # repo-derived data
+        unscored = latest.unscored_findings()
+        if unscored:   # counts only: the separate list is in the run's summary.md
+            out += [f"- {len(unscored)} finding(s) UNSCORED (no CVSS vector or severity label), counted as "
+                    f"{latest.unscored_as.upper()} (`unscored_as`): see the run's summary.md"]
         if for_publish:
             out += [f"- {len(open_findings)} finding(s)."] if found else ["- none"]
             out += _untrusted(found, "Findings (scanner data; inert):")
@@ -330,6 +335,19 @@ def _gateway_dlp_lines(spend_path: Path) -> list[str]:
     if counts("dlp_redactions"):
         out.append(f"- gateway DLP redactions in requests (by class; not an anomaly): {counts('dlp_redactions')}")
     return out
+
+
+def _gateway_note_lines(notes_path: Path) -> list[str]:
+    """Return anomaly lines from the launcher's DLP notes (``<run>/gateway/dlp/notes``: counts only, never names)."""
+    from agentteams.vulnscan import gateway_context   # lazy: it pulls in the registry and the ssh helpers
+
+    try:
+        text = notes_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):   # absent (no gateway start yet) or unreadable: nothing to report
+        return []
+    count = next((int(v) for k, _, v in (ln.partition("=") for ln in text.splitlines())
+                  if k == "hosts_conf_unredacted" and v.isdigit()), 0)
+    return [f"- gateway DLP: {gateway_context.unredacted_note(count)}"] if count else []
 
 
 def _confinement_notice() -> list[str]:

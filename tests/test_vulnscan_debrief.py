@@ -37,6 +37,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(debrief.shutil, "which", lambda name: "/usr/bin/docker")
     monkeypatch.setattr(debrief, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(debrief.time, "sleep", lambda s: None)
+    monkeypatch.setattr(debrief.gateway_context, "_scutil", lambda key: "")   # Popen is faked: no scutil
     return {"run": run, "cfg": cfg, "key": key, "calls": calls, "tmp": tmp_path}
 
 

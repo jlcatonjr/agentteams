@@ -27,7 +27,8 @@ internal network the agent container sits on, and a bridge out. It enforces:
   refused too, unless ``--allow-unmetered``. The 402 message says which cap was hit. Totals go to
   ``spend.json``. Upstream calls are serialised (the cap check and the metering of one call happen
   before the next call is checked), so concurrent requests cannot overshoot a cap. Messages and
-  Responses calls must carry an output ceiling; every call is **reserved** first (input estimate +
+  Responses calls must carry an output ceiling (a Responses call without one reserves
+  ``--responses-reserve-tokens`` when that is set: Codex sends none); every call is **reserved** first (input estimate +
   ceiling, in tokens and priced; a chat call without ``max_tokens`` reserves ``--chat-reserve-tokens``):
   a call that could cross a cap is refused (402) before it is sent. When the
   client hangs up mid-stream, the upstream reply is still read to its end (``--drain-timeout``) so
@@ -37,6 +38,9 @@ internal network the agent container sits on, and a bridge out. It enforces:
   match, known credential formats, secret-like assignments) is refused (400, ``refused``, reason
   ``dlp: <class>``, counted in ``dlp_blocks``); private package names, home paths, email addresses,
   host names and private IP addresses in message text are redacted and counted in ``dlp_redactions``.
+  In a container the launcher supplies the host's context (:mod:`.gateway_context`): its host names
+  (``--dlp-hostnames-file``), the enrolled projects' private package names (``--dlp-private-names-file``)
+  and the host's secrets files (``--dlp-secrets-file``), all as read-only file mounts.
   ``--dlp-responses`` also flags secrets in replies (``dlp_response_flags``) without altering them.
 - **Listener.** TCP ``--listen HOST:PORT`` on the container network (default), or for host-side use
   ``--listen unix:PATH``: a 0600 Unix socket admitting only ``--peer-uid`` by kernel peer credentials
@@ -275,7 +279,7 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                  anthropic_betas: Collection[str] = (),
                  chat_reserve_tokens: int = d.DEFAULT_CHAT_RESERVE_TOKENS,
                  dlp_filter: dlp.Filter | None = None,
-                 dlp_responses: bool = False) -> type[BaseHTTPRequestHandler]:
+                 dlp_responses: bool = False, responses_reserve_tokens: int = 0) -> type[BaseHTTPRequestHandler]:
     """Build the request handler class bound to this gateway's settings.
 
     Args:
@@ -294,6 +298,8 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
             the upstream keys and redacts the lesser classes; there is no way to turn it off).
         dlp_responses: Also scan each upstream reply for the block classes and count a hit in
             ``dlp_response_flags`` (the reply is relayed unchanged).
+        responses_reserve_tokens: Output tokens reserved for a Responses call without ``max_output_tokens``
+            (Codex sends none); 0 refuses such a call.
 
     Returns:
         A ``BaseHTTPRequestHandler`` subclass.
@@ -361,7 +367,7 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
             try:
                 checked = d.check_request(dialect, self.rfile.read(length), models=allowed,
                                           max_output_tokens=max_output_tokens, chat_reserve_tokens=chat_reserve_tokens,
-                                          dlp=scanner.apply)
+                                          dlp=scanner.apply, responses_reserve_tokens=responses_reserve_tokens)
                 headers = d.upstream_headers(dialect, self.headers, ups[dialect], anthropic_betas)
             except dlp.DlpBlocked as exc:   # the class name only: the matched text is never kept or echoed
                 meter.refuse(f"{dialect}: dlp: {exc.cls}", dlp_class=exc.cls)
@@ -541,6 +547,8 @@ def _parser() -> argparse.ArgumentParser:
                    help="ceiling for max_tokens / max_output_tokens on messages and responses")
     p.add_argument("--chat-reserve-tokens", type=int, default=d.DEFAULT_CHAT_RESERVE_TOKENS,
                    help="output tokens reserved for a chat call without max_tokens")
+    p.add_argument("--responses-reserve-tokens", type=int, default=0,
+                   help="output tokens reserved for a responses call without max_output_tokens (0: refuse it)")
     p.add_argument("--drain-timeout", type=float, default=DEFAULT_DRAIN_TIMEOUT,
                    help="seconds to keep reading a reply after the client hung up")
     p.add_argument("--budget-usd", type=float, default=2.0)
@@ -556,6 +564,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--dlp-secrets-dir", default=dlp.SECRETS_DIR,
                    help="directory whose *.env files are loaded like --dlp-secrets-file when present ('' : none)")
     p.add_argument("--dlp-hostname", action="append", default=[], help="a host name to redact (repeatable)")
+    p.add_argument("--dlp-hostnames-file", type=Path, default=None,
+                   help="host names to redact, one per line (the launcher's host context; kept out of argv)")
     p.add_argument("--dlp-private-names", default="", help="private package name patterns to redact (fnmatch, CSV)")
     p.add_argument("--dlp-private-names-file", type=Path, default=None, help="the same, one pattern per line")
     p.add_argument("--dlp-responses", action="store_true",
@@ -563,21 +573,34 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
+class DlpContextError(OSError):
+    """A DLP secrets file could not be read: the gateway refuses to start (exit 2, @security rc.4 Low 5)."""
+
+
+#: Why a mounted DLP file is usually unreadable, for the operator (the gateway runs as uid 10001).
+DLP_UNREADABLE_HINT = ("each mounted file must be readable by the gateway's uid 10001: Docker Desktop (macOS) maps "
+                       "file ownership, but a Linux bind mount keeps the host's owner and 0600 mode; see "
+                       "'Gateway DLP context' in docs_src/api-reference/vulnscan.md")
+
+
 def _dlp_filter(a: argparse.Namespace, keys: Collection[str], key_files: Collection[Path]) -> dlp.Filter:
     """Build the DLP filter: the upstream keys, every secret value of the key files and the secrets files.
 
     Raises:
-        OSError / UnicodeDecodeError: The private-names file cannot be read.
+        DlpContextError: A secrets file cannot be read (fail closed).
+        OSError / UnicodeDecodeError: The private-names or host-names file cannot be read (fail closed).
     """
     files = [*key_files, *a.dlp_secrets_file, *(dlp.secrets_dir_files(a.dlp_secrets_dir) if a.dlp_secrets_dir else [])]
     values, unreadable = dlp.load_secret_files(files)
-    if unreadable:
-        print(f"gateway: dlp: {unreadable} secrets file(s) could not be read", file=sys.stderr)
+    if unreadable:   # fail closed like the names files: a secret the filter cannot load is a secret it lets out
+        raise DlpContextError(f"{unreadable} DLP secrets file(s) could not be read")
     names = _csv(a.dlp_private_names)
     if a.dlp_private_names_file is not None:
         names += dlp.read_private_names(a.dlp_private_names_file)
-    return dlp.Filter(secrets={*keys, *values}, hostnames=[*dlp.default_hostnames(), *a.dlp_hostname],
-                      private_names=names)
+    hosts = [*dlp.default_hostnames(), *a.dlp_hostname]
+    if a.dlp_hostnames_file is not None:
+        hosts += dlp.read_private_names(a.dlp_hostnames_file)   # the same one-entry-per-line format
+    return dlp.Filter(secrets={*keys, *values}, hostnames=hosts, private_names=names)
 
 
 def _server(p: argparse.ArgumentParser, a: argparse.Namespace, handler: type, meter: Meter) -> Any:
@@ -612,6 +635,8 @@ def _validate(p: argparse.ArgumentParser, a: argparse.Namespace) -> tuple[list[s
         p.error("--max-output-tokens must be >= 1")
     if a.chat_reserve_tokens < 1:
         p.error("--chat-reserve-tokens must be >= 1")
+    if not 0 <= a.responses_reserve_tokens <= a.max_output_tokens:
+        p.error("--responses-reserve-tokens must be 0..--max-output-tokens")
     if not (math.isfinite(a.drain_timeout) and a.drain_timeout >= 0):
         p.error("--drain-timeout must be a finite number >= 0")
     if not (a.model or _csv(a.models)):
@@ -675,8 +700,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         scanner = _dlp_filter(a, [u.key for u in upstreams.values()],
                               {key_files[k] for k in dialects if key_files[k] is not None})
+    except DlpContextError as exc:
+        print(f"gateway: {exc}; refusing to start ({DLP_UNREADABLE_HINT})", file=sys.stderr)
+        return 2
     except (OSError, UnicodeDecodeError) as exc:
-        print(f"gateway: cannot read the private-names file: {type(exc).__name__}", file=sys.stderr)
+        print(f"gateway: cannot read a DLP names file (private names or host names): {type(exc).__name__}; "
+              f"refusing to start ({DLP_UNREADABLE_HINT})", file=sys.stderr)
         return 2
     meter = Meter(a.budget_usd, a.spend_file, max_tokens=a.max_tokens_total,
                   max_unmetered=a.max_unmetered_calls, allow_unmetered=a.allow_unmetered)
@@ -684,7 +713,7 @@ def main(argv: list[str] | None = None) -> int:
                            max_output_tokens=a.max_output_tokens, drain_timeout=a.drain_timeout,
                            anthropic_betas=frozenset(_csv(a.anthropic_betas)),
                            chat_reserve_tokens=a.chat_reserve_tokens, dlp_filter=scanner,
-                           dlp_responses=a.dlp_responses)
+                           dlp_responses=a.dlp_responses, responses_reserve_tokens=a.responses_reserve_tokens)
     server = _server(p, a, handler, meter)
     models = ",".join(m for m in (a.model, *_csv(a.models)) if m)
     routes = " ".join(f"{k}={v}" for k, v in urls.items())

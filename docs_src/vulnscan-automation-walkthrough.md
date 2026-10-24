@@ -150,7 +150,9 @@ python -m agentteams.vulnscan daily
 A config value of the wrong type or range stops it with exit 2 and a message naming the key. Only
 one daily run works at a time: a second one, started while the first holds
 `~/.local/state/agentteams/vulnscan/daily.lock`, exits 3 and writes nothing. The run writes
-`~/.local/state/agentteams/vulnscan/<date>/summary.md`:
+`~/.local/state/agentteams/vulnscan/<date>/summary.md`. Severity comes from the advisories' CVSS vectors and
+labels (the higher wins). An advisory with neither is **UNSCORED** and counts as `unscored_as` (default HIGH),
+marked `UNSCORED (as HIGH)`:
 
 ![summary.md: one table per repository with severity, installed version and the upgrade](book/figures/vulnscan/04b-summary.svg)
 
@@ -192,9 +194,16 @@ API key in your shell never lands in the plain-text plist, unit or crontab. Nor 
 shell's `SSH_AUTH_SOCK`: a launchd agent uses the login session's ssh-agent; under systemd or cron,
 set a stable agent socket with `IdentityAgent` in `~/.ssh/config`.
 `python -m agentteams.vulnscan schedule status` confirms it. From now on, every command except
-`daily` and `schedule` prints a warning (`daily.stale_warning`) when the last daily run is older than
-`stale_after_hours` (26), when its heartbeat is unreadable, or when it exited 3 (*"only partially
-scanned"*) or 4 (*"found MALICIOUS packages or compromise indicators"*).
+`schedule install` and `schedule remove` (so `daily` and `schedule status` too) prints a warning
+(`daily.stale_warning`) when the last daily run is older than `stale_after_hours` (26), when its heartbeat is
+unreadable, or when it exited 3 (*"only partially scanned"*) or 4 (*"found MALICIOUS packages or compromise
+indicators"*).
+
+**Missed runs.** On macOS, `schedule install` also installs a catch-up agent, `io.agentteams.vulnscan.catchup`.
+It runs `daily --catch-up` at login and every 6 hours, and scans only when the last run is stale or missing, so a run
+missed while the Mac was powered off is caught up. A run missed while asleep already runs on wake. Before scanning it
+sends a desktop notification. systemd timers catch up by themselves (`Persistent=true`); cron does not (add an
+`@reboot` line yourself).
 
 ---
 
@@ -609,6 +618,10 @@ walkthrough stays the same: the grants, the executor, the review and the isolati
   `~/.config/agentteams-secrets/anthropic.env` (`ANTHROPIC_API_KEY=...`, mode 600). Anthropic's API
   reports no cost, so that route also needs a price table, `agent.prices` (a JSON file of USD per million
   tokens per model; see the [API reference](api-reference/vulnscan.md)).
+- **Keys, not subscription sign-in.** Use an Anthropic Console API key (or OpenRouter). A Claude.ai
+  subscription login (`claude setup-token`, `CLAUDE_CODE_OAUTH_TOKEN`) is not supported: the gateway would
+  hold and forward the subscription token, and Anthropic's Claude Code legal terms do not permit third-party
+  software to store or intermediate Claude.ai credentials.
 - **The team.** Generate a Claude team with the remediation capability (`--framework claude`); its agent
   definition is `.claude/agents/vuln-remediation.md`, passed to Claude Code by its path. Sign grants with
   `--governance-dir <team>/.claude/agents`.
@@ -622,6 +635,49 @@ walkthrough stays the same: the grants, the executor, the review and the isolati
   grant, runs one supervised agent run and prints the outcome, the spend and any request the gateway
   refused (report those: each names what to add to the gateway's allowlist). Keep `agent.enabled` false
   until that run is clean.
+
+### Using the GitHub Copilot CLI
+
+`agent.framework: "copilot"` runs the Copilot CLI with your own model key (BYOK) and offline: it never signs
+in to GitHub and needs no GitHub token. Differences from goose:
+
+- **Models.** By default (`agent.copilot_provider_type: "openai"`) Copilot talks chat completions through the
+  same route as goose, so any OpenRouter model with tool calling works (`agent.upstream`, `agent.key_file`). With
+  `"anthropic"` it uses the Messages route instead, and the model must be a Claude model, as for Claude Code.
+- **The team.** Generate a Copilot CLI team with the remediation capability; its agent definition is
+  `.github/agents/vuln-remediation.agent.md`, which the CLI loads as a custom agent from the read-only team mount.
+  Sign grants with `--governance-dir <team>/.github/agents`.
+- **The image and the self-test.** GitHub publishes no checksum for the Copilot CLI, so
+  `FRAMEWORK=copilot bash scripts/vulnscan-agent-image.sh` builds it from the lockfile agentteams ships
+  (`npm ci --ignore-scripts`, `npm audit signatures`) and checks a hash of the whole installed tree. The self-test
+  runs Copilot once against a local stub and fails unless it offers the model only the vulnscan tools and the
+  planted MCP, hook, agent, skill and instruction files have no effect.
+- **No debrief** (`agent-chat` says so); `review` works as usual.
+- **The acceptance run.** `FRAMEWORK=copilot MODEL=<model> [PROVIDER_TYPE=anthropic] bash
+  scripts/vulnscan-operator/09-accept-framework.sh`.
+
+### Using the Codex CLI
+
+`agent.framework: "codex"` runs Codex over the gateway's Responses route. Differences from goose:
+
+- **Models.** OpenAI models only (`gpt-...`, `o3`..., or OpenRouter's `openai/...`). The default upstream is
+  OpenRouter's Responses route (`agent.upstream_responses`, your OpenRouter `key_file`); the alternative is
+  `"upstream_responses": "https://api.openai.com/v1"` with an OpenAI key in
+  `~/.config/agentteams-secrets/openai.env` (`OPENAI_API_KEY=...`, mode 600) and a price table (`agent.prices`),
+  since OpenAI reports no cost.
+- **One tool you have to accept.** For most models Codex offers an `apply_patch` (file edit) tool that no setting
+  removes. The agent runs it in a read-only sandbox, so its writes are rejected, and the self-test proves that by
+  asking for a patch and checking nothing was written. Codex is enabled only when you accept that explicitly:
+  `"accept_residual_tools": ["apply_patch"]`.
+- **The self-test follows the model.** Codex picks its tools from the model, so the self-test probes with your
+  `agent.model`; changing the model asks for a new self-test. Models that need Codex's code mode fail the tool
+  check and cannot be used.
+- **The team.** Generate a Codex team with the remediation capability; its agent definition is
+  `.codex/agents/vuln-remediation.toml`. Sign grants with `--governance-dir <team>/.codex/agents`.
+- **The image.** `FRAMEWORK=codex bash scripts/vulnscan-agent-image.sh` checks the release tarball's digest and,
+  when `cosign` is installed, its sigstore signature.
+- **No debrief.** **The acceptance run:** `FRAMEWORK=codex MODEL=<OpenAI model> bash
+  scripts/vulnscan-operator/09-accept-framework.sh` (it asks you to accept `apply_patch`).
 
 ---
 

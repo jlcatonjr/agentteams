@@ -199,13 +199,16 @@ def test_feed_outage_is_unscanned_never_clean(tmp_path: Path, feed: Feed) -> Non
     assert "Partially unscanned" in rep.markdown()
 
 
-def test_unrated_advisories_count_as_moderate(tmp_path: Path, feed: Feed) -> None:
+def test_unscored_advisories_count_as_high_unless_configured(tmp_path: Path, feed: Feed) -> None:
     (tmp_path / "requirements.txt").write_text("a==1.0\n")
     feed.vulns = {("PyPI", "a", "1.0"): ["PYSEC-1"]}
     feed.records = {"PYSEC-1": _adv("PYSEC-1", "PyPI", "a", "0", "1.1", severity="")}
     rep = engine.scan_path(tmp_path)
-    assert rep.findings[0].severity == 2
-    assert rep.exit_code("moderate") == EXIT_FINDINGS and rep.exit_code("high") == EXIT_CLEAN
+    f = rep.findings[0]
+    assert (f.severity, f.rated, f.unscored) == (3, 0, 1) and f.shows_unscored()
+    assert rep.exit_code("high") == EXIT_FINDINGS and rep.exit_code("critical") == EXIT_CLEAN
+    rep.apply_unscored("moderate")                      # the operator's choice (unscored_as)
+    assert f.severity == 2 and rep.exit_code("high") == EXIT_CLEAN and rep.exit_code("moderate") == EXIT_FINDINGS
 
 
 def test_inventory_distro_hostcheck_ioc_and_malicious(feed: Feed, monkeypatch: pytest.MonkeyPatch) -> None:

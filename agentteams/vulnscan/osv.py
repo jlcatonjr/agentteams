@@ -3,7 +3,8 @@
 ``vulnerable_ids`` asks ``/v1/querybatch`` about each (ecosystem, name, version). It
 works in chunks of 100 and follows ``next_page_token`` (at most ``MAX_PAGES`` pages, no
 repeated token). A reply that does not answer every query raises ``FeedError``. ``details`` hydrates one
-advisory from ``/v1/vulns/{id}``, cached per process. ``fix_for`` returns the fixed
+advisory from ``/v1/vulns/{id}``, cached per process. ``severity`` ranks it from its CVSS vectors
+(:mod:`.cvss`) and its ``database_specific.severity`` label, whichever is higher. ``fix_for`` returns the fixed
 version of the affected range that contains the installed version.
 ``minimal_fix`` takes the highest of those across all advisories, which is the smallest
 upgrade that clears every one of them.
@@ -14,14 +15,16 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-from agentteams.vulnscan import _http
+from agentteams.vulnscan import _http, cvss
 from agentteams.vulnscan.versions import version_key
 
 OSV_API = "https://api.osv.dev/v1"
 BATCH = 100
 MAX_PAGES = 50   # querybatch pages per query; more (or a repeated token) is a feed fault
 SEVERITY_RANK = {"CRITICAL": 4, "HIGH": 3, "MODERATE": 2, "MEDIUM": 2, "LOW": 1}
-SEVERITY_NAME = {4: "CRITICAL", 3: "HIGH", 2: "MODERATE", 1: "LOW", 0: "UNRATED"}
+SEVERITY_NAME = {4: "CRITICAL", 3: "HIGH", 2: "MODERATE", 1: "LOW", 0: "UNSCORED"}
+#: ``unscored_as`` values: the rank an advisory without any severity counts as (default HIGH).
+UNSCORED_AS = {"critical": 4, "high": 3, "moderate": 2, "low": 1}
 
 Key = tuple[str, str, str]   # (ecosystem, name, version)
 _DETAILS: dict[str, dict] = {}
@@ -112,17 +115,54 @@ def details(vuln_id: str) -> dict:
     return _DETAILS[vuln_id]
 
 
+def cvss_rank(record: dict) -> int:
+    """Return the highest severity rank among the advisory's CVSS v3.x / v4.0 vectors (0 = none usable).
+
+    Args:
+        record: OSV advisory; vectors come from ``severity[]`` and every ``affected[].severity[]``
+            (``CVSS_V3`` / ``CVSS_V4`` entries; other types, such as ``CVSS_V2``, are ignored).
+
+    Returns:
+        Rank of the highest :func:`cvss.band` (1 LOW .. 4 CRITICAL), or 0 when no vector scores.
+    """
+    entries = _as_list(record.get("severity"))   # a scalar, object or null is no vector list: unscored, never a crash
+    for aff in _as_list(record.get("affected")):
+        if isinstance(aff, dict):
+            entries += _as_list(aff.get("severity"))
+    best = 0
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("type") not in ("CVSS_V3", "CVSS_V4"):
+            continue
+        value = cvss.score(str(entry.get("score") or ""))
+        if value is not None:
+            best = max(best, SEVERITY_RANK[cvss.band(value)])
+    return best
+
+
 def severity(record: dict) -> int:
-    """Return the advisory's severity rank (0 = unrated .. 4 = critical).
+    """Return the advisory's severity rank (0 = unscored .. 4 = critical).
+
+    The higher of the CVSS-derived rank (:func:`cvss_rank`) and the GHSA-style
+    ``database_specific.severity`` label: a label never lowers what a vector says, nor the reverse.
 
     Args:
         record: OSV advisory.
 
     Returns:
-        Rank from the GHSA-style ``database_specific.severity`` label, when present.
+        The rank; 0 when the advisory has neither a usable CVSS vector nor a label (*unscored*: the
+        engine counts it as the configured ``unscored_as``, never as harmless).
     """
-    label = str((record.get("database_specific") or {}).get("severity") or "").upper()
-    return SEVERITY_RANK.get(label, 0)
+    if not isinstance(record, dict):   # a malformed advisory is unscored (@security rc.4 Low 7)
+        return 0
+    spec = record.get("database_specific")
+    label = spec.get("severity") if isinstance(spec, dict) else None
+    label = label.upper() if isinstance(label, str) else ""
+    return max(SEVERITY_RANK.get(label, 0), cvss_rank(record))
+
+
+def _as_list(value: object) -> list:
+    """Return ``value`` when it is a list, else ``[]`` (OSV fields from the feed are untrusted JSON)."""
+    return list(value) if isinstance(value, list) else []
 
 
 def is_malicious(vuln_id: str) -> bool:

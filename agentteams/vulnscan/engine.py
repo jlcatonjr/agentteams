@@ -33,7 +33,8 @@ from agentteams.vulnscan.report import Finding, Report
 
 #: Python package locations owned by the OS package manager (dpkg / rpm).
 DISTRO_LOCATION = re.compile(r"^/usr/lib(64)?/python3[^/]*/(dist|site)-packages/?$|^/usr/lib/python3/dist-packages/?$")
-UNRATED_AS = 2   # advisories without a severity label count as MODERATE, never as harmless
+#: Rank of an advisory with neither a CVSS vector nor a label until ``Report.apply_unscored`` (HIGH).
+UNSCORED_DEFAULT = osv.UNSCORED_AS["high"]
 
 
 def repo_of(path: Path, root: Path) -> str:
@@ -102,7 +103,11 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
     for key, ids in hits.items():
         eco, name, ver = key
         records = [fetched[i] for i in ids if fetched.get(i) is not None]
-        sev = max((osv.severity(r) or UNRATED_AS for r in records), default=UNRATED_AS)
+        ranks = [osv.severity(r) for r in records]
+        rated = max(ranks, default=0)
+        # unscored: neither a CVSS vector nor a label, or the record could not be read (also a feed error)
+        unscored = ranks.count(0) + len(ids) - len(records)
+        sev = max(rated, UNSCORED_DEFAULT if unscored else 0)
         known = [i for i in ids if fetched.get(i) is not None]
         fix, unfixed = osv.minimal_fix(known, eco, name, ver) if known else (None, 0)
         malicious = any(osv.is_malicious(i) for i in ids)
@@ -116,7 +121,7 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
             report.findings.append(Finding(
                 kind="package", target=target, name=name, version=ver, ecosystem=eco, scope=scope,
                 severity=4 if malicious else sev, fix=fix or "", unfixed=unfixed, ids=ids,
-                locations=locs, malicious=malicious, distro=distro,
+                locations=locs, malicious=malicious, distro=distro, rated=rated, unscored=unscored,
                 count_dev=dev_policy.get(target) if scope == "dev" else None,
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
 

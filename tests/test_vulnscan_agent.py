@@ -652,6 +652,7 @@ def _launchable(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch, *, rc: i
                         subprocess.CompletedProcess(argv, 0, stdout="", stderr=""))
     monkeypatch.setattr(agent_run.subprocess, "Popen", lambda argv, **kw: _FakeProc(calls, argv, rc))
     monkeypatch.setattr(agent_run.time, "sleep", lambda s: None)
+    monkeypatch.setattr(agent_run.gateway_context, "_scutil", lambda key: "")   # Popen is faked: no scutil
     return calls
 
 

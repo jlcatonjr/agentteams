@@ -13,139 +13,41 @@ mounts, the gateway, the run lock and the self-test record. Containment that hol
 - the only writable host-backed dirs are the driver's :meth:`Driver.state_dirs`, under
   ``<run>/agent/<name>-data``.
 
-This release implements the ``goose`` and ``claude`` drivers. ``copilot``, ``codex`` and ``grok`` are known
-frameworks whose drivers come in later phases; :func:`get_driver` refuses them by name.
+This release implements the ``goose``, ``claude``, ``copilot`` (:mod:`.agent_drivers_copilot`) and ``codex``
+(:mod:`.agent_drivers_codex`) drivers. ``grok`` is a known framework whose driver comes in a later phase;
+:func:`get_driver` refuses it by name. :func:`driver_for` specialises a driver for the operator's settings.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from agentteams.vulnscan import agent_upstreams
-
-AGENT_HOME = "/agenthome"
-#: The container's working directory: an empty tmpfs (revision 7). Not ``/work/team``.
-CWD_IN_CONTAINER = "/work/cwd"
-TEAM_IN_CONTAINER = "/work/team"
-MCP_COMMAND = "python -m agentteams.vulnscan.mcp"
-#: The model key every driver's CLI sees; the real key exists only in the gateway.
-DUMMY_KEY = "injected-by-gateway"
-FRAMEWORKS = ("goose", "claude", "copilot", "codex", "grok")
-DIALECTS = ("chat", "messages", "responses")
-
-
-@dataclass(frozen=True)
-class ImageRecipe:
-    """How the image's Dockerfile installs the CLI (build arg ``AGENT_CLI`` selects stage ``cli-<cli>``).
-
-    ``sha256`` maps Docker's ``TARGETARCH`` to the digest of the release asset for that architecture, as
-    published in ``checksum_source``; the build re-checks the download against the digest it is given.
-    """
-
-    cli: str
-    version: str
-    sha256: tuple[tuple[str, str], ...]
-    checksum_source: str
-    install: str
-
-
-@dataclass(frozen=True)
-class McpAttach:
-    """How the vulnscan MCP server reaches the CLI (folded into :meth:`Driver.command`, env or config files)."""
-
-    kind: str
-    command: str
-
-
-@dataclass(frozen=True)
-class Outcome:
-    """What a run transcript says: the CLI's own error line (capped, or ``""``) and model-call evidence.
-
-    ``model_calls`` is None when the CLI does not report calls; the gateway's spend record then decides.
-    """
-
-    error: str
-    model_calls: int | None = None
-
-
-@dataclass(frozen=True)
-class DebriefSupport:
-    """How a past run's session is resumed interactively (``resume(session)`` gives the in-container argv)."""
-
-    resume: Callable[[str], list[str]]
-    note: str
-
-
-@dataclass(frozen=True)
-class Driver:
-    """One agent runtime. Subclasses implement the methods; the fields are data.
-
-    ``key_env`` is the dummy-key variable the self-test checks; ``model_env`` the variable carrying
-    ``agent.model`` ("" when :meth:`command` passes the model itself).
-    """
-
-    name: str
-    dialect: str
-    image: ImageRecipe
-    default_recipe: str
-    key_env: str
-    model_env: str
-
-    def env(self, a: dict[str, Any], gw_url: str) -> dict[str, str]:
-        """Return the container env for this CLI (dummy key, provider vars, config homes in the tmpfs home).
-
-        ``a`` may be empty (the flags fingerprint and the self-test build the env without the operator's
-        settings): per-run values go through ``model_env`` or :meth:`command`.
-        """
-        raise NotImplementedError
-
-    def state_dirs(self) -> list[str]:
-        """Return the in-container dirs the CLI must write (host-backed under ``<run>/agent/<name>-data``)."""
-        raise NotImplementedError
-
-    def command(self, a: dict[str, Any], *, recipe: str, session: str, task: str, run_id: str) -> list[str]:
-        """Return the CLI argv; ``recipe`` is the agent definition's absolute in-container path."""
-        raise NotImplementedError
-
-    def mcp_attach(self) -> McpAttach:
-        """Return how the vulnscan MCP server is attached."""
-        raise NotImplementedError
-
-    def parse_outcome(self, transcript: str) -> Outcome:
-        """Return the error line and model-call evidence from a run transcript."""
-        raise NotImplementedError
-
-    def selftest_entries(self, command: list[str] | None = None) -> list[str]:
-        """Return probe snippets (Python, run inside the self-test) for checks specific to this runtime.
-
-        ``command`` is the operator's ``agent.command`` override (None or empty: the driver's own): a driver
-        whose probe runs the CLI must run exactly the command a run would use.
-        """
-        raise NotImplementedError
-
-    def command_problem(self, command: list[str]) -> str:
-        """Return why an ``agent.command`` override may not be used with this runtime, or ``""`` (default: none)."""
-        return ""
-
-    def debrief(self) -> DebriefSupport | None:
-        """Return how to resume a run interactively, or None when this runtime has no debrief."""
-        return None
-
-    def run_env(self, a: dict[str, Any]) -> dict[str, str]:
-        """Return the per-run env from the operator's settings (default: ``model_env`` = ``agent.model``).
-
-        Passed with ``-e`` after the shared flags by a run and a debrief (:func:`run_env_args`); not part of
-        :meth:`env`, which the flags fingerprint builds without settings.
-        """
-        return {self.model_env: str(a["model"])} if self.model_env else {}
-
-    def command_template(self) -> list[str]:
-        """Return :meth:`command` with ``{recipe}``, ``{session}``, ``{task}`` and ``{run_id}`` placeholders."""
-        return self.command({}, recipe="{recipe}", session="{session}", task="{task}", run_id="{run_id}")
-
+from agentteams.vulnscan import agent_recipe, agent_upstreams
+from agentteams.vulnscan.agent_driver_base import (  # noqa: F401  (re-exported: the drivers' public API)
+    AGENT_HOME,
+    CWD_IN_CONTAINER,
+    DIALECTS,
+    DUMMY_KEY,
+    FRAMEWORKS,
+    MCP_COMMAND,
+    MCP_ENV,
+    PYTHON,
+    TEAM_IN_CONTAINER,
+    DebriefSupport,
+    Driver,
+    ImageRecipe,
+    McpAttach,
+    Outcome,
+    json_or_none,
+)
+from agentteams.vulnscan.agent_drivers_codex import CODEX, CodexDriver  # noqa: F401
+from agentteams.vulnscan.agent_drivers_copilot import (  # noqa: F401
+    COPILOT,
+    CopilotDriver,
+)
 
 # ---------------------------------------------------------------- goose
 
@@ -228,12 +130,6 @@ GOOSE = GooseDriver(
 #: Claude Code's config dir (``CLAUDE_CONFIG_DIR``: settings, ``.claude.json``, session transcripts under
 #: ``projects/``), the one host-backed writable mount (``<run>/agent/claude-data``), so a debrief can resume.
 CLAUDE_STATE = f"{AGENT_HOME}/.claude-state"
-#: The in-container python the MCP server runs with (absolute: no PATH lookup).
-PYTHON = "/usr/local/bin/python"
-#: The vulnscan MCP server's env, as the container sets it (``agent_run._base_argv``), restated so the
-#: server sees it whether or not the CLI passes its own env to stdio servers.
-MCP_ENV = {"VULNSCAN_RUN_DIR": "/work/run", "VULNSCAN_SPOOL": "/work/spool/requests",
-           "VULNSCAN_RESULTS": "/work/spool/results"}
 #: ``--mcp-config`` takes a file or an inline JSON string (cli-reference); inline, it is part of the command
 #: the flags fingerprint hashes, and no file has to be written before the run.
 CLAUDE_MCP_CONFIG = json.dumps({"mcpServers": {"vulnscan": {
@@ -249,13 +145,6 @@ from agentteams.vulnscan import selftest_canary as _canary
 _checks, _detail = _canary.claude_checks(json.loads(%r), json.loads(%r), recipe=%r)
 r.update(_checks)
 print("SELFTEST-DETAIL " + json.dumps(_detail))'''
-
-
-def _json_or_none(text: str) -> object:
-    try:
-        return json.loads(text)
-    except ValueError:
-        return None
 
 
 @dataclass(frozen=True)
@@ -316,7 +205,7 @@ class ClaudeDriver(Driver):
         ids: set[str] = set()
         anonymous, other = 0, ""
         for line in transcript.splitlines():
-            ev = _json_or_none(line.strip()) if line.lstrip().startswith("{") else None
+            ev = json_or_none(line.strip()) if line.lstrip().startswith("{") else None
             if not isinstance(ev, dict):
                 other = line.strip() if "error" in line.lower() else other
             elif ev.get("type") == "result":
@@ -354,7 +243,7 @@ class ClaudeDriver(Driver):
                     for part in command]
         else:
             argv = self.command(probe, recipe="{recipe}", session=session, task=task, run_id=run_id)
-        recipe = f"{TEAM_IN_CONTAINER}/{self.default_recipe}"
+        recipe = f"{TEAM_IN_CONTAINER}/{self.selected_recipe()}"   # the file a run loads (agent.recipe)
         return [_CLAUDE_PROBE % (json.dumps(argv), json.dumps(self.run_env(probe)), recipe)]
 
     def command_problem(self, command: list[str]) -> str:
@@ -397,7 +286,45 @@ CLAUDE = ClaudeDriver(
         checksum_source="https://downloads.claude.ai/claude-code-releases/{version}/manifest.json "
                         "platforms.linux-<x64|arm64>.checksum (GPG-signed: manifest.json.sig)"))
 
-DRIVERS: dict[str, Driver] = {"goose": GOOSE, "claude": CLAUDE}
+DRIVERS: dict[str, Driver] = {"goose": GOOSE, "claude": CLAUDE, "copilot": COPILOT, "codex": CODEX}
+
+
+def driver_for(a: dict[str, Any], default: str = "goose") -> Driver:
+    """Return the driver for the ``agent.*`` settings: :func:`get_driver` of ``agent.framework``, specialised.
+
+    copilot: the dialect follows ``agent.copilot_provider_type`` (``openai`` chat completions, the default, or
+    ``anthropic`` Messages); codex: the self-test probes with ``agent.model`` (its tool set follows the model).
+    Both feed the flags fingerprint, so a self-test vouches for that variant only. Every driver carries
+    ``agent.recipe`` (:attr:`Driver.recipe`): the self-test runs with the agent definition a run loads.
+
+    Raises:
+        ValueError: As :func:`get_driver`.
+    """
+    recipe = a.get("recipe")
+    d = dataclasses.replace(get_driver(str(a.get("framework") or default)),
+                            recipe=recipe.lstrip("/") if isinstance(recipe, str) else "")
+    if d.name == "copilot":
+        return dataclasses.replace(d, dialect=agent_upstreams.copilot_dialect(a))
+    if d.name == "codex":
+        return dataclasses.replace(d, probe_model=str(a.get("model") or ""))
+    return d
+
+
+def validate_settings(a: dict[str, Any], driver: Driver) -> None:
+    """Check the dialect's keys and model rule (:func:`agent_upstreams.validate`) and the driver's own rule.
+
+    Raises:
+        ValueError: A value has the wrong type or range, or the driver refuses the settings.
+    """
+    agent_upstreams.validate(a, driver.dialect)
+    problem = driver.settings_problem(a)
+    if problem:
+        raise ValueError(problem)
+
+
+#: The selected agent file's check and fingerprint binding (:mod:`.agent_recipe`), for :mod:`.agent_run`.
+recipe_problem = agent_recipe.problem
+recipe_binding = agent_recipe.binding
 
 
 def run_env_args(driver: Driver, a: dict[str, Any]) -> list[str]:

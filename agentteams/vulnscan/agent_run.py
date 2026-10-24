@@ -5,7 +5,7 @@ The isolation design (operator decision, plan R5):
 | Piece | Where | Holds |
 |---|---|---|
 | Agent container (the framework's CLI + vulnscan MCP) | internal-only Docker network | nothing secret; a dummy model key |
-| Gateway container (:mod:`.gateway`) | internal network + bridge | the model API key (read-only file mount; per dialect, :mod:`.agent_upstreams`), the spend cap |
+| Gateway container (:mod:`.gateway`) | internal network + bridge | the model API key (read-only file mount; per dialect, :mod:`.agent_upstreams`), the host's DLP context (read-only; :mod:`.gateway_context`), the spend cap |
 | Executor (:mod:`.executor`) | the operator's host account | git / gh / ssh credentials, the signed grants |
 
 ``agent.framework`` selects the runtime driver (:mod:`.agent_drivers`): the CLI's env, command, state dirs,
@@ -32,8 +32,8 @@ container flags (:func:`flags_sha256`). The test proves, from inside the contain
 - the gateway reachable;
 - read-only mounts and filesystem, and an empty working directory (``cwd_empty``);
 - the driver's own checks (goose: its log, session and config directories writable, ``goose_dirs_writable``;
-  claude: a headless run against a local stub reports only vulnscan tools and ignores a planted canary,
-  :mod:`.selftest_canary`);
+  claude, copilot, codex: a headless run against a local stub offers only vulnscan tools (codex: plus its accepted
+  residual ``apply_patch``, whose writes must fail) and ignores a planted canary, :mod:`.selftest_canary`, :mod:`.selftest_cli`);
 - zero effective capabilities, ``no_new_privs`` set, and a non-root uid.
 
 Every ``docker`` command is built by a pure function, so tests check the flags without Docker.
@@ -59,8 +59,8 @@ from importlib import metadata, resources
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import (agent_drivers, agent_upstreams, executor, executor_guard, ledger, notes, notify, paths,
-                                 report_store, run_records, selftest_probe)
+from agentteams.vulnscan import (agent_drivers, agent_upstreams, executor, executor_guard, gateway_context, ledger, notes,
+                                 notify, paths, report_store, run_records, selftest_probe)
 from agentteams.vulnscan.agent_drivers import Driver
 from agentteams.vulnscan.team_dir import TEAM_DIR_PROTECTED, team_dir_problem  # noqa: F401  (TEAM_DIR_PROTECTED: re-export)
 
@@ -114,7 +114,7 @@ def agent_cfg(cfg: dict[str, Any]) -> dict[str, Any]:
 
 def driver_of(a: dict[str, Any]) -> Driver:
     """Return the runtime driver ``agent.framework`` selects (ValueError: unknown, or not in this release)."""
-    return agent_drivers.get_driver(str(a.get("framework") or DEFAULT_AGENT["framework"]))
+    return agent_drivers.driver_for(a, DEFAULT_AGENT["framework"])   # copilot: dialect; codex: probe model
 
 
 def image_tag(a: dict[str, Any]) -> str:
@@ -164,9 +164,9 @@ def build_argv(context: Path, tag: str, cli_version: str, cli_sha256: str, pytho
     Raises:
         ValueError: The framework has no driver in this release.
     """
-    cli = agent_drivers.get_driver(framework).image.cli
+    image = agent_drivers.get_driver(framework).image   # its pinned extra build args (copilot: NODE_IMAGE) too
     return ["docker", "build", "--pull", "-t", tag, "--build-arg", f"PYTHON_IMAGE={python_image}",
-            "--build-arg", f"AGENT_CLI={cli}", "--build-arg", f"CLI_VERSION={cli_version}",
+            "--build-arg", f"AGENT_CLI={image.cli}", "--build-arg", f"CLI_VERSION={cli_version}", *image.build_argv(),
             "--build-arg", f"CLI_SHA256={cli_sha256}", str(context)]
 
 
@@ -266,8 +266,8 @@ def validate_agent(a: dict[str, Any]) -> None:
     for key in ("model", "framework"):
         if not isinstance(merged[key], str) or not merged[key].strip():
             raise ValueError(f"agent.{key} must be a non-empty string (got {repr(merged[key])[:80]})")
-    # an unknown framework or one without a driver; the dialect's keys and model rule (agent_upstreams)
-    agent_upstreams.validate(merged, driver_of(merged).dialect)
+    # an unknown framework or one without a driver; the dialect's keys and model rule, the driver's own rule
+    agent_drivers.validate_settings(merged, driver_of(merged))
     if not isinstance(merged["recipe"], str):
         raise ValueError(f"agent.recipe must be a string (got {repr(merged['recipe'])[:80]})")
     up = merged["upstream"]
@@ -277,13 +277,14 @@ def validate_agent(a: dict[str, Any]) -> None:
     cmd = merged["command"]
     if not isinstance(cmd, list) or not all(isinstance(c, str) for c in cmd):
         raise ValueError(f"agent.command must be a list of strings (got {repr(cmd)[:80]})")
-    problem = driver_of(merged).command_problem(cmd) if cmd else ""   # claude: no override at all
+    problem = driver_of(merged).command_problem(cmd) if cmd else ""   # claude, copilot, codex: no override at all
     if problem:
         raise ValueError(problem)
 
 
 def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GATEWAY,
-                 budget_usd: float | None = None, max_tokens_total: int | None = None) -> list[str]:
+                 budget_usd: float | None = None, max_tokens_total: int | None = None,
+                 dlp: gateway_context.Context | None = None) -> list[str]:
     """Return the ``docker run`` command for a gateway container.
 
     Args:
@@ -294,6 +295,8 @@ def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GA
         budget_usd: Budget override (defaults to ``a["budget_usd"]``).
         max_tokens_total: Token cap override (a debrief passes its own); default: the run's
             validated ``agent.max_tokens_total``. Never 0 (no cap) from here.
+        dlp: The host's DLP context (:func:`.gateway_context.prepare`); default: its fixed location under
+            ``spend_dir`` with no secrets files. Only fixed in-container paths enter the argv.
 
     Returns:
         argv.
@@ -307,13 +310,14 @@ def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GA
         raise ValueError("the gateway token cap must be a positive integer")
     mounts, routes = agent_upstreams.gateway_routes(a, driver_of(a).dialect)   # chat: the pre-driver argv
     budget = a["budget_usd"] if budget_usd is None else budget_usd
+    dlp_mounts, dlp_flags = gateway_context.argv_parts(dlp or gateway_context.for_dir(spend_dir))
     return ["docker", "run", "-d", "--rm", "--name", name, "--read-only", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--user", AGENT_UID, "--pids-limit", "64", "--memory", "256m",
             "--add-host", "host.docker.internal:host-gateway", *mounts, "-v", f"{spend_dir}:/work/out:rw",
-            tag, "python", "-m", "agentteams.vulnscan.gateway", "--listen", f"0.0.0.0:{GW_PORT}",
+            *dlp_mounts, tag, "python", "-m", "agentteams.vulnscan.gateway", "--listen", f"0.0.0.0:{GW_PORT}",
             *routes, "--budget-usd", str(budget),
             "--spend-file", "/work/out/spend.json", "--max-tokens-total", str(cap),
-            "--max-unmetered-calls", str(max_unmetered), *(["--allow-unmetered"] if allow_unmetered else [])]
+            "--max-unmetered-calls", str(max_unmetered), *(["--allow-unmetered"] if allow_unmetered else []), *dlp_flags]
 
 
 def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, name: str,
@@ -439,12 +443,12 @@ def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
     sha256 over the JSON of the :func:`agent_base` argv and the :func:`gateway_argv` argv, both built
     with fixed placeholder paths, tag ``img`` and :data:`DEFAULT_AGENT` settings (so the operator's model,
     budget or paths do not move it), plus the runtime: the driver's name, dialect, env, command template
-    (``agent.command`` when overridden), model variable, default agent definition and image recipe (CLI and
-    pinned version), the self-test script for that driver, and ``image_id``. One framework's passing
-    self-test therefore never vouches for another's, nor for another image.
+    (``agent.command`` when overridden), model variable, selected agent definition (copilot: with the file's sha256,
+    :func:`.agent_recipe.binding`) and image recipe (CLI, pinned version), the self-test script for that driver, and
+    ``image_id``. One framework's passing self-test therefore never vouches for another's, nor for another image.
 
     Args:
-        a: Agent settings (default :data:`DEFAULT_AGENT`): only ``framework`` and ``command`` are read.
+        a: Agent settings (default :data:`DEFAULT_AGENT`): ``framework``, ``command``, ``recipe`` and ``team_dir``.
         image_id: The local image id the self-test ran against.
 
     Returns:
@@ -455,13 +459,13 @@ def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
     """
     a = {**DEFAULT_AGENT, **(a or {})}
     d = driver_of(a)
-    placeholder = {**DEFAULT_AGENT, "key_file": "/key", "key_file_messages": "/key-messages", "framework": d.name}
+    placeholder = {**DEFAULT_AGENT, **agent_upstreams.runtime_keys(a), "key_file": "/key", "key_file_messages": "/key-messages"}
     runtime = {"name": d.name, "dialect": d.dialect, "env": d.env({}, f"http://{GATEWAY}:{GW_PORT}"),
                "command": list(a["command"]) or d.command_template(), "model_env": d.model_env,
-               "recipe": d.default_recipe, "image": [d.image.cli, d.image.version, list(d.image.sha256)]}
+               "recipe": agent_drivers.recipe_binding(a, d), "image": [d.image.cli, d.image.version, list(d.image.sha256)]}
     blob = json.dumps({"agent_base": _base_argv(Path("/run"), Path("/sessions"), Path("/team"), Path("/spool"),
                                                 name=AGENT_CONTAINER, driver=d),
-                       "gateway": gateway_argv(placeholder, "img", Path("/spend")),
+                       "gateway": gateway_argv(placeholder, "img", Path("/spend"), dlp=gateway_context.placeholder()),
                        "selftest": selftest_script(d, a["command"]), "runtime": runtime, "image_id": image_id}, sort_keys=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -534,7 +538,7 @@ def _ensure_network() -> None:
 
 def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path) -> None:
     _docker(["docker", "rm", "-f", GATEWAY], check=False)
-    _docker(gateway_argv(a, tag, spend_dir))
+    _docker(gateway_argv(a, tag, spend_dir, dlp=gateway_context.prepare(spend_dir)))   # B2: the host's DLP context
     _docker(["docker", "network", "connect", NETWORK, GATEWAY])
     time.sleep(2)
 
@@ -720,7 +724,7 @@ def _not_run_reason(cfg: dict[str, Any], a: dict[str, Any]) -> str:
     ok, why = (False, "docker is not installed") if not shutil.which("docker") else selftest_ok(cfg)
     if not ok:
         return why
-    problem = team_dir_problem(a["team_dir"], agent_upstreams.secret_paths(a))
+    problem = team_dir_problem(a["team_dir"], agent_upstreams.secret_paths(a)) or agent_drivers.recipe_problem(a, driver_of(a))
     if problem:
         return problem
     try:

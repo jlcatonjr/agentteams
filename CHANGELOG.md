@@ -8,6 +8,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **vulnscan: the remediation agent runs on the GitHub Copilot CLI and the Codex CLI (agent-runtimes plan,
+  phase 4).** `agent.framework: "copilot"` (new `vulnscan/agent_drivers_copilot.py`): Copilot CLI 1.0.95 with
+  bring-your-own-key through the gateway and `COPILOT_OFFLINE=true` (no GitHub sign-in or token); the chat route
+  by default, the Messages route with the new `agent.copilot_provider_type: "anthropic"` (Claude models only);
+  `--available-tools` = the vulnscan tools only, every built-in of the pinned release in `--excluded-tools`,
+  `--disable-builtin-mcps`, `--no-custom-instructions`, the agent definition loaded as a custom agent
+  (`--agent`/`--add-dir`; `agent.recipe` must be `.github/agents/<name>.agent.md`). No published checksum, so
+  (revision 12) the image's `copilot-build` stage runs `npm ci --ignore-scripts` from a committed lockfile
+  (`data/vulnscan_agent/copilot/`) and `npm audit signatures` on a digest-pinned Node image, and checks a hash
+  over the whole installed tree. `agent.framework: "codex"` (new `vulnscan/agent_drivers_codex.py`): Codex
+  0.162.1 (`codex exec --json --ephemeral --ignore-user-config --ignore-rules --strict-config -s read-only`), the
+  whole configuration as `-c` overrides (a custom Responses provider at the gateway, the vulnscan MCP server
+  `required`, every tool-adding feature disabled), `CODEX_HOME` the empty tmpfs home (Codex reads
+  `$CODEX_HOME/AGENTS.override.md` even with project docs off: the canary caught it), OpenAI models only, new
+  keys `agent.upstream_responses` / `agent.key_file_responses`. Codex keeps one built-in no switch removes,
+  `apply_patch`: decision D4, it runs only with the new `agent.accept_residual_tools: ["apply_patch"]` and a
+  self-test showing the read-only sandbox rejects its writes. Both refuse every `agent.command` override and have
+  no debrief. Self-test (new `vulnscan/selftest_cli.py`): a headless run against the loopback stub with a canary
+  planted; since neither CLI reports a tool inventory, the checks judge every tool offered in every request
+  (`copilot_*`, `codex_*`, incl. `codex_home_fresh` and `codex_residual_write_blocked`); Codex's probe uses
+  `agent.model`, whose catalog entry decides its tools, so the model is part of `flags_sha256`. Gateway:
+  `--responses-reserve-tokens` (Codex sends no `max_output_tokens`; runs reserve `agent.max_output_tokens` per
+  call instead of being refused), and the Responses route allows `client_metadata` (flat strings), `namespace`
+  tools (of function/custom tools) and a client-run `tool_search`, and checks tool lists carried in `input`
+  items. Every shape was observed with the pinned releases' macOS builds against the stub. The driver contract
+  moved to `vulnscan/agent_driver_base.py` (re-exported by `agent_drivers`); `agent_drivers.driver_for` /
+  `validate_settings`; `ImageRecipe.build_args`. `vulnscan-agent-image.sh` and `09-accept-framework.sh` take
+  `FRAMEWORK=copilot|codex` (codex: sigstore check with `cosign`, Rule S-10 age check, the D4 prompt).
+  Live acceptance with real keys is still to run.
+- **vulnscan: severity from CVSS; unscored advisories count as HIGH (index reliability report R1).**
+  New `vulnscan/cvss.py` (no dependency): CVSS v3.0/v3.1 base scores per the specification (each
+  version's `Roundup`) and CVSS v4.0 by the official FIRST algorithm (macro vectors, look-up table,
+  severity-distance interpolation; a port of the FIRST reference calculator, BSD-2-Clause), banded
+  LOW / MODERATE / HIGH / CRITICAL. `osv.severity` is now the higher of the advisory's `CVSS_V3` /
+  `CVSS_V4` vectors (top-level and `affected[].severity`) and its `database_specific.severity` label.
+  An advisory with neither is **unscored**: it counts as the new config key `unscored_as` (default
+  `"high"`; `--unscored-as` for `scan` / `inventory` / `runtimes`) instead of the silent MODERATE
+  default (`engine.UNRATED_AS` is gone). `summary.md` marks such findings `UNSCORED (as HIGH)`, adds a
+  banner and an *Unscored advisories* section; `review` counts them; `status --project` shows them as
+  `UNSCORED`. New `Finding.rated` / `Finding.unscored`, `Report.unscored_as`, `Report.apply_unscored()`,
+  `Report.unscored_findings()`; the MCP `list_findings` rows carry `rated` and `unscored`.
+- **vulnscan: missed-run catch-up and a staleness alert (R3).** `daily --catch-up` runs the daily scan
+  only when the last completed run is older than `stale_after_hours` (or there is none), after a new
+  `run-stale` / `run-missing` desktop notification; otherwise it exits 0 silently. On macOS,
+  `schedule install` adds a second launchd agent, `io.agentteams.vulnscan.catchup` (`RunAtLoad` plus
+  every 6 h), so a run missed while the Mac was powered off is caught up at login (`schedule remove`
+  removes both; `schedule status` reports it). `daily` and `schedule status` now print the staleness
+  warning too. systemd already catches up (`Persistent=true`); cron is documented as not catching up.
+- **vulnscan: say what we cannot see (R5).** Discovery now lists Go (`go.sum`, else `go.mod`), Maven
+  (`pom.xml`), Gradle (`gradle.lockfile`, else `build.gradle*`), RubyGems (`Gemfile.lock`), NuGet
+  (`packages.lock.json`, else `*.csproj`), pnpm and container images (`Dockerfile*`, `*.Dockerfile`,
+  `Containerfile`, compose files), reported unscannable with the reason `unsupported ecosystem: <name>`
+  (Cargo, conda and Lean now use the same wording). New coverage state **`unsupported ecosystem`** for a
+  workspace whose only manifests are unsupported (it was `nothing to scan`); mixed workspaces keep their
+  state and the coverage section lists their unsupported files. `status --project` reports
+  `unsupported_manifests`. Rule S-VM (`security_rules_invariant` v=15) reports `unsupported ecosystem`
+  as a coverage gap (CONDITIONAL); `nothing to scan` stays not a finding. Example snapshots
+  regenerated.
+
+- **vulnscan gateway: the host's DLP context reaches the containerized gateway (roadmap B2; hardening
+  plan W2 residual).** New `vulnscan/gateway_context.py`; before every gateway start (run,
+  `agent-selftest`, debrief) the launcher gathers, on the host: its host names (`gethostname()` full
+  and short, macOS `scutil` ComputerName/LocalHostName, best effort, and the server-kit `hosts.conf`
+  ssh targets' host parts, `-J` hops and `ssh -G`-resolved aliases; `hosts.conf` names themselves are
+  never redacted, since the agent targets servers by them), the union of every enrolled project's
+  `private_packages`, and `~/.config/agentteams-secrets/*.env`. Names go to `<gateway dir>/dlp/`
+  (0700/0600, regenerated each start, symlinks refused) mounted read-only at `/run/dlp`; each secrets
+  file is mounted read-only at `/run/secrets/dlp/<name>`. New gateway flag `--dlp-hostnames-file`; the
+  argv carries only fixed in-container paths, never a host name, package name or secret.
+  - **Intentional argv change:** the golden gateway argv gains the context mount and the
+    `--dlp-hostnames-file` / `--dlp-private-names-file` (and per-file `--dlp-secrets-file`) flags.
+    `flags_sha256` hashes them with fixed placeholder paths, so machine values never move it, but the
+    fingerprint changes once: run `agent-selftest` again after upgrading.
+
 - **vulnscan: the executor's git, npm and server-kit runs move into a hardened tools container
   (baseAgent hardening plan, W1; decision D1).** New `vulnscan/subproc_confine.py`,
   `vulnscan/subproc_confine_ssh.py`, `vulnscan/tools_image.py` and the image context
@@ -59,7 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `vulnscan/gateway_peer.py`: `--listen unix:PATH` binds a 0600 socket in an owner-only
     directory and admits only `--peer-uid` (default: its own), read from the kernel (`SO_PEERCRED` /
     `LOCAL_PEERCRED`), for host-side use. Runs and debriefs keep TCP on the container network.
-  - Not yet wired: runs pass no host names or private package names to the gateway.
+  - Wired into runs, the self-test and debriefs by the host DLP context entry above (roadmap B2).
 
 - **vulnscan: the remediation agent runs on Claude Code (agent-runtimes plan, phase 3).**
   - `agent.framework: "claude"`: a Claude Code 2.1.296 runtime driver. The image's `cli-claude` stage
@@ -466,6 +540,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **vulnscan: the @security review of the rc.4 candidate, every finding fixed.** *Medium (blocked Copilot agent
+  mode):* (1) Copilot reads its agent file's YAML front matter as configuration (`tools`, `model`,
+  `mcp-servers` ...), and the self-test used the default file while a run loaded `agent.recipe`. Now a run refuses
+  (`not-run`) and the self-test fails (`copilot_agent_file_clean`, the CLI not started) when the selected file is
+  absent or its front matter holds any key but `name` / `description` (a strict YAML subset; unparseable is
+  refused); every driver's self-test runs with the selected file (`Driver.recipe` / `selected_recipe()`), and
+  `flags_sha256` binds its path, plus its sha256 for copilot. claude and codex read the file as prompt text only,
+  so their fingerprint binds the path, not the content (a prompt edit does not invalidate the self-test); new
+  module `vulnscan/agent_recipe.py`. The generated `vuln-remediation.agent.md` carries `tools`/`model`/`handoffs`
+  (VS Code): Copilot needs a copy without them as `agent.recipe`. (2) Copilot's home and code cache were on the
+  host-backed writable mount: the image now unpacks the CLI's package at build time into `/opt/copilot-cache`
+  (root-owned, read-only at run time; verified with the linux-arm64 build as uid 10001 on a read-only rootfs),
+  `COPILOT_HOME` is `/agenthome/.copilot` on the fresh tmpfs, and only logs (`--log-dir`) stay on the host mount;
+  new checks `copilot_home_fresh` and `copilot_state_writable` (replacing `copilot_home_writable`). *Low:* (3) the
+  Codex residual write test also targets the request spool and the state dir (and removes anything written);
+  (4) a Responses call without `max_output_tokens` is forwarded with `max_output_tokens` = the reserve; (5) an
+  unreadable DLP secrets file stops the gateway (exit 2, `gateway.DlpContextError`) with a hint about the
+  gateway's uid 10001, and `gateway_context.prepare` explains on Linux that Docker Engine bind mounts keep the
+  operator's uid and modes (the files are not made world-readable; agent mode is verified on macOS Docker Desktop
+  only); (6) a `hosts.conf` name that is an FQDN, an address or this machine's name (never redacted) is warned
+  about at every gateway start and counted in `<gateway dir>/dlp/notes`, shown by `review` (a count, never the
+  names); (7) a scalar `severity`, a non-object `database_specific` or a non-list `affected` in an OSV record is
+  unscored, not a crash; (8) `daily --catch-up` checks the daily lock first and neither notifies nor runs while
+  a daily run is in progress (`daily.run_in_progress`); (9) the S-VM CONDITIONAL PASS row names
+  `unsupported_manifests` in an otherwise scanned project, as the rule does (`security_rules_invariant` v=16,
+  example snapshots regenerated); (10) `vulnscan-agent-image.sh` prints a `NOTICE` on stderr when `cosign` is
+  absent and only the codex sha256 pin was checked. Re-run `agent-selftest` after upgrading (copilot's
+  fingerprint and checks changed). New tests: `tests/test_vulnscan_security_rc4.py`.
 - **vulnscan: a repository's config can no longer make the executor's fetch, ls-remote or push run a
   program.** git keeps the first `remote.origin.uploadpack` / `receivepack` it reads (the repository's), so
   the executor now passes `--upload-pack=git-upload-pack` / `--receive-pack=git-receive-pack` explicitly. It
