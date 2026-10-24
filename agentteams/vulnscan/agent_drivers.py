@@ -26,7 +26,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from agentteams.vulnscan import agent_recipe, agent_upstreams
+from agentteams.vulnscan import agent_recipe, agent_upstreams, selftest_probe
 from agentteams.vulnscan.agent_driver_base import (  # noqa: F401  (re-exported: the drivers' public API)
     AGENT_HOME,
     CWD_IN_CONTAINER,
@@ -104,8 +104,13 @@ class GooseDriver(Driver):
         return Outcome(error=hit[:300])
 
     def selftest_entries(self, command: list[str] | None = None) -> list[str]:
-        """See :meth:`Driver.selftest_entries`: ``goose_dirs_writable`` (goose's probe runs no CLI command)."""
-        return [_GOOSE_DIRS_PROBE]
+        """See :meth:`Driver.selftest_entries`: ``goose_dirs_writable`` and ``goose_recipe_valid``.
+
+        The second runs ``goose recipe validate`` on the checked copy a run loads (R7, rc.5). It parses only, so
+        unknown keys pass: :func:`agent_recipe.goose_recipe_problem` stays the policy check.
+        """
+        copy = f"{agent_recipe.AGENTDEF_IN_CONTAINER}/{agent_recipe.COPY_PATH['goose']}"
+        return [_GOOSE_DIRS_PROBE, selftest_probe.goose_recipe_entry(copy)]
 
     def debrief(self) -> DebriefSupport:
         """See :meth:`Driver.debrief`: resume by session name, re-passing the MCP extension."""

@@ -103,5 +103,6 @@ def goose_recipe(team: Path, rel: str = ".goose/recipes/vuln-remediation.yaml") 
                                  instructions="You triage findings.", extensions=list(agent_recipe.GOOSE_EXTENSIONS),
                                  prompt="Runtime inputs: task={{ task }}",
                                  parameters=[{"key": "task", "input_type": "string", "requirement": "optional",
-                                              "default": ""}]), encoding="utf-8")
+                                              "default": "", "description": "Task for an unattended run."}]),
+                    encoding="utf-8")   # goose recipe validate requires a parameter description
     return path
