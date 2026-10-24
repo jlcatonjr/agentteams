@@ -320,6 +320,7 @@ def test_the_linux_containers_workflow() -> None:
     uses = [s["uses"] for s in job["steps"] if "uses" in s]
     assert uses and all(len(u.split("@")[1]) == 40 for u in uses)               # pinned by commit SHA (@security rc.5)
     assert "observed_user" in text                                              # asserts what the container ran as
+    assert "_emit_recipe(" in text and '"description": "Task for' in text        # a recipe goose itself accepts
     assert "secrets." not in text and "tools-image.sh" in text and "FRAMEWORK=goose" in text
 
 
