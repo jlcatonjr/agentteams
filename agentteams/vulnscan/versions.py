@@ -16,16 +16,21 @@ from __future__ import annotations
 
 import re
 
-_SPLIT = re.compile(r"^(\d+(?:\.\d+)*)(.*)$")
-_FINAL = re.compile(r"^v?\d+(\.\d+)*$")
+_SPLIT = re.compile(r"^(\d+(?:\.\d+)*)(.*)$", re.ASCII)   # ASCII digits only: int() of "²" raises
+_FINAL = re.compile(r"^v?\d+(\.\d+)*$", re.ASCII)
 _PRE_RANK = {"dev": 0, "a": 1, "alpha": 1, "b": 2, "beta": 2, "c": 3, "rc": 3, "pre": 3, "preview": 3}
+
+
+def _num(digits: str) -> int:
+    """Return the value of an ASCII digit run, capped in length (int() refuses over 4300 digits)."""
+    return int(digits[:64])
 
 
 def _tokens(rest: str) -> tuple:
     out = []
-    for t in re.findall(r"\d+|[a-z]+", rest):
+    for t in re.findall(r"\d+|[a-z]+", rest, re.ASCII):
         if t.isdigit():
-            out.append((2, int(t), ""))
+            out.append((2, _num(t), ""))
         elif t in _PRE_RANK:
             out.append((1, _PRE_RANK[t], ""))
         else:
@@ -46,11 +51,11 @@ def version_key(version: str) -> tuple:
     epoch = 0
     if "!" in v:
         head, v = v.split("!", 1)
-        epoch = int(head) if head.isdigit() else 0
+        epoch = _num(head) if head.isascii() and head.isdigit() else 0
     m = _SPLIT.match(v)
     if not m:
         return (epoch, (), -1, _tokens(v))
-    nums = tuple(int(p) for p in m.group(1).split("."))
+    nums = tuple(_num(p) for p in m.group(1).split("."))
     nums = nums + (0,) * (6 - len(nums)) if len(nums) < 6 else nums
     rest = m.group(2).lstrip(".-_")
     if not rest:
@@ -82,4 +87,4 @@ def major(version: str) -> int | None:
         The major version number.
     """
     m = _SPLIT.match(version.strip().lstrip("vV"))
-    return int(m.group(1).split(".")[0]) if m else None
+    return _num(m.group(1).split(".")[0]) if m else None

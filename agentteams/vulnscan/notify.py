@@ -33,6 +33,8 @@ MESSAGES: dict[str, str] = {
     "agent-not-completed": "Agent run {state}. Run: vulnscan review",
     "publish-failed": "Publishing the run report FAILED (kept locally). Run: vulnscan review",
     "publish-done": "Run report published to the ops repository.",
+    "run-stale": "No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status",
+    "run-missing": "No daily run has completed yet: running it now. Check: vulnscan schedule status",
 }
 _STATES = {"completed", "agent-error", "timed-out", "not-run", "action needed", "partially unscanned",
            "COMPROMISE INDICATORS", "new findings", "clean"}
