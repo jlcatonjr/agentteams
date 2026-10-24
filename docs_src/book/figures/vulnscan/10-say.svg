@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="808" height="158" viewBox="0 0 808 158" role="img">
+<title>Leave a note for the next run</title>
+<rect width="808" height="158" rx="8" fill="#1e1f24"/>
+<rect width="808" height="26" rx="8" fill="#2c2e35"/>
+<rect y="18" width="808" height="8" fill="#2c2e35"/>
+<circle cx="16" cy="13" r="5" fill="#ff5f57"/><circle cx="34" cy="13" r="5" fill="#febc2e"/><circle cx="52" cy="13" r="5" fill="#28c840"/>
+<text x="404" y="17" fill="#a9adb7" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">Leave a note for the next run</text>
+<text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan say 'skip billing this week: it is being migrated' --days 7</text>
+<text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">note note-aa3d71fefb2de408 (sha256 d11b729c9523) will be folded into the next run's task</text>
+<text x="14" y="86" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan say --list</text>
+<text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">note-aa3d71fefb2de408  created 2026-10-23T14:08:33.584985+00:00  expires 2026-10-30T14:08:33.584985+</text>
+<text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    00:00  source operator  target -</text>
+<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    skip billing this week: it is being migrated</text>
+</svg>

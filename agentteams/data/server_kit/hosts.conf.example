@@ -1,0 +1,13 @@
+# Hosts the server kit manages. Copy to hosts.conf (the `server-kit` command does this
+# once) and replace these examples. hosts.conf lives in your user config directory,
+# never in a repository.
+#
+# name | ssh target (anything `ssh` accepts; ~/.ssh/config aliases work) | notes
+#
+# Names: letters, digits, '.', '_' and '-', starting with a letter or digit, at most 64
+# characters; `all` is reserved. remote.sh and run-host.sh refuse any other name.
+#
+# The addresses below are RFC 5737 documentation addresses and example.com names.
+web1        | deploy@web1.example.com                       | Ubuntu; nginx + Python app
+api1        | -J admin@bastion.example.com admin@192.0.2.10  | reached through a bastion
+bastion     | admin@bastion.example.com                     | Amazon Linux / RHEL family

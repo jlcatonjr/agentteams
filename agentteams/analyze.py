@@ -339,6 +339,16 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     ):
         archetypes = list(archetypes) + ["agentteams-updater"]
 
+    # vulnerability_remediation (2026-10-22): the agent that triages the daily `agentteams.vulnscan`
+    # scan and queues remediation requests for the host-side executor. Explicit opt-in only (it is
+    # meaningful only where the operator runs the scanner and signs standing grants), force-appended
+    # like the archetypes above so a selected_archetypes override cannot silently drop it.
+    if (
+        "vulnerability_remediation" in description.get("capabilities", [])
+        and "vuln-remediation" not in archetypes
+    ):
+        archetypes = list(archetypes) + ["vuln-remediation"]
+
     # MCP catalogue (2026-10-07): validate the brief's opt-ins/exclusions up front (an unknown id is an error
     # here, not a silent skip at emission), and bring in the PR agents when the brief opts into a GitHub server
     # or sets pr_management. Explicit opt-in only, force-appended like the two above.
@@ -644,7 +654,13 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Phase-4a goose-native (opt-in): copy operator-DECLARED Goose recipe parameters
     # through to the manifest. Added only when non-empty, so manifests for briefs
     # that declare none are byte-identical (mirrors the mcp_servers pattern above).
-    recipe_parameters = _normalize_recipe_parameters(description.get("recipe_parameters"))
+    raw_params = list(description.get("recipe_parameters") or [])
+    if "vulnerability_remediation" in description.get("capabilities", []) and not any(
+            isinstance(p, dict) and p.get("key") == "task" for p in raw_params):
+        # `vulnscan agent-run` starts the orchestrator with `--params task=...`; goose rejects an undeclared param.
+        raw_params.append({"key": "task", "input_type": "string", "requirement": "optional", "default": "",
+                           "description": "Task for an unattended run (set by `vulnscan agent-run`)."})
+    recipe_parameters = _normalize_recipe_parameters(raw_params)
     if recipe_parameters:
         manifest["recipe_parameters"] = recipe_parameters
     # Phase-4b goose-native (opt-in): copy a declared Goose recipe response schema

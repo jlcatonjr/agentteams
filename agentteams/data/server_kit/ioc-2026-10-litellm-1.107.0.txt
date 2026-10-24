@@ -1,0 +1,16 @@
+# Compromise indicators: litellm 1.107.0 PyPI/Docker supply-chain compromise (2026-10-21).
+# Public indicators (StepSecurity analysis, 2026-10-21). DATA ONLY: remote.sh embeds this file
+# in a quoted heredoc and L1-audit.sh parses it; nothing here is executed.
+# The package version itself is also matched through OSV malicious-package (MAL-*) records.
+file /tmp/.pc_once_72129118c59f5636c0bb
+file /var/tmp/.pc_once_72129118c59f5636c0bb
+file /tmp/remote_code_loader.lock
+file /tmp/.pc_sq_*
+file /tmp/.pc_e_*
+file /var/tmp/.pc_sq_*
+file /var/tmp/.pc_e_*
+name cook.pth
+name cook.py
+name litellm-1.107.0.dist-info
+env  PRIVCOLLECT_ACTIVE=1
+grep sitecustomize.py remote_code_loader|/codepy|litellm\.dev|privcollect

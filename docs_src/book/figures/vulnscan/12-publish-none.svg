@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="141" viewBox="0 0 480 141" role="img">
+<title>Publishing without a publish grant</title>
+<rect width="480" height="141" rx="8" fill="#1e1f24"/>
+<rect width="480" height="26" rx="8" fill="#2c2e35"/>
+<rect y="18" width="480" height="8" fill="#2c2e35"/>
+<circle cx="16" cy="13" r="5" fill="#ff5f57"/><circle cx="34" cy="13" r="5" fill="#febc2e"/><circle cx="52" cy="13" r="5" fill="#28c840"/>
+<text x="240" y="17" fill="#a9adb7" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">Publishing without a publish grant</text>
+<text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan publish-grant list</text>
+<text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="86" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan publish</text>
+<text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">no active publish grant (see: vulnscan publish-grant sign)</text>
+<text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">[exit 1]</text>
+</svg>
