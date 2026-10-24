@@ -11,8 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import agent_run
-from tests.test_vulnscan_agent import _a, _launchable, dirs  # noqa: F401  (dirs is a fixture)
+from agentteams.vulnscan import agent_drivers, agent_run
+from tests.test_vulnscan_agent import (  # noqa: F401  (dirs is a fixture)
+    _a,
+    _launchable,
+    dirs,
+)
 
 
 def test_a_run_without_a_single_model_call_is_an_agent_error_not_completed(dirs: dict[str, Path],
@@ -47,6 +51,8 @@ def test_the_agent_container_gives_goose_a_writable_state_dir() -> None:
 
 def test_the_default_recipe_is_the_remediation_recipe_whose_prompt_is_the_task() -> None:
     """The orchestrator's generated prompt is a role check; a one-shot run of it answers that and stops."""
-    assert agent_run.DEFAULT_AGENT["recipe"] == ".goose/recipes/vuln-remediation.yaml"
-    assert "{recipe}" in agent_run.DEFAULT_AGENT["command"] and any(a == "task={task}" for a in agent_run.DEFAULT_AGENT["command"])
+    goose = agent_drivers.GOOSE
+    assert agent_run.DEFAULT_AGENT["recipe"] == "" and agent_run.DEFAULT_AGENT["command"] == []   # the driver's
+    assert goose.default_recipe == ".goose/recipes/vuln-remediation.yaml"
+    assert "{recipe}" in goose.command_template() and "task={task}" in goose.command_template()
 

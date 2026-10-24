@@ -304,7 +304,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=6 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=7 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.

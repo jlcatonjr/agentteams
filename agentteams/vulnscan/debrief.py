@@ -16,7 +16,9 @@ did. **The agent can explain but cannot act**:
 Only one of an agent run or a debrief runs at a time: :func:`run_debrief` takes
 :func:`agentteams.vulnscan.agent_run.run_lock_path` non-blockingly and refuses when it is held.
 
-The goose facts the resume command relies on are recorded, with sources, by
+How a session is resumed is the runtime driver's (:meth:`agentteams.vulnscan.agent_drivers.Driver.debrief`);
+a framework without debrief support is refused with ``no debrief for <framework>`` (advisory only, never
+part of the safety path). The goose facts the resume command relies on are recorded, with sources, by
 :func:`verify_goose_sessions`.
 """
 
@@ -33,11 +35,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import agent_run, executor
+from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, executor
+from agentteams.vulnscan.agent_drivers import Driver
 
 DEBRIEF_CONTAINER = "agentteams-vulnscan-debrief"
 DEBRIEF_GATEWAY = "agentteams-vulnscan-gw-debrief"
-MCP_EXTENSION = "python -m agentteams.vulnscan.mcp"
+MCP_EXTENSION = agent_drivers.MCP_COMMAND
 DEFAULT_DEBRIEF_BUDGET_USD = 0.5
 DEFAULT_DEBRIEF_MAX_MINUTES = 20.0
 DEFAULT_DEBRIEF_MAX_TOKENS = 400_000   # prompt + completion, enforced by the gateway
@@ -154,21 +157,27 @@ def session_name(run_dir: Path) -> str:
     return f"vulnscan-{run_dir.name}"
 
 
-def resume_command(session: str) -> list[str]:
-    """Return the in-container goose command that resumes a named session interactively.
+def resume_command(session: str, driver: Driver | None = None) -> list[str]:
+    """Return the in-container command that resumes a named session interactively (the driver's).
 
     Args:
-        session: goose session name.
+        session: Session name.
+        driver: The runtime driver (default goose: ``goose session --resume --name``, re-passing the vulnscan
+            MCP extension; see :func:`verify_goose_sessions`).
 
     Returns:
-        argv, re-passing the vulnscan MCP extension (see :func:`verify_goose_sessions`).
+        argv.
 
     Raises:
-        ValueError: ``session`` is empty or not a plain name.
+        ValueError: ``session`` is empty or not a plain name, or the driver has no debrief.
     """
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", session or ""):
-        raise ValueError(f"invalid goose session name: {session!r}")
-    return ["goose", "session", "--resume", "--name", session, "--with-extension", MCP_EXTENSION]
+        raise ValueError(f"invalid session name: {session!r}")
+    d = driver or agent_drivers.GOOSE
+    support = d.debrief()
+    if support is None:
+        raise ValueError(f"no debrief for {d.name}")
+    return support.resume(session)
 
 
 def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> list[str]:
@@ -181,18 +190,19 @@ def debrief_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str) -> li
         a: Agent settings (:func:`agent_run.agent_cfg`).
         tag: Image tag.
         run_dir: The past run's directory (mounted read-only; its goose sessions dir read-write).
-        session: goose session name to resume.
+        session: Session name to resume.
 
     Returns:
         argv.
 
     Raises:
-        ValueError: ``session`` is not a plain name.
+        ValueError: ``session`` is not a plain name, or the framework has no driver or no debrief.
     """
+    d = agent_run.driver_of(a)
     team = Path(str(a["team_dir"] or run_dir)).expanduser().resolve()
-    base = agent_run.agent_base(tag, run_dir, agent_run.sessions_dir(run_dir), team, name=DEBRIEF_CONTAINER,
-                                gateway=DEBRIEF_GATEWAY, spool_mode="ro", interactive=True)
-    return [*base, "-e", f"GOOSE_MODEL={a['model']}", tag, *resume_command(session)]
+    base = agent_run.agent_base(tag, run_dir, agent_run.sessions_dir(run_dir, d), team, name=DEBRIEF_CONTAINER,
+                                gateway=DEBRIEF_GATEWAY, spool_mode="ro", interactive=True, driver=d)
+    return [*base, *agent_drivers.run_env_args(d, a), tag, *resume_command(session, d)]
 
 
 def debrief_limits(a: dict[str, Any]) -> tuple[float, float]:
@@ -246,15 +256,21 @@ def _refuse(code: int, why: str) -> int:
 
 def _preflight(cfg: dict[str, Any], a: dict[str, Any], run_dir: Path) -> str:
     """Return why a debrief cannot start, or ``""`` when it can (lock not checked here)."""
+    try:
+        driver = agent_run.driver_of(a)
+    except ValueError as exc:
+        return str(exc)
+    if driver.debrief() is None:
+        return f"no debrief for {driver.name}"
     if not shutil.which("docker"):
         return "docker is not installed"
     if not a.get("key_file"):
         return "agent.key_file is required"
-    team_problem = agent_run.team_dir_problem(str(a.get("team_dir") or ""), (str(a.get("key_file") or ""),))
+    team_problem = agent_run.team_dir_problem(str(a.get("team_dir") or ""), agent_upstreams.secret_paths(a))
     if team_problem:   # checked before anything is mounted, as for a run
         return f"agent.team_dir: {team_problem}"
-    if not agent_run.sessions_dir(run_dir).is_dir():
-        return f"no goose sessions for run {run_dir.name} (was the agent run?)"
+    if not agent_run.sessions_dir(run_dir, driver).is_dir():
+        return f"no {driver.name} sessions for run {run_dir.name} (was the agent run?)"
     if not _stdin_is_tty():
         return "a debrief is interactive and needs a terminal"
     ok, why = agent_run.selftest_ok(cfg)
@@ -275,7 +291,7 @@ def _cleanup() -> None:
 
 
 def run_debrief(cfg: dict[str, Any], run_dir: Path) -> int:
-    """Resume a past run's goose session interactively, with the terminal attached.
+    """Resume a past run's session interactively (the driver's resume command), with the terminal attached.
 
     Holds :func:`agent_run.run_lock_path` for the whole debrief and refuses when it is already held.
     Starts a dedicated gateway (budget ``agent.debrief_budget_usd``), runs the container with

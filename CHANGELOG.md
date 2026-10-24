@@ -54,6 +54,58 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.2]`.
 
 ### Changes since 1.1.0-rc.1
 
+- **vulnscan: the remediation agent runs on Claude Code (agent-runtimes plan, phase 3).**
+  - `agent.framework: "claude"`: a Claude Code 2.1.296 runtime driver. The image's `cli-claude` stage
+    installs the native linux binary, sha256-pinned; `vulnscan-agent-image.sh FRAMEWORK=claude` takes the
+    digest from the release's GPG-verified `manifest.json` (Anthropic's release key, fingerprint checked)
+    and compares it with the pin. The run is `claude --bare -p` with `--tools ""`, `--strict-mcp-config`,
+    the vulnscan MCP server inline in `--mcp-config`, `--allowedTools "mcp__vulnscan__*"`,
+    `--permission-mode dontAsk` and the team's `.claude/agents/vuln-remediation.md` appended to the
+    system prompt, from the empty working directory. The container holds only a dummy
+    `ANTHROPIC_API_KEY`. `ANTHROPIC_BASE_URL` is the gateway's Messages route, every model alias and
+    helper model is pinned to `agent.model`, and updates, telemetry, experimental betas, auto memory and
+    tool search are off. `agent-chat` resumes the named session (`claude --bare --resume`), not yet
+    exercised live. claude takes no `agent.command` override: the lockdown is part of the driver, and the
+    self-test always runs the command a run would use.
+  - Gateway wiring per driver dialect (`agent_upstreams`): new keys `upstream_messages` (default
+    OpenRouter's `/api/v1`), `key_file_messages` (default `~/.config/agentteams-secrets/anthropic.env` for
+    `api.anthropic.com`, else `key_file`), `models`, `prices`, `anthropic_betas`, `max_output_tokens`
+    and `max_turns`. With `claude`, `agent.model` must be an Anthropic model, and `api.anthropic.com`
+    needs `agent.prices`. goose's gateway command is unchanged.
+  - The self-test gains `provider_apis_blocked` (Anthropic, OpenAI and xAI unreachable; an HTTP error
+    status now counts as reachable for `internet_blocked` too). For claude it also runs Claude Code headless
+    against a loopback stub with a canary planted (`.mcp.json`, `~/.claude.json`, settings hooks, an
+    agent, a skill, `CLAUDE.md`, `AGENTS.md`). It fails unless the reported tools are only
+    `mcp__vulnscan__*` (plus `EndConversation`), only the vulnscan MCP server is attached and nothing
+    planted took effect (`claude_*` checks; the tool inventory is kept in the record's `detail`).
+  - `scripts/vulnscan-operator/09-accept-framework.sh` (`FRAMEWORK=claude`): the operator's live
+    acceptance run: image, self-test with the tool inventory, a one-day stage-fix grant, one supervised
+    agent run, then the outcome, the spend and the gateway's refusal reasons.
+
+- **researchteam integration fixes (review of 2026-10-23, items A2–A5).**
+  - Scanner coverage: `requirements*.lock` and `requirements*.in` are read like `requirements*.txt`
+    (scan only; a staged fix still edits only `requirements*.txt`). A `pyproject.toml` next to
+    requirements files is no longer skipped: its PEP 621 `[project].dependencies` and
+    `optional-dependencies` `==` pins are scanned, a pin already listed alongside is not counted twice,
+    and loose entries no requirements file pins are reported unscannable. `Cargo.lock`, conda
+    `environment.yml`/`.yaml` and Lean `lake-manifest.json` are reported unscannable with the reason
+    ("Rust/crates.io: not supported", "conda: not supported", "Lean: not supported") instead of being
+    skipped silently. Brief `exclude_paths`/`private_packages` and the operator's `exclude` apply as for
+    every manifest.
+  - New coverage state `nothing to scan`: a workspace with no dependency manifest at all (coverage section,
+    `review` and `vulnscan status --project`, which now reports it ahead of `not enrolled`). Rule S-VM no
+    longer treats it as a finding (`security_rules_invariant` v=13 → v=14).
+  - `project-description.schema.json` declares the Layer-2 brief keys `layer2_profile`, `frozen_surfaces`
+    (Rule 15 surface ids), `researchteam_notes`, `governance_agents`, `license` and `methodology_coverage`
+    as typed optional keys, so researchteam-derived briefs and its scaffold validate strictly. Other
+    unknown keys are still refused. Documented in `DESCRIPTION-FORMAT.md`.
+  - The team builder (all frameworks) writes into the brief agentteams already resolves
+    (`.agentteams/brief.json`, else a root `brief.json`), updates it in place keeping keys it did not ask
+    about, and creates `.agentteams/brief.json` only when neither exists, so it no longer shadows a root
+    `brief.json`.
+  - Orchestrator `available_workflows` v=6 → v=7: rc.2 added the `vulnscan/*` dependency-fix PR review
+    protocol to the fence without a version bump. There is no automated check that a fence body change
+    bumps `v=` (the merge engine ignores it; see `FENCE-CONVENTIONS.md`).
 - **vulnscan: enrol every project on the machine.**
   - `vulnscan enroll [DIR…] [--discover DIR] [--level L]` (operator only: a terminal, refused on CI)
     finds agentteams workspaces, groups clones and worktrees by normalised origin (`host/owner/name`,
@@ -548,6 +600,16 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
   - Only `@orchestrator` writes handoff scripts.
   - "Not allowlisted" counts as a runner refusal, which is a stop and is never re-routed through a handoff.
 - New API page `docs_src/api-reference/sandbox-handoff.md`.
+
+### Changed
+
+- **vulnscan gateway: the chat route is deny-by-default and reserved too (phase-2 parity).** After the
+  OpenRouter rewrites, a chat request is refused when it carries a body key outside the allowlist,
+  OpenRouter fallback `models` / `route`, `n`, a tool that is not a `function` (server tools named), a
+  remote image URL, or a `max_tokens` above `--max-output-tokens`. Each call reserves its `max_tokens`
+  (else `--chat-reserve-tokens`, default 8192) before it is relayed. The Messages routes accept Claude
+  Code's `?beta=true` query (any other query is still 403), allow `output_config` (`effort`, `format`),
+  and `spend.json` records the last 20 distinct refusal reasons (`refusal_reasons`).
 
 ## [1.0.1] - 2026-10-21
 

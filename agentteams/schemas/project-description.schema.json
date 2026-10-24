@@ -595,6 +595,46 @@
         },
         "on_failure": { "type": "string", "description": "Shell command run when checks fail (optional)." }
       }
+    },
+    "layer2_profile": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "Layer-2 key (researchteam-derived projects): the Layer-2 profile the project was scaffolded with, e.g. \"scholarly\". Owned and read by the Layer-2 tool; agentteams validates only its shape and does not act on it."
+    },
+    "frozen_surfaces": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok"]},
+      "description": "Layer-2 key (Rule 15): the agent surfaces (framework ids) the project keeps frozen; updates leave the paths each one owns (agentteams.cli.frozen_surfaces.FROZEN_SURFACE_PATHS) to the project. The working brief is not the freeze baseline: the effect classifier takes the recorded freeze state. [] or absent freezes nothing."
+    },
+    "researchteam_notes": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "exclude": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}, "description": "researchteam notes agents (slugs) this project does not take."}
+      },
+      "description": "Layer-2 key (researchteam): settings for researchteam's notes agents, e.g. {\"exclude\": [\"<agent slug>\"]}. Read by researchteam; agentteams validates only its shape."
+    },
+    "governance_agents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+      "description": "Layer-2 key: the governance agent slugs the project's Layer-2 tooling expects in its roster. Informational for agentteams: the generated governance roster still comes from the pipeline (analyze), not from this list."
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Layer-2 key: the project's licence, preferably an SPDX expression (e.g. \"Apache-2.0\", \"MIT OR Apache-2.0\"). Informational; agentteams does not act on it."
+    },
+    "methodology_coverage": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "units_dir": {"type": "string", "description": "Project-relative directory holding one folder per methodology unit (e.g. reports/dossiers)."},
+        "map_path": {"type": "string", "description": "File name, inside each unit folder, of the unit's methodology map (e.g. interpretation.md)."}
+      },
+      "description": "Layer-2 key (researchteam): where the methodology-coverage check finds its units and their maps. Read by researchteam's coverage check; agentteams validates only its shape."
     }
   },
   "additionalProperties": false

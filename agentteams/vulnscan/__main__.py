@@ -185,10 +185,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--ack", action="store_true", help="record that you reviewed everything up to now")
     sp.add_argument("--note", default="")
     sp.add_argument("--gh-replies", action="store_true", help="also list replies on the agents' PRs (uses gh)")
-    sp = sub.add_parser("agent-image", help="build the agent container image")
+    sp = sub.add_parser("agent-image", help="build the agent container image for one framework")
     sp.add_argument("action", choices=("build",))
-    sp.add_argument("--goose-version", required=True)
-    sp.add_argument("--goose-sha256", required=True, help="sha256 of the linux release tarball (from the release page)")
+    sp.add_argument("--framework", default=None, help="the agent CLI to install (default: agent.framework)")
+    sp.add_argument("--cli-version", "--goose-version", dest="cli_version", required=True,
+                    help="the CLI's release version (--goose-version: alias)")
+    sp.add_argument("--cli-sha256", "--goose-sha256", dest="cli_sha256", required=True,
+                    help="checksum of the linux release asset, from the release metadata (--goose-sha256: alias)")
     sp.add_argument("--python-image", default="python:3.12-slim", help="pin by digest: python:3.12-slim@sha256:...")
     sp.add_argument("--source", type=Path, default=None)
     sub.add_parser("agent-selftest", help="prove the agent container's isolation")
@@ -333,8 +336,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if args.cmd == "agent-image":
             try:
-                print(agent_run.build_image(cfg, goose_version=args.goose_version, goose_sha256=args.goose_sha256,
-                                            python_image=args.python_image, source=args.source))
+                print(agent_run.build_image(cfg, cli_version=args.cli_version, cli_sha256=args.cli_sha256,
+                                            python_image=args.python_image, source=args.source,
+                                            framework=args.framework))
             except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
                 print(f"agent image build failed: {exc}", file=sys.stderr)
                 return 1

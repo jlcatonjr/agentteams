@@ -4,7 +4,7 @@
 |---|---|
 | ``enroll [DIR ...] [--discover DIR] [--level L]`` | Operator only (a terminal, never CI): group the projects by owner, answer their level in bulk, write the registry |
 | ``roots`` | Each candidate scan root and its source (registry level, ``repo_roots``, excluded, opted out, unanswered, duplicate) |
-| ``status --project DIR [--json]`` | Read-only, no network: identity, enrolment, coverage state (:data:`coverage.STATES`), last scan and whether it was partial, open findings, recorded fix branches and PRs, grant coverage |
+| ``status --project DIR [--json]`` | Read-only, no network: identity, enrolment, coverage state (:data:`coverage.STATES`, including ``nothing to scan`` for a project with no dependency manifest), last scan and whether it was partial, open findings, recorded fix branches and PRs, grant coverage |
 
 ``enroll`` is the only writer of the registry (:mod:`.registry`). Levels live in each project's brief
 (:mod:`.project_policy`); ``enroll`` copies them, and writes one into a brief only through
@@ -330,8 +330,9 @@ def cmd_status(args: argparse.Namespace, cfg: dict[str, Any] | None) -> int:
         return 0
     findings = ", ".join(f"{k} {v}" for k, v in sorted(st["open_findings"].items())) or "none"
     partial = f" (PARTIAL: {st['last_scan_unscanned']} part(s) unscanned)" if st["last_scan_partial"] else ""
+    empty = " (no dependency manifest found: not a coverage gap)" if st["coverage_state"] == "nothing to scan" else ""
     lines = [f"project      {st['project']}", f"identity     {st['identity']}", f"level        {st['level']}",
-             f"coverage     {st['coverage_state']}",
+             f"coverage     {st['coverage_state']}{empty}",
              f"fix checkout {st['fix_checkout'] or '—'}", f"last scan    {st['last_scan'] or 'never'}{partial}",
              f"findings     {findings}",
              f"grant        {'covers the fix checkout' if st['grant_covers_fix_checkout'] else 'does not cover it'}"]

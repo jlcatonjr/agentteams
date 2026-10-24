@@ -89,13 +89,13 @@ Record the answer in the brief as `"vulnerability_scanning": {"level": "<answer>
 
 Once intake is complete:
 
-1. Write a structured project description file to `.agentteams/brief.json` (the canonical consumer descriptor for an external project) using the collected information. Note: `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only — do not use it for an external project.
+1. Write the collected information to the project's brief, chosen the way agentteams resolves it: `.agentteams/brief.json` if it exists, else `brief.json` at the project root if it exists. Update an existing brief in place: merge the answers into it and keep every key you did not ask about (project-specific keys stay as they are). Create `.agentteams/brief.json` only when neither file exists; creating it beside an existing root `brief.json` would shadow that brief. `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only: do not write it for an external project. `<brief>` below is the file you chose.
 2. Confirm the description with the user: "I'm about to generate your agent team with these settings: [summary]. Shall I proceed?"
 3. If confirmed, invoke the build pipeline:
 
 ```bash
 python build_team.py \
-  --description .agentteams/brief.json \
+  --description <brief> \
   --framework copilot-vscode \
   --project . \
   --output .github/agents
