@@ -32,7 +32,8 @@ Operations (v1):
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
 
 git always runs with system/global config ignored, hooks and commit/tag signing disabled, a fixed ssh
-command and an explicit credential helper, so repository or user config cannot redirect what runs.
+command and an explicit credential helper, so repository or user config cannot redirect what runs. Granted ops
+run git, npm and the server kit in the hardened tools container (:mod:`.subproc_confine`), failing closed.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
+from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
@@ -99,9 +101,11 @@ def kit_dir() -> Path:
 _GIT_HARDENING = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "core.sshCommand=ssh",
                   "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper=",
                   "-c", "commit.gpgsign=false", "-c", "tag.gpgSign=false",   # never a repo-configured gpg.program
+                  "-c", "core.askPass=",   # never a repo-configured askpass program (it would see the push token)
                   # Transports: https, ssh and file only (no ext::, no remote helpers).
                   "-c", "protocol.allow=never", "-c", "protocol.https.allow=always",
-                  "-c", "protocol.ssh.allow=always", "-c", "protocol.file.allow=always")
+                  "-c", "protocol.ssh.allow=always", "-c", "protocol.file.allow=always",
+                  "-c", "protocol.ext.allow=never")
 # A repository's remote.<name>.uploadpack / receivepack would run a program on fetch or push, and git keeps the
 # FIRST value it reads (the repository's), so `-c` cannot override them; the explicit options can.
 _PACK_PROGRAM = {"fetch": "--upload-pack=git-upload-pack", "ls-remote": "--upload-pack=git-upload-pack",
@@ -120,13 +124,17 @@ _SAFE_URL = re.compile(r"(?:https|ssh)://[^\s:]+[^\s]*|[\w.-]+@[\w.-]+:[^\s:][^\
 
 
 def _unsafe_origin(repo: Path, env: dict[str, str]) -> str:
-    """Return why origin's fetch or push URL is not an https, ssh, scp-like or local-path URL, else ""."""
-    for extra in ((), ("--push",)):
-        proc = subprocess.run(["git", *_GIT_HARDENING, "-C", str(repo), "remote", "get-url", *extra, "origin"],
-                              capture_output=True, text=True, env=env, timeout=30, check=False)
-        url = proc.stdout.strip()
-        if proc.returncode or "::" in url or not _SAFE_URL.fullmatch(url):
-            return f"origin URL {url[:80]!r} is not an https, ssh or local path URL; refusing to contact it"
+    """Return why any of origin's fetch or push URLs is not an https, ssh, scp-like or local-path URL, else "".
+
+    ``--all``: `git push origin` pushes to every pushurl, so every URL is checked, not just the first.
+    """
+    for extra in (("--all",), ("--push", "--all")):
+        proc = subproc_confine.run_git(repo, ("remote", "get-url", *extra, "origin"), hardening=_GIT_HARDENING,
+                                       env=env, timeout=30, readonly=True)
+        urls = proc.stdout.split()
+        for url in urls or [""]:
+            if proc.returncode or "::" in url or not _SAFE_URL.fullmatch(url):
+                return f"origin URL {url[:80]!r} is not an https, ssh or local path URL; refusing to contact it"
     return ""
 
 
@@ -154,12 +162,11 @@ def git_proc(repo: Path, *args: str, push: bool = False, timeout: int = 600,
 
     ``text=False`` returns bytes: exact content, line endings included.
     """
-    pre = [*_GIT_HARDENING, *(["-c", "credential.helper=!gh auth git-credential"] if push else [])]
     env = _git_env()
     if args and args[0] in _PACK_PROGRAM and (why := _unsafe_origin(repo, env)):
         return subprocess.CompletedProcess(["git", *args], 128, b"" if not text else "", why if text else why.encode())
-    return subprocess.run(["git", *pre, "-C", str(repo), *_pinned_pack(args)], capture_output=True, text=text,
-                          env=env, timeout=timeout, check=False)
+    return subproc_confine.run_git(repo, _pinned_pack(args), hardening=_GIT_HARDENING, env=env, push=push,
+                                   timeout=timeout, text=text)   # confined in a scope (push: gh helper / stdin token)
 
 
 def query_git(repo: Path, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -173,8 +180,8 @@ def query_git(repo: Path, *args: str, timeout: int = 120) -> subprocess.Complete
     Returns:
         The completed process (text).
     """
-    return subprocess.run(["git", *_GIT_HARDENING, "-C", str(repo), *args], capture_output=True, text=True,
-                          env=_clean_git_env(os.devnull), timeout=timeout, check=False)
+    return subproc_confine.run_git(repo, args, hardening=_GIT_HARDENING, env=_clean_git_env(os.devnull),
+                                   timeout=timeout, readonly=True)
 
 
 def git(repo: Path, *args: str, check: bool = True, push: bool = False) -> str:
@@ -522,7 +529,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     body_file.write_text(body, encoding="utf-8")
     proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
                            "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
-                           "--body-file", str(body_file)], cwd=wt, capture_output=True, text=True,
+                           "--body-file", str(body_file)], cwd=_gh_cwd(), capture_output=True, text=True,
                           env=_gh_push_env(), timeout=300, check=False)
     if proc.returncode:
         raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -545,8 +552,14 @@ def gh_env() -> dict[str, str]:
 
 
 def _gh_push_env() -> dict[str, str]:
-    """Return the hardened git environment for gh, with no global git config at all."""
-    return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull}
+    """Return the hardened git environment for gh, with no global git config and no repository above its cwd."""
+    return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": str(paths.state_dir())}
+
+
+def _gh_cwd() -> Path:
+    """Return gh's working directory: empty, so gh (given ``--repo``) never reads or runs a checkout's config (W1)."""
+    (d := paths.state_dir() / "gh-cwd").mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
@@ -559,7 +572,7 @@ def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
         ExecError: gh failed or did not answer with a JSON list.
     """
     proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
-                           "--json", "url,isCrossRepository"], cwd=wt, capture_output=True, text=True, env=_gh_push_env(), timeout=120,
+                           "--json", "url,isCrossRepository"], cwd=_gh_cwd(), capture_output=True, text=True, env=_gh_push_env(), timeout=120,
                           check=False)
     if proc.returncode:
         raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -628,7 +641,11 @@ def server_op(op: str, host: str) -> dict[str, Any]:
                 "AGENTTEAMS_VULNSCAN_NO_REPORT": "1"})
     script = "remote.sh" if op == "server-audit" else "run-host.sh"
     argv = ["bash", str(kit_dir() / script), host] + (["L1-audit.sh"] if op == "server-audit" else [])
-    proc = subprocess.run(argv, capture_output=True, text=True, env=env, timeout=3600, check=False)
+    if subproc_confine.active():   # ssh in the tools container: generated config, known_hosts lines, one egress host
+        proc = subproc_confine_ssh.run_kit(kit_dir() / script, host, argv[3:], conf_dir=paths.server_kit_dir(),
+                                           logs=logs, timeout=3600)
+    else:
+        proc = subprocess.run(argv, capture_output=True, text=True, env=env, timeout=3600, check=False)
     out = logs / f"{host}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{op}.log"
     out.write_text(proc.stdout + proc.stderr, encoding="utf-8")
     if not re.search(r"^RESULT (clean|action-needed|COMPROMISE)", proc.stdout, re.M):
@@ -775,13 +792,23 @@ def act(op: str, target: str, cfg: dict[str, Any], *, rationale: str = "", reque
 
 
 def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str) -> dict[str, Any]:
-    """Authorize and perform one granted op. Call inside ``ledger.locked()`` (see :func:`act`)."""
+    """Authorize and perform one granted op, its subprocesses confined (fail closed). Call inside ``ledger.locked()``."""
+    try:
+        confined = subproc_confine.scope(cfg, scratch=[_worktrees_dir()])
+    except subproc_confine.Unavailable as exc:   # nothing runs on the host instead
+        ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
+        return {"status": "refused", "detail": str(exc)}
+    with confined:
+        return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id)
+
+
+def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, request_id: str) -> dict[str, Any]:
     try:
         if op not in grant.OPS_V1:
             raise ExecError(f"unknown or non-v1 operation {op!r}")
         canonical = str(_repo_root(target)) if op in ("stage-fix", "open-pr") else target
         g = authorize(op, canonical, request_id, cfg)
-    except ExecError as exc:
+    except (ExecError, subprocess.SubprocessError) as exc:   # incl. subproc_confine.Unavailable and git timeouts
         ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
         return {"status": "refused", "detail": str(exc)}
     try:

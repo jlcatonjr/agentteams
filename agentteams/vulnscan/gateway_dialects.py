@@ -17,7 +17,8 @@ rewrites (``plugins``/web search stripped, ``usage: {include: true}`` forced; th
 routes), then the same deny-by-default checks (:data:`CHAT_KEYS`, ``function`` tools only, no
 OpenRouter ``models``/``route`` fallbacks, ``data:`` image URLs only). Every route reserves its call
 before relaying: the output ceiling it names (chat: ``max_tokens`` / ``max_completion_tokens`` when
-present, else :data:`DEFAULT_CHAT_RESERVE_TOKENS`).
+present, else :data:`DEFAULT_CHAT_RESERVE_TOKENS`). A request that passes is then handed to the DLP hook
+(``dlp``; :mod:`.gateway_dlp`), which refuses a secret and redacts the lesser classes in message text.
 
 **Usage** is parsed per dialect from a JSON reply or an SSE stream (:func:`usage_for`); spend is the
 upstream's ``usage.cost`` when present, else priced from the operator's price table
@@ -29,8 +30,8 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Collection, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -137,6 +138,7 @@ class Checked:
     model: str
     max_output: int = 0          # 0: no reservation
     input_estimate: int = 0
+    redactions: Mapping[str, int] = field(default_factory=dict)   # DLP redact-and-flag counts per class
 
 
 @dataclass(frozen=True)
@@ -319,7 +321,13 @@ def _max_output(body: dict[str, Any], key: str, ceiling: int) -> int:
     return value
 
 
-def _check_chat(raw: bytes, models: Collection[str], max_output_tokens: int, reserve: int) -> Checked:
+#: The gateway's DLP hook (:meth:`.gateway_dlp.Filter.apply`): scans a validated body in place, raises a
+#: :class:`PolicyError` on a secret, returns the redactions per class.
+Dlp = Callable[[str, dict[str, Any]], Mapping[str, int]]
+
+
+def _check_chat(raw: bytes, models: Collection[str], max_output_tokens: int, reserve: int,
+                dlp: Dlp | None = None) -> Checked:
     """The chat route: the OpenRouter rewrites (:func:`rewrite_body`), then deny by default and a reservation.
 
     Refused: a body key outside :data:`CHAT_KEYS` (``models``/``route`` fallbacks by name), a tool that is not a
@@ -336,12 +344,14 @@ def _check_chat(raw: bytes, models: Collection[str], max_output_tokens: int, res
         raise PolicyError(f"{where} is refused on the chat route: the upstream would fetch it itself")
     named = [k for k in ("max_tokens", "max_completion_tokens") if k in body]
     max_out = max(_max_output(body, k, max_output_tokens) for k in named) if named else reserve
-    return Checked(json.dumps(body).encode("utf-8"), body["model"], max_out, math.ceil(len(raw) / BYTES_PER_TOKEN))
+    redactions = dlp(CHAT, body) if dlp else {}
+    return Checked(json.dumps(body).encode("utf-8"), body["model"], max_out, math.ceil(len(raw) / BYTES_PER_TOKEN),
+                   redactions)
 
 
 def check_request(dialect: str, raw: bytes, *, models: Collection[str],
                   max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
-                  chat_reserve_tokens: int = DEFAULT_CHAT_RESERVE_TOKENS) -> Checked:
+                  chat_reserve_tokens: int = DEFAULT_CHAT_RESERVE_TOKENS, dlp: Dlp | None = None) -> Checked:
     """Validate one request body for its dialect (deny by default) and return what to forward.
 
     Args:
@@ -351,15 +361,16 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
         max_output_tokens: Ceiling for ``max_tokens`` / ``max_output_tokens`` (chat: also
             ``max_completion_tokens``).
         chat_reserve_tokens: Output tokens reserved for a chat call that names no output ceiling.
+        dlp: The DLP hook, run on the body once the policy passed (blocks secrets, redacts the rest).
 
     Returns:
-        The body to forward, its model, and the reservation inputs.
+        The body to forward, its model, the reservation inputs and the DLP redaction counts.
 
     Raises:
         PolicyError: A refusal by policy. ValueError / UnicodeDecodeError: not a JSON object.
     """
     if dialect == CHAT:
-        return _check_chat(raw, models, max_output_tokens, chat_reserve_tokens)
+        return _check_chat(raw, models, max_output_tokens, chat_reserve_tokens, dlp)
     body = json.loads(raw.decode("utf-8"))
     if not isinstance(body, dict) or body.get("model") not in models:
         raise PolicyError(_model_error(models))
@@ -391,7 +402,9 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
         raise PolicyError(f"unknown dialect {dialect!r}")
     if where:
         raise PolicyError(f"{where} is refused on the {dialect} route: the upstream would fetch it itself")
-    return Checked(json.dumps(body).encode("utf-8"), body["model"], max_out, math.ceil(len(raw) / BYTES_PER_TOKEN))
+    redactions = dlp(dialect, body) if dlp else {}
+    return Checked(json.dumps(body).encode("utf-8"), body["model"], max_out, math.ceil(len(raw) / BYTES_PER_TOKEN),
+                   redactions)
 
 
 def upstream_headers(dialect: str, client: Mapping[str, str], up: Upstream,

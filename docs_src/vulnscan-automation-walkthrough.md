@@ -48,7 +48,7 @@ component table.
 | npm, if any repository has a `package-lock.json` | `stage-fix` updates npm lockfiles with `npm audit fix --package-lock-only` (it contacts the npm registry) | `npm --version` |
 | GitHub CLI, signed in | `open-pr` pushes a branch and opens a pull request | `gh auth status` |
 | ssh access to your servers, non-interactive, as root or with passwordless `sudo` | server audits run with `BatchMode=yes` and `sudo -n` | `ssh -o BatchMode=yes <host> sudo -n true` |
-| Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway | `docker info` |
+| Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)) | `docker info` |
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
 | shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
@@ -391,6 +391,25 @@ different container flags need a new self-test.
 A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
 `docker_reachable`. `agent-image build` checks Docker before it runs `pip wheel`.
+
+### Step 7b: Build the tools image the executor runs in
+
+The executor runs `git`, `npm audit fix` and the server kit's `ssh` in a separate hardened **tools
+container**. That container has a read-only filesystem, no home directory, no keys, and a per-operation
+egress proxy as its only way out (see
+[Subprocess confinement](api-reference/vulnscan.md#subprocess-confinement-tools-container)). It fails
+closed: until this image is built and its self-test passes, `stage-fix`, `open-pr`, apply-worktree
+staging and the daily server audits are **refused** ("tools container unavailable"), never run on the
+host. Build and prove it once per release:
+
+```bash
+bash scripts/vulnscan-tools-image.sh
+```
+
+It builds `agentteams-vulnscan-tools` from the checkout (Node.js pinned and checksum-verified) and runs
+`python -m agentteams.vulnscan tools-selftest`, which must print `"passed": true`. Re-run it after every
+upgrade. Setting `confine.subprocesses: false` in `vulnscan.json` runs these tools on the host instead; every
+review then opens with a warning.
 
 ### Step 8: Sign a narrow first grant
 

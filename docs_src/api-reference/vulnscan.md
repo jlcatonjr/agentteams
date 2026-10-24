@@ -30,7 +30,7 @@ and only within what you signed.
 | Deterministic scan | `engine`, `osv`, `runtimes`, `daily` | your account | nothing secret | read lockfiles, query OSV.dev and release feeds, audit servers over ssh (read-only) |
 | Agent team (goose orchestrator + `vuln-remediation`) | your generated team | Docker container on an internal-only network | a dummy model key | read today's scan; write requests into the spool |
 | `vulnscan` MCP server | `mcp` | inside the agent container | nothing | the agents' tools: read the scan, `request`, `escalate`, `submit_report` |
-| Egress gateway | `gateway` | sidecar container | the model API key(s) (read-only mounts) | relay the configured dialect routes (chat; Anthropic Messages and OpenAI Responses when enabled) for the allowed models only, deny by default; enforce the spend cap and a token cap on every run and debrief (`--max-tokens-total`, from `agent.max_tokens_total` or `agent.debrief_max_tokens`) |
+| Egress gateway | `gateway` | sidecar container | the model API key(s) (read-only mounts) | relay the configured dialect routes (chat; Anthropic Messages and OpenAI Responses when enabled) for the allowed models only, deny by default; refuse requests carrying secrets and redact lesser identifying data (DLP); enforce the spend cap and a token cap on every run and debrief (`--max-tokens-total`, from `agent.max_tokens_total` or `agent.debrief_max_tokens`) |
 | Executor | `executor` | your account | git, `gh` and ssh credentials; the signed grants | perform a request only under a grant, after the HALT and escalation checks |
 | Ledger | `ledger` | your account | the MAC key, never mounted into a container | record every decision; the review trusts nothing else |
 | Operator CLI | `operator_cli`, `review`, `grant`, `publish` | your terminal | your Ed25519 signing key (read only while signing) | review, resolve, leave notes, sign grants |
@@ -93,10 +93,10 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
 | Destination | What | Controls |
 |---|---|---|
 | OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | package names and versions; runtime versions | HTTPS to those hosts only, no redirects |
-| The npm registry (`stage-fix` in a repository with `package-lock.json`) | the lockfile's dependency tree, through `npm audit fix --package-lock-only` | npm runs on a scratch copy holding only `package.json` and the lockfile, with empty user and global npm config, the public registry, `--strict-ssl=true` and `--ignore-scripts`; the repository's `.npmrc` is never read. npm workspaces fail closed (npm errors, nothing is staged) |
-| The model API (through the gateway) | everything the agents read and write: the scan summary and findings, repository paths, host names, fix plans, executor results, your notes | one route, one model; **not scrubbed**. Choose an `upstream` and model provider you trust with that |
+| The npm registry (`stage-fix` in a repository with `package-lock.json`) | the lockfile's dependency tree, through `npm audit fix --package-lock-only` | npm runs in the [tools container](#subprocess-confinement-tools-container), whose egress proxy allows only `registry.npmjs.org:443`. npm runs on a scratch copy holding only `package.json` and the lockfile, with empty user and global npm config, the public registry, `--strict-ssl=true` and `--ignore-scripts`; the repository's `.npmrc` is never read. npm workspaces fail closed (npm errors, nothing is staged) |
+| The model API (through the gateway) | everything the agents read and write: the scan summary and findings, repository paths, host names, fix plans, executor results, your notes | one route, one model; a DLP filter refuses requests carrying secrets or keys and redacts home paths, email addresses, private IP addresses and the host names and private package names the gateway is given ([DLP](#agentteamsvulnscangateway)). It bounds, never closes, exfiltration through the model endpoint: choose an `upstream` and model provider you trust with the rest |
 | GitHub (`open-pr`) | the fix branch and a pull request body with the fix plan and the agent's rationale (sanitised, quoted) | only to `origin` of a repository a grant covers |
-| Your servers | the server-kit scripts, streamed over ssh (`remote.sh` streams only `L1-audit.sh` to `L5-containers.sh`) | exact `hosts.conf` names a grant covers; audit and dry run only. The audit (which the agent then reads) never reads process environments, unit files, journals or `.env` contents and shows each service by its executable path only, so service arguments and inline secrets never reach its output. Only a hand-run `L1-audit.sh --deep` reads process environments, and nothing in vulnscan passes it |
+| Your servers | the server-kit scripts, streamed over ssh (`remote.sh` streams only `L1-audit.sh` to `L5-containers.sh`) | ssh runs in the [tools container](#subprocess-confinement-tools-container) with only the target's known_hosts lines and named identity files, and an egress proxy allowing only the first hop. exact `hosts.conf` names a grant covers; audit and dry run only. The audit (which the agent then reads) never reads process environments, unit files, journals or `.env` contents and shows each service by its executable path only, so service arguments and inline secrets never reach its output. Only a hand-run `L1-audit.sh --deep` reads process environments, and nothing in vulnscan passes it |
 | Your private ops repo (publish grant) | the run's report, review and summary | agent text fenced; home paths, hostname and private IPs scrubbed; content scan; preflight |
 
 **The spend cap** counts the `usage.cost` the upstream reports with each response, after the
@@ -194,6 +194,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `stale_after_hours` | `26` | Age after which commands warn that no daily run completed |
 | `governance_dir` | `""` | Used only by `halts`, to find a decision log when no grant names one. The executor uses the directory **signed into the grant** |
 | `agent` | see below | Agent mode |
+| `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
 
 The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 
@@ -229,6 +230,14 @@ goose ignores them, and its gateway command is unchanged):
 | `anthropic_betas` | `null` | `anthropic-beta` values the gateway's Messages route allows; `null`: `claude-code-20250219`, `interleaved-thinking-2025-05-14`, `effort-2025-11-24`, `context-1m-2025-08-07` (header-only capabilities Claude Code still sends with experimental betas off). A refused value shows in `spend.json` `refusal_reasons` |
 | `max_output_tokens` | `32000` | The gateway's output ceiling (`--max-output-tokens`) and Claude Code's `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, kept equal so every call fits |
 | `max_turns` | `100` | Claude Code's `--max-turns` |
+
+The `confine` block (`subproc_confine.settings`; any other key, or a wrong type, is refused at load):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `subprocesses` | `true` (unset) | Run git, npm and the server kit in the tools container, failing closed. `false` is the operator's opt-out: they run on the host as before, with a warning on stderr and at the top of every `review` |
+| `image` | `""` | Tools image tag; default `agentteams-vulnscan-tools:<agentteams version>` |
+| `ssh_identity` | `""` | Private key a confined server-kit run uses; empty: the `IdentityFile` entries `ssh -G` reports for the target |
 
 ---
 
@@ -273,6 +282,8 @@ All commands are `python -m agentteams.vulnscan <command>`. Every command except
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose` or `claude` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose: against GitHub's release metadata; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this |
 | `agent-selftest` | Prove the container's isolation for the current image ([checks](#selftestcfg)) |
 | `agent-run` | One agent run on the latest scan |
+| `tools-image build [--python-image IMG] [--node-version V --node-sha256-amd64 S --node-sha256-arm64 S]` | Build the tools image ([Subprocess confinement](#subprocess-confinement-tools-container)): git, OpenSSH, netcat, Node.js + npm (pinned in `tools_image.NODE_*`), the egress proxy and the probe. `scripts/vulnscan-tools-image.sh` checks the Node.js pin against the release's GPG-signed `SHASUMS256.txt`, resolves the python base image to a digest and runs this, then `tools-selftest` |
+| `tools-selftest` | Prove the tools container's isolation for the current image and flags; confined operations refuse until it has passed. Exit 0 pass, 1 fail |
 | `enroll [DIR]… [--discover DIR]… [--level off\|scan\|remediate]` | Enrol projects in the daily scan (operator only: needs a terminal, refuses on CI; exit 2). See [Project registry](#project-registry) |
 | `roots` | Every candidate scan root with its source: `repo_roots`, `registry (scan)`, `registry (remediate)`, `excluded`, `opted out`, `unanswered` or `duplicate` (`SCAN` or `SKIP` per line) |
 | `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
@@ -704,6 +715,76 @@ or kind word; otherwise nothing is sent.
 
 ---
 
+## Subprocess confinement (tools container)
+
+The executor and the daily run's `apply-worktree` staging run tooling against repositories you do not
+control. Since W1 of the baseAgent security-hardening plan they run it in a throwaway container of the
+**tools image** instead of on your account (`subproc_confine`, decision D1):
+
+| What | Where it runs | Network (egress allowlist) |
+|---|---|---|
+| Every git command of a granted op (`stage-fix`, `open-pr`, and the protected-repository and target checks before them) and of `apply-worktree` staging | tools container | none; `fetch`, `push`, `ls-remote`: origin's host only (`host:443`, or the https URL's port); a local-path origin is mounted instead |
+| `npm audit fix` (stage-fix and staging) | tools container | `registry.npmjs.org:443` only |
+| Server kit: `server-audit`, `server-dryrun`, the daily `servers` audits | tools container | the hosts.conf target's first hop (the bastion when it jumps) only |
+| `gh pr list` / `gh pr create` (open-pr) | host | GitHub API, with your token; runs no repository content |
+| Fix planning (`fix_mode: plan`, `fix` without `--apply`), scanning, manifest parsing | host | pure Python parsing (plus the OSV/PyPI feeds) |
+| `vulnscan fix --apply`, `publish` (your own ops repository), operator commands, an escalation's target canonicalisation | host | unchanged (outside the unattended scope, D2) |
+
+Every confined container gets `--read-only`, `--cap-drop ALL`, `no-new-privileges`, your uid:gid (never
+root; files it writes in a worktree stay yours), pids and memory limits, empty tmpfs `/tmp` and `$HOME`
+(`/toolhome`), and only the mounts the command needs, at their real paths:
+
+- **writable:** the repository's git dirs (not for read-only queries such as `rev-parse`, `diff`,
+  `ls-files`, `config --get`), a linked worktree under a scratch root (`<state>/worktrees`, daily's
+  `<repo>.worktrees`), the scratch root a `worktree add|remove` names (any other path is refused), npm's
+  scratch copy, the server kit's log directory;
+- **read-only:** the repository read, the executor's git identity file, the packaged server kit and its
+  config directory, the other registered worktrees' `.git` files (so git never treats them as
+  prunable; `gc.auto=0` and `maintenance.auto=false` too);
+- **never:** your home directory or an ancestor of it, and `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.docker`,
+  `~/.kube`, `~/.config/gh`, `~/.config/agentteams/keys`, `~/.netrc`, `~/.git-credentials`, `~/.npmrc`,
+  `~/.pypirc`, `~/Library/Keychains` (`subproc_confine.SECRET_DIRS`). A server-kit run alone gets a
+  generated ssh config, the target's (and bastion's) known_hosts lines and the identity files its ssh
+  config names, read-only.
+
+**Egress.** A command that needs the network joins the internal Docker network
+`agentteams-vulnscan-tools-net` (no route out). Its only way out is a CONNECT proxy started for that
+operation (on the default bridge too) that allows exactly the listed `host:port` and answers anything
+else, IP literals included, with 403. git (libcurl), npm and ssh (`ProxyCommand nc -X connect`) all go
+through it; DNS for other names is not available inside.
+
+**Credentials for push.** A credentialed git fetch, `ls-remote` or push gets your GitHub token from
+`gh auth token --hostname HOST` on the host and hands it to the container on **stdin**. A wrapper in the
+image (`vulnscan-with-token`) keeps it in one process's environment, and a credential helper
+(`git-credential-vulnscan`) gives it only to that host over https. It never appears in an argv, the
+container's configuration, a file or a log. An ssh origin (`git@HOST:…`, `ssh://git@HOST/…`) is
+rewritten to `https://HOST/…`, so no ssh key reaches git; an ssh origin with a port is refused. The
+existing hardening is unchanged and still applies inside: `_GIT_HARDENING`, the pinned
+upload-pack/receive-pack, the origin URL check, `--ignore-scripts`, the fixed npm registry.
+
+**Fail closed.** With confinement on (the default) and Docker, the tools image, or a passing
+`tools-selftest` for **this** image id and these container flags (`<state>/tools-selftest.json`,
+`subproc_confine.flags_sha256`) missing, a granted op is refused with
+`tools container unavailable: …` (ledger `refused`), `apply-worktree` stages nothing for that
+repository and says why, and a `servers` host is reported unscanned (exit 3). A Docker failure
+mid-operation (exit 125-127, a refused mount, a proxy that does not start) fails the op. Nothing is ever
+retried on the host. `confine.subprocesses: false` is your explicit opt-out.
+
+**Server kit.** `ssh -G` resolves the target on the host (configuration only). Refused, with the reason:
+a `ProxyCommand`, a multi-hop `ProxyJump`, a host with no known_hosts line, no identity file. A key that
+needs ssh-agent or a passphrase cannot work (`BatchMode`; the agent socket is never forwarded).
+
+**Residual risks** (documented, not closed): one shared tools network, so two confined operations at
+the same moment could reach each other's proxy (each still allows only its own listed hosts); the
+allowed origin host is whatever origin names (the repository is under a signed grant, and the token is
+given only to a host `gh` is logged in to); a compromised git or npm can still write inside the
+mounts it was given (the worktree, the repository's git dirs, the npm scratch copy), which
+`validate_diff` and the lockfile checks then judge on the host; during a credentialed fetch or push a
+compromised git process could read the token and use it at origin's host (only that host is
+reachable, for that one command; `api.github.com` is not); a repository whose top is the home
+directory itself cannot be mounted and is refused; Docker itself is trusted (on macOS it runs in a
+VM, which adds a boundary). See the module docstring of `subproc_confine` for the details.
+
 ## Python API
 
 The CLI is the supported interface. These functions are what it calls; use them to script around
@@ -891,7 +972,8 @@ flag; you never run it by hand.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--listen HOST:PORT` | `0.0.0.0:8080` | where it listens |
+| `--listen HOST:PORT` or `unix:PATH` | `0.0.0.0:8080` | where it listens: TCP on the container network (runs and debriefs), or a Unix-domain socket for host-side use (below) |
+| `--peer-uid N` | the gateway's uid | with `unix:PATH`, the only uid admitted; refused with TCP |
 | `--model M` | none | an allowed model (exact match); `--model` and/or `--models` is required |
 | `--models A,B` | none | further allowed models, e.g. a CLI's helper model |
 | `--dialects LIST` | `chat` | routes served: `chat`, `messages`, `responses` (comma-separated, distinct) |
@@ -912,9 +994,15 @@ flag; you never run it by hand.
 | `--max-tokens-total N` | `0` | prompt + completion token cap across all routes; 0 means none (runs and debriefs always pass a positive cap) |
 | `--max-unmetered-calls N` | `20` | refuse after this many unmetered replies; ≥ 1 |
 | `--allow-unmetered` | off | never refuse for unmetered replies (they are still counted) |
+| `--dlp-secrets-file PATH` | none | env file whose secret values are blocked by exact match (repeatable) |
+| `--dlp-secrets-dir DIR` | `~/.config/agentteams-secrets` | its `*.env` files are loaded the same way when the directory exists (absent in the gateway container); `''` turns it off |
+| `--dlp-hostname NAME` | none | a host name to redact, besides the gateway's own (repeatable) |
+| `--dlp-private-names A,B` / `--dlp-private-names-file PATH` | none | private package names to redact: case-insensitive fnmatch patterns (the file: one per line, `#` comments) |
+| `--dlp-responses` | off | also scan each upstream reply for the block classes; a hit is counted in `dlp_response_flags`, the reply is relayed unchanged |
 
-A bad flag value exits 2; so does a key file that cannot be read or holds no key, and a price table
-that cannot be read or is malformed.
+A bad flag value exits 2; so does a key file that cannot be read or holds no key, a price table
+that cannot be read or is malformed, an unreadable `--dlp-private-names-file`, and a `unix:` path
+whose directory is not usable.
 
 **Routes.** Each route is passed through, untranslated, to an upstream that speaks its dialect
 (`gateway_dialects`). Every other path is 403; so is a route whose dialect is not in `--dialects`.
@@ -992,14 +1080,57 @@ usually has no usage and counts as unmetered (fail closed).
 price and `cache_write_per_mtok` to twice it. Any other field, or a value that is not a finite number
 ≥ 0, makes the gateway exit 2.
 
+**DLP (decision D3: block secrets, redact and flag the rest).** Every request that passes the policy
+above is scanned before it is relayed, on every route (`gateway_dlp`). It is always on. It bounds
+exfiltration through the model endpoint (T6); it does not close it: an agent can still encode or split
+a secret, or leak through what it writes.
+
+| Action | Classes | Effect |
+|---|---|---|
+| **Block** | `known-secret` (exact match: each upstream key, every secret-looking value in the key files, `--dlp-secrets-file` and the secrets directory); `private-key` (PEM, OpenSSH, PuTTY); `aws-access-key`, `aws-secret-key`; `github-token` (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), `gitlab-token`; `anthropic-key`, `openrouter-key`, `openai-key`; `slack-token`, `slack-webhook`; `google-api-key`, `stripe-key`, `npm-token`, `pypi-token`; `jwt` (signed); `bearer-token`; `url-credentials` (`scheme://user:password@`); `secret-assignment` (a password/secret/token/api-key/credential name assigned a random-looking value of 12+ characters, or 32+ hex digits); `high-entropy-assignment` (`UPPER_SNAKE=` and a 32+ character high-entropy value that is not hex or a digest) | HTTP 400, counted as `refused` and in `dlp_blocks`; reason `<dialect>: dlp: <class>`. The matched text is never echoed, logged or written |
+| **Redact and flag** | `private-package` → `[REDACTED:private-package]`; `home-path` (`/Users/<name>`, `/home/<name>`, `C:\Users\<name>`) → `~`, which the executor expands back, so a target the agent names still resolves; `email` → `[REDACTED:email]` (not `git@` remotes); `hostname` → `[REDACTED:hostname]`; `private-ip` (RFC 1918 and link-local IPv4, ULA and link-local IPv6) → `[REDACTED:private-ip]` | the call continues; counted per class in `dlp_redactions` |
+
+Every string and object key in the body is scanned for the block classes, except base64 media `data`
+and `data:…;base64,` URIs. Redaction applies only to message text: chat `messages[].content` (strings
+and parts, tool results included); Messages `system` and `messages[].content` blocks (`text`,
+`tool_result`, text `document` sources); Responses `instructions` and `input` (messages,
+`function_call_output`). Ids, names, tool-call `arguments`, `tool_use` inputs and thinking or reasoning
+blocks (which are signed) are never changed, so the tool-call structure stays intact, and the body is
+re-serialised as JSON. Guards against false positives: known formats need their prefix at a token
+boundary and a random-looking body; sha256 and git digests, `sha256:`/`sha512-`/`h1:` pins, UUIDs,
+CVE and GHSA ids, package versions and placeholders (`${{ secrets.X }}`, `process.env.X`,
+`<your-key>`) are not blocked. The regexes are linear (bounded repeats, no nested quantifiers), a
+string seen before is not scanned again (a repeated text is counted once), and a scan is bounded by
+the 16 MiB body cap. Runs pass neither host names nor private package names yet: in the container
+the gateway redacts its own (container) host name only.
+
+**Unix-domain listener (host-side use).** `--listen unix:PATH` binds a socket created mode 0600 in a
+directory that must be a real directory owned by the gateway's uid and not writable by group or
+others (a stale socket is replaced; anything else at the path is refused). Each connection's peer
+uid is read from the kernel (`SO_PEERCRED` on Linux, `LOCAL_PEERCRED` on macOS); a connection from
+another uid than `--peer-uid`, or whose uid cannot be read, is closed before a byte is read and
+counted as `refused`. Runs and debriefs keep TCP on the internal container network.
+
 **`spend.json`** adds `reserved_usd` and `reserved_tokens` (0 between calls), `drained` (replies read
-on after a client hang-up), `drain_cut` (drains cut short by the timeout) and `refusal_reasons`.
+on after a client hang-up), `drain_cut` (drains cut short by the timeout), `refusal_reasons`, and
+the DLP counts `dlp_blocks`, `dlp_redactions` and `dlp_response_flags` (each `{class: count}`; class
+names only). The agent run copies `spend.json` into `status.json`, and `vulnscan review` lists DLP
+blocks and reply flags of the latest run under **Anomalies**, with the redaction counts beside them.
+
+#### `gateway_dlp` and `gateway_peer`
+
+`gateway_dlp.Filter(*, secrets, hostnames, private_names, redact)`: `apply(dialect, body)` (scans in
+place, raises `DlpBlocked`, a `PolicyError` whose `cls` names the class, and returns the redactions per
+class), `scan_block(text)`, `scan_response(payload)`; `secret_values(text)`, `load_secret_files(paths)`,
+`secrets_dir_files(directory)`, `read_private_names(path)`. `gateway_peer.peer_uid(conn)`,
+`peer_allowed(conn, allowed_uid)`, `socket_path_problem(path)` and `UnixGatewayServer(path, handler, *,
+allowed_uid, on_deny)`.
 
 #### `gateway_dialects`
 
 The per-dialect policy and parsers behind the gateway: `ROUTES`, the allowlists above,
-`check_request(dialect, raw, *, models, max_output_tokens, chat_reserve_tokens)` (raises `PolicyError`
-for a refusal),
+`check_request(dialect, raw, *, models, max_output_tokens, chat_reserve_tokens, dlp)` (raises `PolicyError`
+for a refusal; `dlp` is the DLP hook, and `Checked.redactions` its counts),
 `upstream_headers(dialect, client, upstream, anthropic_betas)`, `usage_for(dialect, payload)`
 (returns `(Usage, found)`), `load_prices(path)`, `priced(prices, model, usage)` and
 `reservation(prices, checked)`.
@@ -1288,7 +1419,7 @@ Verify the signature, then write the `resolved` row (`method: operator-ed25519`)
 
 Store one note (at most 2048 bytes; at most 365 days, or no expiry). `_extra` is internal.
 
-#### `active(now)`
+#### `notes.active(now)`
 
 `(notes, problems)`: the unexpired notes, oldest first. Never raises.
 
@@ -1391,7 +1522,7 @@ state directories. `secrets` (`agent_upstreams.secret_paths`: `agent.key_file`, 
 when it is not `key_file`, and `agent.prices`) must lie outside it; the signing key named by
 `AGENTTEAMS_DECISION_ED25519_KEYFILE` is added only when that variable is set.
 
-#### `flags_sha256(a=None, image_id="")`
+#### `agent_run.flags_sha256(a=None, image_id="")`
 
 The fingerprint above, for agent settings `a` (default `DEFAULT_AGENT`; only `framework` and
 `command` are read) and the image id. Raises `ValueError` for a framework without a driver.
@@ -1526,6 +1657,66 @@ run limits' rules: NaN, infinity, booleans, strings and `null` raise `ValueError
 The debrief's token cap from the agent settings `a` (as returned by `agent_run.agent_cfg`):
 `debrief_max_tokens`, default 400 000. Anything but an integer 1–100 000 000
 (`agent_run.MAX_TOKENS_TOTAL_CEILING`) raises `ValueError`; booleans, floats and strings included.
+
+### `agentteams.vulnscan.subproc_confine`
+
+The tools-container runner ([Subprocess confinement](#subprocess-confinement-tools-container)).
+
+#### `scope(cfg, *, scratch=())`
+
+Context in which `run_git`, `run_npm` and `subproc_confine_ssh.run_kit` run confined. Raises
+`Unavailable` at once when confinement is on and Docker, the image or its passing self-test is
+missing; opted out (`confine.subprocesses: false`) it prints `OPT_OUT_WARNING` and runs them on the
+host. `executor._granted` and `daily.stage_worktree_fixes` / the `servers` loop open one.
+
+#### `run_git(repo, args, *, hardening, env, push=False, timeout=600, text=True, readonly=False)`
+
+`git -C repo args` hardened: on the host outside a scope (with the gh credential helper for `push`),
+else in the container with the mounts of `git_mounts`, only the `GIT_*` variables of `env`, and, for
+`fetch`/`push`/`ls-remote`, the egress and credential handling of `classify_remote` and `gh_token`.
+`executor.git_proc` and `query_git` call it.
+
+#### `run_npm(args, *, workdir, scratch_root, env, timeout=600)` · `run_confined(op, argv, *, …)`
+
+`npm` with only `scratch_root` writable and `registry.npmjs.org:443` reachable; the general runner
+(`container_argv`, `proxy_argv` build the docker commands, pure). Exit 125-127 raises `Unavailable`; a
+timeout removes the container and re-raises `TimeoutExpired`.
+
+#### `git_layout(cwd)` · `git_mounts(cwd, args, *, readonly, scratch)` · `git_reads_only(args)` · `mount_problem(path)`
+
+The repository found by reading `.git` files (git is not run); the mounts a git command gets; which
+commands only read; why a path may not be mounted.
+
+#### `config_problem(cfg)` · `enabled(cfg)` · `opted_out(cfg)` · `unavailable_reason(tag)` · `subproc_confine.flags_sha256(image_id)`
+
+Config validation (called by `daily.load_config`), the effective switch, the opt-out, the fail-closed
+check, and the flags fingerprint a self-test record must match.
+
+### `agentteams.vulnscan.subproc_confine_ssh`
+
+#### `run_kit(script, host, script_args, *, conf_dir, logs, timeout=3600)`
+
+One packaged server-kit script against one hosts.conf host in the tools container: `build_ssh_files`
+writes the run's ssh config and known_hosts lines (from `ssh -G` and `ssh-keygen -F` on the host) into
+a fresh directory that is removed afterwards; the egress allowlist is the first hop.
+
+### `agentteams.vulnscan.tools_image`
+
+#### `build_image(cfg, *, python_image, node_version=NODE_VERSION, node_sha256=None)`
+
+Build the tools image from `agentteams/data/vulnscan_tools` (`build_argv`). Node.js `NODE_VERSION`
+(24.21.0, released 2026-09-07) with `NODE_SHA256` per architecture from its GPG-signed
+`SHASUMS256.txt` (signer in `NODE_RELEASE_SIGNERS`); another version needs both checksums.
+
+#### `selftest(cfg)`
+
+Runs the image's probe with a confined operation's exact flags, with `--network none` and through an
+egress proxy allowing only `registry.npmjs.org:443`. Checks (prefixed `none:` / `proxy:`):
+`uid_is_operator_not_root`, `caps_zero`, `no_new_privs`, `rootfs_read_only`, `home_is_empty_tmpfs`,
+`no_credential_paths`, `no_token_variables`, `rw_mount_writable`, `ro_mount_read_only`,
+`tools_present`, `direct_egress_refused`, `dns_unavailable` (none), `proxy_refuses_unlisted`,
+`proxy_refuses_ip_literal`, `proxy_allows_listed` (proxy). Writes `<state>/tools-selftest.json` with the
+image id and `flags_sha256`; only a full pass unlocks confined operations.
 
 ### `agentteams.vulnscan.daily`
 
