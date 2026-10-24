@@ -18,6 +18,8 @@ on:
       - "scripts/vulnscan-agent-image.sh"
       - "scripts/vulnscan-tools-image.sh"
       - ".github/workflows/vulnscan-linux-containers.yml"
+      - "agentteams/frameworks/goose_recipe_emit.py"
+      - "pyproject.toml"
   push:
     branches:
       - main
@@ -28,6 +30,8 @@ on:
       - "scripts/vulnscan-agent-image.sh"
       - "scripts/vulnscan-tools-image.sh"
       - ".github/workflows/vulnscan-linux-containers.yml"
+      - "agentteams/frameworks/goose_recipe_emit.py"
+      - "pyproject.toml"
   workflow_dispatch:
 
 # Least privilege: the job only reads the repository.
@@ -110,17 +114,14 @@ jobs:
           team = base / "team"
           (team / ".goose" / "recipes").mkdir(parents=True, exist_ok=True)
           os.chmod(team, 0o755)
-          (team / ".goose" / "recipes" / "vuln-remediation.yaml").write_text(
-              'version: "1.0.0"\n'
-              "title: Vulnerability remediation\n"
-              "description: CI stand-in for the team's remediation recipe\n"
-              "instructions: Follow the Daily Remediation workflow with the vulnscan tools.\n"
-              "extensions:\n"
-              "  - type: stdio\n"
-              "    name: vulnscan\n"
-              "    cmd: python\n"
-              "    args: [\"-m\", \"agentteams.vulnscan.mcp\"]\n"
-              "    timeout: 300\n")
+          # The renderer's own block (R7: the extensions must equal it; vulnscan's MCP server comes from --with-extension).
+          from agentteams.frameworks.goose_recipe_emit import _emit_recipe
+          from agentteams.vulnscan import agent_recipe
+          (team / ".goose" / "recipes" / "vuln-remediation.yaml").write_text(_emit_recipe(
+              title="Vulnerability remediation", description="CI stand-in for the team's remediation recipe",
+              instructions="Follow the Daily Remediation workflow with the vulnscan tools.",
+              extensions=list(agent_recipe.GOOSE_EXTENSIONS), prompt="Runtime inputs: task={{ task }}",
+              parameters=[{"key": "task", "input_type": "string", "requirement": "optional", "default": ""}]))
           key = base / "keys" / "openrouter.env"
           key.parent.mkdir(mode=0o700, exist_ok=True)
           key.write_text("OPENROUTER_API_KEY=ci-placeholder-not-a-key\n")

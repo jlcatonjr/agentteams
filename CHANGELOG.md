@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **vulnscan: agent mode on Linux Docker Engine (R4).** New `vulnscan/docker_mode.py`: the container user
   follows the Docker mode that `docker info` reports, detected once when a self-test, a run or a debrief starts
   and passed on as a value (no subprocess while hashing or building argv). Docker Desktop (macOS or Linux): uid
-  10001, as before (argv and `flags_sha256` byte-identical). Rootful Engine on a Linux host: the operator's
+  10001, as before (the same argv). Rootful Engine on a Linux host: the operator's
   `uid:gid`, so the gateway reads the 0600 key file and the DLP context and the agent writes the spool and its
   session state through plain bind mounts (an operator whose uid or primary group is root is refused). A container
-  escape on a rootful Engine lands as the operator's own account, so rootless Docker is recommended on Linux. The
+  escape on a rootful Engine lands as the operator's own account, rootless Docker narrows that for the agent and
+  gateway, but the tools container does not support rootless yet (its self-test fails, so confined operations are
+  refused) and remediation needs a rootful Engine for now. The
   user is validated as decimal `uid:gid`, a record with any other `container_user` unlocks nothing, and the self-test
   records the identity the container reported (`observed_user`), which the CI job asserts. Rootless Docker: `0:0`, which the user namespace maps to the operator. Rootful with `userns-remap`:
   refused with an explanation (`checks.docker_mode_supported: false`). Anything unrecognised (an unreadable
@@ -37,10 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   key allowlist and the extensions match stay the policy check. `GooseDriver.selftest_entries` adds the check
   `goose_recipe_valid` (`selftest_probe.goose_recipe_entry`) on `/work/run/agentdef/recipe.yaml`, the checked
   copy a run loads.
-- **Re-run `agent-selftest`.** Linux Docker Engine users re-run it once (the container user, and so
-  `flags_sha256`, changes). goose operators re-run it once more for rc.5 on any Docker (the
-  `goose_recipe_valid` probe text is hashed). Docker Desktop with another runtime: no change from rc.5 itself
-  (every runtime still re-runs the self-test once for rc.4).
+- **Re-run `agent-selftest` once after installing rc.5, every runtime and every Docker.** The probe now prints
+  the identity the container ran as (`SELFTEST-IDENTITY`, enforced by the new check `identity_matches`), and the
+  probe text is hashed, so every fingerprint changes; goose's also gains `goose_recipe_valid`, and on a Linux Engine
+  the container user changes too.
 
 ### Added
 

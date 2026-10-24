@@ -107,7 +107,7 @@ def test_selftest_makes_the_mountpoints_before_docker_run(env: dict[str, Any],
     work = env["tmp"] / "state" / "selftest" / "run"
     watch = [work / "gateway", work / "debrief"]
     seen: list[tuple[list[str], dict[str, bool]]] = []
-    _fake_docker(monkeypatch, seen, watch, stdout="SELFTEST " + json.dumps({"no_capabilities": True}))
+    _fake_docker(monkeypatch, seen, watch, stdout="SELFTEST-IDENTITY 10001:10001\nSELFTEST " + json.dumps({"no_capabilities": True}))
     res = agent_run.selftest({"agent": env["a"]})
     assert res["passed"]
     probe = [(argv, flags) for argv, flags in seen if argv[:2] == ["docker", "run"] and "-c" in argv]

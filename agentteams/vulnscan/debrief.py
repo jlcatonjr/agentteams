@@ -351,17 +351,17 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
     after the container and the gateway are removed, then re-raised.
     """
     tag = agent_run.image_tag(a)
+    mode = agent_run.detect_docker_mode()   # R4: the user the self-test ran as, or no debrief (as a run)
+    user = agent_run.container_user(mode.user)
+    if mode.problem or user != docker_mode.recorded_user(paths.state_dir() / "agent-selftest.json", agent_run.AGENT_UID):
+        return _refuse(EXIT_REFUSED, mode.problem or "the Docker mode changed since the last passing self-test — "
+                                                     "re-run agent-selftest")   # before any directory is made
     started = datetime.now(UTC)
     out = run_dir / "debrief" / started.strftime("%Y%m%dT%H%M%SZ")
     out.mkdir(parents=True, exist_ok=True)
     for d in (executor.spool_dir() / "requests", executor.spool_dir() / "results",
               *(run_dir / m for m in agent_run.MASKED_RUN_DIRS)):   # R6: the masks' mountpoints, before docker run
         d.mkdir(parents=True, exist_ok=True)
-    mode = agent_run.detect_docker_mode()   # R4: the user the self-test ran as, or no debrief (as a run)
-    user = agent_run.container_user(mode.user)
-    if mode.problem or user != docker_mode.recorded_user(paths.state_dir() / "agent-selftest.json", agent_run.AGENT_UID):
-        return _refuse(EXIT_REFUSED, mode.problem or "the Docker mode changed since the last passing self-test — "
-                                                     "re-run agent-selftest")
     argv = debrief_argv(a, tag, run_dir, session_name(run_dir), user=user)
     timed_out = terminated = False
     rc = EXIT_REFUSED

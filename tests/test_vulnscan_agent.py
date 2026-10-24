@@ -259,7 +259,7 @@ def test_flags_sha256_binds_container_flags_gateway_flags_and_selftest(monkeypat
 
 
 def test_selftest_records_the_flags_fingerprint(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
-    ok_line = "SELFTEST " + json.dumps({"no_capabilities": True})
+    ok_line = "SELFTEST-IDENTITY 10001:10001\nSELFTEST " + json.dumps({"no_capabilities": True})
 
     def docker(argv: list[str], **kw: object) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(argv, 0, stdout=ok_line if "-c" in argv else "sha256:img", stderr="")

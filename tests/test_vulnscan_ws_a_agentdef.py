@@ -359,7 +359,7 @@ def test_the_self_test_writes_the_copy_and_records_it(tmp_path: Path, state: Pat
         if "-c" in argv:
             seen["copy"] = (tmp_path / "state" / "selftest" / "run" / "agentdef" / ".github" / "agents" /
                             "vuln-remediation.agent.md").read_bytes()
-        out = 'SELFTEST {"no_capabilities": true}' if "-c" in argv else "sha256:img"
+        out = 'SELFTEST-IDENTITY 10001:10001\nSELFTEST {"no_capabilities": true}' if "-c" in argv else "sha256:img"
         return subprocess.CompletedProcess(argv, 0, stdout=out, stderr="")
     monkeypatch.setattr(agent_run, "_docker", docker)
     monkeypatch.setattr(agent_run.time, "sleep", lambda s: None)

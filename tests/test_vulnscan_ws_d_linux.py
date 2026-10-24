@@ -217,7 +217,10 @@ def _fake_docker(info: dict, calls: list[list[str]]):
         calls.append(argv)
         if argv[:2] == ["docker", "info"]:
             return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(info), stderr="")
-        return subprocess.CompletedProcess(argv, 0, stdout=ok_line if "-c" in argv else "sha256:img", stderr="")
+        if "-c" in argv:   # the probe: the container reports the user it was started as (identity_matches)
+            ran_as = argv[argv.index("--user") + 1]
+            return subprocess.CompletedProcess(argv, 0, stdout=f"SELFTEST-IDENTITY {ran_as}\n{ok_line}", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="sha256:img", stderr="")
     return docker
 
 
@@ -234,6 +237,26 @@ def test_selftest_runs_as_the_detected_user_and_records_it(cfg: dict, monkeypatc
     assert len(runs) == 2 and all(c[c.index("--user") + 1] == user for c in runs)    # the gateway and the probe
     assert sum(c[:2] == ["docker", "info"] for c in calls) == 1
     assert agent_run.selftest_ok(cfg) == (True, "ok")
+
+
+@NOT_ROOT
+@pytest.mark.parametrize("reported", ["0:0", "10001:10001", None])
+def test_selftest_fails_when_the_container_ran_as_someone_else(cfg: dict, monkeypatch: pytest.MonkeyPatch,
+                                                               reported: str | None) -> None:
+    """@audit #278: observed_user is enforced (identity_matches), not only recorded; a silent probe fails too."""
+    real = _fake_docker(ENGINE, [])
+
+    def docker(argv: list[str], **kw: object) -> subprocess.CompletedProcess:
+        out = real(argv, **kw)
+        if "-c" in argv:
+            body = out.stdout.split("\n", 1)[1]
+            out = subprocess.CompletedProcess(argv, 0, stdout=(f"SELFTEST-IDENTITY {reported}\n" if reported else "") + body,
+                                              stderr="")
+        return out
+
+    monkeypatch.setattr(agent_run, "_docker", docker)
+    res = agent_run.selftest(cfg)
+    assert not res["passed"] and res["checks"]["identity_matches"] is False and res["observed_user"] == reported
 
 
 def test_selftest_refuses_userns_remap_before_any_container(cfg: dict, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1741,8 +1741,8 @@ when it is not `key_file`, and `agent.prices`) must lie outside it; the signing 
 
 The fingerprint above, for agent settings `a` (default `DEFAULT_AGENT`; only `framework`, `command`,
 `recipe`, `team_dir` (copilot and goose: to read the copy's sha256), `copilot_provider_type` and, for codex,
-`model` are read) and the image id. `user` is the container user (default uid 10001, Docker Desktop's: the
-digest is then unchanged by R4). Raises `ValueError` for a framework without a driver.
+`model` are read) and the image id. `user` is the container user (default uid 10001, Docker Desktop's: R4 adds no
+argv change there; the rc.5 probe's identity line still changes every digest once). Raises `ValueError` for a framework without a driver.
 
 #### `driver_of(a)`
 
@@ -1775,8 +1775,7 @@ container really ran as; the self-test record keeps it as `observed_user`.
 **What a rootful Engine changes.** The agent's mounts and isolation are the same in every mode (read-only rootfs,
 no capabilities, no privilege gain, the internal network, the R6 masks), so running as the operator's uid gives
 the container no file the Docker Desktop setup did not already mount for it. What changes is the blast radius of a
-container escape: on a rootful Engine it lands as the operator's own account, not an unowned uid. Prefer rootless
-Docker on Linux, where an escape lands in the operator's user namespace.
+container escape: on a rootful Engine it lands as the operator's own account, not an unowned uid. Rootless Docker narrows that for the agent and gateway containers (an escape lands in the operator's user namespace), but the tools container does not support rootless yet: it always runs as the operator's uid, which rootless Docker maps to a subordinate uid that cannot use the operator's files, so its self-test fails and confined operations are refused (fail closed). Remediation operations therefore need a rootful Engine for now.
 
 ### `agentteams.vulnscan.agent_drivers`
 

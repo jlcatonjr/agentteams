@@ -513,6 +513,8 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     checks = json.loads(line[9:]) if line else {"selftest_ran": False}
     detail = next((ln[16:] for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-DETAIL ")), "")
     observed = next((ln[18:].strip() for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-IDENTITY ")), "")
+    if line:   # the container must have run as the user the fingerprint binds (missing line: it did not say)
+        checks["identity_matches"] = observed == user
     image = _image_id(tag)
     result = {"passed": bool(checks) and all(checks.values()), "checks": checks, "framework": driver.name,
               "image": image, "flags_sha256": flags_sha256(a, image, user), "docker_mode": mode.name,
