@@ -67,7 +67,15 @@ TEAM BUILDER INTAKE
 10. COMPONENTS
     List each component to produce (one per line, format: "slug: description"):
     > _
+
+11. VULNERABILITY SCANNING
+    Check this project's dependencies daily for known vulnerabilities? off / scan (recommended) / remediate:
+    > _
 ```
+
+Before question 11, explain: the operator's daily scan (`python -m agentteams.vulnscan`) runs on their own machine. With `scan`, the name and version of every dependency in the project's lockfiles and pinned manifests are sent to OSV.dev (and release data is read from PyPI and nodejs.org); nothing else leaves the machine. With `remediate`, the operator's remediation agent may also propose fixes as `vulnscan/*` pull requests to this repository's own origin, so findings and repository paths reach the configured model provider; it acts only inside the operator's signed grant and does not merge. Package names listed in `private_packages` (patterns such as `@acme/*`) stay on the machine and are reported as "not checked (private)". With `off`, the project asks not to be scanned; the operator decides, and a project the operator enrols anyway is still scanned (the mismatch is reported). The brief only narrows what leaves the machine.
+
+Record the answer in the brief as `"vulnerability_scanning": {"level": "<answer>"}`, adding `private_packages` or `exclude_paths` (repository-relative) if the user names any. Keep host names, IP addresses, URLs and absolute paths out of this block. The build does not enrol the project: the operator does, with `python -m agentteams.vulnscan enroll <project dir>`.
 
 ---
 
@@ -76,7 +84,7 @@ TEAM BUILDER INTAKE
 Once all responses are collected:
 
 ### Step 1: Write description file
-Save collected responses to `.agentteams/brief.json` (the canonical consumer descriptor for an external project). Note: `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only — do not use it for an external project. Use this structure:
+Save collected responses to the project's brief, chosen the way agentteams resolves it: `.agentteams/brief.json` if it exists, else `brief.json` at the project root if it exists. Update an existing brief in place: merge the answers into it and keep every key you did not ask about (project-specific keys stay as they are). Create `.agentteams/brief.json` only when neither file exists; creating it beside an existing root `brief.json` would shadow that brief. `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only: do not write it for an external project. `<brief>` below is the file you chose. Use this structure:
 
 ```json
 {
@@ -89,14 +97,15 @@ Save collected responses to `.agentteams/brief.json` (the canonical consumer des
   "tools": [{"name": "...", "category": "..."}],
   "reference_db_path": "<answer 8 or null>",
   "style_reference": "<answer 9 or null>",
-  "components": [{"slug": "...", "description": "..."}]
+  "components": [{"slug": "...", "description": "..."}],
+  "vulnerability_scanning": {"level": "<answer 11>"}
 }
 ```
 
 ### Step 2: Invoke build pipeline
 ```bash
 python build_team.py \
-  --description .agentteams/brief.json \
+  --description <brief> \
   --framework copilot-vscode \
   --project <project path from answer 5> \
   --output <project path>/.github/agents

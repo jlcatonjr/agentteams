@@ -298,6 +298,24 @@ Fields:
 
 ---
 
+### Layer-2 keys (researchteam-derived projects)
+
+**Type:** optional keys, each with a typed schema  
+**Purpose:** Layer-2 tools built on agentteams (researchteam and the projects derived from it) keep a few keys of their own in the same brief. The schema accepts them so these briefs pass strict validation unchanged. Apart from `frozen_surfaces`, agentteams validates only their shape and does not act on them.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `layer2_profile` | string (lowercase slug) | The Layer-2 profile the project was scaffolded with, e.g. `"scholarly"`. |
+| `frozen_surfaces` | array of framework ids (`codex`, `goose`, `agents-md`, `claude`, `copilot-vscode`, `copilot-cli`, `grok`), unique | Rule 15: the agent surfaces the project keeps frozen. The effect classifier reads the recorded freeze state, not the working brief. |
+| `researchteam_notes` | object; `exclude`: array of agent slugs | researchteam notes agents this project does not take. |
+| `governance_agents` | array of agent slugs, unique | The governance roster the Layer-2 tooling expects. Informational: agentteams still derives the generated roster itself. |
+| `license` | string (1–200 characters) | The project's licence, preferably an SPDX expression such as `"Apache-2.0"`. |
+| `methodology_coverage` | object; `units_dir`, `map_path`: strings | Where researchteam's methodology-coverage check finds its unit folders and the map file in each. |
+
+Any other unknown top-level key is still refused (`additionalProperties: false`).
+
+---
+
 ## Markdown Format Alternative
 
 If you prefer Markdown input, structure the file with these section headers:

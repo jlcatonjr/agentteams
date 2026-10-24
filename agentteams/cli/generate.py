@@ -602,15 +602,15 @@ def _run_generate_inner(
             if rc != 0:
                 return rc
 
-        # Orphan advisories (CH-07: both extracted to build_team.py to keep this
-        # module under the line ceiling). Agent files and reference docs present on
-        # disk that the current team no longer emits — `--prune` above handles only
-        # removals the build log recorded, so without these they accumulate invisibly.
+        # Orphan advisories (in build_team.py, CH-07): files on disk the team no longer emits, which
+        # `--prune` (build-log removals only) misses. Then the unanswered scan-level notice (prints only).
         build_team._report_orphan_agent_files(
             final_rendered, output_dir, manifest,
             agent_ext=adapter.get_file_extension("agent"),
         )
         build_team._report_orphan_reference_docs(final_rendered, output_dir)
+        from agentteams.vulnscan.project_policy import report_unanswered
+        report_unanswered(description)
 
         print(f"\nWriting {len(update_rendered)} file(s)...")
 

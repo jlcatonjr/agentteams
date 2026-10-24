@@ -54,15 +54,22 @@ def _doc_targets(stem: str) -> list[Path]:
     return []
 
 
-def _module_level_functions(paths: list[Path]) -> dict[str, list[str]]:
-    """{function name: parameter names} for module-level defs only.
+def _is_package_doc(stem: str) -> bool:
+    """True when :func:`_doc_targets` resolves *stem* to a sub-package, not a single module."""
+    name = stem.replace("-", "_")
+    return not (PKG_DIR / f"{name}.py").exists() and (PKG_DIR / name).is_dir()
+
+
+def _functions_by_module(paths: list[Path]) -> dict[str, dict[str, list[str]]]:
+    """{module stem: {function name: parameter names}} for module-level defs only.
 
     Direct children of the module body — never methods, which live inside a
     ``ClassDef``. That is what keeps ``self`` out of the comparison.
     """
-    out: dict[str, list[str]] = {}
+    out: dict[str, dict[str, list[str]]] = {}
     for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        funcs: dict[str, list[str]] = {}
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -75,8 +82,43 @@ def _module_level_functions(paths: list[Path]) -> dict[str, list[str]]:
             params += [a.arg for a in args.kwonlyargs]
             if args.kwarg:
                 params.append(f"**{args.kwarg.arg}")
-            out[node.name] = params
+            funcs[node.name] = params
+        out[path.stem] = funcs
     return out
+
+
+def _resolve(name: str, by_module: dict[str, dict[str, list[str]]],
+             is_package: bool) -> tuple[str, list[str] | None] | None:
+    """Resolve a heading's function name to ``(label, real params)``; ``None`` when not comparable.
+
+    API-DOC-SIGNATURE-LEAF-COLLISION: a package can define one function name in several
+    modules (vulnscan: ``build`` in three). When the page covers a package and the heading
+    is qualified — ``grant.build(...)`` or ``agentteams.vulnscan.grant.build(...)`` — and
+    its qualifier names a module of that package, the heading is compared against that
+    module's function only, and a module without it is drift (real params ``None``).
+    Every other heading keeps the leaf-name behaviour: across a package, a later module
+    (in path order) shadows an earlier same-named function.
+
+    Args:
+        name: The dotted or bare name from the heading.
+        by_module: :func:`_functions_by_module` for the page's target files.
+        is_package: Whether the page documents a package rather than one module.
+
+    Returns:
+        ``(label, params)`` where *label* names the function in failure messages, or
+        ``None`` when the heading names nothing comparable.
+    """
+    parts = name.split(".")
+    if is_package and len(parts) >= 2 and parts[-2] in by_module:
+        module, func = parts[-2], parts[-1]
+        return f"{module}.{func}", by_module[module].get(func)
+    leaf = parts[-1]
+    merged: dict[str, list[str]] = {}
+    for funcs in by_module.values():
+        merged.update(funcs)
+    if leaf not in merged:
+        return None
+    return leaf, merged[leaf]
 
 
 def _split_params(sig: str) -> list[str]:
@@ -102,20 +144,25 @@ def _split_params(sig: str) -> list[str]:
     return [p.split("=")[0].split(":")[0].strip() for p in params if p.strip()]
 
 
-def _documented() -> list[tuple[str, str, list[str], list[str]]]:
-    """(doc name, func, documented params, real params) for comparable headings."""
+def _documented() -> list[tuple[str, str, list[str], list[str] | None]]:
+    """(doc name, func, documented params, real params) for comparable headings.
+
+    Real params are ``None`` for a qualified heading whose module lacks the function.
+    """
     rows = []
     for doc in sorted(DOCS_DIR.glob("*.md")):
         if doc.stem in _NON_MODULE_DOCS:
             continue
-        real = _module_level_functions(_doc_targets(doc.stem))
-        if not real:
+        by_module = _functions_by_module(_doc_targets(doc.stem))
+        if not any(by_module.values()):
             continue
+        is_package = _is_package_doc(doc.stem)
         for name, sig in _HEADING_RE.findall(doc.read_text(encoding="utf-8")):
-            leaf = name.split(".")[-1]
-            if leaf not in real:
+            resolved = _resolve(name, by_module, is_package)
+            if resolved is None:
                 continue
-            rows.append((doc.name, leaf, _split_params(sig), real[leaf]))
+            label, real = resolved
+            rows.append((doc.name, label, _split_params(sig), real))
     return rows
 
 
@@ -128,6 +175,10 @@ def test_documented_signatures_match_the_code() -> None:
     )
     drift = []
     for doc, func, documented, real in rows:
+        if real is None:
+            module = func.split(".")[0]
+            drift.append(f"{doc}: {func}() — {module}.py defines no module-level {func.split('.')[-1]}")
+            continue
         if documented == real:
             continue
         missing = [p for p in real if p not in documented]
@@ -141,6 +192,26 @@ def test_documented_signatures_match_the_code() -> None:
             detail.append(f"order differs: doc {documented} vs code {real}")
         drift.append(f"{doc}: {func}() — {'; '.join(detail)}")
     assert not drift, "API doc signatures have drifted from the code:\n  " + "\n  ".join(drift)
+
+
+def test_qualified_heading_resolves_to_its_module_in_a_package() -> None:
+    """API-DOC-SIGNATURE-LEAF-COLLISION: ``grant.build`` is grant.py's build, not the last-sorted one."""
+    assert _is_package_doc("vulnscan") and not _is_package_doc("integrity")
+    by_module = _functions_by_module(_doc_targets("vulnscan"))
+    grant_build = _functions_by_module([PKG_DIR / "vulnscan" / "grant.py"])["grant"]["build"]
+    review_build = _functions_by_module([PKG_DIR / "vulnscan" / "review.py"])["review"]["build"]
+    assert grant_build != review_build, "fixture premise: the colliding builds differ"
+    for name in ("grant.build", "agentteams.vulnscan.grant.build"):
+        assert _resolve(name, by_module, True) == ("grant.build", grant_build)
+    # Unqualified (and qualifier-not-a-module) headings keep the leaf behaviour: last module wins.
+    assert _resolve("build", by_module, True) == ("build", review_build)
+    assert _resolve("Grant.build", by_module, True) == ("build", review_build)
+    # A qualified heading whose module lacks the function is drift, not skipped.
+    assert _resolve("grant.no_such_function", by_module, True) == ("grant.no_such_function", None)
+    # Outside a package, a qualifier never narrows (single-module pages are unchanged).
+    single = _functions_by_module(_doc_targets("integrity"))
+    assert _resolve("integrity.verify", single, False) == ("verify", single["integrity"]["verify"])
+    assert _resolve("nothing_here", single, False) is None
 
 
 def test_comparison_covers_a_meaningful_share_of_the_docs() -> None:

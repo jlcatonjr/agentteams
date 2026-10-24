@@ -55,6 +55,8 @@ SIGNING_CLOSURE: frozenset[str] = frozenset({
     "agentteams/cli/action_ids.py",  # imported by decision_log at module level
     "agentteams/cli/decision_chain.py",  # imported by decision_log at module level
     "agentteams/cli/grants.py",
+    "agentteams/cli/mcp_grant_commands.py",  # builds the MCP direct-grant record this module signs
+    "agentteams/vulnscan/grant.py",  # vulnscan's operator_sign: display, digest, then the key read
     "agentteams/cli/effect_classifier.py",
     "agentteams/cli/governance_targets.py",
     "agentteams/cli/management_directives.py",
@@ -280,6 +282,38 @@ def review_digest(kind: str, spec: dict, team_dir: Path, key_id: str,
                "ledger_root": Path(ledger_root).resolve().as_posix() if ledger_root else ""}
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+#: Record fields the signing code mints for each run (never chosen by the operator).
+MINTED_FIELDS: tuple[str, ...] = ("grant_id", "issued", "expires")
+
+
+def review_choices(record: dict, minted: tuple[str, ...] = MINTED_FIELDS) -> dict:
+    """Return what the operator chose: ``record`` without the minted fields, plus its exact lifetime.
+
+    The review digest must cover the operator's choices, not the per-run id and timestamps, or a
+    digest printed by one run can never match the next (the ``--confirm-review-sha256`` path). The
+    lifetime (``expires - issued``, in seconds) stays covered, so a confirmed digest still binds how
+    long the record is valid. This mirrors ``--sign-grant``, whose digest covers the spec while
+    ``grant_id`` and ``timestamp`` are minted afterwards.
+
+    Args:
+        record: The unsigned record about to be displayed and signed.
+        minted: Field names minted by the signing code.
+
+    Returns:
+        A new dict; ``lifetime_seconds`` is added when both ``issued`` and ``expires`` are present.
+
+    Raises:
+        ValueError: ``issued`` or ``expires`` is not an ISO timestamp.
+    """
+    from datetime import datetime
+
+    choices = {k: v for k, v in record.items() if k not in minted}
+    if "issued" in record and "expires" in record:
+        lifetime = datetime.fromisoformat(str(record["expires"])) - datetime.fromisoformat(str(record["issued"]))
+        choices["lifetime_seconds"] = int(lifetime.total_seconds())
+    return choices
 
 
 def _confirm(digest: str, confirm_sha256: str | None) -> bool:
@@ -730,7 +764,7 @@ def sign_grant(spec_path: str, resolve_dirs: Callable[[], tuple[Path, Path]], *,
     return 0
 
 
-def sign_mcp_direct_grant(record: dict, *, confirm_sha256: str | None = None,
+def sign_mcp_direct_grant(record: dict, *, project_root: Path | None = None, confirm_sha256: str | None = None,
                           allow_checkout: bool = False) -> tuple[dict, bytes] | None:
     """Sign an MCP direct-write grant record with the operator's Ed25519 key (R5), through the operator flow.
 
@@ -741,6 +775,8 @@ def sign_mcp_direct_grant(record: dict, *, confirm_sha256: str | None = None,
 
     Args:
         record: The unsigned grant (every field ``mcp_direct_grants`` binds).
+        project_root: The project the grant is for; the review digest binds it (default: the
+            working directory).
         confirm_sha256: ``--confirm-review-sha256``; None prompts on a terminal.
         allow_checkout: ``--allow-checkout-signing``.
 
@@ -753,15 +789,19 @@ def sign_mcp_direct_grant(record: dict, *, confirm_sha256: str | None = None,
     if spoof:
         print(f"Error: refusing to sign: {spoof}. The key was not read.", file=sys.stderr)
         return None
-    preflight = _signing_preflight([Path.cwd().resolve()], allow_checkout)
+    project = Path(project_root).resolve() if project_root is not None else Path.cwd().resolve()
+    preflight = _signing_preflight([project], allow_checkout)   # the project the digest binds
     if preflight is None:
         return None
     keyfile, _ = preflight
     print("About to sign an MCP direct-write grant (the agent's writes will land without the orchestrator's "
           "approval, within these bounds):")
     for name, value in record.items():
-        print(f"  {name:<16}: {value!r}")
-    digest = review_digest("mcp-direct-grant", record, Path.cwd(), str(record.get("key_id", "")))
+        minted = "   (minted for this run; not in the review digest)" if name in MINTED_FIELDS else ""
+        print(f"  {name:<16}: {value!r}{minted}")
+    # The digest covers the operator's choices (and the lifetime), not the per-run id and times, so a digest
+    # printed by a run without a terminal confirms the next run.
+    digest = review_digest("mcp-direct-grant", review_choices(record), project, str(record.get("key_id", "")))
     if not _confirm(digest, confirm_sha256):
         return None
     private_pem = _read_operator_private_key(keyfile)
@@ -785,6 +825,7 @@ __all__ = [
     "grant_spec_kwargs",
     "load_grant_spec",
     "presign_integrity_check",
+    "review_choices",
     "review_digest",
     "report_issued",
     "sign_decision",

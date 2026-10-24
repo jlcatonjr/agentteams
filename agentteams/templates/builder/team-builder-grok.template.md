@@ -79,12 +79,20 @@ Ask for:
 - A list of components the team will produce (one workstream expert agent is created per component)
 - For each component: slug, brief description, key sections or functions, and any known sources
 
+### Section 8: Dependency Vulnerability Scanning
+Ask (recommended answer: `scan`):
+> "Should this project's dependencies be checked daily for known vulnerabilities? `off`, `scan` (recommended) or `remediate`?"
+
+Explain before they answer: the operator's daily scan (`python -m agentteams.vulnscan`) runs on their own machine. With `scan`, the name and version of every dependency in the project's lockfiles and pinned manifests are sent to OSV.dev (and release data is read from PyPI and nodejs.org); nothing else leaves the machine. With `remediate`, the operator's remediation agent may also propose fixes as `vulnscan/*` pull requests to this repository's own origin, so findings and repository paths reach the configured model provider; it acts only inside the operator's signed grant and does not merge. Package names listed in `private_packages` (patterns such as `@acme/*`) stay on the machine and are reported as "not checked (private)". With `off`, the project asks not to be scanned; the operator decides, and a project the operator enrols anyway is still scanned (the mismatch is reported). The brief only narrows what leaves the machine.
+
+Record the answer in the brief as `"vulnerability_scanning": {"level": "<answer>"}`, adding `private_packages` or `exclude_paths` (repository-relative) if the user names any. Keep host names, IP addresses, URLs and absolute paths out of this block. The build does not enrol the project: the operator does, with `python -m agentteams.vulnscan enroll <project dir>`.
+
 ---
 
 ## After Intake
 
 ### Step 1: Write description file
-Use `Write` to save the collected information as `.agentteams/brief.json` (the canonical consumer descriptor for an external project). Note: `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only — do not use it for an external project.
+Use `Write` to save the collected information to the project's brief, chosen the way agentteams resolves it: `.agentteams/brief.json` if it exists, else `brief.json` at the project root if it exists. Update an existing brief in place: merge the answers into it and keep every key you did not ask about (project-specific keys stay as they are). Create `.agentteams/brief.json` only when neither file exists; creating it beside an existing root `brief.json` would shadow that brief. `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only: do not write it for an external project. `<brief>` below is the file you chose.
 
 ```json
 {
@@ -110,7 +118,8 @@ Use `Write` to save the collected information as `.agentteams/brief.json` (the c
       "sections": ["..."],
       "sources": ["..."]
     }
-  ]
+  ],
+  "vulnerability_scanning": {"level": "scan"}
 }
 ```
 
@@ -121,7 +130,7 @@ Present the summary to the user and ask: "I'm ready to generate your agent team.
 Use `Bash` to run:
 ```bash
 python build_team.py \
-  --description .agentteams/brief.json \
+  --description <brief> \
   --framework grok \
   --project <existing_project_path> \
   --output <existing_project_path>
