@@ -377,3 +377,17 @@ def test_a_goose_command_override_may_not_name_the_team() -> None:
     assert "must not name /work/team" in goose.command_problem(bad)
     with pytest.raises(ValueError, match="must not name /work/team"):
         agent_run.validate_agent({"framework": "goose", "command": bad})
+    for sneaky in ("/work/./team/r.yaml", "//work/team", "/work/x/../team/r.yaml", "--recipe=/work/team/r.yaml"):
+        assert goose.command_problem(["goose", "run", sneaky]), sneaky
+    assert goose.command_problem(["goose", "run", "/work/teams/r.yaml", "/work/run/x"]) == ""
+
+
+def test_version_ordering_never_raises_on_hostile_osv_versions() -> None:
+    """R8 residual (@security rc.4 re-review): non-ASCII digits and huge numbers sort, never raise."""
+    from agentteams.vulnscan.versions import major, version_key
+
+    for v in ("²!1", "1²", "1." + "9" * 5000, "1!" + "9" * 5000, "١٢٣"):
+        version_key(v)
+        major(v)
+    assert major("9" * 5000) is not None and major("²") is None and major("v3.2") == 3
+    assert version_key("1.0") < version_key("1.1") < version_key("1." + "9" * 5000)

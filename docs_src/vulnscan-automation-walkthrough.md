@@ -48,7 +48,7 @@ component table.
 | npm, if any repository has a `package-lock.json` | `stage-fix` updates npm lockfiles with `npm audit fix --package-lock-only` (it contacts the npm registry) | `npm --version` |
 | GitHub CLI, signed in | `open-pr` pushes a branch and opens a pull request | `gh auth status` |
 | ssh access to your servers, non-interactive, as root or with passwordless `sudo` | server audits run with `BatchMode=yes` and `sudo -n` | `ssh -o BatchMode=yes <host> sudo -n true` |
-| Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)) | `docker info` |
+| Docker (Docker Desktop on macOS; Docker Engine on Linux for the tools container only, agent mode on Linux follows in rc.5) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)) | `docker info` |
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
 | shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
@@ -253,7 +253,10 @@ You need two paths later:
 
 - **`team_dir`**: the project root (`~/ops-team`). The container runs
   `.goose/recipes/vuln-remediation.yaml` from it: its prompt is the run's task. (The orchestrator recipe
-  opens with a role-check prompt, so a one-shot `goose run` of it answers that and stops.)
+  opens with a role-check prompt, so a one-shot `goose run` of it answers that and stops.) A run gives
+  goose a checked copy of that recipe. If the recipe has keys such as `settings`, `sub_recipes` or `retry`,
+  or extensions other than the ones agentteams generates, the run is refused. Regenerate the team rather
+  than editing those.
 - **The governance directory**: the team directory holding `references/security-decisions.log.csv`,
   for a goose team `~/ops-team/.goose/recipes`. The executor checks it for HALTs before every action.
 
@@ -364,7 +367,12 @@ its checks. It starts the gateway and runs the container with the agent's exact 
 reference [lists what each one proves](api-reference/vulnscan.md#selftestcfg). Agent mode refuses to
 run until a passing self-test exists **for the current image and the current container flags**:
 after every image rebuild, and after an agentteams upgrade that changes how the containers are
-started, re-run `agent-selftest` (the run's refusal says which).
+started, re-run `agent-selftest` (the run's refusal says which). After installing rc.4, re-run
+`agent-selftest` once for every runtime you use: the fingerprint changed for all of them (the gateway's
+secrets mounts, the masks below, and for copilot and goose the checked copy of the agent definition).
+
+The run directory is mounted read-only, with its `gateway/` and `debrief/` subdirectories hidden behind an
+empty read-only tmpfs: the agent cannot read the DLP list or the spend files.
 
 A passing self-test, as printed on a real first setup (macOS, Docker Desktop, goose 1.37.0; also saved
 to `<state>/agent-selftest.json`):
@@ -645,13 +653,17 @@ in to GitHub and needs no GitHub token. Differences from goose:
   same route as goose, so any OpenRouter model with tool calling works (`agent.upstream`, `agent.key_file`). With
   `"anthropic"` it uses the Messages route instead, and the model must be a Claude model, as for Claude Code.
 - **The team.** Generate a Copilot CLI team with the remediation capability; its agent definition is
-  `.github/agents/vuln-remediation.agent.md`, which the CLI loads as a custom agent from the read-only team mount.
+  `.github/agents/vuln-remediation.agent.md`. Each run, and the self-test, gives the CLI a copy of it whose front
+  matter keeps only `name` and `description`. The `tools`, `model` and `handoffs` it carries for VS Code are
+  removed and listed when the run starts. The file needs no editing, and the CLI never sees the rest of the
+  team's `.github/agents`.
   Sign grants with `--governance-dir <team>/.github/agents`.
 - **The image and the self-test.** GitHub publishes no checksum for the Copilot CLI, so
   `FRAMEWORK=copilot bash scripts/vulnscan-agent-image.sh` builds it from the lockfile agentteams ships
   (`npm ci --ignore-scripts`, `npm audit signatures`) and checks a hash of the whole installed tree. The self-test
   runs Copilot once against a local stub and fails unless it offers the model only the vulnscan tools and the
-  planted MCP, hook, agent, skill and instruction files have no effect.
+  planted MCP, hook, agent, skill and instruction files have no effect (including an agent file with the same
+  name in a team directory the CLI is not given).
 - **No debrief** (`agent-chat` says so); `review` works as usual.
 - **The acceptance run.** `FRAMEWORK=copilot MODEL=<model> [PROVIDER_TYPE=anthropic] bash
   scripts/vulnscan-operator/09-accept-framework.sh`.
@@ -838,6 +850,7 @@ Search the message for the quoted text.
 
 | You see | Cause | Fix |
 |---|---|---|
+| the daily scan takes a long time with many projects | each project's OSV and registry lookups wait on the network | raise `scan_workers` in `vulnscan.json` (default 4, up to 8); `1` scans one after another |
 | `not authorized: ... no valid grant covers it` | no grant names that operation and target, or its uses are spent | `grant list`; sign a grant that covers it |
 | `blocked by open escalation ve-...` | an open escalation covers the target | `halts`, then `resolve` |
 | `HALT in force: ...` | a `@security` HALT on `vulnscan-remediation` | sign a `HALT-RETRACTED` row (see `halts`) |
@@ -846,6 +859,9 @@ Search the message for the quoted text.
 | `set agent.team_dir in vulnscan.json first` | `agent-selftest` without `team_dir` (it no longer falls back to a directory inside the state directory) | set `team_dir` (Step 6), then re-run |
 | `config ... is unusable: ...` (exit 2) | `vulnscan.json` is not valid JSON or a JSON object, or the named key has a wrong type or range. Every `agent.*` key is checked at load, not only `agent.enabled` | fix the key the message names ([rules](api-reference/vulnscan.md#configuration-vulnscanjson)) |
 | agent run state `not-run`, reason mentions the self-test | no passing self-test for this image | `agent-selftest` |
+| `gateway DLP: N secrets director(ies) or file(s) the gateway cannot use` (run state `not-run`; `agent-chat` exits 2 with `debrief not started: …`) | a configured secrets directory cannot be read, or a `*.env` file in it is unreadable, not a regular file or a symlink out of the directory; the paths are on the terminal | fix their permissions, or add `{"path": ..., "sha256": "<shasum -a 256 of the file>"}` to `agent.dlp_skip_ok` (that version only) |
+| `the agent definition cannot be copied: ...` / `the goose recipe ... is refused` / `the copilot agent file ... is refused` (run state `not-run`, or `agent_definition_valid: false`) | the agent definition is missing, a symlink, outside the team, larger than 256 KiB or not UTF-8; a Copilot file without a one-line `description`; a goose recipe with keys or extensions agentteams does not generate | regenerate the team, then re-run `agent-selftest` |
+| `the agent definition changed as the run started` | the team's agent definition was edited while the run started | `agent-selftest`, then run again |
 | `refusing to sign from an install an agent may be able to edit` | `agentteams`, its venv or its interpreter is inside the current directory, a git work tree or an agent-writable root; the next lines name which | sign from a verified install outside agent write roots (`pipx install`). `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
 | `the agentteams package (...) is inside a git work tree` / `sys.prefix (...) is inside a git work tree` / `sys.executable (...) is inside a git work tree` | an editable checkout, a venv kept in a repository, a `pip install` into Homebrew's Python without a venv, or an interpreter git tracks or does not ignore. An interpreter in a git-ignored path (Homebrew's `Cellar/`) is not refused; only the work tree's own ignore rules count (inherited `GIT_*` variables and a global `core.excludesFile` do not) | `pipx install` from a verified release (works on Homebrew's Python) |
 | `the agentteams package (...) is inside the current directory` / `sys.prefix (...) is inside the current directory` | you signed from a directory that contains the install, typically your home directory with a `pipx` install under `~/.local/pipx` | sign from an empty directory: `cd "$(mktemp -d)"`, then re-run the signing command |

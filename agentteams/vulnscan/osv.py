@@ -277,7 +277,7 @@ def minimal_fix(ids: list[str], ecosystem: str, name: str, version: str) -> tupl
     unfixed = 0
     for vid in ids:
         f, malformed, hidden = _walk_fix(details(vid), ecosystem, name, version)
-        if malformed or hidden:   # read back by report.Finding (quirks): counted in the report, never silent
+        if malformed or hidden:   # engine passes quirks() to each Finding: counted in the report, never silent
             _QUIRKS[(vid, ecosystem, normalize_name(ecosystem, name), version)] = (malformed, hidden)
         if f is None:
             unfixed += 1

@@ -7,6 +7,8 @@ Split from :mod:`.agent_drivers` (which re-exports everything here) so the per-f
 from __future__ import annotations
 
 import json
+import posixpath
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -15,6 +17,17 @@ AGENT_HOME = "/agenthome"
 #: The container's working directory: an empty tmpfs (revision 7). Not ``/work/team``.
 CWD_IN_CONTAINER = "/work/cwd"
 TEAM_IN_CONTAINER = "/work/team"
+
+
+def _names_team(part: str) -> bool:
+    """Return whether a command word names the team mount: any path in it (after ``=`` or ``:``), normalized."""
+    for path in re.findall(r"/[^\s=:,;]*", part):
+        norm = posixpath.normpath("/" + path.lstrip("/"))   # /work/./team, //work/team, /work/x/../team
+        if norm == TEAM_IN_CONTAINER or norm.startswith(TEAM_IN_CONTAINER + "/"):
+            return True
+    return False
+
+
 MCP_COMMAND = "python -m agentteams.vulnscan.mcp"
 #: The model key every driver's CLI sees; the real key exists only in the gateway.
 DUMMY_KEY = "injected-by-gateway"
@@ -129,7 +142,7 @@ class Driver:
         Default (goose): any override, except one naming the team mount, which would hand the CLI the team's
         own definition instead of the checked copy that ``{recipe}`` names (R7).
         """
-        if any(TEAM_IN_CONTAINER in str(part) for part in command):
+        if any(_names_team(str(part)) for part in command):
             return (f"agent.command must not name {TEAM_IN_CONTAINER}: use {{recipe}}, the checked copy of the "
                     f"agent definition (R7)")
         return ""

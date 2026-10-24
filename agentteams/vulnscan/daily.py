@@ -31,6 +31,7 @@ reported as clean.
 
 from __future__ import annotations
 
+import contextvars
 import copy
 import datetime as _dt
 import fcntl
@@ -42,6 +43,8 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
+from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -64,6 +67,7 @@ _GIT_TIMEOUT = 600            # seconds for any other git step
 
 _FAIL_ON = ("critical", "high", "moderate", "low", "any", "none")
 _FIX_MODES = ("plan", "apply-worktree")
+MAX_SCAN_WORKERS = 8         # each scan already sends up to 8 OSV requests at once: a ceiling, not a target
 _BOOL_KEYS = ("include_worktrees", "include_dev", "local_runtimes", "allow_major")
 
 DEFAULT_CONFIG: dict = {
@@ -78,6 +82,7 @@ DEFAULT_CONFIG: dict = {
     "local_runtimes": True,
     "fix_mode": "plan",          # plan | apply-worktree
     "allow_major": False,
+    "scan_workers": 4,           # scan roots and fix plans looked up at once (1 = one after another)
     "notify": "desktop",         # none | desktop | command:<program and args>
     "schedule": {"hour": 7, "minute": 30},
     "stale_after_hours": 26,
@@ -122,6 +127,8 @@ def _config_problem(cfg: dict[str, Any]) -> str:
         return f"cooldown_days must be a whole number of days >= 0{got(cfg['cooldown_days'])}"
     if not isinstance(cfg["fix_mode"], str) or cfg["fix_mode"] not in _FIX_MODES:
         return f"fix_mode must be one of {', '.join(_FIX_MODES)}{got(cfg['fix_mode'])}"
+    if not _is_int(cfg["scan_workers"]) or not 1 <= cfg["scan_workers"] <= MAX_SCAN_WORKERS:
+        return f"scan_workers must be a whole number from 1 to {MAX_SCAN_WORKERS}{got(cfg['scan_workers'])}"
     how = cfg["notify"]
     if not isinstance(how, str) or not (how in ("none", "desktop") or how.startswith("command:")):
         return f"notify must be none, desktop or command:<program and args>{got(how)}"
@@ -669,15 +676,18 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         total.feed_errors.append(f"project registry unreadable, enrolled projects not scanned: {exc}")
         entries = []
     exclude, opted_out = coverage.operator_skips(cfg, entries)
+    specs = []
     for root_spec in coverage.effective_roots(cfg, entries):
-        if not root_spec.scanned:
-            continue
+        if root_spec.scanned and not root_spec.path.is_dir():
+            total.feed_errors.append(f"repo root missing: {root_spec.label}")
+        elif root_spec.scanned:
+            specs.append(root_spec)
+    scans = _parallel(cfg, lambda spec: engine.scan_path(   # network-bound: the roots are looked up at once
+        spec.path, include_worktrees=bool(cfg["include_worktrees"]), exclude=exclude,
+        opted_out=opted_out), specs)   # excluded manifests are never read or sent
+    plan_jobs: list[tuple[Path, list[str]]] = []
+    for root_spec, rep in zip(specs, scans, strict=True):   # merged on this thread, in root order
         root_s, root = root_spec.label, root_spec.path
-        if not root.is_dir():
-            total.feed_errors.append(f"repo root missing: {root_s}")
-            continue
-        rep = engine.scan_path(root, include_worktrees=bool(cfg["include_worktrees"]), exclude=exclude,
-                               opted_out=opted_out)   # excluded manifests are never read or sent
         _drop_excluded(cfg, root, rep)   # defence in depth only
         slug = (root.name or "root") if root_spec.source == "repo_roots" else plan_slug(root.resolve())
         (run_dir / f"repos-{slug}.json").write_text(json.dumps(rep.to_dict(), indent=2), encoding="utf-8")
@@ -693,7 +703,8 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
                 staged.append(f"- `{t}` → `{wt or 'not staged'}`")
                 (run_dir / f"fix-{plan_slug(repo.resolve())}.md").write_text(md, encoding="utf-8")
         elif repos:
-            _write_fix_plans(cfg, root, repos, run_dir, total)
+            plan_jobs.append((root, repos))
+    _write_fix_plans(cfg, plan_jobs, run_dir, total)
 
     if cfg.get("local_runtimes", True):
         total.merge(engine.local_runtimes())
@@ -800,8 +811,26 @@ def foreign_clone(repo: Path) -> str:
             "update or remove it locally; a PR would go to the upstream project")
 
 
-def _write_fix_plans(cfg: dict, root: Path, repos: list[str], run_dir: Path, total: Report) -> None:
-    """Write ``fixplan-<slug>.md`` for each git repository under ``root`` that has fixable findings.
+def _parallel(cfg: dict, fn: Callable[[Any], Any], items: Sequence[Any]) -> list[Any]:
+    """Return ``[fn(x) for x in items]``, up to ``scan_workers`` at a time, in order.
+
+    Each call runs in a copy of the caller's context, so a ``subproc_confine`` scope (a ContextVar) applies
+    exactly as it would serially. Results are read in order: the first exception is raised, as serially, after
+    the calls not yet started are cancelled (those already running finish; ``fn`` must leave writing to the caller).
+    """
+    workers = min(int(cfg.get("scan_workers", DEFAULT_CONFIG["scan_workers"])), len(items))
+    if workers <= 1:
+        return [fn(x) for x in items]
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="vulnscan-scan") as pool:
+        futures = [pool.submit(contextvars.copy_context().run, fn, x) for x in items]
+        try:
+            return [f.result() for f in futures]
+        finally:   # after a failure no queued call starts (nothing is left to cancel after success)
+            pool.shutdown(wait=True, cancel_futures=True)
+
+
+def _write_fix_plans(cfg: dict, jobs: list[tuple[Path, list[str]]], run_dir: Path, total: Report) -> None:
+    """Write ``fixplan-<slug>.md`` for each git repository with fixable findings, looked up in parallel.
 
     A plan is keyed by the repository that holds the manifests (:func:`engine.repo_of`, as the scan
     groups findings), names that repository as the ``stage-fix`` target, lists file paths relative to
@@ -810,27 +839,36 @@ def _write_fix_plans(cfg: dict, root: Path, repos: list[str], run_dir: Path, tot
 
     Args:
         cfg: Daily config.
-        root: A ``repo_roots`` entry (a repository or a folder of repositories).
-        repos: Repositories with fixable findings, relative to ``root`` (``"."`` for ``root``).
+        jobs: ``(root, repos)`` pairs: a ``repo_roots`` entry (a repository or a folder of repositories) and
+            its repositories with fixable findings, relative to it (``"."`` for the root).
         run_dir: The run directory.
-        total: The run's report; fix-plan feed failures are added to it.
+        total: The run's report; fix-plan feed failures are added to it, in job order.
     """
-    root = root.resolve()
-    groups: dict[str, list[Path]] = defaultdict(list)
-    for path in discover(root, include_worktrees=bool(cfg["include_worktrees"])):
-        if not _operator_excluded(cfg, path):   # an excluded manifest is never read or looked up
-            groups[engine.repo_of(path, root)].append(path)
-    for rel in repos:
-        repo = root / rel
+    tasks: list[tuple[Path, list[Path]]] = []
+    seen: set[Path] = set()
+    for root, repos in jobs:
+        root = root.resolve()
+        groups: dict[str, list[Path]] = defaultdict(list)
+        for path in discover(root, include_worktrees=bool(cfg["include_worktrees"])):
+            if not _operator_excluded(cfg, path):   # an excluded manifest is never read or looked up
+                groups[engine.repo_of(path, root)].append(path)
+        tasks += [(root / rel, groups.get(rel, [])) for rel in repos if root / rel not in seen]
+        seen.update(root / rel for rel in repos)   # nested repo_roots name a repository once: one plan, one lookup
+
+    def one(task: tuple[Path, list[Path]]) -> tuple[Path, str, list[str]]:   # looks up only; the caller writes
+        repo, manifests = task
         plan = fix.fix_path(repo, apply=False, allow_major=bool(cfg["allow_major"]),
-                            cooldown_days=int(cfg["cooldown_days"]), npm=False, manifests=groups.get(rel, []))
+                            cooldown_days=int(cfg["cooldown_days"]), npm=False, manifests=manifests)
         plan.target = str(repo)
         if not (repo / ".git").exists():
             plan.target_problem = "not a git repository — fix these files by hand"
         elif foreign := foreign_clone(repo):
             plan.target_problem = foreign
-        (run_dir / f"fixplan-{plan_slug(repo)}.md").write_text(plan.markdown(), encoding="utf-8")
-        total.feed_errors += [f"fix plan: {e}" for e in plan.feed_errors]
+        return repo, plan.markdown(), [f"fix plan: {e}" for e in plan.feed_errors]
+
+    for repo, markdown, errors in _parallel(cfg, one, tasks):   # written here, in order, once each
+        (run_dir / f"fixplan-{plan_slug(repo)}.md").write_text(markdown, encoding="utf-8")
+        total.feed_errors += errors
 
 
 def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
