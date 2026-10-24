@@ -82,3 +82,26 @@ def sign_grant(pem: str, record: dict[str, Any]) -> dict[str, Any]:
     from agentteams.cli.signed_ledger import ed25519_sign
 
     return {**record, "signature": ed25519_sign(pem, grant.signed_values(record))}
+
+
+def goose_recipe(team: Path, rel: str = ".goose/recipes/vuln-remediation.yaml") -> Path:
+    """Write a goose recipe a run accepts (R7: the extensions agentteams renders, allowed keys only) into ``team``.
+
+    Args:
+        team: The team directory.
+        rel: The recipe's path in the team (default: the goose driver's).
+
+    Returns:
+        The recipe's path.
+    """
+    from agentteams.frameworks.goose_recipe_emit import _emit_recipe
+    from agentteams.vulnscan import agent_recipe
+
+    path = team / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_emit_recipe(title="Vulnerability Remediation", description="Triages the daily scan",
+                                 instructions="You triage findings.", extensions=list(agent_recipe.GOOSE_EXTENSIONS),
+                                 prompt="Runtime inputs: task={{ task }}",
+                                 parameters=[{"key": "task", "input_type": "string", "requirement": "optional",
+                                              "default": ""}]), encoding="utf-8")
+    return path

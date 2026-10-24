@@ -37,6 +37,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(debrief.shutil, "which", lambda name: "/usr/bin/docker")
     monkeypatch.setattr(debrief, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(debrief.time, "sleep", lambda s: None)
+    monkeypatch.setattr(debrief.gateway_context, "_scutil", lambda key: "")   # Popen is faked: no scutil
     return {"run": run, "cfg": cfg, "key": key, "calls": calls, "tmp": tmp_path}
 
 
@@ -303,3 +304,23 @@ def test_debrief_max_tokens_follows_the_run_limit_rules(bad: object) -> None:
         debrief.debrief_max_tokens({"debrief_max_tokens": bad})
     assert debrief.debrief_max_tokens({}) == debrief.DEFAULT_DEBRIEF_MAX_TOKENS
     assert debrief.debrief_max_tokens({"debrief_max_tokens": 5}) == 5
+
+
+def test_a_dlp_refusal_starts_no_debrief_and_passes_the_acknowledgements(env: dict[str, Any],
+                                                                         monkeypatch: pytest.MonkeyPatch,
+                                                                         capsys: pytest.CaptureFixture) -> None:
+    seen: list[Any] = []
+
+    def refuse(spend_dir: Path, **kwargs: Any) -> None:
+        seen.append(kwargs.get("skip_ok"))
+        raise debrief.gateway_context.DlpRefused("gateway DLP: 1 secrets file(s) the gateway cannot use")
+
+    monkeypatch.setattr(debrief.gateway_context, "prepare", refuse)
+    started = _popen(monkeypatch)
+    ack = [{"path": "/x/a.env", "sha256": "0" * 64}]
+    cfg = {"agent": {**env["cfg"]["agent"], "dlp_skip_ok": ack}}
+    assert debrief.run_debrief(cfg, env["run"]) == debrief.EXIT_REFUSED
+    assert seen == [ack] and started == []
+    assert "debrief not started: gateway DLP" in capsys.readouterr().err
+    assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+                                 ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]

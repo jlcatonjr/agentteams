@@ -6,6 +6,196 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **vulnscan: the daily scan looks up repositories in parallel.** New config key `scan_workers` (default 4, 1–8;
+  1 keeps the old one-after-another behaviour): the scan roots' OSV lookups, then the fix plans' registry lookups,
+  run that many at a time, network-bound work that used to wait in series. Results are merged in root order on the
+  calling thread, so `summary.json` and the fix plans are the same as a serial run's. Each worker runs in a copy of
+  the caller's context (a `subproc_confine` scope is a ContextVar, so it applies as it would serially), and the
+  a root or fix plan that fails is recorded on its own
+  (`scan of <root> stopped: ...`, `fix plan for <repo> stopped: ...`; the run is partially unscanned) while the other
+  roots are kept, where one failing root used to end the whole collection. `apply-worktree` staging, servers and local
+  runtimes stay serial.
+- **vulnscan: the remediation agent runs on the GitHub Copilot CLI and the Codex CLI (agent-runtimes plan,
+  phase 4).** `agent.framework: "copilot"` (new `vulnscan/agent_drivers_copilot.py`): Copilot CLI 1.0.95 with
+  bring-your-own-key through the gateway and `COPILOT_OFFLINE=true` (no GitHub sign-in or token); the chat route
+  by default, the Messages route with the new `agent.copilot_provider_type: "anthropic"` (Claude models only);
+  `--available-tools` = the vulnscan tools only, every built-in of the pinned release in `--excluded-tools`,
+  `--disable-builtin-mcps`, `--no-custom-instructions`, the agent definition loaded as a custom agent
+  (`--agent`/`--add-dir`; `agent.recipe` must be `.github/agents/<name>.agent.md`). No published checksum, so
+  (revision 12) the image's `copilot-build` stage runs `npm ci --ignore-scripts` from a committed lockfile
+  (`data/vulnscan_agent/copilot/`) and `npm audit signatures` on a digest-pinned Node image, and checks a hash
+  over the whole installed tree. `agent.framework: "codex"` (new `vulnscan/agent_drivers_codex.py`): Codex
+  0.162.1 (`codex exec --json --ephemeral --ignore-user-config --ignore-rules --strict-config -s read-only`), the
+  whole configuration as `-c` overrides (a custom Responses provider at the gateway, the vulnscan MCP server
+  `required`, every tool-adding feature disabled), `CODEX_HOME` the empty tmpfs home (Codex reads
+  `$CODEX_HOME/AGENTS.override.md` even with project docs off: the canary caught it), OpenAI models only, new
+  keys `agent.upstream_responses` / `agent.key_file_responses`. Codex keeps one built-in no switch removes,
+  `apply_patch`: decision D4, it runs only with the new `agent.accept_residual_tools: ["apply_patch"]` and a
+  self-test showing the read-only sandbox rejects its writes. Both refuse every `agent.command` override and have
+  no debrief. Self-test (new `vulnscan/selftest_cli.py`): a headless run against the loopback stub with a canary
+  planted; since neither CLI reports a tool inventory, the checks judge every tool offered in every request
+  (`copilot_*`, `codex_*`, incl. `codex_home_fresh` and `codex_residual_write_blocked`); Codex's probe uses
+  `agent.model`, whose catalog entry decides its tools, so the model is part of `flags_sha256`. Gateway:
+  `--responses-reserve-tokens` (Codex sends no `max_output_tokens`; runs reserve `agent.max_output_tokens` per
+  call instead of being refused), and the Responses route allows `client_metadata` (flat strings), `namespace`
+  tools (of function/custom tools) and a client-run `tool_search`, and checks tool lists carried in `input`
+  items. Every shape was observed with the pinned releases' macOS builds against the stub. The driver contract
+  moved to `vulnscan/agent_driver_base.py` (re-exported by `agent_drivers`); `agent_drivers.driver_for` /
+  `validate_settings`; `ImageRecipe.build_args`. `vulnscan-agent-image.sh` and `09-accept-framework.sh` take
+  `FRAMEWORK=copilot|codex` (codex: sigstore check with `cosign`, Rule S-10 age check, the D4 prompt).
+  Live acceptance with real keys is still to run.
+- **vulnscan: severity from CVSS; unscored advisories count as HIGH (index reliability report R1).**
+  New `vulnscan/cvss.py` (no dependency): CVSS v3.0/v3.1 base scores per the specification (each
+  version's `Roundup`) and CVSS v4.0 by the official FIRST algorithm (macro vectors, look-up table,
+  severity-distance interpolation; a port of the FIRST reference calculator, BSD-2-Clause), banded
+  LOW / MODERATE / HIGH / CRITICAL. `osv.severity` is now the higher of the advisory's `CVSS_V3` /
+  `CVSS_V4` vectors (top-level and `affected[].severity`) and its `database_specific.severity` label.
+  An advisory with neither is **unscored**: it counts as the new config key `unscored_as` (default
+  `"high"`; `--unscored-as` for `scan` / `inventory` / `runtimes`) instead of the silent MODERATE
+  default (`engine.UNRATED_AS` is gone). `summary.md` marks such findings `UNSCORED (as HIGH)`, adds a
+  banner and an *Unscored advisories* section; `review` counts them; `status --project` shows them as
+  `UNSCORED`. New `Finding.rated` / `Finding.unscored`, `Report.unscored_as`, `Report.apply_unscored()`,
+  `Report.unscored_findings()`; the MCP `list_findings` rows carry `rated` and `unscored`.
+- **vulnscan: missed-run catch-up and a staleness alert (R3).** `daily --catch-up` runs the daily scan
+  only when the last completed run is older than `stale_after_hours` (or there is none), after a new
+  `run-stale` / `run-missing` desktop notification; otherwise it exits 0 silently. On macOS,
+  `schedule install` adds a second launchd agent, `io.agentteams.vulnscan.catchup` (`RunAtLoad` plus
+  every 6 h), so a run missed while the Mac was powered off is caught up at login (`schedule remove`
+  removes both; `schedule status` reports it). `daily` and `schedule status` now print the staleness
+  warning too. systemd already catches up (`Persistent=true`); cron is documented as not catching up.
+- **vulnscan: say what we cannot see (R5).** Discovery now lists Go (`go.sum`, else `go.mod`), Maven
+  (`pom.xml`), Gradle (`gradle.lockfile`, else `build.gradle*`), RubyGems (`Gemfile.lock`), NuGet
+  (`packages.lock.json`, else `*.csproj`), pnpm and container images (`Dockerfile*`, `*.Dockerfile`,
+  `Containerfile`, compose files), reported unscannable with the reason `unsupported ecosystem: <name>`
+  (Cargo, conda and Lean now use the same wording). New coverage state **`unsupported ecosystem`** for a
+  workspace whose only manifests are unsupported (it was `nothing to scan`); mixed workspaces keep their
+  state and the coverage section lists their unsupported files. `status --project` reports
+  `unsupported_manifests`. Rule S-VM (`security_rules_invariant` v=15) reports `unsupported ecosystem`
+  as a coverage gap (CONDITIONAL); `nothing to scan` stays not a finding. Example snapshots
+  regenerated.
+
+- **vulnscan gateway: the host's DLP context reaches the containerized gateway (roadmap B2; hardening
+  plan W2 residual).** New `vulnscan/gateway_context.py`; before every gateway start (run,
+  `agent-selftest`, debrief) the launcher gathers, on the host: its host names (`gethostname()` full
+  and short, macOS `scutil` ComputerName/LocalHostName, best effort, and the server-kit `hosts.conf`
+  ssh targets' host parts, `-J` hops and `ssh -G`-resolved aliases; `hosts.conf` names themselves are
+  never redacted, since the agent targets servers by them), the union of every enrolled project's
+  `private_packages`, and `~/.config/agentteams-secrets/*.env`. Names go to `<gateway dir>/dlp/`
+  (0700/0600, regenerated each start, symlinks refused) mounted read-only at `/run/dlp`; each secrets
+  file is mounted read-only at `/run/secrets/dlp/<name>`. New gateway flag `--dlp-hostnames-file`; the
+  argv carries only fixed in-container paths, never a host name, package name or secret.
+  - **Intentional argv change:** the golden gateway argv gains the context mount and the
+    `--dlp-hostnames-file` / `--dlp-private-names-file` (and per-file `--dlp-secrets-file`) flags.
+    `flags_sha256` hashes them with fixed placeholder paths, so machine values never move it, but the
+    fingerprint changes once: run `agent-selftest` again after upgrading.
+
+### Security
+
+- **vulnscan: the PR #277 audit.** (1) A goose recipe or Copilot agent file containing a C0/C1 control, NEL
+  (U+0085) or a Unicode line or paragraph separator (U+2028, U+2029) is refused when it is read: goose's YAML reader
+  breaks lines there, so `title: t<U+2028>retry: ...` could hide a key from the allowlist (R2, R7). (2) A non-string
+  OSV advisory `id` is ignored instead of crashing the daily run. (3) A list or other non-string `unscored_as` is a
+  config error, not a traceback. (4) An absolute symlink inside a secrets directory is refused by name on the host
+  (its host path does not exist inside the gateway); a relative link still works.
+- **vulnscan rc.4: every operator re-runs `vulnscan agent-selftest` once after installing,** whatever the runtime.
+  The R5 secrets mounts and the R6 masks below change the container flags that `flags_sha256` binds, so an rc.3
+  self-test no longer vouches for an rc.4 run.
+- **vulnscan: secrets the DLP check cannot use now fail closed (R5).** The gateway gets each configured secrets
+  directory (`~/.config/agentteams-secrets`) as one read-only directory mount (`--mount type=bind,...,readonly`,
+  CSV-quoted, at `/run/secrets/dlp/<n>`; new gateway flags `--dlp-secrets-mount` and `--dlp-skip-ok-file`), not
+  one `-v` per file, so files named `.env` and paths with `,` or `:` are no longer skipped. A run ends `not-run`
+  (a debrief exits 2 with `debrief not started: …`) when a configured directory exists but cannot be read, when it holds a `*.env` file the gateway
+  cannot use (unreadable, not a regular file, a symlink out of the directory), or when the gateway itself counts
+  an unreadable or non-UTF-8 file (it exits 2 and writes a count to `<gateway dir>/dlp-refused`). A missing
+  directory is fine. New setting `agent.dlp_skip_ok` (default `[]`): `{"path", "sha256"}` entries, each
+  acknowledging one exact version of one file; editing the file makes its entry stop matching; `review` lists
+  them (paths on the terminal, a count in the published copy). Paths appear only on the operator's terminal;
+  `dlp/notes` gains counts only.
+- **vulnscan: the agent can no longer read the gateway's files (R6).** The agent, self-test and debrief
+  containers mount an empty read-only tmpfs over `/work/run/gateway` and `/work/run/debrief`
+  (`agent_run.MASKED_RUN_DIRS`), so the DLP host-name list, the acknowledgements and `spend.json` are hidden
+  inside the read-only run mount. The mountpoints are created on the host before every `docker run`.
+- **vulnscan: malformed OSV records no longer break the fix lookup (R8).** `osv.fix_for` walks a record without
+  assuming any type (a malformed `affected`, package, `ranges`, range, `events`, event or non-string version is
+  skipped) and never pairs a fix with a range start it could not read. A fix version must match
+  `[A-Za-z0-9.+~:_-]{1,64}` (`osv.FIX_VERSION`); any other is never shown or offered: the finding notes "fix
+  version not shown (unusual format)". New `Finding.malformed` / `Finding.fix_hidden` (from `osv.quirks`, passed
+  by the engine), shown in the finding's notes and in a line at the top of the report; 0 in an older report.
+
+- **vulnscan: the @security review of the rc.4 candidate, every finding fixed.** *Medium (blocked Copilot agent
+  mode):* (1) Copilot reads its agent file's YAML front matter as configuration (`tools`, `model`,
+  `mcp-servers` ...), and the self-test used the default file while a run loaded `agent.recipe`. Now a run refuses
+  (`not-run`) and the self-test fails (`copilot_agent_file_clean`, the CLI not started) when the selected file is
+  absent or its front matter cannot be parsed (a strict YAML subset); since R1 (below), other keys are removed
+  from the copy instead of refusing the run; every driver's self-test runs with the selected file (`Driver.recipe` / `selected_recipe()`), and
+  `flags_sha256` binds its path, plus its sha256 for copilot and goose. claude and codex read the file as prompt text only,
+  so their fingerprint binds the path, not the content (a prompt edit does not invalidate the self-test); new
+  module `vulnscan/agent_recipe.py`. The generated `vuln-remediation.agent.md` carries `tools`/`model`/`handoffs`
+  (VS Code). Since the rc.4 residuals (R1, below), a run writes its own copy with only `name` and `description`
+  and gives that to Copilot, so the generated file runs as it is. (2) Copilot's home and code cache were on the
+  host-backed writable mount: the image now unpacks the CLI's package at build time into `/opt/copilot-cache`
+  (root-owned, read-only at run time; verified with the linux-arm64 build as uid 10001 on a read-only rootfs),
+  `COPILOT_HOME` is `/agenthome/.copilot` on the fresh tmpfs, and only logs (`--log-dir`) stay on the host mount;
+  new checks `copilot_home_fresh` and `copilot_state_writable` (replacing `copilot_home_writable`). *Low:* (3) the
+  Codex residual write test also targets the request spool and the state dir (and removes anything written);
+  (4) a Responses call without `max_output_tokens` is forwarded with `max_output_tokens` = the reserve; (5) an
+  unreadable DLP secrets file stops the gateway (exit 2, `gateway.DlpContextError`) with a hint about the
+  gateway's uid 10001, and `gateway_context.prepare` explains on Linux that Docker Engine bind mounts keep the
+  operator's uid and modes (the files are not made world-readable; agent mode is verified on macOS Docker Desktop
+  only); (6) a `hosts.conf` name that is an FQDN, an address or this machine's name (never redacted) is warned
+  about at every gateway start and counted in `<gateway dir>/dlp/notes`, shown by `review` (a count, never the
+  names); (7) a scalar `severity`, a non-object `database_specific` or a non-list `affected` in an OSV record is
+  unscored, not a crash; (8) `daily --catch-up` checks the daily lock first and neither notifies nor runs while
+  a daily run is in progress (`daily.run_in_progress`); (9) the S-VM CONDITIONAL PASS row names
+  `unsupported_manifests` in an otherwise scanned project, as the rule does (`security_rules_invariant` v=16,
+  example snapshots regenerated); (10) `vulnscan-agent-image.sh` prints a `NOTICE` on stderr when `cosign` is
+  absent and only the codex sha256 pin was checked. Re-run `agent-selftest` once after upgrading, as the
+  first bullet of this section says. New tests: `tests/test_vulnscan_security_rc4.py`.
+- **vulnscan: Copilot and goose runs read a checked copy of the agent definition that vulnscan owns (rc.4
+  residuals R1, R2, R3, R7, R9).** The copilot and goose fingerprints now bind the copy's sha256 (the claude and
+  codex fingerprints change because of R5 and R6); the one self-test re-run above covers it.
+  - **(R1, R3) Copilot no longer sees the team's `.github/agents`.** A run writes
+    `<run>/agentdef/.github/agents/vuln-remediation.agent.md` from `agent.recipe` (mode 0444, alone in its
+    directory): front matter `name: vuln-remediation` plus the original `description`, the body byte for byte. The
+    CLI gets `--agent=vuln-remediation --add-dir=/work/run/agentdef` and is never given `/work/team`. Every other
+    front-matter key (`tools`, `model`, `handoffs`, `user-invocable` ...) is removed, since each could only narrow
+    the run; the removed keys are printed at run start, recorded in `status.json` under
+    `agent_definition.removed_keys`, and listed by `review` under *Anomalies* (key names only). The generated
+    `vuln-remediation.agent.md` therefore runs as it is. Still refused: no front matter, an unterminated or empty
+    block, a missing or multi-line `description`, an unsafe file name. The self-test writes and runs the same copy;
+    `copilot_canary_inert` also plants a same-name decoy agent in a team directory the CLI is not given, which must
+    stay unseen, and `copilot_agent_file_clean` checks the copy. Probed with Copilot CLI 1.0.95: `--agent` matches
+    the file stem or `name:`, and `--add-dir` loads no instruction, skill or other agent file into the prompt.
+  - **(R2) The agent file is read strictly.** Line 1 must be exactly `---` and the block must end with exactly
+    `---` (not `...`); an empty block is refused; a BOM is dropped and CRLF becomes LF before parsing. It must be
+    a regular file (no symlink) under the resolved team directory (a symlinked parent is refused), at most
+    256 KiB, and UTF-8.
+  - **(R7) goose's recipe is copied** to `<run>/agentdef/recipe.yaml` and bound by its sha256. Allowed top-level
+    keys: `version`, `title`, `description`, `instructions`, `prompt`, `parameters`, `activities` and
+    `extensions`; any other (`settings`, `sub_recipes`, `retry`, `response` ...) is refused, and `extensions` must
+    equal the block agentteams renders for the remediation recipe (`developer`, `summon`). A refused or missing
+    recipe makes a run `not-run` and fails the self-test (`agent_definition_valid`). A goose `agent.command`
+    override may not name `/work/team`, which would bypass the checked copy (`{recipe}` names it); copilot,
+    claude and codex already refuse every override.
+  - **(R9) Re-check after the copy.** After writing its copy, a run checks that the team's file still renders to
+    it and that the self-test still vouches for it; a change in that window refuses the run (`not-run`). One gap remains:
+    an edit made and reverted between the two re-checks. Once the copy exists, later edits to the team's file no
+    longer change what the CLI reads.
+  - `vulnscan/agent_recipe.py` gains `read_source`, `copilot_copy`, `goose_recipe_problem`, `make_copy`,
+    `write_copy`, `in_container` and `AgentCopy`.
+  - **Accepted, not new in rc.4:** goose's `developer` extension gives the agent a shell in its container (it can
+    read `/work/team` and write request files to the spool directly), and `summon` can load the team's other
+    recipes. The host executor checks every request on its own (schema, size, replay, request cap, then grant,
+    HALT and protected repositories), so the MCP server is not the security boundary. A vulnscan-only goose
+    recipe without `developer` is a follow-up. The goose `/work/team` command guard works on strings: `agent.command` is operator
+    config and fingerprinted, so it catches mistakes, not attacks.
+- **vulnscan: hostile version strings can no longer crash version ordering.** `versions.version_key` reads ASCII
+  digits only and caps a digit run at 64 characters (`int()` refuses `²` and numbers over 4300 digits), so a
+  malformed OSV `fixed` or `introduced` value sorts instead of raising. The goose `/work/team` command guard
+  normalizes each path it finds (`/work/./team`, `//work/team`, `..`).
+
 ## [1.1.0-rc.3] - 2026-10-24
 
 ### release notes

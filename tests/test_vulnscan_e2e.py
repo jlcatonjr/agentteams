@@ -26,7 +26,7 @@ import pytest
 
 pytest.importorskip("cryptography")
 from agentteams.vulnscan import agent_run, executor, fix, grant, ledger, report_store, review  # noqa: E402
-from tests._vulnscan_helpers import operator_home, sign_grant  # noqa: E402
+from tests._vulnscan_helpers import goose_recipe, operator_home, sign_grant  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(not shutil.which("git"), reason="git not available")
@@ -147,6 +147,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     team = tmp_path / "ops-team"
     team.mkdir()
+    goose_recipe(team)                     # R7: the run reads a checked copy of it
     keyfile = tmp_path / "secrets" / "openrouter.env"
     keyfile.parent.mkdir()
     keyfile.write_text("OPENROUTER_API_KEY=sk-test\n")
