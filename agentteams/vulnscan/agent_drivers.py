@@ -7,8 +7,9 @@ mounts, the gateway, the run lock and the self-test record. Containment that hol
 
 - the container's working directory is :data:`CWD_IN_CONTAINER`, an empty tmpfs, never the team mount, so
   no CLI auto-loads instruction, hook or MCP files (``AGENTS.md``, ``.mcp.json``, ``.codex/`` ...) from it;
-- the team is mounted read-only at :data:`TEAM_IN_CONTAINER` and the agent definition is passed by its
-  absolute path there;
+- the team is mounted read-only at :data:`TEAM_IN_CONTAINER`; the agent definition is passed by its absolute
+  path: claude and codex the team's file there, copilot and goose a checked copy under the read-only run mount
+  (``/work/run/agentdef``, :mod:`.agent_recipe`);
 - every config home the CLI reads points into the tmpfs ``$HOME`` (:data:`AGENT_HOME`), empty at start;
 - the only writable host-backed dirs are the driver's :meth:`Driver.state_dirs`, under
   ``<run>/agent/<name>-data``.
@@ -71,9 +72,10 @@ r["goose_dirs_writable"] = all(can_mkdir(os.path.join(os.environ.get(var) or hom
 class GooseDriver(Driver):
     """goose: ``goose run --recipe`` over OpenRouter chat completions, the MCP server as a stdio extension.
 
-    goose needs nothing from its working directory: the recipe path is absolute, and no ``developer``
-    extension (the one that would read ``.goosehints`` / ``AGENTS.md``) is loaded. Before revision 7 its cwd
-    was the image's ``WORKDIR`` ``/work`` (the parent of the mounts), never ``/work/team``.
+    goose needs nothing from its working directory: the recipe path is absolute (the run's checked copy,
+    :func:`.agent_recipe.goose_recipe_problem`: its ``extensions`` must be the ones agentteams renders, ``developer``
+    and ``summon``; ``developer`` reads ``.goosehints`` / ``AGENTS.md`` from the working directory, an empty tmpfs).
+    Before revision 7 its cwd was the image's ``WORKDIR`` ``/work`` (the parent of the mounts), never ``/work/team``.
     """
 
     def env(self, a: dict[str, Any], gw_url: str) -> dict[str, str]:

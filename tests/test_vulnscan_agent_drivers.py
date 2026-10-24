@@ -6,7 +6,8 @@ The ``OLD_*`` literals are the full ``docker run`` argv the launcher built *befo
 two revision-7 changes, which the tests spell out: the working directory is an empty tmpfs (``/work/cwd``,
 was the image's ``WORKDIR`` ``/work``), and ``XDG_CONFIG_HOME`` is set to goose's own default
 (``$HOME/.config``, inside the tmpfs home). The self-test probe gains one check, ``cwd_empty``. The gateway
-argv additionally carries the roadmap-B2 DLP context mounts and flags (:func:`_b2`; deliberate). Docker-free.
+argv additionally carries the roadmap-B2 DLP context mounts and flags (:func:`_b2`; deliberate), and since rc.4 (R7)
+the agent's goose is given the run's checked copy of the recipe (:data:`GOOSE_COPY`). Docker-free.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from agentteams.vulnscan import (
 )
 
 RUN = Path("/state/2026-10-22")
+GOOSE_COPY = "/work/run/agentdef/recipe.yaml"   # rc.4 R7: the recipe the CLI is given (agent_recipe.in_container)
 SESSION = "vulnscan-2026-10-22"
 
 _PREFIX = ["--network", "agentteams-vulnscan-net", "--read-only", "--tmpfs", "/tmp:rw,size=256m",
@@ -92,7 +94,9 @@ def fixed(monkeypatch: pytest.MonkeyPatch) -> dict:
 # ---------------------------------------------------------------- golden: no goose behaviour change
 
 def test_golden_agent_argv_is_the_old_one_plus_revision_7(fixed: dict) -> None:
-    assert agent_run.agent_argv(fixed, "img:t", RUN, SESSION, task="TASK TEXT") == _revision_7(OLD_AGENT)
+    # rc.4 R7 (deliberate): goose reads the run's checked copy of the recipe (agent_recipe), not the team's file.
+    new = [GOOSE_COPY if p == "/work/team/.goose/recipes/vuln-remediation.yaml" else p for p in _revision_7(OLD_AGENT)]
+    assert agent_run.agent_argv(fixed, "img:t", RUN, SESSION, task="TASK TEXT") == new
 
 
 def test_golden_selftest_argv_and_probe(fixed: dict) -> None:
@@ -140,7 +144,7 @@ def test_the_command_override_still_substitutes_its_placeholders(fixed: dict) ->
     a = {**fixed, "command": ["goose", "run", "--recipe", "{recipe}", "--name", "{session}", "--x", "{run_id}",
                               "--params", "task={task}"], "recipe": "custom/r.yaml"}
     argv = agent_run.agent_argv(a, "img:t", RUN, SESSION, task="T {run_id}", run_id="R1")
-    assert argv[argv.index("img:t") + 1:] == ["goose", "run", "--recipe", "/work/team/custom/r.yaml", "--name",
+    assert argv[argv.index("img:t") + 1:] == ["goose", "run", "--recipe", GOOSE_COPY, "--name",   # the copy (R7)
                                              SESSION, "--x", "R1", "--params", "task=T {run_id}"]
 
 

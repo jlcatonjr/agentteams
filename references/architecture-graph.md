@@ -5,7 +5,7 @@
 
 - Modules mapped: **324**
 - Packages: **11**
-- Internal import edges: **996**
+- Internal import edges: **999**
 - Distinct external dependencies: **11**
 
 ---
@@ -193,7 +193,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks.goose` | `agentteams.bridge_subagents_goose`, `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_docs`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.runner_mcp`, `agentteams.write_policy` | `agentteams.audit`, `agentteams.bridge`, `agentteams.bridge_subagents_goose`, `agentteams.cli.app`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.registry`, `agentteams.mcp_catalog` |
 | `agentteams.frameworks.goose_coordination` | `agentteams.frameworks.goose` | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants` |
 | `agentteams.frameworks.goose_docs` | `agentteams.capability_hints`, `agentteams.frameworks.goose_tool_scoping` | `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.goose` |
-| `agentteams.frameworks.goose_recipe_emit` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.frameworks.goose_tool_scoping` |
+| `agentteams.frameworks.goose_recipe_emit` | `agentteams.frameworks.base`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.yaml_frontmatter` | `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.vulnscan.agent_recipe` |
 | `agentteams.frameworks.goose_recipe_grants` | `agentteams.frameworks.goose_coordination`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.runner_mcp`, `agentteams.write_policy` | `agentteams.frameworks.goose` |
 | `agentteams.frameworks.goose_recipe_merge` | `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_recipe_validate` | `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.structural_merge` |
 | `agentteams.frameworks.goose_recipe_read` | — | `agentteams.audit_agent_contract`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_merge`, `agentteams.frameworks.goose_recipe_validate`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.interop_grant_check` |
@@ -323,9 +323,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.agent_driver_base` | — | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_codex`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_recipe` |
 | `agentteams.vulnscan.agent_drivers` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_drivers_codex`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_upstreams` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.debrief` |
 | `agentteams.vulnscan.agent_drivers_codex` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
-| `agentteams.vulnscan.agent_drivers_copilot` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
-| `agentteams.vulnscan.agent_recipe` | `agentteams.vulnscan.agent_driver_base` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
-| `agentteams.vulnscan.agent_run` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.run_records`, `agentteams.vulnscan.selftest_probe`, `agentteams.vulnscan.team_dir` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.report_store` |
+| `agentteams.vulnscan.agent_drivers_copilot` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
+| `agentteams.vulnscan.agent_recipe` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.vulnscan.agent_driver_base` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.selftest_cli` |
+| `agentteams.vulnscan.agent_run` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.run_records`, `agentteams.vulnscan.selftest_probe`, `agentteams.vulnscan.team_dir` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.report_store` |
 | `agentteams.vulnscan.agent_settings` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.debrief` | `agentteams.vulnscan.agent_run` |
 | `agentteams.vulnscan.agent_upstreams` | — | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.team_dir` |
 | `agentteams.vulnscan.coverage` | `agentteams.vulnscan.grant`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.registry` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.review` |
@@ -3743,6 +3743,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.vulnscan.agent_driver_base",
+        "agentteams.vulnscan.agent_recipe",
         "agentteams.vulnscan.agent_upstreams",
         "agentteams.vulnscan.mcp"
       ],
@@ -3754,6 +3755,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/vulnscan/agent_recipe.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.frameworks.goose_recipe_emit",
         "agentteams.vulnscan.agent_driver_base"
       ],
       "external": [],
@@ -3765,6 +3767,7 @@ digraph "agentteams architecture" {
       "is_package": false,
       "imports_internal": [
         "agentteams.vulnscan.agent_drivers",
+        "agentteams.vulnscan.agent_recipe",
         "agentteams.vulnscan.agent_settings",
         "agentteams.vulnscan.agent_upstreams",
         "agentteams.vulnscan.executor",
@@ -7718,6 +7721,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.vulnscan.agent_drivers_copilot",
+      "target": "agentteams.vulnscan.agent_recipe"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_drivers_copilot",
       "target": "agentteams.vulnscan.agent_upstreams"
     },
     {
@@ -7726,11 +7733,19 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.vulnscan.agent_recipe",
+      "target": "agentteams.frameworks.goose_recipe_emit"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_recipe",
       "target": "agentteams.vulnscan.agent_driver_base"
     },
     {
       "source": "agentteams.vulnscan.agent_run",
       "target": "agentteams.vulnscan.agent_drivers"
+    },
+    {
+      "source": "agentteams.vulnscan.agent_run",
+      "target": "agentteams.vulnscan.agent_recipe"
     },
     {
       "source": "agentteams.vulnscan.agent_run",
