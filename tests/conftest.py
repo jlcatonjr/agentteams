@@ -79,6 +79,21 @@ def _no_research_cache(monkeypatch):
     monkeypatch.setenv("AGENTTEAMS_RESEARCH_NO_CACHE", "1")
 
 
+@pytest.fixture(autouse=True)
+def _vulnscan_subprocesses_on_host(monkeypatch):
+    """Run vulnscan's git, npm and server-kit subprocesses on the host in tests, EXPLICITLY.
+
+    In production ``confine.subprocesses`` defaults to true: executor ops and apply-worktree staging run them in
+    the tools container and refuse when Docker is unavailable. The existing executor / daily / fix tests drive
+    real host git against temporary repositories, and CI has no tools image, so here the *default* is off. A
+    config that sets ``confine.subprocesses`` itself still wins, which is how
+    ``tests/test_vulnscan_subproc_confine.py`` exercises the confined path (with Docker mocked).
+    """
+    from agentteams.vulnscan import subproc_confine
+
+    monkeypatch.setattr(subproc_confine, "ENABLED_BY_DEFAULT", False)
+
+
 # --- live MODEL-BEHAVIOUR gate (2026-07-30) ---------------------------------
 #
 # Distinct from the credential gates above, and additive to them. Those answer "can this run at
@@ -152,8 +167,40 @@ def _snapshot_watched_tree():
         return None
 
 
+def _report_stale_integrity_manifest(session: pytest.Session) -> None:
+    """Print ``integrity.stale_summary`` once, from the controller process, when the manifest is stale.
+
+    INTEGRITY-MANIFEST-STALE-PER-PIN-EDIT: an edit to a pinned module stales
+    ``references/enforcement-integrity.json``, and tests asserting ``--check``'s exit code then fail in
+    a way that reads like a regression. Naming the stale pins and the re-record command up front says
+    why. Informational only: it never changes the session's outcome. xdist workers skip it (they
+    carry ``workerinput``) so a parallel run prints it once, not once per worker.
+
+    Args:
+        session: The pytest session.
+    """
+    if hasattr(session.config, "workerinput"):
+        return
+    import sys
+
+    from agentteams import integrity
+
+    try:
+        summary = integrity.stale_summary(Path(__file__).resolve().parents[1])
+    except (RuntimeError, OSError) as exc:
+        summary = f"[INTEGRITY] could not check the enforcement manifest: {exc}"
+    if not summary:
+        return
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        reporter.write_line(summary, yellow=True)
+    else:
+        print(summary, file=sys.stderr, flush=True)
+
+
 def pytest_sessionstart(session):  # noqa: D103
     _tree_watch["prev"] = _snapshot_watched_tree()
+    _report_stale_integrity_manifest(session)
 
 
 def pytest_runtest_teardown(item, nextitem):  # noqa: D103

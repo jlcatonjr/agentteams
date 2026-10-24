@@ -49,6 +49,7 @@ from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
+from agentteams.vulnscan import project_policy as _vpolicy
 
 # Default directory name for the fleet's own report/backup output (``run_fleet``
 # writes to ``<parent>/.agentteams-fleet/<run-id>/`` unless --fleet-report overrides).
@@ -147,6 +148,7 @@ class WorkspaceResult:
     snapshot_committed: bool = False
     diff_file: str | None = None
     targets: list[TargetResult] = field(default_factory=list)
+    vulnscan_unanswered: bool = False   # the brief states no vulnerability_scanning level
 
 
 # ---------------------------------------------------------------------------
@@ -801,6 +803,9 @@ def run_fleet(args, parser) -> int:
         print(f"\n▸ {rel}  ({'git' if is_git else 'NON-GIT'})")
 
         descriptor = _resolve_descriptor(ws)
+        if note := _vpolicy.unanswered_line(ws, _vpolicy.read_policy(ws)):   # prints only; never enrols
+            wr.vulnscan_unanswered = True
+            print(f"    {note}")
         targets = _plan_targets(ws, frameworks)
         if not targets:
             print("    (no updatable target)")
@@ -859,11 +864,8 @@ def run_fleet(args, parser) -> int:
                 continue
 
             rc, out = _run_main(argv)
-            tr = TargetResult(
-                workspace=str(ws), target=target, rc=rc,
-                descriptor=str(descriptor) if descriptor else "",
-                status="OK",
-            )
+            tr = TargetResult(workspace=str(ws), target=target, rc=rc, status="OK",
+                              descriptor=str(descriptor) if descriptor else "")
             tr.shrink_grant_warnings, tr.shrink_grants_active = shrink_grant_lines(out)  # every path, dry runs too
 
             if not apply:
@@ -963,10 +965,7 @@ def _first_error(out: str) -> str:
 
 
 def _is_hard_error(out: str) -> bool:
-    return any(
-        l.strip().startswith("Error") or "Traceback (most recent call last)" in l
-        for l in out.splitlines()
-    )
+    return any(l.strip().startswith("Error") or "Traceback (most recent call last)" in l for l in out.splitlines())
 
 
 def _slug(ws: Path, parent: Path) -> str:

@@ -91,7 +91,7 @@ if [ "$MIGRATE" -eq 1 ]; then
     fi
     chmod 600 "$dest"
     echo "moved: $f -> $dest"
-    echo "  new: export AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$dest\""
+    echo "  new: AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$dest\" <command>  (per command; never export it)"
     moved=$((moved + 1))
   done < <(legacy_keys)
   echo "migrate: $moved moved, $skipped skipped. No key was deleted."
@@ -188,9 +188,11 @@ for STORE in "${STORES[@]}"; do
   echo "  public (the store the gate reads)   : $STORE/$KEY_ID.pub.pem"
 done
 echo
-echo "To sign a relaxing decision, in your interactive shell only:"
-echo "  export AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$PRIV\""
-echo "  agentteams --sign-decision path/to/decision-spec.json --output <the same team dir>"
+echo "To sign, in your interactive shell only, set the key file on the signing command itself:"
+echo "  AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$PRIV\" python -m agentteams.vulnscan grant sign --key-id $KEY_ID ..."
+echo "  AGENTTEAMS_DECISION_ED25519_KEYFILE=\"$PRIV\" agentteams --sign-decision path/to/decision-spec.json --output <the same team dir>"
+echo "Do NOT export AGENTTEAMS_DECISION_ED25519_KEYFILE (or put it in a shell rc file): a variable left"
+echo "set is inherited by every later command in that shell, including any agent session you start."
 echo
 echo "Commit each .pub.pem if its team dir is tracked (a .claude/ team dir is often gitignored, so"
 echo "the key then stays local). NEVER commit or export $PRIV into an agent session."

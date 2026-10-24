@@ -79,6 +79,8 @@ nav:
           - Runtime security for served apps: runtime-security-guide.md
           - Red-team scoring and attack generation: redteam-model-scoring-guide.md
           - Security workflow glossary: security-workflow-glossary.md
+          - Vulnerability scanning and remediation: vulnerability-remediation-guide.md
+          - Automated remediation setup, step by step: vulnscan-automation-walkthrough.md
       - Security handbook:
           - "Security handbook: overview": agentteams-security-guide/README.md
           - About this handbook:
@@ -219,6 +221,8 @@ nav:
               - framework-research: api-reference/framework-research.md
               - framework-conformance: api-reference/framework-conformance.md
               - framework-freshness: api-reference/framework-freshness.md
+              - vulnscan: api-reference/vulnscan.md
+              - security-refs-data: api-reference/security-refs-data.md
           - Enhancement & enrichment:
               - enrich: api-reference/enrich.md
               - memory-index: api-reference/memory-index.md

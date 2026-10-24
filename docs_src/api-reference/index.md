@@ -42,6 +42,7 @@ This reference defines the **supported public API surface** (documented modules 
 | Module | Role |
 |--------|------|
 | [`scan`](scan.md) | Proactive security scan for generated agent files |
+| [`vulnscan`](vulnscan.md) | Daily vulnerability scanning and agent-driven remediation under operator-signed grants: architecture, CLI, MCP tools, files, ledger, Python API (setup: [walkthrough](../vulnscan-automation-walkthrough.md)) |
 | [`scan-operational`](scan-operational.md) | Which pipeline-written JSON (incl. listed memory-index shards) the scanner exempts; integrity-pinned |
 | [`env_hygiene`](env-hygiene.md) | `.env` files are gitignored and kept out of Docker build contexts (audit + append-only `--fix`) |
 | [`redteam`](redteam.md) | The `agentteams/redteam/` package — audit internals + corpus coverage/density (F2). The model-scoring + attack-generation *scripts* are in the [Red-Team Model Scoring & Attack Generation](../redteam-model-scoring-guide.md) guide |
@@ -52,6 +53,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`living-doc`](living-doc.md) | Living-document conformance (Rule 7) over unfenced agent prose |
 | [`remediate`](remediate.md) | Auto-correct audit findings via standalone Copilot CLI |
 | [`security-refs`](security-refs.md) | Build live security intelligence placeholders for templates |
+| [`security-refs-data`](security-refs-data.md) | Static OWASP / LLM-reference / control-evidence tables for `security_refs` |
 | [`framework-research`](framework-research.md) | Detect upstream framework drift; transmit via `--update --merge`; supervised-PR auto-update path |
 | [`framework-conformance`](framework-conformance.md) | Standard ≤24h agent-infra conformance check — route `@framework-adapters-expert` on real drift (`agentteams --agent-check`) |
 | [`framework-freshness`](framework-freshness.md) | Cross-framework render-staleness scan — report which provider renders lag the current templates (`--framework-freshness`) |
