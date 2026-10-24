@@ -92,7 +92,7 @@ Record the answer in the brief as `"vulnerability_scanning": {"level": "<answer>
 ## After Intake
 
 ### Step 1: Write description file
-Use `Write` to save the collected information as `.agentteams/brief.json` (the canonical consumer descriptor for an external project). Note: `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only — do not use it for an external project.
+Use `Write` to save the collected information to the project's brief, chosen the way agentteams resolves it: `.agentteams/brief.json` if it exists, else `brief.json` at the project root if it exists. Update an existing brief in place: merge the answers into it and keep every key you did not ask about (project-specific keys stay as they are). Create `.agentteams/brief.json` only when neither file exists; creating it beside an existing root `brief.json` would shadow that brief. `_build-description.json` is the thin stub reserved for `--self` builds of the agentteams repo only: do not write it for an external project. `<brief>` below is the file you chose.
 
 ```json
 {
@@ -130,7 +130,7 @@ Present the summary to the user and ask: "I'm ready to generate your agent team.
 Use `Bash` to run:
 ```bash
 python build_team.py \
-  --description .agentteams/brief.json \
+  --description <brief> \
   --framework grok \
   --project <existing_project_path> \
   --output <existing_project_path>

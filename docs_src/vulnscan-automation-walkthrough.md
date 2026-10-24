@@ -48,7 +48,7 @@ component table.
 | npm, if any repository has a `package-lock.json` | `stage-fix` updates npm lockfiles with `npm audit fix --package-lock-only` (it contacts the npm registry) | `npm --version` |
 | GitHub CLI, signed in | `open-pr` pushes a branch and opens a pull request | `gh auth status` |
 | ssh access to your servers, non-interactive, as root or with passwordless `sudo` | server audits run with `BatchMode=yes` and `sudo -n` | `ssh -o BatchMode=yes <host> sudo -n true` |
-| Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway | `docker info` |
+| Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)) | `docker info` |
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
 | shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
@@ -392,6 +392,25 @@ A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "e
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
 `docker_reachable`. `agent-image build` checks Docker before it runs `pip wheel`.
 
+### Step 7b: Build the tools image the executor runs in
+
+The executor runs `git`, `npm audit fix` and the server kit's `ssh` in a separate hardened **tools
+container**. That container has a read-only filesystem, no home directory, no keys, and a per-operation
+egress proxy as its only way out (see
+[Subprocess confinement](api-reference/vulnscan.md#subprocess-confinement-tools-container)). It fails
+closed: until this image is built and its self-test passes, `stage-fix`, `open-pr`, apply-worktree
+staging and the daily server audits are **refused** ("tools container unavailable"), never run on the
+host. Build and prove it once per release:
+
+```bash
+bash scripts/vulnscan-tools-image.sh
+```
+
+It builds `agentteams-vulnscan-tools` from the checkout (Node.js pinned and checksum-verified) and runs
+`python -m agentteams.vulnscan tools-selftest`, which must print `"passed": true`. Re-run it after every
+upgrade. Setting `confine.subprocesses: false` in `vulnscan.json` runs these tools on the host instead; every
+review then opens with a warning.
+
 ### Step 8: Sign a narrow first grant
 
 The first grant lets the agents stage fixes in **one** repository for **one** day, and do nothing
@@ -577,6 +596,32 @@ a retry after a failed `gh pr create` reuses the pushed branch instead of pushin
 
 Finally set `"enabled": true` in the `agent` block. From then on, every daily run ends with an agent
 run.
+
+### Using Claude Code instead of goose
+
+The remediation agent can run on Claude Code (`agent.framework: "claude"`). Everything else in this
+walkthrough stays the same: the grants, the executor, the review and the isolation. Differences:
+
+- **Models.** Claude Code runs Anthropic models only: `agent.model` must be a Claude model id, such as
+  `anthropic/claude-sonnet-4.5` through OpenRouter (the default upstream, `agent.upstream_messages`
+  `https://openrouter.ai/api/v1`, using your OpenRouter `key_file`) or `claude-sonnet-4-5` with
+  `"upstream_messages": "https://api.anthropic.com/v1"` and an Anthropic key in
+  `~/.config/agentteams-secrets/anthropic.env` (`ANTHROPIC_API_KEY=...`, mode 600). Anthropic's API
+  reports no cost, so that route also needs a price table, `agent.prices` (a JSON file of USD per million
+  tokens per model; see the [API reference](api-reference/vulnscan.md)).
+- **The team.** Generate a Claude team with the remediation capability (`--framework claude`); its agent
+  definition is `.claude/agents/vuln-remediation.md`, passed to Claude Code by its path. Sign grants with
+  `--governance-dir <team>/.claude/agents`.
+- **The image and the self-test.** `FRAMEWORK=claude bash scripts/vulnscan-agent-image.sh` installs the
+  pinned Claude Code release (its digest checked against Anthropic's GPG-signed release manifest; `gpg`
+  must be installed to verify any other version). The self-test then also runs Claude Code once against a
+  local stub and fails unless the only tools it reports are the vulnscan ones and planted `.mcp.json`,
+  hook, `CLAUDE.md` and `AGENTS.md` files have no effect.
+- **The acceptance run.** `FRAMEWORK=claude MODEL=<claude model> bash
+  scripts/vulnscan-operator/09-accept-framework.sh` does all of this in order, signs a one-day stage-fix
+  grant, runs one supervised agent run and prints the outcome, the spend and any request the gateway
+  refused (report those: each names what to add to the gateway's allowlist). Keep `agent.enabled` false
+  until that run is clean.
 
 ---
 

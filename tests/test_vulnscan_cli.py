@@ -453,11 +453,7 @@ def test_agent_defaults_table_matches_default_agent() -> None:
                         "debrief_max_tokens": debrief.DEFAULT_DEBRIEF_MAX_TOKENS}
     assert set(rows) == set(agent_run.DEFAULT_AGENT) | set(debrief_defaults)
     for key, cell in rows.items():
-        if key == "command":
-            m = re.fullmatch(r"goose `(.*)`", cell)
-            assert m and ["goose", *shlex.split(m.group(1))] == agent_run.DEFAULT_AGENT["command"]
-        else:
-            assert _cell(cell) == {**agent_run.DEFAULT_AGENT, **debrief_defaults}[key], key
+        assert _cell(cell) == {**agent_run.DEFAULT_AGENT, **debrief_defaults}[key], key
 
 
 # ---------------------------------------------------------------- G25/V24: publish-grant sign via the CLI

@@ -4,13 +4,19 @@ Supported formats:
 
 | Ecosystem | Files |
 |---|---|
-| PyPI | ``requirements*.txt`` (``==`` pins), ``poetry.lock``, ``uv.lock``, ``Pipfile.lock`` |
+| PyPI | ``requirements*.txt``, ``requirements*.lock`` and ``requirements*.in`` (``==`` pins), ``poetry.lock``, ``uv.lock``, ``Pipfile.lock``; a ``pyproject.toml`` next to requirements files (PEP 621 ``==`` pins) |
 | npm | ``package-lock.json`` and ``npm-shrinkwrap.json`` (v1–v3), ``yarn.lock`` (classic and berry) |
 | Packagist | ``composer.lock`` |
 
 A manifest that yields no exact versions is reported as *unscannable*, not skipped
 silently. Examples are an unpinned ``requirements.txt``, a ``pyproject.toml`` with no
-lockfile, and a ``pnpm-lock.yaml``.
+lockfile, and a ``pnpm-lock.yaml``. Lockfiles of ecosystems the scanner does not read
+(:data:`UNSUPPORTED`: ``Cargo.lock``, conda ``environment.yml``, Lean ``lake-manifest.json``)
+are reported as unscannable with the reason, so a workspace that holds only those is not
+mistaken for one with nothing to scan.
+
+Only ``requirements*.txt`` (:data:`REQ_NAME`) is ever edited by a staged fix; the ``.lock``
+and ``.in`` variants are read, never edited (:data:`REQ_SCAN_NAME`).
 
 Discovery skips vendored and generated trees (``node_modules``, virtualenvs, build
 output). It also skips **linked git worktrees** by default, because they repeat their
@@ -41,11 +47,22 @@ SKIP_DIRS: frozenset[str] = frozenset({
     "tmp",
 })
 
+#: Requirements files a staged fix may edit (``executor.validate_diff`` checks them with :func:`check_pin_edit`).
 REQ_NAME = re.compile(r"^requirements[\w.-]*\.txt$", re.I)
+#: Requirements files the scanner reads: :data:`REQ_NAME` plus pip-compile style ``.lock`` and ``.in`` files.
+REQ_SCAN_NAME = re.compile(r"^requirements[\w.-]*\.(txt|lock|in)$", re.I)
 REQ_PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*==\s*([^\s;#,]+)")
 _REQ_ANY = re.compile(r"^\s*[A-Za-z0-9][A-Za-z0-9._-]*")
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.lock",
              "poetry.lock", "uv.lock", "Pipfile.lock")
+#: Lockfiles of ecosystems that are not scanned: discovered and reported as unscannable with this reason.
+UNSUPPORTED: dict[str, str] = {
+    "Cargo.lock": "Rust/crates.io: not supported",
+    "environment.yml": "conda: not supported",
+    "environment.yaml": "conda: not supported",
+    "lake-manifest.json": "Lean: not supported",
+}
+_DEV_GROUP = re.compile(r"dev|test|lint|doc|type", re.I)
 REGISTRY_HOSTS = frozenset({"registry.npmjs.org", "registry.yarnpkg.com"})
 _LOCK_ROOT_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies", "scripts",
                    "workspaces")
@@ -70,6 +87,7 @@ class Manifest:
     deps: list[Dep] = field(default_factory=list)
     unscannable: str = ""   # reason, when no exact versions could be read
     unpinned: int = 0       # requirement lines without an exact pin
+    covered: bool = False   # nothing of its own to report: requirements files alongside carry its pins
 
 
 def is_linked_worktree(directory: Path) -> bool:
@@ -100,7 +118,9 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
 
     Returns:
         Sorted manifest paths. ``package.json`` and ``pyproject.toml`` are listed only when
-        their directory has no lockfile, so they can be reported as unscannable.
+        their directory has no lockfile (a ``pyproject.toml`` next to requirements files is listed
+        too: :func:`parse` reads its PEP 621 pins). :data:`UNSUPPORTED` lockfiles are listed so they
+        can be reported as unscannable.
     """
     found: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -115,10 +135,10 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         dirnames[:] = sorted(keep)
         names = set(filenames)
         for name in sorted(names):
-            if name in LOCKFILES or REQ_NAME.match(name):
+            if name in LOCKFILES or name in UNSUPPORTED or REQ_SCAN_NAME.match(name):
                 found.append(here / name)
         has_lock = bool(names & set(LOCKFILES))
-        if "pyproject.toml" in names and not has_lock and not any(REQ_NAME.match(n) for n in names):
+        if "pyproject.toml" in names and not has_lock:
             found.append(here / "pyproject.toml")
         if "package.json" in names and not has_lock:
             found.append(here / "package.json")
@@ -140,7 +160,7 @@ def parse(path: Path) -> Manifest:
     name = path.name
     m = Manifest(path=path)
     try:
-        if REQ_NAME.match(name):
+        if REQ_SCAN_NAME.match(name):
             _requirements(path, m)
         elif name in ("package-lock.json", "npm-shrinkwrap.json"):
             _npm_lock(path, m)
@@ -154,15 +174,17 @@ def parse(path: Path) -> Manifest:
             _pipfile_lock(path, m)
         elif name == "pnpm-lock.yaml":
             m.unscannable = "pnpm-lock.yaml is not parsed yet — run `pnpm audit` here"
+        elif name in UNSUPPORTED:
+            m.unscannable = f"{name}: {UNSUPPORTED[name]}"
         elif name == "pyproject.toml":
-            m.unscannable = "pyproject.toml without a lockfile — pin with uv/poetry lock or requirements"
+            _pyproject(path, m)
         elif name == "package.json":
             m.unscannable = "package.json without a lockfile — run `npm install --package-lock-only`"
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, tomllib.TOMLDecodeError,
             KeyError, TypeError, AttributeError) as exc:
         m.deps.clear()
         m.unscannable = f"could not parse: {type(exc).__name__}: {exc}"
-    if not m.deps and not m.unscannable:
+    if not m.deps and not m.unscannable and not m.covered:
         m.unscannable = ("no exact `==` pins" if m.unpinned else "no dependencies listed")
     return m
 
@@ -179,6 +201,47 @@ def _requirements(path: Path, m: Manifest) -> None:
             m.unpinned += 1
     if "dev" in path.name.lower() or "test" in path.name.lower():
         m.deps[:] = [Dep(d.ecosystem, d.name, d.version, "dev", d.source) for d in m.deps]
+
+
+def _pep503(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _pyproject(path: Path, m: Manifest) -> None:
+    """Read a ``pyproject.toml``: alone it is unscannable; next to requirements files, its PEP 621 ``==`` pins.
+
+    ``[project].dependencies`` are runtime; ``[project.optional-dependencies]`` groups named like dev, test,
+    lint, doc or type are dev, the rest runtime. A pin a requirements file alongside already lists (same
+    PEP 503 name and version) is not counted twice. A dependency with no exact pin that no requirements file
+    alongside pins makes the file *unscannable* for that part (its pins are still scanned).
+    """
+    siblings = sorted(p for p in path.parent.iterdir() if REQ_SCAN_NAME.match(p.name) and p.is_file())
+    if not siblings:
+        m.unscannable = "pyproject.toml without a lockfile — pin with uv/poetry lock or requirements"
+        return
+    pinned = {(_pep503(d.name), d.version) for s in siblings for d in parse(s).deps}
+    pinned_names = {n for n, _v in pinned}
+    project = tomllib.loads(path.read_text(encoding="utf-8")).get("project") or {}
+    specs = [(s, "runtime") for s in project.get("dependencies") or []]
+    for group, items in (project.get("optional-dependencies") or {}).items():
+        specs += [(s, "dev" if _DEV_GROUP.search(group) else "runtime") for s in items or []]
+    seen = set(pinned)
+    for spec, scope in specs:
+        line = spec.strip()   # a non-string entry raises AttributeError: parse reports it as unscannable
+        hit = REQ_PIN.match(line)
+        version = hit.group(3) if hit else ""
+        if hit and not version.startswith("=") and "*" not in version:
+            key = (_pep503(hit.group(1)), version)
+            if key not in seen:
+                seen.add(key)
+                m.deps.append(Dep("PyPI", hit.group(1), version, scope, str(path)))
+        elif (name := _REQ_ANY.match(line)) and _pep503(name.group(0).strip()) not in pinned_names:
+            m.unpinned += 1
+    if m.unpinned:
+        m.unscannable = (f"{m.unpinned} [project] dependency(ies) without an exact `==` pin, not pinned in a "
+                         "requirements file alongside")
+    elif not m.deps:
+        m.covered = True   # empty, or every dependency is pinned by the requirements files alongside
 
 
 def _npm_lock(path: Path, m: Manifest) -> None:

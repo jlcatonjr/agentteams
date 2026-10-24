@@ -17,6 +17,7 @@
 | ``agent-image build`` | Build the credential-free agent container image (goose pinned by version + sha256) |
 | ``agent-selftest`` | Prove the container's isolation; agent mode is refused until this passes for the image |
 | ``agent-run`` | Run the agent team once on today's scan (normally done by ``daily`` when ``agent.enabled``) |
+| ``tools-image build`` / ``tools-selftest`` | Build the tools image git, npm and the server kit run in, and prove its isolation (:mod:`.tools_image`) |
 | ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
 
@@ -24,7 +25,7 @@ Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 c
 or above ``--fail-on`` (``fix``: something held back or refused), 3 partially unscanned (a feed or host
 failed), 4 malicious package or compromise indicator. Every command uses 2 for usage or setup
 errors (no config, refused signing). ``act`` gives 0 done, 1 refused, 3 failed. ``agent-run`` gives 0
-completed, 3 not run or agent error. ``agent-selftest`` gives 0 pass, 1 fail.
+completed, 3 not run or agent error. ``agent-selftest`` and ``tools-selftest`` give 0 pass, 1 fail.
 
 Kept separate from the ``agentteams`` console script, like ``python -m agentteams.research``.
 """
@@ -50,6 +51,7 @@ from agentteams.vulnscan import (
     project_cli,
     review,
     schedule,
+    tools_image,
 )
 from agentteams.vulnscan.report import Report
 
@@ -185,16 +187,20 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--ack", action="store_true", help="record that you reviewed everything up to now")
     sp.add_argument("--note", default="")
     sp.add_argument("--gh-replies", action="store_true", help="also list replies on the agents' PRs (uses gh)")
-    sp = sub.add_parser("agent-image", help="build the agent container image")
+    sp = sub.add_parser("agent-image", help="build the agent container image for one framework")
     sp.add_argument("action", choices=("build",))
-    sp.add_argument("--goose-version", required=True)
-    sp.add_argument("--goose-sha256", required=True, help="sha256 of the linux release tarball (from the release page)")
+    sp.add_argument("--framework", default=None, help="the agent CLI to install (default: agent.framework)")
+    sp.add_argument("--cli-version", "--goose-version", dest="cli_version", required=True,
+                    help="the CLI's release version (--goose-version: alias)")
+    sp.add_argument("--cli-sha256", "--goose-sha256", dest="cli_sha256", required=True,
+                    help="checksum of the linux release asset, from the release metadata (--goose-sha256: alias)")
     sp.add_argument("--python-image", default="python:3.12-slim", help="pin by digest: python:3.12-slim@sha256:...")
     sp.add_argument("--source", type=Path, default=None)
     sub.add_parser("agent-selftest", help="prove the agent container's isolation")
     sub.add_parser("agent-run", help="run the agent team once on the latest scan")
     operator_cli.register(sub)
     project_cli.register(sub)
+    tools_image.register(sub)
     return p
 
 
@@ -333,8 +339,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if args.cmd == "agent-image":
             try:
-                print(agent_run.build_image(cfg, goose_version=args.goose_version, goose_sha256=args.goose_sha256,
-                                            python_image=args.python_image, source=args.source))
+                print(agent_run.build_image(cfg, cli_version=args.cli_version, cli_sha256=args.cli_sha256,
+                                            python_image=args.python_image, source=args.source,
+                                            framework=args.framework))
             except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
                 print(f"agent image build failed: {exc}", file=sys.stderr)
                 return 1
@@ -367,6 +374,8 @@ def main(argv: list[str] | None = None) -> int:
         return project_cli.dispatch(args, daily.load_config)
     if args.cmd in operator_cli.COMMANDS:
         return operator_cli.dispatch(args, daily.load_config)
+    if args.cmd in tools_image.COMMANDS:
+        return tools_image.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":
         dest = args.dest or paths.server_kit_dir()
         names = export_server_kit(dest)

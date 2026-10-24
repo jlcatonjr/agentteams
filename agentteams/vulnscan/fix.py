@@ -34,7 +34,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, osv, project_policy
+from agentteams.vulnscan import _http, osv, project_policy, subproc_confine
 from agentteams.vulnscan.manifests import REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -398,7 +398,9 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
     global config pointed at an empty file, inherited ``npm_config_*`` variables dropped, and the
     registry and TLS verification fixed on the command line. The repository's own ``.npmrc``
     (registry, proxy, ``strict-ssl``, ``ca``/``cafile``) is therefore never read (D2). With
-    ``apply`` the changed lockfile is copied back.
+    ``apply`` the changed lockfile is copied back. Inside a confinement scope npm runs in the tools container
+    (:func:`subproc_confine.run_npm`): only the scratch copy is mounted (writable) and only the registry is
+    reachable; :class:`subproc_confine.Unavailable` propagates (fail closed).
 
     Args:
         directory: Folder holding package-lock.json.
@@ -408,7 +410,8 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
     Returns:
         npm's output, or a note when npm is unavailable or a manifest is a symlink.
     """
-    npm = shutil.which("npm")
+    confined = subproc_confine.active() is not None
+    npm = "npm" if confined else shutil.which("npm")
     if not npm:
         return "npm not installed — run `npm audit fix --package-lock-only --ignore-scripts` where it is"
     names = [n for n in ("package.json", *NPM_LOCKFILES) if (directory / n).is_symlink() or (directory / n).exists()]
@@ -420,8 +423,10 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
     if not apply:
         cmd.append("--dry-run")
     env = {k: v for k, v in os.environ.items() if not k.lower().startswith("npm_config_")}
-    with tempfile.TemporaryDirectory(prefix="agentteams-npm-") as tmp:
-        scratch, user_rc, global_rc = Path(tmp) / "pkg", Path(tmp) / "user-npmrc", Path(tmp) / "global-npmrc"
+    with tempfile.TemporaryDirectory(prefix="agentteams-npm-",
+                                     dir=subproc_confine.scratch_parent() if confined else None) as tmp_name:
+        tmp = Path(tmp_name).resolve()   # confined: mounted at its resolved path
+        scratch, user_rc, global_rc = tmp / "pkg", tmp / "user-npmrc", tmp / "global-npmrc"
         scratch.mkdir()
         for empty in (user_rc, global_rc):   # two files: npm refuses one file as both ("double-loading config")
             empty.write_text("", encoding="utf-8")
@@ -429,8 +434,12 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
             shutil.copyfile(directory / n, scratch / n)
         env.update({"NPM_CONFIG_USERCONFIG": str(user_rc), "NPM_CONFIG_GLOBALCONFIG": str(global_rc)})
         try:
-            proc = subprocess.run(cmd, cwd=scratch, env=env, capture_output=True, text=True, timeout=600,
-                                  check=False)
+            if confined:   # only the two config paths cross over; nothing of the host environment
+                proc = subproc_confine.run_npm(cmd[1:], workdir=scratch, scratch_root=tmp, timeout=600, env={
+                    k: env[k] for k in ("NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG")})
+            else:
+                proc = subprocess.run(cmd, cwd=scratch, env=env, capture_output=True, text=True, timeout=600,
+                                      check=False)
         except subprocess.TimeoutExpired:
             return "npm audit fix timed out after 600s"
         if apply:

@@ -205,8 +205,11 @@ def test_budget_exhausted_is_402_with_reason(upstream: Upstream) -> None:
 
 
 def test_token_cap_is_402(upstream: Upstream) -> None:
-    upstream.script.append(_json_reply({"cost": 0.0, "prompt_tokens": 60, "completion_tokens": 40}))
-    h = _handler(gateway.Meter(100.0, None, max_tokens=100))
+    # Phase 3 (deliberate): chat calls are reserved too, so the cap leaves room for one call's reservation
+    # (the default chat reserve plus the input estimate) before the reply's tokens fill it.
+    cap = gateway.d.DEFAULT_CHAT_RESERVE_TOKENS + 100
+    upstream.script.append(_json_reply({"cost": 0.0, "prompt_tokens": cap - 40, "completion_tokens": 40}))
+    h = _handler(gateway.Meter(100.0, None, max_tokens=cap))
     assert _drive(h, _request(_chat()))[0] == 200
     status, body = _drive(h, _request(_chat()))
     assert status == 402 and "token cap" in json.loads(body)["error"]["message"]
@@ -262,7 +265,31 @@ def test_client_disconnect_mid_stream_still_meters(upstream: Upstream) -> None:
         return first
 
     _drive(_handler(meter), _request(_chat(stream=True)), on_client=hang_up)
-    assert meter.calls == 1 and meter.unmetered == 1 and meter.spent == 0.0   # partial stream: fails closed
+    # revision 9: the upstream stream is drained after the hang-up, so the billed cost is metered (it used to
+    # count as an unmetered partial stream; an upstream cut still does, see the next test)
+    assert meter.calls == 1 and meter.unmetered == 0 and meter.spent == 0.5 and meter.drained == 1
+
+
+def test_client_reset_before_the_headers_still_drains_and_meters(upstream: Upstream) -> None:
+    """Security review item 3: a client gone before the response headers are written is drained like a hang-up."""
+    hung_up = threading.Event()
+    chunks = [b'data: {"choices": [{"delta": {"content": "a"}}]}\n\n'] * 2 + [b'data: {"usage": {"cost": 0.25}}\n\n']
+
+    def late() -> FakeResponse:
+        hung_up.wait(5)                              # the upstream answers only after the client has gone
+        time.sleep(0.05)
+        return FakeResponse(200, chunks, "text/event-stream")
+
+    upstream.script.append(late)
+    meter = gateway.Meter(1.0, None)
+
+    def reset(cli: socket.socket) -> bytes:
+        cli.close()                                  # before any response byte: writing the headers fails
+        hung_up.set()
+        return b""
+
+    assert _drive(_handler(meter), _request(_chat(stream=True)), on_client=reset) == (0, b"")
+    assert meter.calls == 1 and meter.unmetered == 0 and meter.spent == 0.25 and meter.drained == 1
 
 
 def test_upstream_disconnect_and_timeout(upstream: Upstream) -> None:
