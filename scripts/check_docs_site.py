@@ -25,6 +25,13 @@ Three subcommands, all stdlib-only, all run by the `docs-build` job in `.github/
     unnoticed; so does a duplicate entry. Every honoured removal is printed. Non-HTML assets
     (images, CSS, JS) are out of scope: they are not cited from outside the site.
 
+``external SITE``
+    Every external ``http(s)`` link on the nav pages is requested once (weekly, by
+    `.github/workflows/docs-links.yml`). Only definite breakage fails: HTTP 404/410 or a host that does
+    not resolve. Rate limits, timeouts and server errors are reported as **unverified**, never counted as
+    passing. Links whose target is a client-side route (``/#/…``) can only be checked up to the ``#``,
+    and the count of such links is printed so that limit stays visible.
+
 ``inbound SITE``
     Every ``jlcatonjr.github.io/agentteams/<path>`` URL hard-coded in the files listed in
     ``INBOUND_SOURCES`` must resolve to a page in the built site. A listed source file that does not
@@ -34,7 +41,10 @@ from __future__ import annotations
 
 import argparse
 import re
+import socket
 import sys
+import urllib.error
+import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -83,6 +93,7 @@ class _PageParser(HTMLParser):
         self.headings: list[int] = []
         self.imgs_without_alt = 0
         self.link_texts: list[str] = []
+        self.external_links: list[str] = []
         self._in_title = False
         self._article_depth = 0
         self._depth = 0
@@ -107,6 +118,9 @@ class _PageParser(HTMLParser):
             self.imgs_without_alt += 1
         elif tag == "a" and "headerlink" not in classes:
             self._link_text = []
+            href = a.get("href") or ""
+            if href.startswith(("http://", "https://")):
+                self.external_links.append(href)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -317,6 +331,75 @@ def check_inbound(site: Path) -> int:
     return rc
 
 
+def _fetch_status(url: str, timeout: float) -> int | None:
+    """Return the HTTP status for *url* (HEAD, falling back to GET), or None if the host does not resolve.
+
+    Raises:
+        OSError: For timeouts and other network failures the caller classifies as unverified.
+    """
+    headers = {"User-Agent": "agentteams-docs-link-check (+https://github.com/jlcatonjr/agentteams)"}
+    for method in ("HEAD", "GET"):
+        req = urllib.request.Request(url, method=method, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — http(s) only
+                return resp.status
+        except urllib.error.HTTPError as err:
+            if method == "HEAD" and err.code in (403, 405, 501):
+                continue  # some hosts refuse HEAD; retry with GET
+            return err.code
+        except urllib.error.URLError as err:
+            if isinstance(err.reason, socket.gaierror):
+                return None
+            raise OSError(str(err.reason)) from err
+    return None
+
+
+def check_external(site: Path, timeout: float = 15.0) -> int:
+    """Request every external link on the nav pages once; fail only on definite breakage.
+
+    Args:
+        site: The built site directory.
+        timeout: Per-request timeout in seconds.
+
+    Returns:
+        Process exit code: 1 if any link returned 404/410 or its host does not resolve.
+
+    Raises:
+        OSError: If a page cannot be read.
+    """
+    links: dict[str, set[str]] = {}
+    client_routes: set[str] = set()
+    for md_path in nav_pages():
+        parser = _PageParser()
+        parser.feed((site / page_html(md_path)).read_text(encoding="utf-8"))
+        for href in parser.external_links:
+            if "/#/" in href:
+                client_routes.add(href)
+            links.setdefault(href.split("#", 1)[0], set()).add(md_path)
+    rc = 0
+    broken: list[str] = []
+    unverified: list[str] = []
+    for url, pages in sorted(links.items()):
+        try:
+            status = _fetch_status(url, timeout)
+        except OSError as err:
+            unverified.append(f"{url} ({err})")
+            continue
+        if status is None or status in (404, 410):
+            broken.append(f"{url} -> {status or 'host not found'} (on {', '.join(sorted(pages))})")
+        elif status >= 400:
+            unverified.append(f"{url} -> HTTP {status}")
+    for item in broken:
+        print(f"[external] FAIL: {item}")
+        rc = 1
+    for item in unverified:
+        print(f"[external] unverified: {item}")
+    print(f"[external] {len(links)} distinct external URLs: {len(broken)} broken, {len(unverified)} unverified")
+    if client_routes:
+        print(f"[external] {len(client_routes)} links are client-side routes (/#/...): only their site was checked, not each route")
+    return rc
+
+
 def main(argv: list[str] | None = None) -> int:
     """Command-line entry point.
 
@@ -339,11 +422,15 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--allowlist", type=Path, default=REPO_ROOT / ".github" / "docs-removed-urls.txt")
     i = sub.add_parser("inbound")
     i.add_argument("site", type=Path)
+    e = sub.add_parser("external")
+    e.add_argument("site", type=Path)
     args = ap.parse_args(argv)
     if args.cmd == "pages":
         return check_pages(args.site)
     if args.cmd == "urls":
         return check_urls(args.base_site, args.head_site, args.allowlist)
+    if args.cmd == "external":
+        return check_external(args.site)
     return check_inbound(args.site)
 
 

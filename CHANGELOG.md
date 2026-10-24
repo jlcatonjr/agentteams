@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (site restructure, phase 4: closeout)
+
+- **Weekly external-link check.** `.github/workflows/docs-links.yml` runs `scripts/check_docs_site.py
+  external` and fails only on definite breakage: HTTP 404/410, or a host that does not resolve. Rate
+  limits and timeouts are reported as unverified. It uses the standard library, with no third-party
+  action.
+- **README:**
+  - names all 7 frameworks, with Beta labels;
+  - names the 11 governance agents its count refers to;
+  - lists every framework's instructions file;
+  - links the new Why agentteams and Contribute sections.
+- **`references/docs-site-ux-rubric.reference.md`:** the researched UI/UX review rubric used for this
+  restructure, published as a tracked reference. It covers information architecture, usability,
+  WCAG 2.2 AA, contributor onboarding, Material for MkDocs and URL stability.
+- **`references/documentation-refresh.procedure.md` and `references/filing-conventions.md`:** cover
+  the API nav-group rule, the strict build and site checks, the removed-URL allowlist, and where new
+  docs pages go.
+- **Self-build brief:** `docs_src/why` and `docs_src/contribute` added to `memory_index_extra_dirs`,
+  so the memory index covers the new sections.
+
 ### docs (site restructure, phase 3: Contribute)
 
 - **New Contribute section** (`docs_src/contribute/`), with seven pages:
