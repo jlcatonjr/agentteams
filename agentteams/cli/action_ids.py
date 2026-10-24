@@ -27,7 +27,7 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: per-plan ``branch-cleanup:<sha256>`` id. The pre-upgrade report checks old HALTs against these; a
 #: test checks both directions against the call sites.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
-                                 "branch-cleanup")
+                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

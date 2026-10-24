@@ -1022,7 +1022,10 @@ Operator only (R5); run it outside every agent session. It signs a direct-write 
 `mcp_grants` entry must ask for `approval: "direct"`. The key comes from `AGENTTEAMS_DECISION_ED25519_KEYFILE`,
 as for every operator signature. Name it with `--key-id ID`. The integrity and install-location checks run first,
 with the key unread. The full grant is then shown with a review digest, and it is signed only once that digest is
-confirmed: a terminal y/N, or `--confirm-review-sha256`.
+confirmed: a terminal y/N, or `--confirm-review-sha256`. The digest covers what you chose (the agent, the binding,
+the write cap, the key id and the grant's lifetime), not the `grant_id`, `issued` and `expires` each run mints, and binds the
+target project, so the digest a run without a terminal prints confirms the next run for the same project. Before 2026-10-22 it covered
+the minted fields too, so the flag could never match.
 - **What it binds:** the brief's current tools, write scopes and gates, the installed server's hash, an expiry
   (`--grant-days`, 1–30, default 7) and a write cap (`--max-writes`, 1–500, default 50).
 - **Checks:** it refuses a grant with no gate and directory-wide scopes, and verifies the grant before saving it.
@@ -1128,6 +1131,25 @@ missing ledger is an empty report (exit 0).
 With `--mcp-need-report`: the register to read. It must be inside the project and not a symlink. Without it,
 the report looks for `references/mcp-needs.csv`, then under `.claude/agents/`, `.github/agents/` and `.goose/`.
 
+### `--set-vulnscan LEVEL`
+
+Writes the project's dependency-scanning level (`off`, `scan` or `remediate`) into the `vulnerability_scanning`
+block of `--project`'s brief (else the current directory's). The brief is found the same way fleet updates find
+it. Only that block's text changes; every other key keeps its order and indentation. A brief is never
+created: without one, it exits 1. It shows the unified diff and its sha256, then asks `y/N` on the terminal.
+
+`--yes` never answers this prompt. The level decides what leaves the machine: with `scan`, dependency names and
+versions go to OSV.dev; with `remediate`, findings and repository paths also reach the model provider. That
+needs its own confirmation, not a build's blanket yes. Without a terminal, it prints the diff and its sha256
+and writes nothing (exit 1). To apply a reviewed diff from a script, rerun with
+`--set-vulnscan-confirm-sha256 <sha256>`. Already at that level: exit 0, nothing written. The command only
+records the project's intent. The operator enrols the project on a machine with
+`python -m agentteams.vulnscan enroll <dir>`.
+
+### `--set-vulnscan-confirm-sha256 SHA256`
+
+With `--set-vulnscan`: apply the change only when its diff's sha256 equals `SHA256`; a mismatch exits 1.
+
 ### `--confined-path`
 
 Read-only (P5b). Prints the operator-owned `confined_programs` file for `--project` (else the current
@@ -1159,11 +1181,15 @@ Mint an **HMAC-signed, non-widening** cross-workspace capability grant (P2) from
 
 ### `--confirm-review-sha256 HEX`
 
-Used with `--sign-decision` and `--sign-grant` when there is no terminal to confirm on, and with
-`--install-confined`, where it is required: the sha256 of the JSON you reviewed.
+Used with `--sign-decision`, `--sign-grant` and `--sign-mcp-direct-grant` when there is no terminal to
+confirm on, and with `--install-confined`, where it is required: the sha256 of the JSON you reviewed.
+A digest confirms a payload, not a moment: run again with the same choices, it confirms again.
+(vulnscan's `grant sign`, `publish-grant sign` and `resolve` accept it the same way.)
 
-Both minters print the payload and its review digest before reading the key. The digest covers the
-kind, the spec, the team dir, the `key_id` and the ledger root. On a terminal they then ask
+Every minter prints the payload and its review digest before reading the key. For `--sign-decision`
+and `--sign-grant` the digest covers the kind, the spec, the team dir, the `key_id` and the ledger
+root; for `--sign-mcp-direct-grant` it covers your choices and the grant's lifetime (not the per-run
+`grant_id` and times) and binds the target project. On a terminal they then ask
 `Sign this payload? [y/N]`. Without a terminal they refuse unless this flag equals the digest
 printed for the payload you reviewed. `--yes` never applies to signing.
 

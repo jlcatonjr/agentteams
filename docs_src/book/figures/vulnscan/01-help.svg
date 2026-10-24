@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="808" height="651" viewBox="0 0 808 651" role="img">
+<title>python -m agentteams.vulnscan --help</title>
+<rect width="808" height="651" rx="8" fill="#1e1f24"/>
+<rect width="808" height="26" rx="8" fill="#2c2e35"/>
+<rect y="18" width="808" height="8" fill="#2c2e35"/>
+<circle cx="16" cy="13" r="5" fill="#ff5f57"/><circle cx="34" cy="13" r="5" fill="#febc2e"/><circle cx="52" cy="13" r="5" fill="#28c840"/>
+<text x="404" y="17" fill="#a9adb7" font-family="Menlo, Consolas, monospace" font-size="12" text-anchor="middle">python -m agentteams.vulnscan --help</text>
+<text x="14" y="52" fill="#8fd18f" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">$ python -m agentteams.vulnscan --help</text>
+<text x="14" y="69" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">usage: python -m agentteams.vulnscan [-h]</text>
+<text x="14" y="86" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">                                     {scan,inventory,runtimes,fix,init,daily,schedule,server-kit,gra</text>
+<text x="14" y="103" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    nt,act,serve-requests,review,agent-image,agent-selftest,agent-run,halts,resolve,say,publish-gran</text>
+<text x="14" y="120" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    t,publish,agent-chat} ...</text>
+<text x="14" y="137" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="154" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">Find and remediate known-vulnerable dependencies and runtimes.</text>
+<text x="14" y="171" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="188" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">positional arguments:</text>
+<text x="14" y="205" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  {scan,inventory,runtimes,fix,init,daily,schedule,server-kit,grant,act,serve-requests,review,agent-</text>
+<text x="14" y="222" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    image,agent-selftest,agent-run,halts,resolve,say,publish-grant,publish,agent-chat}</text>
+<text x="14" y="239" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    scan                scan manifests under a repo or a folder of repos</text>
+<text x="14" y="256" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    inventory           analyze a server-kit audit log</text>
+<text x="14" y="273" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    runtimes            check Node/PHP/Python on this machine</text>
+<text x="14" y="290" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    fix                 plan (or --apply) dependency fixes in a working tree you control</text>
+<text x="14" y="307" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    init                write a starter config (never overwrites)</text>
+<text x="14" y="324" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    daily               one scheduled run over the configured repos and servers</text>
+<text x="14" y="341" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    schedule            install/remove/status of the daily job</text>
+<text x="14" y="358" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    server-kit          export the Linux server scripts</text>
+<text x="14" y="375" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    grant               standing remediation grants (sign: operator only)</text>
+<text x="14" y="392" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    act                 run one grant-covered action through the executor</text>
+<text x="14" y="409" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    serve-requests      execute spooled agent requests that a grant covers</text>
+<text x="14" y="426" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    review              after-action review of unattended remediation</text>
+<text x="14" y="443" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    agent-image         build the agent container image</text>
+<text x="14" y="460" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    agent-selftest      prove the agent container's isolation</text>
+<text x="14" y="477" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    agent-run           run the agent team once on the latest scan</text>
+<text x="14" y="494" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    halts               what is blocking remediation, and how to clear it</text>
+<text x="14" y="511" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    resolve             resolve an escalation (serious kinds need your Ed25519 signature)</text>
+<text x="14" y="528" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    say                 leave a note for the agents' next run</text>
+<text x="14" y="545" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    publish-grant       operator-signed grant to push reports to a private ops repo</text>
+<text x="14" y="562" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    publish             publish a run's report now</text>
+<text x="14" y="579" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">    agent-chat          talk to a past run's agent</text>
+<text x="14" y="596" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve"></text>
+<text x="14" y="613" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">options:</text>
+<text x="14" y="630" fill="#e6e6e6" font-family="Menlo, Consolas, monospace" font-size="13" xml:space="preserve">  -h, --help            show this help message and exit</text>
+</svg>

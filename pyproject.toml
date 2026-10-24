@@ -113,6 +113,12 @@ exclude = [
 [tool.setuptools.package-data]
 "agentteams" = ["templates/**", "schemas/**", "data/**"]
 
+# The `**` globs above would also ship bytecode a test run left in the source tree (MANIFEST.in's
+# global-exclude covers only the sdist). A shipped .pyc is recorded in the wheel's RECORD, Python then
+# rewrites it on first use, and the signing install-location check reports the install as modified.
+[tool.setuptools.exclude-package-data]
+"agentteams" = ["**/__pycache__/*", "**/*.pyc", "**/*.pyo"]
+
 [tool.setuptools.data-files]
 "share/man/man1" = ["agentteams.1"]
 
