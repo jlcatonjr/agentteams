@@ -6,53 +6,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.0-rc.2] - 2026-10-23
+## [1.1.0-rc.3] - 2026-10-24
 
 ### release notes
 
-agentteams 1.1.0-rc.2 is the second release candidate of the 1.1 line. It makes the daily vulnerability scan and
-remediation part of every agentteams project, new and existing, without committing anything about your machines or
-servers. It also closes a security gap in the remediation executor. Keep pinning `v1.0.x` where you need the stable
-line; the final `v1.1.0` will be signed from `release/1.1`.
+agentteams 1.1.0-rc.3 is the third release candidate of the 1.1 line. It lets the vulnscan remediation agent run on
+your preferred framework, moves the executor's untrusted-repository tooling into a hardened container, and adds a DLP
+filter to the model gateway. Keep pinning `v1.0.x` where you need the stable line.
 
-- **Projects declare their scan intent in the brief.** The new `vulnerability_scanning` block holds:
-  - `level` (`off`, `scan` or `remediate`);
-  - `exclude_paths` and `private_packages` (never sent to OSV, PyPI or npm);
-  - `include_dev`, `delivery` and `base_branch`.
+- **Choose the agent runtime with `agent.framework`.**
+  - **goose:** now pinned to 1.54.0, the newest release past the 14-day cooldown.
+  - **Claude Code 2.1.296** (new): the image takes its digest from Anthropic's GPG-verified release manifest. It runs
+    with `--bare`, no built-in tools, only the vulnscan MCP server and `dontAsk`, and accepts no command override.
+    Its self-test runs it headless against a stub, with planted files (`.mcp.json`, hooks, skills, `CLAUDE.md`,
+    `AGENTS.md`) that must have no effect.
+  - Drivers for Copilot, Codex and Grok follow.
+- **The gateway speaks three API formats.**
+  - Anthropic Messages and OpenAI Responses pass through, beside chat completions.
+  - Every format is deny-by-default: server tools, remote MCP, fetchable URLs and unlisted betas are refused.
+  - Usage is metered per format, with a price table, a per-call reservation and a drain on disconnect.
+- **DLP on every model request.**
+  - Blocked: secrets and keys (exact secret values, known token formats, private keys, signed JWTs).
+  - Redacted and flagged: private IPs, email addresses, the hostname and private package names. Home paths become
+    `~`.
+  - The matched text is never logged; counts go to the spend file and the review.
+  - Optional unix-socket listener with kernel peer-uid checks.
+- **The executor's tooling runs in a hardened tools container.**
+  - Covers `git`, `npm audit fix` and the server kit's `ssh`.
+  - The container has a read-only filesystem, no home directory and no credential folders.
+  - Its only exit is a proxy allowing exactly the operation's host.
+  - The push token reaches the container only on stdin, and only origin's host over https gets it.
+  - **Breaking:** run `bash scripts/vulnscan-tools-image.sh` after upgrading. Until its self-test passes, `stage-fix`,
+    `open-pr` and server audits are refused, never run on the host. Opting out takes `confine.subprocesses: false`,
+    and every review then carries a warning.
+- **Self-test, every runtime:** provider APIs must be unreachable, and an HTTP error from a reachable host no longer
+  counts as "internet blocked".
+- **Scanning and integration:**
+  - `requirements*.lock` and `*.in` files are read, and so is a pyproject next to requirements files.
+  - Cargo, conda and Lean lockfiles are reported as unsupported.
+  - A new "nothing to scan" coverage state.
+  - The schema accepts researchteam's Layer-2 brief keys.
+  - The team builder updates an existing `brief.json`.
+- **Re-pins:** `references/enforcement-integrity.json` pins the new modules and the tools image files. Re-render,
+  then run `--verify-integrity`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.3` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`). Then build the agent and tools images.
 
-  The schema rejects hosts, IP addresses, outside paths and catch-all patterns. New projects are asked at intake
-  (recommended: `scan`), and `agentteams --set-vulnscan` changes it, showing a diff first.
-- **The operator enrols projects on each machine.**
-  - `python -m agentteams.vulnscan enroll --discover <dir>` finds agentteams workspaces and groups them by origin,
-    so clones and worktrees collapse to one checkout.
-  - You answer unanswered projects in bulk, per owner.
-  - Only that command writes the machine registry (`~/.config/agentteams/projects.json`), and it refuses on CI.
-  - `--update` and fleet runs list unanswered projects.
-- **The daily scan covers every enrolled project** plus your explicit `repo_roots`, with a Coverage section in the
-  summary and review. `vulnscan roots` and `vulnscan status --project .` show where things stand.
-  - A brief can narrow what leaves the machine.
-  - A brief cannot reduce what you chose to check.
-- **Grants follow enrolment, under review.** `grant sign --from-registry` shows only additions and removals since your
-  last signed grant, and you confirm each owner's additions. The registry never authorizes anything.
-- **The executor is stricter.** It refuses:
-  - clones of protected repositories, matched by origin, including the push URL;
-  - repositories enrolled below `remediate`, or whose origin changed;
-  - pull requests when the project asks for plans only.
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.3]`.
 
-  It scrubs home paths, hostnames and private IP addresses from PR bodies.
-- **Security fix.** A repository's own git config (`remote.origin.uploadpack`, `ext::` remotes) could make the
-  executor's fetch or push run a program. The executor now:
-  - passes git's own upload-pack and receive-pack explicitly;
-  - accepts only https, ssh, scp-like and local-path origins;
-  - uses only the https, ssh and file transports.
-- **Re-pins:** `references/enforcement-integrity.json` pins the new vulnscan modules (`registry`, `coverage`,
-  `project_cli`, `project_policy`, `executor_guard`). Re-render, then run `--verify-integrity`.
-- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.2` tag (release key `SHA256:IPdnLwlF…`,
-  as in `SECURITY.md`); pin its peeled commit.
-
-The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.2]`.
-
-### Changes since 1.1.0-rc.1
+### Changes since 1.1.0-rc.2
 
 - **vulnscan: the executor's git, npm and server-kit runs move into a hardened tools container
   (baseAgent hardening plan, W1; decision D1).** New `vulnscan/subproc_confine.py`,
@@ -159,6 +161,65 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.2]`.
   - Orchestrator `available_workflows` v=6 → v=7: rc.2 added the `vulnscan/*` dependency-fix PR review
     protocol to the fence without a version bump. There is no automated check that a fence body change
     bumps `v=` (the merge engine ignores it; see `FENCE-CONVENTIONS.md`).
+
+### Changed
+
+- **vulnscan gateway: the chat route is deny-by-default and reserved too (phase-2 parity).** After the
+  OpenRouter rewrites, a chat request is refused when it carries a body key outside the allowlist,
+  OpenRouter fallback `models` / `route`, `n`, a tool that is not a `function` (server tools named), a
+  remote image URL, or a `max_tokens` above `--max-output-tokens`. Each call reserves its `max_tokens`
+  (else `--chat-reserve-tokens`, default 8192) before it is relayed. The Messages routes accept Claude
+  Code's `?beta=true` query (any other query is still 403), allow `output_config` (`effort`, `format`),
+  and `spend.json` records the last 20 distinct refusal reasons (`refusal_reasons`).
+
+## [1.1.0-rc.2] - 2026-10-23
+
+### release notes
+
+agentteams 1.1.0-rc.2 is the second release candidate of the 1.1 line. It makes the daily vulnerability scan and
+remediation part of every agentteams project, new and existing, without committing anything about your machines or
+servers. It also closes a security gap in the remediation executor. Keep pinning `v1.0.x` where you need the stable
+line; the final `v1.1.0` will be signed from `release/1.1`.
+
+- **Projects declare their scan intent in the brief.** The new `vulnerability_scanning` block holds:
+  - `level` (`off`, `scan` or `remediate`);
+  - `exclude_paths` and `private_packages` (never sent to OSV, PyPI or npm);
+  - `include_dev`, `delivery` and `base_branch`.
+
+  The schema rejects hosts, IP addresses, outside paths and catch-all patterns. New projects are asked at intake
+  (recommended: `scan`), and `agentteams --set-vulnscan` changes it, showing a diff first.
+- **The operator enrols projects on each machine.**
+  - `python -m agentteams.vulnscan enroll --discover <dir>` finds agentteams workspaces and groups them by origin,
+    so clones and worktrees collapse to one checkout.
+  - You answer unanswered projects in bulk, per owner.
+  - Only that command writes the machine registry (`~/.config/agentteams/projects.json`), and it refuses on CI.
+  - `--update` and fleet runs list unanswered projects.
+- **The daily scan covers every enrolled project** plus your explicit `repo_roots`, with a Coverage section in the
+  summary and review. `vulnscan roots` and `vulnscan status --project .` show where things stand.
+  - A brief can narrow what leaves the machine.
+  - A brief cannot reduce what you chose to check.
+- **Grants follow enrolment, under review.** `grant sign --from-registry` shows only additions and removals since your
+  last signed grant, and you confirm each owner's additions. The registry never authorizes anything.
+- **The executor is stricter.** It refuses:
+  - clones of protected repositories, matched by origin, including the push URL;
+  - repositories enrolled below `remediate`, or whose origin changed;
+  - pull requests when the project asks for plans only.
+
+  It scrubs home paths, hostnames and private IP addresses from PR bodies.
+- **Security fix.** A repository's own git config (`remote.origin.uploadpack`, `ext::` remotes) could make the
+  executor's fetch or push run a program. The executor now:
+  - passes git's own upload-pack and receive-pack explicitly;
+  - accepts only https, ssh, scp-like and local-path origins;
+  - uses only the https, ssh and file transports.
+- **Re-pins:** `references/enforcement-integrity.json` pins the new vulnscan modules (`registry`, `coverage`,
+  `project_cli`, `project_policy`, `executor_guard`). Re-render, then run `--verify-integrity`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.2` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`); pin its peeled commit.
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.2]`.
+
+### Changes since 1.1.0-rc.1
+
 - **vulnscan: enrol every project on the machine.**
   - `vulnscan enroll [DIR…] [--discover DIR] [--level L]` (operator only: a terminal, refused on CI)
     finds agentteams workspaces, groups clones and worktrees by normalised origin (`host/owner/name`,
@@ -653,16 +714,6 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.1]`.
   - Only `@orchestrator` writes handoff scripts.
   - "Not allowlisted" counts as a runner refusal, which is a stop and is never re-routed through a handoff.
 - New API page `docs_src/api-reference/sandbox-handoff.md`.
-
-### Changed
-
-- **vulnscan gateway: the chat route is deny-by-default and reserved too (phase-2 parity).** After the
-  OpenRouter rewrites, a chat request is refused when it carries a body key outside the allowlist,
-  OpenRouter fallback `models` / `route`, `n`, a tool that is not a `function` (server tools named), a
-  remote image URL, or a `max_tokens` above `--max-output-tokens`. Each call reserves its `max_tokens`
-  (else `--chat-reserve-tokens`, default 8192) before it is relayed. The Messages routes accept Claude
-  Code's `?beta=true` query (any other query is still 403), allow `output_config` (`effort`, `format`),
-  and `spend.json` records the last 20 distinct refusal reasons (`refusal_reasons`).
 
 ## [1.0.1] - 2026-10-21
 
