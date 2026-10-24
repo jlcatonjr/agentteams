@@ -95,11 +95,13 @@ def test_private_names_are_the_union_over_every_enrolled_project(tmp_path: Path,
     assert names == [] and "registry cannot be read" in problem
 
 
-def test_secrets_files_keep_only_mountable_env_names(tmp_path: Path) -> None:
-    for name in ("anthropic.env", "open,router.env", "notes.txt", "a:b.env"):
+def test_check_secrets_mounts_the_directory_whatever_the_file_names(tmp_path: Path) -> None:
+    for name in ("anthropic.env", "open,router.env", "notes.txt", "a:b.env", ".env"):   # R5: no name is skipped
         (tmp_path / name).write_text("X_TOKEN=" + fake(20) + "\n")
-    assert gateway_context.secrets_files(tmp_path) == (tmp_path / "anthropic.env",)
-    assert gateway_context.secrets_files(tmp_path / "absent") == ()
+    mounts, problems, acked, counts = gateway_context.check_secrets([tmp_path, tmp_path / "absent"])
+    assert mounts == (tmp_path,) and problems == [] and acked == []
+    assert counts == {"secrets_dirs_missing": 1, "secrets_files": 4, "secrets_skip_ok": 0,
+                      "secrets_skip_ok_unmatched": 0}
 
 
 # ---------------------------------------------------------------- the context files
@@ -110,7 +112,7 @@ def test_prepare_writes_private_files_and_refuses_symlinks(host: Path, tmp_path:
     secrets.mkdir()
     (secrets / "vendor.env").write_text("VENDOR_TOKEN=" + fake(24) + "\n")
     ctx = gateway_context.prepare(spend, kit_dir=host, secrets_dir=secrets, entries=_entries(tmp_path, monkeypatch))
-    assert ctx == gateway_context.Context(spend / "dlp", (secrets / "vendor.env",))
+    assert ctx == gateway_context.Context(spend / "dlp", (secrets,))
     assert stat.S_IMODE(os.stat(ctx.directory).st_mode) == 0o700
     for name in ("hostnames", "private-names"):
         assert stat.S_IMODE(os.stat(ctx.directory / name).st_mode) == 0o600
@@ -140,20 +142,22 @@ def test_gateway_argv_mounts_read_only_and_holds_no_machine_values(host: Path, t
     a = {**agent_run.DEFAULT_AGENT, "key_file": str(tmp_path / "or.env")}
     argv = agent_run.gateway_argv(a, "img:t", spend, dlp=ctx)
     mounts = [argv[i + 1] for i, x in enumerate(argv) if x == "-v"]
-    assert f"{spend / 'dlp'}:/run/dlp:ro" in mounts and f"{secrets / 'vendor.env'}:/run/secrets/dlp/vendor.env:ro" in mounts
+    assert f"{spend / 'dlp'}:/run/dlp:ro" in mounts
     assert [m for m in mounts if not m.endswith(":ro")] == [f"{spend}:/work/out:rw"]   # only spend.json is writable
+    assert [argv[i + 1] for i, x in enumerate(argv) if x == "--mount"] == \
+        [f"type=bind,source={secrets},target=/run/secrets/dlp/0,readonly"]              # R5: the directory, read-only
     joined = " ".join(argv).lower()
-    for name in [*gateway_context.hostnames(host), "acme", value.lower()]:
+    for name in [*gateway_context.hostnames(host), "acme", value.lower(), "vendor.env"]:
         assert name not in joined, name
     tail = argv[argv.index("--max-unmetered-calls") + 2:]
     assert tail == ["--dlp-hostnames-file", "/run/dlp/hostnames", "--dlp-private-names-file", "/run/dlp/private-names",
-                    "--dlp-secrets-file", "/run/secrets/dlp/vendor.env"]
+                    "--dlp-secrets-mount", "/run/secrets/dlp/0", "--dlp-skip-ok-file", "/run/dlp/skip-ok"]
 
 
 def test_flags_sha256_covers_the_flags_but_not_the_machine(host: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base = agent_run.flags_sha256()
     monkeypatch.setattr(gateway_context.socket, "gethostname", lambda: "other-machine.example")
-    monkeypatch.setattr(gateway_context, "secrets_files", lambda directory=None: ())
+    monkeypatch.setattr(gateway_context, "check_secrets", lambda *a, **k: ((), [], [], {}))
     assert agent_run.flags_sha256() == base               # machine values never move it (no daily churn)
     monkeypatch.setattr(gateway_context, "IN_GW", "/run/elsewhere")
     assert agent_run.flags_sha256() != base               # the flags' paths do
@@ -162,6 +166,7 @@ def test_flags_sha256_covers_the_flags_but_not_the_machine(host: Path, monkeypat
 def test_start_gateway_prepares_the_context(host: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AGENTTEAMS_VULNSCAN_CONFIG_DIR", str(tmp_path / "cfg"))
     monkeypatch.setenv("AGENTTEAMS_SERVER_KIT_DIR", str(host))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))   # no real secrets directory is listed
     calls: list[list[str]] = []
     monkeypatch.setattr(agent_run, "_docker", lambda argv, **kw: calls.append(argv))
     monkeypatch.setattr(agent_run.time, "sleep", lambda s: None)
@@ -184,7 +189,8 @@ def test_the_context_file_drives_redaction_and_blocking(host: Path, tmp_path: Pa
     # the gateway's own flags, with the in-container paths mapped back to the host files
     _, flags = gateway_context.argv_parts(ctx)
     host_paths = {f"{gateway_context.IN_GW}/{n}": str(ctx.directory / n) for n in ("hostnames", "private-names")}
-    host_paths |= {f"{gateway_context.SECRETS_IN_GW}/{f.name}": str(f) for f in ctx.secrets_files}
+    host_paths |= {f"{gateway_context.IN_GW}/{gateway_context.SKIP_OK}": str(ctx.directory / gateway_context.SKIP_OK)}
+    host_paths |= {f"{gateway_context.SECRETS_IN_GW}/{n}": str(d) for n, d in enumerate(ctx.secrets_dirs)}
     a = gateway._parser().parse_args([host_paths.get(x, x) for x in flags] + ["--dlp-secrets-dir", ""])
     scanner = gateway._dlp_filter(a, [], [])
     meter = gateway.Meter(1.0, tmp_path / "spend.json")
