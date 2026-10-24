@@ -28,8 +28,8 @@ NOT_ROOT = pytest.mark.skipif(os.getuid() == 0, reason="a rootful Engine refuses
 USERNS = {**ENGINE, "SecurityOptions": ["name=apparmor", "name=seccomp,profile=builtin", "name=userns"]}
 
 
-def _classify(info: object, platform: str = "linux", uid: int = UID) -> docker_mode.DockerMode:
-    return docker_mode.classify(info, uid=uid, gid=GID, platform=platform)
+def _classify(info: object, platform: str = "linux", uid: int = UID, gid: int = GID) -> docker_mode.DockerMode:
+    return docker_mode.classify(info, uid=uid, gid=gid, platform=platform)
 
 
 # ---------------------------------------------------------------- the mode table
@@ -45,7 +45,20 @@ def test_rootful_engine_runs_as_the_operator() -> None:
 
 def test_rootful_engine_refuses_an_operator_who_is_root() -> None:
     mode = _classify(ENGINE, uid=0)
-    assert mode.name == docker_mode.ROOTFUL and mode.user is None and "real root" in mode.problem
+    assert mode.name == docker_mode.ROOTFUL and mode.user is None and "running as root" in mode.problem
+    mode = _classify(ENGINE, uid=501, gid=0)   # @security rc.5: root's group is refused too
+    assert mode.user is None and "primary group" in mode.problem
+
+
+@pytest.mark.parametrize("bad", ["501", "501:20,mode=0777", "a:b", "501:20\n", "-1:20", "1" * 11 + ":20"])
+def test_a_container_user_must_be_decimal_uid_gid(bad: str, tmp_path: Path) -> None:
+    """@security rc.5: the user reaches --user and the tmpfs options; a record can never unlock a malformed one."""
+    with pytest.raises(ValueError, match="not a container user"):
+        agent_run.container_user(bad)
+    record = tmp_path / "agent-selftest.json"
+    record.write_text(json.dumps({"container_user": bad}))
+    assert docker_mode.recorded_user(record, agent_run.AGENT_UID) == agent_run.AGENT_UID
+    assert agent_run.container_user("501:20") == "501:20" and agent_run.container_user(None) == agent_run.AGENT_UID
 
 
 def test_rootless_runs_as_root_inside_the_user_namespace() -> None:
@@ -282,7 +295,8 @@ def test_the_linux_containers_workflow() -> None:
     job = wf["jobs"]["linux-containers"]
     assert job["runs-on"] == "ubuntu-latest" and "permissions" not in job
     uses = [s["uses"] for s in job["steps"] if "uses" in s]
-    assert uses and all(u.split("@")[1].startswith("v") for u in uses)          # pinned by tag, as the others
+    assert uses and all(len(u.split("@")[1]) == 40 for u in uses)               # pinned by commit SHA (@security rc.5)
+    assert "observed_user" in text                                              # asserts what the container ran as
     assert "secrets." not in text and "tools-image.sh" in text and "FRAMEWORK=goose" in text
 
 

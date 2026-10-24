@@ -44,9 +44,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0   # v7
         with:
           python-version: "3.12"
 
@@ -145,9 +145,12 @@ jobs:
           import json, os
           from agentteams.vulnscan import paths
           rec = json.loads((paths.state_dir() / "agent-selftest.json").read_text())
-          print(json.dumps({k: rec.get(k) for k in ("passed", "docker_mode", "container_user", "checks")}, indent=2))
+          keys = ("passed", "docker_mode", "container_user", "observed_user", "checks")
+          print(json.dumps({k: rec.get(k) for k in keys}, indent=2))
+          me = f"{os.getuid()}:{os.getgid()}"
           assert rec["passed"] and rec["docker_mode"] == "rootful", rec.get("checks")
-          assert rec["container_user"] == f"{os.getuid()}:{os.getgid()}"
+          assert rec["container_user"] == me                 # the user requested
+          assert rec["observed_user"] == me, rec.get("observed_user")   # the uid:gid the container reported
           EOF
 
       - name: Diagnostics

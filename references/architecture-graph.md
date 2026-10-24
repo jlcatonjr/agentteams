@@ -5,7 +5,7 @@
 
 - Modules mapped: **325**
 - Packages: **11**
-- Internal import edges: **1002**
+- Internal import edges: **1005**
 - Distinct external dependencies: **11**
 
 ---
@@ -321,7 +321,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.__main__` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.report`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule`, `agentteams.vulnscan.tools_image` | — |
 | `agentteams.vulnscan._http` | — | `agentteams.vulnscan.engine`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.runtimes` |
 | `agentteams.vulnscan.agent_driver_base` | — | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_codex`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_recipe` |
-| `agentteams.vulnscan.agent_drivers` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_drivers_codex`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_upstreams` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.debrief` |
+| `agentteams.vulnscan.agent_drivers` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_drivers_codex`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.selftest_probe` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.debrief` |
 | `agentteams.vulnscan.agent_drivers_codex` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
 | `agentteams.vulnscan.agent_drivers_copilot` | `agentteams.vulnscan.agent_driver_base`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.mcp` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.selftest_cli` |
 | `agentteams.vulnscan.agent_recipe` | `agentteams.frameworks.goose_recipe_emit`, `agentteams.vulnscan.agent_driver_base` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.selftest_cli` |
@@ -331,8 +331,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.coverage` | `agentteams.vulnscan.grant`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.registry` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.review` |
 | `agentteams.vulnscan.cvss` | — | `agentteams.vulnscan.osv` |
 | `agentteams.vulnscan.daily` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.coverage`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.report`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.review`, `agentteams.vulnscan.subproc_confine`, `agentteams.vulnscan.subproc_confine_ssh` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.review` |
-| `agentteams.vulnscan.debrief` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.gateway_context` | `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.operator_cli` |
-| `agentteams.vulnscan.docker_mode` | — | `agentteams.vulnscan.agent_run` |
+| `agentteams.vulnscan.debrief` | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.docker_mode`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.paths` | `agentteams.vulnscan.agent_settings`, `agentteams.vulnscan.operator_cli` |
+| `agentteams.vulnscan.docker_mode` | — | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.debrief` |
 | `agentteams.vulnscan.engine` | `agentteams.vulnscan._http`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.report`, `agentteams.vulnscan.runtimes` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor` |
 | `agentteams.vulnscan.escalations` | `agentteams.cli.signed_ledger`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger` | `agentteams.vulnscan.executor`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.review` |
 | `agentteams.vulnscan.executor` | `agentteams.cli.decision_log`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.notify`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.report_store`, `agentteams.vulnscan.subproc_confine`, `agentteams.vulnscan.subproc_confine_ssh` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.publish` |
@@ -351,7 +351,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.notify` | `agentteams.vulnscan.escalations` | `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor` |
 | `agentteams.vulnscan.operator_cli` | `agentteams.cli.decision_log`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.escalations`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.publish` | `agentteams.vulnscan.__main__` |
 | `agentteams.vulnscan.osv` | `agentteams.vulnscan._http`, `agentteams.vulnscan.cvss`, `agentteams.vulnscan.versions` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.report` |
-| `agentteams.vulnscan.paths` | — | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule`, `agentteams.vulnscan.subproc_confine`, `agentteams.vulnscan.subproc_confine_ssh`, `agentteams.vulnscan.team_dir`, `agentteams.vulnscan.tools_image` |
+| `agentteams.vulnscan.paths` | — | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.agent_run`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.debrief`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.notes`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.project_cli`, `agentteams.vulnscan.publish`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.review`, `agentteams.vulnscan.schedule`, `agentteams.vulnscan.subproc_confine`, `agentteams.vulnscan.subproc_confine_ssh`, `agentteams.vulnscan.team_dir`, `agentteams.vulnscan.tools_image` |
 | `agentteams.vulnscan.project_cli` | `agentteams.vulnscan.coverage`, `agentteams.vulnscan.daily`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.paths`, `agentteams.vulnscan.project_policy`, `agentteams.vulnscan.registry`, `agentteams.vulnscan.report` | `agentteams.vulnscan.__main__` |
 | `agentteams.vulnscan.project_policy` | `agentteams.fleet` | `agentteams._fleet_report`, `agentteams.cli.app`, `agentteams.cli.generate`, `agentteams.fleet`, `agentteams.vulnscan.coverage`, `agentteams.vulnscan.engine`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.project_cli` |
 | `agentteams.vulnscan.publish` | `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger`, `agentteams.scan`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.grant`, `agentteams.vulnscan.ledger`, `agentteams.vulnscan.paths` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.executor_guard`, `agentteams.vulnscan.operator_cli`, `agentteams.vulnscan.review` |
@@ -364,7 +364,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.schedule` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.__main__` |
 | `agentteams.vulnscan.selftest_canary` | `agentteams.vulnscan.mcp` | `agentteams.vulnscan.selftest_cli` |
 | `agentteams.vulnscan.selftest_cli` | `agentteams.vulnscan.agent_drivers_codex`, `agentteams.vulnscan.agent_drivers_copilot`, `agentteams.vulnscan.agent_recipe`, `agentteams.vulnscan.selftest_canary` | — |
-| `agentteams.vulnscan.selftest_probe` | — | `agentteams.vulnscan.agent_run` |
+| `agentteams.vulnscan.selftest_probe` | — | `agentteams.vulnscan.agent_drivers`, `agentteams.vulnscan.agent_run` |
 | `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.paths` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.gateway_context`, `agentteams.vulnscan.review`, `agentteams.vulnscan.subproc_confine_ssh`, `agentteams.vulnscan.tools_image` |
 | `agentteams.vulnscan.subproc_confine_ssh` | `agentteams.vulnscan.paths`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.gateway_context` |
 | `agentteams.vulnscan.team_dir` | `agentteams.frameworks._write_roots`, `agentteams.vulnscan.agent_upstreams`, `agentteams.vulnscan.paths` | `agentteams.vulnscan.agent_run` |
@@ -3722,7 +3722,8 @@ digraph "agentteams architecture" {
         "agentteams.vulnscan.agent_drivers_codex",
         "agentteams.vulnscan.agent_drivers_copilot",
         "agentteams.vulnscan.agent_recipe",
-        "agentteams.vulnscan.agent_upstreams"
+        "agentteams.vulnscan.agent_upstreams",
+        "agentteams.vulnscan.selftest_probe"
       ],
       "external": [],
       "repo_local": []
@@ -3861,8 +3862,10 @@ digraph "agentteams architecture" {
         "agentteams.vulnscan.agent_drivers",
         "agentteams.vulnscan.agent_run",
         "agentteams.vulnscan.agent_upstreams",
+        "agentteams.vulnscan.docker_mode",
         "agentteams.vulnscan.executor",
-        "agentteams.vulnscan.gateway_context"
+        "agentteams.vulnscan.gateway_context",
+        "agentteams.vulnscan.paths"
       ],
       "external": [],
       "repo_local": []
@@ -7720,6 +7723,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.vulnscan.agent_upstreams"
     },
     {
+      "source": "agentteams.vulnscan.agent_drivers",
+      "target": "agentteams.vulnscan.selftest_probe"
+    },
+    {
       "source": "agentteams.vulnscan.agent_drivers_codex",
       "target": "agentteams.vulnscan.agent_driver_base"
     },
@@ -7921,11 +7928,19 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.vulnscan.debrief",
+      "target": "agentteams.vulnscan.docker_mode"
+    },
+    {
+      "source": "agentteams.vulnscan.debrief",
       "target": "agentteams.vulnscan.executor"
     },
     {
       "source": "agentteams.vulnscan.debrief",
       "target": "agentteams.vulnscan.gateway_context"
+    },
+    {
+      "source": "agentteams.vulnscan.debrief",
+      "target": "agentteams.vulnscan.paths"
     },
     {
       "source": "agentteams.vulnscan.engine",

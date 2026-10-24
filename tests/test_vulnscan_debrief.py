@@ -324,3 +324,41 @@ def test_a_dlp_refusal_starts_no_debrief_and_passes_the_acknowledgements(env: di
     assert "debrief not started: gateway DLP" in capsys.readouterr().err
     assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
                                  ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
+
+
+def _selftest_user(user: str | None) -> None:
+    record = agent_run.paths.state_dir() / "agent-selftest.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"container_user": user} if user else {}))
+
+
+def test_a_debrief_on_a_rootful_engine_runs_as_the_self_tested_user(env: dict[str, Any],
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4: the debrief and its gateway run as the user the self-test ran as (here the operator's, rootful)."""
+    from agentteams.vulnscan.docker_mode import DockerMode
+
+    monkeypatch.setattr(agent_run, "detect_docker_mode", lambda: DockerMode("rootful", "501:20"))
+    _selftest_user("501:20")
+    started = _popen(monkeypatch)
+    assert debrief.run_debrief(env["cfg"], env["run"]) == 0
+    assert started[0].argv[started[0].argv.index("--user") + 1] == "501:20"
+    gw = next(c for c in env["calls"] if c[:3] == ["docker", "run", "-d"])
+    assert gw[gw.index("--user") + 1] == "501:20"
+
+
+@pytest.mark.parametrize(("mode", "recorded", "why"), [
+    (("rootful", "501:20", ""), None, "Docker mode changed"),          # self-tested on Docker Desktop
+    (("desktop", None, ""), "501:20", "Docker mode changed"),          # self-tested on a rootful Engine
+    (("userns-remap", None, "userns-remap is not supported"), None, "userns-remap"),
+])
+def test_a_debrief_refuses_another_docker_mode(env: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+                                               capsys: pytest.CaptureFixture, mode: tuple, recorded: str | None,
+                                               why: str) -> None:
+    from agentteams.vulnscan.docker_mode import DockerMode
+
+    monkeypatch.setattr(agent_run, "detect_docker_mode", lambda: DockerMode(*mode))
+    _selftest_user(recorded)
+    started = _popen(monkeypatch)
+    assert debrief.run_debrief(env["cfg"], env["run"]) == debrief.EXIT_REFUSED
+    assert started == [] and why in capsys.readouterr().err
+    assert not any(c[:2] == ["docker", "run"] for c in env["calls"])

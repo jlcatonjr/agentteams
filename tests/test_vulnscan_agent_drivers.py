@@ -120,6 +120,14 @@ def test_golden_selftest_argv_and_probe(fixed: dict) -> None:
     old = (probe[:start] + 'r["internet_blocked"] = not reach("https://example.com") and not '
            'reach("https://openrouter.ai/api/v1/models")\n' + probe[end:])
     old = old.replace("os, urllib.error, urllib.request", "os, urllib.request").replace(CWD_LINE, "")
+    # rc.5 R7 (deliberate): goose's probe also runs `goose recipe validate` on the checked copy of the recipe.
+    entry = selftest_probe.goose_recipe_entry("/work/run/agentdef/recipe.yaml") + "\n"   # entries are newline-joined
+    assert old.count(entry) == 1
+    old = old.replace(entry, "")
+    # rc.5 R4 (deliberate, @security): the probe reports the uid:gid the container really ran as.
+    identity = 'print("SELFTEST-IDENTITY %d:%d" % (os.getuid(), os.getgid()))   # what the container really ran as\n'
+    assert old.count(identity) == 1
+    old = old.replace(identity, "")
     assert hashlib.sha256(old.encode()).hexdigest() == OLD_PROBE_SHA256
 
 

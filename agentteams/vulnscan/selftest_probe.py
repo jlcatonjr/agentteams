@@ -76,6 +76,7 @@ nnp = [l.split()[1] for l in st.splitlines() if l.startswith("NoNewPrivs:")][0]
 r["no_capabilities"] = int(cap, 16) == 0
 r["no_new_privs"] = nnp == "1"
 %(non_root)s
+print("SELFTEST-IDENTITY %%d:%%d" %% (os.getuid(), os.getgid()))   # what the container really ran as
 print("SELFTEST " + json.dumps(r))
 """
 

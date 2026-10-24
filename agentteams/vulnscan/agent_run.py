@@ -221,7 +221,13 @@ def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, n
 
 
 def container_user(user: str | None = None) -> str:
-    """Return ``user`` (the Docker mode's, :mod:`.docker_mode`), else the image's :data:`AGENT_UID` (pure, R4)."""
+    """Return ``user`` (the Docker mode's, :mod:`.docker_mode`), else the image's :data:`AGENT_UID` (pure, R4).
+
+    Raises:
+        ValueError: ``user`` is not ``uid:gid`` in decimal (it reaches ``--user`` and the tmpfs options).
+    """
+    if user and not docker_mode.USER_RE.fullmatch(user):
+        raise ValueError(f"not a container user (uid:gid): {user[:40]!r}")
     return user or AGENT_UID
 
 
@@ -506,10 +512,11 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     line = next((ln for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST ")), "")
     checks = json.loads(line[9:]) if line else {"selftest_ran": False}
     detail = next((ln[16:] for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-DETAIL ")), "")
+    observed = next((ln[18:].strip() for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-IDENTITY ")), "")
     image = _image_id(tag)
     result = {"passed": bool(checks) and all(checks.values()), "checks": checks, "framework": driver.name,
               "image": image, "flags_sha256": flags_sha256(a, image, user), "docker_mode": mode.name,
-              "container_user": user, "at": datetime.now(UTC).isoformat(),
+              "container_user": user, "observed_user": observed[:40] or None, "at": datetime.now(UTC).isoformat(),
               "detail": json.loads(detail) if detail else None, "stderr": proc.stderr[-1000:],
               "agent_definition": agentdef.record() if agentdef else None}
     (paths.state_dir() / "agent-selftest.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -549,7 +556,10 @@ def selftest_ok(cfg: dict[str, Any]) -> tuple[bool, str]:
         return False, "the agent image changed since the last passing self-test — re-run agent-selftest"
     if not rec.get("flags_sha256"):
         return False, "the self-test record predates container-flag binding — re-run agent-selftest"
-    if rec.get("flags_sha256") != flags_sha256(a, current, str(rec.get("container_user") or "") or None):
+    recorded = rec.get("container_user")
+    if recorded is not None and not (isinstance(recorded, str) and docker_mode.USER_RE.fullmatch(recorded)):
+        return False, "the self-test record names no valid container user — re-run agent-selftest"
+    if rec.get("flags_sha256") != flags_sha256(a, current, recorded or None):
         return False, ("the runtime (framework, CLI, command), the container flags or the self-test changed since "
                        "the last passing self-test — re-run agent-selftest")
     return True, "ok"

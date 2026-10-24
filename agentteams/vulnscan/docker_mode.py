@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -44,8 +45,10 @@ INFO_ARGV = ["docker", "info", "--format", "{{json .}}"]
 USERNS_PROBLEM = ("Docker runs with userns-remap: container uids map to subordinate uids, which cannot read your "
                   "key files or write the run directories. Agent mode is not supported there; use rootless Docker, "
                   "or a daemon without userns-remap")
-ROOT_PROBLEM = ("vulnscan is running as root on a rootful Docker Engine: the agent containers would run as real "
-                "root. Run vulnscan from your own account")
+ROOT_PROBLEM = ("vulnscan is running as root, or with root as its primary group, on a rootful Docker Engine: the "
+                "agent containers would run with root's uid or group. Run vulnscan from your own account")
+#: A container user: ``uid:gid``, both decimal (what ``--user`` and the tmpfs ``uid=``/``gid=`` options take).
+USER_RE = re.compile(r"[0-9]{1,10}:[0-9]{1,10}")
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess]
 
@@ -98,7 +101,7 @@ def classify(info: object, *, uid: int, gid: int, platform: str | None = None) -
         return DockerMode(ROOTLESS, ROOTLESS_USER)
     if "userns" in names:
         return DockerMode(USERNS_REMAP, problem=USERNS_PROBLEM)
-    if uid == 0:
+    if uid == 0 or gid == 0:   # root's uid, or root's group on every file the containers create
         return DockerMode(ROOTFUL, problem=ROOT_PROBLEM)
     return DockerMode(ROOTFUL, f"{uid}:{gid}")
 
@@ -140,4 +143,5 @@ def recorded_user(record: Path, default: str) -> str:
         rec = json.loads(record.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return default
-    return str(rec.get("container_user") or default) if isinstance(rec, dict) else default
+    user = rec.get("container_user") if isinstance(rec, dict) else None
+    return user if isinstance(user, str) and USER_RE.fullmatch(user) else default   # anything else: no unlock

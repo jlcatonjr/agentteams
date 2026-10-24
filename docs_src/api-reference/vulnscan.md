@@ -1255,12 +1255,13 @@ same check with the same `agent.dlp_skip_ok`; a refusal there ends the debrief w
 skip_ok)` takes one secrets directory or several, and returns a `Context(directory, secrets_dirs)`;
 `bind_spec(source, target)` builds the CSV-quoted read-only `--mount` value.
 
-**Gateway DLP context on Linux.** The gateway runs as uid 10001. Docker Desktop on macOS maps the ownership
-of bind-mounted files, so the operator's 0700 directory and 0600 files are readable; a Linux Docker Engine
-bind mount keeps the operator's uid and modes, so uid 10001 cannot read the DLP context, the key file(s) or
-the secrets files, and the gateway refuses to start (exit 2) rather than run with an incomplete filter.
-`prepare` prints this on Linux at every start. The files are not made world-readable to work around it
-(every local account could then read the secrets); agent mode is verified with Docker Desktop on macOS only.
+**Gateway DLP context on Linux.** The gateway's user follows the Docker mode
+([`docker_mode`](#agentteamsvulnscandocker_mode)). Docker Desktop maps the ownership of bind-mounted files,
+so uid 10001 reads the operator's 0700 directory and 0600 files. A Linux Docker Engine bind mount keeps the
+operator's uid and modes, so there the gateway runs as the operator (rootful: their `uid:gid`; rootless:
+uid 0, mapped to them) and reads the same files. If a file is still unreadable the gateway refuses to start
+(exit 2) rather than run with an incomplete filter; `prepare` prints a note on Linux at every start. The
+files are never made world-readable (every local account could then read the secrets).
 
 `flags_sha256` hashes the gateway argv built with
 `gateway_context.placeholder()` (fixed paths, one placeholder secrets directory): it covers the presence and
@@ -1661,7 +1662,8 @@ written before the driver refactor no longer match: re-run `agent-selftest` once
 before starting any container, when Docker is not reachable or the image is not built
 (`checks.docker_reachable: false`; the CLI prints
 `agent-selftest: docker is not reachable or the agent image <tag> is not built — start Docker (or run agent-image build) first`
-and exits 1). A `docker` failure part-way through raises; the CLI prints
+and exits 1), or when the Docker mode is refused (`userns-remap`, or root on a rootful Engine:
+`checks.docker_mode_supported: false`; [`docker_mode`](#agentteamsvulnscandocker_mode)). A `docker` failure part-way through raises; the CLI prints
 `agent-selftest failed: <error>` and exits 1. Every check must be `true`:
 
 | Check | Meaning |
@@ -1675,6 +1677,7 @@ and exits 1). A `docker` failure part-way through raises; the CLI prints
 | `spool_writable` | the agent can queue requests |
 | `cwd_empty` | the working directory is the empty tmpfs `/work/cwd`, never the team mount (no CLI auto-loads instruction, hook or MCP files from it) |
 | `goose_dirs_writable` (goose driver) | goose can create its log, session and config directories (`XDG_STATE_HOME` is `<sessions mount>/state`, so goose's logs survive as `<run>/agent/goose-data/state/goose/logs`; not under the root-owned `.local` the sessions mount creates); without them goose stops before its first model call |
+| `goose_recipe_valid` (goose) | `goose recipe validate` accepts the recipe a run loads, the checked copy `/work/run/agentdef/recipe.yaml` (it parses only: unknown keys pass; the key allowlist in [`agent_recipe`](#agentteamsvulnscanagent_recipe) is the policy check). Added in rc.5: it changes goose's `flags_sha256` |
 | `claude_config_writable` (claude driver) | Claude Code can write its config dir (`CLAUDE_CONFIG_DIR`, `<run>/agent/claude-data`) |
 | `claude_headless_ran` (claude) | the headless probe run ([`selftest_canary`](#agentteamsvulnscanselftest_canary)) exited 0 with a successful `result` event after reaching the local stub |
 | `claude_mcp_attached` (claude) | the CLI's `system/init` event lists exactly one MCP server, `vulnscan`, connected |
@@ -1694,12 +1697,13 @@ and exits 1). A `docker` failure part-way through raises; the CLI prints
 | `codex_tool_inventory` (codex) | every tool offered (top-level, inside namespaces, and in `input` tool lists) is a vulnscan tool, a read-only MCP resource tool (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`), the client-run `tool_search`, or the accepted residual `apply_patch`. The probe runs with `agent.model`: the tool set follows the model (code-mode models, offered a JavaScript `exec` tool, fail here) |
 | `codex_residual_write_blocked` (codex) | when `apply_patch` was offered, the stub answered with an `apply_patch` call adding four files (in a temp dir, the working directory, the request spool `/work/spool/requests` and the state dir `/agenthome/.codex-state`, the writable mounts), Codex returned the rejection to the model, and none of them exists (one that does is removed again before the record is written) |
 | `codex_canary_inert` (codex) | the planted files had no effect: no marker file was written, and neither the canary token nor the canary MCP server reached the requests or the output |
-| `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, a non-root uid (the image runs as 10001) |
+| `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, and not root: a non-zero uid (10001 on Docker Desktop, the operator's on a rootful Engine); under rootless Docker, uid 0 inside that `/proc/self/uid_map` maps to a non-zero uid outside |
 
 The record also keeps `detail` (the probe's tool inventory: claude `init_tools`, `request_tools`,
 `mcp_servers`; copilot and codex `offered_tools`, codex `residual_tools`, `residual_outputs`, `written`,
 copilot `cli_info` (the CLI's `session.info` lines, e.g. the tools it disabled) and `request_paths`; all
-`unexpected_tools`, `markers_fired`, `rc`), which `09-accept-framework.sh` prints. The self-test container
+`unexpected_tools`, `markers_fired`, `rc`), which `09-accept-framework.sh` prints, and `docker_mode` and
+`container_user` (the user the containers ran as). The self-test container
 may run for up to 300 s (the headless CLI run).
 
 #### `selftest_ok(cfg)`
@@ -1707,7 +1711,9 @@ may run for up to 300 s (the headless CLI run).
 `(ok, reason)`: whether a passing self-test exists for the current image, framework and container
 flags (`flags_sha256`). A framework without a driver in this release is refused with its reason. When Docker cannot be used the reason is `docker is not reachable or the
 agent image <tag> is not built — start Docker (or run agent-image build) first, then re-run
-agent-selftest`.
+agent-selftest`. The fingerprint is checked for the user the self-test ran as (`container_user`);
+`run_agent` detects the Docker mode itself and refuses (`not-run`, "the Docker mode changed since the last
+passing self-test") when it gives a different user, or when the mode is refused.
 
 #### `docker_unreachable(tag)`
 
@@ -1731,17 +1737,46 @@ state directories. `secrets` (`agent_upstreams.secret_paths`: `agent.key_file`, 
 when it is not `key_file`, and `agent.prices`) must lie outside it; the signing key named by
 `AGENTTEAMS_DECISION_ED25519_KEYFILE` is added only when that variable is set.
 
-#### `agent_run.flags_sha256(a=None, image_id="")`
+#### `agent_run.flags_sha256(a=None, image_id="", user=None)`
 
 The fingerprint above, for agent settings `a` (default `DEFAULT_AGENT`; only `framework`, `command`,
 `recipe`, `team_dir` (copilot and goose: to read the copy's sha256), `copilot_provider_type` and, for codex,
-`model` are read) and the image id. Raises `ValueError` for a
-framework without a driver.
+`model` are read) and the image id. `user` is the container user (default uid 10001, Docker Desktop's: the
+digest is then unchanged by R4). Raises `ValueError` for a framework without a driver.
 
 #### `driver_of(a)`
 
 The runtime driver the settings select ([`agent_drivers.driver_for`](#agentteamsvulnscanagent_drivers)):
 copilot's dialect follows `copilot_provider_type`, codex's self-test probes with `agent.model`.
+
+### `agentteams.vulnscan.docker_mode`
+
+Docker modes (R4, rc.5): the container user for the agent, self-test, debrief and gateway containers, chosen
+from `docker info` (detected once when a self-test, a run or a debrief starts, passed on as a value; argv
+builders and `flags_sha256` never run a subprocess):
+
+| Docker mode (`DockerMode.name`) | Container user |
+|---|---|
+| Docker Desktop, macOS or Linux (`desktop`) | uid 10001, the image's user (unchanged) |
+| Rootful Docker Engine, Linux host (`rootful`) | the operator's `uid:gid`; refused when the operator's uid or primary group is root (0) |
+| Rootless Docker, Linux host (`rootless`) | `0:0`, which the user namespace maps to the operator |
+| Rootful with `userns-remap` (`userns-remap`) | refused: container uids map to subordinate uids, which cannot read the operator's files |
+| anything else: an unreadable answer, a non-Desktop VM on macOS (`unknown`) | uid 10001 (fails closed: no more access than before) |
+
+The tmpfs `$HOME` and working directory are owned by the chosen user. `classify(info, *, uid, gid,
+platform=None)` is the pure mapping; `detect(runner=None)` runs `docker info --format '{{json .}}'` once;
+`recorded_user(record, default)` reads the user a self-test ran as (`container_user` in its record);
+`DockerMode(name, user, problem)` (`user` None means the image's user; `problem` non-empty means refused). In
+`agent_run`: `container_user(user=None)` (the user, else `AGENT_UID`; ValueError unless it is `uid:gid` in decimal,
+`docker_mode.USER_RE`) and `detect_docker_mode()`. A record whose `container_user` is not `uid:gid` unlocks
+nothing: `recorded_user` returns the default and `selftest_ok` refuses. The probe also prints the `uid:gid` the
+container really ran as; the self-test record keeps it as `observed_user`.
+
+**What a rootful Engine changes.** The agent's mounts and isolation are the same in every mode (read-only rootfs,
+no capabilities, no privilege gain, the internal network, the R6 masks), so running as the operator's uid gives
+the container no file the Docker Desktop setup did not already mount for it. What changes is the blast radius of a
+container escape: on a rootful Engine it lands as the operator's own account, not an unowned uid. Prefer rootless
+Docker on Linux, where an escape lands in the operator's user namespace.
 
 ### `agentteams.vulnscan.agent_drivers`
 
@@ -1994,12 +2029,19 @@ The in-container probe the [self-test](#selftestcfg) runs with the agent's exact
 line, `SELFTEST {json}`, with one boolean per check; its text is part of `flags_sha256`.
 
 `PROBE_TEMPLATE`: the probe's Python source, with `%(gateway)s`, `%(port)d`, `%(key_env)s`,
-`%(dummy)s`, `%(cwd)s` and `%(entries)s` placeholders.
+`%(dummy)s`, `%(cwd)s`, `%(non_root)s` and `%(entries)s` placeholders.
 
-#### `selftest_probe.render(gateway, port, *, key_env, dummy, entries, cwd)`
+#### `selftest_probe.render(gateway, port, *, key_env, dummy, entries, cwd, rootless)`
 
 The probe source for one gateway and one driver: the shared checks, the driver's model-key variable
-(default `OPENROUTER_API_KEY`) holding the dummy key, and the driver's own checks (`entries`).
+(default `OPENROUTER_API_KEY`) holding the dummy key, and the driver's own checks (`entries`). `rootless`
+(default false) selects the rootless `non_root` check (`NON_ROOT_ROOTLESS`) instead of `NON_ROOT`.
+
+#### `selftest_probe.goose_recipe_entry(recipe)`
+
+The `goose_recipe_valid` check for a goose probe: runs `goose recipe validate <recipe>` (exit 0 passes) on the
+recipe's in-container path. `GooseDriver.selftest_entries` passes the checked copy,
+`/work/run/agentdef/recipe.yaml`.
 
 ### `agentteams.vulnscan.debrief`
 
@@ -2012,7 +2054,11 @@ driver has no debrief is refused (exit 2) with `no debrief for <framework>`; the
 never part of the safety path. Its container masks `/work/run/gateway` and `/work/run/debrief` as a run's does
 (R6). Its gateway gets the host's DLP context like a run's and honours `agent.dlp_skip_ok`; when the DLP check
 cannot cover every secret (`gateway_context.DlpRefused`, R5), the debrief exits 2 with
-`debrief not started: …` before its container starts, the way a run ends `not-run`.
+`debrief not started: …` before its container starts, the way a run ends `not-run`. It detects the Docker
+mode and runs its container and gateway as the user the self-test ran as (`debrief_argv(a, tag, run_dir,
+session, user=None)` and `_start_gateway(a, tag, spend_dir, budget_usd, user=None)` take it). It refuses with
+exit 2 when the mode is refused, or when the user differs: `the Docker mode changed since the last passing
+self-test — re-run agent-selftest`.
 
 All three debrief limits are checked before anything starts: a bad one returns 2 with
 `debrief refused: agent.debrief_budget_usd must be …` (or the key at fault). The config load
@@ -2188,6 +2234,9 @@ The completed run directories (those with a `summary.json`), oldest first.
   [Steps 8–10](../vulnscan-automation-walkthrough.md#step-8-sign-a-narrow-first-grant)).
 - **macOS Seatbelt is not the agent sandbox.** Agent mode uses the Linux container, which is what
   `agent-selftest` verifies.
+- **Linux Docker Engine is tested in CI on a rootful Engine** (`vulnscan-linux-containers.yml`); rootless
+  Docker is implemented and unit-tested, not run in CI; `userns-remap` is refused
+  ([`docker_mode`](#agentteamsvulnscandocker_mode)).
 - **The model provider sees the agents' context** ([What leaves your machine](#what-leaves-your-machine)).
   vulnscan does not rate models.
 - **goose session facts** used by `agent-chat` are verified for goose 1.10 and later

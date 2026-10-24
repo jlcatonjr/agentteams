@@ -48,7 +48,7 @@ component table.
 | npm, if any repository has a `package-lock.json` | `stage-fix` updates npm lockfiles with `npm audit fix --package-lock-only` (it contacts the npm registry) | `npm --version` |
 | GitHub CLI, signed in | `open-pr` pushes a branch and opens a pull request | `gh auth status` |
 | ssh access to your servers, non-interactive, as root or with passwordless `sudo` | server audits run with `BatchMode=yes` and `sudo -n` | `ssh -o BatchMode=yes <host> sudo -n true` |
-| Docker (Docker Desktop on macOS; Docker Engine on Linux for the tools container only, agent mode on Linux follows in rc.5) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)) | `docker info` |
+| Docker (Docker Desktop on macOS or Linux, or Docker Engine on Linux) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)). On Linux Docker Engine the containers run as you (rootful) or as root mapped to you (rootless); `userns-remap` is not supported | `docker info` |
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
 | shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
@@ -404,6 +404,13 @@ $ python -P -m agentteams.vulnscan agent-selftest
 
 The `image` and `flags_sha256` values are yours to compare against later runs: a different image or
 different container flags need a new self-test.
+
+`agent-selftest` also records the Docker mode (`docker_mode`: `desktop`, `rootful`, `rootless`, or `unknown`
+for a mode it cannot recognise) and the user the containers ran as (`container_user`). If you switch between
+Docker Desktop and Docker Engine, or between rootful and rootless, re-run `agent-selftest`: a run and
+`agent-chat` refuse until you do. For goose, rc.5 adds the check `goose_recipe_valid` (`goose recipe validate`
+on the run's checked copy of the recipe), so goose operators re-run `agent-selftest` once more after
+installing rc.5.
 
 A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
@@ -861,6 +868,9 @@ Search the message for the quoted text.
 | agent run state `not-run`, reason mentions the self-test | no passing self-test for this image | `agent-selftest` |
 | `gateway DLP: N secrets director(ies) or file(s) the gateway cannot use` (run state `not-run`; `agent-chat` exits 2 with `debrief not started: …`) | a configured secrets directory cannot be read, or a `*.env` file in it is unreadable, not a regular file or a symlink out of the directory; the paths are on the terminal | fix their permissions, or add `{"path": ..., "sha256": "<shasum -a 256 of the file>"}` to `agent.dlp_skip_ok` (that version only) |
 | `the agent definition cannot be copied: ...` / `the goose recipe ... is refused` / `the copilot agent file ... is refused` (run state `not-run`, or `agent_definition_valid: false`) | the agent definition is missing, a symlink, outside the team, larger than 256 KiB or not UTF-8; a Copilot file without a one-line `description`; a goose recipe with keys or extensions agentteams does not generate | regenerate the team, then re-run `agent-selftest` |
+| `the Docker mode changed since the last passing self-test` (run state `not-run`; `agent-chat` exits 2) | the Docker you run with now gives a different container user than the one the self-test ran as (Docker Desktop vs Engine, rootful vs rootless) | re-run `agent-selftest` with the Docker you will run with |
+| `Docker runs with userns-remap: …` (`agent-selftest`, `docker_mode_supported: false`) | the daemon remaps container uids to subordinate uids, which cannot read your files | use rootless Docker, or a daemon without `userns-remap` |
+| `vulnscan is running as root on a rootful Docker Engine: …` | the containers would run as real root | run vulnscan as your own user |
 | `the agent definition changed as the run started` | the team's agent definition was edited while the run started | `agent-selftest`, then run again |
 | `refusing to sign from an install an agent may be able to edit` | `agentteams`, its venv or its interpreter is inside the current directory, a git work tree or an agent-writable root; the next lines name which | sign from a verified install outside agent write roots (`pipx install`). `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
 | `the agentteams package (...) is inside a git work tree` / `sys.prefix (...) is inside a git work tree` / `sys.executable (...) is inside a git work tree` | an editable checkout, a venv kept in a repository, a `pip install` into Homebrew's Python without a venv, or an interpreter git tracks or does not ignore. An interpreter in a git-ignored path (Homebrew's `Cellar/`) is not refused; only the work tree's own ignore rules count (inherited `GIT_*` variables and a global `core.excludesFile` do not) | `pipx install` from a verified release (works on Homebrew's Python) |
