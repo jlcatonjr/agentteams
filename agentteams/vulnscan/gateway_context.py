@@ -21,10 +21,11 @@ machine's own name: :func:`revealing_names`) is warned about at every gateway st
 ``<gateway dir>/dlp/notes`` (``hosts_conf_unredacted=N``), which ``review`` shows as an anomaly.
 
 **Unreadable context fails closed.** The gateway exits 2 when a names file or a secrets file cannot be read
-(:class:`agentteams.vulnscan.gateway.DlpContextError`). It runs as uid 10001: Docker Desktop (macOS) maps file
-ownership, a Linux Docker Engine bind mount does not (the files keep the operator's uid and 0700/0600 modes), so
-on Linux the gateway refuses to start; :func:`prepare` prints :data:`LINUX_NOTE` there. Making the files
-world-readable is not done: the secrets would then be readable by every local account.
+(:class:`agentteams.vulnscan.gateway.DlpContextError`). Its user follows the Docker mode
+(:mod:`agentteams.vulnscan.docker_mode`, R4): uid 10001 on Docker Desktop, which maps file ownership; the
+operator's uid on a rootful Linux Engine and uid 0 mapped to the operator under rootless Docker, where a bind
+mount keeps the operator's uid and 0700/0600 modes; :func:`prepare` prints :data:`LINUX_NOTE` on Linux. Making
+the files world-readable is not done: the secrets would then be readable by every local account.
 
 **Never in argv or a repository.** The values are written (directory 0700, files 0600, symlinks
 refused) under the run's gateway dir and regenerated at every start; the argv carries only fixed
@@ -61,11 +62,11 @@ NOTES = "notes"
 #: In-gateway directory of the mounted secrets files.
 SECRETS_IN_GW = "/run/secrets/dlp"
 #: Printed at every gateway start on Linux (@security rc.4 Low 5): the gateway refuses to start (exit 2) on an
-#: unreadable DLP file, and a rootful Linux bind mount keeps the host's owner and modes (0700 / 0600 here).
-LINUX_NOTE = ("on Linux the gateway container (uid 10001) must be able to read the DLP context dir, the key "
-              "file(s) and each secrets file it mounts; a Docker Engine bind mount keeps your uid and the 0700/0600 "
-              "modes, so the gateway then refuses to start (exit 2) rather than run with an incomplete filter. "
-              "Agent mode is verified with Docker Desktop on macOS only (docs: 'Gateway DLP context')")
+#: unreadable DLP file, and a Linux bind mount keeps the host's owner and modes (0700 / 0600 here).
+LINUX_NOTE = ("on Linux the gateway container must be able to read the DLP context dir, the key file(s) and each "
+              "secrets file it mounts, or it refuses to start (exit 2) rather than run with an incomplete filter. "
+              "It runs as your uid on a rootful Docker Engine and as uid 0 mapped to you under rootless Docker, so "
+              "files you own are readable; userns-remap is refused (docs: 'Docker modes', 'Gateway DLP context')")
 HEADER = "# agentteams vulnscan gateway DLP context: machine-local, regenerated at every gateway start\n"
 _SAFE_ENV = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}\.env")
 _HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9.:-]{2,252}")

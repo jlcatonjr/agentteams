@@ -250,6 +250,8 @@ def test_flags_sha256_binds_container_flags_gateway_flags_and_selftest(monkeypat
     monkeypatch.setattr(agent_run, "AGENT_UID", "0:0")                       # an isolation flag changed
     assert agent_run.flags_sha256() != base
     monkeypatch.undo()
+    assert agent_run.flags_sha256(user=agent_run.AGENT_UID) == base          # R4: Docker Desktop's user, unchanged
+    assert len({base, agent_run.flags_sha256(user="1000:1000"), agent_run.flags_sha256(user="0:0")}) == 3
     monkeypatch.setattr(agent_run, "GW_PORT", 9999)                          # a gateway flag changed
     assert agent_run.flags_sha256() != base
 
