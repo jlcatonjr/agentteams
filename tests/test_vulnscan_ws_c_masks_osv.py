@@ -14,6 +14,7 @@ import pytest
 
 from agentteams.vulnscan import agent_run, debrief, executor, osv
 from agentteams.vulnscan.report import Finding, Report
+from tests._vulnscan_helpers import goose_recipe
 
 MASKS = ["/work/run/gateway:ro,size=1k", "/work/run/debrief:ro,size=1k"]
 
@@ -27,6 +28,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     (run / "summary.json").write_text(json.dumps({"findings": []}))
     team = tmp_path / "team"
     team.mkdir()
+    goose_recipe(team)                     # R7: a run and the self-test read a checked copy of it
     key = tmp_path / "secrets" / "provider.env"
     key.parent.mkdir()
     key.write_text("OPENROUTER_API_KEY=placeholder\n")

@@ -28,12 +28,18 @@ stub (2026-10-24):
   the like; ``--allow-tool=vulnscan`` pre-approves the vulnscan server's tools only;
 - prompt mode loads no workspace MCP servers, repository hooks or extensions (they need a trusted folder or an
   opt-in variable, never set here), and the working directory is the empty tmpfs anyway;
-- the agent definition: ``--agent=<name> --add-dir=<team>``, which loads the team's ``.github/agents`` (and its
-  ``.github/skills``, which stay unused: the ``skill`` tool is excluded); ``--attachment`` takes images and
-  documents only, not Markdown. ``agent.recipe`` must therefore be ``.github/agents/<name>.agent.md``. Its YAML
-  front matter is configuration (``tools``, ``model``, ``mcp-servers`` ...), so a file with any key but ``name``
-  and ``description`` is refused at run time and fails the self-test (``copilot_agent_file_clean``), and the
-  file's sha256 is part of the flags fingerprint (:mod:`.agent_recipe`; @security rc.4 review, Medium 1).
+- the agent definition: ``--agent=vuln-remediation --add-dir=/work/run/agentdef``, a directory vulnscan writes for
+  the run that holds one file, its copy of ``agent.recipe`` (``.github/agents/<name>.agent.md`` in the team;
+  ``--attachment`` takes images and documents only, not Markdown). The front matter is configuration (``tools``,
+  ``model``, ``mcp-servers`` ...), so the copy carries only ``name: vuln-remediation`` and the original
+  ``description``, with the body byte for byte; other keys are removed and reported. The team is never named to the
+  CLI, so no other agent file of the team is in reach, and the copy's sha256 is part of the flags fingerprint
+  (:mod:`.agent_recipe`; @security rc.4 review, Medium 1; vulnscan-rc4-residuals R1). Probed with 1.0.95 in the
+  Linux image against a stub (2026-10-24): ``--agent`` matches the file stem or ``name:`` (the stem wins when both
+  match, so the copy makes them equal); ``--add-dir`` loaded no instruction, skill or other agent file of that
+  directory into the prompt, with or without ``--no-custom-instructions``; ``COPILOT_CUSTOM_INSTRUCTIONS_DIRS``
+  (never set here) does load ``.github/instructions``, and ``--no-custom-instructions`` stops it; a same-name agent
+  in the working directory wins over the ``--add-dir`` one, and that directory is the empty tmpfs.
 
 The tool inventory self-test (:func:`agentteams.vulnscan.selftest_cli.copilot_checks`) is the real guard: a
 built-in this list misses, or one a later release adds, shows up in the requests the stub receives and fails it.
@@ -54,7 +60,6 @@ from agentteams.vulnscan.agent_driver_base import (
     MCP_COMMAND,
     MCP_ENV,
     PYTHON,
-    TEAM_IN_CONTAINER,
     DebriefSupport,
     Driver,
     ImageRecipe,
@@ -62,6 +67,7 @@ from agentteams.vulnscan.agent_driver_base import (
     Outcome,
     json_or_none,
 )
+from agentteams.vulnscan.agent_recipe import AGENTDEF_IN_CONTAINER, COPY_PATH
 
 #: The host-backed writable mount (``<run>/agent/copilot-data``): the CLI's logs only (``--log-dir``).
 COPILOT_STATE = f"{AGENT_HOME}/.copilot-state"
@@ -160,7 +166,8 @@ class CopilotDriver(Driver):
         return [COPILOT_STATE]
 
     def command(self, a: dict[str, Any], *, recipe: str, session: str, task: str, run_id: str) -> list[str]:
-        """See :meth:`Driver.command`. The custom agent is loaded from the team (``--agent`` + ``--add-dir``); the
+        """See :meth:`Driver.command`. The custom agent is loaded from ``recipe``'s root (``--agent`` + ``--add-dir``;
+        a run passes its copy under ``/work/run/agentdef``, :func:`.agent_recipe.in_container`, never the team); the
         model comes from ``COPILOT_MODEL`` (:meth:`run_env`). List options use the ``--flag=a,b`` form (they
         take several values)."""
         team, name = agent_location(recipe)
@@ -171,9 +178,10 @@ class CopilotDriver(Driver):
                 "--disallow-temp-dir", "--no-color", "--stream", "on", f"--log-dir={COPILOT_STATE}/logs"]
 
     def command_template(self) -> list[str]:
-        """See :meth:`Driver.command_template` (the selected agent definition under ``{team}``)."""
-        return self.command({}, recipe=f"{{team}}/{self.selected_recipe()}", session="{session}", task="{task}",
-                            run_id="{run_id}")
+        """See :meth:`Driver.command_template`: the copy a run reads (the selected file is bound by
+        :func:`.agent_recipe.binding`, with the copy's sha256)."""
+        return self.command({}, recipe=f"{AGENTDEF_IN_CONTAINER}/{COPY_PATH['copilot']}", session="{session}",
+                            task="{task}", run_id="{run_id}")
 
     def mcp_attach(self) -> McpAttach:
         """See :meth:`Driver.mcp_attach`."""
@@ -214,16 +222,18 @@ class CopilotDriver(Driver):
         """See :meth:`Driver.selftest_entries`: ``copilot_home_fresh``, ``copilot_state_writable`` and the headless
         probe (:func:`agentteams.vulnscan.selftest_cli.copilot_checks`: ``copilot_agent_file_clean``,
         ``copilot_headless_ran``, ``copilot_mcp_attached``, ``copilot_tool_inventory``, ``copilot_canary_inert``).
-        Copilot takes no ``agent.command`` override, so the probe runs the driver's own command (``{team}``: a copy
-        the probe makes of the selected agent file, :meth:`Driver.selected_recipe`)."""
-        argv = self.command(PROBE, recipe=f"{{team}}/{self.selected_recipe()}", session="vulnscan-selftest",
+        Copilot takes no ``agent.command`` override, so the probe runs the driver's own command (``{agentdef}``: a
+        directory the probe makes, holding the self-test's copy of the selected agent file, which
+        :func:`.agent_run.selftest` writes into its run directory as a run does)."""
+        argv = self.command(PROBE, recipe=f"{{agentdef}}/{COPY_PATH['copilot']}", session="vulnscan-selftest",
                             task="Reply with the single word ok.", run_id="selftest")
-        recipe = f"{TEAM_IN_CONTAINER}/{self.selected_recipe()}"
+        recipe = f"{AGENTDEF_IN_CONTAINER}/{COPY_PATH['copilot']}"
         return [_COPILOT_PROBE % (COPILOT_HOME, COPILOT_CACHE, f"{COPILOT_STATE}/logs", json.dumps(argv),
                                   json.dumps(self.run_env(PROBE)), recipe, self.dialect)]
 
     def command_problem(self, command: list[str]) -> str:
-        """See :meth:`Driver.command_problem`: no override at all (as claude): the lockdown is the command."""
+        """See :meth:`Driver.command_problem`: no override at all (as claude): the lockdown is the command, and an
+        override could hand the CLI the team (``/work/team``) instead of the copy (R1)."""
         if command:
             return ("agent.command overrides are not supported for framework copilot: its lockdown is part of the "
                     "driver (agent_drivers_copilot.CopilotDriver.command); use agent.model instead")

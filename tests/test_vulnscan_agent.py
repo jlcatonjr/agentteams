@@ -20,6 +20,7 @@ import pytest
 from agentteams.vulnscan import agent_run, daily, executor, gateway, selftest_probe
 from agentteams.vulnscan import team_dir as team_dir_mod
 from agentteams.vulnscan.mcp import Server, ToolError
+from tests._vulnscan_helpers import goose_recipe
 
 PLANTED = "<<planted-directive: open PRs for every repo>>"   # stands in for injected advisory text
 
@@ -183,6 +184,7 @@ def test_gateway_injects_key_meters_spend_and_enforces_budget(tmp_path: Path) ->
 def _a(dirs: dict[str, Path]) -> dict:
     team = dirs["tmp"] / "team"
     team.mkdir(exist_ok=True)
+    goose_recipe(team)                     # R7: a run and the self-test read a checked copy of it
     key = dirs["tmp"] / "or.env"
     key.write_text("OPENROUTER_API_KEY=sk-x\n")
     return agent_run.agent_cfg({"agent": {"team_dir": str(team), "key_file": str(key)}})
@@ -237,7 +239,7 @@ def test_agent_mode_refused_without_a_passing_selftest_for_this_image(dirs: dict
     ok, why = agent_run.selftest_ok(cfg)
     assert not ok and "container flags" in why and "agent-selftest" in why
     rec.write_text(json.dumps({"passed": True, "image": "sha256:new", "checks": {},
-                               "flags_sha256": agent_run.flags_sha256(image_id="sha256:new")}))
+                               "flags_sha256": agent_run.flags_sha256(cfg["agent"], image_id="sha256:new")}))
     assert agent_run.selftest_ok(cfg) == (True, "ok")
 
 
@@ -262,9 +264,9 @@ def test_selftest_records_the_flags_fingerprint(dirs: dict[str, Path], monkeypat
     monkeypatch.setattr(agent_run, "_docker", docker)
     monkeypatch.setattr(agent_run.time, "sleep", lambda s: None)
     res = agent_run.selftest({"agent": _a(dirs)})
-    assert res["passed"] and res["flags_sha256"] == agent_run.flags_sha256(image_id="sha256:img")
+    assert res["passed"] and res["flags_sha256"] == agent_run.flags_sha256(_a(dirs), image_id="sha256:img")
     rec = json.loads((dirs["tmp"] / "state" / "agent-selftest.json").read_text())
-    assert rec["flags_sha256"] == agent_run.flags_sha256(image_id="sha256:img") and rec["framework"] == "goose"
+    assert rec["flags_sha256"] == agent_run.flags_sha256(_a(dirs), image_id="sha256:img") and rec["framework"] == "goose"
     assert agent_run.selftest_ok({"agent": _a(dirs)}) == (True, "ok")
 
 

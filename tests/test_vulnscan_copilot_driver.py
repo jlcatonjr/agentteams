@@ -72,10 +72,10 @@ def test_the_env_is_byok_offline_with_the_dummy_key() -> None:
 
 
 def test_the_command_locks_the_tools_down_and_loads_the_custom_agent() -> None:
-    argv = COPILOT.command({}, recipe="/work/team/.github/agents/vuln-remediation.agent.md", session=SESSION,
+    argv = COPILOT.command({}, recipe="/work/run/agentdef/.github/agents/vuln-remediation.agent.md", session=SESSION,
                            task="TASK", run_id="R1")
     assert argv[:3] == ["copilot", "-p", "TASK"]
-    assert _flag(argv, "--agent") == "vuln-remediation" and _flag(argv, "--add-dir") == "/work/team"
+    assert _flag(argv, "--agent") == "vuln-remediation" and _flag(argv, "--add-dir") == "/work/run/agentdef"
     assert _flag(argv, "--available-tools").split(",") == VULNSCAN_TOOLS
     assert set(_flag(argv, "--excluded-tools").split(",")) == set(agent_drivers_copilot.BUILTIN_TOOLS)
     assert {"bash", "view", "edit", "create", "apply_patch", "task", "skill", "web_fetch", "sql"} <= set(
@@ -92,7 +92,8 @@ def test_the_command_locks_the_tools_down_and_loads_the_custom_agent() -> None:
     assert server["command"] == agent_drivers.PYTHON and server["args"] == ["-m", "agentteams.vulnscan.mcp"]
     assert server["env"] == agent_drivers.MCP_ENV and server["tools"] == ["*"] and server["type"] == "local"
     assert COPILOT.mcp_attach().kind == "copilot-additional-mcp-config"
-    assert _flag(COPILOT.command_template(), "--add-dir") == "{team}"
+    assert _flag(COPILOT.command_template(), "--add-dir") == "/work/run/agentdef"   # the copy's dir, never the team
+    assert not any("/work/team" in part for part in COPILOT.command_template())
 
 
 def test_the_agent_definition_must_be_a_custom_agent_file() -> None:
@@ -113,7 +114,10 @@ def test_agent_argv_for_copilot(copilot_cfg: dict) -> None:
     assert f"/state/2026-10-22/agent/copilot-data:{agent_drivers_copilot.COPILOT_STATE}:rw" in head
     assert "COPILOT_MODEL=openai/gpt-5.5" in head and "COPILOT_PROVIDER_MAX_OUTPUT_TOKENS=32000" in head
     assert "COPILOT_PROVIDER_API_KEY=injected-by-gateway" in head and "COPILOT_OFFLINE=true" in head
-    assert _flag(cmd, "--add-dir") == "/work/team" and _flag(cmd, "--agent") == "vuln-remediation" and cmd[2] == "TASK TEXT"
+    assert _flag(cmd, "--add-dir") == "/work/run/agentdef" and _flag(cmd, "--agent") == "vuln-remediation"
+    assert cmd[2] == "TASK TEXT" and not any("/work/team" in part for part in cmd)   # R1: the team is never named
+    other = agent_run.agent_argv({**copilot_cfg, "recipe": ".github/agents/other.agent.md"}, "img:p", RUN, SESSION)
+    assert _flag(other, "--agent") == "vuln-remediation"   # the copy's name, whichever file it was made from
 
 
 def test_copilot_has_no_debrief(copilot_cfg: dict, tmp_path: Path) -> None:
@@ -174,8 +178,8 @@ def test_the_copilot_probe_renders_for_each_dialect() -> None:
         compile(src, "probe", "exec")
         assert "_cli.copilot_checks(" in src and 'r["copilot_home_fresh"]' in src and 'r["copilot_state_writable"]' in src
         assert 'os.environ.get("COPILOT_PROVIDER_API_KEY") == "injected-by-gateway"' in src
-        assert repr(d.dialect) in src and "/work/team/.github/agents/vuln-remediation.agent.md" in src
-        assert "--add-dir={team}" in src
+        assert repr(d.dialect) in src and "/work/run/agentdef/.github/agents/vuln-remediation.agent.md" in src
+        assert "--add-dir={agentdef}" in src and "/work/team" not in src   # the self-test's copy (R1)
 
 
 FAKE_COPILOT = textwrap.dedent(r'''
@@ -191,6 +195,8 @@ FAKE_COPILOT = textwrap.dedent(r'''
         print("No such agent: " + flag("--agent"), file=sys.stderr); sys.exit(1)
     tools = flag("--available-tools").split(",")
     system = agent
+    if mode == "loads_team":                          # a CLI that also resolved --agent in the team (R1 decoy)
+        system += open(os.path.join("..", "team", ".github", "agents", flag("--agent") + ".agent.md")).read()
     if mode == "extra":
         tools.append("bash")
     if mode == "loads_project":                       # what a CLI with workspace trust would do
@@ -226,7 +232,7 @@ def _checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, d: agent
     for k, v in d.env({}, "http://unused").items():
         monkeypatch.setenv(k, v)
     probe = agent_drivers_copilot.PROBE
-    argv = d.command(probe, recipe="{team}/" + d.default_recipe, session="s", task="Reply ok.", run_id="t")
+    argv = d.command(probe, recipe="{agentdef}/" + d.default_recipe, session="s", task="Reply ok.", run_id="t")
     agent = tmp_path / "vuln-remediation.agent.md"
     agent.write_text("---\nname: vuln-remediation\ndescription: \"vulnscan remediation\"\n---\nYou triage.\n",
                      encoding="utf-8")
@@ -253,6 +259,11 @@ def test_a_built_in_tool_fails_the_inventory(tmp_path: Path, monkeypatch: pytest
 def test_planted_files_that_take_effect_fail_the_canary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     checks, detail = _checks(tmp_path, monkeypatch, "loads_project")
     assert not checks["copilot_canary_inert"] and detail["markers_fired"] == ["mcp-server"] and detail["canary_token_seen"]
+
+
+def test_a_same_name_agent_in_the_team_fails_the_canary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    checks, detail = _checks(tmp_path, monkeypatch, "loads_team")      # R1: the decoy must stay unseen
+    assert checks["copilot_headless_ran"] and not checks["copilot_canary_inert"] and detail["canary_token_seen"]
 
 
 def test_a_failing_or_missing_copilot_does_not_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

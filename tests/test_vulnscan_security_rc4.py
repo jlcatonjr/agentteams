@@ -43,10 +43,9 @@ GENERATED = ("---\nname: Vulnerability Remediation\ndescription: \"x\"\nuser-inv
 
 @pytest.mark.parametrize("text", [
     CLEAN,
-    "no front matter at all: the whole file is the prompt\n",
+    CLEAN.replace("\n", "\r\n"),                                     # R2: CRLF is normalised first
+    "﻿" + CLEAN,                                                # and a BOM dropped
     "---\nname: plain value\n# a comment\n\ndescription: 'single ''quoted'' value'\n---\nbody\n",
-    "---\n---\nempty front matter\n",
-    "--- \nname: a\n---\n",                                          # trailing blank on the delimiter
 ])
 def test_front_matter_with_name_and_description_only_is_accepted(text: str) -> None:
     assert agent_recipe.front_matter_problem(text) == ""
@@ -58,8 +57,14 @@ def test_front_matter_with_name_and_description_only_is_accepted(text: str) -> N
     ("---\nmodel: x\n---\n", "'model' is configuration"),
     ("---\nmcp-servers:\n  evil:\n    command: sh\n---\n", "'mcp-servers' is configuration"),
     ("---\nname: a\n", "no closing ---"),
-    ("---x\nname: a\n---\n", "opening line must be exactly ---"),
-    ("\n\n---\ntools: [x]\n---\n", "'tools' is configuration"),     # leading blank lines do not hide it
+    ("---\nname: a\n...\n", "no closing ---"),                       # R2: '...' is no closer
+    ("---x\nname: a\n---\n", "line 1 must be exactly ---"),
+    ("--- \nname: a\n---\n", "line 1 must be exactly ---"),          # R2: exactly, no trailing blank
+    ("\n\n---\ntools: [x]\n---\n", "line 1 must be exactly ---"),    # leading blank lines are not front matter
+    ("no front matter at all\n", "no front matter"),                 # R1: the copy always has one
+    ("---\n---\nbody\n", "empty front matter"),
+    ("---\n# only a comment\n---\nbody\n", "empty front matter"),
+    ("---\nname: a\n---\nbody\n", "no 'description'"),
     ("---\nname: a\n  tools: [x]\n---\n", "unparseable front matter (line 3"),
     ("---\nname: a\ndescription: >\n  folded\n---\n", "'description' must be a one-line string"),
     ("---\nname: [a, b]\n---\n", "'name' must be a one-line string"),
@@ -80,25 +85,28 @@ def _team(tmp_path: Path, text: str, name: str = "vuln-remediation") -> Path:
     return tmp_path / "team"
 
 
-def test_a_run_refuses_a_copilot_agent_file_with_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_run_copies_the_generated_copilot_file_and_refuses_what_has_no_description(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agent_run, "selftest_ok", lambda cfg: (True, "ok"))
     monkeypatch.setattr(agent_run.shutil, "which", lambda name: "/usr/bin/docker")
     monkeypatch.setattr(agent_run, "team_dir_problem", lambda *a, **k: "")
-    team = _team(tmp_path, GENERATED)
+    team = _team(tmp_path, GENERATED)                    # R1/R3: removed keys no longer refuse the run
     a = {**agent_run.DEFAULT_AGENT, "framework": "copilot", "team_dir": str(team), "key_file": "/k"}
-    why = agent_run._not_run_reason({"agent": a}, a)
-    assert "copilot agent file .github/agents/vuln-remediation.agent.md is refused" in why and "'user-invocable'" in why
-    _team(tmp_path, CLEAN)
     assert agent_run._not_run_reason({"agent": a}, a) == ""
+    for text, why in (("no front matter\n", "no front matter"), ("---\nname: a\n", "no closing ---"),
+                      ("---\nname: a\ntools: [x]\n---\nbody\n", "no 'description'")):
+        _team(tmp_path, text)
+        got = agent_run._not_run_reason({"agent": a}, a)
+        assert "copilot agent file .github/agents/vuln-remediation.agent.md is refused" in got and why in got
     gone = {**a, "recipe": ".github/agents/missing.agent.md"}
     assert "cannot be read" in agent_run._not_run_reason({"agent": gone}, gone)
-    goose = {**a, "framework": "goose"}                  # the check is copilot's (its front matter is configuration)
-    assert agent_drivers.recipe_problem(goose, agent_run.driver_of(goose)) == ""
+    goose = {**a, "framework": "goose"}                  # R7: goose's recipe is checked too
+    assert "cannot be read" in agent_drivers.recipe_problem(goose, agent_run.driver_of(goose))
 
 
 def test_the_copilot_self_test_refuses_the_file_without_running_the_cli(tmp_path: Path) -> None:
     team = _team(tmp_path, GENERATED)
-    argv = ["/must/not/run", "-p", "x", "--agent=vuln-remediation", "--add-dir={team}"]
+    argv = ["/must/not/run", "-p", "x", "--agent=vuln-remediation", "--add-dir={agentdef}"]
     for recipe in (team / ".github" / "agents" / "vuln-remediation.agent.md", tmp_path / "absent.agent.md"):
         checks, detail = selftest_cli.copilot_checks(argv, {}, recipe=str(recipe), dialect="chat", timeout=5)
         assert checks == dict.fromkeys(selftest_cli.COPILOT_CHECKS, False) and "rc" not in detail
@@ -106,13 +114,15 @@ def test_the_copilot_self_test_refuses_the_file_without_running_the_cli(tmp_path
 
 
 def test_the_self_test_runs_with_the_selected_agent_file() -> None:
-    for fw, recipe in (("copilot", ".github/agents/other.agent.md"), ("claude", ".claude/agents/other.md"),
-                       ("codex", ".codex/agents/other.toml")):
+    for fw, recipe in (("claude", ".claude/agents/other.md"), ("codex", ".codex/agents/other.toml")):
         a = {**agent_run.DEFAULT_AGENT, "framework": fw, "recipe": recipe, "accept_residual_tools": ["apply_patch"]}
         src = agent_run.selftest_script(agent_run.driver_of(a))
         assert f"/work/team/{recipe}" in src and agent_run.driver_of(a).default_recipe not in src, fw
+    # copilot: the probe runs with the copy agent_run.selftest writes from the selected file (R1)
     a = {**agent_run.DEFAULT_AGENT, "framework": "copilot", "recipe": ".github/agents/other.agent.md"}
-    assert "--agent=other" in agent_run.driver_of(a).command_template()
+    src = agent_run.selftest_script(agent_run.driver_of(a))
+    assert "/work/run/agentdef/.github/agents/vuln-remediation.agent.md" in src and "/work/team" not in src
+    assert "--agent=vuln-remediation" in agent_run.driver_of(a).command_template()
 
 
 def _fp(team: Path, **a: object) -> str:
@@ -126,10 +136,10 @@ def test_the_fingerprint_binds_copilot_content_and_every_framework_path(tmp_path
     agent.write_text(CLEAN + "One more prompt line.\n", encoding="utf-8")
     assert _fp(team, framework="copilot") != before                     # copilot: any edit asks for a new self-test
     binding = agent_recipe.binding({"team_dir": str(team), "framework": "copilot"}, agent_drivers.COPILOT)
+    copy = agent_recipe.copilot_copy(agent.read_text(encoding="utf-8"))     # R1: the bytes the CLI reads
     assert binding == {"path": ".github/agents/vuln-remediation.agent.md",
-                       "sha256": hashlib.sha256(agent.read_bytes()).hexdigest()}
-    for fw, default in (("claude", ".claude/agents/vuln-remediation.md"), ("codex", ".codex/agents/vuln-remediation.toml"),
-                        ("goose", ".goose/recipes/vuln-remediation.yaml")):
+                       "sha256": hashlib.sha256(copy.data).hexdigest()}
+    for fw, default in (("claude", ".claude/agents/vuln-remediation.md"), ("codex", ".codex/agents/vuln-remediation.toml")):
         (team / default).parent.mkdir(parents=True, exist_ok=True)
         (team / default).write_text("prompt v1\n", encoding="utf-8")
         first = _fp(team, framework=fw)

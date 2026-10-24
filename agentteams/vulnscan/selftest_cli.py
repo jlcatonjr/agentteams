@@ -11,8 +11,8 @@ with a random token, an extra MCP server and hooks that would touch marker files
 in the working directory, in ``$HOME`` and in the CLI's config home. Codex's run also answers its first
 request with an ``apply_patch`` call when the model is offered that residual tool, and checks no file was
 written: in a temp dir, the working directory, the request spool and Codex's state dir (``codex_residual_write_blocked``).
-Copilot's run is refused before the CLI starts when the selected agent file is absent or its front matter carries
-configuration (``copilot_agent_file_clean``, :mod:`.agent_recipe`). Nothing here contacts the network beyond the loopback stub.
+Copilot's run uses the copy a run reads (:mod:`.agent_recipe`), alone in the ``--add-dir`` directory, and is refused
+before the CLI starts when that copy is absent or its front matter carries configuration (``copilot_agent_file_clean``). Nothing here contacts the network beyond the loopback stub.
 """
 
 from __future__ import annotations
@@ -239,14 +239,18 @@ def evaluate_codex(run: stub.StubRun, token: str, fired: list[str], written: lis
 
 # ---------------------------------------------------------------- copilot
 
-def plant_copilot(roots: list[Path], home: Path, markers: Path, token: str) -> list[Path]:
+def plant_copilot(roots: list[Path], home: Path, markers: Path, token: str, decoy: tuple[Path, str] | None = None
+                  ) -> list[Path]:
     """Plant files Copilot must ignore in each of ``roots`` and in ``$HOME/.copilot``; return the markers.
 
-    ``roots`` are the working directory and the team copy the probe adds with ``--add-dir`` (which loads only
-    that team's ``.github/agents`` and, unused, ``.github/skills``). ``COPILOT_HOME`` (the CLI's own config home:
-    the empty state dir in a run) is left empty, as in a run. Prompt mode loads no workspace MCP servers,
-    repository hooks or extensions without a trusted folder, and ``--no-custom-instructions`` loads no
-    instruction file.
+    ``roots`` are the working directory and a team directory the CLI is never given: a run's ``--add-dir`` names only
+    the copy's directory (R1). ``decoy`` (a root and an agent name) adds an agent file with the selected agent's stem
+    and ``name:``, carrying the canary, to that root's ``.github/agents``: the CLI must load the copy, never a
+    same-name file of the team. Not in the working directory: Copilot 1.0.95 prefers a same-name agent there to the
+    ``--add-dir`` one (probe, 2026-10-24), which is why a run's working directory is an empty tmpfs (``cwd_empty``).
+    ``COPILOT_HOME`` (the CLI's own config home: the empty state dir in a run) is left empty, as in a run. Prompt
+    mode loads no workspace MCP servers, repository hooks or extensions without a trusted folder, and
+    ``--no-custom-instructions`` loads no instruction file.
     """
     hooks = {"version": 1, "hooks": {ev: [{"type": "command", "bash": f"touch {markers}/hook-{ev}"}]
                                      for ev in ("sessionStart", "userPromptSubmitted", "preToolUse", "sessionEnd")}}
@@ -260,8 +264,9 @@ def plant_copilot(roots: list[Path], home: Path, markers: Path, token: str) -> l
         for path in (root / "AGENTS.md", root / "CLAUDE.md", root / "GEMINI.md", root / ".github" / "copilot-instructions.md",
                      root / ".github" / "instructions" / "canary.instructions.md"):
             path.write_text(_instruction(token), encoding="utf-8")
-        (root / ".github" / "agents" / "canary.agent.md").write_text(
-            f"---\nname: canary\ndescription: canary\n---\n{_instruction(token)}", encoding="utf-8")
+        for name in ("canary", *([decoy[1]] if decoy and decoy[0] == root else [])):
+            (root / ".github" / "agents" / f"{name}.agent.md").write_text(
+                f"---\nname: {name}\ndescription: canary\n---\n{_instruction(token)}", encoding="utf-8")
         for d in (root / ".github" / "skills", root / ".claude" / "skills"):
             _skill(d, token)
     user = home / ".copilot"
@@ -307,36 +312,38 @@ def copilot_checks(argv: list[str], run_env: dict[str, str], *, recipe: str, dia
     """Run Copilot headless against the stub with the canary planted; return (checks, detail).
 
     Args:
-        argv: The driver's run command, with ``{team}`` where the team root goes (``--add-dir``).
+        argv: The driver's run command, with ``{agentdef}`` where the copy's directory goes (``--add-dir``).
         run_env: The driver's per-run env (model, output setting) for the probe's model.
-        recipe: The selected agent definition (``<team>/.github/agents/<name>.agent.md``), copied into a team
-            directory the probe makes (with the canary planted in it too).
+        recipe: The copy a run reads (``<run>/agentdef/.github/agents/vuln-remediation.agent.md``, written by
+            :func:`.agent_run.selftest`), copied into a directory the probe makes, alone, as in a run.
         dialect: ``chat`` (``COPILOT_PROVIDER_TYPE=openai``) or ``messages`` (``anthropic``).
         binary: Replace ``argv[0]`` (tests run a fake CLI).
         timeout: Seconds for the CLI run.
 
     Returns:
         ``({"copilot_agent_file_clean", "copilot_headless_ran", "copilot_mcp_attached", "copilot_tool_inventory",
-        "copilot_canary_inert"}, detail)``. The selected agent file must exist and its front matter may hold only
-        ``name`` and ``description`` (:func:`.agent_recipe.front_matter_problem`); otherwise the CLI is not run
-        and every check fails.
+        "copilot_canary_inert"}, detail)``. The copy must exist and its front matter may hold only ``name`` and
+        ``description`` (:func:`.agent_recipe.front_matter_problem`); otherwise the CLI is not run and every check
+        fails. A same-name decoy in a team directory the CLI is not given carries the canary (:func:`plant_copilot`).
     """
     try:
         text = Path(recipe).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:   # the selected file must exist: no placeholder (rc.4 Medium 1)
+    except (OSError, UnicodeDecodeError) as exc:   # the copy must exist: no placeholder (rc.4 Medium 1)
         return _copilot_refused(f"the agent file {recipe} cannot be read ({type(exc).__name__})")
     problem = agent_recipe.front_matter_problem(text)
     if problem:                                    # never run the CLI with configuration in the front matter
         return _copilot_refused(problem)
     tmp = Path(tempfile.mkdtemp(prefix="vulnscan-canary-"))
     try:
-        work, home, copilot_home, markers, team = (tmp / n for n in ("cwd", "home", "copilot-home", "markers", "team"))
+        work, home, copilot_home, markers, team, agentdef = (
+            tmp / n for n in ("cwd", "home", "copilot-home", "markers", "team", "agentdef"))
         copilot_home.mkdir(parents=True)
         token = "CANARY-" + secrets.token_hex(8)
-        planted = plant_copilot([work, team], home, markers, token)
-        name = next((a.split("=", 1)[1] for a in argv if a.startswith("--agent=")), "vuln-remediation")
-        (team / ".github" / "agents" / f"{name}.agent.md").write_text(text, encoding="utf-8")   # what --agent selects
-        cmd = [part.replace("{team}", str(team)) for part in argv]
+        name = next((a.split("=", 1)[1] for a in argv if a.startswith("--agent=")), agent_recipe.COPILOT_NAME)
+        planted = plant_copilot([work, team], home, markers, token, decoy=(team, name))
+        (agentdef / ".github" / "agents").mkdir(parents=True)
+        (agentdef / ".github" / "agents" / f"{name}.agent.md").write_text(text, encoding="utf-8")   # --agent selects it
+        cmd = [part.replace("{agentdef}", str(agentdef)) for part in argv]
         cmd = [*binary, *cmd[1:]] if binary else cmd
         # COPILOT_CACHE_HOME stays the run's (the image's read-only cache); the home is fresh, as in a run
         env = {**os.environ, **run_env, "HOME": str(home), "COPILOT_HOME": str(copilot_home),

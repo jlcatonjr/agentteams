@@ -14,8 +14,8 @@ tmpfs ``/tmp``, ``$HOME`` (``/agenthome``) and the working directory (``/work/cw
 mount), ``--cap-drop ALL``, ``no-new-privileges``, a non-root uid, pids and memory limits. Its **only**
 writable mounts are the request spool and the driver's state dirs (``<run>/agent/<framework>-data``; goose:
 its sessions, with its logs under ``state/goose/logs``). The run executes ``agent.recipe`` (default: the
-driver's, goose ``.goose/recipes/vuln-remediation.yaml``) by its absolute path under the read-only team
-mount. The transcript is
+driver's, goose ``.goose/recipes/vuln-remediation.yaml``) by its absolute path: copilot and goose read a
+checked copy in ``<run>/agentdef`` (:mod:`.agent_recipe`), claude and codex the read-only team mount. The transcript is
 captured host-side from stdout, and the gateway's ``spend.json`` lives in ``<run>/gateway``,
 which only the gateway mounts. One run at a time: :data:`run_lock_path` is held for the whole run.
 
@@ -58,7 +58,7 @@ from importlib import metadata, resources
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import (agent_drivers, agent_upstreams, executor, executor_guard, gateway_context, ledger, notes,
+from agentteams.vulnscan import (agent_drivers, agent_recipe, agent_upstreams, executor, executor_guard, gateway_context, ledger, notes,
                                  notify, paths, report_store, run_records, selftest_probe)
 from agentteams.vulnscan.agent_drivers import Driver
 from agentteams.vulnscan.agent_settings import (  # noqa: F401  (re-exports: the settings live there)
@@ -262,7 +262,8 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
 
     The command is the driver's (:meth:`Driver.command`) unless ``agent.command`` overrides it (advanced:
     a template with ``{recipe}``, ``{session}``, ``{task}`` and ``{run_id}``). The agent definition is passed
-    by its absolute path under the read-only team mount; the working directory is an empty tmpfs.
+    by its absolute path (:func:`.agent_recipe.in_container`: copilot and goose, the run's copy under the read-only
+    ``/work/run``; claude and codex, the team's file); the working directory is an empty tmpfs.
 
     Args:
         a: Agent settings.
@@ -284,7 +285,7 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
     if problem:
         raise ValueError(f"refusing to mount the team dir: {problem}")
     team = Path(str(a["team_dir"])).expanduser().resolve()
-    recipe = f"{agent_drivers.TEAM_IN_CONTAINER}/" + str(a.get("recipe") or d.default_recipe).lstrip("/")
+    recipe = agent_recipe.in_container(a, d)   # copilot, goose: the copy run_agent writes (R1, R7); else the team's
     if a.get("command"):
         cmd = [part.replace("{recipe}", recipe).replace("{session}", session).replace("{run_id}", run_id)
                .replace("{task}", task) for part in a["command"]]
@@ -311,7 +312,7 @@ def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
     sha256 over the JSON of the :func:`agent_base` argv and the :func:`gateway_argv` argv, both built
     with fixed placeholder paths, tag ``img`` and :data:`DEFAULT_AGENT` settings (so the operator's model,
     budget or paths do not move it), plus the runtime: the driver's name, dialect, env, command template
-    (``agent.command`` when overridden), model variable, selected agent definition (copilot: with the file's sha256,
+    (``agent.command`` when overridden), model variable, selected agent definition (copilot and goose: with the sha256 of the copy the CLI reads,
     :func:`.agent_recipe.binding`) and image recipe (CLI, pinned version), the self-test script for that driver, and
     ``image_id``. One framework's passing self-test therefore never vouches for another's, nor for another image.
 
@@ -459,6 +460,10 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
         run_limits(a)
     except ValueError as exc:
         return {"passed": False, "checks": {"run_limits_valid": False}, "error": str(exc)}
+    try:   # copilot, goose: the probe runs with the copy a run reads (agent_recipe; R1, R7)
+        agentdef = agent_recipe.write_copy(a, driver, work / "run")
+    except (OSError, ValueError) as exc:
+        return {"passed": False, "checks": {"agent_definition_valid": False}, "error": str(exc)[:300]}
     unreachable = docker_unreachable(tag)
     if unreachable:
         return {"passed": False, "checks": {"docker_reachable": False}, "error": unreachable}
@@ -475,7 +480,8 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     image = _image_id(tag)
     result = {"passed": bool(checks) and all(checks.values()), "checks": checks, "framework": driver.name,
               "image": image, "flags_sha256": flags_sha256(a, image), "at": datetime.now(UTC).isoformat(),
-              "detail": json.loads(detail) if detail else None, "stderr": proc.stderr[-1000:]}
+              "detail": json.loads(detail) if detail else None, "stderr": proc.stderr[-1000:],
+              "agent_definition": agentdef.record() if agentdef else None}
     (paths.state_dir() / "agent-selftest.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result
 
@@ -691,6 +697,16 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             d.mkdir(parents=True, exist_ok=True)
         session = f"vulnscan-{run_dir.name}"
         serve = _Server(cfg, run_dir, run_id)
+        try:   # copilot, goose: the CLI reads this copy, never the team's file (R1, R7)
+            agentdef = agent_recipe.write_copy(a, driver, run_dir)
+        except (OSError, ValueError) as exc:
+            return finish("not-run", reason=f"the agent definition cannot be copied: {exc}"[:300])
+        if agentdef is not None:
+            status["agent_definition"] = agentdef.record()   # removed keys are recorded (no content)
+            if agent_recipe.notice(agentdef):
+                print(agent_recipe.notice(agentdef), file=sys.stderr)
+            if agent_recipe.binding(a, driver) != agentdef.bound() or not selftest_ok(cfg)[0]:   # R9: the self-tested copy
+                return finish("not-run", reason="the agent definition changed as the run started — re-run agent-selftest")
         timed_out, rc, launch_error, terminated, refused = False, -1, "", False, ""
         with sigterm_raises_exit():
             try:   # a broken ledger (ValueError) here also ends the run as agent-error, never a crash
