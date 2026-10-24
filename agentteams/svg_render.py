@@ -2,7 +2,8 @@
 
 Produces a standalone ``.svg`` document (byte-identical for identical input) from a
 neutral node/edge spec, using a layered left-to-right layout with barycenter crossing
-reduction. Used by :mod:`agentteams.graph` (agent topology) and
+reduction (or, opt-in via ``render_svg(direction="TB")``, the same layout transposed
+top-to-bottom: ranks as rows, edges bottom-of-source to top-of-target). Used by :mod:`agentteams.graph` (agent topology) and
 :mod:`agentteams.architecture` (module dependencies) so the rendered diagram can live in
 its own ``.svg`` file that the companion ``.md`` references.
 
@@ -85,6 +86,16 @@ _V_GAP = 18        # vertical gap between nodes in a column
 _MARGIN = 16       # outer margin
 _MIN_W = 48        # minimum node width
 _DUMMY_H = 10      # vertical lane reserved for an edge routing waypoint (dummy node)
+# Top-to-bottom (``direction="TB"``) geometry: ranks are rows, members side by side.
+_TB_RANK_GAP = 48  # vertical gap between rank rows
+_TB_NODE_GAP = 24  # horizontal gap between items in a row
+_DUMMY_W = 10      # horizontal lane reserved for a routing waypoint in a row
+
+#: Accepted ``render_svg(direction=...)`` values.
+_DIRECTIONS = frozenset({"LR", "TB"})
+
+#: ``(box, edge_lines, total_w, total_h)`` returned by the per-direction layouts.
+_Layout = tuple[dict[str, tuple[int, int, int, int]], list[str], int, int]
 
 
 def _node_width(label: str) -> int:
@@ -250,12 +261,254 @@ def _arrow_marker() -> str:
     )
 
 
+def _layout_lr(
+    columns: dict[int, list[object]],
+    by_id: dict[str, SvgNode],
+    rank: dict[str, int],
+    drawn: list[tuple[str, str, bool]],
+    edge_chain: list[list[tuple[str, int, int]]],
+    dummy_rank: dict[tuple[str, int, int], int],
+) -> _Layout:
+    """Left-to-right placement: ranks are columns, rank members stacked vertically.
+
+    Args:
+        columns: rank → ordered members (real node ids and dummy waypoint keys).
+        by_id: real node id → node.
+        rank: real node id → rank.
+        drawn: drawn edges as ``(src, dst, both_directions)``.
+        edge_chain: per drawn edge, its dummy waypoints ordered source → target.
+        dummy_rank: dummy waypoint key → rank.
+
+    Returns:
+        ``(box, edge_lines, total_w, total_h)`` — integer node boxes, ``<path>``
+        lines, and the document width/height.
+    """
+    max_rank = max(columns) if columns else 0
+
+    def _is_dummy(node: object) -> bool:
+        return isinstance(node, tuple)
+
+    def _item_h(node: object) -> int:
+        return _DUMMY_H if _is_dummy(node) else _NODE_H
+
+    # Column widths (real nodes only; dummies are zero-width lanes) and x offsets.
+    col_w = {
+        r: max((_node_width(by_id[n].label) for n in members if not _is_dummy(n)),
+               default=_MIN_W)
+        for r, members in columns.items()
+    }
+    x_left: dict[int, int] = {}
+    cursor = _MARGIN
+    for r in range(max_rank + 1):
+        x_left[r] = cursor
+        cursor += col_w.get(r, 0) + _H_GAP
+    content_w = cursor - _H_GAP if columns else _MARGIN
+
+    # Column heights (mixed real/dummy item heights) and vertical centering.
+    col_h = {
+        r: sum(_item_h(n) for n in members) + _V_GAP * (len(members) - 1) if members else 0
+        for r, members in columns.items()
+    }
+    content_h = max(col_h.values(), default=0)
+
+    # Final integer coordinates: real nodes → box (x, y, w, h); dummies → lane centre.
+    box: dict[str, tuple[int, int, int, int]] = {}
+    dummy_c: dict[tuple[str, int, int], tuple[int, int]] = {}
+    for r, members in columns.items():
+        y = _MARGIN + (content_h - col_h[r]) // 2
+        for node in members:
+            h = _item_h(node)
+            if _is_dummy(node):
+                dummy_c[node] = (x_left[r] + col_w[r] // 2, y + h // 2)
+            else:
+                width = _node_width(by_id[node].label)
+                x = x_left[r] + (col_w[r] - width) // 2
+                box[node] = (x, y, width, _NODE_H)
+            y += h + _V_GAP
+
+
+    # Edges. Each drawn edge is ONE <path> whose vertical movement is confined to the
+    # inter-column gaps: in-column segments are horizontal lanes (a node's own y-row
+    # or a dummy's reserved slot), which never overlap another box.
+    def _colL(r: int) -> int:
+        return x_left[r]
+
+    def _colR(r: int) -> int:
+        return x_left[r] + col_w[r]
+
+    max_x = content_w
+    edge_lines: list[str] = []
+    for ei, (src, dst, both) in enumerate(drawn):
+        rs, rd = rank[src], rank[dst]
+        sx, sy, sw, sh = box[src]
+        syc = sy + sh // 2
+        dx, dy, dw, dh = box[dst]
+        dyc = dy + dh // 2
+        stops: list[tuple[int, int]] = []
+        if rd > rs:                                    # forward (rightward)
+            stops += [(sx + sw, syc), (_colR(rs), syc)]
+            for key in edge_chain[ei]:
+                r, (cxp, cyp) = dummy_rank[key], dummy_c[key]
+                stops += [(_colL(r), cyp), (_colR(r), cyp)]
+            stops += [(_colL(rd), dyc), (dx, dyc)]
+        elif rd < rs:                                  # back (leftward), rendered dashed
+            stops += [(sx, syc), (_colL(rs), syc)]
+            for key in edge_chain[ei]:
+                r, (cxp, cyp) = dummy_rank[key], dummy_c[key]
+                stops += [(_colR(r), cyp), (_colL(r), cyp)]
+            stops += [(_colR(rd), dyc), (dx + dw, dyc)]
+        else:                                          # same rank: bulge into the gap
+            bulge = _colR(rs) + _H_GAP // 2
+            stops += [(sx + sw, syc), (bulge, syc), (bulge, dyc), (dx + dw, dyc)]
+        # Collapse consecutive duplicate points (e.g. a full-column-width box).
+        pts = [stops[0]]
+        for p in stops[1:]:
+            if p != pts[-1]:
+                pts.append(p)
+        segs = [f"M{pts[0][0]},{pts[0][1]}"]
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+            max_x = max(max_x, x1, x2)
+            if y1 == y2:                               # horizontal lane → straight line
+                segs.append(f"L{x2},{y2}")
+            else:                                      # gap transition → S-curve
+                mx = (x1 + x2) // 2
+                segs.append(f"C{mx},{y1} {mx},{y2} {x2},{y2}")
+        dashed = "" if both or rd > rs else ' stroke-dasharray="4,3"'
+        marker_start = ' marker-start="url(#arrow)"' if both else ""
+        edge_lines.append(
+            f'  <path d="{" ".join(segs)}" '
+            f'fill="none" stroke="#8a8a8a" stroke-width="1.5"{dashed}'
+            f'{marker_start} marker-end="url(#arrow)"/>'
+        )
+
+    total_w = max_x + _MARGIN
+    total_h = content_h + 2 * _MARGIN
+    return box, edge_lines, total_w, total_h
+
+
+def _layout_tb(
+    columns: dict[int, list[object]],
+    by_id: dict[str, SvgNode],
+    rank: dict[str, int],
+    drawn: list[tuple[str, str, bool]],
+    edge_chain: list[list[tuple[str, int, int]]],
+    dummy_rank: dict[tuple[str, int, int], int],
+) -> _Layout:
+    """Top-to-bottom placement: ranks are rows, rank members placed side by side.
+
+    The transpose of :func:`_layout_lr`. Every edge leaves the bottom edge of its
+    source box (top edge for a back-edge) and enters the top (bottom) edge of its
+    target; within a row it runs as a vertical lane (the box's own centre-line or a
+    dummy waypoint's reserved slot), so all horizontal movement is confined to the
+    inter-row gaps and never crosses an unrelated box.
+
+    Args:
+        columns: rank → ordered members (real node ids and dummy waypoint keys).
+        by_id: real node id → node.
+        rank: real node id → rank.
+        drawn: drawn edges as ``(src, dst, both_directions)``.
+        edge_chain: per drawn edge, its dummy waypoints ordered source → target.
+        dummy_rank: dummy waypoint key → rank.
+
+    Returns:
+        ``(box, edge_lines, total_w, total_h)`` — integer node boxes, ``<path>``
+        lines, and the document width/height.
+    """
+    max_rank = max(columns) if columns else 0
+
+    def _item_w(node: object) -> int:
+        if isinstance(node, tuple):
+            return _DUMMY_W
+        return _node_width(by_id[node].label)
+
+    row_w = {
+        r: sum(_item_w(n) for n in members) + _TB_NODE_GAP * (len(members) - 1)
+        for r, members in columns.items()
+    }
+    content_w = max(row_w.values(), default=0)
+    y_top = {r: _MARGIN + r * (_NODE_H + _TB_RANK_GAP) for r in range(max_rank + 1)}
+    content_h = (
+        (max_rank + 1) * _NODE_H + max_rank * _TB_RANK_GAP if columns else 0
+    )
+
+    box: dict[str, tuple[int, int, int, int]] = {}
+    dummy_x: dict[tuple[str, int, int], int] = {}
+    for r, members in columns.items():
+        x = _MARGIN + (content_w - row_w[r]) // 2
+        for node in members:
+            w = _item_w(node)
+            if isinstance(node, tuple):
+                dummy_x[node] = x + w // 2
+            else:
+                box[node] = (x, y_top[r], w, _NODE_H)
+            x += w + _TB_NODE_GAP
+
+    def _rowT(r: int) -> int:
+        return y_top[r]
+
+    def _rowB(r: int) -> int:
+        return y_top[r] + _NODE_H
+
+    max_y = content_h + _MARGIN
+    edge_lines: list[str] = []
+    for ei, (src, dst, both) in enumerate(drawn):
+        rs, rd = rank[src], rank[dst]
+        sx, sy, sw, sh = box[src]
+        sxc = sx + sw // 2
+        dx, dy, dw, dh = box[dst]
+        dxc = dx + dw // 2
+        stops: list[tuple[int, int]] = []
+        if rd > rs:                                    # forward (downward)
+            stops += [(sxc, sy + sh), (sxc, _rowB(rs))]
+            for key in edge_chain[ei]:
+                r, cx = dummy_rank[key], dummy_x[key]
+                stops += [(cx, _rowT(r)), (cx, _rowB(r))]
+            stops += [(dxc, _rowT(rd)), (dxc, dy)]
+        elif rd < rs:                                  # back (upward), rendered dashed
+            stops += [(sxc, sy), (sxc, _rowT(rs))]
+            for key in edge_chain[ei]:
+                r, cx = dummy_rank[key], dummy_x[key]
+                stops += [(cx, _rowB(r)), (cx, _rowT(r))]
+            stops += [(dxc, _rowB(rd)), (dxc, dy + dh)]
+        else:                                          # same rank: bulge into the gap
+            bulge = _rowB(rs) + _TB_RANK_GAP // 2
+            stops += [(sxc, sy + sh), (sxc, bulge), (dxc, bulge), (dxc, dy + dh)]
+        pts = [stops[0]]
+        for p in stops[1:]:
+            if p != pts[-1]:
+                pts.append(p)
+        segs = [f"M{pts[0][0]},{pts[0][1]}"]
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+            max_y = max(max_y, y1, y2)
+            if x1 == x2 or y1 == y2:                   # straight lane → line
+                segs.append(f"L{x2},{y2}")
+            else:                                      # gap transition → S-curve
+                my = (y1 + y2) // 2
+                segs.append(f"C{x1},{my} {x2},{my} {x2},{y2}")
+        dashed = "" if both or rd > rs else ' stroke-dasharray="4,3"'
+        marker_start = ' marker-start="url(#arrow)"' if both else ""
+        edge_lines.append(
+            f'  <path d="{" ".join(segs)}" '
+            f'fill="none" stroke="#8a8a8a" stroke-width="1.5"{dashed}'
+            f'{marker_start} marker-end="url(#arrow)"/>'
+        )
+
+    total_w = content_w + 2 * _MARGIN
+    total_h = max_y + _MARGIN
+    return box, edge_lines, total_w, total_h
+
+
 def render_svg(
     nodes: list[SvgNode],
     edges: list[SvgEdge],
     *,
     palette: dict[str, tuple[str, str]] | None = None,
     title: str = "",
+    direction: str = "LR",
 ) -> str:
     """Render ``nodes``/``edges`` to a deterministic standalone SVG document.
 
@@ -265,10 +518,21 @@ def render_svg(
             arrowhead at each end.
         palette: ``kind`` → ``(fill, stroke)``; missing kinds fall back to grey.
         title: optional ``<title>`` for accessibility.
+        direction: ``"LR"`` (default) lays ranks out as columns, left to right;
+            ``"TB"`` lays ranks out as rows, top to bottom, with the nodes of a rank
+            side by side and edges running from the bottom of the source box to the
+            top of the target. The ``"LR"`` output is unchanged by this option.
 
     Returns:
         SVG XML as a string, byte-identical for identical input.
+
+    Raises:
+        ValueError: if ``direction`` is neither ``"LR"`` nor ``"TB"``.
     """
+    if direction not in _DIRECTIONS:
+        raise ValueError(
+            f"direction must be one of {sorted(_DIRECTIONS)}, got {direction!r}"
+        )
     palette = palette or {}
     nodes = sorted(nodes, key=lambda n: n.id)
     ids = [n.id for n in nodes]
@@ -336,109 +600,12 @@ def render_svg(
         members.sort(key=_order_key)
     _order_within_ranks(columns, neighbours)
 
-    max_rank = max(columns) if columns else 0
+    layout = _layout_tb if direction == "TB" else _layout_lr
+    box, edge_lines, total_w, total_h = layout(
+        columns, by_id, rank, drawn, edge_chain, dummy_rank
+    )
 
-    def _is_dummy(node: object) -> bool:
-        return isinstance(node, tuple)
-
-    def _item_h(node: object) -> int:
-        return _DUMMY_H if _is_dummy(node) else _NODE_H
-
-    # Column widths (real nodes only; dummies are zero-width lanes) and x offsets.
-    col_w = {
-        r: max((_node_width(by_id[n].label) for n in members if not _is_dummy(n)),
-               default=_MIN_W)
-        for r, members in columns.items()
-    }
-    x_left: dict[int, int] = {}
-    cursor = _MARGIN
-    for r in range(max_rank + 1):
-        x_left[r] = cursor
-        cursor += col_w.get(r, 0) + _H_GAP
-    content_w = cursor - _H_GAP if columns else _MARGIN
-
-    # Column heights (mixed real/dummy item heights) and vertical centering.
-    col_h = {
-        r: sum(_item_h(n) for n in members) + _V_GAP * (len(members) - 1) if members else 0
-        for r, members in columns.items()
-    }
-    content_h = max(col_h.values(), default=0)
-
-    # Final integer coordinates: real nodes → box (x, y, w, h); dummies → lane centre.
-    box: dict[str, tuple[int, int, int, int]] = {}
-    dummy_c: dict[tuple[str, int, int], tuple[int, int]] = {}
-    for r, members in columns.items():
-        y = _MARGIN + (content_h - col_h[r]) // 2
-        for node in members:
-            h = _item_h(node)
-            if _is_dummy(node):
-                dummy_c[node] = (x_left[r] + col_w[r] // 2, y + h // 2)
-            else:
-                width = _node_width(by_id[node].label)
-                x = x_left[r] + (col_w[r] - width) // 2
-                box[node] = (x, y, width, _NODE_H)
-            y += h + _V_GAP
-
-    out: list[str] = []   # SVG header appended after edge geometry fixes the bounds.
-
-    # Edges. Each drawn edge is ONE <path> whose vertical movement is confined to the
-    # inter-column gaps: in-column segments are horizontal lanes (a node's own y-row
-    # or a dummy's reserved slot), which never overlap another box.
-    def _colL(r: int) -> int:
-        return x_left[r]
-
-    def _colR(r: int) -> int:
-        return x_left[r] + col_w[r]
-
-    max_x = content_w
-    edge_lines: list[str] = []
-    for ei, (src, dst, both) in enumerate(drawn):
-        rs, rd = rank[src], rank[dst]
-        sx, sy, sw, sh = box[src]
-        syc = sy + sh // 2
-        dx, dy, dw, dh = box[dst]
-        dyc = dy + dh // 2
-        stops: list[tuple[int, int]] = []
-        if rd > rs:                                    # forward (rightward)
-            stops += [(sx + sw, syc), (_colR(rs), syc)]
-            for key in edge_chain[ei]:
-                r, (cxp, cyp) = dummy_rank[key], dummy_c[key]
-                stops += [(_colL(r), cyp), (_colR(r), cyp)]
-            stops += [(_colL(rd), dyc), (dx, dyc)]
-        elif rd < rs:                                  # back (leftward), rendered dashed
-            stops += [(sx, syc), (_colL(rs), syc)]
-            for key in edge_chain[ei]:
-                r, (cxp, cyp) = dummy_rank[key], dummy_c[key]
-                stops += [(_colR(r), cyp), (_colL(r), cyp)]
-            stops += [(_colR(rd), dyc), (dx + dw, dyc)]
-        else:                                          # same rank: bulge into the gap
-            bulge = _colR(rs) + _H_GAP // 2
-            stops += [(sx + sw, syc), (bulge, syc), (bulge, dyc), (dx + dw, dyc)]
-        # Collapse consecutive duplicate points (e.g. a full-column-width box).
-        pts = [stops[0]]
-        for p in stops[1:]:
-            if p != pts[-1]:
-                pts.append(p)
-        segs = [f"M{pts[0][0]},{pts[0][1]}"]
-        for i in range(len(pts) - 1):
-            x1, y1 = pts[i]
-            x2, y2 = pts[i + 1]
-            max_x = max(max_x, x1, x2)
-            if y1 == y2:                               # horizontal lane → straight line
-                segs.append(f"L{x2},{y2}")
-            else:                                      # gap transition → S-curve
-                mx = (x1 + x2) // 2
-                segs.append(f"C{mx},{y1} {mx},{y2} {x2},{y2}")
-        dashed = "" if both or rd > rs else ' stroke-dasharray="4,3"'
-        marker_start = ' marker-start="url(#arrow)"' if both else ""
-        edge_lines.append(
-            f'  <path d="{" ".join(segs)}" '
-            f'fill="none" stroke="#8a8a8a" stroke-width="1.5"{dashed}'
-            f'{marker_start} marker-end="url(#arrow)"/>'
-        )
-
-    total_w = max_x + _MARGIN
-    total_h = content_h + 2 * _MARGIN
+    out: list[str] = []
 
     out.append(
         '<svg xmlns="http://www.w3.org/2000/svg" '
