@@ -199,7 +199,7 @@ noted; all of these are built in, no plugin required)
 - **Redirects.** These need the **external** `mkdocs-redirects` plugin, which writes meta-refresh
   stubs that keep `#fragment`. <https://github.com/mkdocs/mkdocs-redirects>
 
-**Verified locally (2026-10-23, mkdocs 1.6.1 / Material 9.7.6)**
+**Verified locally (2026-10-23, mkdocs 1.6.1 / Material 9.7.6; the pin has since moved to 9.7.7)**
 - With `navigation.indexes`, a *titled* first child (`- Overview: why/index.md`) still attaches as the
   section index. So the `Title: path.md` nav form the tests require is compatible with it.
 - `README.md` is also treated as an index. Existing handbook sections whose first child is a
@@ -250,11 +250,11 @@ noted; all of these are built in, no plugin required)
 | `tests/test_docs_nav_completeness.py:43` regex `:\s*([A-Za-z0-9_\-/]+\.md)\s*$` | Every nav entry is `Title: path.md`, unquoted, on one line. No bare entries. | MAT-3 (OK: titled index form verified) |
 | same file, l.149–155 | `interoperability.md` stays a **top-level** nav entry at 2-space indent | IA-5 / MAT-1: it uses one of the 7 tabs |
 | same file, l.112 | Every `api-reference/` nav page is linked from `api-reference/index.md` | IA-4 |
-| `scripts/check_api_doc_parity.py:55`, `tests/test_module_doc_ratchet.py:39`, `tests/test_api_doc_signatures.py:35` | `docs_src/api-reference/` stays flat. Every non-index page there maps to a module. No new overview pages in that directory. | MAT-3: API groups cannot get their own `index.md` overview pages there, so they stay collapsed groups without overviews. The API `index.md` is the overview. |
-| `agentteams/cli/artifacts.py:933`; `tests/test_memory_index_relevance.py:124` | Only top-level `docs_src/*.md` is memory-indexed, and the relevance tests score that corpus | New pages go in subdirectories (`why/`, `contribute/`), so they don't shift the BM25 tests |
-| README / man page / `pyproject.toml` absolute URLs (13 paths) | No existing page moves | URL-2 is met by moving no files; no redirects plugin needed |
+| `scripts/check_api_doc_parity.py:56`, `tests/test_module_doc_ratchet.py:39`, `tests/test_api_doc_signatures.py:35` | `docs_src/api-reference/` stays flat. Every non-index page there maps to a module. No new overview pages in that directory. | MAT-3: API groups cannot get their own `index.md` overview pages there, so they stay collapsed groups without overviews. The API `index.md` is the overview. |
+| `agentteams/cli/artifacts.py:933`; `tests/test_memory_index_relevance.py:124` | The relevance tests' BM25 corpus is top-level `docs_src/*.md` only (section folders reach the memory index through `memory_index_extra_dirs` in the self-build brief) | New pages go in subdirectories (`why/`, `contribute/`), so they don't shift the BM25 tests |
+| README / man page / `pyproject.toml` absolute URLs (derived and checked by `scripts/check_docs_site.py inbound`) | No existing page moves | URL-2 is met by moving no files; no redirects plugin needed |
 | `scripts/docs_freshness_watch.py` | A `custom_dir` override would count as "source" | MAT-5: prefer a Markdown home page over a template override |
-| `mkdocs.yml:12` `#copyright-year` + `javascripts/current-year.js` | Any footer override must keep the span | MAT-5 |
+| `mkdocs.yml:13` `#copyright-year` + `javascripts/current-year.js` | Any footer override must keep the span | MAT-5 |
 
 ## 8. The `@ux-reviewer` agent
 

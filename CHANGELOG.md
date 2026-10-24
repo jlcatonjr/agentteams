@@ -103,7 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New guard `tests/test_docs_api_nav_groups.py`: the API nav groups must equal the table-bearing
   sections of `api-reference/index.md`, and every API page must sit in the group whose table lists it.
 - Theme features added: section index pages, breadcrumbs, nav pruning, previous/next footer and an
-  "Edit this page" button. The Markdown extensions `attr_list` and `md_in_html` are enabled.
+  "Edit this page" button (replaced by a view-source button in phase 3). The Markdown extensions
+  `attr_list` and `md_in_html` are enabled.
 - Visible side effect: in the handbooks, sections whose first page is a `README.md` now open that page
   when clicked, instead of listing an "Overview"/"Contents" entry.
 
