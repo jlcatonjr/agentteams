@@ -6,6 +6,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.5] - 2026-10-24
+
+### release notes
+
+agentteams 1.1.0-rc.5 is the fifth release candidate of the 1.1 line. It brings the vulnscan remediation agent to Linux
+Docker Engine. Keep pinning `v1.0.x` where you need the stable line.
+
+- **Agent mode on Linux Docker Engine.** The container user now follows the Docker mode that `docker info` reports.
+  It is detected once when a self-test, a run or a debrief starts.
+
+  | Docker mode | Container user |
+  |---|---|
+  | Docker Desktop (macOS or Linux) | uid 10001, as before |
+  | Rootful Engine | your own `uid:gid`; refused when you run as root or with root as your primary group |
+  | Rootless | `0:0`, which the user namespace maps to you |
+  | `userns-remap` | refused |
+  | Anything unrecognised | uid 10001, so a misread fails closed |
+
+- **The self-test proves who the containers ran as.** It records the Docker mode, the requested user and the
+  identity the container reported. The new check `identity_matches` fails if they differ. A run, or a debrief,
+  refuses when the Docker mode has changed since the last passing self-test.
+- **goose's recipe is also validated by goose itself.** The new `goose_recipe_valid` check runs
+  `goose recipe validate` on the checked copy. It only parses the recipe, so the rc.4 allowlist stays the policy
+  check.
+- **Linux in CI.** A new job builds the tools and goose agent images on a rootful Docker Engine and runs both
+  self-tests.
+- **What a rootful Engine changes.** The agent's mounts and isolation are the same in every mode. A container escape
+  on a rootful Engine would land as your own account rather than an unowned uid.
+- **Limits.**
+  - Rootless Docker is implemented for the agent and its gateway, and unit-tested, but not run in CI.
+  - The tools container does not support rootless Docker yet: under rootless its self-test fails and confined
+    `git`, `npm` and `ssh` operations are refused (fail closed). Use a rootful Engine for remediation operations.
+- **After upgrading:** every operator runs `python -m agentteams.vulnscan agent-selftest` once, whatever the runtime
+  and Docker. The probe changed, so every fingerprint changed.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.5` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`). Then build the agent and tools images, and run the self-tests.
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.5]`.
+
+### Changes since 1.1.0-rc.4
+
 ### Changed
 
 ### Added (rc.5: Linux Docker Engine)
