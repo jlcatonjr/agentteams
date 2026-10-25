@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (site restructure, phase 3: Contribute)
+
+- **New Contribute section** (`docs_src/contribute/`), with seven pages:
+  - **Contribute to agentteams:** how contributions work today. Issues are welcome from everyone;
+    pull requests are by invitation on an issue. It ranks ways to help from quickest to most involved
+    and sets expectations: a first response within 7 days, best effort.
+  - **Your first pull request:** a fork-to-PR tutorial.
+  - **What your pull request needs:** the review checklist.
+  - **Project tour.**
+  - **Tests and CI:** every check on a pull request and how to read a failure.
+  - **Working on the docs site:** the rules that keep URLs and the API reference intact.
+  - **Code of conduct.**
+- **Contributor Covenant 2.1** adopted as `.github/CODE_OF_CONDUCT.md`, identical to the official
+  text apart from the enforcement contact. The site page includes it, so there is one copy.
+- **GitHub community files:**
+  - a short `.github/CONTRIBUTING.md` that points to the site;
+  - issue forms for bugs, documentation problems, features, and template/adapter proposals;
+  - blank issues are disabled; security reports and questions are routed to private reporting and
+    Discussions;
+  - a first-PR checklist at the top of the PR template.
+- **`SECURITY.md` reporting channel fixed.** It said to email `maintainer@example.org`, a placeholder
+  that reached nobody. It now points to GitHub private vulnerability reporting.
+- **`contributing.md` becomes "Public API and template policy"** (its URL is unchanged). Its setup,
+  test and pull-request sections duplicated the new Contribute pages and contradicted them in places,
+  so they now live only in Contribute.
+- **The page action is now "view source"** (`content.action.view`) instead of "edit this page". The edit
+  flow forks the repository and offers to open a pull request, which the invitation rule asks people
+  not to do.
+- `scripts/check_docs_site.py` now enforces its page checks on `contribute/`.
+
 ### docs (site restructure, phase 2: Home and Why agentteams)
 
 - **New "Why agentteams" section** (`docs_src/why/`), with four pages:

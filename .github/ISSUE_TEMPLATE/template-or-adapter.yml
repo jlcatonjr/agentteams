@@ -1,0 +1,36 @@
+name: Agent template or framework adapter proposal
+description: Propose a new agent archetype, a template change, or support for another agent tool.
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of proposal
+      options:
+        - New agent archetype (template)
+        - Change to an existing template
+        - New or improved framework adapter
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: Which projects need this, and why
+      description: The kind of project or tool, and what the current team gets wrong without it.
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Sketch
+      description: >-
+        For a template: its role, tier and the work it owns. For an adapter: the tool, where it reads
+        agent files from, and a link to its documentation.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to work on this if a maintainer invites a pull request.

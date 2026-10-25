@@ -68,7 +68,7 @@ lists the supported frameworks and which are in beta.
   [security handbook](../agentteams-security-guide/README.md).
 - **A researcher interested in how agent teams are organized:** [Further reading](further-reading.md)
   and the [manuscript (draft)](../manuscript.md).
-- **Thinking about contributing:** [Pull request process and API policy](../contributing.md).
+- **Thinking about contributing:** [Contribute to agentteams](../contribute/index.md).
 
 ## What agentteams is not
 

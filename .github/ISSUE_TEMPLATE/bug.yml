@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in agentteams does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Before pasting commands, output or a brief, remove anything
+        private: API keys and tokens, absolute paths that contain your username, hostnames, and the
+        names of private repositories or organizations.
+        For a security vulnerability, use private reporting instead (see SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and flags
+      description: The exact agentteams command you ran.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error or unexpected output
+      render: text
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `agentteams --version` and `python --version`, and your operating system.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework
+      options:
+        - copilot-vscode
+        - copilot-cli
+        - claude
+        - goose
+        - agents-md
+        - codex
+        - grok
+        - not framework-specific
+  - type: textarea
+    id: brief
+    attributes:
+      label: Project brief (optional)
+      description: The brief you used, with any sensitive fields removed.
+      render: json

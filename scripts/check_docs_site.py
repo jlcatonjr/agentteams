@@ -46,7 +46,7 @@ _NAV_TARGET_RE = re.compile(r":\s*([A-Za-z0-9_\-/]+\.md)\s*$", re.M)
 
 #: Source-page prefixes (docs_src-relative) whose pages must have zero violations of any check.
 #: Grows as sections are brought up to the rubric; never shrinks. Every prefix must match a nav page.
-ENFORCED_PREFIXES: tuple[str, ...] = ("index.md", "why/")
+ENFORCED_PREFIXES: tuple[str, ...] = ("index.md", "why/", "contribute/")
 
 #: Per-page ratchet: for each check, the exact set of nav pages (outside ENFORCED_PREFIXES) known to
 #: violate it, measured on the build. Remove a page when you fix it; the check fails until you do.

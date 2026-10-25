@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/jlcatonjr/agentteams/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Ask a question
+    url: https://github.com/jlcatonjr/agentteams/discussions
+    about: Questions and ideas that are not yet a concrete proposal go to Discussions.
+  - name: Contributor guide
+    url: https://jlcatonjr.github.io/agentteams/contribute/
+    about: How contributions work, including how pull requests are invited.
