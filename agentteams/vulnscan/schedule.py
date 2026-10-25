@@ -2,9 +2,14 @@
 
 | Platform | Mechanism | Missed runs |
 |---|---|---|
-| macOS | launchd user agent ``~/Library/LaunchAgents/io.agentteams.vulnscan.plist`` | Run on wake |
+| macOS | launchd user agent ``~/Library/LaunchAgents/io.agentteams.vulnscan.plist``, plus the catch-up agent ``io.agentteams.vulnscan.catchup.plist`` | Asleep: run on wake. Powered off: the catch-up agent (at login, then every 6 h) runs ``daily --catch-up`` |
 | Linux with systemd | User timer ``~/.config/systemd/user/agentteams-vulnscan.{service,timer}`` | ``Persistent=true`` catches up |
-| Other | A crontab line tagged ``# agentteams-vulnscan`` | — |
+| Other | A crontab line tagged ``# agentteams-vulnscan`` | None: cron skips a run missed while the machine was off. Add your own ``@reboot`` line running ``daily --catch-up`` if the machine is often off at the run time |
+
+``daily --catch-up`` runs the daily scan only when the last completed run is older than ``stale_after_hours``
+(or there is none), after a desktop notification saying so; otherwise it exits 0 without a word. launchd
+runs a calendar job missed while the Mac slept on wake, but drops one missed while it was powered off: the
+catch-up agent covers that (``RunAtLoad`` at login, ``StartInterval`` every :data:`CATCH_UP_INTERVAL` s).
 
 Every call is a dry run unless ``apply=True``. A dry run returns exactly the files and
 commands it would write or run. The job runs this same interpreter
@@ -35,6 +40,9 @@ from pathlib import Path
 from agentteams.vulnscan import paths
 
 LABEL = "io.agentteams.vulnscan"
+#: The macOS catch-up agent (login and every :data:`CATCH_UP_INTERVAL` seconds: ``daily --catch-up``).
+CATCH_UP_LABEL = f"{LABEL}.catchup"
+CATCH_UP_INTERVAL = 6 * 3600
 UNIT = "agentteams-vulnscan"
 CRON_TAG = "# agentteams-vulnscan"
 #: Present only while systemd is the running init system (``sd_booted(3)``).
@@ -66,9 +74,13 @@ class Plan:
     errors: list[str] = field(default_factory=list)            # failures while applying
 
 
-def _program() -> list[str]:
+def _program(*, catch_up: bool = False) -> list[str]:
     # -P: launchd/systemd/cron start the job in some working directory; keep it off the import path.
-    return [sys.executable, "-P", "-m", "agentteams.vulnscan", "daily"]
+    return [sys.executable, "-P", "-m", "agentteams.vulnscan", "daily", *(["--catch-up"] if catch_up else [])]
+
+
+def _agent_path(label: str) -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
 
 
 #: Programs the unattended job runs by name; their directories (and only theirs) go on the job's PATH.
@@ -163,12 +175,14 @@ def _xml(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def launchd_plist(hour: int, minute: int) -> str:
+def launchd_plist(hour: int, minute: int, *, catch_up: bool = False) -> str:
     """Return the launchd agent definition.
 
     Args:
         hour: Local hour (0-23).
         minute: Minute (0-59).
+        catch_up: The catch-up agent instead (:data:`CATCH_UP_LABEL`): ``daily --catch-up`` at load (login)
+            and every :data:`CATCH_UP_INTERVAL` seconds, in place of the calendar time.
 
     Returns:
         Plist XML text.
@@ -179,18 +193,21 @@ def launchd_plist(hour: int, minute: int) -> str:
     """
     check_time(hour, minute)
     log = paths.state_dir() / "scheduler.log"
-    args = "".join(f"\n    <string>{_xml(a)}</string>" for a in _program())
+    args = "".join(f"\n    <string>{_xml(a)}</string>" for a in _program(catch_up=catch_up))
+    when = (f"<key>RunAtLoad</key><true/>\n  <key>StartInterval</key><integer>{CATCH_UP_INTERVAL}</integer>"
+            if catch_up else
+            f"<key>StartCalendarInterval</key>\n  <dict><key>Hour</key><integer>{hour}</integer>"
+            f"<key>Minute</key><integer>{minute}</integer></dict>")
     env = "".join(f"\n    <key>{_xml(k)}</key><string>{_xml(v)}</string>" for k, v in job_environment().items())
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>{LABEL}</string>
+  <key>Label</key><string>{CATCH_UP_LABEL if catch_up else LABEL}</string>
   <key>ProgramArguments</key>
   <array>{args}
   </array>
-  <key>StartCalendarInterval</key>
-  <dict><key>Hour</key><integer>{hour}</integer><key>Minute</key><integer>{minute}</integer></dict>
+  {when}
   <key>EnvironmentVariables</key>
   <dict>{env}
   </dict>
@@ -307,14 +324,19 @@ def install(hour: int = 7, minute: int = 30, *, apply: bool = False) -> Plan:
         paths.state_dir().mkdir(parents=True, exist_ok=True)
     mech = _mechanism()
     if mech == "launchd":
-        target = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-        plan.files[str(target)] = launchd_plist(hour, minute)
-        if apply:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(plan.files[str(target)], encoding="utf-8")
         uid = str(os.getuid())
-        _run(["launchctl", "bootout", f"gui/{uid}/{LABEL}"], apply, plan, may_fail=True)   # absent on first install
-        _run(["launchctl", "bootstrap", f"gui/{uid}", str(target)], apply, plan)
+        for label, catch_up in ((LABEL, False), (CATCH_UP_LABEL, True)):
+            target = _agent_path(label)
+            plan.files[str(target)] = launchd_plist(hour, minute, catch_up=catch_up)
+            if apply:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(plan.files[str(target)], encoding="utf-8")
+            _run(["launchctl", "bootout", f"gui/{uid}/{label}"], apply, plan, may_fail=True)   # absent on first install
+            _run(["launchctl", "bootstrap", f"gui/{uid}", str(target)], apply, plan)
+            if plan.errors:
+                break   # the daily job did not load: no catch-up agent for a job that is not there
+        plan.notes.append("the catch-up agent runs at login and every 6 h; it scans only when the last run is older "
+                          "than stale_after_hours (or there is none yet: then it scans right after this install)")
     elif mech == "systemd":
         unit_dir = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "systemd" / "user"
         service, timer = systemd_units(hour, minute)
@@ -339,6 +361,8 @@ def install(hour: int = 7, minute: int = 30, *, apply: bool = False) -> Plan:
                 if proc.returncode:
                     plan.errors.append(f"crontab - failed: {proc.stderr.strip()[:200]}")
         plan.commands.append(["crontab", "-"])
+        plan.notes.append("cron does not catch up a run missed while the machine was off; if that happens often, "
+                          "add an @reboot line running the same command with `daily --catch-up`")
     return plan
 
 
@@ -354,11 +378,12 @@ def remove(*, apply: bool = False) -> Plan:
     plan = Plan()
     mech = _mechanism()
     if mech == "launchd":
-        target = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-        _run(["launchctl", "bootout", f"gui/{os.getuid()}/{LABEL}"], apply, plan, may_fail=True)
-        plan.files[str(target)] = ""
-        if apply and target.exists():
-            target.unlink()
+        for label in (LABEL, CATCH_UP_LABEL):
+            target = _agent_path(label)
+            _run(["launchctl", "bootout", f"gui/{os.getuid()}/{label}"], apply, plan, may_fail=True)
+            plan.files[str(target)] = ""
+            if apply and target.exists():
+                target.unlink()
     elif mech == "systemd":
         # disable fails when the units are not installed (never installed, or removed already):
         # that is only an error when there was something to disable.
@@ -390,13 +415,16 @@ def remove(*, apply: bool = False) -> Plan:
 def status() -> str:
     """Describe whether the job is installed and when it last ran.
 
+    The staleness warning (:func:`daily.stale_warning`) is printed by the CLI before this text.
+
     Returns:
         Human-readable status.
     """
     mech = _mechanism()
+    extra = ""
     if mech == "launchd":
-        target = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
-        installed = target.exists()
+        installed = _agent_path(LABEL).exists()
+        extra = f"\ncatch-up job installed: {_agent_path(CATCH_UP_LABEL).exists()}"
     elif mech == "systemd":
         installed = subprocess.run(["systemctl", "--user", "is-enabled", f"{UNIT}.timer"],
                                    capture_output=True, text=True, check=False).returncode == 0
@@ -405,4 +433,4 @@ def status() -> str:
         installed = CRON_TAG in cur
     hb = paths.state_dir() / "heartbeat.json"
     last = hb.read_text(encoding="utf-8").strip() if hb.exists() else "(no run recorded)"
-    return f"mechanism: {mech}\ninstalled: {installed}\nconfig: {paths.config_file()}\nstate: {paths.state_dir()}\nlast run: {last}"
+    return f"mechanism: {mech}\ninstalled: {installed}{extra}\nconfig: {paths.config_file()}\nstate: {paths.state_dir()}\nlast run: {last}"

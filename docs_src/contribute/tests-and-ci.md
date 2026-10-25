@@ -38,6 +38,7 @@ There is no separate lint or formatting command. Match the style of the surround
 | macOS Seatbelt | `ci.yml`, job `macos-seatbelt` | advisory: shown, but does not block |
 | Docs build | `ci.yml`, job `docs-build` | the strict build warns, a page check fails, a cited URL no longer resolves, or a published URL disappears |
 | Changelog | `changelog-link.yml` | `agentteams/**/*.py` changed without a `CHANGELOG.md` entry |
+| vulnscan Linux containers | `vulnscan-linux-containers.yml` | only when vulnscan code, its images or `pyproject.toml` change: the tools and agent container images fail to build or their self-tests fail on Linux Docker |
 
 The other workflows run on a schedule, on push to `main`, or by hand: for example the daily feature
 audit, the weekly red-team audit, the security maintenance runs and the site deploy. They do not run on

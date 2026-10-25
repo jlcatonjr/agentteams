@@ -20,7 +20,8 @@ Then it checks, from the CLI's own report and from what the stub received:
 - no canary marker exists and the canary token reached neither the model nor the output.
 
 Results are booleans (one per check) plus a detail dict for the self-test record (printed as
-``SELFTEST-DETAIL``). Nothing here contacts the network beyond the loopback stub.
+``SELFTEST-DETAIL``). Nothing here contacts the network beyond the loopback stub. The stub also speaks the
+OpenAI Responses dialect and takes scripted replies; :mod:`.selftest_cli` runs the Copilot and Codex probes on it.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -91,10 +93,42 @@ def canned_chat(model: str, stream: bool) -> tuple[str, bytes]:
     return "text/event-stream", body
 
 
-CANNED = {"messages": canned_messages, "chat": canned_chat}
+def responses_message(text: str = "ok") -> dict[str, Any]:
+    """Return an OpenAI Responses ``message`` output item saying ``text``."""
+    return {"type": "message", "id": "msg_selftest", "status": "completed", "role": "assistant",
+            "content": [{"type": "output_text", "text": text, "annotations": []}]}
 
 
-def _stub_handler(dialect: str, received: list[dict[str, Any]]) -> type[BaseHTTPRequestHandler]:
+def canned_responses(model: str, stream: bool, output: list[dict[str, Any]] | None = None) -> tuple[str, bytes]:
+    """Return ``(content type, body)``: an OpenAI Responses reply (default: a message saying ``ok``).
+
+    ``output`` replaces the output items (the Codex probe answers with a tool call first). Streamed as
+    ``response.created``, ``response.output_item.added`` / ``.done`` per item and ``response.completed``.
+    """
+    items = output if output is not None else [responses_message()]
+    usage = {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2, "input_tokens_details": {"cached_tokens": 0},
+             "output_tokens_details": {"reasoning_tokens": 0}}
+    done = {"id": "resp_selftest", "object": "response", "created_at": 0, "status": "completed", "model": model,
+            "output": items, "usage": usage}
+    if not stream:
+        return "application/json", json.dumps(done).encode()
+    events: list[dict[str, Any]] = [{"type": "response.created",
+                                     "response": {**done, "status": "in_progress", "output": [], "usage": None}}]
+    for i, item in enumerate(items):
+        events += [{"type": "response.output_item.added", "output_index": i, "item": item},
+                   {"type": "response.output_item.done", "output_index": i, "item": item}]
+    events.append({"type": "response.completed", "response": done})
+    return "text/event-stream", _sse([{**e, "sequence_number": n} for n, e in enumerate(events)])
+
+
+CANNED = {"messages": canned_messages, "chat": canned_chat, "responses": canned_responses}
+#: A scripted stub reply: ``(request body, index of the request) -> (content type, body)``, or None for the
+#: canned ``ok`` reply of the dialect.
+Reply = Callable[[dict[str, Any], int], "tuple[str, bytes] | None"]
+
+
+def _stub_handler(dialect: str, received: list[dict[str, Any]], reply: Reply | None = None
+                  ) -> type[BaseHTTPRequestHandler]:
     canned = CANNED[dialect]
 
     class Stub(BaseHTTPRequestHandler):
@@ -128,7 +162,8 @@ def _stub_handler(dialect: str, received: list[dict[str, Any]]) -> type[BaseHTTP
                 self._send(404, "application/json", b'{"error": "count_tokens is not served"}')
                 return
             req = body if isinstance(body, dict) else {}
-            self._send(200, *canned(str(req.get("model") or "stub"), bool(req.get("stream"))))
+            scripted = reply(req, len(received) - 1) if reply else None
+            self._send(200, *(scripted or canned(str(req.get("model") or "stub"), bool(req.get("stream")))))
 
     return Stub
 
@@ -157,26 +192,31 @@ def _events(stdout: str) -> list[dict[str, Any]]:
 
 
 def stub_run(argv: list[str], env: dict[str, str], *, cwd: str, dialect: str, base_env: str,
-             timeout: float = 120.0) -> StubRun:
+             timeout: float = 120.0, base_suffix: str = "", argv_url: str = "", reply: Reply | None = None) -> StubRun:
     """Run ``argv`` with ``env`` (``base_env`` pointed at a loopback stub of ``dialect``) and collect the result.
 
     Args:
         argv: The CLI command.
         env: The complete environment for it (the stub URL is added as ``base_env``).
         cwd: Working directory.
-        dialect: ``messages`` or ``chat``: the canned reply's shape.
-        base_env: The variable naming the API base URL (``ANTHROPIC_BASE_URL``, ``OPENROUTER_HOST``).
+        dialect: ``messages``, ``chat`` or ``responses``: the canned reply's shape.
+        base_env: The variable naming the API base URL (``ANTHROPIC_BASE_URL``, ``OPENROUTER_HOST``); "" sets none.
         timeout: Seconds before the CLI is killed (``rc`` None).
+        base_suffix: Appended to the stub URL in ``base_env`` (Copilot's chat base ends in ``/api/v1``).
+        argv_url: A gateway URL inside ``argv`` (Codex's provider ``base_url``), replaced by the stub's URL.
+        reply: A scripted reply per request (default: the dialect's canned ``ok``).
 
     Returns:
         The exit code, output, JSON events and the requests the stub received.
     """
     received: list[dict[str, Any]] = []
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _stub_handler(dialect, received))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _stub_handler(dialect, received, reply))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        full_env = {**env, base_env: f"http://127.0.0.1:{server.server_address[1]}"}
+        url = f"http://127.0.0.1:{server.server_address[1]}"
+        full_env = {**env, **({base_env: url + base_suffix} if base_env else {})}
+        argv = [part.replace(argv_url, url) for part in argv] if argv_url else argv
         proc = subprocess.run(argv, env=full_env, cwd=cwd, capture_output=True, text=True, timeout=timeout,
                               check=False, stdin=subprocess.DEVNULL)
         rc, out, err = proc.returncode, proc.stdout, proc.stderr

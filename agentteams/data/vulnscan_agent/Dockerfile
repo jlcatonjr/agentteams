@@ -5,18 +5,20 @@
 #
 # Driver-parameterised: build arg AGENT_CLI (the framework's runtime driver, agentteams/vulnscan/
 # agent_drivers.py) selects the install stage `cli-<AGENT_CLI>`; the final stage adds agentteams and the
-# non-root user on top of it. The goose and claude stages are implemented in this release; the others
-# fail the build with a clear message. Needs BuildKit (Docker's default builder since Engine 23), which builds only
-# the stages the final image uses.
+# non-root user on top of it. The goose, claude, copilot and codex stages are implemented in this release;
+# grok fails the build with a clear message. Needs BuildKit (Docker's default builder since Engine 23), which builds
+# only the stages the final image uses.
 #
 # Supply chain:
 #   * PYTHON_IMAGE should be pinned by digest (python:3.12-slim@sha256:...). The build command
 #     warns when it is a bare tag.
 #   * The CLI release asset is pinned by CLI_VERSION *and* CLI_SHA256. A mismatch fails the build.
 #     Take the checksum from the release metadata (scripts/vulnscan-agent-image.sh does), never from
-#     this file.
+#     this file. copilot has no release checksum: CLI_SHA256 is the installed tree's hash (see its stage).
 ARG PYTHON_IMAGE=python:3.12-slim
 ARG AGENT_CLI=goose
+# copilot's npm build stage only (the image keeps none of it); passed pinned by digest by the copilot driver.
+ARG NODE_IMAGE=node:24-bookworm-slim
 
 FROM ${PYTHON_IMAGE} AS base
 RUN apt-get update \
@@ -69,13 +71,65 @@ RUN case "${TARGETARCH:-amd64}" in \
  && HOME=/tmp/claude-home DISABLE_AUTOUPDATER=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 claude --version \
  && rm -rf /tmp/claude-home
 
-# ---------------------------------------------------------------- not in this release
+# ---------------------------------------------------------------- copilot (npm ci from the committed lockfile)
+# GitHub publishes no checksum for the Copilot CLI (plan revision 12). copilot/package-lock.json (committed, in
+# this directory) pins every package's sha512 integrity, so `npm ci` refuses a tarball that differs;
+# `npm audit signatures` checks the registry signatures; --ignore-scripts runs no install script. CLI_SHA256
+# is a hash over the whole installed tree for this architecture (agent_drivers_copilot.COPILOT.image.sha256):
+#   find node_modules -type f ! -name .package-lock.json -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum
+# Only the platform package's native binary is copied into the image: it needs neither node nor npm.
+FROM ${NODE_IMAGE} AS copilot-build
+ARG CLI_VERSION
+ARG CLI_SHA256
+RUN test -n "$CLI_VERSION" && test -n "$CLI_SHA256" \
+ || { echo "CLI_VERSION and CLI_SHA256 build args are required" >&2; exit 1; }
+WORKDIR /opt/copilot
+COPY copilot/package.json copilot/package-lock.json ./
+RUN node -e 'const l = require("./package-lock.json"); const v = l.packages["node_modules/@github/copilot"].version; if (v !== process.env.CLI_VERSION) { console.error(`the lockfile pins @github/copilot ${v}, not ${process.env.CLI_VERSION}`); process.exit(1); }' \
+ && npm ci --ignore-scripts --no-audit --no-fund \
+ && npm audit signatures \
+ && TREE="$(find node_modules -type f ! -name .package-lock.json -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)" \
+ && echo "installed tree sha256 $TREE" \
+ && if [ "$TREE" != "$CLI_SHA256" ]; then echo "installed tree sha256 $TREE != CLI_SHA256 $CLI_SHA256" >&2; exit 1; fi \
+ && BIN="$(find node_modules/@github -path '*/copilot-linux-*/copilot' -type f)" \
+ && test "$(echo "$BIN" | wc -l)" = 1 && mkdir -p /opt/copilot/bin && install -m 0755 "$BIN" /opt/copilot/bin/copilot
 
+# The binary unpacks its bundled package into COPILOT_CACHE_HOME on first start. That happens here, once, into
+# /opt/copilot-cache (agent_drivers_copilot.COPILOT_CACHE): root-owned and read-only at run time (read-only rootfs),
+# so a run never unpacks or rewrites code on a writable mount. COPILOT_HOME is the run's fresh tmpfs instead.
 FROM base AS cli-copilot
-RUN echo "AGENT_CLI=copilot: driver not available in this release" >&2; exit 1
+ARG CLI_VERSION
+COPY --from=copilot-build /opt/copilot/bin/copilot /usr/local/bin/copilot
+RUN HOME=/tmp/copilot-home COPILOT_OFFLINE=true COPILOT_AUTO_UPDATE=false COPILOT_HOME=/tmp/copilot-home/.copilot \
+      COPILOT_CACHE_HOME=/opt/copilot-cache copilot --version \
+ && ls -d /opt/copilot-cache/pkg/linux-*/"${CLI_VERSION}" \
+ && chown -R root:root /opt/copilot-cache && chmod -R a+rX,go-w /opt/copilot-cache \
+ && rm -rf /tmp/copilot-home
 
+# ---------------------------------------------------------------- codex (release tarball, sha256-pinned)
+# CLI_SHA256 is the release asset's digest (GitHub's assets[].digest); scripts/vulnscan-agent-image.sh also
+# checks the binary's sigstore bundle when cosign is installed.
 FROM base AS cli-codex
-RUN echo "AGENT_CLI=codex: driver not available in this release" >&2; exit 1
+ARG CLI_VERSION
+ARG CLI_SHA256
+ARG TARGETARCH
+RUN test -n "$CLI_VERSION" && test -n "$CLI_SHA256" \
+ || { echo "CLI_VERSION and CLI_SHA256 build args are required" >&2; exit 1; }
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) CARCH=x86_64-unknown-linux-musl ;; \
+      arm64) CARCH=aarch64-unknown-linux-musl ;; \
+      *) echo "unsupported arch ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /tmp/codex.tar.gz \
+      "https://github.com/openai/codex/releases/download/rust-v${CLI_VERSION}/codex-${CARCH}.tar.gz" \
+ && echo "${CLI_SHA256}  /tmp/codex.tar.gz" | sha256sum -c - \
+ && mkdir -p /tmp/codex && tar -xzf /tmp/codex.tar.gz -C /tmp/codex \
+ && install -m 0755 "/tmp/codex/codex-${CARCH}" /usr/local/bin/codex \
+ && rm -rf /tmp/codex /tmp/codex.tar.gz \
+ && HOME=/tmp/codex-home CODEX_HOME=/tmp/codex-home codex --version \
+ && rm -rf /tmp/codex-home
+
+# ---------------------------------------------------------------- not in this release
 
 FROM base AS cli-grok
 RUN echo "AGENT_CLI=grok: driver not available in this release" >&2; exit 1

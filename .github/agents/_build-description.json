@@ -287,5 +287,8 @@
     ],
     "staleness_slo_minutes": 1440,
     "trigger_contract_version": "v1"
+  },
+  "vulnerability_scanning": {
+    "level": "scan"
   }
 }
