@@ -4,7 +4,7 @@ Supported formats:
 
 | Ecosystem | Files |
 |---|---|
-| PyPI | ``requirements*.txt``, ``requirements*.lock`` and ``requirements*.in`` (``==`` pins), ``poetry.lock``, ``uv.lock``, ``Pipfile.lock``; a ``pyproject.toml`` next to requirements files (PEP 621 ``==`` pins) |
+| PyPI | ``requirements*.txt``, ``requirements*.lock`` and ``requirements*.in``, also with a ``-``/``_``/``.``-ended prefix such as ``ci-requirements.txt`` (``==`` pins), ``poetry.lock``, ``uv.lock``, ``Pipfile.lock``; a ``pyproject.toml`` next to requirements files (PEP 621 ``==`` pins) |
 | npm | ``package-lock.json`` and ``npm-shrinkwrap.json`` (v1–v3), ``yarn.lock`` (classic and berry) |
 | Packagist | ``composer.lock`` |
 
@@ -58,10 +58,12 @@ SKIP_DIRS: frozenset[str] = frozenset({
     "tmp",
 })
 
-#: Requirements files a staged fix may edit (``executor.validate_diff`` checks them with :func:`check_pin_edit`).
-REQ_NAME = re.compile(r"^requirements[\w.-]*\.txt$", re.I)
+#: Requirements files a staged fix may edit (``executor.validate_diff`` checks them with :func:`check_pin_edit`):
+#: ``requirements*.txt``, also with a prefix ending in ``-``, ``_`` or ``.`` (``ci-requirements.txt``,
+#: ``dev_requirements.txt``), which a name test anchored at ``requirements`` used to skip silently.
+REQ_NAME = re.compile(r"^([\w.-]*[-_.])?requirements[\w.-]*\.txt$", re.I)
 #: Requirements files the scanner reads: :data:`REQ_NAME` plus pip-compile style ``.lock`` and ``.in`` files.
-REQ_SCAN_NAME = re.compile(r"^requirements[\w.-]*\.(txt|lock|in)$", re.I)
+REQ_SCAN_NAME = re.compile(r"^([\w.-]*[-_.])?requirements[\w.-]*\.(txt|lock|in)$", re.I)
 REQ_PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*==\s*([^\s;#,]+)")
 _REQ_ANY = re.compile(r"^\s*[A-Za-z0-9][A-Za-z0-9._-]*")
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.lock",
