@@ -3,7 +3,11 @@
 # interactive terminal, after 01-03 and 02 (the sandbox repo), with Docker running.
 #
 #   1. checks vulnscan.json selects FRAMEWORK (agent.framework) with a model that framework can run;
-#      with your confirmation it switches agent.framework / agent.model (MODEL=) and keeps a backup
+#      with your confirmation it switches agent.framework / agent.model (MODEL=) and keeps a backup;
+#      copilot: PROVIDER_TYPE=openai|anthropic sets agent.copilot_provider_type (default openai: chat
+#      completions, any OpenRouter model; anthropic: Messages, Claude models only);
+#      codex: asks you to accept its residual apply_patch tool (decision D4: agent.accept_residual_tools),
+#      whose writes the read-only sandbox rejects and the self-test checks (codex_residual_write_blocked)
 #   2. builds that framework's image (vulnscan-agent-image.sh: the CLI's pinned, checksum-verified release)
 #      and runs agent-selftest; prints every check and the CLI's tool inventory from its headless probe
 #   3. signs a NARROW grant: stage-fix only, only ~/vulnscan-sandbox-root, 1 day, 5 uses
@@ -16,10 +20,14 @@
 #
 # Usage:   FRAMEWORK=claude MODEL=anthropic/claude-sonnet-4.5 KEY_ID=op1 \
 #            bash scripts/vulnscan-operator/09-accept-framework.sh
+#          FRAMEWORK=copilot MODEL=openai/gpt-5.5 [PROVIDER_TYPE=anthropic] bash scripts/vulnscan-operator/09-accept-framework.sh
+#          FRAMEWORK=codex MODEL=openai/gpt-5.5 bash scripts/vulnscan-operator/09-accept-framework.sh
+# copilot and codex have no debrief (agent-chat says so); review the run with `review` as usual.
 set -euo pipefail
 
 FRAMEWORK="${FRAMEWORK:-claude}"
 MODEL="${MODEL:-}"
+PROVIDER_TYPE="${PROVIDER_TYPE:-}"
 KEY_ID="${KEY_ID:-op1}"
 ROOT="$HOME/vulnscan-sandbox-root"
 CFGFILE="$HOME/.config/agentteams/vulnscan.json"
@@ -37,26 +45,43 @@ docker info >/dev/null 2>&1 || { echo "Docker is not running" >&2; exit 2; }
   "$FRAMEWORK" 2>/dev/null || { echo "FRAMEWORK=$FRAMEWORK has no driver in this agentteams" >&2; exit 2; }
 
 echo "== 1/5 vulnscan.json selects $FRAMEWORK"
-read -r CUR_FW CUR_MODEL ENABLED < <("$PY" -P -c 'import sys; from agentteams.vulnscan import daily, agent_run
-a = agent_run.agent_cfg(daily.load_config()); print(a["framework"], a["model"], str(bool(a["enabled"])).lower())')
+read -r CUR_FW CUR_MODEL ENABLED CUR_PT CUR_RESIDUAL < <("$PY" -P -c 'import sys; from agentteams.vulnscan import agent_run
+from pathlib import Path; import json
+a = agent_run.agent_cfg(json.loads(Path(sys.argv[1]).read_text()))   # raw: a config that does not validate yet still loads here
+print(a["framework"], a["model"], str(bool(a["enabled"])).lower(), a.get("copilot_provider_type") or "openai",
+      "yes" if "apply_patch" in (a.get("accept_residual_tools") or []) else "no")' "$CFGFILE")
 if [ "$ENABLED" = true ]; then
   echo "agent.enabled is true: the daily job would run the agent too. Set it false for the acceptance run." >&2; exit 2
 fi
-if [ "$CUR_FW" != "$FRAMEWORK" ] || { [ -n "$MODEL" ] && [ "$MODEL" != "$CUR_MODEL" ]; }; then
+NEW_PT="$CUR_PT"; NEW_RESIDUAL="$CUR_RESIDUAL"
+[ "$FRAMEWORK" = copilot ] && [ -n "$PROVIDER_TYPE" ] && NEW_PT="$PROVIDER_TYPE"
+if [ "$FRAMEWORK" = codex ] && [ "$CUR_RESIDUAL" != yes ]; then
+  echo "codex keeps one built-in tool no switch removes: apply_patch. Its writes are rejected by the read-only"
+  echo "sandbox, and the self-test checks that (codex_residual_write_blocked). Decision D4: accept it explicitly."
+  read -r -p "Set agent.accept_residual_tools: [\"apply_patch\"]? [y/N] " ANS
+  case "$ANS" in y|Y) NEW_RESIDUAL=yes;; *) echo "not accepted: codex stays refused (validate_agent)" >&2; exit 1;; esac
+fi
+if [ "$CUR_FW" != "$FRAMEWORK" ] || { [ -n "$MODEL" ] && [ "$MODEL" != "$CUR_MODEL" ]; } || [ "$NEW_PT" != "$CUR_PT" ] \
+   || [ "$NEW_RESIDUAL" != "$CUR_RESIDUAL" ]; then
   NEW_MODEL="${MODEL:-$CUR_MODEL}"
   echo "vulnscan.json has agent.framework=$CUR_FW, agent.model=$CUR_MODEL"
-  read -r -p "Switch to agent.framework=$FRAMEWORK, agent.model=$NEW_MODEL (backup kept)? [y/N] " ANS
+  read -r -p "Switch to agent.framework=$FRAMEWORK, agent.model=$NEW_MODEL (copilot provider $NEW_PT; backup kept)? [y/N] " ANS
   case "$ANS" in y|Y) ;; *) echo "left unchanged; set them yourself, then re-run" >&2; exit 1;; esac
   cp -p "$CFGFILE" "$CFGFILE.bak-$(date -u +%Y%m%dT%H%M%SZ)"
-  "$PY" -P - "$CFGFILE" "$FRAMEWORK" "$NEW_MODEL" <<'PY'
+  "$PY" -P - "$CFGFILE" "$FRAMEWORK" "$NEW_MODEL" "$NEW_PT" "$NEW_RESIDUAL" <<'PY'
 import json, sys
 from pathlib import Path
-p, fw, model = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+p, fw, model, pt, residual = Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 cfg = json.loads(p.read_text())
-cfg.setdefault("agent", {}).update(framework=fw, model=model)
+agent = cfg.setdefault("agent", {})
+agent.update(framework=fw, model=model)
+if fw == "copilot":
+    agent["copilot_provider_type"] = pt
+if residual == "yes":
+    agent["accept_residual_tools"] = sorted(set(agent.get("accept_residual_tools") or []) | {"apply_patch"})
 p.write_text(json.dumps(cfg, indent=2) + "\n")
 from agentteams.vulnscan import daily
-daily.load_config()   # validate_agent: refuses a model the framework cannot run (claude: Anthropic models only)
+daily.load_config()   # validate_agent: the model rule (claude/copilot-anthropic: Claude; codex: OpenAI), D4
 print(f"agent.framework={fw} agent.model={model}; config valid")
 PY
 fi
@@ -84,9 +109,11 @@ for k, v in sorted((rec.get("checks") or {}).items()):
 detail = rec.get("detail") or {}
 if detail:
     print("tool inventory (the CLI's own report, headless against a local stub):")
-    for k in ("init_tools", "request_tools", "unexpected_tools", "mcp_servers", "markers_fired",
-              "canary_token_seen", "rc", "result_subtype"):
-        print(f"  {k}: {json.dumps(detail.get(k))}")
+    for k in ("init_tools", "request_tools", "offered_tools", "unexpected_tools", "residual_tools", "residual_outputs",
+              "written", "mcp_servers", "markers_fired", "canary_token_seen", "rc", "result_subtype", "request_paths",
+              "cli_info", "errors"):
+        if k in detail:   # claude, copilot and codex report different keys
+            print(f"  {k}: {clean(json.dumps(detail.get(k)))[:600]}")
     if detail.get("stderr_tail"):
         print("  stderr (tail): " + clean(str(detail["stderr_tail"]).replace("\n", " | "))[:300])
 sys.exit(0 if rec.get("passed") else 1)

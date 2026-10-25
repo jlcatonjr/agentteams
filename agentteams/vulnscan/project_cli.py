@@ -4,7 +4,7 @@
 |---|---|
 | ``enroll [DIR ...] [--discover DIR] [--level L]`` | Operator only (a terminal, never CI): group the projects by owner, answer their level in bulk, write the registry |
 | ``roots`` | Each candidate scan root and its source (registry level, ``repo_roots``, excluded, opted out, unanswered, duplicate) |
-| ``status --project DIR [--json]`` | Read-only, no network: identity, enrolment, coverage state (:data:`coverage.STATES`, including ``nothing to scan`` for a project with no dependency manifest), last scan and whether it was partial, open findings, recorded fix branches and PRs, grant coverage |
+| ``status --project DIR [--json]`` | Read-only, no network: identity, enrolment, coverage state (:data:`coverage.STATES`, including ``nothing to scan`` for a project with no dependency manifest and ``unsupported ecosystem`` for one whose only manifests vulnscan cannot read), the manifests no scan reads, last scan and whether it was partial, open findings, recorded fix branches and PRs, grant coverage |
 
 ``enroll`` is the only writer of the registry (:mod:`.registry`). Levels live in each project's brief
 (:mod:`.project_policy`); ``enroll`` copies them, and writes one into a brief only through
@@ -232,7 +232,8 @@ def _latest_findings(checkouts: list[str]) -> tuple[str | None, dict[str, int], 
     for f in rep.findings:
         if f.kind == "package" and Path(f.target).expanduser().is_absolute() \
                 and any(coverage.within(f.target, c) for c in checkouts):
-            counts["MALICIOUS" if f.malicious else SEVERITY_NAME.get(f.severity, "UNRATED")] += 1
+            counts["MALICIOUS" if f.malicious else "UNSCORED" if f.shows_unscored()
+                   else SEVERITY_NAME.get(f.severity, "UNSCORED")] += 1
     return rep.generated_at or runs[-1].name, dict(counts), len(rep.feed_errors)
 
 
@@ -307,6 +308,7 @@ def project_status(project: Path, cfg: dict[str, Any] | None) -> dict[str, Any]:
     target = out["fix_checkout"] or out["project"]
     out["grant_covers_fix_checkout"] = any(grant.covers(g, "stage-fix", target) for g in grants)
     out["coverage_state"] = coverage.project_state(cfg, entry, project.expanduser().resolve(), grants)
+    out["unsupported_manifests"] = coverage.unsupported_manifests(out["fix_checkout"] or out["project"])[0]
     out["problems"] = problems + [f"grant: {p}" for p in grant_problems]
     return out
 
@@ -330,7 +332,9 @@ def cmd_status(args: argparse.Namespace, cfg: dict[str, Any] | None) -> int:
         return 0
     findings = ", ".join(f"{k} {v}" for k, v in sorted(st["open_findings"].items())) or "none"
     partial = f" (PARTIAL: {st['last_scan_unscanned']} part(s) unscanned)" if st["last_scan_partial"] else ""
-    empty = " (no dependency manifest found: not a coverage gap)" if st["coverage_state"] == "nothing to scan" else ""
+    empty = {"nothing to scan": " (no dependency manifest found: not a coverage gap)",
+             "unsupported ecosystem": " (only manifests vulnscan cannot read: a coverage gap, nothing is checked)"
+             }.get(st["coverage_state"], "")
     lines = [f"project      {st['project']}", f"identity     {st['identity']}", f"level        {st['level']}",
              f"coverage     {st['coverage_state']}{empty}",
              f"fix checkout {st['fix_checkout'] or '—'}", f"last scan    {st['last_scan'] or 'never'}{partial}",
@@ -338,6 +342,7 @@ def cmd_status(args: argparse.Namespace, cfg: dict[str, Any] | None) -> int:
              f"grant        {'covers the fix checkout' if st['grant_covers_fix_checkout'] else 'does not cover it'}"]
     if "scanned_daily" in st:
         lines.append(f"daily scan   {'yes' if st['scanned_daily'] else 'no'}")
+    lines += [f"not scanned  {m} — unsupported ecosystem" for m in st["unsupported_manifests"]]
     lines += [f"fix          {f['ts']} {f['op']} {f['branch']} {f['pr']}".rstrip() for f in st["recorded_fixes"]]
     lines += [f"problem      {p}" for p in st["problems"]]
     print("\n".join(lines))
