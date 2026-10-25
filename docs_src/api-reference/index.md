@@ -6,7 +6,7 @@ This reference defines the **supported public API surface** (documented modules 
 
 ---
 
-## Pipeline Modules
+## Pipeline modules
 
 | Module | Role |
 |--------|------|
@@ -22,7 +22,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`fence_twin_acks`](fence-twin-acks.md) | Operator ledger that acknowledges a kept twin: it turns that twin's fleet REVIEW into a notice, is bound to the twin's exact text and never drops anything |
 | [`whole_body_migration`](whole-body-migration.md) | Retires a legacy whole-body `content` fence beside the fences the render still has, keeping or flagging non-template text; reports a section present twice |
 
-## Core Support Modules
+## Core support modules
 
 | Module | Role |
 |--------|------|
@@ -37,7 +37,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`drift`](drift.md) | Detect template-to-instance drift for incremental updates |
 | [`behavioral-drift`](behavioral-drift.md) | Detect behavioral divergence in agent runs vs. specification |
 
-## Audit & Security Support
+## Audit & security support
 
 | Module | Role |
 |--------|------|
@@ -58,7 +58,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`framework-conformance`](framework-conformance.md) | Standard ≤24h agent-infra conformance check — route `@framework-adapters-expert` on real drift (`agentteams --agent-check`) |
 | [`framework-freshness`](framework-freshness.md) | Cross-framework render-staleness scan — report which provider renders lag the current templates (`--framework-freshness`) |
 
-## Enhancement & Enrichment
+## Enhancement & enrichment
 
 | Module | Role |
 |--------|------|
@@ -70,7 +70,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`code-index`](code-index.md) | Code & API index over repository scripts and the external APIs they use (gitignored local cache) |
 | [`code-sources`](code-sources.md) | Source resolution and partitioning for the code & API index |
 
-## Agent & Team Analysis
+## Agent & team analysis
 
 | Module | Role |
 |--------|------|
@@ -81,7 +81,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
 | [`eval-adapters`](eval-adapters.md) | Convert neutral eval-suite contracts into Inspect AI and OpenAI Evals artifacts |
 
-## Manifest & Documentation
+## Manifest & documentation
 
 | Module | Role |
 |--------|------|
@@ -108,7 +108,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`front_matter_baseline`](front-matter-baseline.md) | The three-way front-matter merge's baseline (what agentteams authored, version 2) and the guard that restores dropped hand-written handoffs |
 | [`template_pins`](template-pins.md) | Trust root for installed template digests (`--pin-templates`) |
 
-## Host Features & Bridge Emission
+## Host features & bridge emission
 
 | Module | Role |
 |--------|------|
@@ -148,7 +148,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`bridge_pair_docs`](bridge-pair-docs.md) | Prose renderers for the bridge's framework-agnostic pair-dir artifacts (carved out of `bridge`) |
 | [`bridge_skills`](bridge-skills.md) | Claude skill bodies emitted by the bridge (carved out of `bridge`) |
 
-## Multi-Framework Pinned Sync
+## Multi-framework pinned sync
 
 | Module | Role |
 |--------|------|
@@ -165,7 +165,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`shrink_allow`](shrink-allow.md) | `--shrink-allow`: operator-reviewed per-section overrides of the shrink guard (template retirements vs enrichment) |
 | [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
 
-## Standalone Modules
+## Standalone modules
 
 | Module | Role |
 |--------|------|
@@ -174,7 +174,7 @@ This reference defines the **supported public API surface** (documented modules 
 
 ---
 
-## Typical Pipeline Usage
+## Typical pipeline usage
 
 ```python
 from pathlib import Path
@@ -199,7 +199,7 @@ emit.print_summary(result, manifest)
 
 ---
 
-## Interoperability API Family
+## Interoperability API family
 
 The interoperability feature family has four approaches, each a dedicated module or module
 group:

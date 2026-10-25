@@ -136,8 +136,8 @@ def test_every_api_reference_page_is_linked_from_the_index() -> None:
     assert not unlinked, (
         f"{len(unlinked)} api-reference page(s) are in mkdocs.yml's nav but never linked from "
         f"docs_src/api-reference/index.md, so a reader browsing the index can't discover them: "
-        f"{unlinked}. Add each to an index.md table (or to the 'Coverage gaps' list if it "
-        "genuinely has no home yet)."
+        f"{unlinked}. Add each to the index.md table of the group it belongs in; "
+        "tests/test_docs_api_nav_groups.py then requires the nav to place it in that same group."
     )
 
 

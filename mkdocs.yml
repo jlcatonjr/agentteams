@@ -24,279 +24,307 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.top
+    - navigation.indexes
+    - navigation.path
+    - navigation.prune
+    - navigation.footer
+    - content.action.edit
     - search.suggest
     - search.highlight
     - content.code.copy
 
 nav:
   - Home: index.md
-  - Manuscript: manuscript.md
-  - Getting Started: getting-started.md
-  - Agent-Assisted Setup: agent-assisted-setup.md
-  - How It Works: how-it-works.md
-  - Examples: examples.md
-  - CLI Reference: cli-reference.md
-  - Interoperability: interoperability.md
   - Guides:
-      - Post-Production Auditor: post-production-auditor-guide.md
-      - Security Hardening & Threat Intelligence: security-hardening-guide.md
-      - Vulnerability Scanning & Remediation: vulnerability-remediation-guide.md
-      - Automated Remediation Setup (step by step): vulnscan-automation-walkthrough.md
-      - Red-Team Model Scoring & Attack Generation: redteam-model-scoring-guide.md
-      - Security Workflow Glossary: security-workflow-glossary.md
-      - Runtime Security for Served Apps: runtime-security-guide.md
-      - Section Fencing & Safe Merges: section-fencing-guide.md
-      - Update Lifecycle, Drift & Backups: update-lifecycle-guide.md
-      - Detecting Stale Docs & Scripts: stale-detection-guide.md
-      - Update Compatibility Maintenance: update-compatibility-maintenance-guide.md
-      - Delivery Procedure: delivery-procedure.md
-      - Migration Guide: migration-guide.md
-      - Known Limitations in 1.0: known-limitations.md
-      - Interoperability Patterns: interoperability-patterns-guide.md
-      - Bridge CI Automation: bridge-ci-automation-guide.md
-      - Enrichment Pipeline: enrichment-pipeline-guide.md
-      - Cross-Repository Coordination: cross-repository-coordination-guide.md
-      - Working with Your Generated Team: working-with-your-generated-team-guide.md
-      - Verification Environment: verification-environment.md
-  - Security Infrastructure Handbook:
-      - Overview: agentteams-security-guide/README.md
-      - The Map (SKELETON): agentteams-security-guide/SKELETON.md
-      - Audience Profiles: agentteams-security-guide/audience-profiles.md
-      - Sources: agentteams-security-guide/SOURCES.md
-      - Projection Guide: agentteams-security-guide/_meta/projection-guide.md
-      - "Reference (full depth)":
-          - Contents: agentteams-security-guide/reference/README.md
-          - "Part I — What It Is & Why": agentteams-security-guide/reference/part-i-what-it-is-and-why.md
-          - "Part II — The Constitution & Authority": agentteams-security-guide/reference/part-ii-the-constitution-and-authority.md
-          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/reference/part-iii-clearance-waivers-and-grants.md
-          - "Part IV — The Gates": agentteams-security-guide/reference/part-iv-the-gates.md
-          - "Part V — Content Safety": agentteams-security-guide/reference/part-v-content-safety.md
-          - "Part VI — OS Confinement": agentteams-security-guide/reference/part-vi-os-confinement.md
-          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/reference/part-vii-threat-intelligence-and-red-team.md
-          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/reference/part-viii-integrity-provenance-and-recovery.md
-          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/reference/part-ix-synthesis-and-reference-matter.md
-      - "For Developers":
-          - Contents: agentteams-security-guide/for-developers/README.md
-          - "Part I — What It Is & Why": agentteams-security-guide/for-developers/part-i-what-it-is-and-why.md
-          - "Part II — The Constitution & Authority": agentteams-security-guide/for-developers/part-ii-the-constitution-and-authority.md
-          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/for-developers/part-iii-clearance-waivers-and-grants.md
-          - "Part IV — The Gates": agentteams-security-guide/for-developers/part-iv-the-gates.md
-          - "Part V — Content Safety": agentteams-security-guide/for-developers/part-v-content-safety.md
-          - "Part VI — OS Confinement": agentteams-security-guide/for-developers/part-vi-os-confinement.md
-          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-developers/part-vii-threat-intelligence-and-red-team.md
-          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-developers/part-viii-integrity-provenance-and-recovery.md
-          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-developers/part-ix-synthesis-and-reference-matter.md
-      - "For Researchers":
-          - Contents: agentteams-security-guide/for-researchers/README.md
-          - "Part I — What It Is & Why": agentteams-security-guide/for-researchers/part-i-what-it-is-and-why.md
-          - "Part II — The Constitution & Authority": agentteams-security-guide/for-researchers/part-ii-the-constitution-and-authority.md
-          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/for-researchers/part-iii-clearance-waivers-and-grants.md
-          - "Part IV — The Gates": agentteams-security-guide/for-researchers/part-iv-the-gates.md
-          - "Part V — Content Safety": agentteams-security-guide/for-researchers/part-v-content-safety.md
-          - "Part VI — OS Confinement": agentteams-security-guide/for-researchers/part-vi-os-confinement.md
-          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-researchers/part-vii-threat-intelligence-and-red-team.md
-          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-researchers/part-viii-integrity-provenance-and-recovery.md
-          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-researchers/part-ix-synthesis-and-reference-matter.md
-      - "For Everyone":
-          - Contents: agentteams-security-guide/for-everyone/README.md
-          - "Part I — What It Is & Why": agentteams-security-guide/for-everyone/part-i-what-it-is-and-why.md
-          - "Part II — The Constitution & Authority": agentteams-security-guide/for-everyone/part-ii-the-constitution-and-authority.md
-          - "Part III — Clearance, Waivers & Grants": agentteams-security-guide/for-everyone/part-iii-clearance-waivers-and-grants.md
-          - "Part IV — The Gates": agentteams-security-guide/for-everyone/part-iv-the-gates.md
-          - "Part V — Content Safety": agentteams-security-guide/for-everyone/part-v-content-safety.md
-          - "Part VI — OS Confinement": agentteams-security-guide/for-everyone/part-vi-os-confinement.md
-          - "Part VII — Threat Intelligence & Red Team": agentteams-security-guide/for-everyone/part-vii-threat-intelligence-and-red-team.md
-          - "Part VIII — Integrity, Provenance & Recovery": agentteams-security-guide/for-everyone/part-viii-integrity-provenance-and-recovery.md
-          - "Part IX — Synthesis & Reference Matter": agentteams-security-guide/for-everyone/part-ix-synthesis-and-reference-matter.md
-  - Sandboxing Guide:
-      - Overview: agentteams-sandboxing-guide/README.md
-      - The Map (SKELETON): agentteams-sandboxing-guide/SKELETON.md
-      - Audience Profiles: agentteams-sandboxing-guide/audience-profiles.md
-      - Sources: agentteams-sandboxing-guide/SOURCES.md
-      - Projection Guide: agentteams-sandboxing-guide/_meta/projection-guide.md
-      - Reference:
-          - Contents: agentteams-sandboxing-guide/reference/README.md
-          - "Part I — What It Is & Why": agentteams-sandboxing-guide/reference/part-i-what-it-is-and-why.md
-          - "Part II — The Request": agentteams-sandboxing-guide/reference/part-ii-the-request.md
-          - "Part III — The Decision": agentteams-sandboxing-guide/reference/part-iii-the-decision.md
-          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/reference/part-iv-the-mechanisms.md
-          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/reference/part-v-wiring-and-enforcement.md
-          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/reference/part-vi-integrity-and-drift.md
-          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/reference/part-vii-ceilings-and-red-team.md
-          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/reference/part-viii-synthesis-and-reference.md
-      - For Developers:
-          - Contents: agentteams-sandboxing-guide/for-developers/README.md
-          - "Part I — What It Is & Why": agentteams-sandboxing-guide/for-developers/part-i-what-it-is-and-why.md
-          - "Part II — The Request": agentteams-sandboxing-guide/for-developers/part-ii-the-request.md
-          - "Part III — The Decision": agentteams-sandboxing-guide/for-developers/part-iii-the-decision.md
-          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/for-developers/part-iv-the-mechanisms.md
-          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/for-developers/part-v-wiring-and-enforcement.md
-          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/for-developers/part-vi-integrity-and-drift.md
-          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/for-developers/part-vii-ceilings-and-red-team.md
-          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/for-developers/part-viii-synthesis-and-reference.md
-      - For Researchers:
-          - Contents: agentteams-sandboxing-guide/for-researchers/README.md
-          - "Part I — What It Is & Why": agentteams-sandboxing-guide/for-researchers/part-i-what-it-is-and-why.md
-          - "Part II — The Request": agentteams-sandboxing-guide/for-researchers/part-ii-the-request.md
-          - "Part III — The Decision": agentteams-sandboxing-guide/for-researchers/part-iii-the-decision.md
-          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/for-researchers/part-iv-the-mechanisms.md
-          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/for-researchers/part-v-wiring-and-enforcement.md
-          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/for-researchers/part-vi-integrity-and-drift.md
-          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/for-researchers/part-vii-ceilings-and-red-team.md
-          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/for-researchers/part-viii-synthesis-and-reference.md
-      - For Everyone:
-          - Contents: agentteams-sandboxing-guide/for-everyone/README.md
-          - "Part I — What It Is & Why": agentteams-sandboxing-guide/for-everyone/part-i-what-it-is-and-why.md
-          - "Part II — The Request": agentteams-sandboxing-guide/for-everyone/part-ii-the-request.md
-          - "Part III — The Decision": agentteams-sandboxing-guide/for-everyone/part-iii-the-decision.md
-          - "Part IV — The Mechanisms": agentteams-sandboxing-guide/for-everyone/part-iv-the-mechanisms.md
-          - "Part V — Wiring & Enforcement": agentteams-sandboxing-guide/for-everyone/part-v-wiring-and-enforcement.md
-          - "Part VI — Integrity & Drift": agentteams-sandboxing-guide/for-everyone/part-vi-integrity-and-drift.md
-          - "Part VII — Ceilings & Red-Team": agentteams-sandboxing-guide/for-everyone/part-vii-ceilings-and-red-team.md
-          - "Part VIII — Synthesis & Reference": agentteams-sandboxing-guide/for-everyone/part-viii-synthesis-and-reference.md
-  - Claude & Copilot:
-      - Claude Code Cheat Sheet: claude-code-cheat-sheet.md
-      - Claude Privileges: claude-privileges.md
-      - Copilot Privileges: copilot-privileges.md
-  - Goose:
-      - System Prep & Source/Model Switch: goose-system-prep.md
-      - Cheat Sheet: goose-cheat-sheet.md
-      - Cloud Providers: goose-cloud-providers.md
-      - Privileges: goose-privileges.md
-      - Per-User Runtime Pattern: goose-runtime-pattern-guide.md
-  - Grok Build:
-      - Privileges: grok-privileges.md
-  - API Reference:
-      - Overview: api-reference/index.md
-      - ingest: api-reference/ingest.md
-      - analyze: api-reference/analyze.md
-      - analyze-tools: api-reference/analyze-tools.md
-      - tool-version-source: api-reference/tool-version-source.md
-      - manifest-format: api-reference/manifest-format.md
-      - render: api-reference/render.md
-      - emit: api-reference/emit.md
-      - fences: api-reference/fences.md
-      - fence-twins: api-reference/fence-twins.md
-      - fence-twin-acks: api-reference/fence-twin-acks.md
-      - whole-body-migration: api-reference/whole-body-migration.md
-      - convert: api-reference/convert.md
-      - integrity: api-reference/integrity.md
-      - vulnscan: api-reference/vulnscan.md
-      - interop: api-reference/interop.md
-      - capability-map: api-reference/capability-map.md
-      - canonical: api-reference/canonical.md
-      - bridge: api-reference/bridge.md
-      - bridge-skills: api-reference/bridge-skills.md
-      - bridge-pair-docs: api-reference/bridge-pair-docs.md
-      - fleet: api-reference/fleet.md
-      - drift: api-reference/drift.md
-      - behavioral-drift: api-reference/behavioral-drift.md
-      - scan: api-reference/scan.md
-      - scan-operational: api-reference/scan-operational.md
-      - env_hygiene: api-reference/env-hygiene.md
-      - redteam: api-reference/redteam.md
-      - session_scan: api-reference/session_scan.md
-      - audit: api-reference/audit.md
-      - remediate: api-reference/remediate.md
-      - security-refs: api-reference/security-refs.md
-      - security-refs-data: api-reference/security-refs-data.md
-      - framework-research: api-reference/framework-research.md
-      - framework-conformance: api-reference/framework-conformance.md
-      - framework-freshness: api-reference/framework-freshness.md
-      - enrich: api-reference/enrich.md
-      - memory-index: api-reference/memory-index.md
-      - memory-index-incremental: api-reference/memory-index-incremental.md
-      - memory-index-store: api-reference/memory-index-store.md
-      - output-plan: api-reference/output-plan.md
-      - update-report: api-reference/update-report.md
-      - living-doc: api-reference/living-doc.md
-      - cli: api-reference/cli.md
-      - code-index: api-reference/code-index.md
-      - feature-inventory: api-reference/feature-inventory.md
-      - feature-audit: api-reference/feature-audit.md
-      - code-sources: api-reference/code-sources.md
-      - fence-inject: api-reference/fence-inject.md
-      - graph: api-reference/graph.md
-      - architecture: api-reference/architecture.md
-      - git-hooks: api-reference/git-hooks.md
-      - model-routing: api-reference/model-routing.md
-      - eval-suite: api-reference/eval-suite.md
-      - eval-adapters: api-reference/eval-adapters.md
-      - frameworks: api-reference/frameworks.md
-      - man: api-reference/man.md
-      - handoff_payloads: api-reference/handoff_payloads.md
-      - plan_steps: api-reference/plan_steps.md
-      - plan-steps-todo: api-reference/plan-steps-todo.md
-      - parallel-plan: api-reference/parallel-plan.md
-      - sandbox_handoff: api-reference/sandbox-handoff.md
-      - liaison-logs: api-reference/liaison-logs.md
-      - mcp_need: api-reference/mcp-need.md
-      - mcp_need_report: api-reference/mcp-need-report.md
-      - mcp_catalog: api-reference/mcp-catalog.md
-      - mcp_servers: api-reference/mcp-servers.md
-      - governance_logs: api-reference/governance-logs.md
-      - control-plane-io: api-reference/control-plane-io.md
-      - projection-marker: api-reference/projection-marker.md
-      - signing-switch: api-reference/signing-switch.md
-      - team-dir-advisories: api-reference/team-dir-advisories.md
-      - prompt-roots: api-reference/prompt-roots.md
-      - host-features: api-reference/host-features.md
-      - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
-      - rank-conformance: api-reference/rank-conformance.md
-      - baseline: api-reference/baseline.md
-      - template-pins: api-reference/template-pins.md
-      - front-matter-reconcile: api-reference/front-matter-reconcile.md
-      - front-matter-baseline: api-reference/front-matter-baseline.md
-      - bridge-subagents: api-reference/bridge-subagents.md
-      - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
-      - adopted-agents: api-reference/adopted-agents.md
-      - proposals: api-reference/proposals.md
-      - confinement: api-reference/confinement.md
-      - proposal_policy: api-reference/proposal-policy.md
-      - proposal_runner: api-reference/proposal-runner.md
-      - sealed_result: api-reference/sealed-result.md
-      - proposal_run: api-reference/proposal-run.md
-      - proposal_staging: api-reference/proposal-staging.md
-      - runner_mcp: api-reference/runner-mcp.md
-      - interop_write_policy: api-reference/interop-write-policy.md
-      - interop_grant_check: api-reference/interop-grant-check.md
-      - mcp_direct_grants: api-reference/mcp-direct-grants.md
-      - git_exec: api-reference/git-exec.md
-      - source_provenance: api-reference/source-provenance.md
-      - user_regions: api-reference/user-regions.md
-      - write_policy: api-reference/write-policy.md
-      - orphan-advisory: api-reference/orphan-advisory.md
-      - bridge-sources: api-reference/bridge-sources.md
-      - hooks-emit: api-reference/hooks-emit.md
-      - instructions-split: api-reference/instructions-split.md
-      - schedule-emit: api-reference/schedule-emit.md
-      - mcp-detect: api-reference/mcp-detect.md
-      - mcp-emit: api-reference/mcp-emit.md
-      - goose-config: api-reference/goose-config.md
-      - pr-management: api-reference/pr-management.md
-      - research: api-reference/research.md
-      - toml-write: api-reference/toml-write.md
-      - codex-mcp-emit: api-reference/codex-mcp-emit.md
-      - grok-config-emit: api-reference/grok-config-emit.md
-      - team-package: api-reference/team-package.md
-      - sync-baseline: api-reference/sync-baseline.md
-      - sync-classifier: api-reference/sync-classifier.md
-      - sync-pin: api-reference/sync-pin.md
-      - multi-sync: api-reference/multi-sync.md
-      - agent-doc-sync: api-reference/agent-doc-sync.md
-      - learned-blocks: api-reference/learned-blocks.md
-      - branch-inventory: api-reference/branch-inventory.md
-      - branch-cleanup: api-reference/branch-cleanup.md
-      - shrink-allow: api-reference/shrink-allow.md
-      - project-notes: api-reference/project-notes.md
-  - Template Authoring: template-authoring.md
-  - Description Format: DESCRIPTION-FORMAT.md
-  - Structural Update Plan: structural-update-plan.md
-  - Contributing: contributing.md
-  - Releases and branches: release-and-branching.md
-  - Changelog: changelog.md
+      - Get started:
+          - Getting started: getting-started.md
+          - Agent-assisted setup: agent-assisted-setup.md
+          - How it works: how-it-works.md
+          - Examples: examples.md
+      - Run your team:
+          - Working with your generated team: working-with-your-generated-team-guide.md
+          - Post-production auditor: post-production-auditor-guide.md
+          - Enrichment pipeline: enrichment-pipeline-guide.md
+          - Delivery procedure: delivery-procedure.md
+          - Verification environment: verification-environment.md
+      - Update and maintain:
+          - Update lifecycle, drift and backups: update-lifecycle-guide.md
+          - Section fencing and safe merges: section-fencing-guide.md
+          - Detecting stale docs and scripts: stale-detection-guide.md
+          - Update compatibility maintenance: update-compatibility-maintenance-guide.md
+          - Migration guide: migration-guide.md
+      - Cross-repo and bridges:
+          - Interoperability patterns: interoperability-patterns-guide.md
+          - Bridge CI automation: bridge-ci-automation-guide.md
+          - Cross-repository coordination: cross-repository-coordination-guide.md
+      - Framework notes:
+          - Claude Code and Copilot:
+              - Cheat sheet (Claude Code): claude-code-cheat-sheet.md
+              - Privileges (Claude Code): claude-privileges.md
+              - Privileges (Copilot): copilot-privileges.md
+          - Goose:
+              - System prep and model switch (Goose): goose-system-prep.md
+              - Cheat sheet (Goose): goose-cheat-sheet.md
+              - Cloud providers (Goose): goose-cloud-providers.md
+              - Privileges (Goose): goose-privileges.md
+              - Per-user runtime pattern (Goose): goose-runtime-pattern-guide.md
+          - Grok Build:
+              - Privileges (Grok Build): grok-privileges.md
+  - Why agentteams:
+      - Manuscript (draft): manuscript.md
+  - Interoperability: interoperability.md
+  - Security:
+      - Topic guides:
+          - Hardening and threat intelligence: security-hardening-guide.md
+          - Runtime security for served apps: runtime-security-guide.md
+          - Red-team scoring and attack generation: redteam-model-scoring-guide.md
+          - Security workflow glossary: security-workflow-glossary.md
+          - Vulnerability scanning and remediation: vulnerability-remediation-guide.md
+          - Automated remediation setup, step by step: vulnscan-automation-walkthrough.md
+      - Security handbook:
+          - "Security handbook: overview": agentteams-security-guide/README.md
+          - About this handbook:
+              - "Security handbook: the map": agentteams-security-guide/SKELETON.md
+              - "Security handbook: audience profiles": agentteams-security-guide/audience-profiles.md
+              - "Security handbook: sources": agentteams-security-guide/SOURCES.md
+              - "Security handbook: projection guide": agentteams-security-guide/_meta/projection-guide.md
+          - Reference edition (full depth):
+              - "Security handbook: reference edition": agentteams-security-guide/reference/README.md
+              - I. What it is and why (security, reference): agentteams-security-guide/reference/part-i-what-it-is-and-why.md
+              - II. The constitution and authority (security, reference): agentteams-security-guide/reference/part-ii-the-constitution-and-authority.md
+              - III. Clearance, waivers and grants (security, reference): agentteams-security-guide/reference/part-iii-clearance-waivers-and-grants.md
+              - IV. The gates (security, reference): agentteams-security-guide/reference/part-iv-the-gates.md
+              - V. Content safety (security, reference): agentteams-security-guide/reference/part-v-content-safety.md
+              - VI. OS confinement (security, reference): agentteams-security-guide/reference/part-vi-os-confinement.md
+              - VII. Threat intelligence and red team (security, reference): agentteams-security-guide/reference/part-vii-threat-intelligence-and-red-team.md
+              - VIII. Integrity, provenance and recovery (security, reference): agentteams-security-guide/reference/part-viii-integrity-provenance-and-recovery.md
+              - IX. Synthesis and reference matter (security, reference): agentteams-security-guide/reference/part-ix-synthesis-and-reference-matter.md
+          - Developers edition:
+              - "Security handbook: developers edition": agentteams-security-guide/for-developers/README.md
+              - I. What it is and why (security, developers): agentteams-security-guide/for-developers/part-i-what-it-is-and-why.md
+              - II. The constitution and authority (security, developers): agentteams-security-guide/for-developers/part-ii-the-constitution-and-authority.md
+              - III. Clearance, waivers and grants (security, developers): agentteams-security-guide/for-developers/part-iii-clearance-waivers-and-grants.md
+              - IV. The gates (security, developers): agentteams-security-guide/for-developers/part-iv-the-gates.md
+              - V. Content safety (security, developers): agentteams-security-guide/for-developers/part-v-content-safety.md
+              - VI. OS confinement (security, developers): agentteams-security-guide/for-developers/part-vi-os-confinement.md
+              - VII. Threat intelligence and red team (security, developers): agentteams-security-guide/for-developers/part-vii-threat-intelligence-and-red-team.md
+              - VIII. Integrity, provenance and recovery (security, developers): agentteams-security-guide/for-developers/part-viii-integrity-provenance-and-recovery.md
+              - IX. Synthesis and reference matter (security, developers): agentteams-security-guide/for-developers/part-ix-synthesis-and-reference-matter.md
+          - Researchers edition:
+              - "Security handbook: researchers edition": agentteams-security-guide/for-researchers/README.md
+              - I. What it is and why (security, researchers): agentteams-security-guide/for-researchers/part-i-what-it-is-and-why.md
+              - II. The constitution and authority (security, researchers): agentteams-security-guide/for-researchers/part-ii-the-constitution-and-authority.md
+              - III. Clearance, waivers and grants (security, researchers): agentteams-security-guide/for-researchers/part-iii-clearance-waivers-and-grants.md
+              - IV. The gates (security, researchers): agentteams-security-guide/for-researchers/part-iv-the-gates.md
+              - V. Content safety (security, researchers): agentteams-security-guide/for-researchers/part-v-content-safety.md
+              - VI. OS confinement (security, researchers): agentteams-security-guide/for-researchers/part-vi-os-confinement.md
+              - VII. Threat intelligence and red team (security, researchers): agentteams-security-guide/for-researchers/part-vii-threat-intelligence-and-red-team.md
+              - VIII. Integrity, provenance and recovery (security, researchers): agentteams-security-guide/for-researchers/part-viii-integrity-provenance-and-recovery.md
+              - IX. Synthesis and reference matter (security, researchers): agentteams-security-guide/for-researchers/part-ix-synthesis-and-reference-matter.md
+          - Everyone edition:
+              - "Security handbook: everyone edition": agentteams-security-guide/for-everyone/README.md
+              - I. What it is and why (security, everyone): agentteams-security-guide/for-everyone/part-i-what-it-is-and-why.md
+              - II. The constitution and authority (security, everyone): agentteams-security-guide/for-everyone/part-ii-the-constitution-and-authority.md
+              - III. Clearance, waivers and grants (security, everyone): agentteams-security-guide/for-everyone/part-iii-clearance-waivers-and-grants.md
+              - IV. The gates (security, everyone): agentteams-security-guide/for-everyone/part-iv-the-gates.md
+              - V. Content safety (security, everyone): agentteams-security-guide/for-everyone/part-v-content-safety.md
+              - VI. OS confinement (security, everyone): agentteams-security-guide/for-everyone/part-vi-os-confinement.md
+              - VII. Threat intelligence and red team (security, everyone): agentteams-security-guide/for-everyone/part-vii-threat-intelligence-and-red-team.md
+              - VIII. Integrity, provenance and recovery (security, everyone): agentteams-security-guide/for-everyone/part-viii-integrity-provenance-and-recovery.md
+              - IX. Synthesis and reference matter (security, everyone): agentteams-security-guide/for-everyone/part-ix-synthesis-and-reference-matter.md
+      - Sandboxing guide:
+          - "Sandboxing guide: overview": agentteams-sandboxing-guide/README.md
+          - About this guide:
+              - "Sandboxing guide: the map": agentteams-sandboxing-guide/SKELETON.md
+              - "Sandboxing guide: audience profiles": agentteams-sandboxing-guide/audience-profiles.md
+              - "Sandboxing guide: sources": agentteams-sandboxing-guide/SOURCES.md
+              - "Sandboxing guide: projection guide": agentteams-sandboxing-guide/_meta/projection-guide.md
+          - Reference edition (full depth):
+              - "Sandboxing guide: reference edition": agentteams-sandboxing-guide/reference/README.md
+              - I. What it is and why (sandboxing, reference): agentteams-sandboxing-guide/reference/part-i-what-it-is-and-why.md
+              - II. The request (sandboxing, reference): agentteams-sandboxing-guide/reference/part-ii-the-request.md
+              - III. The decision (sandboxing, reference): agentteams-sandboxing-guide/reference/part-iii-the-decision.md
+              - IV. The mechanisms (sandboxing, reference): agentteams-sandboxing-guide/reference/part-iv-the-mechanisms.md
+              - V. Wiring and enforcement (sandboxing, reference): agentteams-sandboxing-guide/reference/part-v-wiring-and-enforcement.md
+              - VI. Integrity and drift (sandboxing, reference): agentteams-sandboxing-guide/reference/part-vi-integrity-and-drift.md
+              - VII. Ceilings and red-team (sandboxing, reference): agentteams-sandboxing-guide/reference/part-vii-ceilings-and-red-team.md
+              - VIII. Synthesis and reference (sandboxing, reference): agentteams-sandboxing-guide/reference/part-viii-synthesis-and-reference.md
+          - Developers edition:
+              - "Sandboxing guide: developers edition": agentteams-sandboxing-guide/for-developers/README.md
+              - I. What it is and why (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-i-what-it-is-and-why.md
+              - II. The request (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-ii-the-request.md
+              - III. The decision (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-iii-the-decision.md
+              - IV. The mechanisms (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-iv-the-mechanisms.md
+              - V. Wiring and enforcement (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-v-wiring-and-enforcement.md
+              - VI. Integrity and drift (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-vi-integrity-and-drift.md
+              - VII. Ceilings and red-team (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-vii-ceilings-and-red-team.md
+              - VIII. Synthesis and reference (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-viii-synthesis-and-reference.md
+          - Researchers edition:
+              - "Sandboxing guide: researchers edition": agentteams-sandboxing-guide/for-researchers/README.md
+              - I. What it is and why (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-i-what-it-is-and-why.md
+              - II. The request (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-ii-the-request.md
+              - III. The decision (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-iii-the-decision.md
+              - IV. The mechanisms (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-iv-the-mechanisms.md
+              - V. Wiring and enforcement (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-v-wiring-and-enforcement.md
+              - VI. Integrity and drift (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-vi-integrity-and-drift.md
+              - VII. Ceilings and red-team (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-vii-ceilings-and-red-team.md
+              - VIII. Synthesis and reference (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-viii-synthesis-and-reference.md
+          - Everyone edition:
+              - "Sandboxing guide: everyone edition": agentteams-sandboxing-guide/for-everyone/README.md
+              - I. What it is and why (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-i-what-it-is-and-why.md
+              - II. The request (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-ii-the-request.md
+              - III. The decision (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-iii-the-decision.md
+              - IV. The mechanisms (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-iv-the-mechanisms.md
+              - V. Wiring and enforcement (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-v-wiring-and-enforcement.md
+              - VI. Integrity and drift (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-vi-integrity-and-drift.md
+              - VII. Ceilings and red-team (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-vii-ceilings-and-red-team.md
+              - VIII. Synthesis and reference (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-viii-synthesis-and-reference.md
+  - Reference:
+      - CLI reference: cli-reference.md
+      - API reference:
+          - "API reference: overview": api-reference/index.md
+          - Pipeline modules:
+              - ingest: api-reference/ingest.md
+              - analyze: api-reference/analyze.md
+              - analyze-tools: api-reference/analyze-tools.md
+              - tool-version-source: api-reference/tool-version-source.md
+              - manifest-format: api-reference/manifest-format.md
+              - render: api-reference/render.md
+              - emit: api-reference/emit.md
+              - fences: api-reference/fences.md
+              - fence-twins: api-reference/fence-twins.md
+              - fence-twin-acks: api-reference/fence-twin-acks.md
+              - whole-body-migration: api-reference/whole-body-migration.md
+          - Core support modules:
+              - convert: api-reference/convert.md
+              - interop: api-reference/interop.md
+              - bridge: api-reference/bridge.md
+              - team-package: api-reference/team-package.md
+              - cli: api-reference/cli.md
+              - output-plan: api-reference/output-plan.md
+              - update-report: api-reference/update-report.md
+              - fleet: api-reference/fleet.md
+              - drift: api-reference/drift.md
+              - behavioral-drift: api-reference/behavioral-drift.md
+          - Audit & security support:
+              - scan: api-reference/scan.md
+              - scan-operational: api-reference/scan-operational.md
+              - env_hygiene: api-reference/env-hygiene.md
+              - redteam: api-reference/redteam.md
+              - session_scan: api-reference/session_scan.md
+              - audit: api-reference/audit.md
+              - integrity: api-reference/integrity.md
+              - feature-audit: api-reference/feature-audit.md
+              - living-doc: api-reference/living-doc.md
+              - remediate: api-reference/remediate.md
+              - security-refs: api-reference/security-refs.md
+              - framework-research: api-reference/framework-research.md
+              - framework-conformance: api-reference/framework-conformance.md
+              - framework-freshness: api-reference/framework-freshness.md
+              - vulnscan: api-reference/vulnscan.md
+              - security-refs-data: api-reference/security-refs-data.md
+          - Enhancement & enrichment:
+              - enrich: api-reference/enrich.md
+              - memory-index: api-reference/memory-index.md
+              - memory-index-incremental: api-reference/memory-index-incremental.md
+              - memory-index-store: api-reference/memory-index-store.md
+              - fence-inject: api-reference/fence-inject.md
+              - code-index: api-reference/code-index.md
+              - code-sources: api-reference/code-sources.md
+          - Agent & team analysis:
+              - graph: api-reference/graph.md
+              - architecture: api-reference/architecture.md
+              - git-hooks: api-reference/git-hooks.md
+              - model-routing: api-reference/model-routing.md
+              - eval-suite: api-reference/eval-suite.md
+              - eval-adapters: api-reference/eval-adapters.md
+          - Manifest & documentation:
+              - frameworks: api-reference/frameworks.md
+              - man: api-reference/man.md
+              - handoff_payloads: api-reference/handoff_payloads.md
+              - plan_steps: api-reference/plan_steps.md
+              - plan-steps-todo: api-reference/plan-steps-todo.md
+              - liaison-logs: api-reference/liaison-logs.md
+              - mcp_need: api-reference/mcp-need.md
+              - mcp_catalog: api-reference/mcp-catalog.md
+              - governance_logs: api-reference/governance-logs.md
+              - mcp_servers: api-reference/mcp-servers.md
+              - mcp_need_report: api-reference/mcp-need-report.md
+              - control-plane-io: api-reference/control-plane-io.md
+              - signing-switch: api-reference/signing-switch.md
+              - projection-marker: api-reference/projection-marker.md
+              - team-dir-advisories: api-reference/team-dir-advisories.md
+              - prompt-roots: api-reference/prompt-roots.md
+              - parallel-plan: api-reference/parallel-plan.md
+              - sandbox_handoff: api-reference/sandbox-handoff.md
+              - feature-inventory: api-reference/feature-inventory.md
+              - front-matter-reconcile: api-reference/front-matter-reconcile.md
+              - front-matter-baseline: api-reference/front-matter-baseline.md
+              - template-pins: api-reference/template-pins.md
+          - Host features & bridge emission:
+              - host-features: api-reference/host-features.md
+              - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
+              - rank-conformance: api-reference/rank-conformance.md
+              - baseline: api-reference/baseline.md
+              - bridge-subagents: api-reference/bridge-subagents.md
+              - proposals: api-reference/proposals.md
+              - confinement: api-reference/confinement.md
+              - proposal_policy: api-reference/proposal-policy.md
+              - mcp_direct_grants: api-reference/mcp-direct-grants.md
+              - interop_write_policy: api-reference/interop-write-policy.md
+              - interop_grant_check: api-reference/interop-grant-check.md
+              - runner_mcp: api-reference/runner-mcp.md
+              - proposal_staging: api-reference/proposal-staging.md
+              - proposal_run: api-reference/proposal-run.md
+              - proposal_runner: api-reference/proposal-runner.md
+              - sealed_result: api-reference/sealed-result.md
+              - git_exec: api-reference/git-exec.md
+              - source_provenance: api-reference/source-provenance.md
+              - user_regions: api-reference/user-regions.md
+              - write_policy: api-reference/write-policy.md
+              - adopted-agents: api-reference/adopted-agents.md
+              - orphan-advisory: api-reference/orphan-advisory.md
+              - bridge-subagents-goose: api-reference/bridge-subagents-goose.md
+              - bridge-sources: api-reference/bridge-sources.md
+              - hooks-emit: api-reference/hooks-emit.md
+              - instructions-split: api-reference/instructions-split.md
+              - schedule-emit: api-reference/schedule-emit.md
+              - goose-config: api-reference/goose-config.md
+              - mcp-detect: api-reference/mcp-detect.md
+              - mcp-emit: api-reference/mcp-emit.md
+              - codex-mcp-emit: api-reference/codex-mcp-emit.md
+              - grok-config-emit: api-reference/grok-config-emit.md
+              - toml-write: api-reference/toml-write.md
+              - bridge-pair-docs: api-reference/bridge-pair-docs.md
+              - bridge-skills: api-reference/bridge-skills.md
+          - Multi-framework pinned sync:
+              - multi-sync: api-reference/multi-sync.md
+              - sync-pin: api-reference/sync-pin.md
+              - sync-baseline: api-reference/sync-baseline.md
+              - sync-classifier: api-reference/sync-classifier.md
+              - canonical: api-reference/canonical.md
+              - capability-map: api-reference/capability-map.md
+              - agent-doc-sync: api-reference/agent-doc-sync.md
+              - learned-blocks: api-reference/learned-blocks.md
+              - branch-inventory: api-reference/branch-inventory.md
+              - project-notes: api-reference/project-notes.md
+              - shrink-allow: api-reference/shrink-allow.md
+              - branch-cleanup: api-reference/branch-cleanup.md
+          - Standalone modules:
+              - pr-management: api-reference/pr-management.md
+              - research: api-reference/research.md
+      - Project brief format: DESCRIPTION-FORMAT.md
+      - Known limitations in 1.0: known-limitations.md
+      - Changelog: changelog.md
+  - Contribute:
+      - Pull request process and API policy: contributing.md
+      - Template authoring: template-authoring.md
+      - Releases and branches: release-and-branching.md
+      - "Design notes: structural update plan": structural-update-plan.md
 
 markdown_extensions:
+  - attr_list
+  - md_in_html
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
