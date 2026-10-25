@@ -1,0 +1,8 @@
+{
+  "name": "agentteams-vulnscan-copilot",
+  "private": true,
+  "description": "Pinned Copilot CLI for the vulnscan agent image (npm ci --ignore-scripts from package-lock.json)",
+  "dependencies": {
+    "@github/copilot": "1.0.95"
+  }
+}
