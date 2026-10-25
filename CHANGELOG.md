@@ -6,6 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+### Added (rc.5: Linux Docker Engine)
+
+- **vulnscan: agent mode on Linux Docker Engine (R4).** New `vulnscan/docker_mode.py`: the container user
+  follows the Docker mode that `docker info` reports, detected once when a self-test, a run or a debrief starts
+  and passed on as a value (no subprocess while hashing or building argv). Docker Desktop (macOS or Linux): uid
+  10001, as before (the same argv). Rootful Engine on a Linux host: the operator's
+  `uid:gid`, so the gateway reads the 0600 key file and the DLP context and the agent writes the spool and its
+  session state through plain bind mounts (an operator whose uid or primary group is root is refused). A container
+  escape on a rootful Engine lands as the operator's own account, rootless Docker narrows that for the agent and
+  gateway, but the tools container does not support rootless yet (its self-test fails, so confined operations are
+  refused) and remediation needs a rootful Engine for now. The
+  user is validated as decimal `uid:gid`, a record with any other `container_user` unlocks nothing, and the self-test
+  records the identity the container reported (`observed_user`), which the CI job asserts. Rootless Docker: `0:0`, which the user namespace maps to the operator. Rootful with `userns-remap`:
+  refused with an explanation (`checks.docker_mode_supported: false`). Anything unrecognised (an unreadable
+  answer, a non-Desktop VM on macOS) keeps uid 10001, so a misread mode fails closed. The tmpfs `$HOME` and
+  working directory are owned by the chosen user. The self-test record gains `docker_mode` and
+  `container_user`; `flags_sha256` takes the user as an input; a run refuses (`not-run`) and a debrief refuses
+  (exit 2) when the detected user differs from the one the self-test ran as ("the Docker mode changed since the
+  last passing self-test — re-run agent-selftest"), or when the mode is refused. The debrief runs its container
+  and gateway as that user (`debrief_argv(..., user=None)`, `debrief._start_gateway(..., user=None)`).
+- **vulnscan: `non_root` depends on the Docker mode.** Under rootless Docker the probe checks "uid 0 inside,
+  not root outside" (`/proc/self/uid_map` maps uid 0 to a non-zero uid); elsewhere it is unchanged
+  (`selftest_probe.render(..., rootless)`, `NON_ROOT_ROOTLESS`).
+- **CI: `.github/workflows/vulnscan-linux-containers.yml`** (ubuntu-latest, rootful Docker,
+  `permissions: contents: read`): builds the tools image and the goose agent image with the repository's own
+  scripts and runs `tools-selftest` and `agent-selftest` against a local stub upstream with a placeholder key,
+  then asserts the self-test ran as the runner's own `uid:gid`. This job is the real Linux test.
+- **vulnscan: goose's self-test runs `goose recipe validate` (R7, rc.5).** goose 1.54.0 has
+  `goose recipe validate <path>` (exit 0 valid, 1 invalid). Probed offline, read-only, non-root: it rejects a
+  missing required field, broken YAML and an unreadable file, but accepts unknown keys (it only parses), so the
+  key allowlist and the extensions match stay the policy check. `GooseDriver.selftest_entries` adds the check
+  `goose_recipe_valid` (`selftest_probe.goose_recipe_entry`) on `/work/run/agentdef/recipe.yaml`, the checked
+  copy a run loads.
+- **Re-run `agent-selftest` once after installing rc.5, every runtime and every Docker.** The probe now prints
+  the identity the container ran as (`SELFTEST-IDENTITY`, enforced by the new check `identity_matches`), and the
+  probe text is hashed, so every fingerprint changes; goose's also gains `goose_recipe_valid`, and on a Linux Engine
+  the container user changes too.
+
 ## [1.1.0-rc.4] - 2026-10-24
 
 ### release notes

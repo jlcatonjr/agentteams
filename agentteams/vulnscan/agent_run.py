@@ -58,8 +58,8 @@ from importlib import metadata, resources
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import (agent_drivers, agent_recipe, agent_upstreams, executor, executor_guard, gateway_context, ledger, notes,
-                                 notify, paths, report_store, run_records, selftest_probe)
+from agentteams.vulnscan import (agent_drivers, agent_recipe, agent_upstreams, docker_mode, executor, executor_guard,
+                                 gateway_context, ledger, notes, notify, paths, report_store, run_records, selftest_probe)
 from agentteams.vulnscan.agent_drivers import Driver
 from agentteams.vulnscan.agent_settings import (  # noqa: F401  (re-exports: the settings live there)
     BUDGET_USD_CEILING, DEFAULT_AGENT, MAX_MINUTES_CEILING, MAX_TOKENS_TOTAL_CEILING, _positive_int, agent_cfg,
@@ -151,7 +151,7 @@ def run_lock_path() -> Path:
 
 def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GATEWAY,
                  budget_usd: float | None = None, max_tokens_total: int | None = None,
-                 dlp: gateway_context.Context | None = None) -> list[str]:
+                 dlp: gateway_context.Context | None = None, user: str | None = None) -> list[str]:
     """Return the ``docker run`` command for a gateway container.
 
     Args:
@@ -164,6 +164,7 @@ def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GA
             validated ``agent.max_tokens_total``. Never 0 (no cap) from here.
         dlp: The host's DLP context (:func:`.gateway_context.prepare`); default: its fixed location under
             ``spend_dir`` with no secrets files. Only fixed in-container paths enter the argv.
+        user: The container user (:func:`container_user`).
 
     Returns:
         argv.
@@ -179,7 +180,7 @@ def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GA
     budget = a["budget_usd"] if budget_usd is None else budget_usd
     dlp_mounts, dlp_flags = gateway_context.argv_parts(dlp or gateway_context.for_dir(spend_dir))
     return ["docker", "run", "-d", "--rm", "--name", name, "--read-only", "--cap-drop", "ALL",
-            "--security-opt", "no-new-privileges", "--user", AGENT_UID, "--pids-limit", "64", "--memory", "256m",
+            "--security-opt", "no-new-privileges", "--user", container_user(user), "--pids-limit", "64", "--memory", "256m",
             "--add-host", "host.docker.internal:host-gateway", *mounts, "-v", f"{spend_dir}:/work/out:rw",
             *dlp_mounts, tag, "python", "-m", "agentteams.vulnscan.gateway", "--listen", f"0.0.0.0:{GW_PORT}",
             *routes, "--budget-usd", str(budget),
@@ -189,7 +190,7 @@ def gateway_argv(a: dict[str, Any], tag: str, spend_dir: Path, *, name: str = GA
 
 def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, name: str,
                gateway: str = GATEWAY, spool_mode: str = "rw", interactive: bool = False,
-               driver: Driver | None = None) -> list[str]:
+               driver: Driver | None = None, user: str | None = None) -> list[str]:
     """Return the isolation flags and mounts shared by the agent, self-test and debrief containers.
 
     Args:
@@ -204,6 +205,7 @@ def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, n
         spool_mode: ``rw`` for runs; ``ro`` for a debrief, which can explain but not act.
         interactive: Add ``-it`` (debrief).
         driver: The runtime driver (default: goose).
+        user: The container user (:func:`container_user`).
 
     Returns:
         argv up to (not including) the image.
@@ -215,7 +217,23 @@ def agent_base(tag: str, run_dir: Path, sessions_dir: Path, team_dir: Path, *, n
     if problem:
         raise ValueError(f"refusing to mount the team dir: {problem}")
     return _base_argv(run_dir, sessions_dir, team_dir, executor.spool_dir(), name=name, gateway=gateway,
-                      spool_mode=spool_mode, interactive=interactive, driver=driver)
+                      spool_mode=spool_mode, interactive=interactive, driver=driver, user=user)
+
+
+def container_user(user: str | None = None) -> str:
+    """Return ``user`` (the Docker mode's, :mod:`.docker_mode`), else the image's :data:`AGENT_UID` (pure, R4).
+
+    Raises:
+        ValueError: ``user`` is not ``uid:gid`` in decimal (it reaches ``--user`` and the tmpfs options).
+    """
+    if user and not docker_mode.USER_RE.fullmatch(user):
+        raise ValueError(f"not a container user (uid:gid): {user[:40]!r}")
+    return user or AGENT_UID
+
+
+def detect_docker_mode() -> docker_mode.DockerMode:
+    """Run ``docker info`` once (through :func:`_docker`) and return the Docker mode (:mod:`.docker_mode`)."""
+    return docker_mode.detect(lambda argv: _docker(argv, check=False, timeout=60))
 
 
 def state_mounts(sessions: Path, driver: Driver) -> list[tuple[Path, str]]:
@@ -230,18 +248,20 @@ def state_mounts(sessions: Path, driver: Driver) -> list[tuple[Path, str]]:
 
 def _base_argv(run_dir: Path, sessions_dir: Path, team_dir: Path, spool: Path, *, name: str,
                gateway: str = GATEWAY, spool_mode: str = "rw", interactive: bool = False,
-               driver: Driver | None = None) -> list[str]:
+               driver: Driver | None = None, user: str | None = None) -> list[str]:
     """Build :func:`agent_base`'s argv without the team-dir check (also hashed by :func:`flags_sha256`)."""
     if spool_mode not in ("rw", "ro"):
         raise ValueError("spool_mode must be rw or ro")
     d = driver or agent_drivers.GOOSE
     env = {**d.env({}, f"http://{gateway}:{GW_PORT}"), "VULNSCAN_RUN_DIR": "/work/run",
            "VULNSCAN_SPOOL": "/work/spool/requests", "VULNSCAN_RESULTS": "/work/spool/results"}
+    user = container_user(user)
+    owner = "uid={},gid={}".format(*user.split(":"))   # the tmpfs dirs belong to the container user (R4)
     return ["docker", "run", "--rm", *(["-it"] if interactive else []), "--name", name,
             "--network", NETWORK, "--read-only",
-            "--tmpfs", "/tmp:rw,size=256m", "--tmpfs", f"{AGENT_HOME}:rw,size=256m,uid=10001,gid=10001",
-            "--tmpfs", f"{CWD_IN_CONTAINER}:rw,size=16m,uid=10001,gid=10001,mode=0700", "-w", CWD_IN_CONTAINER,
-            "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", AGENT_UID,
+            "--tmpfs", "/tmp:rw,size=256m", "--tmpfs", f"{AGENT_HOME}:rw,size=256m,{owner}",
+            "--tmpfs", f"{CWD_IN_CONTAINER}:rw,size=16m,{owner},mode=0700", "-w", CWD_IN_CONTAINER,
+            "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--user", user,
             "--pids-limit", "256", "--memory", "2g",
             "-v", f"{run_dir}:/work/run:ro", "-v", f"{spool / 'requests'}:/work/spool/requests:{spool_mode}",
             *(x for m in MASKED_RUN_DIRS for x in ("--tmpfs", f"/work/run/{m}:ro,size=1k")),   # mountpoints: mkdir first
@@ -257,7 +277,7 @@ def sessions_dir(run_dir: Path, driver: Driver | None = None) -> Path:
 
 
 def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task: str = TASK,
-               run_id: str = "") -> list[str]:
+               run_id: str = "", user: str | None = None) -> list[str]:
     """Return the ``docker run`` command for the agent container.
 
     The command is the driver's (:meth:`Driver.command`) unless ``agent.command`` overrides it (advanced:
@@ -272,6 +292,7 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
         session: Session name (named, so the dead-turn wrapper and a debrief can resume it).
         task: Task text (the launcher folds operator notes into it).
         run_id: The run id.
+        user: The container user (:func:`container_user`).
 
     Returns:
         argv.
@@ -291,22 +312,24 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
                .replace("{task}", task) for part in a["command"]]
     else:
         cmd = d.command(a, recipe=recipe, session=session, task=task, run_id=run_id)
-    return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=AGENT_CONTAINER, driver=d),
+    return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=AGENT_CONTAINER, driver=d, user=user),
             *agent_drivers.run_env_args(d, a), tag, *cmd]
 
 
-def selftest_script(driver: Driver | None = None, command: list[str] | None = None) -> str:
+def selftest_script(driver: Driver | None = None, command: list[str] | None = None, user: str | None = None) -> str:
     """Return the self-test probe for a driver (default goose): the shared checks plus the driver's own,
-    whose CLI probe runs ``command`` (the ``agent.command`` override) when given, as a run would."""
+    whose CLI probe runs ``command`` (the ``agent.command`` override) when given, as a run would. Under
+    rootless Docker (container user 0:0) ``non_root`` is the rootless check (:mod:`.selftest_probe`)."""
     d = driver or agent_drivers.GOOSE
     return selftest_probe.render(GATEWAY, GW_PORT, key_env=d.key_env, dummy=agent_drivers.DUMMY_KEY,
-                                 entries=d.selftest_entries(list(command or []) or None), cwd=CWD_IN_CONTAINER)
+                                 entries=d.selftest_entries(list(command or []) or None), cwd=CWD_IN_CONTAINER,
+                                 rootless=container_user(user) == docker_mode.ROOTLESS_USER)
 
 
 SELFTEST = selftest_script()   # goose's probe (the default framework)
 
 
-def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
+def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "", user: str | None = None) -> str:
     """Return the fingerprint of the runtime and container flags that a passing self-test vouches for (P9, rev. 10).
 
     sha256 over the JSON of the :func:`agent_base` argv and the :func:`gateway_argv` argv, both built
@@ -319,6 +342,8 @@ def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
     Args:
         a: Agent settings (default :data:`DEFAULT_AGENT`): ``framework``, ``command``, ``recipe`` and ``team_dir``.
         image_id: The local image id the self-test ran against.
+        user: The container user (:func:`container_user`), from the Docker mode detected before hashing. With
+            Docker Desktop it is :data:`AGENT_UID` and the digest is unchanged by R4.
 
     Returns:
         Hex digest.
@@ -333,19 +358,22 @@ def flags_sha256(a: dict[str, Any] | None = None, image_id: str = "") -> str:
                "command": list(a["command"]) or d.command_template(), "model_env": d.model_env,
                "recipe": agent_drivers.recipe_binding(a, d), "image": [d.image.cli, d.image.version, list(d.image.sha256)]}
     blob = json.dumps({"agent_base": _base_argv(Path("/run"), Path("/sessions"), Path("/team"), Path("/spool"),
-                                                name=AGENT_CONTAINER, driver=d),
-                       "gateway": gateway_argv(placeholder, "img", Path("/spend"), dlp=gateway_context.placeholder()),
-                       "selftest": selftest_script(d, a["command"]), "runtime": runtime, "image_id": image_id}, sort_keys=True)
+                                                name=AGENT_CONTAINER, driver=d, user=user),
+                       "gateway": gateway_argv(placeholder, "img", Path("/spend"), dlp=gateway_context.placeholder(),
+                                               user=user),
+                       "selftest": selftest_script(d, a["command"], user), "runtime": runtime, "image_id": image_id},
+                      sort_keys=True)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-def selftest_argv(a: dict[str, Any], tag: str, run_dir: Path) -> list[str]:
+def selftest_argv(a: dict[str, Any], tag: str, run_dir: Path, user: str | None = None) -> list[str]:
     """Return the ``docker run`` command for the isolation self-test (same flags as the agent).
 
     Args:
         a: Agent settings.
         tag: Image tag.
         run_dir: A run directory to mount read-only.
+        user: The container user (:func:`container_user`).
 
     Returns:
         argv.
@@ -356,8 +384,8 @@ def selftest_argv(a: dict[str, Any], tag: str, run_dir: Path) -> list[str]:
     """
     d = driver_of(a)
     team = Path(str(a["team_dir"] or run_dir)).expanduser().resolve()
-    return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=SELFTEST_CONTAINER, driver=d),
-            tag, "python", "-I", "-c", selftest_script(d, a.get("command"))]
+    return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=SELFTEST_CONTAINER, driver=d, user=user),
+            tag, "python", "-I", "-c", selftest_script(d, a.get("command"), user)]
 
 
 def _docker(argv: list[str], *, check: bool = True, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -405,11 +433,14 @@ def _ensure_network() -> None:
         _docker(["docker", "network", "create", "--internal", NETWORK])
 
 
-def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path) -> None:
-    """Start the gateway (gateway_context.DlpRefused: an unusable secrets dir or file, or its exit 2; R5)."""
+def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, user: str | None = None) -> None:
+    """Start the gateway (gateway_context.DlpRefused: an unusable secrets dir or file, or its exit 2; R5).
+
+    ``user``: the container user for the Docker mode (R4, :func:`container_user`); None: the default.
+    """
     _docker(["docker", "rm", "-f", GATEWAY], check=False)
     dlp = gateway_context.prepare(spend_dir, skip_ok=a.get("dlp_skip_ok") or [])   # B2: the host's DLP context
-    _docker(gateway_argv(a, tag, spend_dir, dlp=dlp))
+    _docker(gateway_argv(a, tag, spend_dir, dlp=dlp, user=user))
     try:
         _docker(["docker", "network", "connect", NETWORK, GATEWAY])
     except RuntimeError:   # the gateway already exited: its DLP-context refusal, if any, is the reason
@@ -467,19 +498,27 @@ def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
     unreachable = docker_unreachable(tag)
     if unreachable:
         return {"passed": False, "checks": {"docker_reachable": False}, "error": unreachable}
+    mode = detect_docker_mode()   # R4: once, before any argv or fingerprint; passed on as a value
+    if mode.problem:
+        return {"passed": False, "checks": {"docker_mode_supported": False}, "error": mode.problem}
+    user = container_user(mode.user)
     _ensure_network()
     try:
-        _start_gateway(a, tag, work / "gateway")
-        proc = _docker(selftest_argv(a, tag, work / "run"), check=False, timeout=300)   # + a headless CLI run
+        _start_gateway(a, tag, work / "gateway", user)
+        proc = _docker(selftest_argv(a, tag, work / "run", user), check=False, timeout=300)   # + a headless CLI run
     finally:
         _docker(["docker", "rm", "-f", SELFTEST_CONTAINER], check=False)
         _stop_gateway()
     line = next((ln for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST ")), "")
     checks = json.loads(line[9:]) if line else {"selftest_ran": False}
     detail = next((ln[16:] for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-DETAIL ")), "")
+    observed = next((ln[18:].strip() for ln in proc.stdout.splitlines() if ln.startswith("SELFTEST-IDENTITY ")), "")
+    if line:   # the container must have run as the user the fingerprint binds (missing line: it did not say)
+        checks["identity_matches"] = observed == user
     image = _image_id(tag)
     result = {"passed": bool(checks) and all(checks.values()), "checks": checks, "framework": driver.name,
-              "image": image, "flags_sha256": flags_sha256(a, image), "at": datetime.now(UTC).isoformat(),
+              "image": image, "flags_sha256": flags_sha256(a, image, user), "docker_mode": mode.name,
+              "container_user": user, "observed_user": observed[:40] or None, "at": datetime.now(UTC).isoformat(),
               "detail": json.loads(detail) if detail else None, "stderr": proc.stderr[-1000:],
               "agent_definition": agentdef.record() if agentdef else None}
     (paths.state_dir() / "agent-selftest.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -519,7 +558,10 @@ def selftest_ok(cfg: dict[str, Any]) -> tuple[bool, str]:
         return False, "the agent image changed since the last passing self-test — re-run agent-selftest"
     if not rec.get("flags_sha256"):
         return False, "the self-test record predates container-flag binding — re-run agent-selftest"
-    if rec.get("flags_sha256") != flags_sha256(a, current):
+    recorded = rec.get("container_user")
+    if recorded is not None and not (isinstance(recorded, str) and docker_mode.USER_RE.fullmatch(recorded)):
+        return False, "the self-test record names no valid container user — re-run agent-selftest"
+    if rec.get("flags_sha256") != flags_sha256(a, current, recorded or None):
         return False, ("the runtime (framework, CLI, command), the container flags or the self-test changed since "
                        "the last passing self-test — re-run agent-selftest")
     return True, "ok"
@@ -689,6 +731,11 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         why = _not_run_reason(cfg, a)
         if why:
             return finish("not-run", reason=why)
+        mode = detect_docker_mode()   # R4: once per run, after the refusals; this run's argv take it as a value
+        user = container_user(mode.user)
+        if mode.problem or user != docker_mode.recorded_user(paths.state_dir() / "agent-selftest.json", AGENT_UID):
+            return finish("not-run", reason=mode.problem or (
+                f"the Docker mode changed since the last passing self-test (now {mode.name}) — re-run agent-selftest"))
         out.mkdir(parents=True, exist_ok=True)
         tag = image_tag(a)
         driver = driver_of(a)   # _not_run_reason refused an unknown framework
@@ -710,7 +757,7 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         timed_out, rc, launch_error, terminated, refused = False, -1, "", False, ""
         with sigterm_raises_exit():
             try:   # a broken ledger (ValueError) here also ends the run as agent-error, never a crash
-                timed_out, rc = _launch(a, tag, run_dir, session, serve, status, task, run_id)
+                timed_out, rc = _launch(a, tag, run_dir, session, serve, status, task, run_id, user)
             except SystemExit as exc:   # SIGTERM (launchd unload, logout): clean up below, then exit
                 if exc.code != SIGTERM_EXIT:
                     raise
@@ -776,7 +823,7 @@ def read_spend(path: Path) -> tuple[dict[str, Any] | None, str]:
 
 
 def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Server, status: dict[str, Any],
-            task: str, run_id: str) -> tuple[bool, int]:
+            task: str, run_id: str, user: str | None = None) -> tuple[bool, int]:
     """Start the gateway and the agent container and serve requests until it exits or times out.
 
     The caller removes both containers afterwards, whatever happens here.
@@ -790,6 +837,7 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
         status: The run's status dict (``stale_requests`` is recorded here).
         task: Task text before notes are folded in.
         run_id: The run id.
+        user: The container user (:func:`container_user`).
 
     Returns:
         ``(timed_out, exit code)``.
@@ -802,10 +850,10 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
     task = fold_notes(task, run_id)
     _ensure_network()
     _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
-    _start_gateway(a, tag, run_dir / "gateway")
+    _start_gateway(a, tag, run_dir / "gateway", user)
     timed_out = False
     with open(out / "transcript.log", "w", encoding="utf-8") as log:
-        proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task, run_id=run_id), stdout=log,
+        proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task, run_id=run_id, user=user), stdout=log,
                                 stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 60 * float(a["max_minutes"])
         while proc.poll() is None and time.monotonic() < deadline:

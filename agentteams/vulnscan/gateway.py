@@ -583,10 +583,11 @@ class DlpContextError(OSError):
     """A DLP secrets file could not be read: the gateway refuses to start (exit 2, @security rc.4 Low 5)."""
 
 
-#: Why a mounted DLP file is usually unreadable, for the operator (the gateway runs as uid 10001).
-DLP_UNREADABLE_HINT = ("each mounted file must be readable by the gateway's uid 10001: Docker Desktop (macOS) maps "
-                       "file ownership, but a Linux bind mount keeps the host's owner and 0600 mode; see "
-                       "'Gateway DLP context' in docs_src/api-reference/vulnscan.md")
+#: Why a mounted DLP file is usually unreadable, for the operator (the gateway's user follows the Docker mode, R4).
+DLP_UNREADABLE_HINT = ("each mounted file must be readable by the gateway's user: uid 10001 on Docker Desktop, which "
+                       "maps file ownership; your own uid on a rootful Linux Docker Engine, and uid 0 mapped to you "
+                       "under rootless Docker, so a file you own and can read is readable; see 'Gateway DLP context' "
+                       "and 'Docker modes' in docs_src/api-reference/vulnscan.md")
 
 
 def _dlp_filter(a: argparse.Namespace, keys: Collection[str], key_files: Collection[Path]) -> dlp.Filter:
