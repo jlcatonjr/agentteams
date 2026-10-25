@@ -1,10 +1,10 @@
-# How It Works
+# How it works
 
 Agent Teams Module transforms a single project description into a complete, coordinated AI agent team through a four-stage pipeline.
 
 ---
 
-## Pipeline Overview
+## Pipeline overview
 
 ```
 brief.json / brief.md
@@ -53,7 +53,7 @@ Loads each template from `templates/` and substitutes every `{PLACEHOLDER}` with
 Writes all rendered files to the target framework directory:
 
 - `copilot-vscode` -> `.github/agents/`
-- `copilot-cli` -> `.github/copilot/`
+- `copilot-cli` -> `.github/agents/` (the same folder as VS Code; handoffs removed)
 - `claude` -> `.claude/agents/`
 - `goose` **(beta)** -> `.goose/recipes/`
 - `agents-md` **(beta)** -> `.agents/`
@@ -68,14 +68,11 @@ Also writes framework instructions at the parent of the framework agents directo
 
 It also generates `SETUP-REQUIRED.md` for unresolved manual placeholders, and runs post-generation audit/security scan when requested.
 
-### Path B: Convert Existing Teams
-
-In addition to fresh generation, the module supports format migration with `--convert-from`.
-This path reads existing agent files, preserves body prose, and rewrites framework wrappers/front matter for the target framework.
+Fresh generation is one of three build paths; see [Three build paths](#three-build-paths).
 
 ---
 
-## 4-Tier Agent Taxonomy
+## 4-tier agent taxonomy
 
 Every generated team contains agents from four hierarchical tiers.
 
@@ -107,7 +104,7 @@ Tier 4: Workstream Experts
        component brief → domain agent commission → review
 ```
 
-### How Tiers Interact
+### How tiers interact
 
 ```
 User Request
@@ -124,7 +121,7 @@ Governance Agents (audits, reviews, clearances)
 
 The orchestrator **routes without producing**. Domain agents **produce without scoping**. Workstream experts **scope without producing**. Governance agents **audit without producing**.
 
-### Optional Outcome-Verification Layer
+### Optional outcome-verification layer
 
 Teams that include `@post-production-auditor` can add an optional post-production workflow extension (Workflow 10C) in the orchestrator user-editable section. This workflow validates claimed completed outcomes against source-of-truth state and enforces fail-closed closure behavior on `FAIL`/`INCONCLUSIVE` verdicts.
 
@@ -132,7 +129,7 @@ The analyzer auto-selection for `@post-production-auditor` uses contextual cue p
 
 To avoid forced propagation to teams that do not include this archetype, Workflow 10C and its routing row are added outside FENCED sections (in user-editable gaps), not inside generated fenced blocks.
 
-### Agent Knowledge Updates
+### Agent knowledge updates
 
 Generated agent teams are designed to keep their documentation current automatically as projects evolve. Two mechanisms work together:
 
@@ -146,7 +143,7 @@ These three mechanisms together ensure that agents do not assert stale beliefs a
 
 ---
 
-## Template Library
+## Template library
 
 Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The library provides:
 
@@ -156,7 +153,7 @@ Templates in `templates/` are Markdown files with `{PLACEHOLDER}` tokens. The li
 | Governance | `universal/` (11 tier-2 governance agent templates) |
 | Domain | `domain/` (15 archetype templates + 6 tool templates, incl. `content-enricher` and `work-summarizer`) |
 | Workstream Expert | `workstream-expert.template.md` (one template, rendered per component) |
-| Builder | `builder/` (4 framework-specific team-builder templates) |
+| Builder | `builder/` (framework-specific team-builder templates; some frameworks share one) |
 
 In addition to the 11 always-included tier-2 governance templates, `universal/` also contains the tier-1 Orchestrator template.
 
@@ -166,25 +163,57 @@ See [Template Authoring](template-authoring.md) for placeholder conventions and 
 
 ---
 
-## Framework Adapters
+## Framework adapters
 
 The same template library targets every registered framework through adapters in `agentteams/frameworks/`. Which adapters are Stable and which are Beta is set by the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md):
 
 | Framework | Agent Format | Entry Point |
 |-----------|-------------|-------------|
 | `copilot-vscode` | `.agent.md` with YAML front matter | VS Code Copilot agent panel |
-| `copilot-cli` | Plain `.md` system prompts | `gh copilot` CLI |
-| `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Projects |
+| `copilot-cli` | `.agent.md` with YAML front matter, handoffs removed | Copilot CLI (`copilot`) |
+| `claude` | Claude front matter `.md` + `CLAUDE.md` | Claude Code |
 | `goose` **(beta)** | Recipe YAML (`.goose/recipes/*.yaml`) + repo-root `AGENTS.md`/`.goosehints` | `goose run --recipe` |
 | `agents-md` **(beta)** | Cross-tool `AGENTS.md` standard (plain `.md`) + `.agents/` | Any AGENTS.md-aware tool |
 | `codex` **(beta)** | Codex custom agents (`.codex/agents/*.toml`) + repo-root `AGENTS.md` | Codex CLI |
 | `grok` **(beta)** | Grok Build custom agents (`.grok/agents/*.md`) + repo-root `AGENTS.md` | `grok --agent .grok/agents/<slug>.md` |
 
-Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework. VS Code Copilot keeps handoffs inline; frameworks that do not support the VS Code syntax can instead receive a sidecar `references/runtime-handoffs.json` manifest when extracted handoffs are present. Goose encodes handoffs natively inside each recipe (orchestrator `sub_recipes`; deeper edges become `summon` `load(...)`), so it emits no sidecar. **Goose support is in beta** (generate, convert, bridge and interop), and its adapter is **Beta** under the [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md).
+Each adapter in `agentteams/frameworks/` knows the file naming conventions, front-matter schema, and handoff delivery mode for its target framework.
+
+### Handoffs and the team builder
+
+Each framework receives the team's routing (its handoffs) in the form it can use, and gets a
+framework-native **team builder** agent that can regenerate or extend the team.
+
+| Framework | Handoffs | Team builder |
+|-----------|----------|--------------|
+| `copilot-vscode` | Native inline YAML | `.agent.md` agent |
+| `copilot-cli` | Runtime manifest (`references/runtime-handoffs.json`) when handoffs are present | `.agent.md` agent |
+| `claude` | Runtime manifest (`references/runtime-handoffs.json`) when handoffs are present | Claude agent `.md` |
+| `goose` **(beta)** | Native: orchestrator handoffs become `sub_recipes`, deeper edges become `summon` `load(...)` | Runnable `team-builder.yaml` recipe |
+| `agents-md` **(beta)** | Routing preserved in `references/runtime-handoffs.json` | `.agents/team-builder.md` |
+| `codex` **(beta)** | Native: written into each agent's `developer_instructions` | `.codex/agents/team-builder.toml` |
+| `grok` **(beta)** | Runtime manifest (`references/runtime-handoffs.json`) | Grok Build custom agent |
+
+Where handoffs go into the manifest, the visible prompt files carry no inline handoff sections, but the
+routing stays available to bridge layers and other runtime tooling. Goose emits one recipe per agent
+plus a team brief at the repo-root `AGENTS.md` and a `.goosehints` integrator. `agents-md` writes the
+framework-neutral repo-root `AGENTS.md` read by many AI coding tools, plus per-specialist detail under
+`.agents/`; `--convert-from` and `--bridge-from` do not target it (interop does). The [feature-support matrix](cli-reference.md#feature-support-by-framework)
+shows which commands each framework supports.
+
+### Three build paths
+
+- **Path A, fresh generation:** build a team from a brief (`--description`).
+- **Path B, format migration:** move an existing team to another framework (`--convert-from`).
+- **Path C, lightweight bridge:** keep a source team canonical and give other tools a thin interface to
+  it (`--bridge-from`).
+
+The [Interoperability](interoperability.md) tab covers paths B and C and the CAI interop pipeline in
+detail.
 
 ---
 
-## Using a Coding Agent to Run the Pipeline
+## Using a coding agent to run the pipeline
 
 The four-stage pipeline can be driven entirely by a coding agent. Instead of running CLI commands manually, you describe what you want in plain language and the agent drafts the brief, generates the team, resolves placeholders, and audits the result.
 

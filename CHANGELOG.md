@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### docs (site restructure, phase 2: Home and Why agentteams)
+
+- **New "Why agentteams" section** (`docs_src/why/`), with four pages:
+  - the problem and the constitutional approach, who the project is for, and what it is not;
+  - the constitutional core in plain language, and how generated teams keep it in force;
+  - why each of the four tiers of agents exists, with the adaptive plan-execution workflow
+    described in words as well as the diagram;
+  - further reading: the blog series, now listed on the site, plus the manuscript and the
+    handbook editions.
+- **Home is now a landing page:** the problem, the idea, a two-command example, routes for using,
+  understanding, integrating, securing and contributing, and reasons to trust the project. The
+  anchors of the old Home sections still resolve.
+- **Home's framework detail moved to How it works.** The handoff and team-builder table now covers
+  all 7 frameworks, and the three build paths are there too. Home's old table listed 5.
+- **Dark mode** follows the reader's system setting, with a toggle. Text and links measure at least
+  4.5:1 in both color schemes.
+- **Link hover/focus color fixed.** Material's indigo accent (`#526cfe`) measured 4.26:1 on light
+  and 3.78:1 on dark, below the WCAG AA minimum. `stylesheets/extra.css` replaces it with shades of
+  the same indigo: 5.71:1 and 6.47:1.
+- `scripts/check_docs_site.py` now enforces its page checks on `why/` as well as Home.
+- Corrections found while reviewing these pages:
+  - `copilot-cli` writes `.github/agents/*.agent.md`; `.github/copilot/` has not been emitted since
+    2026-08-15. Fixed in `how-it-works.md` and `getting-started.md`.
+  - The `claude` entry point is Claude Code, not "Claude Projects".
+  - `agents-md` is an interop target. Only convert and bridge do not target it.
+  - `getting-started.md` now lists all 7 frameworks' output folders.
+  - The duplicated "Path B" subsection is merged into "Three build paths".
+  - `how-it-works.md` headings are sentence case. Their anchors are unchanged.
+
 ### docs (site restructure, phase 1: navigation)
 
 - The site nav is regrouped from 21 top-level entries into 7 tabs: Home, Guides, Why agentteams,

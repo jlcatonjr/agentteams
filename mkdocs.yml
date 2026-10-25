@@ -13,13 +13,27 @@ extra:
 copyright: "&copy; <span id='copyright-year'></span> jlcatonjr"
 extra_javascript:
   - javascripts/current-year.js
+extra_css:
+  - stylesheets/extra.css
 
 theme:
   name: material
   palette:
-    - scheme: default
+    # Follows the reader's OS setting, with a toggle (decision D4; contrast measured in both schemes).
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
       primary: indigo
       accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
     - navigation.tabs
     - navigation.sections
@@ -71,6 +85,10 @@ nav:
           - Grok Build:
               - Privileges (Grok Build): grok-privileges.md
   - Why agentteams:
+      - Why agentteams: why/index.md
+      - Constitutional design: why/constitutional-design.md
+      - Anatomy of a team: why/anatomy-of-a-team.md
+      - Further reading: why/further-reading.md
       - Manuscript (draft): manuscript.md
   - Interoperability: interoperability.md
   - Security:
