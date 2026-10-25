@@ -17,15 +17,15 @@ Given a project description (a `.json` or `.md` brief), the module:
 1. **Analyzes** the project goal, deliverables, tools, and components
 2. **Selects** the right agent archetypes from a 4-tier taxonomy
 3. **Renders** all agent files by filling in project-specific placeholders
-4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude, Goose *(beta)*, or the cross-tool AGENTS.md standard *(beta)*
+4. **Emits** ready-to-use agent files for VS Code Copilot, Copilot CLI, Claude Code, or (in beta) Goose, the cross-tool AGENTS.md standard, Codex and Grok Build
 
 The generated team includes:
 - 1 **Orchestrator** agent — coordinates all workflows
-- 11 **Governance agents** — navigation, security, consistency, cleanup, documentation, cross-repository coordination, and git operations
+- 11 **Governance agents** — navigator, security, code hygiene, adversarial review, conflict auditing, conflict resolution, cleanup, documentation updating, refactoring, cross-repository liaison, and git operations
 - 3–10 **Domain agents** — `@work-summarizer` (always included) plus project-appropriate archetypes
 - 1 **Workstream Expert** per project component — deep, component-specific knowledge
 - 1 **Team Builder agent** — framework-native agent that can regenerate or expand the team from within your framework
-- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` + `.goosehints` (Goose)
+- A framework instructions file — `.github/copilot-instructions.md` (Copilot VS Code / Copilot CLI), `.claude/CLAUDE.md` (Claude), or a repo-root `AGENTS.md` (Goose, with `.goosehints`; AGENTS.md; Codex; Grok Build)
 
 The generated team governs *how your project gets built* — it does not run inside the project
 itself. If your app serves LLM output to end users, you're responsible for adding your own runtime
@@ -957,6 +957,7 @@ agentteams/
 
 | Page | Description |
 |------|-------------|
+| [Why agentteams](https://jlcatonjr.github.io/agentteams/why/) | The problem, the constitutional approach, and who it is for |
 | [Getting Started](https://jlcatonjr.github.io/agentteams/getting-started/) | Install, write a brief, generate your first team |
 | [Agent-Assisted Setup](https://jlcatonjr.github.io/agentteams/agent-assisted-setup/) | Use `@team-builder` to build the brief interactively |
 | [How It Works](https://jlcatonjr.github.io/agentteams/how-it-works/) | Pipeline stages, agent taxonomy, knowledge updates |
@@ -966,6 +967,7 @@ agentteams/
 | [API Reference](https://jlcatonjr.github.io/agentteams/api-reference/) | Python module API (`ingest`, `analyze`, `render`, `emit`, …) |
 | [Structural Update Plan](https://jlcatonjr.github.io/agentteams/structural-update-plan/) | Roadmap for programmatic team update propagation |
 | [Changelog](https://jlcatonjr.github.io/agentteams/changelog/) | Release notes |
+| [Contribute](https://jlcatonjr.github.io/agentteams/contribute/) | How to report problems and how invited contributions work |
 
 **In-repo references:**
 

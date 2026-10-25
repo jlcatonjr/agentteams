@@ -22,7 +22,7 @@ and baseAgent all follow the same model, so what you learn here applies to all f
 
 | Ref | What it is | Who changes it |
 |---|---|---|
-| `main` | Development, the next minor version | Anyone, through a pull request |
+| `main` | Development, the next minor version | Invited contributors, through a pull request |
 | `release/1.0` | Reviewed fixes queued for the next patch release; unsigned between tags; not for pinning | Jim only, by backport |
 | `vX.Y.Z`, `vX.Y.Z-rc.N` | One exact release, signed by Jim, never moved; what you install and pin | Jim only |
 | Your work branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`) | One change, deleted after merge | Its author |
@@ -65,7 +65,7 @@ a branch.
 
 ## Contributing a change
 
-agentteams is public, and you have read access only. Contribute from a fork; Jim reviews and merges your pull request.
+agentteams is public, and you have read access only. Pull requests are currently by invitation: start from an issue on which the maintainer has invited one (see [Contribute to agentteams](contribute/index.md)). Contribute from a fork; Jim reviews and merges your pull request.
 
 1. **Set up once.** Fork the repository on GitHub, then clone your fork and add the original as `upstream`:
 
@@ -88,7 +88,7 @@ agentteams is public, and you have read access only. Contribute from a fork; Jim
    git push -u origin fix/<short-topic>
    ```
 
-5. **CI.** `ci.yml` runs on every pull request and must pass. Before you push, run `python -m pytest tests/ -q`. If you changed a CLI flag or help text, also regenerate the man page with `python -m agentteams.man > agentteams.1` ([Contributing](contributing.md)).
+5. **CI.** `ci.yml` runs on every pull request and must pass. Before you push, run `python -m pytest tests/ -q`. If you changed a CLI flag or help text, also regenerate the man page with `python -m agentteams.man > agentteams.1` ([What your pull request needs](contribute/what-your-pr-needs.md#if-you-change-the-public-api-or-cli)).
 6. **Merge.** Jim reviews and merges. You can't merge into this repository.
 7. **Delete your branch after it merges.**
 

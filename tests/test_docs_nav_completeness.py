@@ -144,8 +144,9 @@ def test_every_api_reference_page_is_linked_from_the_index() -> None:
 def test_interoperability_has_the_tab_three_pages_promise() -> None:
     """Regression pin for the audit's sharpest instance.
 
-    `index.md` tells the reader to open a dedicated tab. A top-level nav entry is what makes
-    that sentence true; burying the page inside a group would not.
+    Home routes readers to Interoperability as its own destination (an "Integrate it" card), and
+    other pages call it a dedicated tab. A top-level nav entry is what makes that true; burying the
+    page inside a group would not.
     """
     assert "interoperability.md" in _nav_targets()
     nav = MKDOCS.read_text(encoding="utf-8")

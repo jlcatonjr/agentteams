@@ -199,3 +199,40 @@ def test_inbound_fails_on_an_unresolved_url(cds, monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cds, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(cds, "INBOUND_SOURCES", ("SRC.md",))
     assert cds.check_inbound(_site(tmp_path, {"index.html": "x"})) == 1
+
+
+def _external(cds, monkeypatch, tmp_path, hrefs: list[str], statuses: dict):
+    body = GOOD + "".join(f"<a href='{h}'>link text {i}</a>" for i, h in enumerate(hrefs))
+    monkeypatch.setattr(cds, "nav_pages", lambda: ["index.md"])
+
+    def fake(url, timeout):
+        result = statuses[url]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    monkeypatch.setattr(cds, "_fetch_status", fake)
+    return cds.check_external(_site(tmp_path, {"index.html": _page("Home", body)}))
+
+
+def test_external_fails_only_on_definite_breakage(cds, monkeypatch, tmp_path, capsys) -> None:
+    hrefs = ["https://ok.example/", "https://gone.example/x", "https://nohost.example/"]
+    rc = _external(cds, monkeypatch, tmp_path, hrefs,
+                   {"https://ok.example/": 200, "https://gone.example/x": 404, "https://nohost.example/": None})
+    out = capsys.readouterr().out
+    assert rc == 1 and "gone.example/x -> 404" in out and "host not found" in out
+
+
+def test_external_rate_limits_and_timeouts_are_unverified_not_passing(cds, monkeypatch, tmp_path, capsys) -> None:
+    hrefs = ["https://busy.example/", "https://slow.example/"]
+    rc = _external(cds, monkeypatch, tmp_path, hrefs,
+                   {"https://busy.example/": 429, "https://slow.example/": OSError("timed out")})
+    out = capsys.readouterr().out
+    assert rc == 0 and "2 unverified" in out and "0 broken" in out
+
+
+def test_external_client_routes_are_checked_once_and_counted(cds, monkeypatch, tmp_path, capsys) -> None:
+    hrefs = ["https://blog.example/#/post-1", "https://blog.example/#/post-2"]
+    rc = _external(cds, monkeypatch, tmp_path, hrefs, {"https://blog.example/": 200})
+    out = capsys.readouterr().out
+    assert rc == 0 and "1 distinct external URLs" in out and "2 links are client-side routes" in out

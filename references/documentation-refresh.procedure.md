@@ -104,9 +104,17 @@ python3 - <<'PY'
 import re, pathlib
 nav = set(re.findall(r':\s*([A-Za-z0-9_\-/]+\.md)\s*$', pathlib.Path('mkdocs.yml').read_text(), re.M))
 files = {str(p.relative_to('docs_src')) for p in pathlib.Path('docs_src').rglob('*.md')}
-print("not in nav:", sorted(files - nav))
+print("not in nav:", sorted(files - nav))   # expected: the snippet target assets/feature-summary-table.md
+                                           # and the exclusions declared in tests/test_docs_nav_completeness.py
 print("nav points at missing:", sorted(nav - files))
 PY
+#      API pages must also sit in the nav group named after their api-reference/index.md table:
+python3 -m pytest -q tests/test_docs_api_nav_groups.py
+#      And the built site keeps every published URL and passes the page checks (what CI's docs-build job runs).
+#      A page may be retired only by listing its URL path in .github/docs-removed-urls.txt with a '# reason';
+#      the docs-build job fails on any other missing URL, and on an allowlist entry whose page exists again.
+pip install -r .github/docs-requirements.txt && mkdocs build --strict --site-dir _site \
+  && python3 scripts/check_docs_site.py pages _site && python3 scripts/check_docs_site.py inbound _site
 
 # 1.5  Internal links
 python3 - <<'PY'
@@ -170,10 +178,10 @@ not by effort.
 | # | Surface | Authority it must match | How to tell it drifted | Route to |
 |---|---|---|---|---|
 | 2.1 | `docs_src/cli-reference.md` | `agentteams.cli.parser._build_parser()` | 1.2 reports missing flags | `@cli-and-examples-expert` → `@primary-producer` |
-| 2.2 | `README.md` — framework list | `agentteams.frameworks.registry.FRAMEWORKS` | a registry key absent from the README | `@framework-adapters-expert` |
+| 2.2 | `README.md`, `docs_src/index.md`, `how-it-works.md`, `getting-started.md` — framework lists and Beta labels | `agentteams.frameworks.registry.FRAMEWORKS` and the `STABILITY.md` adapter table | a registry key or Beta status absent or different in any of them | `@framework-adapters-expert` |
 | 2.3 | `README.md` — CLI block | the parser | 1.2 reports missing flags | `@cli-and-examples-expert` |
 | 2.4 | `docs_src/api-reference/*.md` | `agentteams/**/*.py` | 1.3 + `test_api_doc_signatures.py` | `@technical-validator` → `@agent-updater` |
-| 2.5 | `mkdocs.yml` nav | `docs_src/**/*.md` | 1.4 reports pages not in nav | `@navigator` |
+| 2.5 | `mkdocs.yml` nav | `docs_src/**/*.md`; API groups = the table headings in `docs_src/api-reference/index.md` | 1.4 reports pages not in nav, `test_docs_api_nav_groups.py` fails, or `check_docs_site.py` reports duplicate titles | `@navigator` |
 | 2.6 | `.claude/CLAUDE.md`, `AGENTS.md` | `.github/agents/_build-description.json` | a table row naming a path that does not exist | `@agent-updater` (via 1.7) |
 | 2.7 | `docs_src/getting-started.md`, `how-it-works.md`, `examples.md` | observed behaviour | a documented command's real output differs | `@technical-validator` |
 | 2.8 | `SECURITY.md`, `STABILITY.md` | `agentteams/scan.py`, the flag surface | a policy claim no longer true of the code | `@security` |
