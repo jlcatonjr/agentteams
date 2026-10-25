@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+### Fixed
+
+- **vulnscan: prefixed requirements files are scanned.** A requirements file whose name has a prefix ending in `-`,
+  `_` or `.` (`ci-requirements.txt`, `dev_requirements.txt`, `test.requirements.in`) was skipped silently, because the
+  name test was anchored at `requirements`. Found when a `.github/ci-requirements.txt` pin with a Dependabot alert
+  did not appear in the daily scan. `REQ_NAME` and `REQ_SCAN_NAME` take the prefix; a staged fix may now edit such a
+  `.txt` file under the same pin-only check.
+
 ## [1.1.0-rc.5] - 2026-10-24
 
 ### release notes

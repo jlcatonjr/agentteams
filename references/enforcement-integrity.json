@@ -118,7 +118,7 @@
     "agentteams/vulnscan/gateway_peer.py": "bbd48df133b52879809bbc9159520462afdab694a050a881a472657224db17a8",
     "agentteams/vulnscan/grant.py": "8374df6f8716f4cdb3790087535c9e8e6020d2f89cea9b48b9dd6de726699184",
     "agentteams/vulnscan/ledger.py": "b0acedbe4e0f94d59b8ac063631905d3c898ca033818403c51420b5a11613518",
-    "agentteams/vulnscan/manifests.py": "8f7e4c368943caeed703afd1c708cbaaede4204819170e78ad550819da863ca0",
+    "agentteams/vulnscan/manifests.py": "f7086a078127a5cbadb5a21269945c9ff3e7b8a4cac484e1b9afb38b99550a77",
     "agentteams/vulnscan/mcp.py": "3982e9541acf026d8cae9b0ead206e66117e5075528b80de49461953eec1d4c4",
     "agentteams/vulnscan/notes.py": "183e0dbd37cfecb1649549bd2b1731ec8f4dceadac75a34f6b28f4f53f420fe3",
     "agentteams/vulnscan/notify.py": "8f5e52eaa018d7d7260f79883c4a2856125f46386524eb4076e9b2d779351101",

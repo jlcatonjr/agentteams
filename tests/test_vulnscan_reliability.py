@@ -354,3 +354,27 @@ def test_rule_s_vm_reports_unsupported_ecosystem_but_not_nothing_to_scan() -> No
     assert "*nothing to scan* (the project has no dependency\n  manifest) is not a finding" in rule
     row = next(ln for ln in rule.splitlines() if ln.startswith("| Daily vulnerability scan missing"))
     assert "*unsupported ecosystem* (a coverage gap; never *nothing to scan*)" in row and "CONDITIONAL PASS" in row
+
+
+@pytest.mark.parametrize(("name", "read"), [
+    ("requirements.txt", True), ("requirements-dev.txt", True), ("requirements.lock", True),
+    ("ci-requirements.txt", True), ("dev_requirements.txt", True), ("test.requirements.in", True),
+    ("myrequirements.txt", False), ("requirements.md", False), ("ci-requirements.json", False),
+])
+def test_prefixed_requirements_files_are_scanned(name: str, read: bool) -> None:
+    """A prefix ending in -, _ or . (ci-requirements.txt) used to make the scanner skip the file silently."""
+    assert bool(manifests.REQ_SCAN_NAME.match(name)) is read
+    if name.endswith(".txt"):
+        assert bool(manifests.REQ_NAME.match(name)) is read
+
+
+def test_a_ci_requirements_file_reaches_the_report(tmp_path: Path, feed: Feed) -> None:  # noqa: F811
+    ci = tmp_path / ".github"
+    ci.mkdir()
+    (ci / "ci-requirements.txt").write_text("pytest==9.0.2\n")
+    feed.vulns = {("PyPI", "pytest", "9.0.2"): ["GHSA-6w46-j5rx-g56g"]}
+    feed.records = {"GHSA-6w46-j5rx-g56g": _adv("GHSA-6w46-j5rx-g56g", "PyPI", "pytest", "0", "9.0.3", "MODERATE")}
+    assert ci / "ci-requirements.txt" in manifests.discover(tmp_path)
+    rep = engine.scan_path(tmp_path)
+    (f,) = [f for f in rep.findings if f.kind == "package"]
+    assert (f.name, f.version, f.fix) == ("pytest", "9.0.2", "9.0.3")
