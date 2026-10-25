@@ -14,7 +14,7 @@ Before staging any changes, verify:
 
 1. Tests pass: `python -m pytest tests/ -q`
 2. No absolute filesystem paths in staged content (OPSEC — see `@security` trigger list)
-3. `docs/` rebuilt if `docs_src/` was modified: `mkdocs build --clean`
+3. Docs build checked if `docs_src/` or `mkdocs.yml` was modified: `mkdocs build --strict --site-dir _site` (CI builds the same way; `_site/` is gitignored)
 4. No backup files (`.bak`, `.bak[0-9]`) or `__pycache__` staged
 5. If any CLI flag or help string changed: `python -m agentteams.man > agentteams.1`. CI
    diff-checks the man page and no local test does, so a help-text edit made after the last
@@ -240,7 +240,7 @@ When `git merge` or `git rebase` reports conflicts:
 7. **Post-resolution verification:**
    ```bash
    python -m pytest tests/ -q
-   mkdocs build --clean   # if docs were affected
+   mkdocs build --strict --site-dir _site   # if docs were affected
    git log --oneline -5   # confirm clean commit history
    ```
 

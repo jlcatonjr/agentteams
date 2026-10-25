@@ -63,6 +63,71 @@ jobs:
         if: runner.os == 'Linux'
         run: bash scripts/check-durable-tmp-refs.sh
 
+  # Docs site guard (docs-site restructure, Phase 0). Builds the site strictly on every PR and push, so a
+  # broken link or nav entry fails before merge rather than in docs.yml after it. Then runs the
+  # stdlib checks in scripts/check_docs_site.py: per-page accessibility checks, every URL cited in
+  # README/man page/pyproject still resolving, and every page URL of the base build still existing
+  # (deliberate removals go in .github/docs-removed-urls.txt).
+  docs-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false  # this job never pushes; keep the token out of .git/config
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"  # same as docs.yml, so the PR check builds like the deploy
+
+      - name: Install pinned docs toolchain
+        run: pip install -r .github/docs-requirements.txt
+
+      - name: Build docs (strict)
+        run: mkdocs build --strict --site-dir _site
+
+      - name: Page checks (titles, skip link, alt text, headings, link text)
+        run: python scripts/check_docs_site.py pages _site
+
+      - name: Inbound URLs resolve
+        run: python scripts/check_docs_site.py inbound _site
+
+      - name: Resolve the base ref to compare against
+        id: base
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push)
+              if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+                 || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+                # New branch or force-push: compare against where this branch left main.
+                base="$(git merge-base HEAD origin/main)"
+              else
+                base="$BEFORE"
+              fi ;;
+            *) base="$(git rev-parse HEAD^)" ;;
+          esac
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Resolved base '$base' is not a commit SHA."; exit 1; }
+          echo "Comparing against $base"
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Build the base ref's site (non-strict; the base may predate the strict gate)
+        env:
+          BASE: ${{ steps.base.outputs.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          if ! (cd "$RUNNER_TEMP/base" && mkdocs build --site-dir "$RUNNER_TEMP/base-site"); then
+            echo "::error::The base ref $BASE does not build, so URL preservation cannot be checked."
+            exit 1
+          fi
+
+      - name: No published URL disappears unless allowlisted
+        run: python scripts/check_docs_site.py urls "$RUNNER_TEMP/base-site" _site --allowlist .github/docs-removed-urls.txt
+
   # The fence-twin lineage corpus (agentteams/data/template_lineage.json) is deletion authority
   # (Rule 12). The test job above is a shallow clone, so this job runs the lineage tests with full
   # public history: entries citing public commits are checked against git, and entries citing the

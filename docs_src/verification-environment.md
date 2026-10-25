@@ -2,7 +2,7 @@
 
 This page declares the minimum tooling AgentTeams' CI gate and local
 development workflow assume. The preflight script
-[`scripts/verify-env.py`](../scripts/verify-env.py) asserts these
+[`scripts/verify-env.py`](https://github.com/jlcatonjr/agentteams/blob/main/scripts/verify-env.py) asserts these
 preconditions and is run as the first step in CI.
 
 ## Preconditions
