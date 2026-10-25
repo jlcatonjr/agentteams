@@ -114,10 +114,13 @@ def test_dry_run_install_and_remove_touch_nothing(env: dict[str, Path], monkeypa
     uid = os.getuid()
     if mech == "launchd":
         target = str(env["home"] / "Library" / "LaunchAgents" / f"{schedule.LABEL}.plist")
-        assert list(plan.files) == [target] and "<integer>6</integer>" in plan.files[target]
+        catch = str(env["home"] / "Library" / "LaunchAgents" / f"{schedule.CATCH_UP_LABEL}.plist")
+        assert list(plan.files) == [target, catch] and "<integer>6</integer>" in plan.files[target]
         assert plan.commands == [["launchctl", "bootout", f"gui/{uid}/{schedule.LABEL}"],
-                                 ["launchctl", "bootstrap", f"gui/{uid}", target]]
-        assert removal.files == {target: ""}
+                                 ["launchctl", "bootstrap", f"gui/{uid}", target],
+                                 ["launchctl", "bootout", f"gui/{uid}/{schedule.CATCH_UP_LABEL}"],
+                                 ["launchctl", "bootstrap", f"gui/{uid}", catch]]
+        assert removal.files == {target: "", catch: ""}
     elif mech == "systemd":
         unit_dir = env["home"] / ".config" / "systemd" / "user"
         assert set(plan.files) == {str(unit_dir / f"{schedule.UNIT}.service"), str(unit_dir / f"{schedule.UNIT}.timer")}
@@ -137,14 +140,20 @@ def test_launchd_apply_install_status_remove(env: dict[str, Path], monkeypatch: 
     _use(monkeypatch, "launchd")
     uid = os.getuid()
     target = env["home"] / "Library" / "LaunchAgents" / f"{schedule.LABEL}.plist"
+    catch = env["home"] / "Library" / "LaunchAgents" / f"{schedule.CATCH_UP_LABEL}.plist"
     assert "installed: False" in schedule.status() and "(no run recorded)" in schedule.status()
     plan = schedule.install(7, 30, apply=True)
     assert not plan.errors and target.read_text() == plan.files[str(target)]
-    assert _log(env) == [f"launchctl bootout gui/{uid}/{schedule.LABEL}", f"launchctl bootstrap gui/{uid} {target}"]
-    assert "mechanism: launchd\ninstalled: True" in schedule.status()
+    assert catch.read_text() == plan.files[str(catch)]
+    assert _log(env) == [f"launchctl bootout gui/{uid}/{schedule.LABEL}", f"launchctl bootstrap gui/{uid} {target}",
+                         f"launchctl bootout gui/{uid}/{schedule.CATCH_UP_LABEL}",
+                         f"launchctl bootstrap gui/{uid} {catch}"]
+    assert "mechanism: launchd\ninstalled: True\ncatch-up job installed: True" in schedule.status()
     env["log"].unlink()
     removal = schedule.remove(apply=True)
-    assert not removal.errors and not target.exists() and _log(env) == [f"launchctl bootout gui/{uid}/{schedule.LABEL}"]
+    assert not removal.errors and not target.exists() and not catch.exists()
+    assert _log(env) == [f"launchctl bootout gui/{uid}/{schedule.LABEL}",
+                         f"launchctl bootout gui/{uid}/{schedule.CATCH_UP_LABEL}"]
     assert "installed: False" in schedule.status()
 
 

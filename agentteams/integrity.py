@@ -196,6 +196,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/paths.py",
     "agentteams/vulnscan/agent_run.py",
     "agentteams/vulnscan/selftest_probe.py",   # the self-test probe a passing self-test vouches for
+    "agentteams/vulnscan/docker_mode.py",      # R4: the container user per Docker mode (never real root)
     "agentteams/vulnscan/run_records.py",      # archives earlier runs' status, transcript and report
     "agentteams/vulnscan/registry.py",         # machine registry: what is scanned and proposed for grants
     "agentteams/vulnscan/coverage.py",         # effective scan roots and coverage states
@@ -268,6 +269,18 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # W2: the gateway's DLP filter (blocks secrets, redacts private data) and its peer-credential listener.
     "agentteams/vulnscan/gateway_dlp.py",
     "agentteams/vulnscan/gateway_peer.py",
+    "agentteams/vulnscan/gateway_context.py",  # host names, secrets files and private names given to the DLP filter
+    "agentteams/vulnscan/cvss.py",             # CVSS v3.1 / v4.0 base scores: decides what counts as HIGH
+    # Phase 4 runtimes: the driver contract, the Copilot and Codex lockdowns, the headless CLI probe, and the
+    # committed lockfile the Copilot image is built from (a changed lockfile changes what the container runs).
+    "agentteams/vulnscan/agent_driver_base.py",
+    "agentteams/vulnscan/agent_drivers_copilot.py",
+    "agentteams/vulnscan/agent_drivers_codex.py",
+    "agentteams/vulnscan/selftest_cli.py",
+    "agentteams/vulnscan/agent_recipe.py",
+    "agentteams/vulnscan/agent_settings.py",
+    "agentteams/data/vulnscan_agent/copilot/package.json",
+    "agentteams/data/vulnscan_agent/copilot/package-lock.json",
     "agentteams/cli/management_directives.py",  # C-4: the directive denylist / EXACT-scope boundary (M1)
     "agentteams/cli/effect_classifier.py",      # WS-D keystone: the derived relaxing/exception class
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use

@@ -8,7 +8,7 @@ Decision D3 of the baseAgent hardening plan: **block secrets, redact and flag th
 
 | Class | What |
 |---|---|
-| ``known-secret`` | an exact value the gateway holds: its upstream key(s), every secret-looking value in the key files, ``--dlp-secrets-file`` files and ``~/.config/agentteams-secrets/*.env`` when present |
+| ``known-secret`` | an exact value the gateway holds: its upstream key(s), every secret-looking value in the key files, ``--dlp-secrets-file`` files, the ``*.env`` files of the ``--dlp-secrets-mount`` directories and ``~/.config/agentteams-secrets/*.env`` when present |
 | ``private-key`` | a PEM or OpenSSH private-key header, a PuTTY key file |
 | ``aws-access-key``, ``aws-secret-key`` | ``AKIA``/``ASIA``… key ids; a 40-character secret assigned to an ``aws…secret`` name |
 | ``github-token``, ``gitlab-token`` | ``ghp_``/``gho_``/``ghu_``/``ghs_``/``ghr_`` tokens, ``github_pat_``; ``glpat-`` |
@@ -30,7 +30,7 @@ and ``input``), never in tool-call arguments, ``tool_use`` inputs, thinking/reas
 | ``private-package`` | ``[REDACTED:private-package]`` (names matching ``--dlp-private-names`` fnmatch patterns) |
 | ``home-path`` | ``~`` (``/Users/<name>``, ``/home/<name>``, ``C:\\Users\\<name>``: the executor expands ``~`` back, so a target the agent names stays usable) |
 | ``email`` | ``[REDACTED:email]`` (not ``git@…`` remotes) |
-| ``hostname`` | ``[REDACTED:hostname]`` (the gateway's own hostname and ``--dlp-hostname`` names) |
+| ``hostname`` | ``[REDACTED:hostname]`` (the gateway's own hostname, ``--dlp-hostname`` names and ``--dlp-hostnames-file`` lines; a containerized gateway gets the host's from :mod:`.gateway_context`) |
 | ``private-ip`` | ``[REDACTED:private-ip]`` (RFC 1918, link-local IPv4; ULA and link-local IPv6) |
 
 **False-positive guards.** Hex digests and git SHAs, ``sha256:``/``sha512-``/``h1:`` digests, UUIDs,
@@ -62,6 +62,9 @@ from .gateway_dialects import CHAT, MESSAGES, RESPONSES, PolicyError
 SECRETS_DIR = "~/.config/agentteams-secrets"
 #: Exact secrets shorter than this are ignored (too likely to occur by chance).
 MIN_EXACT = 8
+#: Written next to ``--spend-file`` when the gateway refuses to start over its DLP context (exit 2): one line of
+#: counts, never a path. The launcher reads it to end the run ``not-run`` (R5); a start clears it first.
+REFUSED_NAME = "dlp-refused"
 #: A string longer than this is scanned in its first and last halves of this size (16 MiB, the body cap).
 MAX_SCAN_CHARS = 16 * 1024 * 1024
 CACHE_SIZE = 4096
@@ -243,10 +246,54 @@ def load_secret_files(paths: Iterable[Path]) -> tuple[set[str], int]:
     unreadable = 0
     for path in paths:
         try:
+            if not path.is_file():   # absent, a dangling symlink or a FIFO (reading one would block): unusable
+                raise OSError("not a regular file")
             values |= secret_values(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError):
             unreadable += 1
     return values, unreadable
+
+
+def env_candidates(directory: Path) -> list[Path]:
+    """Return a directory's ``*.env`` entries (``.env`` too) that are not directories, sorted.
+
+    Dangling symlinks and other non-regular entries are included, so a caller counts them as unusable
+    instead of skipping them silently (R5).
+
+    Raises:
+        OSError: The directory cannot be listed.
+    """
+    return sorted(p for p in directory.iterdir() if p.name.endswith(".env") and not p.is_dir())
+
+
+def load_secret_mounts(directories: Iterable[Path], skip_ok: Iterable[str] = ()) -> tuple[set[str], int, int, int]:
+    """Read every ``*.env`` file of the mounted secrets directories (R5: directories, not per-file mounts).
+
+    Args:
+        directories: The in-gateway secrets directories (``--dlp-secrets-mount``).
+        skip_ok: In-gateway file paths the operator acknowledged (``agent.dlp_skip_ok``, checked by sha256 on
+            the host): one of them that cannot be read is skipped instead of counted.
+
+    Returns:
+        ``(values, directories that cannot be listed, files that cannot be read, acknowledged files skipped)``.
+    """
+    acked = frozenset(skip_ok)
+    values: set[str] = set()
+    bad_dirs = bad_files = skipped = 0
+    for d in directories:
+        try:
+            files = env_candidates(Path(d))
+        except OSError:
+            bad_dirs += 1
+            continue
+        for f in files:
+            found, unreadable = load_secret_files([f])
+            values |= found
+            if unreadable and str(f) in acked:
+                skipped += 1
+            else:
+                bad_files += unreadable
+    return values, bad_dirs, bad_files, skipped
 
 
 def secrets_dir_files(directory: str | Path = SECRETS_DIR) -> list[Path]:
