@@ -124,6 +124,12 @@ def test_stale_warning_survives_an_undecodable_heartbeat(xdg: Path) -> None:
     ({"allow_major": "true"}, "allow_major"),
     ({"fix_mode": "apply"}, "fix_mode"),
     ({"fix_mode": None}, "fix_mode"),
+    ({"unscored_as": ["high"]}, "unscored_as"),
+    ({"scan_workers": 0}, "scan_workers"),
+    ({"scan_workers": 9}, "scan_workers"),
+    ({"scan_workers": "4"}, "scan_workers"),
+    ({"scan_workers": True}, "scan_workers"),
+    ({"scan_workers": 2.5}, "scan_workers"),
     ({"notify": 1}, "notify"),
     ({"notify": "email"}, "notify"),
     ({"agent": "yes"}, "agent"),
@@ -196,7 +202,8 @@ def test_load_config_accepts_valid_shapes(xdg: Path, data: dict[str, Any]) -> No
     ({"image": 1}, "agent.image"),
     ({"command": "goose run"}, "agent.command"),
     ({"command": ["goose", 1]}, "agent.command"),
-    ({"framework": "codex"}, "agent.framework"),       # known, but its driver is not in this release
+    ({"framework": "grok"}, "agent.framework"),        # known, but its driver is not in this release
+    ({"framework": "codex"}, "agent.framework"),       # the default model is not an OpenAI model (revision 13)
     ({"framework": "goose2"}, "agent.framework"),
 ])
 def test_load_config_validates_every_agent_value(xdg: Path, agent: dict[str, Any], key: str) -> None:

@@ -48,7 +48,7 @@ component table.
 | npm, if any repository has a `package-lock.json` | `stage-fix` updates npm lockfiles with `npm audit fix --package-lock-only` (it contacts the npm registry) | `npm --version` |
 | GitHub CLI, signed in | `open-pr` pushes a branch and opens a pull request | `gh auth status` |
 | ssh access to your servers, non-interactive, as root or with passwordless `sudo` | server audits run with `BatchMode=yes` and `sudo -n` | `ssh -o BatchMode=yes <host> sudo -n true` |
-| Docker (Docker Desktop on macOS, Docker Engine on Linux) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)) | `docker info` |
+| Docker (Docker Desktop on macOS or Linux, or Docker Engine on Linux) | the agent container and its gateway, and the tools container the executor runs `git`, `npm` and `ssh` in ([Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in)). On Linux Docker Engine the agent and gateway containers run as you (rootful) or as root mapped to you (rootless). The tools container always runs as your uid, so under rootless Docker its self-test fails and confined `git`, `npm` and `ssh` operations are refused (fail closed) until a later release; use a rootful Engine for remediation operations. `userns-remap` is not supported | `docker info` |
 | An OpenRouter API key, or a local route proxy | the agents' model | — |
 | openssl | to install your public key | `openssl version` |
 | shellcheck, contributors only | linting the server kit ([Part D](#part-d-acceptance-checks-on-your-machine) #8) | `shellcheck --version` |
@@ -150,7 +150,9 @@ python -m agentteams.vulnscan daily
 A config value of the wrong type or range stops it with exit 2 and a message naming the key. Only
 one daily run works at a time: a second one, started while the first holds
 `~/.local/state/agentteams/vulnscan/daily.lock`, exits 3 and writes nothing. The run writes
-`~/.local/state/agentteams/vulnscan/<date>/summary.md`:
+`~/.local/state/agentteams/vulnscan/<date>/summary.md`. Severity comes from the advisories' CVSS vectors and
+labels (the higher wins). An advisory with neither is **UNSCORED** and counts as `unscored_as` (default HIGH),
+marked `UNSCORED (as HIGH)`:
 
 ![summary.md: one table per repository with severity, installed version and the upgrade](book/figures/vulnscan/04b-summary.svg)
 
@@ -192,9 +194,16 @@ API key in your shell never lands in the plain-text plist, unit or crontab. Nor 
 shell's `SSH_AUTH_SOCK`: a launchd agent uses the login session's ssh-agent; under systemd or cron,
 set a stable agent socket with `IdentityAgent` in `~/.ssh/config`.
 `python -m agentteams.vulnscan schedule status` confirms it. From now on, every command except
-`daily` and `schedule` prints a warning (`daily.stale_warning`) when the last daily run is older than
-`stale_after_hours` (26), when its heartbeat is unreadable, or when it exited 3 (*"only partially
-scanned"*) or 4 (*"found MALICIOUS packages or compromise indicators"*).
+`schedule install` and `schedule remove` (so `daily` and `schedule status` too) prints a warning
+(`daily.stale_warning`) when the last daily run is older than `stale_after_hours` (26), when its heartbeat is
+unreadable, or when it exited 3 (*"only partially scanned"*) or 4 (*"found MALICIOUS packages or compromise
+indicators"*).
+
+**Missed runs.** On macOS, `schedule install` also installs a catch-up agent, `io.agentteams.vulnscan.catchup`.
+It runs `daily --catch-up` at login and every 6 hours, and scans only when the last run is stale or missing, so a run
+missed while the Mac was powered off is caught up. A run missed while asleep already runs on wake. Before scanning it
+sends a desktop notification. systemd timers catch up by themselves (`Persistent=true`); cron does not (add an
+`@reboot` line yourself).
 
 ---
 
@@ -244,7 +253,10 @@ You need two paths later:
 
 - **`team_dir`**: the project root (`~/ops-team`). The container runs
   `.goose/recipes/vuln-remediation.yaml` from it: its prompt is the run's task. (The orchestrator recipe
-  opens with a role-check prompt, so a one-shot `goose run` of it answers that and stops.)
+  opens with a role-check prompt, so a one-shot `goose run` of it answers that and stops.) A run gives
+  goose a checked copy of that recipe. If the recipe has keys such as `settings`, `sub_recipes` or `retry`,
+  or extensions other than the ones agentteams generates, the run is refused. Regenerate the team rather
+  than editing those.
 - **The governance directory**: the team directory holding `references/security-decisions.log.csv`,
   for a goose team `~/ops-team/.goose/recipes`. The executor checks it for HALTs before every action.
 
@@ -355,7 +367,12 @@ its checks. It starts the gateway and runs the container with the agent's exact 
 reference [lists what each one proves](api-reference/vulnscan.md#selftestcfg). Agent mode refuses to
 run until a passing self-test exists **for the current image and the current container flags**:
 after every image rebuild, and after an agentteams upgrade that changes how the containers are
-started, re-run `agent-selftest` (the run's refusal says which).
+started, re-run `agent-selftest` (the run's refusal says which). After installing rc.4, re-run
+`agent-selftest` once for every runtime you use: the fingerprint changed for all of them (the gateway's
+secrets mounts, the masks below, and for copilot and goose the checked copy of the agent definition).
+
+The run directory is mounted read-only, with its `gateway/` and `debrief/` subdirectories hidden behind an
+empty read-only tmpfs: the agent cannot read the DLP list or the spend files.
 
 A passing self-test, as printed on a real first setup (macOS, Docker Desktop, goose 1.37.0; also saved
 to `<state>/agent-selftest.json`):
@@ -387,6 +404,13 @@ $ python -P -m agentteams.vulnscan agent-selftest
 
 The `image` and `flags_sha256` values are yours to compare against later runs: a different image or
 different container flags need a new self-test.
+
+`agent-selftest` also records the Docker mode (`docker_mode`: `desktop`, `rootful`, `rootless`, or `unknown`
+for a mode it cannot recognise) and the user the containers ran as (`container_user`). If you switch between
+Docker Desktop and Docker Engine, or between rootful and rootless, re-run `agent-selftest`: a run and
+`agent-chat` refuse until you do. For goose, rc.5 adds the check `goose_recipe_valid` (`goose recipe validate`
+on the run's checked copy of the recipe), so goose operators re-run `agent-selftest` once more after
+installing rc.5.
 
 A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
@@ -609,6 +633,10 @@ walkthrough stays the same: the grants, the executor, the review and the isolati
   `~/.config/agentteams-secrets/anthropic.env` (`ANTHROPIC_API_KEY=...`, mode 600). Anthropic's API
   reports no cost, so that route also needs a price table, `agent.prices` (a JSON file of USD per million
   tokens per model; see the [API reference](api-reference/vulnscan.md)).
+- **Keys, not subscription sign-in.** Use an Anthropic Console API key (or OpenRouter). A Claude.ai
+  subscription login (`claude setup-token`, `CLAUDE_CODE_OAUTH_TOKEN`) is not supported: the gateway would
+  hold and forward the subscription token, and Anthropic's Claude Code legal terms do not permit third-party
+  software to store or intermediate Claude.ai credentials.
 - **The team.** Generate a Claude team with the remediation capability (`--framework claude`); its agent
   definition is `.claude/agents/vuln-remediation.md`, passed to Claude Code by its path. Sign grants with
   `--governance-dir <team>/.claude/agents`.
@@ -622,6 +650,53 @@ walkthrough stays the same: the grants, the executor, the review and the isolati
   grant, runs one supervised agent run and prints the outcome, the spend and any request the gateway
   refused (report those: each names what to add to the gateway's allowlist). Keep `agent.enabled` false
   until that run is clean.
+
+### Using the GitHub Copilot CLI
+
+`agent.framework: "copilot"` runs the Copilot CLI with your own model key (BYOK) and offline: it never signs
+in to GitHub and needs no GitHub token. Differences from goose:
+
+- **Models.** By default (`agent.copilot_provider_type: "openai"`) Copilot talks chat completions through the
+  same route as goose, so any OpenRouter model with tool calling works (`agent.upstream`, `agent.key_file`). With
+  `"anthropic"` it uses the Messages route instead, and the model must be a Claude model, as for Claude Code.
+- **The team.** Generate a Copilot CLI team with the remediation capability; its agent definition is
+  `.github/agents/vuln-remediation.agent.md`. Each run, and the self-test, gives the CLI a copy of it whose front
+  matter keeps only `name` and `description`. The `tools`, `model` and `handoffs` it carries for VS Code are
+  removed and listed when the run starts. The file needs no editing, and the CLI never sees the rest of the
+  team's `.github/agents`.
+  Sign grants with `--governance-dir <team>/.github/agents`.
+- **The image and the self-test.** GitHub publishes no checksum for the Copilot CLI, so
+  `FRAMEWORK=copilot bash scripts/vulnscan-agent-image.sh` builds it from the lockfile agentteams ships
+  (`npm ci --ignore-scripts`, `npm audit signatures`) and checks a hash of the whole installed tree. The self-test
+  runs Copilot once against a local stub and fails unless it offers the model only the vulnscan tools and the
+  planted MCP, hook, agent, skill and instruction files have no effect (including an agent file with the same
+  name in a team directory the CLI is not given).
+- **No debrief** (`agent-chat` says so); `review` works as usual.
+- **The acceptance run.** `FRAMEWORK=copilot MODEL=<model> [PROVIDER_TYPE=anthropic] bash
+  scripts/vulnscan-operator/09-accept-framework.sh`.
+
+### Using the Codex CLI
+
+`agent.framework: "codex"` runs Codex over the gateway's Responses route. Differences from goose:
+
+- **Models.** OpenAI models only (`gpt-...`, `o3`..., or OpenRouter's `openai/...`). The default upstream is
+  OpenRouter's Responses route (`agent.upstream_responses`, your OpenRouter `key_file`); the alternative is
+  `"upstream_responses": "https://api.openai.com/v1"` with an OpenAI key in
+  `~/.config/agentteams-secrets/openai.env` (`OPENAI_API_KEY=...`, mode 600) and a price table (`agent.prices`),
+  since OpenAI reports no cost.
+- **One tool you have to accept.** For most models Codex offers an `apply_patch` (file edit) tool that no setting
+  removes. The agent runs it in a read-only sandbox, so its writes are rejected, and the self-test proves that by
+  asking for a patch and checking nothing was written. Codex is enabled only when you accept that explicitly:
+  `"accept_residual_tools": ["apply_patch"]`.
+- **The self-test follows the model.** Codex picks its tools from the model, so the self-test probes with your
+  `agent.model`; changing the model asks for a new self-test. Models that need Codex's code mode fail the tool
+  check and cannot be used.
+- **The team.** Generate a Codex team with the remediation capability; its agent definition is
+  `.codex/agents/vuln-remediation.toml`. Sign grants with `--governance-dir <team>/.codex/agents`.
+- **The image.** `FRAMEWORK=codex bash scripts/vulnscan-agent-image.sh` checks the release tarball's digest and,
+  when `cosign` is installed, its sigstore signature.
+- **No debrief.** **The acceptance run:** `FRAMEWORK=codex MODEL=<OpenAI model> bash
+  scripts/vulnscan-operator/09-accept-framework.sh` (it asks you to accept `apply_patch`).
 
 ---
 
@@ -782,6 +857,7 @@ Search the message for the quoted text.
 
 | You see | Cause | Fix |
 |---|---|---|
+| the daily scan takes a long time with many projects | each project's OSV and registry lookups wait on the network | raise `scan_workers` in `vulnscan.json` (default 4, up to 8); `1` scans one after another |
 | `not authorized: ... no valid grant covers it` | no grant names that operation and target, or its uses are spent | `grant list`; sign a grant that covers it |
 | `blocked by open escalation ve-...` | an open escalation covers the target | `halts`, then `resolve` |
 | `HALT in force: ...` | a `@security` HALT on `vulnscan-remediation` | sign a `HALT-RETRACTED` row (see `halts`) |
@@ -790,6 +866,12 @@ Search the message for the quoted text.
 | `set agent.team_dir in vulnscan.json first` | `agent-selftest` without `team_dir` (it no longer falls back to a directory inside the state directory) | set `team_dir` (Step 6), then re-run |
 | `config ... is unusable: ...` (exit 2) | `vulnscan.json` is not valid JSON or a JSON object, or the named key has a wrong type or range. Every `agent.*` key is checked at load, not only `agent.enabled` | fix the key the message names ([rules](api-reference/vulnscan.md#configuration-vulnscanjson)) |
 | agent run state `not-run`, reason mentions the self-test | no passing self-test for this image | `agent-selftest` |
+| `gateway DLP: N secrets director(ies) or file(s) the gateway cannot use` (run state `not-run`; `agent-chat` exits 2 with `debrief not started: …`) | a configured secrets directory cannot be read, or a `*.env` file in it is unreadable, not a regular file or a symlink out of the directory; the paths are on the terminal | fix their permissions, or add `{"path": ..., "sha256": "<shasum -a 256 of the file>"}` to `agent.dlp_skip_ok` (that version only) |
+| `the agent definition cannot be copied: ...` / `the goose recipe ... is refused` / `the copilot agent file ... is refused` (run state `not-run`, or `agent_definition_valid: false`) | the agent definition is missing, a symlink, outside the team, larger than 256 KiB or not UTF-8; a Copilot file without a one-line `description`; a goose recipe with keys or extensions agentteams does not generate | regenerate the team, then re-run `agent-selftest` |
+| `the Docker mode changed since the last passing self-test` (run state `not-run`; `agent-chat` exits 2) | the Docker you run with now gives a different container user than the one the self-test ran as (Docker Desktop vs Engine, rootful vs rootless) | re-run `agent-selftest` with the Docker you will run with |
+| `Docker runs with userns-remap: …` (`agent-selftest`, `docker_mode_supported: false`) | the daemon remaps container uids to subordinate uids, which cannot read your files | use rootless Docker, or a daemon without `userns-remap` |
+| `vulnscan is running as root on a rootful Docker Engine: …` | the containers would run as real root | run vulnscan as your own user |
+| `the agent definition changed as the run started` | the team's agent definition was edited while the run started | `agent-selftest`, then run again |
 | `refusing to sign from an install an agent may be able to edit` | `agentteams`, its venv or its interpreter is inside the current directory, a git work tree or an agent-writable root; the next lines name which | sign from a verified install outside agent write roots (`pipx install`). `--allow-checkout-signing` overrides this, but then you sign with code an agent may have edited |
 | `the agentteams package (...) is inside a git work tree` / `sys.prefix (...) is inside a git work tree` / `sys.executable (...) is inside a git work tree` | an editable checkout, a venv kept in a repository, a `pip install` into Homebrew's Python without a venv, or an interpreter git tracks or does not ignore. An interpreter in a git-ignored path (Homebrew's `Cellar/`) is not refused; only the work tree's own ignore rules count (inherited `GIT_*` variables and a global `core.excludesFile` do not) | `pipx install` from a verified release (works on Homebrew's Python) |
 | `the agentteams package (...) is inside the current directory` / `sys.prefix (...) is inside the current directory` | you signed from a directory that contains the install, typically your home directory with a `pipx` install under `~/.local/pipx` | sign from an empty directory: `cd "$(mktemp -d)"`, then re-run the signing command |

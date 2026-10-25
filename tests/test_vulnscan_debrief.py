@@ -37,6 +37,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(debrief.shutil, "which", lambda name: "/usr/bin/docker")
     monkeypatch.setattr(debrief, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(debrief.time, "sleep", lambda s: None)
+    monkeypatch.setattr(debrief.gateway_context, "_scutil", lambda key: "")   # Popen is faked: no scutil
     return {"run": run, "cfg": cfg, "key": key, "calls": calls, "tmp": tmp_path}
 
 
@@ -303,3 +304,61 @@ def test_debrief_max_tokens_follows_the_run_limit_rules(bad: object) -> None:
         debrief.debrief_max_tokens({"debrief_max_tokens": bad})
     assert debrief.debrief_max_tokens({}) == debrief.DEFAULT_DEBRIEF_MAX_TOKENS
     assert debrief.debrief_max_tokens({"debrief_max_tokens": 5}) == 5
+
+
+def test_a_dlp_refusal_starts_no_debrief_and_passes_the_acknowledgements(env: dict[str, Any],
+                                                                         monkeypatch: pytest.MonkeyPatch,
+                                                                         capsys: pytest.CaptureFixture) -> None:
+    seen: list[Any] = []
+
+    def refuse(spend_dir: Path, **kwargs: Any) -> None:
+        seen.append(kwargs.get("skip_ok"))
+        raise debrief.gateway_context.DlpRefused("gateway DLP: 1 secrets file(s) the gateway cannot use")
+
+    monkeypatch.setattr(debrief.gateway_context, "prepare", refuse)
+    started = _popen(monkeypatch)
+    ack = [{"path": "/x/a.env", "sha256": "0" * 64}]
+    cfg = {"agent": {**env["cfg"]["agent"], "dlp_skip_ok": ack}}
+    assert debrief.run_debrief(cfg, env["run"]) == debrief.EXIT_REFUSED
+    assert seen == [ack] and started == []
+    assert "debrief not started: gateway DLP" in capsys.readouterr().err
+    assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+                                 ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
+
+
+def _selftest_user(user: str | None) -> None:
+    record = agent_run.paths.state_dir() / "agent-selftest.json"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps({"container_user": user} if user else {}))
+
+
+def test_a_debrief_on_a_rootful_engine_runs_as_the_self_tested_user(env: dict[str, Any],
+                                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    """R4: the debrief and its gateway run as the user the self-test ran as (here the operator's, rootful)."""
+    from agentteams.vulnscan.docker_mode import DockerMode
+
+    monkeypatch.setattr(agent_run, "detect_docker_mode", lambda: DockerMode("rootful", "501:20"))
+    _selftest_user("501:20")
+    started = _popen(monkeypatch)
+    assert debrief.run_debrief(env["cfg"], env["run"]) == 0
+    assert started[0].argv[started[0].argv.index("--user") + 1] == "501:20"
+    gw = next(c for c in env["calls"] if c[:3] == ["docker", "run", "-d"])
+    assert gw[gw.index("--user") + 1] == "501:20"
+
+
+@pytest.mark.parametrize(("mode", "recorded", "why"), [
+    (("rootful", "501:20", ""), None, "Docker mode changed"),          # self-tested on Docker Desktop
+    (("desktop", None, ""), "501:20", "Docker mode changed"),          # self-tested on a rootful Engine
+    (("userns-remap", None, "userns-remap is not supported"), None, "userns-remap"),
+])
+def test_a_debrief_refuses_another_docker_mode(env: dict[str, Any], monkeypatch: pytest.MonkeyPatch,
+                                               capsys: pytest.CaptureFixture, mode: tuple, recorded: str | None,
+                                               why: str) -> None:
+    from agentteams.vulnscan.docker_mode import DockerMode
+
+    monkeypatch.setattr(agent_run, "detect_docker_mode", lambda: DockerMode(*mode))
+    _selftest_user(recorded)
+    started = _popen(monkeypatch)
+    assert debrief.run_debrief(env["cfg"], env["run"]) == debrief.EXIT_REFUSED
+    assert started == [] and why in capsys.readouterr().err
+    assert not any(c[:2] == ["docker", "run"] for c in env["calls"])

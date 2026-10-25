@@ -52,7 +52,7 @@ SEVERITY = {"critical": 4, "high": 3, "moderate": 2, "low": 1, "any": 0}
 MAX_FINDINGS = 500           # rows list_findings returns; ``total``/``truncated`` say when more matched
 MAX_LINE = 2 * 1024 * 1024   # bytes per JSON-RPC line (a maximal report escapes to ~1.2 MB)
 _FINDING_KEYS = ("kind", "target", "name", "version", "ecosystem", "scope", "severity", "fix", "ids", "malicious",
-                 "distro", "detail")
+                 "distro", "detail", "rated", "unscored")
 #: The line ``fix.FixResult.markdown`` writes for the repository a daily fix plan is for.
 _PLAN_TARGET = re.compile(r"^Repository \(the `stage-fix` target\): `([^`\n]+)`$", re.M)
 #: Written by the host (:func:`agentteams.vulnscan.executor_guard.write_plan_levels`) before the agent starts.
