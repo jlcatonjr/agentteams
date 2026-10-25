@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **vulnscan: prefixed requirements files are scanned.** A requirements file whose name has a prefix ending in `-`,
+  `_` or `.` (`ci-requirements.txt`, `dev_requirements.txt`, `test.requirements.in`) was skipped silently, because the
+  name test was anchored at `requirements`. Found when a `.github/ci-requirements.txt` pin with a Dependabot alert
+  did not appear in the daily scan. `REQ_NAME` and `REQ_SCAN_NAME` take the prefix; a staged fix may now edit such a
+  `.txt` file under the same pin-only check.
+
 ### Added (rc.5: Linux Docker Engine)
 
 - **vulnscan: agent mode on Linux Docker Engine (R4).** New `vulnscan/docker_mode.py`: the container user
