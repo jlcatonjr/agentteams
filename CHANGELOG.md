@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.6] - 2026-10-26
+
+### release notes
+
+agentteams 1.1.0-rc.6 is the sixth release candidate of the 1.1 line. It closes a vulnerability-scan blind spot and
+fixes a false failure in the macOS sandbox gates. Keep pinning `v1.0.x` where you need the stable line.
+
+- **Prefixed requirements files are scanned.** A requirements file named with a prefix ending in `-`, `_` or `.`
+  (`ci-requirements.txt`, `dev_requirements.txt`, `test.requirements.in`) was skipped silently, because the file-name
+  test was anchored at `requirements`. Such a file is now read like any other, and a staged fix may edit it under the
+  same pin-only check. This is how a CI-only pytest pin with an open Dependabot alert stayed out of the daily scan.
+- **macOS sandbox gate 8 no longer reports a false escape.** `mac-escape-tests.sh` deleted the write-protected team
+  marker with a plain `rm`. On a terminal BSD `rm` asks "override?", and a declined prompt exits 0, so the
+  control-plane gate reported `ESCAPED: marker` although nothing was deleted.
+  - The confined `rm`/`mv` now run with `-f` and no stdin; a real denial still exits non-zero.
+  - The verdict also requires every control-plane file to be intact, checked from outside the sandbox. A reported
+    success with every file intact is INDETERMINATE, not PASS.
+- **After upgrading:** no self-test re-run is needed for this release alone. If you are coming from rc.3 or earlier,
+  run `python -m agentteams.vulnscan agent-selftest` once (rc.4 and rc.5 changed the container flags).
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.6` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.6]`.
+
+### Changes since 1.1.0-rc.5
+
 ### Changed
 
 ### Fixed
