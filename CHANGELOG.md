@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (daily agent: goose 1.54 wire compatibility)
+
+- **The daily remediation agent reaches the model again.** Since the 2026-10-24 agent image (goose 1.54.0),
+  every run made zero model calls. goose sends `session_id`, a session-grouping label whose value duplicates the
+  allowed `user`, and the chat route refused it as an unknown key. The gateway now strips it with the other
+  OpenRouter-only keys (`gateway_dialects.STRIP_KEYS`), so it is never forwarded.
+- **goose's output ceiling is capped at the source.** goose 1.54 otherwise asks for the model's whole context as
+  `max_tokens` (943718 for `z-ai/glm-5.3`), which the chat route refuses by design. The goose driver now sets
+  `GOOSE_MAX_TOKENS` to `agent.max_output_tokens` (default 32000), never above the route's 64000 ceiling. The
+  gateway's refusal of over-ceiling values is unchanged.
+- **New run state `gateway-refused`.** A run with no model call and policy refusals in `spend.json` used to read
+  as `agent-error`, quoting goose's "transient, please retry". It is now `gateway-refused`, and its reason lists
+  the refusals and says the failure recurs on every run until the allowlist or the CLI pin changes.
+- **`grant sign` refuses a grant past the aggregate cap.** When `grant.MAX_ACTIVE` (2) valid grants exist, it
+  names them and asks for one to be revoked first. Previously the third grant made `load_active` refuse every
+  grant, which silently stopped all remediation.
+
 ### docs (site restructure, phase 4: closeout)
 
 - **Weekly external-link check.** `.github/workflows/docs-links.yml` runs `scripts/check_docs_site.py
