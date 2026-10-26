@@ -302,6 +302,10 @@ def main(argv: list[str] | None = None) -> int:
             ok = grant.revoke(args.grant_id)
             print("revoked" if ok else "no such grant")
             return 0 if ok else 1
+        capped = grant.cap_problem()
+        if capped:
+            print(f"refused: {capped}", file=sys.stderr)
+            return 2
         roots = args.repo_root
         if args.from_registry:
             cfg = load_cfg() if paths.config_file().exists() else {}

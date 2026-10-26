@@ -77,7 +77,10 @@ AGENT_CONTAINER = "agentteams-vulnscan-agent"
 SELFTEST_CONTAINER = "agentteams-vulnscan-selftest"
 GOOSE_SESSIONS_IN_CONTAINER = agent_drivers.GOOSE_SESSIONS    # goose's sessions mount (see agent_drivers)
 GOOSE_STATE_IN_CONTAINER = agent_drivers.GOOSE_STATE          # goose's logs, inside that mount
-RUN_STATES = ("completed", "agent-error", "timed-out", "not-run")
+#: ``gateway-refused``: the agent reached no model because the gateway refused every call by policy (a CLI that
+#: sends a body key, beta or ceiling the allowlists do not take). Unlike ``agent-error`` it is not transient: it
+#: recurs on every run until the allowlist or the CLI pin changes.
+RUN_STATES = ("completed", "agent-error", "gateway-refused", "timed-out", "not-run")
 TASK = ("Daily vulnerability remediation: follow your Daily Remediation workflow. "
         "Use the vulnscan tools: read get_summary and "
         "list_findings, triage, and request stage-fix/open-pr for fixable repo findings and server-audit/"
@@ -786,9 +789,15 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         extra: dict[str, Any] = {"spend_problem": spend_problem} if spend_problem else {}
         if state == "completed" and not spend_problem and not (spend or {}).get("calls"):
             # goose exits 0 after "Ran into this error": a run that never reached the model did nothing.
-            state = "agent-error"
-            extra["reason"] = ("the agent exited without a single model call (no gateway spend recorded)"
-                               + _transcript_error(run_dir / "agent" / "transcript.log", a))
+            policy = [str(r) for r in (spend or {}).get("refusal_reasons") or []]
+            if (spend or {}).get("refused") and policy:
+                state = "gateway-refused"
+                extra["reason"] = ("the gateway refused every model call by policy; this recurs on every run until "
+                                   "the gateway allowlist or the agent CLI pin changes: " + "; ".join(policy))[:300]
+            else:
+                state = "agent-error"
+                extra["reason"] = ("the agent exited without a single model call (no gateway spend recorded)"
+                                   + _transcript_error(run_dir / "agent" / "transcript.log", a))
         return finish(state, exit=rc, timed_out=timed_out, spend=spend, **extra)
 
 
