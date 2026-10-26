@@ -8,7 +8,7 @@ One run:
 1. Scans each effective root (:func:`coverage.effective_roots`: the explicit ``repo_roots``, plus the fix
    checkout of every registry entry at ``scan`` or ``remediate``, minus ``exclude`` paths and duplicates), writes a fix plan per git repository (``fixplan-<name>-<digest>.md``,
    naming the repository as the ``stage-fix`` target), and in
-   ``fix_mode = "apply-worktree"`` stages non-major, cooldown-clean fixes in a fresh git
+   ``fix_mode = "apply-worktree"`` stages non-major, OSV-clean fixes in a fresh git
    worktree per repository. It never commits, pushes or merges.
 2. Checks the runtimes on this machine (``local_runtimes``).
 3. Runs the *packaged* server kit's read-only ``L1-audit.sh`` (with the user's kit dir as its
@@ -80,7 +80,7 @@ DEFAULT_CONFIG: dict = {
     "fail_on": "high",           # critical | high | moderate | low | any | none
     "unscored_as": "high",       # what an advisory with no CVSS vector or severity label counts as
     "include_dev": False,
-    "cooldown_days": 14,         # Rule S-10 release cooldown
+    "cooldown_days": 0,          # deprecated 2026-10-26 and ignored: no release-age cooldown (Rule S-10)
     "local_runtimes": True,
     "fix_mode": "plan",          # plan | apply-worktree
     "allow_major": False,
@@ -189,6 +189,9 @@ def load_config(path: Path | None = None) -> dict:
     problem = _config_problem(cfg)
     if problem:
         raise ValueError(f"{path}: {problem}")
+    if cfg["cooldown_days"]:
+        print(f"note: {path}: cooldown_days is deprecated and ignored (no release-age cooldown since 2026-10-26); "
+              "remove the key", file=sys.stderr)
     return cfg
 
 
@@ -447,7 +450,7 @@ def stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
 def _stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
     """Create ``<repo>.worktrees/vulnscan-<date>`` off ``origin/HEAD`` and apply fixes there.
 
-    The cooldown is never below :data:`executor.MIN_COOLDOWN_DAYS` and the result must pass
+    Releases are not age-gated (:data:`executor.RELEASE_COOLDOWN_DAYS`) and the result must pass
     :func:`executor.validate_diff` (only dependency pins and lockfiles change); a refused result is
     removed. A same-day rerun reuses the worktree only after :func:`_reuse_problem` finds nothing.
     Without ``origin/HEAD`` the default branch is unknown and nothing is staged.
@@ -487,7 +490,7 @@ def _stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
         made = _git(repo, "worktree", "add", "-q", "-b", branch, str(wt), base)
         if made.returncode:
             return "", f"{repo}: worktree add failed: {made.stderr.strip()}"
-    cooldown = max(executor.MIN_COOLDOWN_DAYS, int(cfg.get("cooldown_days", executor.MIN_COOLDOWN_DAYS)))
+    cooldown = executor.RELEASE_COOLDOWN_DAYS   # the config's cooldown_days is deprecated and ignored
     found = [m for m in discover(wt) if not _operator_excluded(cfg, repo / m.relative_to(wt))]
     res = fix.fix_path(wt, apply=True, allow_major=False,   # unattended: never a major jump
                        cooldown_days=cooldown, manifests=found)
@@ -868,7 +871,7 @@ def _write_fix_plans(cfg: dict, jobs: list[tuple[Path, list[str]]], run_dir: Pat
         repo, manifests = task
         try:
             plan = fix.fix_path(repo, apply=False, allow_major=bool(cfg["allow_major"]),
-                                cooldown_days=int(cfg["cooldown_days"]), npm=False, manifests=manifests)
+                                cooldown_days=executor.RELEASE_COOLDOWN_DAYS, npm=False, manifests=manifests)
         except _ITEM_ERRORS as exc:   # no plan for this repository (recorded); the others are kept
             return repo, "", [f"fix plan for {repo} stopped: {type(exc).__name__}: {exc}"[:400]]
         plan.target = str(repo)

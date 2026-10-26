@@ -2,7 +2,8 @@
 template's Invariant Core fence, its verdict row and cross-references are wired up, and the
 prevention playbook carries the matching baseline lines.
 
-See tmp/by-week/2026-W33/npm-release-cooldown-security-default.plan.md.
+See tmp/by-week/2026-W33/npm-release-cooldown-security-default.plan.md. The release cooldown itself is
+deprecated (operator ruling 2026-10-26); the vulnerability search it sat beside stays mandatory.
 """
 from __future__ import annotations
 
@@ -39,7 +40,7 @@ def test_rule_s10_exists_inside_the_invariant_fence():
     assert begin < rule_pos < end
 
 
-def test_rule_s10_names_the_vetting_sources_and_cooldown():
+def test_rule_s10_names_the_vetting_sources():
     text = _template_text()
     rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
     next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
@@ -49,24 +50,22 @@ def test_rule_s10_names_the_vetting_sources_and_cooldown():
         "https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities",
         "OSV.dev",
         "`npm audit`",
-        "default 14 days",
-        "CVE/GHSA/OSV",
+        "cooldown is deprecated",
     ):
         assert marker in body, f"Rule S-10 is missing {marker!r}"
 
 
-def test_rule_s10_cooldown_never_delays_remediation():
-    """The cooldown governs adopting new releases, not patching known-vulnerable ones —
-    without this clause it reads as contradicting the KEV patch-urgency guidance."""
+def test_rule_s10_never_delays_remediation():
+    """Remediating a known-vulnerable installed version is never delayed (KEV patch urgency)."""
     text = _template_text()
     rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
     next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
-    assert "never delays remediating" in text[rule_start:next_section]
+    assert "is never delayed" in text[rule_start:next_section].replace("\n  ", " ")
 
 
 def test_verdict_table_has_a_rule_s10_row():
     text, begin, end = _fence()
-    row_pos = text.index("younger than the Rule S-10 cooldown")
+    row_pos = text.index("complete the S-10 vulnerability search")
     assert begin < row_pos < end
     row_line = text[text.rfind("\n", 0, row_pos): text.index("\n", row_pos)]
     assert "CONDITIONAL PASS" in row_line
@@ -86,8 +85,8 @@ def test_rule_s10_is_cross_referenced_not_restated():
 def test_playbook_carries_dependency_vetting_baseline_lines():
     playbook = _format_prevention_playbook([])
     assert "Before any package/module install" in playbook
-    assert "package-release cooldown (default 14 days)" in playbook
-    assert "never delays remediating" in playbook
+    assert "package-release cooldown is deprecated" in playbook
+    assert "never delay remediating" in playbook
 
 
 def test_static_source_entries_include_snyk_and_npm_audit():
@@ -165,17 +164,16 @@ def test_merge_static_sources_restores_missing_entries_without_duplicating():
     assert len(_merge_static_sources(restored)) == len(restored)
 
 
-def test_cooldown_is_unconditional_across_ecosystems():
-    """The cooldown applies to every update/installation in every ecosystem — a future
-    edit must not quietly re-narrow it to npm (generalized 2026-08-17 by operator
-    request; npm stays as motivating precedent only)."""
+def test_cooldown_is_deprecated_but_vetting_still_binds():
+    """The release cooldown is deprecated in every ecosystem (operator ruling 2026-10-26): no
+    waiting period, no exemption needed. The vulnerability search still gates every install."""
     text = _template_text()
     rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
     next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
     body = text[rule_start:next_section]
-    assert "wait before installing" in body
-    assert "all ecosystems" in body.replace("\n  ", " ")
-    # Distro-curated security updates of installed packages are remediation, not adoption.
-    assert "remediation, not adoption" in body
+    flat = body.replace("\n  ", " ")
+    assert "wait before installing" not in flat and "default 14 days" not in flat
+    assert "no release-age waiting period in any ecosystem" in flat
+    assert "Never install a release that fails the vulnerability search" in flat
     playbook = _format_prevention_playbook([])
-    assert "not only npm" in playbook
+    assert "known-vulnerability search" in playbook

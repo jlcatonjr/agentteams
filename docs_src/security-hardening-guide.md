@@ -43,26 +43,13 @@ Every generated `@security` agent carries two install-time defaults
    install, search reliable sources (OSV.dev, Snyk Vulnerability DB, NVD,
    GitHub Advisories, `npm audit` / `pip-audit` / `cargo audit`) for known
    vulnerabilities in the exact name and version being adopted.
-2. **Package-release cooldown** — if a release is less than **14 days** old,
-   wait before installing it (a configurable default that governs every
-   update and installation in every ecosystem — npm, PyPI, crates.io,
-   Homebrew, …; npm is the motivating precedent after the recent registry
-   supply-chain wave, not the scope). Enforce mechanically where tooling
-   allows: `npm install --before=<date>`, pnpm `minimumReleaseAge`,
-   uv `--exclude-newer <date>`, Renovate/Dependabot cooldown; check age with
-   `npm view <pkg> time` or the PyPI JSON API's `upload_time_iso_8601`; pin
-   exact versions with a lockfile. Distro-curated security updates of
-   already-installed packages (apt/dnf/apk, DSA/USN/RHSA-backed) are
-   remediation, not adoption — the cooldown does not apply to them
-   (third-party repositories, PPAs, and vendor-added sources are not that
-   channel).
+2. **No package-release cooldown** (deprecated 2026-10-26, operator ruling) — a release that
+   passes the vulnerability review may be adopted the day it is published, in
+   every ecosystem; no cooldown exception or exemption is needed. Pin exact
+   versions with a lockfile, and verify the artifact's identity (Rule S-9).
 
-The cooldown never delays remediating an already-installed vulnerable version —
-KEV/patch-urgency guidance takes precedence. A release that itself fixes a
-vulnerability affecting the project may be adopted inside the window only when
-the fix maps to a published CVE/GHSA/OSV advisory that predates the release or
-originates from the ecosystem's advisory database (not solely from the package
-maintainer), and `@security` review is recorded in `security-decisions.log.csv`.
+Remediating an already-installed vulnerable version is never delayed —
+KEV/patch-urgency guidance applies.
 
 ### Generated Security Reference Files
 
@@ -429,7 +416,7 @@ op-2026-05-10-001,2026-05-10T14:30:00Z,cross-repo-write,CONDITIONAL_PASS,"waiver
 4. **Monitor EPSS trends** — Generated `security.agent.md` shows exploit likelihood; escalate high values
 5. **Document exceptions** — Use `notes` column in `security-decisions.log.csv` to explain policy overrides
 6. **Vet before install** — Search OSV.dev / Snyk DB / NVD / `npm audit` for known vulnerabilities in the exact name@version before any install (Rule S-10)
-7. **Respect the release cooldown** — Default to adopting package releases only after 14 days, with advisory-backed security fixes as the reviewed exception (Rule S-10)
+7. **No release cooldown** — The 14-day package-release cooldown is deprecated 2026-10-26; vetting (item 6) still gates every install (Rule S-10)
 
 ---
 
