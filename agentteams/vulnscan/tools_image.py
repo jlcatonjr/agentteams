@@ -15,7 +15,7 @@ flags of a confined operation, twice:
 Node.js is pinned here (:data:`NODE_VERSION`, :data:`NODE_SHA256`): the official linux tarball, its sha256 per
 architecture taken from the release's ``SHASUMS256.txt``, whose GPG signature was verified against a Node.js
 releaser key (:data:`NODE_RELEASE_SIGNERS`) when it was pinned. ``scripts/vulnscan-tools-image.sh`` re-checks both
-before building. Rule S-10: a release is pinned only once it is at least 14 days old (:data:`NODE_RELEASED`).
+before building. :data:`NODE_RELEASED` records its release date (S-10's 14-day cooldown applied when it was pinned; it is deprecated since 2026-10-26).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from agentteams.vulnscan import paths
 from agentteams.vulnscan import subproc_confine as sc
 
 NODE_VERSION = "24.21.0"                 # LTS "Krypton"; npm 11.19.0
-NODE_RELEASED = "2026-09-07"             # pinned 2026-10-23 (46 days old; S-10 needs >= 14)
+NODE_RELEASED = "2026-09-07"             # pinned 2026-10-23 (46 days old then)
 NODE_SHA256 = {"amd64": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6",
                "arm64": "6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2"}
 #: Signer of v24.21.0's SHASUMS256.txt (listed in the nodejs/node README's release keys).

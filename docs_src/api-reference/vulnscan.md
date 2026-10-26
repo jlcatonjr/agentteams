@@ -200,7 +200,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
 | `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
-| `cooldown_days` | `14` | A fix release must be at least this old (Rule S-10). The executor never goes below 14 |
+| `cooldown_days` | `0` | Deprecated (deprecated 2026-10-26) and ignored: fix releases are not age-gated. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
 | `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with the cooldown clamped to at least 14 days. The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
@@ -989,7 +989,7 @@ unusual format, for that package version in this process; `(0, 0)` for advisorie
 #### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
-`allow_major=False`, `cooldown_days=14`, `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
+`allow_major=False`, `cooldown_days=0` (no release-age gate; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
 `manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
 never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
