@@ -228,6 +228,22 @@ def test_invalid_grants_do_not_count_toward_the_cap(env: dict[str, Any]) -> None
     assert len(valid) == grant.MAX_ACTIVE and len(problems) == 1 and "not valid now" in problems[0]
 
 
+def test_signing_past_the_cap_is_refused_before_it_disables_the_others(env: dict[str, Any]) -> None:
+    """2026-10-25: a third grant was signed while two were valid, and every grant stopped working."""
+    assert grant.cap_problem() == ""
+    held = [_signed(env) for _ in range(grant.MAX_ACTIVE)]
+    grant.install(held[0])
+    assert grant.cap_problem() == ""                      # one more still fits
+    grant.install(held[1])
+    why = grant.cap_problem()
+    assert "exceeds the aggregate cap" in why and all(g["grant_id"] in why for g in held) and "grant revoke" in why
+    grant.install(_signed(env, now=datetime.now(UTC) - timedelta(days=3)))   # expired grants do not count
+    assert grant.cap_problem() == why
+    grant.grants_dir().chmod(0o777)                       # an unsafe grants dir is reported, not signed into
+    assert "refusing all grants" in grant.cap_problem()
+    grant.grants_dir().chmod(0o700)
+
+
 # ---------------------------------------------------------------- directory and file trust
 
 def test_a_group_writable_grants_dir_refuses_all(env: dict[str, Any]) -> None:

@@ -36,7 +36,8 @@ MESSAGES: dict[str, str] = {
     "run-stale": "No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status",
     "run-missing": "No daily run has completed yet: running it now. Check: vulnscan schedule status",
 }
-_STATES = {"completed", "agent-error", "timed-out", "not-run", "action needed", "partially unscanned",
+_STATES = {"completed", "agent-error", "gateway-refused", "timed-out", "not-run", "action needed",
+           "partially unscanned",
            "COMPROMISE INDICATORS", "new findings", "clean"}
 _KINDS = {*KINDS, FLOOD_KIND}
 

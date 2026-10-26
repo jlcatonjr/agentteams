@@ -351,6 +351,37 @@ def load_active(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], l
     Returns:
         Valid records and one message per rejected file.
     """
+    valid, problems = _scan(now=now)
+    if len(valid) > MAX_ACTIVE:
+        return [], problems + [f"{len(valid)} valid grants exceed the aggregate cap of {MAX_ACTIVE} — refusing all"]
+    return valid, problems
+
+
+def cap_problem(*, now: datetime | None = None) -> str:
+    """Return why signing one more grant would exceed :data:`MAX_ACTIVE`, or "" when it would not.
+
+    Over the cap :func:`load_active` refuses every grant, so ``grant sign`` checks first instead of silently
+    disabling the grants already in force (2026-10-25: a third grant stopped all remediation).
+
+    Args:
+        now: Clock override (tests).
+
+    Returns:
+        A message naming the valid grants and how to revoke one, or "".
+    """
+    valid, problems = _scan(now=now)
+    unsafe = next((p for p in problems if p.endswith("refusing all grants")), "")
+    if unsafe:   # an unsafe grants dir refuses every grant anyway: say so instead of signing into it
+        return unsafe
+    if len(valid) < MAX_ACTIVE:
+        return ""
+    held = ", ".join(f"{g['grant_id']} ({'/'.join(g['ops'])}, expires {g['expires']})" for g in valid)
+    return (f"{len(valid)} valid grant(s) already ({held}); one more exceeds the aggregate cap of {MAX_ACTIVE}, "
+            "which refuses every grant. Revoke one first: grant revoke --grant-id <id>")
+
+
+def _scan(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], list[str]]:
+    """Return (verified grants, problems) without applying the aggregate cap."""
     d = grants_dir()
     valid: list[dict[str, Any]] = []
     problems: list[str] = []
@@ -371,8 +402,6 @@ def load_active(*, now: datetime | None = None) -> tuple[list[dict[str, Any]], l
             problems.append(f"{f.name}: {exc}")
             continue
         valid.append(rec)
-    if len(valid) > MAX_ACTIVE:
-        return [], problems + [f"{len(valid)} valid grants exceed the aggregate cap of {MAX_ACTIVE} — refusing all"]
     return valid, problems
 
 

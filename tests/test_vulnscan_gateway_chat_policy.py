@@ -53,6 +53,16 @@ def test_a_goose_shaped_request_passes_and_is_reserved() -> None:
     _check(_chat(tool_choice={"type": "function", "function": {"name": "vulnscan__get_summary"}}))
 
 
+def test_goose_154_session_id_is_stripped_not_refused() -> None:
+    # The body keys goose 1.54.0 sent on 2026-10-25 (its llm_request log): session_id duplicates user and used to
+    # refuse every call before the first model turn.
+    raw = _chat(tools=[FN_TOOL], stream=True, stream_options={"include_usage": True}, user="20261025_1",
+                session_id="20261025_1", usage={"include": True}, max_tokens=32_000)
+    body = json.loads(_check(raw).body)
+    assert "session_id" not in body and body["user"] == "20261025_1"
+    assert "session_id" in d.STRIP_KEYS and "session_id" not in d.CHAT_KEYS
+
+
 @pytest.mark.parametrize(("extra", "why"), [
     ({"models": ["other/model"]}, "fallback models"),
     ({"route": "fallback"}, "fallback routing"),
