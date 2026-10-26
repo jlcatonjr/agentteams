@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **sandbox (macOS): gate 8 no longer scores a declined `rm` prompt as an escape.** `mac-escape-tests.sh` tried to
+  delete the write-protected team marker with a plain `rm`; on a terminal BSD `rm` asks "override?", and a declined
+  prompt exits 0, so the control-plane gate reported `ESCAPED: marker` although nothing was deleted (a false FAIL that
+  blocked a confined-run verification). The confined `rm`/`mv` now run with `-f` and no stdin (a real denial still
+  exits non-zero), and the verdict also requires the switch, verify-key store, marker and directory to be intact when
+  checked from outside the sandbox; a reported success with every file intact is INDETERMINATE, not PASS.
+
 ## [1.0.1] - 2026-10-21
 
 ### release notes

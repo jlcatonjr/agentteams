@@ -71,7 +71,7 @@
     "agentteams/templates/universal/hooks/grok-gate-shim.py": "7e0c71dd5f2de44e5d981ff00dc5140746b57198c9fdf77d3d97bc3bc128cfdf",
     "agentteams/templates/universal/hooks/settings.hooks.example.json": "700bf14dce3ba97ad608e48df651b113f248232aa2b3bf3e48da0713e0d3371f",
     "agentteams/templates/universal/sandbox/confine-run.sh": "37e852098a5e6b92aeaf8f61ae087c8580631cfbe86a0907884edf0d58ec06b1",
-    "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "71d00a1d1d4b83f8239784b0c7e60dce7dc9271e477f30d4eab74e052ea453ab",
+    "agentteams/templates/universal/sandbox/mac-escape-tests.sh": "369ca51f0388d18a12e2bd1503f4efec0a36f61e03d4820256b1307ca59295ed",
     "agentteams/unfenced.py": "f93ba361487463aa51f3124da7421a77f87ee0e617a59248b231d9a08f077905",
     "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",
     "agentteams/write_policy.py": "422c4daf12c279366348205ca051638ca3037f118b9eacbee70668035cf1fff7"
