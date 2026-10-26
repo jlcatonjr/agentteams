@@ -1,16 +1,15 @@
 """Remediate vulnerable dependency versions in a working tree. Dry run unless ``apply``.
 
 - **requirements*.txt**: each vulnerable ``==`` pin moves to the *smallest* PyPI release that
-  (a) OSV reports as clean, (b) was uploaded at least ``cooldown_days`` ago (Rule S-10's
-  release cooldown), and (c) is neither a pre-release nor fully yanked. A major-version jump
+  (a) OSV reports as clean, (b) was uploaded at least ``cooldown_days`` ago (0 by default: Rule S-10's
+  release cooldown is deprecated since 2026-10-26), and (c) is neither a pre-release nor fully yanked. A major-version jump
   is proposed but written only with ``allow_major``. A pin whose current version is
   **malicious** (OSV ``MAL-*``) is never edited: that is an incident, not an upgrade. Line
   endings and every other byte of the file are preserved. A file that pins ``--hash`` values is
   held back (``hash-held``) rather than left with a stale hash, and a symlinked manifest is
   refused, never followed.
-- **npm lockfiles**: ``npm audit fix --package-lock-only --ignore-scripts --before=<cutoff>``.
-  It touches the lockfile only, runs no install scripts, and resolves only releases older
-  than the cooldown. Semver-major fixes are left for a person (no ``--force``). It runs on a
+- **npm lockfiles**: ``npm audit fix --package-lock-only --ignore-scripts`` (with ``--before=<cutoff>``
+  only for a positive ``cooldown_days``). It touches the lockfile only and runs no install scripts. Semver-major fixes are left for a person (no ``--force``). It runs on a
   scratch copy with the public registry and TLS verification fixed, never reading the
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
@@ -142,14 +141,14 @@ def _releases(name: str) -> list[tuple[str, _dt.datetime]]:
     return sorted(out, key=lambda r: version_key(r[0]))
 
 
-def choose_version(name: str, current: str, *, cooldown_days: int = 14,
+def choose_version(name: str, current: str, *, cooldown_days: int = 0,
                    now: _dt.datetime | None = None) -> tuple[str, str]:
     """Pick the smallest clean, cooldown-aged release above ``current``.
 
     Args:
         name: PyPI project name.
         current: Pinned version.
-        cooldown_days: Minimum release age.
+        cooldown_days: Minimum release age in days (0: none).
         now: Clock override for tests.
 
     Returns:
@@ -171,7 +170,7 @@ def choose_version(name: str, current: str, *, cooldown_days: int = 14,
     if aged:
         return aged[0][0], ""
     young = clean[0]
-    return "", f"clean release {young[0]} is younger than the {cooldown_days}-day cooldown (needs an S-10 exception)"
+    return "", f"clean release {young[0]} is younger than the requested {cooldown_days}-day cooldown"
 
 
 def _dirty(path: Path) -> bool:
@@ -218,13 +217,13 @@ def git_config_problem(directory: Path) -> str:
     return ""
 
 
-def plan_requirements(path: Path, *, cooldown_days: int = 14, allow_major: bool = False,
+def plan_requirements(path: Path, *, cooldown_days: int = 0, allow_major: bool = False,
                       label: str = "", private: tuple[str, ...] = ()) -> list[PinChange]:
     """Return the edits needed for one requirements file.
 
     Args:
         path: requirements*.txt file.
-        cooldown_days: Minimum release age for a replacement.
+        cooldown_days: Minimum release age for a replacement (0: none).
         allow_major: Whether a major-version jump counts as ``fix`` (else ``major-held``).
         label: Path shown in the plan (defaults to ``path``).
         private: The project's ``private_packages`` patterns: those pins are never looked up.
@@ -322,7 +321,7 @@ def _npm_workspaces(lockfile: Path) -> bool:
     return False
 
 
-def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "",
+def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
                   private: tuple[str, ...] = ()) -> tuple[list[PinChange], str]:
     """List what ``stage-fix``'s ``npm audit fix`` is there to fix in one lockfile (dry run; npm is not run).
 
@@ -336,7 +335,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "",
 
     Args:
         path: package-lock.json or npm-shrinkwrap.json.
-        cooldown_days: The release cooldown npm is given (``--before``), named in the note.
+        cooldown_days: The release cooldown npm is given (``--before``), named in the note (0: none).
         label: Path shown in the plan (defaults to ``path``).
         private: The project's ``private_packages`` patterns: those packages are never looked up.
 
@@ -383,7 +382,8 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "",
         elif unfixed:
             c.note += f" ({unfixed} without a fix)"
     note = ("`stage-fix` runs `npm audit fix --package-lock-only --ignore-scripts` on this lockfile as a whole "
-            f"(releases at least {cooldown_days} days old only, no `--force`). npm, not this plan, picks the resolved "
+            f"({f'releases at least {cooldown_days} days old only, ' if cooldown_days > 0 else ''}no `--force`). "
+            "npm, not this plan, picks the resolved "
             "versions within the ranges `package.json` and the dependent packages allow, so it may stop short of a "
             "row's version or fix fewer rows. \"≥\" is the smallest version the advisories call fixed.")
     if workspaces:
@@ -391,7 +391,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 14, label: str = "",
     return changes, note
 
 
-def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) -> str:
+def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> str:
     """Run npm's lockfile-only, script-free audit fix for ``directory``.
 
     npm runs on a scratch copy holding only ``package.json`` and the lockfile, with its user and
@@ -404,7 +404,7 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
 
     Args:
         directory: Folder holding package-lock.json.
-        cooldown_days: Releases newer than this are not considered (``--before``).
+        cooldown_days: Releases newer than this are not considered (``--before``); 0 sets no cutoff.
         apply: Write the lockfile; otherwise ``--dry-run``.
 
     Returns:
@@ -417,9 +417,10 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
     names = [n for n in ("package.json", *NPM_LOCKFILES) if (directory / n).is_symlink() or (directory / n).exists()]
     if any((directory / n).is_symlink() for n in names):
         return "npm audit fix not run: package.json or the lockfile is a symlink"
-    cutoff = (_dt.date.today() - _dt.timedelta(days=cooldown_days)).isoformat()
-    cmd = [npm, "audit", "fix", "--package-lock-only", "--ignore-scripts", f"--before={cutoff}", "--no-fund",
+    cmd = [npm, "audit", "fix", "--package-lock-only", "--ignore-scripts", "--no-fund",
            f"--registry={NPM_REGISTRY}", "--strict-ssl=true"]
+    if cooldown_days > 0:   # no cutoff at 0: --before=<today> would still exclude today's releases
+        cmd.append(f"--before={(_dt.date.today() - _dt.timedelta(days=cooldown_days)).isoformat()}")
     if not apply:
         cmd.append("--dry-run")
     env = {k: v for k, v in os.environ.items() if not k.lower().startswith("npm_config_")}
@@ -450,7 +451,7 @@ def npm_fix(directory: Path, *, cooldown_days: int = 14, apply: bool = False) ->
     return (proc.stdout + proc.stderr) or f"npm exited {proc.returncode}"
 
 
-def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 14,
+def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 0,
              include_worktrees: bool = False, allow_dirty: bool = False, npm: bool = True,
              manifests: list[Path] | None = None) -> FixResult:
     """Plan (and with ``apply``, make) dependency fixes for every manifest under ``root``.
@@ -459,7 +460,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         root: Working tree to change. Point it at a worktree or branch you control.
         apply: Write changes.
         allow_major: Also take major-version jumps.
-        cooldown_days: Rule S-10 release cooldown.
+        cooldown_days: Minimum release age (0, the default: none; Rule S-10's cooldown is deprecated).
         include_worktrees: Descend into linked worktrees too.
         allow_dirty: Edit files that already have uncommitted changes.
         npm: Run the npm step (needs npm on PATH). A dry run lists each lockfile's vulnerable

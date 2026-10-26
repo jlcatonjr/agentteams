@@ -14,7 +14,7 @@ request it does the following, under one exclusive ledger lock:
 Operations (v1):
 
 - ``stage-fix REPO``: in an executor-owned worktree off ``origin/<default>``, applies
-  :func:`agentteams.vulnscan.fix.fix_path` (non-major, cooldown-clean). It then validates the
+  :func:`agentteams.vulnscan.fix.fix_path` (non-major, OSV-clean). It then validates the
   diff: only requirements/lockfiles (regular files, modes unchanged, none deleted), only upward
   ``==`` version edits, no root-package change, and only allowlisted registries in lockfile URLs.
   A repository whose own git config defines a filter driver, or that git refuses to open, is refused
@@ -57,7 +57,7 @@ from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
-MIN_COOLDOWN_DAYS = 14                       # Rule S-10 floor: config may raise it, never lower it
+RELEASE_COOLDOWN_DAYS = 0                    # Rule S-10's cooldown is deprecated (2026-10-26); cooldown_days is ignored
 ALLOWED_CHANGED = re.compile(r"(^|/)(requirements[\w.-]*\.txt|package-lock\.json|npm-shrinkwrap\.json)$", re.I)
 REQUEST_ID = re.compile(r"^[0-9a-f]{32}$")
 #: origin URL forms gh can target: https://HOST/OWNER/REPO, git@HOST:OWNER/REPO, ssh://git@HOST/OWNER/REPO
@@ -410,7 +410,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
 
     Args:
         repo: Repository root.
-        cfg: Daily config (``cooldown_days``).
+        cfg: Daily config.
 
     Returns:
         Result with worktree, branch, base and the fix plan markdown.
@@ -433,7 +433,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     branch = ""   # set once this attempt (and only it) may have created the branch
     try:
         git(repo, "worktree", "add", "-q", "--detach", str(wt), base)
-        cooldown = max(MIN_COOLDOWN_DAYS, int(cfg.get("cooldown_days", MIN_COOLDOWN_DAYS)))
+        cooldown = RELEASE_COOLDOWN_DAYS   # the config's cooldown_days is deprecated and ignored
         res = fix.fix_path(wt, apply=True, allow_major=False, cooldown_days=cooldown)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
@@ -441,7 +441,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         if not changed:   # an npm that failed to run must not read as "nothing fixable"
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
-                            "nothing fixable without a major jump or cooldown exception")
+                            "nothing fixable without a major jump")
         digest = hashlib.sha256(git(wt, "diff", "--no-ext-diff", "--no-textconv", base).encode()).hexdigest()[:10]
         name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
         _release_own_branch(repo, name)   # the branch is absent from here on, or this raised

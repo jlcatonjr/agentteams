@@ -53,10 +53,11 @@ def _pypi(feed: Feed, name: str, releases: dict[str, int]) -> None:
 def test_choose_version_smallest_clean_and_cooldown(feed: Feed) -> None:
     _pypi(feed, "requests", {"2.31.0": 900, "2.32.0": 300, "2.33.0": 60, "2.34.0rc1": 30, "2.35.0": 2})
     feed.vulns = {("PyPI", "requests", "2.32.0"): ["G"]}
-    assert fix.choose_version("requests", "2.31.0") == ("2.33.0", "")
+    assert fix.choose_version("requests", "2.31.0", cooldown_days=14) == ("2.33.0", "")
     feed.vulns[("PyPI", "requests", "2.33.0")] = ["G"]
-    v, why = fix.choose_version("requests", "2.31.0")
+    v, why = fix.choose_version("requests", "2.31.0", cooldown_days=14)
     assert v == "" and "2.35.0" in why and "cooldown" in why
+    assert fix.choose_version("requests", "2.31.0") == ("2.35.0", "")   # default: no cooldown (deprecated)
 
 
 def test_plan_and_apply_requirements_preserves_bytes(tmp_path: Path, feed: Feed) -> None:
@@ -488,7 +489,7 @@ for name, body in (("package-lock.json", '{"lockfileVersion": 3, "packages": {""
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="shebang fake npm")
-def test_v33_npm_fix_uses_the_cooldown_cutoff_and_copies_back_only_the_lockfile(
+def test_v33_npm_fix_cutoff_only_for_a_positive_cooldown_and_copies_back_only_the_lockfile(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
@@ -513,7 +514,7 @@ def test_v33_npm_fix_uses_the_cooldown_cutoff_and_copies_back_only_the_lockfile(
     fix.npm_fix(repo, apply=True)
     fix.npm_fix(repo, cooldown_days=30, apply=True)
     runs = [json.loads(ln) for ln in log.read_text().splitlines()]
-    assert [[a for a in r if a.startswith("--before=")] for r in runs] == [["--before=2026-10-08"], ["--before=2026-09-22"]]
+    assert [[a for a in r if a.startswith("--before=")] for r in runs] == [[], ["--before=2026-09-22"]]
     assert '"fixed": true' in (repo / "package-lock.json").read_text()
     assert (repo / "package.json").read_text() == pkg and sorted(p.name for p in repo.iterdir()) == [
         "package-lock.json", "package.json"]

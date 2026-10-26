@@ -8,8 +8,8 @@ vulnerabilities and drives their remediation:
 - ``inventory LOG`` judges what a server reported. The bundled server kit's audit script
   prints the packages and runtimes installed on a host; this command applies the same
   engine to them.
-- ``fix PATH`` turns findings into edits: the smallest clean release older than the
-  release cooldown, with major-version jumps gated. It is a dry run unless ``--apply``.
+- ``fix PATH`` turns findings into edits: the smallest clean release (no release-age
+  cooldown since 2026-10-26), with major-version jumps gated. It is a dry run unless ``--apply``.
 - ``daily`` runs all of it on a schedule against the repos and servers named in the
   user's own config file, which lives outside every repository.
 - ``schedule`` installs that daily run as a launchd agent, a systemd user timer, or a
