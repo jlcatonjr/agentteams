@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-26
+
+### release notes
+
+agentteams 1.0.2 is a patch release on the 1.0 line with one fix, backported from `main` by `cherry-pick -x`. It adds
+no dependencies and no new configuration, and changes nothing outside the macOS sandbox acceptance gates.
+
+- **macOS sandbox gate 8 no longer reports a false escape.** `mac-escape-tests.sh` deleted the write-protected team
+  marker with a plain `rm`. On a terminal BSD `rm` asks "override?", and a declined prompt exits 0, so the
+  control-plane gate reported `ESCAPED: marker` although nothing was deleted. That false FAIL blocked confined-run
+  verifications.
+  - The confined `rm`/`mv` now run with `-f` and no stdin; a real denial still exits non-zero.
+  - The verdict also requires every control-plane file to be intact, checked from outside the sandbox. A reported
+    success with every file intact is INDETERMINATE, not PASS.
+- **Upgrade:** re-render your team (the fix is in the generated `sandbox/mac-escape-tests.sh`), then re-run the
+  confined-run verification if it reported a gate-8 FAIL.
+- **Install:** from a verified, detached checkout of the signed `v1.0.2` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.0.2]`.
+
+### Changes since 1.0.1
+
 ### Fixed
 
 - **sandbox (macOS): gate 8 no longer scores a declined `rm` prompt as an escape.** `mac-escape-tests.sh` tried to
