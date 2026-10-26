@@ -172,26 +172,33 @@ _PRIVILEGE_ARTIFACT_BASENAMES: frozenset[str] = frozenset({
     "confine-run.sh", "mac-escape-tests.sh",                  # neutral launcher + mac deny-test
 })
 
-_BRIEF_SUBPATH = ".agentteams/brief.json"
-
-
 def _read_brief_privilege(root: Path) -> dict[str, Any]:
     """Return the pin's brief privilege posture, or ``{}`` when non-confining/absent.
 
-    Reads ``.agentteams/brief.json`` and returns only the privilege fields, with
+    Finds the team's brief as fleet discovery does (``fleet._resolve_descriptor``: ``.agentteams/brief.json``,
+    else the repository-root ``brief.json``, else the generated ``_build-description.json``). Reading only the
+    first left every team whose brief is at the root without its sandbox/ on sync. A brief other than
+    ``.agentteams/brief.json`` counts only when it sets ``privilege_profile`` itself: a stub or a foreign
+    ``brief.json`` that merely inherits the default never starts a sandbox rollout on sync. A brief that is a
+    symlink, or resolves outside ``root``, is ignored. Returns only the privilege fields, with
     ``privilege_profile_explicit`` derived from whether the brief set the field (so the fail
     -closed gate flip's explicit-opt-in contract is preserved across projection — audit
     SEV-3#1). Returns ``{}`` when there is no brief, the profile is cooperative/absent, or the
     file is unreadable (projection then emits no boundary, exactly as before — fail safe).
     """
-    path = root / _BRIEF_SUBPATH
-    if not path.is_file():
+    from agentteams.fleet import _resolve_descriptor
+
+    root = Path(root)
+    path = _resolve_descriptor(root)
+    if path is None or path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
         return {}
     try:
         brief = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     if not isinstance(brief, dict):
+        return {}
+    if "privilege_profile" not in brief and path != root / ".agentteams" / "brief.json":
         return {}
     # Normalize through the SAME default as generation (a missing key → confined as of
     # 2026-W39), so a team that merely ACCEPTS the default still gets its boundary projected —
@@ -265,6 +272,7 @@ def _emit_privilege_artifacts(
 
     agents_dir = framework_agents_dir(root, framework)
     adapter = FRAMEWORKS[framework]()
+    project = Path(root).resolve()
     written: list[str] = []
     from agentteams.frameworks.claude import guard_gate_pin_files
 
@@ -282,6 +290,9 @@ def _emit_privilege_artifacts(
                 and rel_path != "../hooks/.gitignore"):
             continue  # skip .goosehints / capability refs / etc. — privilege set only
         target = (agents_dir / rel_path).resolve()
+        if not target.is_relative_to(project):  # a linked agents dir or a ../ path must not write outside
+            print(f"  note: skipped {rel_path}: resolves outside {project}", file=sys.stderr)
+            continue
         written.append(str(target))
         if not dry_run:
             target.parent.mkdir(parents=True, exist_ok=True)

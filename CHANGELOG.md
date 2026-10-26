@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+### sync (sandbox artifacts for teams with a root brief)
+
+- **Pinned sync re-renders `sandbox/` for teams whose brief is at the repository root.** `multi_sync` read the
+  privilege posture only from `.agentteams/brief.json`. A team with only a root `brief.json` or the
+  `.github/agents/_build-description.json` stub therefore got no boundary projection on sync, and its
+  `confine-run.sh`, `mac-escape-tests.sh` and `sandbox.sb` stayed at the version that first generated them. The
+  sync now finds the brief through fleet discovery (`fleet._resolve_descriptor`). A brief other than
+  `.agentteams/brief.json` counts only when it sets `privilege_profile` itself, so a stub or foreign `brief.json`
+  that merely inherits the confined default starts no sandbox rollout. A symlinked brief is ignored. A team with
+  a regular (not symlinked) `.agentteams/brief.json` is unaffected.
+- **Projection never writes outside the project.** A privilege artifact whose path resolves outside the
+  repository (a linked agents directory, a `../` path) is skipped with a note.
+
 ## [1.1.0-rc.6] - 2026-10-26
 
 ### release notes
