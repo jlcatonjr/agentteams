@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (S-10 release cooldown deprecated)
+
+- **The 14-day package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes
+  the known-vulnerability search may be adopted the day it is published, in every ecosystem; no cooldown
+  exception or exemption is needed. The vulnerability search itself (Rule S-10) still gates every install.
+  Generated `@security` agents: Rule S-10 (fence v12) no longer has a waiting period, and the escalation
+  table's cooldown row now covers only an unvetted install; the security feed's prevention playbook says the
+  same. Backported from `main` (the 1.0 line has no vulnscan or server kit, so only the rule text changes).
+- **Trade-off:** the cooldown let registries catch and unpublish malicious releases before adoption.
+  Without it, defence rests on the OSV search (including `MAL-*` entries), artifact identity (Rule S-9)
+  and lockfile pinning.
+
 ## [1.0.3] - 2026-10-26
 
 ### release notes
