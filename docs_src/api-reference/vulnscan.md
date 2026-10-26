@@ -269,7 +269,7 @@ The `confine` block (`subproc_confine.settings`; any other key, or a wrong type,
 
 | Ecosystem | Files | Notes |
 |---|---|---|
-| PyPI | `requirements*.txt` (`REQ_NAME`) | `==` pins; the only requirements files a staged fix edits (`check_pin_edit`) |
+| PyPI | `requirements*.txt`, also with a prefix ending in `-`, `_` or `.` such as `ci-requirements.txt` (`REQ_NAME`) | `==` pins; the only requirements files a staged fix edits (`check_pin_edit`) |
 | PyPI | `requirements*.lock`, `requirements*.in` (`REQ_SCAN_NAME`) | `==` pins, scanned only, never edited; a `.in` with loose specs is unscannable |
 | PyPI | `poetry.lock`, `uv.lock`, `Pipfile.lock` | |
 | PyPI | `pyproject.toml` next to requirements files (no lockfile) | PEP 621 `[project].dependencies` and `optional-dependencies` `==` pins (groups named like dev/test/lint/doc/type are dev). A pin a requirements file alongside already lists (PEP 503 name and version) is not counted twice; loose entries no requirements file pins make it unscannable for that part |
