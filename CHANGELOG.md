@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-26
+
+### release notes
+
+agentteams 1.0.3 is a patch release on the 1.0 line with one fix, backported from `main` by `cherry-pick -x`. It adds
+no dependencies and no new configuration.
+
+- **Pinned sync re-renders `sandbox/` for teams whose brief is at the repository root.** The sync read the privilege
+  posture only from `.agentteams/brief.json`, so a team that keeps its brief as `brief.json` at the root never had
+  `confine-run.sh`, `mac-escape-tests.sh` or `sandbox.sb` re-rendered on an upgrade. The 1.0.2 gate-8 fix, for
+  example, reached such teams only when they re-rendered by hand.
+  - The sync now finds the brief as fleet discovery does: `.agentteams/brief.json`, then `brief.json`, then
+    `.github/agents/_build-description.json`.
+  - A brief other than `.agentteams/brief.json` counts only when it sets `privilege_profile` itself. A generated stub
+    or an unrelated `brief.json` that merely inherits the confined default starts no sandbox rollout on sync.
+  - A symlinked brief is ignored, and projection skips any artifact whose path resolves outside the repository.
+- **Upgrade:** a team with a root brief that sets `privilege_profile` gets its `sandbox/` files rewritten on the next
+  sync. Review that diff in the autosync PR.
+- **Install:** from a verified, detached checkout of the signed `v1.0.3` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.0.3]`.
+
+### Changes since 1.0.2
+
 ### Changed
 
 ### sync (sandbox artifacts for teams with a root brief)
