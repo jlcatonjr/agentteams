@@ -246,3 +246,15 @@ def test_loopback_proxy_emits_localhost_form_on_macos(tmp_path):
     )
     assert proc.returncode == 0, proc.stderr
     assert 'localhost:8443' in proc.stdout
+
+
+def test_gate8_cannot_score_a_declined_rm_prompt_as_an_escape() -> None:
+    """A write-protected file makes BSD rm/mv prompt on a terminal, and a declined prompt exits 0 (a false FAIL at
+    gate 8, baseAgent #219). Gate 8 runs them prompt-free and with no stdin, and its verdict checks the files."""
+    text = (Path(__file__).resolve().parents[1] / "agentteams" / "templates" / "universal" / "sandbox"
+            / "mac-escape-tests.sh").read_text(encoding="utf-8")
+    gate8 = text[text.index("# ---- Gate 8: control plane"):text.index("# ---- Gate 8b:")]
+    assert '(rm -f "' in gate8 and '(mv -f "' in gate8
+    assert "(rm \"" not in gate8 and "(mv \"" not in gate8
+    assert "' </dev/null)\"" in gate8
+    assert 'intact=yes' in gate8 and '[ "$conf" = denied ] && [ "$intact" = yes ]' in gate8
