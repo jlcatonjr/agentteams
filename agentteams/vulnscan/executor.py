@@ -529,7 +529,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     body_file.write_text(body, encoding="utf-8")
     proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
                            "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
-                           "--body-file", str(body_file)], cwd=_gh_cwd(), capture_output=True, text=True,
+                           "--body-file", str(body_file)], cwd=gh_cwd(), capture_output=True, text=True,
                           env=_gh_push_env(), timeout=300, check=False)
     if proc.returncode:
         raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -556,8 +556,10 @@ def _gh_push_env() -> dict[str, str]:
     return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": str(paths.state_dir())}
 
 
-def _gh_cwd() -> Path:
-    """Return gh's working directory: empty, so gh (given ``--repo``) never reads or runs a checkout's config (W1)."""
+def gh_cwd() -> Path:
+    """Return gh's working directory: empty, so gh (given ``--repo``) never reads or runs a checkout's config (W1).
+
+    Public for the other modules that run ``gh`` (effectiveness, executor_supersede)."""
     (d := paths.state_dir() / "gh-cwd").mkdir(parents=True, exist_ok=True)
     return d
 
@@ -572,7 +574,7 @@ def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
         ExecError: gh failed or did not answer with a JSON list.
     """
     proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
-                           "--json", "url,isCrossRepository"], cwd=_gh_cwd(), capture_output=True, text=True, env=_gh_push_env(), timeout=120,
+                           "--json", "url,isCrossRepository"], cwd=gh_cwd(), capture_output=True, text=True, env=_gh_push_env(), timeout=120,
                           check=False)
     if proc.returncode:
         raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -835,12 +837,15 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
 
 
 # The spool server (request reading, the batch preflight, serving) lives in .executor_serve (CH-07). These
-# wrappers import it lazily: it imports this module, so a load-time re-export would be an import cycle.
-def serve_requests(cfg: dict[str, Any], **kwargs: Any) -> list[dict[str, Any]]:
+# wrappers import it lazily, inside the call: executor_serve imports this module at load time (it looks up
+# act, spool_dir and the request limits here, so they stay the one source), and a load-time import back
+# would be an import cycle.
+def serve_requests(cfg: dict[str, Any], *, run_dir: Path | None = None, run_id: str | None = None,
+                   deadline: float | None = None) -> list[dict[str, Any]]:
     """See :func:`agentteams.vulnscan.executor_serve.serve_requests`."""
     from agentteams.vulnscan import executor_serve
 
-    return executor_serve.serve_requests(cfg, **kwargs)
+    return executor_serve.serve_requests(cfg, run_dir=run_dir, run_id=run_id, deadline=deadline)
 
 
 def quarantine_pending(reason: str) -> int:
@@ -855,9 +860,3 @@ def batch_block(cfg: dict[str, Any], op: str) -> str:
     from agentteams.vulnscan import executor_serve
 
     return executor_serve.batch_block(cfg, op)
-
-
-def _read_request(path: Path) -> dict[str, Any]:
-    from agentteams.vulnscan import executor_serve
-
-    return executor_serve._read_request(path)

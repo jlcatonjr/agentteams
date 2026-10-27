@@ -3,7 +3,13 @@
 Split from :mod:`.executor` (CH-07). Every request still goes through ``executor.act``, the single
 authorizing entry point; this module only reads, orders and files requests. Names it uses from the
 executor are looked up on that module at call time, so ``executor.MAX_REQUESTS_PER_PASS`` and friends
-stay the one source (and what tests patch).
+stay the one source (and what tests patch). The import is one-way at load time: ``executor`` reaches this
+module only through lazy wrappers inside its functions (``serve_requests``, ``quarantine_pending``,
+``batch_block``), so there is no load-time cycle.
+
+This is a move plus features: besides the moved code (request reading and schema checks, the stale and
+overflow handling), it adds the batch preflight, the ``repo-held`` notice for a :mod:`.retry_guard` hold,
+``processed/blocked-<id>.json`` names for requests not attempted, and :func:`write_staged_index`.
 
 **Batch preflight.** Before a pass's first request of a granted op, and again after any refusal of one,
 :func:`batch_block` asks whether that op can run at all: the tools container (its image and passing

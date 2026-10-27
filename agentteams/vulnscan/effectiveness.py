@@ -73,11 +73,13 @@ def _pr_of(row: dict[str, Any]) -> str:
 
 
 def _gh_view(url: str) -> dict[str, Any] | None:
-    from agentteams.vulnscan import executor   # lazy: the executor imports far more than this module needs
+    # Lazy: daily imports this module and the executor; importing the executor (and publish, below) at load time
+    # would make this module's import pull in the whole executor stack for a read-only gh lookup.
+    from agentteams.vulnscan import executor
 
     try:
         proc = subprocess.run(["gh", "pr", "view", url, "--json", "state,createdAt,mergedAt,statusCheckRollup"],
-                              cwd=executor._gh_cwd(), capture_output=True, text=True, env=executor.gh_env(),
+                              cwd=executor.gh_cwd(), capture_output=True, text=True, env=executor.gh_env(),
                               timeout=60, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return None
