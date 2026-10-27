@@ -187,13 +187,34 @@ def _dirty(path: Path) -> bool:
     return proc.returncode == 0 and bool(proc.stdout.strip())
 
 
+#: git-lfs's standard filter config, exactly as ``git lfs install`` writes it: the one filter driver git may run in a
+#: repository the executor touches (plan C2). The executor's git environment sets ``GIT_LFS_SKIP_SMUDGE=1``, so a
+#: checkout writes LFS pointer files and nothing is downloaded; the executor never edits LFS-tracked files.
+LFS_FILTER = {"filter.lfs.clean": "git-lfs clean -- %f", "filter.lfs.smudge": "git-lfs smudge -- %f",
+              "filter.lfs.process": "git-lfs filter-process"}
+#: git-lfs settings refused alongside the filter (a POSIX ERE on config key names): extensions run a program on
+#: clean/smudge, custom transfer agents (any key, and the URL-scoped ``lfs.<url>.standalonetransferagent`` form) run one
+#: on a transfer, and ``lfs.storage`` moves where clean writes objects, possibly outside the repository.
+LFS_REFUSED_KEYS = r"^lfs\.(extension|customtransfer)\.|standalonetransferagent$|^lfs\.storage$"
+
+
+def lfs_available() -> bool:
+    """Return whether git-lfs can run where the executor's git runs: the tools container has it (its image installs
+    it and ``tools-selftest`` checks it); on the host it must be on ``PATH``."""
+    from agentteams.vulnscan import subproc_confine   # lazy: only repo ops ask
+
+    return subproc_confine.active() is not None or shutil.which("git-lfs") is not None
+
+
 def git_config_problem(directory: Path) -> str:
     """Return why git may not run in ``directory``'s repository, or "" (none, or not a repository).
 
     The hardened git turns off hooks and ``core.fsmonitor`` by name, but a ``filter.<name>.clean`` /
     ``.process`` / ``.smudge`` driver has an arbitrary name and runs under ``git status`` or a checkout when
     ``.gitattributes`` selects it. Global and system config are off in :func:`executor.query_git`, so any driver
-    seen here comes from the repository's own config (including its ``include`` files). A repository git
+    seen here comes from the repository's own config (including its ``include`` files). The only drivers allowed
+    are git-lfs's standard ones, value for value (:data:`LFS_FILTER`), when git-lfs is available
+    (:func:`lfs_available`) and no refused git-lfs setting is present (:data:`LFS_REFUSED_KEYS`). A repository git
     refuses to open (e.g. ``safe.directory``) is a problem too: its dirty check would otherwise read as clean.
 
     Args:
@@ -212,8 +233,17 @@ def git_config_problem(directory: Path) -> str:
             return ""
         return f"git refuses to read this repository ({probe.stderr.strip()[:200]}) — fix it by hand"
     proc = executor.query_git(directory, "config", "--get-regexp", r"^filter\..*\.(clean|process|smudge)$")
-    if proc.returncode == 0 and proc.stdout.strip():
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return ""
+    pairs = [(line.split(" ", 1) + [""])[:2] for line in proc.stdout.splitlines() if line.strip()]
+    if not all(LFS_FILTER.get(key) == value for key, value in pairs):
         return "the repository's git config defines a filter driver, which git would run — fix it by hand"
+    if not lfs_available():
+        return "the repository uses git-lfs filters but git-lfs is not installed where the executor runs git"
+    refused = executor.query_git(directory, "config", "--get-regexp", LFS_REFUSED_KEYS)
+    if refused.returncode == 0 and refused.stdout.strip():
+        return ("the repository's git-lfs config names a program or a storage path (an extension, a custom transfer "
+                "agent or lfs.storage) — fix it by hand")
     return ""
 
 

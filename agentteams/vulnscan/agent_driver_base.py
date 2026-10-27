@@ -179,6 +179,26 @@ MCP_ENV = {"VULNSCAN_RUN_DIR": "/work/run", "VULNSCAN_SPOOL": "/work/spool/reque
            "VULNSCAN_RESULTS": "/work/spool/results"}
 
 
+def fill_command(command: list[str], *, recipe: str, session: str, task: str, run_id: str) -> list[str]:
+    """Fill an ``agent.command`` override's ``{recipe}``, ``{session}``, ``{run_id}`` and ``{task}`` placeholders.
+
+    Shared by a run (:func:`agentteams.vulnscan.agent_run.agent_argv`) and the drivers' self-test probes, so a
+    passing self-test vouches for exactly the command a run uses.
+
+    Args:
+        command: The override.
+        recipe: The agent definition's in-container path (the claude probe passes ``"{recipe}"`` to keep it).
+        session: Session name.
+        task: The task prompt.
+        run_id: Run id.
+
+    Returns:
+        The filled argv.
+    """
+    return [part.replace("{recipe}", recipe).replace("{session}", session).replace("{run_id}", run_id)
+            .replace("{task}", task) for part in command]
+
+
 def json_or_none(text: str) -> object:
     """Decode one JSON value, or None for a line that is not JSON (transcript and event-stream parsing)."""
     try:

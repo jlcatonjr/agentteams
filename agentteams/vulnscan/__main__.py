@@ -20,6 +20,7 @@
 | ``tools-image build`` / ``tools-selftest`` | Build the tools image git, npm and the server kit run in, and prove its isolation (:mod:`.tools_image`) |
 | ``enroll`` / ``roots`` / ``status --project DIR`` | Enrol projects (operator only), effective scan roots, one project's status (:mod:`.project_cli`) |
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
+| ``handoff status`` | Staged fixes, the repository orchestrators' verdicts and pending packets (:mod:`.handoff`) |
 
 Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 clean, 1 findings at
 or above ``--fail-on`` (``fix``: something held back or refused), 3 partially unscanned (a feed or host
@@ -46,6 +47,7 @@ from agentteams.vulnscan import (
     executor,
     fix,
     grant,
+    handoff,
     operator_cli,
     paths,
     project_cli,
@@ -206,6 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
     operator_cli.register(sub)
     project_cli.register(sub)
     tools_image.register(sub)
+    handoff.register(sub)
     return p
 
 
@@ -266,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
         return code
     if args.cmd == "schedule":
         if args.action == "status":
-            print(schedule.status())
+            print(schedule.status(load_cfg() if paths.config_file().exists() else None))
             return 0
         when: dict = {}
         if paths.config_file().exists():
@@ -394,6 +397,8 @@ def main(argv: list[str] | None = None) -> int:
         return operator_cli.dispatch(args, daily.load_config)
     if args.cmd in tools_image.COMMANDS:
         return tools_image.dispatch(args, daily.load_config)
+    if args.cmd in handoff.COMMANDS:
+        return handoff.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":
         dest = args.dest or paths.server_kit_dir()
         names = export_server_kit(dest)

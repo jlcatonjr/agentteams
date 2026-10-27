@@ -7,7 +7,8 @@ name: vulnscan Linux containers
 #
 # It builds the tools image and the goose agent image with the repository's own scripts (every download
 # checked against the pins), then runs both self-tests. The model upstream is a local stub; the key file holds
-# a placeholder, never a real key. The goose self-test makes no model call.
+# a placeholder, never a real key. The goose self-test makes no billed model call: goose runs headless against
+# a loopback stub inside the container, and every request it sends must pass the gateway's policy (A3).
 
 on:
   pull_request:

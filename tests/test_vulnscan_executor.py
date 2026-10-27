@@ -636,7 +636,7 @@ def _assert_refused_cleanly(repo: Path, rid: str) -> None:
     """V30: a refused stage-fix leaves no vulnscan branch, no staged state or worktree, and exactly [begun, failed]."""
     assert [r["kind"] for r in ledger.read() if r.get("request_id") == rid] == ["begun", "failed"]
     assert _sh(repo, "branch", "--list", "vulnscan/*") == ""
-    assert not (executor.spool_dir() / "staged" / f"{executor._state_slug(repo.resolve())}.json").exists()
+    assert not (executor.spool_dir() / "staged" / f"{executor.state_slug(repo.resolve())}.json").exists()
     assert _executor_worktrees(repo) == [] and _sh(repo, "status", "--porcelain") == ""
 
 

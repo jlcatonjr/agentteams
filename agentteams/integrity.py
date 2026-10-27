@@ -210,6 +210,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/executor_supersede.py",   # close-superseded: the executor's only PR-closing code
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
+    "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
+    "agentteams/vulnscan/remediation_status.py",  # what blocks the executor (summary + notifications)
+    "agentteams/vulnscan/server_fixplan.py",   # per-host server fix plans (read-only)
     "agentteams/vulnscan/agent_drivers.py",    # per-framework agent runtime (image pin, env, command, lockdown)
     "agentteams/vulnscan/team_dir.py",         # the remediation team directory check
     "agentteams/vulnscan/gateway_dialects.py", # per-dialect allowlists, usage parsing, reservation
