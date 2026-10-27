@@ -8,6 +8,7 @@ Covers the acceptance list of tmp/by-week/2026-W40/branch-lifecycle-standardizat
 from __future__ import annotations
 
 import csv
+import json
 import os
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -805,3 +806,91 @@ def test_cleanup_authorized_by_signed_waiver_with_signing_enforced(repo, tmp_pat
     plan2_path, _ = _plan(repo, tmp_path / "second")
     code, _ = bc.run_cleanup(plan2_path, _cfg(repo), team_dir=team, apply=True, api=FakeAPI())
     assert code == bc.EXIT_UNAUTHORIZED  # different plan, and the waiver is used up
+
+
+# ---------------------------------------------------------------------------
+# Maintained release lines (--maintained-release) and the unsigned-PASS refusal (reference §4)
+# ---------------------------------------------------------------------------
+
+
+def test_maintained_release_is_kept_and_never_planned(repo):
+    repo.branch("release/1.0", {"r.txt": "r\n"})
+    repo.merge_no_ff("release/1.0")
+    inv = inventory(repo, maintained_patterns=(r"^release/1\.0$",))
+    assert rec(inv, "release/1.0")["state"] == "release-maintained"
+    assert all(item["branch"] != "release/1.0" for item in inv["plan"]["items"])
+
+
+def test_cleanup_with_maintained_release_skips_a_planned_release(repo, tmp_path):
+    """A plan made without the flag lists the release; a cleanup run with it sees drift and keeps it."""
+    repo.branch("release/1.0", {"r.txt": "r\n"})
+    repo.merge_no_ff("release/1.0")
+    plan_path, plan = _plan(repo, tmp_path)
+    assert any(item["branch"] == "release/1.0" for item in plan["items"])
+    team = _team(repo, f"2026-10-04,security,{bc.clearance_action(plan)},PASS,,")
+    cfg = bi.InventoryConfig(repo=repo.work, now=NOW, maintained_patterns=(r"^release/",))
+    code, lines = bc.run_cleanup(plan_path, cfg, team_dir=team, apply=True, api=FakeAPI())
+    assert code == bc.EXIT_OK, lines
+    assert any("skip" in line and "release/1.0" in line for line in lines), lines
+    assert "release/1.0" in repo.refs()
+
+
+@pytest.mark.parametrize("argv,needle", [
+    (["--maintained-release", "^release/"], "--maintained-release requires"),
+    (["--branch-inventory", "--maintained-release", "release/("], "not a valid regex"),
+])
+def test_cli_rejects_bad_maintained_release(argv, needle, capsys):
+    with pytest.raises(SystemExit) as exc:
+        _main(argv)
+    assert exc.value.code == 2 and needle in capsys.readouterr().err
+
+
+def test_cli_maintained_release_reaches_the_inventory(repo, capsys):
+    repo.branch("release/1.0", {"r.txt": "r\n"})
+    repo.merge_no_ff("release/1.0")
+    rc = _main(["--branch-inventory", "--no-api", "--json", "--project", str(repo.work),
+                "--maintained-release", r"^release/1\.0$"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    inv = json.loads(out[:out.rindex("Branch inventory:")])
+    assert rec(inv, "release/1.0")["state"] == "release-maintained"
+
+
+def test_signature_column_requires_a_key_even_with_enforcement_off(repo, tmp_path, monkeypatch):
+    """Reference §4: a `signature` column activates signing whatever enforce_decision_signing says."""
+    monkeypatch.delenv("AGENTTEAMS_DECISION_SIGNING_KEY", raising=False)
+    _merged(repo, "feat/s")
+    plan_path, plan = _plan(repo, tmp_path)
+    team = _team(repo)
+    (team / "references" / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified,signature\n"
+        f"2026-10-04,security,{bc.clearance_action(plan)},PASS,,,\n", encoding="utf-8")
+    (team / "references" / "agent-privilege.json").write_text(json.dumps({"enforce_decision_signing": False}))
+    code, lines = bc.run_cleanup(plan_path, _cfg(repo), team_dir=team, apply=True, api=FakeAPI())
+    assert code == bc.EXIT_UNAUTHORIZED
+    assert any("decision signing key is not configured" in line for line in lines), lines
+    assert "feat/s" in repo.refs()
+
+
+def test_signing_key_in_env_requires_a_signed_row_with_enforcement_off(repo, tmp_path, monkeypatch):
+    """Reference §4: the env key alone activates signing; an unsigned PASS is then refused."""
+    monkeypatch.setenv("AGENTTEAMS_DECISION_SIGNING_KEY", "session-only-key-0123456789abcdef")
+    _merged(repo, "feat/k")
+    plan_path, plan = _plan(repo, tmp_path)
+    team = _team(repo, f"2026-10-04,security,{bc.clearance_action(plan)},PASS,,")
+    (team / "references" / "agent-privilege.json").write_text(json.dumps({"enforce_decision_signing": False}))
+    code, lines = bc.run_cleanup(plan_path, _cfg(repo), team_dir=team, apply=True, api=FakeAPI())
+    assert code == bc.EXIT_UNAUTHORIZED
+    assert any("carries no signature" in line for line in lines), lines
+    assert "feat/k" in repo.refs()
+
+
+def test_branch_cleanup_row_effect_class_is_derived_not_declared():
+    """Reference §4: leave effect_class empty; a non-relaxing declaration on a bulk delete is refused."""
+    from agentteams.cli import effect_classifier as ec
+
+    row = {"action_reviewed": "branch-cleanup:" + "0" * 64, "verdict": "PASS", "scope": "",
+           "effect_destructive": "true", "effect_bulk": "true", "effect_class": ""}
+    assert ec.classify_row(row, kind="decision") == ec.RELAXING
+    with pytest.raises(ec.EffectClassifierError):
+        ec.classify_row({**row, "effect_class": "non-relaxing"}, kind="decision")

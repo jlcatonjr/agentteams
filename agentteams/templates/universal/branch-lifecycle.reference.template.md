@@ -31,7 +31,7 @@ twin's state. Rules are evaluated in order, and the first match wins. *N* defaul
 | 1 | Default | the default branch | Keep. Check that local equals the push remote. |
 | 2 | Protected | branch protection or a ruleset covers it (API) | Keep. Never delete. |
 | 3 | Evergreen / bot | named by a workflow `branch:` key (detected), or by a gate script (check by hand) | Keep. Reconcile its PR. |
-| 4 | Release (maintained) | a declared maintained release line | Keep. |
+| 4 | Release (maintained) | a declared maintained release line: `--maintained-release REGEX` (repeatable; unanchored `re.search`, so write `^release/1\.0$` for one line) | Keep. |
 | 5 | Release (finished) | matches the release pattern, and rule 6 or 7 holds | Tag `archive/<branch>` (annotated), confirm on the remote, then delete. |
 | 6 | Merged | the tip is an ancestor of the default branch, and the branch owns at least one commit off the default branch's first-parent history (an empty fresh branch owns none); **or** an ancestor that owns no commits and has been idle more than *N* days (a fast-forward-merged or abandoned empty branch) | Delete. |
 | 7 | Merged-by-PR | a PR whose head repository is the push remote's (never a fork with the same name), whose base is the default branch, is merged, whose `head.sha` equals this ref's tip (every PR with that head is checked), and whose merge commit is reachable from the default branch | Delete, after confirming `refs/pull/<n>/head` equals the tip on the remote. |
@@ -140,10 +140,24 @@ hold in the report.
      - `key_id`: the stem of the verify key's file name.
 - An HMAC-signed `branch-delete` grant is refused, because the HMAC key is visible inside a
   sandbox.
-- **When the workspace enforces signed decisions** (`references/agent-privilege.json`:
-  `enforce_decision_signing: true`) and no decision key is provisioned, an unsigned PASS row cannot
-  clear `--branch-cleanup`. Authenticate `@security`'s verdict with a C-2 security waiver
-  instead. The operator, in their own shell:
+- **When an unsigned PASS is refused.** Decision signing is active when **either** the decisions
+  log's header has a `signature` column **or** `AGENTTEAMS_DECISION_SIGNING_KEY` is set. That holds
+  whatever `enforce_decision_signing` says, so a log that once gained the column keeps requiring
+  signed rows with the switch off. Signing active and no key in the shell: the gate refuses with
+  "decision signing key is not configured". `enforce_decision_signing: true`
+  (`references/agent-privilege.json`) adds two things:
+  - it refuses an unsigned row even when signing is otherwise inactive;
+  - it routes a row whose effect is bulk, cross-repository, capability-granting or explicitly
+    constraint-relaxing (an unfreeze included) to the operator's Ed25519 path.
+
+  Two more cases:
+  - A row whose `sig_scheme` is `ed25519` is always Ed25519-verified.
+  - A workspace with `signing-governed.marker` but no `agent-privilege.json` fails closed.
+- **Leave `effect_class` empty on the PASS row.** It is derived from the row's effect fields. A
+  self-declared value that disagrees is refused: `non-relaxing` on a destructive or bulk row, and
+  `relaxing` on a row whose fields derive non-relaxing.
+- **Without a decision key, use a waiver.** In either refusal above, authenticate `@security`'s
+  verdict with a C-2 security waiver instead. The operator, in their own shell:
   - mints one row in `references/security-waivers.log.csv` with `action_reviewed` set to
     `branch-cleanup:<plan sha256>`, `approver` set to `security`, `max_uses` set to 1 and a short
     `expires_at`;
