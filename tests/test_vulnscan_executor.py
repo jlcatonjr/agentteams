@@ -381,6 +381,7 @@ def test_broken_ledger_refuses_without_raising(env: dict) -> None:
 
 def test_internal_ops_are_processed_first_and_run_ids(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     order: list[str] = []
+    _install(env)   # a granted op passes the batch preflight only when a valid grant allows it
     monkeypatch.setattr(executor, "act", lambda op, target, cfg, **kw: order.append(op) or {"status": "done"})
     _req(env, "a" * 32, op="server-audit", target="web1", rationale="r")
     _req(env, "b" * 32, op="report", target="run", payload={"markdown": "m"})
