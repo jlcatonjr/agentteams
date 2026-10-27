@@ -6,6 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.7] - 2026-10-26
+
+### release notes
+
+agentteams 1.1.0-rc.7 is the seventh release candidate of the 1.1 line. It deprecates the 14-day package-release
+cooldown and fixes pinned sync for teams whose brief is at the repository root. Keep pinning `v1.0.x` where you need
+the stable line (the same changes are in `v1.0.3` and `v1.0.4`).
+
+- **The S-10 package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes the
+  known-vulnerability search may be adopted the day it is published, in every ecosystem; no cooldown exception or
+  exemption is needed. The vulnerability search (OSV, including `MAL-*` malicious-package entries) still gates every
+  install, and Rule S-9 identity checks are unchanged.
+  - vulnscan: the executor's 14-day floor is gone. `cooldown_days` in your config and `fix --cooldown-days` are
+    accepted but ignored, with a deprecation note; remove the key. npm runs without `--before`.
+  - Server kit: `L3-node-runtime.sh` and `L5-containers.sh` no longer hold fresh releases by default;
+    `--cooldown-days N` is still an explicit opt-in.
+  - Generated `@security` agents: Rule S-10 (fence v17) has no waiting period. Re-render your team to pick it up.
+  - Trade-off: the cooldown gave registries time to catch and unpublish malicious releases. Defence now rests on
+    the OSV search, artifact identity and lockfile pinning.
+- **Pinned sync re-renders `sandbox/` for teams whose brief is at the repository root.** The sync read the privilege
+  posture only from `.agentteams/brief.json`, so a team that keeps its brief as `brief.json` at the root never had
+  `confine-run.sh`, `mac-escape-tests.sh` or `sandbox.sb` re-rendered on an upgrade.
+  - The sync now finds the brief as fleet discovery does: `.agentteams/brief.json`, then `brief.json`, then
+    `.github/agents/_build-description.json`.
+  - A brief other than `.agentteams/brief.json` counts only when it sets `privilege_profile` itself. A generated stub
+    or an unrelated `brief.json` that merely inherits the confined default starts no sandbox rollout on sync.
+  - A symlinked brief is ignored, and projection skips any artifact whose path resolves outside the repository.
+- **After upgrading:** re-render each team (`--update --merge`, or the autosync PR) so its `@security` agent drops the
+  cooldown, and review the `sandbox/` diff where a root brief sets `privilege_profile`. No vulnscan self-test re-run
+  is needed for this release alone.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.7` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.7]`.
+
+### Changes since 1.1.0-rc.6
+
 ### Changed
 
 ### security (S-10 release cooldown deprecated)
