@@ -65,11 +65,11 @@ target = os.environ["E2E_TARGET"]
 log = {"findings_total": findings["total"]}
 for op in ("stage-fix", "open-pr"):
     rid = tool("request", op=op, target=target, rationale="critical PyJWT advisory")["id"]
-    for _ in range(600):
+    for _ in range(3):   # the MCP server refuses a fourth pending poll of one id (no busy-polling)
+        time.sleep(2.0)
         st = tool("request_status", id=rid)
         if st["status"] != "pending":
             break
-        time.sleep(0.05)
     log[op] = st
 tool("submit_report", markdown="# Run report\n\nStaged PyJWT 2.15.0 and opened " + str(log["open-pr"].get("pr")))
 srv.stdin.close()

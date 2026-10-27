@@ -43,17 +43,15 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import stat
 import subprocess
-import time
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
-from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import retry_guard, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
@@ -243,6 +241,8 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
             raise ExecError(f"cannot tell which repositories are protected ({exc}); refusing") from exc
         executor_guard.refuse_scan_only(target)
         executor_guard.refuse_by_brief(op, target)
+        if why := retry_guard.futile_reason(op, target, rows):   # nothing fixable, plan unchanged since
+            raise ExecError(why)
     grants, problems = grant.load_active()
     usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
     if not usable:
@@ -529,7 +529,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     body_file.write_text(body, encoding="utf-8")
     proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
                            "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
-                           "--body-file", str(body_file)], cwd=_gh_cwd(), capture_output=True, text=True,
+                           "--body-file", str(body_file)], cwd=gh_cwd(), capture_output=True, text=True,
                           env=_gh_push_env(), timeout=300, check=False)
     if proc.returncode:
         raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -556,8 +556,10 @@ def _gh_push_env() -> dict[str, str]:
     return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": str(paths.state_dir())}
 
 
-def _gh_cwd() -> Path:
-    """Return gh's working directory: empty, so gh (given ``--repo``) never reads or runs a checkout's config (W1)."""
+def gh_cwd() -> Path:
+    """Return gh's working directory: empty, so gh (given ``--repo``) never reads or runs a checkout's config (W1).
+
+    Public for the other modules that run ``gh`` (effectiveness, executor_supersede)."""
     (d := paths.state_dir() / "gh-cwd").mkdir(parents=True, exist_ok=True)
     return d
 
@@ -572,7 +574,7 @@ def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
         ExecError: gh failed or did not answer with a JSON list.
     """
     proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
-                           "--json", "url,isCrossRepository"], cwd=_gh_cwd(), capture_output=True, text=True, env=_gh_push_env(), timeout=120,
+                           "--json", "url,isCrossRepository"], cwd=gh_cwd(), capture_output=True, text=True, env=_gh_push_env(), timeout=120,
                           check=False)
     if proc.returncode:
         raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")
@@ -834,140 +836,27 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
     return {"status": "done", **slim}
 
 
-def _read_request(path: Path) -> dict[str, Any]:
-    # O_NONBLOCK: the agent can create a FIFO named <id>.json in its rw spool; a blocking open would
-    # stall the serving loop, and with it the run's time cap (R8-1).
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise ExecError("not a regular file")
-        data = os.read(fd, MAX_REPORT_REQUEST_BYTES + 1)
-    finally:
-        os.close(fd)
-    if len(data) > MAX_REPORT_REQUEST_BYTES:
-        raise ExecError("request too large")
-    req = json.loads(data.decode("utf-8"))
-    if not isinstance(req, dict) or set(req) - REQUEST_KEYS or not {"id", "op", "target"} <= set(req):
-        raise ExecError("request does not match the schema")
-    if len(data) > MAX_REQUEST_BYTES and req.get("op") != "report":
-        raise ExecError("request too large")
-    if not REQUEST_ID.match(str(req["id"])) or path.name != f"{req['id']}.json":
-        raise ExecError("bad request id")
-    if not all(isinstance(req.get(k, ""), str) for k in REQUEST_KEYS - {"payload"}):
-        raise ExecError("request fields must be strings")
-    _check_payload(req)
-    return req
+# The spool server (request reading, the batch preflight, serving) lives in .executor_serve (CH-07). These
+# wrappers import it lazily, inside the call: executor_serve imports this module at load time (it looks up
+# act, spool_dir and the request limits here, so they stay the one source), and a load-time import back
+# would be an import cycle.
+def serve_requests(cfg: dict[str, Any], *, run_dir: Path | None = None, run_id: str | None = None,
+                   deadline: float | None = None) -> list[dict[str, Any]]:
+    """See :func:`agentteams.vulnscan.executor_serve.serve_requests`."""
+    from agentteams.vulnscan import executor_serve
 
-
-def _check_payload(req: dict[str, Any]) -> None:
-    """Validate the per-op payload: required for and only allowed with internal ops."""
-    op, payload = req["op"], req.get("payload")
-    if op not in INTERNAL_OPS:
-        if payload is not None:
-            raise ExecError("payload is only allowed with internal ops")
-        return
-    if not isinstance(payload, dict):
-        raise ExecError(f"op {op!r} requires a payload object")
-    if op == "report":
-        if set(payload) != {"markdown"} or not isinstance(payload["markdown"], str):
-            raise ExecError("report payload must be {\"markdown\": str}")
-    else:
-        if set(payload) != {"kind", "evidence"} or not all(isinstance(v, str) for v in payload.values()):
-            raise ExecError("escalate payload must be {\"kind\": str, \"evidence\": str}")
-        if payload["kind"] not in AGENT_ESCALATION_KINDS:
-            raise ExecError(f"escalation kind must be one of {AGENT_ESCALATION_KINDS}")
+    return executor_serve.serve_requests(cfg, run_dir=run_dir, run_id=run_id, deadline=deadline)
 
 
 def quarantine_pending(reason: str) -> int:
-    """Move every pending spool request aside unprocessed (``processed/stale-<id>.json``), with one ledger row.
+    """See :func:`agentteams.vulnscan.executor_serve.quarantine_pending`."""
+    from agentteams.vulnscan import executor_serve
 
-    Called at the start of a run, under the run lock: requests a crashed or killed run left behind
-    must not be served as the new run's (its report, its escalation count, its actions).
-
-    Args:
-        reason: Why (recorded on each ``refused`` row).
-
-    Returns:
-        How many requests were moved.
-    """
-    req_dir, done_dir = spool_dir() / "requests", spool_dir() / "processed"
-    pending = sorted(req_dir.glob("*.json")) if req_dir.is_dir() else []
-    if not pending:
-        return 0
-    done_dir.mkdir(parents=True, exist_ok=True)
-    for path in pending:
-        shutil.move(str(path), str(done_dir / f"stale-{path.name}"))
-    with ledger.locked():   # one row, however many files: a planted pile cannot stall the ledger
-        ledger.append("refused", op="(stale)", target=f"{len(pending)} request files", request_id="",
-                      detail=reason[:300])
-    return len(pending)
+    return executor_serve.quarantine_pending(reason)
 
 
-def _set_aside_overflow(cfg: dict[str, Any], overflow: list[Path], done_dir: Path, run_id: str | None) -> None:
-    """Move requests over the per-pass cap aside unread and open (or keep) an escalation-flood."""
-    for path in overflow:
-        shutil.move(str(path), str(done_dir / f"overflow-{path.name}"))
-    detail = f"{len(overflow)} spool requests over the per-pass cap of {MAX_REQUESTS_PER_PASS} were set aside unread"
-    with ledger.locked():
-        ledger.append("refused", op="(overflow)", target=f"{len(overflow)} request files", request_id="", detail=detail)
-        esc, new = escalations.record_flood(detail, run_id=run_id or f"adhoc-{datetime.now(UTC).date().isoformat()}")
-    if new:
-        notify.send(cfg, "escalation", id=esc.id, kind=esc.kind)
+def batch_block(cfg: dict[str, Any], op: str) -> str:
+    """See :func:`agentteams.vulnscan.executor_serve.batch_block`."""
+    from agentteams.vulnscan import executor_serve
 
-
-def serve_requests(cfg: dict[str, Any], *, run_dir: Path | None = None, run_id: str | None = None,
-                   deadline: float | None = None) -> list[dict[str, Any]]:
-    """Process pending spool requests once — internal ops (escalations, reports) first.
-
-    At most :data:`MAX_REQUESTS_PER_PASS` are read; any more are moved aside unread and open an
-    ``escalation-flood`` (blocks everything until the operator resolves it). Processing stops at
-    ``deadline``; what is left stays queued for the next pass.
-
-    Args:
-        cfg: Daily config.
-        run_dir: The current run directory (passed to ``report``).
-        run_id: The current run id (passed to ``escalate``).
-        deadline: ``time.monotonic()`` value after which no further request is started.
-
-    Returns:
-        Results (also written to ``<spool>/results/<id>.json`` for the agents to read). A ledger
-        integrity failure stops the batch with one refused result.
-    """
-    req_dir = spool_dir() / "requests"
-    done_dir = spool_dir() / "processed"
-    req_dir.mkdir(parents=True, exist_ok=True)
-    done_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        seen = ledger.consumed_request_ids()
-    except ValueError as exc:
-        return [{"status": "refused", "detail": f"ledger integrity failure — nothing processed: {exc}"}]
-    files = sorted(req_dir.glob("*.json"))
-    if len(files) > MAX_REQUESTS_PER_PASS:
-        _set_aside_overflow(cfg, files[MAX_REQUESTS_PER_PASS:], done_dir, run_id)
-        files = files[:MAX_REQUESTS_PER_PASS]
-    valid: list[tuple[Path, dict[str, Any]]] = []
-    for path in files:
-        try:
-            req = _read_request(path)
-            if req["id"] in seen:
-                raise ExecError("request id already used (replay)")
-        except (ExecError, OSError, ValueError, UnicodeDecodeError) as exc:
-            with ledger.locked():
-                ledger.append("refused", op="(invalid)", target=path.name[:80], request_id="",
-                              detail=f"malformed request: {exc}"[:500])
-            shutil.move(str(path), str(done_dir / f"rejected-{path.name}"))
-            continue
-        valid.append((path, req))
-    valid.sort(key=lambda pr: (pr[1]["op"] not in INTERNAL_OPS, pr[1]["op"] != "escalate"))
-    out = []
-    for path, req in valid:
-        if deadline is not None and time.monotonic() >= deadline:
-            break   # the rest stays queued; the run's cap is enforced on the container, not here
-        res = {"id": req["id"], "op": req["op"], "target": req["target"],
-               **act(req["op"], req["target"], cfg, rationale=req.get("rationale", ""), request_id=req["id"],
-                     payload=req.get("payload"), run_dir=run_dir, run_id=run_id)}
-        _write_json(spool_dir() / "results" / f"{req['id']}.json", res)
-        shutil.move(str(path), str(done_dir / path.name))
-        seen.add(req["id"])
-        out.append(res)
-    return out
+    return executor_serve.batch_block(cfg, op)

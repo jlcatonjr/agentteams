@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (remediation effectiveness)
+
+- **The daily summary says whether remediation lands.** A new **Remediation effectiveness** section
+  (`effectiveness.section`) counts findings fixed and new since the previous run, the remediation PRs the
+  executor opened (open, the oldest one's age, open longer than 3 days, failing CI, no CI checks, merged in
+  the last 7 days), fixes staged with no PR yet, and held repositories. Counts only: the summary is
+  published, so the section names no repository, PR, host or path. PR state comes from read-only
+  `gh pr view` on the ledger's PR URLs.
+- **New alerts.** `stale-prs` when a remediation PR is open longer than 3 days or fails CI; `agent-down` when
+  the agent has not completed for two runs in a row (the 2026-10-25 outage ran three days with only
+  per-run `agent-not-completed` messages); `repo-held` once per held repository plan.
+- **No more futile daily retries.** `stage-fix` of a repository whose last outcome was "nothing fixable without
+  a major jump" is refused (`held: …`) while its dry-run fix plan is unchanged (`retry_guard`); a changed
+  plan lifts the hold. One repository had been retried and refused six times in three days.
+- **Batch preflight.** Before a granted op's first request in a pass, and after any refusal, the executor
+  checks the tools container and that a valid grant with uses left allows the op; when not, the op's
+  remaining requests are not attempted (`not attempted: …`, one ledger row). A missing tools self-test had
+  refused the same batch of nine repositories twice, minutes apart.
+- The spool server (`serve_requests`, `quarantine_pending`, request reading) moved to
+  `vulnscan/executor_serve.py` (CH-07; `executor.py` was at 973 of 1000 lines) and is re-exported from
+  `executor`. The remediation agent's `daily_remediation` fence (v3) explains `not attempted:` and `held:`.
+- **No busy-polling.** On 2026-10-27 the agent polled one pending request 69 times in two minutes until the
+  10M-token run cap refused the next call. `request_status` now answers a pending request with an instruction
+  not to poll, and refuses after three pending answers for one id in a run. The remediation agent's workflow
+  says to queue everything and check each request once near the end.
+- **Staged fixes get `open-pr`.** The host writes `staged-fixes.json` into the run directory
+  (`executor_serve.write_staged_index`; the agent container mounts no spool): `get_fix_plans` lists those
+  repositories first, and `request` refuses a second `stage-fix` for one.
+- **New run state `cap-reached`.** A run that ends after the gateway's run budget or token cap refused a call
+  is no longer a generic `agent-error`; its reason quotes the cap refusal.
+- Docs: `session_id` is recorded as the one deliberate non-OpenRouter strip on the chat route.
+
 ### security (S-10 release cooldown deprecated)
 
 - **The 14-day package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes

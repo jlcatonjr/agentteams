@@ -13,8 +13,8 @@ between dialects: tool-calling translation is where agents silently break.
 type, an ``anthropic-version`` or an ``anthropic-beta`` value outside the allowlists below, a server-side
 tool, or content the upstream would fetch from a URL or a stored file. Client headers outside the allowlist
 are not forwarded. The ``chat`` route first applies its original OpenRouter-only rewrites (:data:`STRIP_KEYS`
-removed: ``plugins``/web search, and goose's ``session_id`` grouping label; ``usage: {include: true}`` forced;
-they never touch the other routes), then the same deny-by-default checks (:data:`CHAT_KEYS`, ``function``
+removed: ``plugins``/web search; ``usage: {include: true}`` forced; they never touch the other routes) plus one
+deliberate non-OpenRouter exception, goose's ``session_id`` grouping label, stripped rather than refused, then the same deny-by-default checks (:data:`CHAT_KEYS`, ``function``
 tools only, no OpenRouter ``models``/``route`` fallbacks, ``data:`` image URLs only). Every route reserves its
 call before relaying: the output ceiling it names (chat: ``max_tokens`` / ``max_completion_tokens`` when
 present, else :data:`DEFAULT_CHAT_RESERVE_TOKENS`; responses: ``max_output_tokens``, else the gateway's
@@ -49,7 +49,9 @@ COUNT_TOKENS_REFUSAL = ("count_tokens is not served by this gateway (refused by 
 
 #: Chat keys removed before the checks, never forwarded: OpenRouter-only features (unchanged chat behaviour) and
 #: ``session_id``, the session-grouping label goose >= 1.54 sends (its value duplicates the allowed ``user``).
-#: Stripping keeps it off the upstream; refusing it stopped every goose run before its first model call.
+#: ``session_id`` is the one deliberate exception to "refused, never stripped": it is not an OpenRouter feature,
+#: but stripping keeps it off the upstream, and refusing it stopped every goose run before its first model call.
+#: Any other new client key is still refused (deny by default).
 STRIP_KEYS = ("plugins", "web_search_options", "transforms", "session_id")
 
 #: Request bytes per token for the input estimate of a reservation (deliberately low, so it over-estimates).

@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import _http, executor, executor_guard, fix, grant, ledger, osv, review  # noqa: E402
+from agentteams.vulnscan import _http, executor, executor_guard, executor_serve, fix, grant, ledger, osv, review  # noqa: E402
 from tests._vulnscan_helpers import operator_home, sign_grant  # noqa: E402
 
 GIT = shutil.which("git")
@@ -343,16 +343,16 @@ def _req(env: dict, rid: str, **body: object) -> Path:
 
 def test_payload_schema_and_size_caps(env: dict) -> None:
     ok = _req(env, "1" * 32, op="report", target="run", payload={"markdown": "x" * 100_000})
-    assert executor._read_request(ok)["payload"]["markdown"]          # > 64 KiB allowed for report only
+    assert executor_serve._read_request(ok)["payload"]["markdown"]          # > 64 KiB allowed for report only
     big = _req(env, "2" * 32, op="server-audit", target="web1", rationale="y" * 70_000)
     with pytest.raises(executor.ExecError, match="too large"):
-        executor._read_request(big)
+        executor_serve._read_request(big)
     for rid, body in (("3" * 32, {"op": "escalate", "target": "x", "payload": {"kind": "escalation-flood", "evidence": "e"}}),
                       ("4" * 32, {"op": "server-audit", "target": "web1", "payload": {"markdown": "m"}}),
                       ("5" * 32, {"op": "report", "target": "run"}),
                       ("6" * 32, {"op": "escalate", "target": "x", "payload": {"kind": "ioc"}})):
         with pytest.raises(executor.ExecError):
-            executor._read_request(_req(env, rid, **body))
+            executor_serve._read_request(_req(env, rid, **body))
 
 
 def test_canonical_target(env: dict, tmp_path: Path) -> None:
@@ -381,6 +381,7 @@ def test_broken_ledger_refuses_without_raising(env: dict) -> None:
 
 def test_internal_ops_are_processed_first_and_run_ids(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     order: list[str] = []
+    _install(env)   # a granted op passes the batch preflight only when a valid grant allows it
     monkeypatch.setattr(executor, "act", lambda op, target, cfg, **kw: order.append(op) or {"status": "done"})
     _req(env, "a" * 32, op="server-audit", target="web1", rationale="r")
     _req(env, "b" * 32, op="report", target="run", payload={"markdown": "m"})

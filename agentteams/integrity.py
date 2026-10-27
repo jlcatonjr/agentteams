@@ -203,6 +203,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
     "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
     "agentteams/vulnscan/executor_guard.py",   # protected repos by origin; scan-only refusal
+    "agentteams/vulnscan/executor_serve.py",   # spool request schema checks, batch preflight (split from executor.py)
+    "agentteams/vulnscan/retry_guard.py",      # holds a futile stage-fix (refusal decided inside authorize)
+    "agentteams/vulnscan/effectiveness.py",    # what the published summary says about remediation (counts only)
     "agentteams/vulnscan/agent_drivers.py",    # per-framework agent runtime (image pin, env, command, lockdown)
     "agentteams/vulnscan/team_dir.py",         # the remediation team directory check
     "agentteams/vulnscan/gateway_dialects.py", # per-dialect allowlists, usage parsing, reservation

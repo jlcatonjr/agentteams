@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import agent_run, daily, executor, gateway, selftest_probe
+from agentteams.vulnscan import agent_run, daily, executor, executor_serve, gateway, selftest_probe
 from agentteams.vulnscan import team_dir as team_dir_mod
 from agentteams.vulnscan.mcp import Server, ToolError
 from tests._vulnscan_helpers import goose_recipe
@@ -63,7 +63,7 @@ def test_mcp_tools_and_requests_match_the_executor_schema(dirs: dict[str, Path])
     assert [f["name"] for f in s.call("list_findings", {"min_severity": "high"})["findings"]] == ["PyJWT"]
     q = s.call("request", {"op": "server-audit", "target": "web1", "rationale": "daily audit"})
     path = dirs["requests"] / f"{q['id']}.json"
-    assert executor._read_request(path)["op"] == "server-audit"          # the executor accepts what the MCP writes
+    assert executor_serve._read_request(path)["op"] == "server-audit"          # the executor accepts what the MCP writes
     assert s.call("request_status", {"id": q["id"]})["status"] == "pending"
     (dirs["results"] / f"{q['id']}.json").write_text(json.dumps({"id": q["id"], "status": "done"}))
     assert s.call("request_status", {"id": q["id"]})["status"] == "done"
@@ -80,10 +80,10 @@ def test_mcp_escalate_and_submit_report_write_payload_requests(dirs: dict[str, P
     assert mcp.ESCALATION_KINDS == executor.AGENT_ESCALATION_KINDS   # the container copy stays in step
     s = Server(dirs["run"], dirs["requests"], dirs["results"])
     e = s.call("escalate", {"target": "web1", "kind": "ioc", "evidence": "x" * 5000})
-    req = executor._read_request(dirs["requests"] / f"{e['id']}.json")
+    req = executor_serve._read_request(dirs["requests"] / f"{e['id']}.json")
     assert req["op"] == "escalate" and req["payload"]["kind"] == "ioc" and len(req["payload"]["evidence"]) == 2000
     r = s.call("submit_report", {"markdown": "# Run report\n" + "y" * 100_000})
-    req = executor._read_request(dirs["requests"] / f"{r['id']}.json")
+    req = executor_serve._read_request(dirs["requests"] / f"{r['id']}.json")
     assert req["op"] == "report" and req["target"] == "run" and req["payload"]["markdown"].startswith("# Run report")
     for name, bad in (("escalate", {"target": "web1", "kind": "escalation-flood", "evidence": "e"}),
                       ("escalate", {"target": "a\nb", "kind": "ioc", "evidence": "e"}),
