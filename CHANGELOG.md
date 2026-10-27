@@ -53,6 +53,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is no longer a generic `agent-error`; its reason quotes the cap refusal.
 - Docs: `session_id` is recorded as the one deliberate non-OpenRouter strip on the chat route.
 
+### vulnscan (repository aliases; grants checked before git runs)
+
+- **The remediation agent names repositories by alias.** The gateway's DLP redacts home paths, so the
+  repository paths in fix plans and findings reached the model mangled, and every `stage-fix` the agent
+  asked for named a guessed path that the executor refused. The MCP server now shows each repository as
+  `<name>-<8 hex>` (the fix plan's file-name key) in plans, the summary and findings, and `request` and
+  `escalate` map an alias named in the run's plans or findings back to the host path. `request` refuses an
+  unknown alias; `escalate` passes it through (a stop condition is never refused). Executor results
+  (`request_status`, `list_requests`) show aliases too. Two paths that share an alias are both left
+  unmapped. An absolute path is still accepted. The fix plan key, the alias and the executor's state key
+  now come from one function (`repo_alias.alias`); existing state-file names are unchanged. The
+  `vuln-remediation` agent's daily steps (fence `daily_remediation` v5) give the alias as the target. The
+  DLP is unchanged.
+- **The executor checks grant coverage before any git runs in a requested path.** A `stage-fix` or `open-pr`
+  target must be an existing directory inside an active grant's `repo_roots` (symlinks resolved) before the
+  executor resolves the repository top or runs the protected-repository checks. A path no grant covers, such
+  as `/root` or another user's home, is refused without a subprocess (`executor_guard.refuse_outside_grants`).
+  The resolved path that was checked is the one used from then on. Refusal order for a covered path is
+  unchanged. An escalation's target is canonicalised with git only inside a grant's `repo_roots`
+  (`executor_guard.canonical_if_granted`); any other target blocks every target, as before for targets that
+  do not canonicalise.
+
 ### security (S-10 release cooldown deprecated)
 
 - **The 14-day package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes

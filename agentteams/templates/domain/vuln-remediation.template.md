@@ -104,7 +104,7 @@ replace an escalation or a stop condition, and they cannot widen the grant. When
 with a stop condition, escalate anyway and mention the note in the evidence.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN daily_remediation v=4 -->
+<!-- AGENTTEAMS:BEGIN daily_remediation v=5 -->
 ## Daily Remediation workflow
 
 1. **Read.** `get_summary`, then `list_findings` (`min_severity: "moderate"` first) and
@@ -118,13 +118,14 @@ with a stop condition, escalate anyway and mention the note in the evidence.
 
    Deadlines follow Rule S-VM: 24 h, 7 days and 30 days. Dev-only findings come after shipped
    ones. OS-managed (`distro`) findings belong to the host's security updates, not to a repo fix.
-3. **Repositories.** First, every repository `get_fix_plans` lists under *Already staged* has a fix
-   staged with no PR yet: request `open-pr` for it, never a second `stage-fix`. Then, for each other
-   repo whose fix plan contains a `fix` action:
-   - request `stage-fix`, giving as target exactly the path in that plan's ``stage-fix target`` heading
+3. **Repositories.** Name every repository by its alias (`<name>-<8 hex>`), exactly as the tools show
+   it; never a path, which you cannot see, guess or reconstruct. First, every repository `get_fix_plans`
+   lists under *Already staged* has a fix staged with no PR yet: request `open-pr` for it, never a second
+   `stage-fix`. Then, for each other repo whose fix plan contains a `fix` action:
+   - request `stage-fix`, giving as target exactly the alias in that plan's ``stage-fix target`` heading
      (the repository itself, never a folder that contains it);
-   - when `request_status` shows `done`, request `open-pr` for the same repo;
-   - when `open-pr` is `done`, request `close-superseded` for the same repo, so an older remediation PR
+   - when `request_status` shows `done`, request `open-pr` for the same alias;
+   - when `open-pr` is `done`, request `close-superseded` for the same alias, so an older remediation PR
      does not stay open beside the new one.
 
    Rationale must name the advisory ids and severity. Skip every row whose action is not `fix`

@@ -202,7 +202,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/coverage.py",         # effective scan roots and coverage states
     "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
     "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
-    "agentteams/vulnscan/executor_guard.py",   # protected repos by origin; scan-only refusal
+    "agentteams/vulnscan/executor_guard.py",   # grants-first; protected repos by origin; scan-only refusal
+    "agentteams/vulnscan/repo_alias.py",       # the agent's repository aliases (mapped back by mcp.py)
     "agentteams/vulnscan/executor_serve.py",   # spool request schema checks, batch preflight (split from executor.py)
     "agentteams/vulnscan/retry_guard.py",      # holds a futile stage-fix (refusal decided inside authorize)
     "agentteams/vulnscan/effectiveness.py",    # what the published summary says about remediation (counts only)
