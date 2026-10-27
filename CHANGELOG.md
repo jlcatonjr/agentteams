@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### vulnscan (superseded PRs and the merge digest)
+
+- **New executor op `close-superseded`.** Each `open-pr` opens a new `vulnscan/*` PR (the executor never
+  force-pushes), so an older PR for the same repository stayed open beside its replacement. Under a grant that
+  names the op, the executor closes the repository's older PRs once the newest is open: only PRs it opened
+  itself, in the same repository, with no reviews, no comments and no commit by anyone else. It posts a fixed,
+  scrubbed comment naming the replacement, keeps the branch, and never merges (`vulnscan/executor_supersede.py`).
+  The remediation agent requests it after a successful `open-pr` (`invariant_core` v3, `daily_remediation` v4);
+  `@security`'s S-VM rules say what it may close (`security_rules_invariant` v18).
+- **Daily merge digest.** Each run writes `merge-digest.sh` (0700, machine-local, never published) into its
+  run directory: one block per open, mergeable remediation PR whose checks all passed, each asking before
+  `gh pr merge --match-head-commit`. It runs with the operator's credentials and is not a grant use (the
+  grant op `merge` stays reserved). It is built only from the validated repository, number and head SHA,
+  `shlex`-quoted (`vulnscan/merge_digest.py`). The summary counts the PRs ready to merge.
+
+### Changed
+
 ### vulnscan (remediation effectiveness)
 
 - **The daily summary says whether remediation lands.** A new **Remediation effectiveness** section

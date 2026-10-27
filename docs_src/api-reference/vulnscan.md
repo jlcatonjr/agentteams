@@ -74,11 +74,18 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    is still sent. `summary.md` ends with a **Remediation effectiveness** section
    (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
    the previous run, the remediation PRs the executor opened (open, the oldest one's age, open longer
-   than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, and
+   than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, PRs ready
+   to merge (open, mergeable, every check passed), and
    repositories held by the futile-retry guard. PR state comes from read-only `gh pr view` calls on the
    PR URLs in the ledger (the newest 50); a failed lookup is counted as unknown. Then `stale-prs` is sent
    when any open remediation PR is older than 3 days or fails CI. These counts are taken before the
-   agent phase, so the next run reflects what the agent did.
+   agent phase, so the next run reflects what the agent did. The same lookups write the run's
+   **merge digest**, `merge-digest.sh` (0700, machine-local, never published; `merge_digest`): one block
+   per open remediation PR that GitHub reports mergeable with every check passed. Each block asks before
+   `gh pr merge <n> --repo <host/owner/repo> --merge --match-head-commit <sha>`. You run it with your own
+   credentials; it is not a grant use (the grant op `merge` stays reserved). It is built only from the
+   validated repository, PR number and 40-hex head SHA, each `shlex`-quoted, so no PR title or branch text
+   reaches it.
 3. **Only when `agent.enabled`**, and only when step 2 wrote the summary and the heartbeat (a failed
    write skips the agent phase):
    1. **Agent run** (`agent_run.run_agent`): take the run lock (when another run or a debrief holds
@@ -565,7 +572,7 @@ container. Everything it returns that came from advisories or repositories is pr
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated` |
 | `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository path to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first under *Already staged: request open-pr for these, not stage-fix* |
-| `request` | `op` (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
+| `request` | `op` (`stage-fix`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
@@ -578,7 +585,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `open-pr`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -603,8 +610,9 @@ for one can never verify as the other.
 | Valid at once | at most 2 (more: all refused) | at most 1 (more: all refused) |
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
-**Operations.** v1 grants may name `stage-fix`, `open-pr`, `server-audit` and `server-dryrun`.
-`merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
+**Operations.** v1 grants may name `stage-fix`, `open-pr`, `close-superseded`, `server-audit` and
+`server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
+An existing grant does not cover `close-superseded` until the operator signs one that names it.
 
 **Bounds `grant.build` enforces:**
 
@@ -1401,6 +1409,18 @@ worktrees, so a retry starts clean. `stage-fix` stages only the validated paths,
 pathspecs: tracked files with `git add -u` (so a tracked pin file under a gitignored directory is
 staged without `-f`) and new, non-ignored files with a plain `git add`. It refuses if anything else
 ends up staged. Raises `ExecError`.
+
+#### `close-superseded REPO` (`executor_supersede.close_superseded`)
+
+Closes the repository's older remediation PRs once its newest one is open (`open-pr` never updates a PR in
+place, since it never force-pushes). The replacement is the PR of the repository's newest successful
+`open-pr` in the ledger; GitHub must report it open with a `vulnscan/*` head in the same repository, or
+nothing is closed. Candidates are only earlier `open-pr` PRs of the same repository (the newest 20). A
+candidate is closed only when it is open, its head is a same-repository `vulnscan/*` branch, and it has no
+reviews, no comments and no commit by anyone but the executor's git identity; otherwise it is kept, with
+the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming the replacement (scrubbed by
+`publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
+`executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
 #### `validate_diff(wt, base)`
 
@@ -2205,6 +2225,38 @@ oldest open PR's age in days.
 `stale-prs` when an open remediation PR is stale or failing; `agent-down` when the agent has not
 completed for `AGENT_DOWN_RUNS` (2) runs in a row, counted from earlier runs' `summary.md` (a run with
 no agent section ends the streak).
+
+### `agentteams.vulnscan.merge_digest`
+
+#### `green(repo, number, data)` / `GreenPr(repo, number, head)`
+
+A remediation PR ready to merge: `data` (from `gh pr view`) is open, `MERGEABLE`, and every
+`statusCheckRollup` entry is an object whose conclusion (or state) is `SUCCESS`, `SKIPPED` or `NEUTRAL`
+(no checks, or any other entry, is not ready). `GreenPr` raises `ValueError` unless `repo` is
+`host/owner/repo` of `[A-Za-z0-9_.-]` parts, `number` a positive int and `head` 40 lowercase hex.
+
+#### `render_script(prs, run_name)` / `write(run_dir, prs)`
+
+The digest script: per PR, `ask` (reads `/dev/tty`) and then `gh pr merge <n> --repo <repo> --merge
+--match-head-commit <sha>`, every value `shlex`-quoted. The comment names the run only when `run_name` is a
+`YYYY-MM-DD` date. `write` creates `<run_dir>/merge-digest.sh` with mode 0700 (`O_NOFOLLOW`); a failed write
+is reported on stderr and returns `None`.
+
+### `agentteams.vulnscan.executor_supersede`
+
+#### `close_superseded(repo, rows=None, *, view=None, close=None)`
+
+The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
+repository's successful `open-pr` PRs, oldest first; `head_problem(data)` and `touched_problem(data,
+identity)` say why a PR may not be closed. Each candidate is looked up again right before it is closed; a
+change in the remaining moment can still be missed, which is accepted because a closed PR can be reopened
+and its branch is kept.
+
+### `agentteams.vulnscan.ops`
+
+`REPO_OPS` (the operations whose target is a repository path), `PR_URL`, `pr_of(row)` and `repo_of(url)`:
+one definition for the executor, `grant`, the MCP server (standard library only, so it loads in the agent
+container), `effectiveness` and `executor_supersede`.
 
 ### `agentteams.vulnscan.retry_guard`
 

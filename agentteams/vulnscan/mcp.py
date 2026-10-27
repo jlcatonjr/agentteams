@@ -13,7 +13,8 @@ Tools:
 - ``get_fix_plans``: the deterministic fix plans, one per git repository, each headed by the
   repository path that ``stage-fix`` takes as its target. A plan for a repository enrolled below
   ``remediate`` is headed "scan only" instead (the executor refuses ``stage-fix``/``open-pr`` there).
-- ``request``: queue ``stage-fix`` / ``open-pr`` / ``server-audit`` / ``server-dryrun`` on a target, with a rationale.
+- ``request``: queue ``stage-fix`` / ``open-pr`` / ``close-superseded`` / ``server-audit`` / ``server-dryrun`` on a
+  target, with a rationale.
 - ``request_status`` / ``list_requests``: the executor's results. A pending request gets an instruction not to
   poll (the executor serves requests on its own schedule); after :data:`MAX_PENDING_POLLS` pending answers for
   one id, further polls of it are refused, so a polling loop cannot burn the run's token cap.
@@ -45,12 +46,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from agentteams.vulnscan.ops import REPO_OPS   # stdlib-only: safe in the agent container
 from agentteams.vulnscan.report_store import REPORT_MAX_BYTES   # one cap: tool and store agree
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vulnscan"
 SERVER_VERSION = "1"
-OPS = ("stage-fix", "open-pr", "server-audit", "server-dryrun")
+OPS = (*REPO_OPS, "server-audit", "server-dryrun")
 ESCALATION_KINDS = ("malicious", "ioc", "injection", "integrity", "other")
 MAX_TEXT = 200_000
 SEVERITY = {"critical": 4, "high": 3, "moderate": 2, "low": 1, "any": 0}
@@ -253,7 +255,7 @@ class Server:
             raise ToolError("invalid target")
         if op.startswith("server-") and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", target):
             raise ToolError("server targets are exact hosts.conf names")
-        if op in ("stage-fix", "open-pr") and not target.startswith("/"):
+        if op in REPO_OPS and not target.startswith("/"):
             raise ToolError("repo targets are absolute paths")
         if op == "stage-fix" and target.rstrip("/") in self._staged():
             raise ToolError("a fix is already staged for this repository and has no PR yet: request open-pr for it, "
