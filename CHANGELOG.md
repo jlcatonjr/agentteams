@@ -6,6 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.9] - 2026-10-27
+
+### release notes
+
+agentteams 1.1.0-rc.9 is the ninth release candidate of the 1.1 line. It makes daily vulnscan remediation land and
+shows whether it is working. It fixes the failures found in rc.8's first live agent run. The 1.0 line has no agent
+gateway and is unaffected.
+
+- **The agent can name repositories again.** The gateway's DLP redacts home paths, so the agent never saw a usable
+  repo target and guessed. The agent now names each repo by an alias (`<name>-<8 hex>`), which is mapped back to the
+  host path for that run only. The DLP is unchanged, and home paths still never reach the model provider.
+- **Grants are checked first.** The executor refuses a target outside every granted repo root before any git
+  subprocess runs. Escalations are canonicalised only inside a grant.
+- **No busy-polling.** `request_status` tells the agent a pending request is queued and refuses after three polls of
+  the same request. A repo with a staged fix gets `open-pr`, not a second `stage-fix`. A run that hits its token
+  cap is reported as `cap-reached`.
+- **Futile retries stop.** A `stage-fix` whose last result was "nothing fixable without a major jump" is held
+  (`held:`) until the repo's fix plan changes. The operator gets one `repo-held` notice.
+- **Remediation effectiveness in every daily summary.** It reports findings fixed versus new, open vulnscan PRs (count,
+  oldest age, CI state), PRs merged in the last 7 days, and fixes staged with no PR. It shows counts only.
+- **Alerts:** `stale-prs` (a vulnscan PR older than 3 days or with failing CI), `agent-down` (two runs in a row not
+  completed) and `repo-held`.
+- **Superseded PRs are closed.** A new grant-scoped `close-superseded` op closes the executor's own older vulnscan PR
+  once its replacement is open, and only if no one has reviewed, commented or pushed to it. Nothing is force-pushed.
+- **Merge digest.** Each run writes a machine-local `merge-digest.sh`. It merges green vulnscan PRs on your own
+  credentials, asks before each one and uses `--match-head-commit`. The executor still never merges.
+- **After upgrading:**
+  - Re-sign the repo grant with `--op close-superseded` added. Only two grants can be active, so revoke the old repo
+    grant first.
+  - Rebuild the tools and agent images.
+  - Re-render teams to pick up the vuln-remediation fence `daily_remediation` v5 and `security_rules_invariant` v18.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.9` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.9]`.
+
+### Changes since 1.1.0-rc.8
+
 ### Changed
 
 ### vulnscan (superseded PRs and the merge digest)
