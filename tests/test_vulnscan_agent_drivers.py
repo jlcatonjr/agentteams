@@ -84,6 +84,15 @@ def _revision_7(old: list[str]) -> list[str]:
     return _r6(new)
 
 
+def _goose_max_tokens(old: list[str]) -> list[str]:
+    """The old argv plus exactly the 2026-10-26 change (deliberate): ``GOOSE_MAX_TOKENS`` caps goose's
+    ``max_tokens`` at ``agent.max_output_tokens`` (goose 1.54 sent 943718, which the chat route refuses)."""
+    new = list(old)
+    i = new.index("GOOSE_DISABLE_KEYRING=1") + 1
+    new[i:i] = ["-e", "GOOSE_MAX_TOKENS=32000"]
+    return new
+
+
 def _r6(old: list[str]) -> list[str]:
     """The old argv plus exactly the rc.4 R6 change (deliberate): two empty read-only tmpfs masks over the
     gateway's files under ``/work/run``, right after the request-spool mount."""
@@ -104,13 +113,15 @@ def fixed(monkeypatch: pytest.MonkeyPatch) -> dict:
 
 def test_golden_agent_argv_is_the_old_one_plus_revision_7(fixed: dict) -> None:
     # rc.4 R7 (deliberate): goose reads the run's checked copy of the recipe (agent_recipe), not the team's file.
-    new = [GOOSE_COPY if p == "/work/team/.goose/recipes/vuln-remediation.yaml" else p for p in _revision_7(OLD_AGENT)]
+    # 2026-10-26 (deliberate): plus GOOSE_MAX_TOKENS (_goose_max_tokens).
+    new = [GOOSE_COPY if p == "/work/team/.goose/recipes/vuln-remediation.yaml" else p
+           for p in _goose_max_tokens(_revision_7(OLD_AGENT))]
     assert agent_run.agent_argv(fixed, "img:t", RUN, SESSION, task="TASK TEXT") == new
 
 
 def test_golden_selftest_argv_and_probe(fixed: dict) -> None:
     argv = agent_run.selftest_argv(fixed, "img:t", RUN)
-    assert argv[:-1] + ["<probe>"] == _revision_7(OLD_SELFTEST)
+    assert argv[:-1] + ["<probe>"] == _goose_max_tokens(_revision_7(OLD_SELFTEST))
     probe = argv[-1]
     assert probe == agent_run.SELFTEST and probe.count(CWD_LINE) == 1
     # Phase 3 (deliberate): an HTTP error status now counts as reachable (server_answers), and
@@ -132,7 +143,7 @@ def test_golden_selftest_argv_and_probe(fixed: dict) -> None:
 
 
 def test_golden_debrief_argv(fixed: dict) -> None:
-    assert debrief.debrief_argv(fixed, "img:t", RUN, SESSION) == _revision_7(OLD_DEBRIEF)
+    assert debrief.debrief_argv(fixed, "img:t", RUN, SESSION) == _goose_max_tokens(_revision_7(OLD_DEBRIEF))
 
 
 def _b2(old: list[str], secrets: tuple[str, ...] = ()) -> list[str]:

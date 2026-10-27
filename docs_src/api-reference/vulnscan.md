@@ -383,7 +383,7 @@ failed `systemctl disable` only when the units were installed.
 | `serve-requests` | served | — | run lock held, or no config | — | — |
 | `agent-image build` | built | build failed (also: Docker not reachable, checked before `pip wheel`) | no config | — | — |
 | `agent-selftest` | passed | failed, refused (also: Docker not reachable or the image not built), or a `docker` command failed part-way (`agent-selftest failed: …`) | no config | — | — |
-| `agent-run` | completed | — | no scan, or no config | not run, error or timed out | 143: SIGTERM (both containers removed, `agent-error` recorded) |
+| `agent-run` | completed | — | no scan, or no config | not run, error, gateway-refused or timed out | 143: SIGTERM (both containers removed, `agent-error` recorded) |
 | `halts` | nothing blocks | something blocks, or the ledger fails verification | an unusable config | — | — |
 | `resolve` | resolved | not resolved (declined, not signed) | refused | — | — |
 | `say` | done | no such note | refused | — | — |
@@ -1624,7 +1624,7 @@ Promote one `/vulnscan note` comment to a note. The author must be the authentic
 #### `run_agent(cfg, run_dir, *, task, run_id)`
 
 One agent run. Returns the status (also written to `<run>/agent/status.json`) with `run_state` in
-`completed`, `agent-error`, `timed-out` or `not-run`, and `run_id`. Launcher failures end as
+`completed`, `agent-error`, `gateway-refused`, `timed-out` or `not-run`, and `run_id`. Launcher failures end as
 `agent-error` rather than raising. Exception: when another run or a debrief holds the run lock, it
 returns `not-run` with `status_written: False`, and nothing in the run directory is written or
 finalized (the holder may be a live run of that directory); the same holds when an earlier run's

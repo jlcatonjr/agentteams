@@ -49,6 +49,7 @@ from agentteams.vulnscan.agent_drivers_copilot import (  # noqa: F401
     COPILOT,
     CopilotDriver,
 )
+from agentteams.vulnscan.gateway_dialects import DEFAULT_MAX_OUTPUT_TOKENS
 
 # ---------------------------------------------------------------- goose
 
@@ -79,9 +80,15 @@ class GooseDriver(Driver):
     """
 
     def env(self, a: dict[str, Any], gw_url: str) -> dict[str, str]:
-        """See :meth:`Driver.env`. ``XDG_CONFIG_HOME`` is goose's default (``$HOME/.config``) made explicit."""
+        """See :meth:`Driver.env`. ``XDG_CONFIG_HOME`` is goose's default (``$HOME/.config``) made explicit.
+
+        ``GOOSE_MAX_TOKENS`` caps goose's ``max_tokens`` at ``agent.max_output_tokens`` (never above the chat route's
+        ceiling): without it goose 1.54 asks for the model's whole context (943718 for z-ai/glm-5.3 on 2026-10-25),
+        which the gateway refuses by design.
+        """
+        cap = min(agent_upstreams.max_output_tokens(a), DEFAULT_MAX_OUTPUT_TOKENS)
         return {"GOOSE_PROVIDER": "openrouter", "OPENROUTER_HOST": gw_url, "OPENROUTER_API_KEY": DUMMY_KEY,
-                "GOOSE_MODE": "auto", "GOOSE_DISABLE_KEYRING": "1",
+                "GOOSE_MODE": "auto", "GOOSE_DISABLE_KEYRING": "1", "GOOSE_MAX_TOKENS": str(cap),
                 "XDG_DATA_HOME": f"{AGENT_HOME}/.local/share", "XDG_STATE_HOME": GOOSE_STATE,
                 "XDG_CONFIG_HOME": f"{AGENT_HOME}/.config"}
 
