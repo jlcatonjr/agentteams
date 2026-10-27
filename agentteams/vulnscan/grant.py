@@ -37,7 +37,7 @@ from typing import Any
 from agentteams.vulnscan import paths
 
 PURPOSE_TAG = "agentteams-vulnscan-remediation-grant-v1"
-OPS_V1: frozenset[str] = frozenset({"stage-fix", "open-pr", "server-audit", "server-dryrun"})
+OPS_V1: frozenset[str] = frozenset({"stage-fix", "open-pr", "close-superseded", "server-audit", "server-dryrun"})
 OPS_RESERVED: frozenset[str] = frozenset({"merge", "server-apply"})   # full-automation stage; refused in v1
 MAX_DAYS = 30
 MAX_USES = 500

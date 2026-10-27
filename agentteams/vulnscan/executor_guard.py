@@ -279,7 +279,7 @@ def refuse_by_brief(op: str, target: str) -> None:
     """Refuse what the project's own brief does not ask for (narrowing only: a brief never widens a grant).
 
     Args:
-        op: ``stage-fix`` or ``open-pr``.
+        op: ``stage-fix``, ``open-pr`` or ``close-superseded`` (a plan-only brief does not refuse closing).
         target: Canonical repository path.
 
     Raises:

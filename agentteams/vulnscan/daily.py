@@ -48,8 +48,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, notify, osv, paths, registry
-from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, merge_digest, notify, osv, paths
+from agentteams.vulnscan import registry, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -905,6 +905,7 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
         md += "\n## Notes\n\n" + "".join(f"- {n}\n" for n in notes)
     md += "\n" + coverage.section(cfg, report=total)
     eff_md, eff = effectiveness.section(total, previous)   # counts only: the summary is published
+    merge_digest.write(run_dir, eff.green)   # machine-local, 0700, never published; asks per merge
     md += "\n" + eff_md
     if staged:
         md += "\n## Fixes staged in worktrees (review, test, commit, open a PR)\n\n" + "\n".join(staged) + "\n"

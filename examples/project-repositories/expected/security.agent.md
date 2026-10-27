@@ -47,7 +47,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=17 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=18 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -318,6 +318,11 @@ installed. Its id is deliberately not numbered (S-11, S-12, … belong to projec
   addresses) is scrubbed, and a content scan runs first. Its gate action is `vulnscan-publish`: a HALT
   on it stops publishing; escalations do not.
 - ❌ A grant **never** overrides an unretracted HALT (C-2). The check runs before every use, on the gate action `vulnscan-remediation`. A HALT scoped to one target (`vulnscan-remediation:<repo-or-host>`) stops **all** grant use until it is retracted, because a suffix decorates the action and never narrows it.
+- ✅ **Closing superseded remediation PRs.** A grant may name `close-superseded`: the executor closes a
+  repository's older remediation PRs once its newest one is open, and only PRs it opened itself that no
+  person has reviewed, commented on or pushed to. It closes with a fixed comment, never deletes a branch,
+  and never merges. Merging stays with the operator, who runs the daily run's machine-local merge digest
+  with their own credentials, one confirmation per PR (it is not a grant use).
 - ❌ A grant **never** covers merging, force-pushing, applying changes to a server, or any change the
   agent itself wrote (the fenced run report a publish grant pushes is text for the operator, never a
   change to code or configuration). These need their own signed relaxation (Rule 15) and evidence
@@ -424,7 +429,7 @@ on a destructive or governance scope is itself a finding, not an authorization.
 ### Current Threat Intelligence Snapshot
 
 <!-- AGENTTEAMS:BEGIN threat_intelligence v=1 -->
-Generated at: `2026-10-26T22:34:40Z`
+Generated at: `2026-10-27T15:22:57Z`
 
 **Sources:**
 

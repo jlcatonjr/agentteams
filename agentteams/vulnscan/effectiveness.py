@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import ledger, paths, retry_guard
+from agentteams.vulnscan import ledger, merge_digest, paths, retry_guard
 from agentteams.vulnscan.report import Report
 
 STALE_DAYS = 3
@@ -34,6 +34,7 @@ MERGED_WINDOW_DAYS = 7
 MAX_PR_LOOKUPS = 50
 AGENT_DOWN_RUNS = 2
 _PR_URL = re.compile(r"^https://[A-Za-z0-9.-]+/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/\d+$")
+_PR_URL_PARTS = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")
 _FAILING = {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}
 _AGENT_STATE = re.compile(r"^## Agent run\s*\n\s*\n- state: \*\*([a-z-]+)\*\*", re.MULTILINE)
 
@@ -50,6 +51,7 @@ class PrStats:
     unknown: int = 0
     oldest_days: int | None = None
     lookups: int = 0
+    green: list[merge_digest.GreenPr] = field(default_factory=list)   # for the machine-local merge digest
     notes: list[str] = field(default_factory=list)
 
 
@@ -78,7 +80,8 @@ def _gh_view(url: str) -> dict[str, Any] | None:
     from agentteams.vulnscan import executor
 
     try:
-        proc = subprocess.run(["gh", "pr", "view", url, "--json", "state,createdAt,mergedAt,statusCheckRollup"],
+        proc = subprocess.run(["gh", "pr", "view", url, "--json",
+                               "state,createdAt,mergedAt,statusCheckRollup,mergeable,headRefOid"],
                               cwd=executor.gh_cwd(), capture_output=True, text=True, env=executor.gh_env(),
                               timeout=60, check=False)
     except (OSError, subprocess.TimeoutExpired):
@@ -122,6 +125,10 @@ def pr_stats(urls: list[str], *, now: datetime | None = None, view: Any = None) 
             st.unknown += 1
             continue
         state = str(data.get("state", "")).upper()
+        m = _PR_URL_PARTS.match(url)
+        ready = merge_digest.green(f"{m[1]}/{m[2]}/{m[3]}", int(m[4]), data) if m else None
+        if ready:
+            st.green.append(ready)
         if state == "MERGED":
             age = _age_days(data.get("mergedAt"), now)
             st.merged_recent += age is not None and age <= MERGED_WINDOW_DAYS
@@ -184,13 +191,15 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| … with no CI checks | {stats.no_checks} |",
         f"| Remediation PRs merged in the last {MERGED_WINDOW_DAYS} days | {stats.merged_recent} |",
         f"| Fixes staged with no PR yet | {staged_without_pr()} |",
+        f"| PRs ready to merge (open, mergeable, every check passed) | {len(stats.green)} |",
         f"| Repositories held (nothing fixable without a major upgrade) | {retry_guard.held_count()} |",
     ]
     if stats.unknown:
         lines.append(f"| PR lookups that failed (state unknown) | {stats.unknown} |")
     lines.append("")
     lines += [f"- {n}" for n in stats.notes]
-    lines.append("Merging stays with the operator: `vulnscan review` lists the PRs; nothing merges automatically.")
+    lines.append("Merging stays with the operator: this run's directory holds `merge-digest.sh`, which asks before "
+                 "each merge and runs with the operator's own credentials; nothing merges automatically.")
     from agentteams.vulnscan import publish   # lazy: publish imports the executor
 
     return publish.rewrite_paths("\n".join(lines) + "\n"), stats

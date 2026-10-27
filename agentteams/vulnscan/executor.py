@@ -23,7 +23,10 @@ Operations (v1):
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
   removes the executor's worktree. It never merges.
-- Both repo ops are refused on any worktree or clone of the agentteams checkout, ``agent.team_dir``, a
+- ``close-superseded REPO``: closes the repository's older executor PRs once its newest one is open,
+  only those no person has reviewed, commented on or pushed to; never merges, deletes or pushes
+  (:mod:`.executor_supersede`).
+- The repo ops are refused on any worktree or clone of the agentteams checkout, ``agent.team_dir``, a
   grant's ``governance_dir`` or a publish ops repo (compared by git common dir and by origin; P7), and on
   a repository the project registry enrols at a level other than ``remediate`` or whose brief says so
   (``delivery: plan`` refuses ``open-pr``; ``base_branch`` is the PR base) (:mod:`.executor_guard`).
@@ -51,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
-from agentteams.vulnscan import retry_guard, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import executor_supersede, retry_guard, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
@@ -66,6 +69,7 @@ MAX_REQUEST_BYTES = 64 * 1024
 MAX_REPORT_REQUEST_BYTES = 256 * 1024        # a `report` request carries the agent's report (<= 200 KB markdown)
 MAX_REQUESTS_PER_PASS = 200                  # more in the spool at once opens an escalation-flood (S-VM review)
 INTERNAL_OPS = ("report", "escalate")        # grant-free: they only record (R6)
+REPO_OPS = ("stage-fix", "open-pr", "close-superseded")   # target a repository; executor_guard applies
 AGENT_ESCALATION_KINDS = escalations.AGENT_KINDS     # never "escalation-flood"
 GIT_IDENTITY = ("agentteams-vulnscan", "vulnscan@agentteams.invalid")
 
@@ -233,7 +237,7 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
     if esc is not None:
         raise ExecError(f"blocked by open escalation {esc.id} ({esc.kind}, scope {esc.scope}); "
                         f"see: vulnscan halts")
-    if op in ("stage-fix", "open-pr"):
+    if op in REPO_OPS:
         try:
             executor_guard.refuse_ops_repo(target)
             executor_guard.refuse_protected_repos(target, cfg)
@@ -808,7 +812,7 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
     try:
         if op not in grant.OPS_V1:
             raise ExecError(f"unknown or non-v1 operation {op!r}")
-        canonical = str(_repo_root(target)) if op in ("stage-fix", "open-pr") else target
+        canonical = str(_repo_root(target)) if op in REPO_OPS else target
         g = authorize(op, canonical, request_id, cfg)
     except (ExecError, subprocess.SubprocessError) as exc:   # incl. subproc_confine.Unavailable and git timeouts
         ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
@@ -818,6 +822,8 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
             result = stage_fix(Path(canonical), cfg)
         elif op == "open-pr":
             result = open_pr(Path(canonical), rationale)
+        elif op == "close-superseded":
+            result = executor_supersede.close_superseded(Path(canonical))
         else:
             result = server_op(op, canonical)
     except (ExecError, OSError, subprocess.SubprocessError, ValueError) as exc:
