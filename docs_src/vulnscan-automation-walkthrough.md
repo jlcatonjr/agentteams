@@ -603,9 +603,14 @@ governance directory and of the publish ops repository (worktrees included), wha
 ```bash
 AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
 python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 14 --max-uses 50 \
-    --op stage-fix --op open-pr --repo-root ~/code/shop-api --repo-root ~/code/billing \
+    --op stage-fix --op open-pr --op close-superseded --repo-root ~/code/shop-api --repo-root ~/code/billing \
     --governance-dir ~/ops-team/.goose/recipes
 ```
+
+`--op close-superseded` lets the agent have the executor close a repository's older remediation PRs once
+the newest is open (only untouched PRs it opened itself; never a merge). After each daily run,
+`<state>/<date>/merge-digest.sh` lists the PRs ready to merge and asks before each one; run it yourself
+when you want to merge.
 
 Add `--op server-audit --op server-dryrun --host web1` to let the agents audit and dry-run servers.
 `merge` and `server-apply` are refused: no grant can cover them. At most two grants may be valid at
