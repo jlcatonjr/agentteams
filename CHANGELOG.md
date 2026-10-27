@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.8] - 2026-10-27
+
+### release notes
+
+agentteams 1.1.0-rc.8 is the eighth release candidate of the 1.1 line. It restores the daily vulnscan remediation
+agent, which has made no model calls since its tools image moved to goose 1.54. The 1.0 line has no agent gateway
+and is unaffected.
+
+- **The daily remediation agent reaches the model again.** goose 1.54 sends a `session_id` body key, and the gateway's
+  deny-by-default chat route refused every call, so runs ended as `agent-error` with no spend. The gateway now strips
+  `session_id` before forwarding; it is never sent upstream.
+- **goose's output ceiling is capped at the source.** The goose driver sets `GOOSE_MAX_TOKENS` to
+  `agent.max_output_tokens` (default 32000). Without it, goose 1.54 asks for the model's whole context window, which
+  the route refuses.
+- **New run state `gateway-refused`.** A run with no model call and gateway refusals no longer reads as a transient
+  `agent-error`. Its reason lists the refusals and says the failure will recur until the allowlist or the CLI pin
+  changes.
+- **`grant sign` refuses a grant past the aggregate cap.** It names the active grants and asks for one to be revoked
+  first. Before, a third grant made every grant invalid and silently stopped remediation.
+- **After upgrading:** reinstall the scheduled vulnscan (pipx) from the verified tag. The next daily run should show
+  agent state `completed`. No team re-render is needed for this release.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.8` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.8]`.
+
+### Changes since 1.1.0-rc.7
+
 ### Changed
 
 ### vulnscan (daily agent: goose 1.54 wire compatibility)
