@@ -10,9 +10,9 @@
 # the workstation (`vulnscan inventory`) from live data; this script only knows
 # "newest release of a line" (nodejs.org/dist/index.json).
 #   ... --restart-services                                       # restart node systemd units / pm2 after
-#   ... --cooldown-days N (default 14)   only adopt releases at least N days old (Rule S-10)
-#   ... --allow-fresh                    adopt the newest release even inside the cooldown — only
-#                                        for a security release with a published advisory
+#   ... --cooldown-days N (default 0)    only adopt releases at least N days old (Rule S-10's
+#                                        cooldown is deprecated since 2026-10-26: no wait by default)
+#   ... --allow-fresh                    adopt the newest release even when a --cooldown-days is set
 #   ... --require-gpg                    fail unless the SHASUMS256 GPG signature verifies
 #
 # Handles: official tarballs (/usr/local, /opt — SHA-256 verified against
@@ -22,12 +22,13 @@
 # Containers: use L5-containers.sh.
 set -uo pipefail
 
-APPLY=false; MAJOR=""; RESTART=false; COOLDOWN=14; FRESH=false; NEEDGPG=false
+APPLY=false; MAJOR=""; RESTART=false; COOLDOWN=0; FRESH=false; NEEDGPG=false
 need(){ case "${2-}" in ""|--*) echo "option $1 needs a value" >&2; exit 2;; esac; }   # missing value: usage error (2), never an unbound-variable crash
 while [ $# -gt 0 ]; do case "$1" in
   --apply) APPLY=true;; --major) need "$@"; MAJOR="$2"; shift;; --restart-services) RESTART=true;;
   --cooldown-days) need "$@"; COOLDOWN="$2"; shift;; --allow-fresh) FRESH=true;; --require-gpg) NEEDGPG=true;;
   *) echo "unknown option: $1" >&2; exit 2;; esac; shift; done
+[ "$COOLDOWN" = 0 ] || echo "note: --cooldown-days is deprecated (Rule S-10's cooldown, 2026-10-26); honoured as an explicit opt-in" >&2
 
 SCAN_ROOTS="/usr/bin /usr/local /opt /home /root"
 ARCH=$(uname -m); case "$ARCH" in x86_64) NARCH=x64;; aarch64|arm64) NARCH=arm64;; *) NARCH=$ARCH;; esac

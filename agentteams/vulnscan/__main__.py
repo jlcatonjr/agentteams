@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--apply", action="store_true")
     sp.add_argument("--allow-major", action="store_true")
     sp.add_argument("--allow-dirty", action="store_true")
-    sp.add_argument("--cooldown-days", type=int, default=14)
+    sp.add_argument("--cooldown-days", type=int, default=None, help="deprecated and ignored (no release-age cooldown)")
     sp.add_argument("--include-worktrees", action="store_true")
     sp.add_argument("--no-npm", action="store_true")
     sp = sub.add_parser("init", help="write a starter config (never overwrites)")
@@ -239,8 +239,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "runtimes":
         return _emit(engine.local_runtimes(), args)
     if args.cmd == "fix":
+        if args.cooldown_days is not None:
+            print("note: --cooldown-days is deprecated and ignored (no release-age cooldown since 2026-10-26)",
+                  file=sys.stderr)
         res = fix.fix_path(args.path, apply=args.apply, allow_major=args.allow_major,
-                           cooldown_days=args.cooldown_days, include_worktrees=args.include_worktrees,
+                           include_worktrees=args.include_worktrees,
                            allow_dirty=args.allow_dirty, npm=not args.no_npm)
         print(res.markdown())
         return res.exit_code()

@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+### security (S-10 release cooldown deprecated)
+
+- **The 14-day package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes
+  the known-vulnerability search may be adopted the day it is published, in every ecosystem; no cooldown
+  exception or exemption is needed. The vulnerability search itself (Rule S-10) still gates every install.
+  - vulnscan: the executor's 14-day floor is gone (`executor.RELEASE_COOLDOWN_DAYS = 0`). The daily
+    config's `cooldown_days` and `fix --cooldown-days` are accepted but ignored, with a deprecation note,
+    because existing configs carry an explicit `14`. npm runs without `--before`.
+  - Server kit: `L3-node-runtime.sh` and `L5-containers.sh` default to no cooldown; `--cooldown-days N`
+    still opts into one.
+  - Generated `@security` agents: Rule S-10 and the S-VM deadlines no longer mention a waiting period;
+    the escalation table's cooldown row now covers only an unvetted install. The security feed's
+    prevention playbook says the same.
+- **Trade-off:** the cooldown let registries catch and unpublish malicious releases before adoption.
+  Without it, defence rests on the OSV search (including `MAL-*` entries), artifact identity (Rule S-9)
+  and lockfile pinning.
+
+### Changed
+
+### sync (sandbox artifacts for teams with a root brief)
+
+- **Pinned sync re-renders `sandbox/` for teams whose brief is at the repository root.** `multi_sync` read the
+  privilege posture only from `.agentteams/brief.json`. A team with only a root `brief.json` or the
+  `.github/agents/_build-description.json` stub therefore got no boundary projection on sync, and its
+  `confine-run.sh`, `mac-escape-tests.sh` and `sandbox.sb` stayed at the version that first generated them. The
+  sync now finds the brief through fleet discovery (`fleet._resolve_descriptor`). A brief other than
+  `.agentteams/brief.json` counts only when it sets `privilege_profile` itself, so a stub or foreign `brief.json`
+  that merely inherits the confined default starts no sandbox rollout. A symlinked brief is ignored. A team with
+  a regular (not symlinked) `.agentteams/brief.json` is unaffected.
+- **Projection never writes outside the project.** A privilege artifact whose path resolves outside the
+  repository (a linked agents directory, a `../` path) is skipped with a note.
+
 ## [1.1.0-rc.6] - 2026-10-26
 
 ### release notes
