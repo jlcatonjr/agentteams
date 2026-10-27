@@ -108,10 +108,51 @@ def test_the_digest_asks_per_pr_and_pins_the_head(tmp_path: Path) -> None:
     merge = next(ln for ln in text.splitlines() if "gh pr merge" in ln)
     argv = shlex.split(merge.split("||")[0])
     assert argv == ["gh", "pr", "merge", "7", "--repo", "github.com/o/app", "--merge", "--match-head-commit", SHA]
-    assert "No green remediation PRs" in merge_digest.render([], "2026-10-27")
+    assert "No green remediation PRs" in merge_digest.render_script([], "2026-10-27")
 
 
 def test_a_digest_identifier_that_is_not_validated_is_refused() -> None:
     for bad in (("github.com/o/app", 0, SHA), ("github.com/o/app", 7, "HEAD"), ("o/$(x)/y", 7, SHA)):
         with pytest.raises(ValueError):
             merge_digest.GreenPr(*bad)
+
+
+def test_a_pr_touched_between_the_first_look_and_the_close_is_kept() -> None:
+    """@security B1: the candidate is looked at again right before it is closed."""
+    rows = [_row(_url(1)), _row(_url(2))]
+    seen = {"n": 0}
+
+    def view(url: str) -> dict[str, Any]:
+        if url == _url(1):
+            seen["n"] += 1
+            return _pr() if seen["n"] == 1 else _pr(comments=[{"body": "hold on"}])
+        return _pr()
+
+    closed: list[str] = []
+    out = executor_supersede.close_superseded(Path(REPO), rows, view=view, close=lambda u, c: closed.append(u))
+    assert closed == [] and seen["n"] == 2 and "comments" in out["kept"][0]["reason"]
+
+
+def test_a_check_entry_that_is_not_an_object_never_passes() -> None:
+    """@security B3."""
+    data = {"state": "OPEN", "mergeable": "MERGEABLE", "headRefOid": SHA,
+            "statusCheckRollup": [{"conclusion": "SUCCESS"}, "SUCCESS"]}
+    assert merge_digest.green("github.com/o/app", 7, data) is None
+    assert merge_digest.green("github.com/o/app", 7, {**data, "statusCheckRollup": "SUCCESS"}) is None
+
+
+def test_the_digest_comment_names_only_a_dated_run() -> None:
+    """@security B2."""
+    assert "for run 2026-10-27:" in merge_digest.render_script([], "2026-10-27")
+    text = merge_digest.render_script([], "x$(touch /tmp/p)\nrm -rf ~")
+    assert "(unknown)" in text and "touch" not in text and "rm -rf" not in text
+
+
+def test_close_superseded_alone_still_needs_a_repo_root(tmp_path: Path) -> None:
+    """@conflict-auditor 3: a repo op grant without roots could never be used."""
+    gov = tmp_path / "gov" / "references"
+    gov.mkdir(parents=True)
+    (gov / "security-decisions.log.csv").write_text("date\n")
+    with pytest.raises(grant.GrantError, match="close-superseded need at least one repo root"):
+        grant.build(ops=["close-superseded"], repo_roots=[], hosts=[], days=1, max_uses=1, key_id="op",
+                    governance_dir=str(tmp_path / "gov"))

@@ -24,6 +24,7 @@ from pathlib import Path
 FILENAME = "merge-digest.sh"
 _REPO = re.compile(r"^[A-Za-z0-9.-]+/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
+_RUN_NAME = re.compile(r"^\d{4}-\d{2}-\d{2}$")   # a run directory's name: its date
 _PASSING = {"SUCCESS", "SKIPPED", "NEUTRAL"}
 
 
@@ -41,25 +42,27 @@ class GreenPr:
             raise ValueError("not a valid remediation PR identifier")
 
 
-def green(url_repo: str, number: int, data: dict) -> GreenPr | None:
+def green(repo: str, number: int, data: dict) -> GreenPr | None:
     """Return the PR as a :class:`GreenPr` when it is open, mergeable and every check passed, else None."""
     if str(data.get("state", "")).upper() != "OPEN" or str(data.get("mergeable", "")).upper() != "MERGEABLE":
         return None
     checks = data.get("statusCheckRollup") or []
-    if not checks or any(str((c or {}).get("conclusion") or (c or {}).get("state") or "").upper() not in _PASSING
-                         for c in checks if isinstance(c, dict)):
+    if not isinstance(checks, list) or not checks or any(
+            not isinstance(c, dict) or str(c.get("conclusion") or c.get("state") or "").upper() not in _PASSING
+            for c in checks):   # a check entry that is not an object is not a passing check
         return None
     try:
-        return GreenPr(url_repo, number, str(data.get("headRefOid", "")))
+        return GreenPr(repo, number, str(data.get("headRefOid", "")))
     except ValueError:
         return None
 
 
-def render(prs: list[GreenPr], run_name: str) -> str:
+def render_script(prs: list[GreenPr], run_name: str) -> str:
     """Return the digest script text."""
     lines = [
         "#!/usr/bin/env bash",
-        f"# vulnscan merge digest for run {shlex.quote(run_name)}: green remediation PRs, one confirmation each.",
+        f"# vulnscan merge digest for run {run_name if _RUN_NAME.match(run_name) else '(unknown)'}: green "
+        "remediation PRs, one confirmation each.",
         "# Runs with YOUR gh credentials. Nothing merges unless you answer y. --match-head-commit makes GitHub",
         "# refuse a PR whose head moved after this file was written. Machine-local; never committed or published.",
         "set -uo pipefail",
@@ -88,7 +91,7 @@ def write(run_dir: Path, prs: list[GreenPr]) -> Path | None:
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o700)
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(render(prs, run_dir.name))
+            fh.write(render_script(prs, run_dir.name))
         os.chmod(tmp, 0o700)
         tmp.replace(path)
     except OSError as exc:

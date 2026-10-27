@@ -22,38 +22,23 @@ hardened gh environment of ``open-pr``.
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import ledger
+from agentteams.vulnscan import ledger, ops
 
 OP = "close-superseded"
 MAX_CANDIDATES = 20
-_PR_URL = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")
 _VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits"
-
-
-def _repo_of(url: str) -> str:
-    m = _PR_URL.match(url)
-    return f"{m.group(1)}/{m.group(2)}/{m.group(3)}".lower() if m else ""
-
-
-def _pr_of(row: dict[str, Any]) -> str:
-    try:
-        url = json.loads(str(row.get("detail") or "{}")).get("pr", "")
-    except (ValueError, AttributeError):   # a detail that is not a JSON object names no PR
-        return ""
-    return url if isinstance(url, str) and _PR_URL.match(url) else ""
 
 
 def ledger_prs(repo: str, rows: list[dict[str, Any]]) -> list[str]:
     """Return the distinct PR URLs of ``repo``'s successful ``open-pr`` rows, oldest first (by latest mention)."""
     out: dict[str, None] = {}
     for r in rows:
-        url = _pr_of(r) if r.get("op") == "open-pr" and r.get("kind") == "done" and r.get("target") == repo else ""
+        url = ops.pr_of(r) if r.get("target") == repo else ""
         if url:
             out.pop(url, None)
             out[url] = None   # re-insert: a re-claimed PR counts at its newest position
@@ -119,7 +104,7 @@ def close_superseded(repo: Path, rows: list[dict[str, Any]] | None = None, *,
     closed: list[str] = []
     kept: list[dict[str, str]] = []
     for url in prs[:-1][-MAX_CANDIDATES:]:
-        if _repo_of(url) != _repo_of(replacement):
+        if ops.repo_of(url) != ops.repo_of(replacement):
             kept.append({"pr": url, "reason": "it is in another repository than the replacement"})
             continue
         data = look(url)
@@ -127,8 +112,15 @@ def close_superseded(repo: Path, rows: list[dict[str, Any]] | None = None, *,
         if why == "not open":
             continue   # already merged or closed: nothing to do, nothing to report
         why = why or touched_problem(data, ex.GIT_IDENTITY)
+        if not why:
+            # Re-check right before closing, to keep the view -> close window as small as gh allows. A review,
+            # comment or push landing between this view and the close can still be missed; that gap is
+            # accepted because closing is reversible (the PR can be reopened and its branch is kept).
+            fresh = look(url)
+            why = head_problem(fresh) or touched_problem(fresh, ex.GIT_IDENTITY)
         if why:
-            kept.append({"pr": url, "reason": why})
+            if why != "not open":
+                kept.append({"pr": url, "reason": why})
             continue
         shut(url, publish.rewrite_paths(
             f"Superseded by {replacement}, a newer automated security fix for the same repository. Closed by the "
@@ -140,7 +132,7 @@ def close_superseded(repo: Path, rows: list[dict[str, Any]] | None = None, *,
 def _gh(*args: str) -> subprocess.CompletedProcess:
     from agentteams.vulnscan import executor as ex
 
-    return subprocess.run(["gh", *args], cwd=ex._gh_cwd(), capture_output=True, text=True, env=ex._gh_push_env(),
+    return subprocess.run(["gh", *args], cwd=ex.gh_cwd(), capture_output=True, text=True, env=ex.gh_push_env(),
                           timeout=120, check=False)
 
 

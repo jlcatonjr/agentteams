@@ -56,6 +56,7 @@ from typing import Any
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
 from agentteams.vulnscan import executor_supersede, retry_guard, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
+from agentteams.vulnscan.ops import REPO_OPS   # repo-targeted ops: executor_guard applies
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
 RELEASE_COOLDOWN_DAYS = 0                    # Rule S-10's cooldown is deprecated (2026-10-26); cooldown_days is ignored
@@ -69,7 +70,6 @@ MAX_REQUEST_BYTES = 64 * 1024
 MAX_REPORT_REQUEST_BYTES = 256 * 1024        # a `report` request carries the agent's report (<= 200 KB markdown)
 MAX_REQUESTS_PER_PASS = 200                  # more in the spool at once opens an escalation-flood (S-VM review)
 INTERNAL_OPS = ("report", "escalate")        # grant-free: they only record (R6)
-REPO_OPS = ("stage-fix", "open-pr", "close-superseded")   # target a repository; executor_guard applies
 AGENT_ESCALATION_KINDS = escalations.AGENT_KINDS     # never "escalation-flood"
 GIT_IDENTITY = ("agentteams-vulnscan", "vulnscan@agentteams.invalid")
 
@@ -534,7 +534,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
                            "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
                            "--body-file", str(body_file)], cwd=gh_cwd(), capture_output=True, text=True,
-                          env=_gh_push_env(), timeout=300, check=False)
+                          env=gh_push_env(), timeout=300, check=False)
     if proc.returncode:
         raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
     url = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
@@ -547,7 +547,7 @@ def gh_env() -> dict[str, str]:
 
     Inherited ``GIT_*`` variables are dropped, system and global git config are off, and ``gh`` never prompts.
     Shared by publish and notes (read-only API calls). The executor's own ``gh pr`` calls use
-    :func:`_gh_push_env`, which adds the hardened git environment.
+    :func:`gh_push_env`, which adds the hardened git environment.
 
     Returns:
         The environment.
@@ -555,8 +555,10 @@ def gh_env() -> dict[str, str]:
     return _clean_git_env(os.devnull) | {"GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"}
 
 
-def _gh_push_env() -> dict[str, str]:
-    """Return the hardened git environment for gh, with no global git config and no repository above its cwd."""
+def gh_push_env() -> dict[str, str]:
+    """Return the hardened git environment for gh, with no global git config and no repository above its cwd.
+
+    Public for ``executor_supersede``, which runs ``gh pr view`` / ``gh pr close`` under a grant."""
     return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": str(paths.state_dir())}
 
 
@@ -578,7 +580,7 @@ def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
         ExecError: gh failed or did not answer with a JSON list.
     """
     proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--head", branch, "--state", "open",
-                           "--json", "url,isCrossRepository"], cwd=gh_cwd(), capture_output=True, text=True, env=_gh_push_env(), timeout=120,
+                           "--json", "url,isCrossRepository"], cwd=gh_cwd(), capture_output=True, text=True, env=gh_push_env(), timeout=120,
                           check=False)
     if proc.returncode:
         raise ExecError(f"gh pr list failed: {(proc.stderr or proc.stdout).strip()[:400]}")

@@ -74,7 +74,8 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    is still sent. `summary.md` ends with a **Remediation effectiveness** section
    (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
    the previous run, the remediation PRs the executor opened (open, the oldest one's age, open longer
-   than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, and
+   than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, PRs ready
+   to merge (open, mergeable, every check passed), and
    repositories held by the futile-retry guard. PR state comes from read-only `gh pr view` calls on the
    PR URLs in the ledger (the newest 50); a failed lookup is counted as unknown. Then `stale-prs` is sent
    when any open remediation PR is older than 3 days or fails CI. These counts are taken before the
@@ -2224,6 +2225,38 @@ oldest open PR's age in days.
 `stale-prs` when an open remediation PR is stale or failing; `agent-down` when the agent has not
 completed for `AGENT_DOWN_RUNS` (2) runs in a row, counted from earlier runs' `summary.md` (a run with
 no agent section ends the streak).
+
+### `agentteams.vulnscan.merge_digest`
+
+#### `green(repo, number, data)` / `GreenPr(repo, number, head)`
+
+A remediation PR ready to merge: `data` (from `gh pr view`) is open, `MERGEABLE`, and every
+`statusCheckRollup` entry is an object whose conclusion (or state) is `SUCCESS`, `SKIPPED` or `NEUTRAL`
+(no checks, or any other entry, is not ready). `GreenPr` raises `ValueError` unless `repo` is
+`host/owner/repo` of `[A-Za-z0-9_.-]` parts, `number` a positive int and `head` 40 lowercase hex.
+
+#### `render_script(prs, run_name)` / `write(run_dir, prs)`
+
+The digest script: per PR, `ask` (reads `/dev/tty`) and then `gh pr merge <n> --repo <repo> --merge
+--match-head-commit <sha>`, every value `shlex`-quoted. The comment names the run only when `run_name` is a
+`YYYY-MM-DD` date. `write` creates `<run_dir>/merge-digest.sh` with mode 0700 (`O_NOFOLLOW`); a failed write
+is reported on stderr and returns `None`.
+
+### `agentteams.vulnscan.executor_supersede`
+
+#### `close_superseded(repo, rows=None, *, view=None, close=None)`
+
+The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
+repository's successful `open-pr` PRs, oldest first; `head_problem(data)` and `touched_problem(data,
+identity)` say why a PR may not be closed. Each candidate is looked up again right before it is closed; a
+change in the remaining moment can still be missed, which is accepted because a closed PR can be reopened
+and its branch is kept.
+
+### `agentteams.vulnscan.ops`
+
+`REPO_OPS` (the operations whose target is a repository path), `PR_URL`, `pr_of(row)` and `repo_of(url)`:
+one definition for the executor, `grant`, the MCP server (standard library only, so it loads in the agent
+container), `effectiveness` and `executor_supersede`.
 
 ### `agentteams.vulnscan.retry_guard`
 

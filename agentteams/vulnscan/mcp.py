@@ -46,13 +46,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from agentteams.vulnscan.ops import REPO_OPS   # stdlib-only: safe in the agent container
 from agentteams.vulnscan.report_store import REPORT_MAX_BYTES   # one cap: tool and store agree
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "vulnscan"
 SERVER_VERSION = "1"
-OPS = ("stage-fix", "open-pr", "close-superseded", "server-audit", "server-dryrun")
-REPO_OPS = ("stage-fix", "open-pr", "close-superseded")   # targets are absolute repository paths
+OPS = (*REPO_OPS, "server-audit", "server-dryrun")
 ESCALATION_KINDS = ("malicious", "ioc", "injection", "integrity", "other")
 MAX_TEXT = 200_000
 SEVERITY = {"critical": 4, "high": 3, "moderate": 2, "low": 1, "any": 0}

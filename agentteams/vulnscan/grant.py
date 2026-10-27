@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import paths
+from agentteams.vulnscan.ops import REPO_OPS
 
 PURPOSE_TAG = "agentteams-vulnscan-remediation-grant-v1"
 OPS_V1: frozenset[str] = frozenset({"stage-fix", "open-pr", "close-superseded", "server-audit", "server-dryrun"})
@@ -114,8 +115,8 @@ def build(*, ops: list[str], repo_roots: list[str], hosts: list[str], days: int,
     roots = sorted({str(Path(r).expanduser().resolve()) for r in repo_roots})
     if any(r == str(Path.home().resolve()) or r == "/" for r in roots):
         raise GrantError("a repo root may not be / or the home directory itself")
-    if any(op in ops for op in ("stage-fix", "open-pr")) and not roots:
-        raise GrantError("stage-fix/open-pr need at least one repo root")
+    if any(op in ops for op in REPO_OPS) and not roots:
+        raise GrantError(f"{'/'.join(REPO_OPS)} need at least one repo root")
     gov = Path(governance_dir).expanduser().resolve() if governance_dir else None
     if gov is None or not (gov / "references" / "security-decisions.log.csv").is_file():
         raise GrantError("governance_dir must be a team directory containing references/security-decisions.log.csv")

@@ -26,15 +26,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import ledger, merge_digest, paths, retry_guard
+from agentteams.vulnscan import ledger, merge_digest, ops, paths, retry_guard
 from agentteams.vulnscan.report import Report
 
 STALE_DAYS = 3
 MERGED_WINDOW_DAYS = 7
 MAX_PR_LOOKUPS = 50
 AGENT_DOWN_RUNS = 2
-_PR_URL = re.compile(r"^https://[A-Za-z0-9.-]+/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/\d+$")
-_PR_URL_PARTS = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")
 _FAILING = {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"}
 _AGENT_STATE = re.compile(r"^## Agent run\s*\n\s*\n- state: \*\*([a-z-]+)\*\*", re.MULTILINE)
 
@@ -59,19 +57,11 @@ def pr_urls(rows: list[dict[str, Any]]) -> list[str]:
     """Return the distinct PR URLs of the executor's ``open-pr`` successes, newest first."""
     seen: dict[str, None] = {}
     for r in reversed(rows):
-        url = _pr_of(r) if r.get("op") == "open-pr" and r.get("kind") == "done" else ""
-        if _PR_URL.match(url):
+        url = ops.pr_of(r)
+        if url:
             seen.setdefault(url, None)
     return list(seen)
 
-
-def _pr_of(row: dict[str, Any]) -> str:
-    """Return the ``pr`` URL in an ``open-pr`` row's JSON detail, or ""."""
-    try:
-        url = json.loads(str(row.get("detail") or "{}")).get("pr", "")
-    except (ValueError, AttributeError):   # a detail that is not a JSON object names no PR
-        return ""
-    return url if isinstance(url, str) else ""
 
 
 def _gh_view(url: str) -> dict[str, Any] | None:
@@ -125,7 +115,7 @@ def pr_stats(urls: list[str], *, now: datetime | None = None, view: Any = None) 
             st.unknown += 1
             continue
         state = str(data.get("state", "")).upper()
-        m = _PR_URL_PARTS.match(url)
+        m = ops.PR_URL.match(url)
         ready = merge_digest.green(f"{m[1]}/{m[2]}/{m[3]}", int(m[4]), data) if m else None
         if ready:
             st.green.append(ready)
