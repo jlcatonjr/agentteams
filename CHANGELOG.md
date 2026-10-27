@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-26
+
+### release notes
+
+agentteams 1.0.4 is a patch release on the 1.0 line with one change, backported from `main`. It adds no
+dependencies and no new configuration.
+
+- **The S-10 package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes the
+  known-vulnerability search may be adopted the day it is published, in every ecosystem; no cooldown exception or
+  exemption is needed. The vulnerability search (OSV, including `MAL-*` malicious-package entries) still gates every
+  install, and Rule S-9 identity checks are unchanged. The 1.0 line has no vulnscan or server kit, so this release
+  changes the generated `@security` agent's Rule S-10 (fence v12) and the security feed's prevention playbook only.
+  - Trade-off: the cooldown gave registries time to catch and unpublish malicious releases. Defence now rests on
+    the vulnerability search, artifact identity and lockfile pinning.
+- **Upgrade:** re-render your team (`--update --merge`, or the autosync PR) so its `@security` agent drops the
+  cooldown. Decision-log S-10 exemption rows signed before this release stay valid and are simply no longer needed.
+- **Install:** from a verified, detached checkout of the signed `v1.0.4` tag (release key `SHA256:IPdnLwlF…`, as in
+  `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.0.4]`.
+
+### Changes since 1.0.3
+
 ### security (S-10 release cooldown deprecated)
 
 - **The 14-day package-release cooldown is deprecated (operator ruling, 2026-10-26).** A release that passes
