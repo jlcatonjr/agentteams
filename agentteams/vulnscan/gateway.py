@@ -11,6 +11,8 @@ internal network the agent container sits on, and a bridge out. It enforces:
 - **Allowed models.** The request's ``model`` must equal one of the configured models (``--model``
   plus ``--models``; exact match). On the chat route OpenRouter ``plugins``/web-search features are
   stripped and ``usage: {include: true}`` is forced so cost is reported (OpenRouter-only rewrites).
+  One non-OpenRouter key is stripped there too, as a deliberate exception: goose's ``session_id``
+  grouping label (a duplicate of the allowed ``user``), so it never reaches the upstream.
   Every route is then **deny by default**: body keys, tool types, ``anthropic-*`` header values
   outside the allowlists, server-side tools, OpenRouter fallback ``models`` and content the upstream
   would fetch are refused (400, counted as ``refused``), never stripped. Routes match the exact path;

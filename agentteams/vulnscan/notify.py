@@ -35,8 +35,12 @@ MESSAGES: dict[str, str] = {
     "publish-done": "Run report published to the ops repository.",
     "run-stale": "No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status",
     "run-missing": "No daily run has completed yet: running it now. Check: vulnscan schedule status",
+    "repo-held": ("A repository is held: nothing is fixable without a major upgrade and its fix plan has not "
+                  "changed. Upgrade it by hand. Run: vulnscan review"),
+    "stale-prs": "{count} remediation PR(s) waiting: {old} older than {days} days, {failing} failing CI. Run: vulnscan review",
+    "agent-down": "The remediation agent has not completed for {count} runs in a row. Run: vulnscan review",
 }
-_STATES = {"completed", "agent-error", "gateway-refused", "timed-out", "not-run", "action needed",
+_STATES = {"completed", "agent-error", "gateway-refused", "cap-reached", "timed-out", "not-run", "action needed",
            "partially unscanned",
            "COMPROMISE INDICATORS", "new findings", "clean"}
 _KINDS = {*KINDS, FLOOD_KIND}

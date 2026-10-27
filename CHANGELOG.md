@@ -6,6 +6,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+### vulnscan (superseded PRs and the merge digest)
+
+- **New executor op `close-superseded`.** Each `open-pr` opens a new `vulnscan/*` PR (the executor never
+  force-pushes), so an older PR for the same repository stayed open beside its replacement. Under a grant that
+  names the op, the executor closes the repository's older PRs once the newest is open: only PRs it opened
+  itself, in the same repository, with no reviews, no comments and no commit by anyone else. It posts a fixed,
+  scrubbed comment naming the replacement, keeps the branch, and never merges (`vulnscan/executor_supersede.py`).
+  The remediation agent requests it after a successful `open-pr` (`invariant_core` v3, `daily_remediation` v4);
+  `@security`'s S-VM rules say what it may close (`security_rules_invariant` v18).
+- **Daily merge digest.** Each run writes `merge-digest.sh` (0700, machine-local, never published) into its
+  run directory: one block per open, mergeable remediation PR whose checks all passed, each asking before
+  `gh pr merge --match-head-commit`. It runs with the operator's credentials and is not a grant use (the
+  grant op `merge` stays reserved). It is built only from the validated repository, number and head SHA,
+  `shlex`-quoted (`vulnscan/merge_digest.py`). The summary counts the PRs ready to merge.
+
+### Changed
+
+### vulnscan (remediation effectiveness)
+
+### vulnscan (repository aliases; grants checked before git runs)
+
+- **The remediation agent names repositories by alias.** The gateway's DLP redacts home paths, so the
+  repository paths in fix plans and findings reached the model mangled, and every `stage-fix` the agent
+  asked for named a guessed path that the executor refused. The MCP server now shows each repository as
+  `<name>-<8 hex>` (the fix plan's file-name key) in plans, the summary and findings, and `request` and
+  `escalate` map an alias named in the run's plans or findings back to the host path. `request` refuses an
+  unknown alias; `escalate` passes it through (a stop condition is never refused). Executor results
+  (`request_status`, `list_requests`) show aliases too. Two paths that share an alias are both left
+  unmapped. An absolute path is still accepted. The fix plan key, the alias and the executor's state key
+  now come from one function (`repo_alias.alias`); existing state-file names are unchanged. The
+  `vuln-remediation` agent's daily steps (fence `daily_remediation` v5) give the alias as the target. The
+  DLP is unchanged.
+- **The executor checks grant coverage before any git runs in a requested path.** A `stage-fix` or `open-pr`
+  target must be an existing directory inside an active grant's `repo_roots` (symlinks resolved) before the
+  executor resolves the repository top or runs the protected-repository checks. A path no grant covers, such
+  as `/root` or another user's home, is refused without a subprocess (`executor_guard.refuse_outside_grants`).
+  The resolved path that was checked is the one used from then on. Refusal order for a covered path is
+  unchanged. An escalation's target is canonicalised with git only inside a grant's `repo_roots`
+  (`executor_guard.canonical_if_granted`); any other target blocks every target, as before for targets that
+  do not canonicalise.
+
+- **The daily summary says whether remediation lands.** A new **Remediation effectiveness** section
+  (`effectiveness.section`) counts findings fixed and new since the previous run, the remediation PRs the
+  executor opened (open, the oldest one's age, open longer than 3 days, failing CI, no CI checks, merged in
+  the last 7 days), fixes staged with no PR yet, and held repositories. Counts only: the summary is
+  published, so the section names no repository, PR, host or path. PR state comes from read-only
+  `gh pr view` on the ledger's PR URLs.
+- **New alerts.** `stale-prs` when a remediation PR is open longer than 3 days or fails CI; `agent-down` when
+  the agent has not completed for two runs in a row (the 2026-10-25 outage ran three days with only
+  per-run `agent-not-completed` messages); `repo-held` once per held repository plan.
+- **No more futile daily retries.** `stage-fix` of a repository whose last outcome was "nothing fixable without
+  a major jump" is refused (`held: …`) while its dry-run fix plan is unchanged (`retry_guard`); a changed
+  plan lifts the hold. One repository had been retried and refused six times in three days.
+- **Batch preflight.** Before a granted op's first request in a pass, and after any refusal, the executor
+  checks the tools container and that a valid grant with uses left allows the op; when not, the op's
+  remaining requests are not attempted (`not attempted: …`, one ledger row). A missing tools self-test had
+  refused the same batch of nine repositories twice, minutes apart.
+- The spool server (`serve_requests`, `quarantine_pending`, request reading) moved to
+  `vulnscan/executor_serve.py` (CH-07; `executor.py` was at 973 of 1000 lines) and is re-exported from
+  `executor`. The remediation agent's `daily_remediation` fence (v3) explains `not attempted:` and `held:`.
+- **No busy-polling.** On 2026-10-27 the agent polled one pending request 69 times in two minutes until the
+  10M-token run cap refused the next call. `request_status` now answers a pending request with an instruction
+  not to poll, and refuses after three pending answers for one id in a run. The remediation agent's workflow
+  says to queue everything and check each request once near the end.
+- **Staged fixes get `open-pr`.** The host writes `staged-fixes.json` into the run directory
+  (`executor_serve.write_staged_index`; the agent container mounts no spool): `get_fix_plans` lists those
+  repositories first, and `request` refuses a second `stage-fix` for one.
+- **New run state `cap-reached`.** A run that ends after the gateway's run budget or token cap refused a call
+  is no longer a generic `agent-error`; its reason quotes the cap refusal.
+- Docs: `session_id` is recorded as the one deliberate non-OpenRouter strip on the chat route.
+
 ## [1.1.0-rc.8] - 2026-10-27
 
 ### release notes

@@ -35,7 +35,6 @@ import contextvars
 import copy
 import datetime as _dt
 import fcntl
-import hashlib
 import json
 import math
 import os
@@ -48,8 +47,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import coverage, engine, executor, fix, notify, osv, paths, registry, subproc_confine
-from agentteams.vulnscan import subproc_confine_ssh
+from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, merge_digest, notify, osv, paths
+from agentteams.vulnscan import registry, repo_alias, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -622,6 +621,7 @@ def _agent_phase(cfg: dict, run_dir: Path) -> None:
     if status.get("state") != "completed":
         word = status.get("state")   # notify takes only known state words; anything else is an error
         notify.send(cfg, "agent-not-completed", state=word if word in agent_run.RUN_STATES else "agent-error")
+    effectiveness.agent_alert(cfg, run_dir.parent, run_dir.name, str(status.get("state")))   # 2+ runs in a row
 
 
 def _read_heartbeat_dict() -> dict[str, Any]:
@@ -781,7 +781,7 @@ def plan_slug(repo: Path) -> str:
     Returns:
         ``<name>-<8 hex>``.
     """
-    return re.sub(r"[^A-Za-z0-9._-]", "-", repo.name or "root") + "-" + hashlib.sha256(str(repo).encode()).hexdigest()[:8]
+    return repo_alias.alias(str(repo))   # also the agent's alias for the repository (mcp.py)
 
 
 _ORIGIN_URL = re.compile(r'^\[remote "origin"\]\s*$(?:\n(?!\[).*)*?\n\s*url\s*=\s*(\S+)', re.M)
@@ -903,6 +903,9 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     if notes:
         md += "\n## Notes\n\n" + "".join(f"- {n}\n" for n in notes)
     md += "\n" + coverage.section(cfg, report=total)
+    eff_md, eff = effectiveness.section(total, previous)   # counts only: the summary is published
+    merge_digest.write(run_dir, eff.green)   # machine-local, 0700, never published; asks per merge
+    md += "\n" + eff_md
     if staged:
         md += "\n## Fixes staged in worktrees (review, test, commit, open a PR)\n\n" + "\n".join(staged) + "\n"
     written = True
@@ -923,4 +926,5 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     if code or new:
         notify.send(cfg, "run-done", state=RUN_LABELS.get(code, NEW_FINDINGS_LABEL),
                     findings=len(total.findings), new=len(new))
+    effectiveness.alerts(cfg, eff)   # remediation PRs older than STALE_DAYS or failing CI
     return total, code, written

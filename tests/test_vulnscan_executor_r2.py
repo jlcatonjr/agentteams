@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import executor, fix, ledger, osv, review  # noqa: E402
+from agentteams.vulnscan import executor, executor_serve, fix, ledger, osv, review  # noqa: E402
 from tests.test_vulnscan_executor import (  # noqa: E402
     _pin_fix,
     GIT,
@@ -176,7 +176,7 @@ def test_k_e3_a_symlinked_decision_log_is_refused(env: dict, monkeypatch: pytest
 @pytest.mark.parametrize("payload", [{"markdown": 5}, {"markdown": "x", "extra": "y"}, {}, ["# r"], "# r", None])
 def test_k_e16_a_malformed_report_payload_is_refused(env: dict, payload: object) -> None:
     with pytest.raises(executor.ExecError, match="payload"):
-        executor._read_request(_req(env, "1" * 32, op="report", target="run", payload=payload))
+        executor_serve._read_request(_req(env, "1" * 32, op="report", target="run", payload=payload))
     run = env["tmp"] / "state" / "2026-10-22"
     run.mkdir(parents=True)
     assert executor.serve_requests(env["cfg"], run_dir=run) == []

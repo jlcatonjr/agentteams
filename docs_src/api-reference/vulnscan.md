@@ -71,7 +71,21 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    when the run exits non-zero or finds new findings (`daily._finish`). NEW marks compare with the
    newest readable earlier `summary.json`; an unreadable one is skipped with a note in `summary.md`.
    A write that fails (disk full) makes the run exit 3 (4 on compromise indicators), and `run-done`
-   is still sent.
+   is still sent. `summary.md` ends with a **Remediation effectiveness** section
+   (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
+   the previous run, the remediation PRs the executor opened (open, the oldest one's age, open longer
+   than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, PRs ready
+   to merge (open, mergeable, every check passed), and
+   repositories held by the futile-retry guard. PR state comes from read-only `gh pr view` calls on the
+   PR URLs in the ledger (the newest 50); a failed lookup is counted as unknown. Then `stale-prs` is sent
+   when any open remediation PR is older than 3 days or fails CI. These counts are taken before the
+   agent phase, so the next run reflects what the agent did. The same lookups write the run's
+   **merge digest**, `merge-digest.sh` (0700, machine-local, never published; `merge_digest`): one block
+   per open remediation PR that GitHub reports mergeable with every check passed. Each block asks before
+   `gh pr merge <n> --repo <host/owner/repo> --merge --match-head-commit <sha>`. You run it with your own
+   credentials; it is not a grant use (the grant op `merge` stays reserved). It is built only from the
+   validated repository, PR number and 40-hex head SHA, each `shlex`-quoted, so no PR title or branch text
+   reaches it.
 3. **Only when `agent.enabled`**, and only when step 2 wrote the summary and the heartbeat (a failed
    write skips the agent phase):
    1. **Agent run** (`agent_run.run_agent`): take the run lock (when another run or a debrief holds
@@ -82,7 +96,10 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
       earlier run (`executor.quarantine_pending`); fold your notes into the task (`notes-folded`
       row); start the gateway, then the agent container. Every 15 s the executor serves the agents'
       requests (`executor.serve_requests`): at most 200 per pass, escalations first, then the
-      report, then granted operations. At the time cap the container is removed; the last requests
+      report, then granted operations. Before a granted op's first request of a pass, and after any
+      refusal of one, a batch preflight (`executor.batch_block`) checks the tools container and that
+      a valid grant with uses left allows the op; when either fails, the op's remaining requests in
+      that pass are not attempted (one `refused` ledger row counts them). At the time cap the container is removed; the last requests
       are served; the run's own report is finalized with the run state. A run that would end
       `completed` without a report of its own ends `agent-error` (the reason quotes the
       transcript's last error line). A SIGTERM (launchd unload,
@@ -90,7 +107,8 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    2. Append the agent run's state to `summary.md`.
    3. **Publish** the report, review and summary when a publish grant is active
       (`daily.publish_run`).
-   4. Send `agent-not-completed` unless the run completed.
+   4. Send `agent-not-completed` unless the run completed, and `agent-down` when it is the second
+      (or later) run in a row that did not complete (`effectiveness.agent_streak`).
 
 ### What leaves your machine
 
@@ -383,7 +401,7 @@ failed `systemctl disable` only when the units were installed.
 | `serve-requests` | served | — | run lock held, or no config | — | — |
 | `agent-image build` | built | build failed (also: Docker not reachable, checked before `pip wheel`) | no config | — | — |
 | `agent-selftest` | passed | failed, refused (also: Docker not reachable or the image not built), or a `docker` command failed part-way (`agent-selftest failed: …`) | no config | — | — |
-| `agent-run` | completed | — | no scan, or no config | not run, error, gateway-refused or timed out | 143: SIGTERM (both containers removed, `agent-error` recorded) |
+| `agent-run` | completed | — | no scan, or no config | not run, error, gateway-refused, cap-reached or timed out | 143: SIGTERM (both containers removed, `agent-error` recorded) |
 | `halts` | nothing blocks | something blocks, or the ledger fails verification | an unusable config | — | — |
 | `resolve` | resolved | not resolved (declined, not signed) | refused | — | — |
 | `say` | done | no such note | refused | — | — |
@@ -552,13 +570,24 @@ container. Everything it returns that came from advisories or repositories is pr
 | Tool | Arguments | Effect |
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
-| `list_findings` | `min_severity` (`critical`…`any`), `target` | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated` |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository path to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way |
-| `request` | `op` (`stage-fix`, `open-pr`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it |
-| `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant |
+| `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix* |
+| `request` | `op` (`stage-fix`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
+| `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
-| `request_status` | `id` | The executor's result, or `pending` |
+| `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
 | `list_requests` | — | The 50 most recent results |
+
+**Repository aliases** (`agentteams.vulnscan.repo_alias`). The gateway's DLP redacts home paths in
+everything the model reads, so the tools never show a repository path: each repository appears as
+`<name>-<8 hex>` (the fix plan's file-name key, `daily.plan_slug`, and the executor's state key), in plan
+headings, plan text, the summary, finding rows and the executor results `request_status` and
+`list_requests` return. `request` maps an alias named in this run's fix plans, findings or staged fixes back to the
+host path before writing the request and refuses any other relative target. `escalate` maps a known
+alias the same way but passes any other target through: a stop condition is never refused, and a target
+the executor cannot place widens the escalation to every target. Two paths that share an alias are both
+left unmapped. The mapping is a convenience: the spool file still carries the absolute path and the
+executor re-validates it. The DLP is unchanged.
 
 **Spool request file** (`<state>/spool/requests/<id>.json`, what the MCP server writes and the
 executor validates):
@@ -567,7 +596,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `open-pr`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -592,8 +621,9 @@ for one can never verify as the other.
 | Valid at once | at most 2 (more: all refused) | at most 1 (more: all refused) |
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
-**Operations.** v1 grants may name `stage-fix`, `open-pr`, `server-audit` and `server-dryrun`.
-`merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
+**Operations.** v1 grants may name `stage-fix`, `open-pr`, `close-superseded`, `server-audit` and
+`server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
+An existing grant does not cover `close-superseded` until the operator signs one that names it.
 
 **Bounds `grant.build` enforces:**
 
@@ -607,8 +637,11 @@ for one can never verify as the other.
 
 **Scope.** A repository is covered when its path is inside one of the `repo_roots`, so a root covers
 every repository below it. Name roots explicitly, or let `grant sign --from-registry` propose them
-([Grants from the registry](#grants-from-the-registry)). Whatever a grant says, the executor
-(`executor_guard`) refuses repo operations on:
+([Grants from the registry](#grants-from-the-registry)). Before any git runs in a requested path,
+the executor checks, from the filesystem and the signed grants alone, that it is an existing
+directory inside an active grant's `repo_roots` (`executor_guard.refuse_outside_grants`); a path no
+grant covers is refused without running a subprocess. Whatever a grant says, the executor
+(`executor_guard`) then refuses repo operations on:
 
 - **a protected repository**: the agentteams installation it runs from, `agent.team_dir`, the
   `governance_dir` of every grant file (remediation and publish, valid or not), and any publish grant's
@@ -734,8 +767,9 @@ and, until you resolve it, refuses every grant use in its scope.
 | `escalation-flood` | (executor) more than 10 escalations in one run, or more than 200 spool requests at once | every target | your Ed25519 signature |
 
 The canonical target is the **main** repository's top-level path (a subdirectory or a linked
-worktree maps to it) or an exact `hosts.conf` name. A target that does not canonicalise blocks
-everything. A repeat of an open escalation (same kind and scope) records nothing new.
+worktree maps to it) or an exact `hosts.conf` name. Only a path inside an active grant's `repo_roots` is
+canonicalised (`executor_guard.canonical_if_granted`; git never runs elsewhere). A target that does not
+canonicalise blocks everything. A repeat of an open escalation (same kind and scope) records nothing new.
 
 **Escalations and HALTs are separate.** An escalation is the executor's block, raised by an agent and
 cleared with `resolve`. A HALT is a `@security` verdict in the team's decision log; Rule S-VM tells
@@ -784,9 +818,13 @@ or kind word; otherwise nothing is sent.
 | `publish-done` | Run report published to the ops repository. |
 | `run-stale` | No daily run has completed for {hours}h: running the missed scan now. Check: vulnscan schedule status |
 | `run-missing` | No daily run has completed yet: running it now. Check: vulnscan schedule status |
+| `repo-held` | A repository is held: nothing is fixable without a major upgrade and its fix plan has not changed. Upgrade it by hand. Run: vulnscan review |
+| `stale-prs` | {count} remediation PR(s) waiting: {old} older than {days} days, {failing} failing CI. Run: vulnscan review |
+| `agent-down` | The remediation agent has not completed for {count} runs in a row. Run: vulnscan review |
 
 `run-stale` and `run-missing` are sent by `daily --catch-up` (the macOS catch-up agent) before it runs the
-missed scan.
+missed scan. `repo-held` is sent once per held fix plan (`retry_guard.mark_held`); `stale-prs` at most
+once per daily run; `agent-down` on every run that extends a streak of two or more.
 
 ---
 
@@ -803,7 +841,7 @@ control. Since W1 of the baseAgent security-hardening plan they run it in a thro
 | Server kit: `server-audit`, `server-dryrun`, the daily `servers` audits | tools container | the hosts.conf target's first hop (the bastion when it jumps) only |
 | `gh pr list` / `gh pr create` (open-pr) | host | GitHub API, with your token; runs no repository content |
 | Fix planning (`fix_mode: plan`, `fix` without `--apply`), scanning, manifest parsing | host | pure Python parsing (plus the OSV/PyPI feeds) |
-| `vulnscan fix --apply`, `publish` (your own ops repository), operator commands, an escalation's target canonicalisation | host | unchanged (outside the unattended scope, D2) |
+| `vulnscan fix --apply`, `publish` (your own ops repository), operator commands, an escalation's target canonicalisation (only inside a grant's `repo_roots`) | host | unchanged (outside the unattended scope, D2) |
 
 Every confined container gets `--read-only`, `--cap-drop ALL`, `no-new-privileges`, your uid:gid (never
 root; files it writes in a worktree stay yours), pids and memory limits, empty tmpfs `/tmp` and `$HOME`
@@ -1148,7 +1186,10 @@ Anthropic's shape (`{"type": "error", "error": {...}}`); every error body has `e
 
 **Chat route rewrites.** The model must be allowed; OpenRouter `plugins`, `web_search_options` and
 `transforms` are stripped and `usage: {include: true}` is forced. These rewrites are OpenRouter-only
-and never applied to the other routes.
+and never applied to the other routes. One deliberate exception is not an OpenRouter feature: goose's
+`session_id` (a session-grouping label sent by goose 1.54 and later, duplicating the allowed `user`) is
+also stripped, so it never reaches the upstream. Refusing it stopped every goose run before its first
+model call. Any other unknown key is still refused.
 
 **Deny by default (every route).** A request is refused with HTTP 400 and counted as `refused`; nothing
 (beyond the chat rewrites above) is stripped. Each refusal's reason is kept in `spend.json`
@@ -1339,13 +1380,27 @@ Process the pending spool requests once: escalations first, then reports, then g
 Reads at most `MAX_REQUESTS_PER_PASS` (200); more are moved aside unread and open an
 `escalation-flood`. Starts no new request after `deadline` (a `time.monotonic()` value). Each result
 is also written to `<spool>/results/<id>.json`. Without `run_dir`, `report` requests are refused.
+Lives in `executor_serve` (re-exported here), as do `quarantine_pending` and `batch_block`.
+
+Before the first request of each granted op in a pass, and again after any refusal of one,
+`batch_block(cfg, op)` returns why that op cannot run at all: the tools container is unavailable
+(confinement on, and no image or no passing `tools-selftest`), or no valid grant with uses left allows
+the op. While it does, the op's remaining requests are not attempted: each result is `refused` with
+`not attempted: <reason>`, the file is moved to `processed/blocked-<id>.json`, and one `refused` ledger
+row (target `<n> requests`) records the count. A `stage-fix` refused by the futile-retry guard sends
+`repo-held` once per held plan.
 
 #### `authorize(op, target, request_id, cfg)`
 
-Call inside `ledger.locked()`. Refuses a target an open escalation blocks, a repo operation on a
+Call inside `ledger.locked()`. A repo operation reaches it only after `executor_guard.refuse_outside_grants`
+has passed (no grant covering the requested path: refused before any git runs) and its repository top has been
+resolved. Refuses a target an open escalation blocks, a repo operation on a
 publish grant's ops repository, a protected repository (common directory or origin) or a repository
-enrolled below `remediate` (`executor_guard`), a target no grant covers, exhausted uses, a missing decision log or
-an open HALT; otherwise appends the `begun` row and returns the grant. Raises `ExecError`.
+enrolled below `remediate` (`executor_guard`), a `stage-fix` the futile-retry guard holds
+(`retry_guard.futile_reason`: the repository's last `stage-fix` outcome was "nothing fixable without a
+major jump" and its newest dry-run fix plan is byte-identical to the plan of that day; a changed plan,
+a later success or a missing plan lifts the hold), a target no grant covers, exhausted uses, a missing
+decision log or an open HALT; otherwise appends the `begun` row and returns the grant. Raises `ExecError`.
 
 #### `open_pr(repo, rationale)`
 
@@ -1371,6 +1426,18 @@ worktrees, so a retry starts clean. `stage-fix` stages only the validated paths,
 pathspecs: tracked files with `git add -u` (so a tracked pin file under a gitignored directory is
 staged without `-f`) and new, non-ignored files with a plain `git add`. It refuses if anything else
 ends up staged. Raises `ExecError`.
+
+#### `close-superseded REPO` (`executor_supersede.close_superseded`)
+
+Closes the repository's older remediation PRs once its newest one is open (`open-pr` never updates a PR in
+place, since it never force-pushes). The replacement is the PR of the repository's newest successful
+`open-pr` in the ledger; GitHub must report it open with a `vulnscan/*` head in the same repository, or
+nothing is closed. Candidates are only earlier `open-pr` PRs of the same repository (the newest 20). A
+candidate is closed only when it is open, its head is a same-repository `vulnscan/*` branch, and it has no
+reviews, no comments and no commit by anyone but the executor's git identity; otherwise it is kept, with
+the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming the replacement (scrubbed by
+`publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
+`executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
 #### `validate_diff(wt, base)`
 
@@ -1408,6 +1475,8 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 
 | Function | Does |
 |---|---|
+| `refuse_outside_grants(op, target)` | Refuses, before anything runs git in it, a target that is not absolute, that no active grant's `repo_roots` covers (symlinks resolved), or that is not an existing directory; reads only the filesystem and the signed grants. Returns the resolved path, which the executor uses from then on (what runs is what was checked) |
+| `canonical_if_granted(target)` | The escalation canonicaliser: a `hosts.conf` name, or `canonical_target` of a path inside an active grant's `repo_roots`; any other target is `None` without a subprocess, so its escalation blocks every target |
 | `refuse_ops_repo(target)` | Refuses a publish grant's ops repository (by path) |
 | `refuse_protected_repos(target, cfg)` | Refuses a target in the same repository as a protected path, by git common dir (`repo_identity`) or by origin (any of `target_origins`); a git check that takes over 30 s refuses |
 | `target_origins(target)` | The target's origin identities: the config text's `origin` URL and the push URL git itself would use (hardened `remote get-url --push origin`); refuses an unreadable identity |
@@ -1624,7 +1693,9 @@ Promote one `/vulnscan note` comment to a note. The author must be the authentic
 #### `run_agent(cfg, run_dir, *, task, run_id)`
 
 One agent run. Returns the status (also written to `<run>/agent/status.json`) with `run_state` in
-`completed`, `agent-error`, `gateway-refused`, `timed-out` or `not-run`, and `run_id`. Launcher failures end as
+`completed`, `agent-error`, `gateway-refused`, `cap-reached`, `timed-out` or `not-run`, and `run_id`. A run
+that ends `agent-error` or `timed-out` (or by SIGTERM) after the gateway's run budget or token cap refused a call is
+`cap-reached`, its `reason` quoting the cap refusal from `spend.json` (`cap_reason`). Launcher failures end as
 `agent-error` rather than raising. Exception: when another run or a debrief holds the run lock, it
 returns `not-run` with `status_written: False`, and nothing in the run directory is written or
 finalized (the holder may be a live run of that directory); the same holds when an earlier run's
@@ -2153,6 +2224,72 @@ Publish a run when a publish grant is active; `None` otherwise.
 The config with defaults filled in. Raises `FileNotFoundError` when there is none, and
 `ValueError` naming the file and the key when it is not a JSON object or a key has a wrong type or
 range, every `agent.*` key included ([`validate_agent`](#validate_agenta)).
+
+### `agentteams.vulnscan.effectiveness`
+
+#### `section(total, previous, *, stats=None)`
+
+The summary's **Remediation effectiveness** section and the PR counts behind it (`PrStats`). Counts
+only, and passed through `publish.rewrite_paths`: no repository, PR, host or path is named.
+
+#### `pr_urls(rows)` / `pr_stats(urls, *, now=None, view=None)`
+
+The distinct PR URLs of the ledger's `open-pr` successes, newest first; then their counts from
+read-only `gh pr view` (at most `MAX_PR_LOOKUPS`, 50): open, open longer than `STALE_DAYS` (3),
+failing CI, no checks, merged within `MERGED_WINDOW_DAYS` (7), unknown (a failed lookup), and the
+oldest open PR's age in days.
+
+#### `alerts(cfg, stats)` / `agent_alert(cfg, state, today, current)` / `agent_streak(state, today, current)`
+
+`stale-prs` when an open remediation PR is stale or failing; `agent-down` when the agent has not
+completed for `AGENT_DOWN_RUNS` (2) runs in a row, counted from earlier runs' `summary.md` (a run with
+no agent section ends the streak).
+
+### `agentteams.vulnscan.merge_digest`
+
+#### `green(repo, number, data)` / `GreenPr(repo, number, head)`
+
+A remediation PR ready to merge: `data` (from `gh pr view`) is open, `MERGEABLE`, and every
+`statusCheckRollup` entry is an object whose conclusion (or state) is `SUCCESS`, `SKIPPED` or `NEUTRAL`
+(no checks, or any other entry, is not ready). `GreenPr` raises `ValueError` unless `repo` is
+`host/owner/repo` of `[A-Za-z0-9_.-]` parts, `number` a positive int and `head` 40 lowercase hex.
+
+#### `render_script(prs, run_name)` / `write(run_dir, prs)`
+
+The digest script: per PR, `ask` (reads `/dev/tty`) and then `gh pr merge <n> --repo <repo> --merge
+--match-head-commit <sha>`, every value `shlex`-quoted. The comment names the run only when `run_name` is a
+`YYYY-MM-DD` date. `write` creates `<run_dir>/merge-digest.sh` with mode 0700 (`O_NOFOLLOW`); a failed write
+is reported on stderr and returns `None`.
+
+### `agentteams.vulnscan.executor_supersede`
+
+#### `close_superseded(repo, rows=None, *, view=None, close=None)`
+
+The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
+repository's successful `open-pr` PRs, oldest first; `head_problem(data)` and `touched_problem(data,
+identity)` say why a PR may not be closed. Each candidate is looked up again right before it is closed; a
+change in the remaining moment can still be missed, which is accepted because a closed PR can be reopened
+and its branch is kept.
+
+### `agentteams.vulnscan.ops`
+
+`REPO_OPS` (the operations whose target is a repository path), `PR_URL`, `pr_of(row)` and `repo_of(url)`:
+one definition for the executor, `grant`, the MCP server (standard library only, so it loads in the agent
+container), `effectiveness` and `executor_supersede`.
+
+### `agentteams.vulnscan.retry_guard`
+
+#### `futile_reason(op, target, rows)`
+
+Why a `stage-fix` of `target` would only repeat "nothing fixable without a major jump", or `""`. Held
+while the repository's newest `fixplan-<slug>.md` equals the plan of the day that result was recorded;
+a changed plan, a later successful `stage-fix`, or a missing plan lifts it. Reads the ledger and run
+directories only. Called by `executor.authorize`.
+
+#### `mark_held(target)` / `held_count()`
+
+Record a held repository at its current plan in `<state>/held-repos.json` (machine-local; returns True
+only the first time per plan, which is when `repo-held` is sent); count repositories still held.
 
 ### `agentteams.vulnscan.review`
 
