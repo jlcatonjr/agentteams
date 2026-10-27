@@ -140,3 +140,33 @@ def test_stdio_answers_malformed_input_and_keeps_serving(dirs: dict[str, Path]) 
     assert by_id[7]["result"] == {}
     assert "PyJWT" in by_id[8]["result"]["content"][0]["text"]                  # still serving afterwards
     assert [o["id"] for o in out][-2:] == [7, 8]
+
+
+
+# ---------------------------------------------------------------- no busy-polling; staged fixes (2026-10-27 run)
+
+def test_a_pending_request_says_do_not_poll_and_repeated_polls_are_refused(dirs: dict[str, Path]) -> None:
+    """The 2026-10-27 run polled one pending id 69 times until the token cap ended the run."""
+    srv, rid = _server(dirs), "a" * 32
+    for _ in range(mcp.MAX_PENDING_POLLS):
+        out = srv.call("request_status", {"id": rid})
+        assert out["status"] == "pending" and "Do not poll again" in out["note"]
+    with pytest.raises(ToolError, match="polling refused"):
+        srv.call("request_status", {"id": rid})
+    (dirs["results"] / f"{rid}.json").write_text(json.dumps({"id": rid, "status": "done"}))
+    assert srv.call("request_status", {"id": rid})["status"] == "done"   # a result is always returned
+    assert srv.call("request_status", {"id": "b" * 32})["status"] == "pending"   # counted per id
+
+
+def test_a_staged_repository_gets_open_pr_not_a_second_stage_fix(dirs: dict[str, Path]) -> None:
+    (dirs["run"] / mcp.STAGED_FILE).write_text(json.dumps({"repos": ["/repos/app"]}))
+    (dirs["run"] / "fixplan-app-1.md").write_text("# Fix plan (dry run)\n\nRepository (the `stage-fix` target): `/repos/app`\n")
+    srv = _server(dirs)
+    plans = srv.call("get_fix_plans", {})
+    assert "Already staged: request open-pr" in plans and "- `/repos/app`" in plans
+    with pytest.raises(ToolError, match="already staged"):
+        srv.call("request", {"op": "stage-fix", "target": "/repos/app/", "rationale": "GHSA-x high"})
+    assert srv.call("request", {"op": "open-pr", "target": "/repos/app", "rationale": "GHSA-x high"})
+    assert srv.call("request", {"op": "stage-fix", "target": "/repos/other", "rationale": "GHSA-y high"})
+    (dirs["run"] / mcp.STAGED_FILE).write_text("not json")
+    assert srv.call("request", {"op": "stage-fix", "target": "/repos/app", "rationale": "r"})   # bad index: no hold

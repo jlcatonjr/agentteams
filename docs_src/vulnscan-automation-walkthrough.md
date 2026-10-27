@@ -526,7 +526,7 @@ supervised run (GLM 5.3 through OpenRouter, a private test repository with two v
 About a minute and six cents: `unmetered: 0` shows the route reports usage on every reply, so the budget
 cap is exact.
 
-`run_state` is `completed`, `agent-error`, `gateway-refused`, `timed-out` or `not-run`. A refused run, a launcher
+`run_state` is `completed`, `agent-error`, `gateway-refused`, `cap-reached`, `timed-out` or `not-run`. A refused run, a launcher
 failure or a SIGTERM has `reason` in place of `exit`, `timed_out` and `spend` (a held run lock also
 adds `"status_written": false`, and nothing is written); `stale_requests`, `spend_problem`, `report_problem` and
 `cleanup_error` appear only when they apply. A run whose agent exits 0 without a single model call
@@ -534,6 +534,9 @@ adds `"status_written": false`, and nothing is written); `stale_requests`, `spen
 from `<run>/agent/transcript.log`. When the gateway refused those calls by policy it is `gateway-refused`
 instead, with the refusal reasons: it recurs on every run until the allowlist or the CLI pin changes.
 (goose exits 0 after such a refusal; a refused run whose agent exits non-zero stays `agent-error`.)
+A run that stopped after the gateway's run budget or token cap refused a call is `cap-reached`, with the
+cap refusal as its `reason`: raise `agent.max_tokens_total` or the budget, or look for an agent polling in a
+loop.
 The sample above predates two later fields: `report` (the
 `request_id` and `submitted` time of the report this run submitted, or `null`) and, when an earlier
 run on the same date was set aside, `archived_previous` (its records move to `<run>/agent/runs/<run id>/`

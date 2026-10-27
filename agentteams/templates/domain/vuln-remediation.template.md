@@ -103,7 +103,7 @@ replace an escalation or a stop condition, and they cannot widen the grant. When
 with a stop condition, escalate anyway and mention the note in the evidence.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN daily_remediation v=2 -->
+<!-- AGENTTEAMS:BEGIN daily_remediation v=3 -->
 ## Daily Remediation workflow
 
 1. **Read.** `get_summary`, then `list_findings` (`min_severity: "moderate"` first) and
@@ -117,7 +117,9 @@ with a stop condition, escalate anyway and mention the note in the evidence.
 
    Deadlines follow Rule S-VM: 24 h, 7 days and 30 days. Dev-only findings come after shipped
    ones. OS-managed (`distro`) findings belong to the host's security updates, not to a repo fix.
-3. **Repositories.** For each repo whose fix plan contains a `fix` action:
+3. **Repositories.** First, every repository `get_fix_plans` lists under *Already staged* has a fix
+   staged with no PR yet: request `open-pr` for it, never a second `stage-fix`. Then, for each other
+   repo whose fix plan contains a `fix` action:
    - request `stage-fix`, giving as target exactly the path in that plan's ``stage-fix target`` heading
      (the repository itself, never a folder that contains it);
    - when `request_status` shows `done`, request `open-pr` for the same repo.
@@ -127,8 +129,16 @@ with a stop condition, escalate anyway and mention the note in the evidence.
    `npm-unavailable`; `malicious` is a stop condition), and list them for the operator with the reason.
 4. **Servers.** Request `server-audit` for hosts with host findings or that are stale. Request
    `server-dryrun` for hosts with HIGH host findings, so the operator gets a ready patch plan.
-5. **Follow up.** Poll `request_status` until each request is `done`, `failed` or `refused`. Do not
-   re-request something that was refused for lack of a grant.
+5. **Follow up, without busy-polling.** The executor serves requests on its own schedule, not on
+   demand, and every tool call re-sends your whole context against the run's token cap. Queue all your
+   requests first, then call `request_status` **once per request** near the end of the run. A
+   `pending` answer means move on: never call it again in a loop or wait for it (after three pending
+   answers for one id, further polls are refused). Report pending requests as pending; the next run
+   reads their results and requests `open-pr` for fixes staged meanwhile. Do not re-request something
+   that was refused for lack of a grant. A refusal starting `not attempted:`
+   means the executor stopped that operation for the whole pass (the tools container or the grant);
+   a refusal starting `held:` means the repository has nothing fixable without a major upgrade and its
+   fix plan has not changed. Re-request neither this run; list them for the operator.
 6. **Report** in the format below and submit it with `submit_report`. It is the record of this
    unattended run that the operator's after-action review collects. Submit once, at the end; a
    later submission replaces an earlier one.
