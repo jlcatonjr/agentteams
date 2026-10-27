@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import executor, executor_guard, fix, ledger, mcp, publish, registry  # noqa: E402
+from agentteams.vulnscan import executor, executor_guard, fix, ledger, mcp, publish, registry, repo_alias  # noqa: E402
 from tests.test_vulnscan_executor import (  # noqa: E402
     _fake_gh,
     _gh_calls,
@@ -128,12 +128,13 @@ def test_scan_only_plans_are_marked_for_the_agent(env: dict) -> None:
     server = mcp.Server(run_dir, env["tmp"] / "spool", env["tmp"] / "results")
     text = server.call("get_fix_plans", {})
     assert "## scan only — do not request stage-fix (enrolled at scan) (fixplan-scanned.md)" in text
-    assert f"## stage-fix target `{fixable}` (fixplan-fixable.md)" in text
+    assert f"## stage-fix target `{repo_alias.alias(str(fixable))}` (fixplan-fixable.md)" in text
+    assert str(fixable) not in text and str(scan) not in text           # paths are shown as aliases only
     registry.registry_path().write_text("{not json")
     executor_guard.write_plan_levels(run_dir)
     assert "stage-fix target" not in server.call("get_fix_plans", {})   # unreadable registry: every plan is held
     (run_dir / mcp.PLAN_LEVELS_FILE).write_text("[not an object")      # a bad file is only a missing convenience
-    assert f"stage-fix target `{fixable}`" in server.call("get_fix_plans", {})
+    assert f"stage-fix target `{repo_alias.alias(str(fixable))}`" in server.call("get_fix_plans", {})
 
 
 # ---------------------------------------------------------------- PR body scrubbing

@@ -35,7 +35,6 @@ import contextvars
 import copy
 import datetime as _dt
 import fcntl
-import hashlib
 import json
 import math
 import os
@@ -49,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, merge_digest, notify, osv, paths
-from agentteams.vulnscan import registry, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import registry, repo_alias, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -782,7 +781,7 @@ def plan_slug(repo: Path) -> str:
     Returns:
         ``<name>-<8 hex>``.
     """
-    return re.sub(r"[^A-Za-z0-9._-]", "-", repo.name or "root") + "-" + hashlib.sha256(str(repo).encode()).hexdigest()[:8]
+    return repo_alias.alias(str(repo))   # also the agent's alias for the repository (mcp.py)
 
 
 _ORIGIN_URL = re.compile(r'^\[remote "origin"\]\s*$(?:\n(?!\[).*)*?\n\s*url\s*=\s*(\S+)', re.M)

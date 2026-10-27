@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from agentteams.vulnscan import mcp
+from agentteams.vulnscan import mcp, repo_alias
 from agentteams.vulnscan.mcp import Server, ToolError
 
 
@@ -163,10 +163,16 @@ def test_a_staged_repository_gets_open_pr_not_a_second_stage_fix(dirs: dict[str,
     (dirs["run"] / "fixplan-app-1.md").write_text("# Fix plan (dry run)\n\nRepository (the `stage-fix` target): `/repos/app`\n")
     srv = _server(dirs)
     plans = srv.call("get_fix_plans", {})
-    assert "Already staged: request open-pr" in plans and "- `/repos/app`" in plans
+    app = repo_alias.alias("/repos/app")
+    assert "Already staged: request open-pr" in plans and f"- `{app}`" in plans and "/repos/app" not in plans
     with pytest.raises(ToolError, match="already staged"):
         srv.call("request", {"op": "stage-fix", "target": "/repos/app/", "rationale": "GHSA-x high"})
+    with pytest.raises(ToolError, match="already staged"):                       # by alias too
+        srv.call("request", {"op": "stage-fix", "target": app, "rationale": "GHSA-x high"})
     assert srv.call("request", {"op": "open-pr", "target": "/repos/app", "rationale": "GHSA-x high"})
+    for op in ("open-pr", "close-superseded"):                                     # aliases map for every repo op
+        rid = srv.call("request", {"op": op, "target": app, "rationale": "GHSA-x high"})["id"]
+        assert json.loads((dirs["requests"] / f"{rid}.json").read_text())["target"] == "/repos/app"
     assert srv.call("request", {"op": "stage-fix", "target": "/repos/other", "rationale": "GHSA-y high"})
     (dirs["run"] / mcp.STAGED_FILE).write_text("not json")
     assert srv.call("request", {"op": "stage-fix", "target": "/repos/app", "rationale": "r"})   # bad index: no hold

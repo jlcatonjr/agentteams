@@ -26,11 +26,11 @@ Operations (v1):
 - ``close-superseded REPO``: closes the repository's older executor PRs once its newest one is open,
   only those no person has reviewed, commented on or pushed to; never merges, deletes or pushes
   (:mod:`.executor_supersede`).
-- The repo ops are refused on any worktree or clone of the agentteams checkout, ``agent.team_dir``, a
-  grant's ``governance_dir`` or a publish ops repo (compared by git common dir and by origin; P7), and on
-  a repository the project registry enrols at a level other than ``remediate`` or whose brief says so
-  (``delivery: plan`` refuses ``open-pr``; ``base_branch`` is the PR base) (:mod:`.executor_guard`).
-  The PR body passes the publish scrubber (home paths, host name, private IPs).
+- The repo ops are refused, before any git runs, on a path outside every grant's ``repo_roots``; then on any
+  worktree or clone of the agentteams checkout, ``agent.team_dir``, a grant's ``governance_dir`` or a publish ops
+  repo (by git common dir and by origin; P7), and on a repository the registry enrols at a level other than
+  ``remediate`` or whose brief says so (``delivery: plan`` refuses ``open-pr``; ``base_branch`` is the PR base)
+  (:mod:`.executor_guard`). The PR body passes the publish scrubber (home paths, host name, private IPs).
 - ``server-audit HOST`` / ``server-dryrun HOST``: run the *packaged* server kit's read-only audit,
   or ``run-host.sh`` without ``--apply``, on an exact host named in the grant and in ``hosts.conf``.
 
@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
-from agentteams.vulnscan import executor_supersede, retry_guard, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import executor_supersede, repo_alias, retry_guard, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 from agentteams.vulnscan.ops import REPO_OPS   # repo-targeted ops: executor_guard applies
 
@@ -286,7 +286,7 @@ def _repo_root(target: str) -> Path:
 
 
 def _state_slug(repo: Path) -> str:
-    return re.sub(r"[^A-Za-z0-9._-]", "-", repo.name) + "-" + hashlib.sha256(str(repo).encode()).hexdigest()[:8]
+    return repo_alias.alias(str(repo), empty="")   # "": state-file names stay byte-identical (no "root")
 
 
 def _worktrees_dir() -> Path:
@@ -746,7 +746,7 @@ def _internal(op: str, target: str, *, payload: dict[str, Any], request_id: str,
         return {"stored": str(path)}
     rid = run_id or f"adhoc-{datetime.now(UTC).date().isoformat()}"
     esc = escalations.record(payload["kind"], target, payload["evidence"], request_id=request_id, run_id=rid,
-                             canonical=canonical_target)
+                             canonical=executor_guard.canonical_if_granted)
     new = esc.request_id == request_id
     ledger.append("done", op=op, target=esc.scope, request_id=request_id,
                   detail=f"{'opened' if new else 'duplicate of'} {esc.id}")
@@ -814,7 +814,7 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
     try:
         if op not in grant.OPS_V1:
             raise ExecError(f"unknown or non-v1 operation {op!r}")
-        canonical = str(_repo_root(target)) if op in REPO_OPS else target
+        canonical = str(_repo_root(executor_guard.refuse_outside_grants(op, target))) if op in REPO_OPS else target
         g = authorize(op, canonical, request_id, cfg)
     except (ExecError, subprocess.SubprocessError) as exc:   # incl. subproc_confine.Unavailable and git timeouts
         ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
