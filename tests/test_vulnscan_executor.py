@@ -534,6 +534,9 @@ def test_p7_repo_ops_refuse_protected_repositories_by_common_dir(env: dict, monk
         with pytest.raises(executor.ExecError, match="not authorized"):
             executor.authorize("open-pr", str(unrelated), "x", cfg)
     assert executor_guard.repo_identity(tmp / "missing") is None and executor_guard.repo_identity(Path("relative")) is None
+    res = executor.act("stage-fix", str(wt), cfg)                       # without a grant, nothing runs git in it
+    assert res["status"] == "refused" and "not authorized" in res["detail"]
+    _install(env, ops=["stage-fix"], hosts=[])
     res = executor.act("stage-fix", str(wt), cfg)
     assert res["status"] == "refused" and "same repository" in res["detail"]
 
@@ -805,14 +808,14 @@ def test_i4_authorize_refusal_order_and_no_begun_row(env: dict, monkeypatch: pyt
     p.write_text("\n".join(rows[:-1] + [json.dumps(forged)]) + "\n")
     assert "integrity" in executor.act("stage-fix", str(team), cfg)["detail"]
     p.write_text(saved)
-    res = executor.act("stage-fix", str(team), cfg)                  # escalation beats protected/grant/HALT
+    res = executor.act("stage-fix", str(team), cfg)                  # no covering grant beats all: no git runs
+    assert res["status"] == "refused" and "outside every active grant" in res["detail"], res
+    _install(env, ops=["stage-fix"], hosts=[])
+    res = executor.act("stage-fix", str(team), cfg)                  # escalation beats protected/HALT
     assert res["status"] == "refused" and esc["escalation"] in res["detail"], res
     escalations.resolve_other(esc["escalation"], "checked")
-    res = executor.act("stage-fix", str(team), cfg)                  # protected beats no grant/HALT
+    res = executor.act("stage-fix", str(team), cfg)                  # protected beats HALT
     assert res["status"] == "refused" and "same repository" in res["detail"], res
-    res = executor.act("stage-fix", str(other), cfg)                 # no grant beats HALT
-    assert res["status"] == "refused" and "not authorized" in res["detail"], res
-    _install(env, ops=["stage-fix"], hosts=[])
     res = executor.act("stage-fix", str(other), cfg)
     assert res["status"] == "refused" and "HALT" in res["detail"], res
     assert _no_begun(ledger.read())

@@ -3,6 +3,10 @@
 Every check here only *narrows* what a grant allows; none can widen it. They run inside
 :func:`agentteams.vulnscan.executor.authorize`, before a grant is looked up.
 
+- **Grants first (:func:`refuse_outside_grants`).** Before anything runs git in a requested path, it must be
+  an existing directory inside an active grant's ``repo_roots``. Only the filesystem and the signed grants
+  are read, so a path no grant covers (``/root``, another user's home, a guessed path) never reaches git.
+
 - **Protected repositories (P7).** The agentteams checkout this package runs from, ``agent.team_dir``,
   the ``governance_dir`` of every remediation- and publish-grant file (valid or not) and every publish
   grant's ops repository. A target is refused when it shares a git common dir with one of them (any
@@ -34,7 +38,7 @@ from pathlib import Path
 from typing import Any
 
 import agentteams
-from agentteams.vulnscan import grant, mcp, registry
+from agentteams.vulnscan import grant, mcp, registry, repo_alias
 
 #: Identity kinds that are paths on this machine, not an origin (never matched across clones).
 _PATH_KINDS = ("local", "file", "dir")
@@ -44,6 +48,73 @@ def _exec_error(message: str) -> Exception:
     from agentteams.vulnscan import executor   # lazy: executor imports this module
 
     return executor.ExecError(message)
+
+
+def refuse_outside_grants(op: str, target: str) -> str:
+    """Refuse a repo-op target that no active grant covers, before anything runs git in it.
+
+    The target is the agent's string. Only the filesystem is consulted (absolute path, symlinks
+    resolved, an existing directory) and the signed grants are read; no subprocess runs. A target
+    outside every granted ``repo_roots`` (``/root``, a guessed or another user's path) is refused here,
+    so it never reaches git. :func:`agentteams.vulnscan.executor.authorize` still checks coverage and
+    uses for the canonical repository afterwards.
+
+    Args:
+        op: A repo op (:data:`agentteams.vulnscan.ops.REPO_OPS`).
+        target: The requested target.
+
+    Returns:
+        The resolved path that was checked (symlinks resolved). Callers use it, never ``target`` again,
+        so what runs is what was checked.
+
+    Raises:
+        ExecError: Not an absolute path, not an existing directory, or outside every active grant.
+    """
+    if "\0" in target or not Path(target).is_absolute():
+        raise _exec_error("repo targets must be absolute paths")
+    try:
+        real = Path(target).resolve()
+        is_dir = real.is_dir()
+    except (OSError, RuntimeError) as exc:   # RuntimeError: a symlink loop on older Pythons
+        raise _exec_error(f"{target}: cannot be read ({exc})") from exc
+    grants, problems = grant.load_active()
+    if not any(grant.covers(g, op, str(real)) for g in grants):
+        why = "; ".join(problems) if problems else "outside every active grant's repo_roots"
+        raise _exec_error(f"not authorized: {op} {target}: {why}")
+    if not is_dir:
+        raise _exec_error(f"{target} is not an existing directory")
+    return str(real)
+
+
+def canonical_if_granted(target: str) -> str | None:
+    """Canonicalise an escalation target, running git only in a path an active grant covers.
+
+    ``escalate`` needs no grant and its target is the agent's string. A ``hosts.conf`` name, or an
+    absolute path inside an active grant's ``repo_roots`` (symlinks resolved), goes to
+    :func:`agentteams.vulnscan.executor.canonical_target`; anything else returns None without a
+    subprocess, which makes the escalation's scope every target (fail-safe).
+
+    Args:
+        target: The agent's escalation target.
+
+    Returns:
+        The canonical target, or None.
+    """
+    from agentteams.cli.signed_ledger import path_within
+    from agentteams.vulnscan import executor   # lazy: executor imports this module
+
+    if target in executor._kit_hosts():
+        return target
+    if "\0" in target or not Path(target).is_absolute():
+        return None
+    try:
+        real = str(Path(target).resolve())
+    except (OSError, RuntimeError):
+        return None
+    grants, _problems = grant.load_active()
+    if not any(path_within(real, root) for g in grants for root in g.get("repo_roots", [])):
+        return None
+    return executor.canonical_target(real)
 
 
 def refuse_ops_repo(target: str) -> None:
@@ -360,7 +431,7 @@ def write_plan_levels(run_dir: Path) -> Path:
     scan_only: dict[str, str] = {}
     for plan in sorted([*run_dir.glob("fixplan-*.md"), *run_dir.glob("fix-*.md")]):
         lines = plan.read_text(encoding="utf-8", errors="replace").splitlines()
-        m = mcp._PLAN_TARGET.fullmatch(lines[2]) if len(lines) > 2 else None
+        m = repo_alias.PLAN_TARGET.fullmatch(lines[2]) if len(lines) > 2 else None
         entry = registry.find(entries, Path(m.group(1))) if m else None
         if m and entry is not None and entry.level != "remediate":
             scan_only[m.group(1)] = entry.level

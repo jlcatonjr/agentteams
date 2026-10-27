@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import _http, daily, fix, mcp, osv, runtimes
+from agentteams.vulnscan import _http, daily, fix, mcp, osv, repo_alias, runtimes
 
 from tests.test_vulnscan_core import Feed, _adv
 
@@ -151,7 +151,8 @@ def test_a_folder_of_repositories_gets_one_plan_per_repository(xdg: Path, feed: 
     web_md = (run_dir / f"fixplan-{daily.plan_slug(web)}.md").read_text()
     assert "## npm: `frontend/package-lock.json`" in web_md and "| fix |" in web_md
     text = mcp.Server(run_dir, xdg / "spool", xdg / "results").call("get_fix_plans", {})
-    assert f"## stage-fix target `{svc}`" in text and f"## stage-fix target `{web}`" in text
+    assert f"## stage-fix target `{daily.plan_slug(svc)}`" in text and f"## stage-fix target `{daily.plan_slug(web)}`" in text
+    assert str(svc) not in text and str(web) not in text                      # the agent sees aliases, not paths
 
 
 def test_same_named_repositories_in_two_roots_do_not_collide(xdg: Path, feed: Feed) -> None:
@@ -166,7 +167,7 @@ def test_same_named_repositories_in_two_roots_do_not_collide(xdg: Path, feed: Fe
     plans = list(run_dir.glob("fixplan-svc-*.md"))
     assert len(plans) == 2
     assert {(r / "svc").resolve() for r in roots} == \
-        {Path(mcp._PLAN_TARGET.search(p.read_text()).group(1)) for p in plans}
+        {Path(repo_alias.PLAN_TARGET.search(p.read_text()).group(1)) for p in plans}
 
 
 def test_nested_repository_is_left_out_of_its_parents_plan(xdg: Path, feed: Feed) -> None:

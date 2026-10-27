@@ -570,13 +570,24 @@ container. Everything it returns that came from advisories or repositories is pr
 | Tool | Arguments | Effect |
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
-| `list_findings` | `min_severity` (`critical`…`any`), `target` | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated` |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository path to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first under *Already staged: request open-pr for these, not stage-fix* |
-| `request` | `op` (`stage-fix`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
-| `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant |
+| `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix* |
+| `request` | `op` (`stage-fix`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
+| `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
 | `list_requests` | — | The 50 most recent results |
+
+**Repository aliases** (`agentteams.vulnscan.repo_alias`). The gateway's DLP redacts home paths in
+everything the model reads, so the tools never show a repository path: each repository appears as
+`<name>-<8 hex>` (the fix plan's file-name key, `daily.plan_slug`, and the executor's state key), in plan
+headings, plan text, the summary, finding rows and the executor results `request_status` and
+`list_requests` return. `request` maps an alias named in this run's fix plans, findings or staged fixes back to the
+host path before writing the request and refuses any other relative target. `escalate` maps a known
+alias the same way but passes any other target through: a stop condition is never refused, and a target
+the executor cannot place widens the escalation to every target. Two paths that share an alias are both
+left unmapped. The mapping is a convenience: the spool file still carries the absolute path and the
+executor re-validates it. The DLP is unchanged.
 
 **Spool request file** (`<state>/spool/requests/<id>.json`, what the MCP server writes and the
 executor validates):
@@ -626,8 +637,11 @@ An existing grant does not cover `close-superseded` until the operator signs one
 
 **Scope.** A repository is covered when its path is inside one of the `repo_roots`, so a root covers
 every repository below it. Name roots explicitly, or let `grant sign --from-registry` propose them
-([Grants from the registry](#grants-from-the-registry)). Whatever a grant says, the executor
-(`executor_guard`) refuses repo operations on:
+([Grants from the registry](#grants-from-the-registry)). Before any git runs in a requested path,
+the executor checks, from the filesystem and the signed grants alone, that it is an existing
+directory inside an active grant's `repo_roots` (`executor_guard.refuse_outside_grants`); a path no
+grant covers is refused without running a subprocess. Whatever a grant says, the executor
+(`executor_guard`) then refuses repo operations on:
 
 - **a protected repository**: the agentteams installation it runs from, `agent.team_dir`, the
   `governance_dir` of every grant file (remediation and publish, valid or not), and any publish grant's
@@ -753,8 +767,9 @@ and, until you resolve it, refuses every grant use in its scope.
 | `escalation-flood` | (executor) more than 10 escalations in one run, or more than 200 spool requests at once | every target | your Ed25519 signature |
 
 The canonical target is the **main** repository's top-level path (a subdirectory or a linked
-worktree maps to it) or an exact `hosts.conf` name. A target that does not canonicalise blocks
-everything. A repeat of an open escalation (same kind and scope) records nothing new.
+worktree maps to it) or an exact `hosts.conf` name. Only a path inside an active grant's `repo_roots` is
+canonicalised (`executor_guard.canonical_if_granted`; git never runs elsewhere). A target that does not
+canonicalise blocks everything. A repeat of an open escalation (same kind and scope) records nothing new.
 
 **Escalations and HALTs are separate.** An escalation is the executor's block, raised by an agent and
 cleared with `resolve`. A HALT is a `@security` verdict in the team's decision log; Rule S-VM tells
@@ -826,7 +841,7 @@ control. Since W1 of the baseAgent security-hardening plan they run it in a thro
 | Server kit: `server-audit`, `server-dryrun`, the daily `servers` audits | tools container | the hosts.conf target's first hop (the bastion when it jumps) only |
 | `gh pr list` / `gh pr create` (open-pr) | host | GitHub API, with your token; runs no repository content |
 | Fix planning (`fix_mode: plan`, `fix` without `--apply`), scanning, manifest parsing | host | pure Python parsing (plus the OSV/PyPI feeds) |
-| `vulnscan fix --apply`, `publish` (your own ops repository), operator commands, an escalation's target canonicalisation | host | unchanged (outside the unattended scope, D2) |
+| `vulnscan fix --apply`, `publish` (your own ops repository), operator commands, an escalation's target canonicalisation (only inside a grant's `repo_roots`) | host | unchanged (outside the unattended scope, D2) |
 
 Every confined container gets `--read-only`, `--cap-drop ALL`, `no-new-privileges`, your uid:gid (never
 root; files it writes in a worktree stay yours), pids and memory limits, empty tmpfs `/tmp` and `$HOME`
@@ -1377,7 +1392,9 @@ row (target `<n> requests`) records the count. A `stage-fix` refused by the futi
 
 #### `authorize(op, target, request_id, cfg)`
 
-Call inside `ledger.locked()`. Refuses a target an open escalation blocks, a repo operation on a
+Call inside `ledger.locked()`. A repo operation reaches it only after `executor_guard.refuse_outside_grants`
+has passed (no grant covering the requested path: refused before any git runs) and its repository top has been
+resolved. Refuses a target an open escalation blocks, a repo operation on a
 publish grant's ops repository, a protected repository (common directory or origin) or a repository
 enrolled below `remediate` (`executor_guard`), a `stage-fix` the futile-retry guard holds
 (`retry_guard.futile_reason`: the repository's last `stage-fix` outcome was "nothing fixable without a
@@ -1458,6 +1475,8 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 
 | Function | Does |
 |---|---|
+| `refuse_outside_grants(op, target)` | Refuses, before anything runs git in it, a target that is not absolute, that no active grant's `repo_roots` covers (symlinks resolved), or that is not an existing directory; reads only the filesystem and the signed grants. Returns the resolved path, which the executor uses from then on (what runs is what was checked) |
+| `canonical_if_granted(target)` | The escalation canonicaliser: a `hosts.conf` name, or `canonical_target` of a path inside an active grant's `repo_roots`; any other target is `None` without a subprocess, so its escalation blocks every target |
 | `refuse_ops_repo(target)` | Refuses a publish grant's ops repository (by path) |
 | `refuse_protected_repos(target, cfg)` | Refuses a target in the same repository as a protected path, by git common dir (`repo_identity`) or by origin (any of `target_origins`); a git check that takes over 30 s refuses |
 | `target_origins(target)` | The target's origin identities: the config text's `origin` URL and the push URL git itself would use (hardened `remote get-url --push origin`); refuses an unreadable identity |
