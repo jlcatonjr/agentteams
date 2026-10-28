@@ -500,7 +500,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     Raises:
         ExecError: The repository's own git config defines a filter driver or a conditional include (also
             when found only in the new worktree, before its checkout), git refuses to open it or read its config,
-            or anything else fails (the worktree, and a branch this attempt created, are removed, D4).
+            the change resolves no advisory (:attr:`fix.FixResult.resolved` is 0), or anything else fails (the
+            worktree, and a branch this attempt created, are removed, D4).
         subprocess.SubprocessError: A git or npm step timed out (the worktree is removed too).
     """
     unsafe = fix.git_config_problem(repo)   # before any git on the repo: checkout would run smudge filters
@@ -531,6 +532,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
                             "nothing fixable without a major jump")
         _refuse_filtered(wt, changed)   # C2: a filtered file's commit would not hold what validate_diff checked
+        if res.resolved == 0:   # npm moved packages within their ranges to releases that are still affected
+            raise ExecError(f"{retry_guard.FUTILE_DETAIL}: the change resolves no advisory")
         digest = hashlib.sha256(change_diff(wt, base).encode()).hexdigest()[:10]   # names the branch
         name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
         _release_own_branch(repo, name)   # the branch is absent from here on, or this raised
@@ -549,7 +552,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
                 with contextlib.suppress(ExecError, OSError, subprocess.SubprocessError):
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
-              "changed": changed, "plan": res.markdown()}
+              "changed": changed, "resolved": res.resolved, "plan": res.markdown()}
     _write_json(staged_file(repo), result)
     return result
 

@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (a staged change must resolve an advisory)
+
+- **`stage-fix` refuses a change that resolves no advisory.** npm audit fix can move a package within its range to
+  a release that is still affected: data-quality-monitor's qs went 6.14.2 → 6.14.3 inside express's `~6.14.0`
+  range, while all four qs advisories need 6.16.1. The change was staged, approved and opened as PR #19
+  (2026-10-28) and fixed nothing. `fix --apply` now counts each changed manifest's (ecosystem, package, advisory)
+  occurrences, one per installed copy, before and after the change (OSV; `private_packages` are never looked up;
+  a feed error fails closed) and records the number removed in `FixResult.resolved` (`None`: not measured). A new
+  advisory on another package does not offset a fix. `stage-fix` refuses `resolved == 0` as "nothing fixable
+  without a major jump", so `retry_guard` holds the repository until its fix plan changes, and the staged record
+  carries `resolved`.
+
 ### vulnscan (no duplicate PR for a fix re-staged on a later day)
 
 - **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch

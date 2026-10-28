@@ -172,7 +172,7 @@ def test_spool_rejects_malformed_symlinked_and_replayed_requests(env: dict, monk
 
 # ---------------------------------------------------------------- repo ops (real git)
 
-def _repo_with_remote(tmp: Path) -> Path:
+def _repo_with_remote(tmp: Path, files: dict[str, str] | None = None) -> Path:
     remote = tmp / "remote.git"
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(remote)], check=True)
     repo = tmp / "repos" / "svc"
@@ -181,8 +181,8 @@ def _repo_with_remote(tmp: Path) -> Path:
     run("init", "-q", "-b", "main")
     run("config", "user.email", "t@example.com")
     run("config", "user.name", "t")
-    (repo / "requirements.txt").write_text("PyJWT==2.3.0\nflask>=3\n")
-    (repo / "app.py").write_text("print('hi')\n")
+    for name, text in (files or {"requirements.txt": "PyJWT==2.3.0\nflask>=3\n", "app.py": "print('hi')\n"}).items():
+        (repo / name).write_text(text)
     run("add", "-A")
     run("commit", "-q", "-m", "init")
     # A GitHub-style origin (open-pr derives the PR's repository from it), rewritten to the local bare repo.
