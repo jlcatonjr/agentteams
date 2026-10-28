@@ -57,12 +57,13 @@ def test_the_build_log_records_the_switch(tmp_path):
     assert target_under_switch(bad.parent)
 
 
-def test_a_codex_refusal_points_to_native_regeneration(tmp_path):
-    """interop refuses codex under the switch, so the message must not point there (@security cond. 3)."""
+def test_a_codex_refusal_points_to_interop_into_the_native_gate(tmp_path):
+    """interop takes codex under the switch only into a native team's gate, so the message says so (@security
+    cond. 3, updated 2026-10-27 when codex joined interop_write_policy.SUPPORTED)."""
     agents = tmp_path / "project" / ".codex" / "agents"
     (agents / "references").mkdir(parents=True)
     (agents / "references" / "build-log.json").write_text(json.dumps({"write_policy": "orchestrator-only"}))
-    with pytest.raises(ValueError, match="Regenerate the codex team natively"):
+    with pytest.raises(ValueError, match="into a native Codex team rendered under the switch"):
         convert_team(_source(tmp_path), agents, "codex", overwrite=True)
 
 
