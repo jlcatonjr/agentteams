@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (a reply that is all reasoning)
+
+- **`agent.reasoning` bounds the model's reasoning.** Both rc.9 live runs (z-ai/glm-5.3) spent the whole output
+  of one reply on reasoning, hit the output-token limit before any tool call, and ended `agent-error` with no
+  report. The new chat-route setting (`null` by default: nothing changes) is an OpenRouter `reasoning` object
+  with exactly one of `effort`, `max_tokens` (below `agent.max_output_tokens`) or `enabled: false`. The
+  gateway's new `--chat-reasoning` flag writes it into every chat request, replacing the client's
+  `reasoning` / `reasoning_effort` / `include_reasoning`. Both the setting and the flag are checked at load. The self-test
+  fingerprint is unchanged.
+- **The run state names the cut-off.** The goose driver reports goose's output-limit warning as "the model's
+  reply reached its output-token limit before it called a tool". Its error-line fallback skips tool data
+  (JSON and Markdown table lines): rc.9's runs were reported as `"feed_errors": [],`.
+- **`list_requests` returns the 20 newest results, newest first** (was the 50 newest, oldest first). The
+  request history grows all day and was part of the context the model reasoned over.
+
 ### vulnscan (superseded PRs and the merge digest)
 
 - **New executor op `close-superseded`.** Each `open-pr` opens a new `vulnscan/*` PR (the executor never
