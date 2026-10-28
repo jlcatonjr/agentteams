@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import os
 import platform
+import plistlib
+import re
 import shlex
 import shutil
 import subprocess
@@ -412,10 +414,72 @@ def remove(*, apply: bool = False) -> Plan:
     return plan
 
 
-def status() -> str:
+def installed_time() -> tuple[int, int] | None:
+    """Return the ``(hour, minute)`` the installed daily job runs at, or None when none is installed or readable.
+
+    Reads the job this module writes: the launchd plist's ``StartCalendarInterval``, the systemd timer's
+    ``OnCalendar=*-*-* HH:MM:SS``, or the tagged crontab line's minute and hour fields.
+
+    Returns:
+        The installed time, or None.
+    """
+    try:
+        mech = _mechanism()
+        if mech == "launchd":
+            plist = _agent_path(LABEL)
+            if not plist.is_file():
+                return None
+            when = plistlib.loads(plist.read_bytes()).get("StartCalendarInterval")
+            if isinstance(when, dict) and isinstance(when.get("Hour"), int):
+                return when["Hour"], int(when.get("Minute") or 0)
+            return None
+        if mech == "systemd":
+            timer = Path.home() / ".config" / "systemd" / "user" / f"{UNIT}.timer"
+            hit = re.search(r"^OnCalendar=\*-\*-\* (\d{1,2}):(\d{2})", timer.read_text(encoding="utf-8"), re.M) \
+                if timer.is_file() else None
+            return (int(hit[1]), int(hit[2])) if hit else None
+        cur = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=False).stdout
+        line = next((ln for ln in cur.splitlines() if ln.rstrip().endswith(CRON_TAG)), "")
+        hit = re.match(r"\s*(\d{1,2})\s+(\d{1,2})\s", line)
+        return (int(hit[2]), int(hit[1])) if hit else None
+    except (OSError, ValueError, plistlib.InvalidFileException, subprocess.SubprocessError):
+        return None
+
+
+def drift(cfg: dict | None) -> str:
+    """Return a warning when the installed job's time differs from ``vulnscan.json``'s ``schedule``, else "".
+
+    The config's time only takes effect through ``vulnscan schedule install``; an edit without a re-install (or a
+    job installed with ``--hour``/``--minute``) leaves the two apart, and the run happens at the installed time.
+
+    Args:
+        cfg: Daily config (None or no ``schedule``: nothing to compare).
+
+    Returns:
+        One line, or "".
+    """
+    want = cfg.get("schedule") if isinstance(cfg, dict) else None
+    have = installed_time()
+    if not isinstance(want, dict) or have is None:
+        return ""
+    try:
+        target = (int(want.get("hour", 7)), int(want.get("minute", 30)))
+    except (TypeError, ValueError):
+        return ""
+    if have == target:
+        return ""
+    return (f"the installed daily job runs at {have[0]:02d}:{have[1]:02d} but vulnscan.json's schedule says "
+            f"{target[0]:02d}:{target[1]:02d}: run `vulnscan schedule install --apply` (or set schedule to the "
+            "installed time) so they agree")
+
+
+def status(cfg: dict | None = None) -> str:
     """Describe whether the job is installed and when it last ran.
 
     The staleness warning (:func:`daily.stale_warning`) is printed by the CLI before this text.
+
+    Args:
+        cfg: Daily config; when given, a schedule drift (:func:`drift`) is added as a warning line.
 
     Returns:
         Human-readable status.
@@ -433,4 +497,6 @@ def status() -> str:
         installed = CRON_TAG in cur
     hb = paths.state_dir() / "heartbeat.json"
     last = hb.read_text(encoding="utf-8").strip() if hb.exists() else "(no run recorded)"
-    return f"mechanism: {mech}\ninstalled: {installed}{extra}\nconfig: {paths.config_file()}\nstate: {paths.state_dir()}\nlast run: {last}"
+    warn = drift(cfg)
+    return (f"mechanism: {mech}\ninstalled: {installed}{extra}\nconfig: {paths.config_file()}\nstate: {paths.state_dir()}"
+            f"\nlast run: {last}" + (f"\nWARNING: {warn}" if warn else ""))

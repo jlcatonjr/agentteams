@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, merge_digest, notify, osv, paths
-from agentteams.vulnscan import registry, repo_alias, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import registry, remediation_status, repo_alias, subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -88,6 +88,7 @@ DEFAULT_CONFIG: dict = {
     "schedule": {"hour": 7, "minute": 30},
     "stale_after_hours": 26,
     "governance_dir": "",        # team dir whose decision log the executor checks for HALTs (C-2)
+    "handoff_required": False,   # true: open-pr waits for each repository orchestrator's approval (handoff.py)
     # Agent mode (off by default): after the scan, the team runs in an isolated container and
     # requests actions that the executor performs only under a signed grant. See agent_run.DEFAULT_AGENT.
     "agent": {"enabled": False, "team_dir": "", "key_file": "", "budget_usd": 2.0},
@@ -887,6 +888,39 @@ def _write_fix_plans(cfg: dict, jobs: list[tuple[Path, list[str]]], run_dir: Pat
         total.feed_errors += errors
 
 
+def _server_plans(cfg: dict, run_dir: Path, total: Report) -> str:
+    """Write ``server-fixplan-<host>.md`` per configured host with findings (plan D1); return the summary lines.
+
+    The plans go to ``<state>/server-plans/<date>/``, outside the run directory the agent container mounts; the summary
+    (which the agent reads) names them by file name only.
+    """
+    from agentteams.vulnscan import server_fixplan
+
+    kit = paths.server_kit_dir()
+    home = str(Path.home())
+    shown = "~" + str(kit)[len(home):] if str(kit).startswith(home + os.sep) else str(kit)
+    try:
+        plans = server_fixplan.write(paths.state_dir() / "server-plans" / run_dir.name, total,
+                                     [str(h) for h in cfg.get("servers") or []], kit / "apps.conf", kit=shown)
+    except OSError as exc:
+        return f"\n## Server fix plans\n\n- could not write them: {type(exc).__name__}\n"
+    if not plans:
+        return ""
+    return ("\n## Server fix plans (apply by hand with the server kit)\n\n"
+            f"In the state directory under `server-plans/{run_dir.name}/`:\n\n"
+            + "".join(f"- `{p.name}`\n" for p in plans))
+
+
+def _handoff_section(cfg: dict) -> str:
+    """Return the summary's handoff section (H2: staged fixes and the repository orchestrators' verdicts), or ""."""
+    from agentteams.vulnscan import handoff   # lazy: executor-side state, read only
+
+    try:
+        return "\n" + handoff.markdown(handoff.status(cfg, handoff.repos_with_staged_fixes()))
+    except (OSError, ValueError) as exc:
+        return f"\n## Handoffs to repository orchestrators\n\n- could not read the handoff state: {exc}\n"
+
+
 def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
             staged: list[str]) -> tuple[Report, int, bool]:
     """Write summary + heartbeat, notify, and return (report, exit code, whether the files were written).
@@ -906,23 +940,30 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     eff_md, eff = effectiveness.section(total, previous)   # counts only: the summary is published
     merge_digest.write(run_dir, eff.green)   # machine-local, 0700, never published; asks per merge
     md += "\n" + eff_md
+    readiness = remediation_status.collect(cfg)   # B1/B4: what would stop the executor; never raises
+    md += "\n" + remediation_status.markdown(readiness)
+    md += _handoff_section(cfg)
+    md += _server_plans(cfg, run_dir, total)
     if staged:
         md += "\n## Fixes staged in worktrees (review, test, commit, open a PR)\n\n" + "\n".join(staged) + "\n"
     written = True
     try:
         (run_dir / "summary.md").write_text(md, encoding="utf-8")
         # private package names stay in the machine-local repos-*.json; the MCP server reads summary.json
-        (run_dir / "summary.json").write_text(json.dumps(total.to_dict(private_names=False), indent=2),
-                                              encoding="utf-8")
+        (run_dir / "summary.json").write_text(json.dumps({**total.to_dict(private_names=False),
+                                                          "remediation": readiness}, indent=2), encoding="utf-8")
         _write_atomic(heartbeat_path(), json.dumps({
             "last_run": _dt.datetime.now(_dt.UTC).isoformat(), "exit": code, "findings": len(total.findings),
-            "new": len(new), "unscanned": len(total.feed_errors), "summary": str(run_dir / "summary.md")}, indent=2))
+            "new": len(new), "unscanned": len(total.feed_errors), "summary": str(run_dir / "summary.md"),
+            "agentteams_version": readiness["agentteams_version"], "remediation_blocked": len(readiness["blocked"])},
+            indent=2))
     except OSError as exc:
         written = False
         msg = f"could not write the run's summary or heartbeat: {exc}"
         total.feed_errors.append(msg)
         print(f"vulnscan daily: {msg}", file=sys.stderr)
         code = code if code == EXIT_COMPROMISE else EXIT_UNSCANNED
+    remediation_status.notify(cfg, readiness)
     if code or new:
         notify.send(cfg, "run-done", state=RUN_LABELS.get(code, NEW_FINDINGS_LABEL),
                     findings=len(total.findings), new=len(new))

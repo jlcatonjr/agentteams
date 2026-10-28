@@ -419,7 +419,8 @@ def test_agent_not_completed_notification_renders(xdg: Path, monkeypatch: pytest
     monkeypatch.setattr(agent_run, "run_agent", run_agent)
     monkeypatch.setattr(daily, "publish_run", lambda cfg, run_dir, run_id: None)
     daily.run_daily(_cfg(agent={"enabled": True}), today="2026-10-22")
-    assert [k for k, _ in spy.sent] == ["agent-not-completed"]
+    # agent mode on with no grant: the readiness check (remediation_status, plan B2) reports it first
+    assert [k for k, _ in spy.sent] == ["remediation-blocked", "agent-not-completed"]
 
 
 @pytest.mark.parametrize(("result", "key"), [({"status": "done"}, "publish-done"),
