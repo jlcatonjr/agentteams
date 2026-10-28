@@ -1449,6 +1449,17 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
 - When the remote branch exists with no open pull request, one is created without pushing, but only
   if the remote ref is exactly the staged commit (a push that succeeded before `gh pr create`
   failed); otherwise it refuses (`not overwriting`).
+- When the remote branch does not exist, the same change may already be open under an earlier date: the
+  branch name is `vulnscan/<YYYYMMDD>-<digest>`, and a fix re-staged on a later day keeps its digest. An open
+  pull request from the same repository on `vulnscan/<any date>-<same digest>` (the first 3 such) is returned
+  (`existing: true`, `same_change_as: <its branch>`) and nothing is pushed, but only if every commit on it is the
+  executor's git identity and its whole change (`git diff` from its merge base with the staged base) equals the
+  staged change byte for byte. The digest only selects candidates: it is public and 40 bits long. Reviews and
+  comments do not prevent a claim. The lookup is best effort: if gh or git fails or times out, the pull request
+  is opened as before.
+- When the remote branch does not exist and every staged path already has its staged content on origin's base
+  branch (the change was merged meanwhile, e.g. through an earlier day's pull request), nothing is pushed or
+  opened: the staged state is retired and the result says `already_in_base: true` (`pr` is empty).
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
@@ -1467,8 +1478,9 @@ ends up staged. Raises `ExecError`.
 
 Closes the repository's older remediation PRs once its newest one is open (`open-pr` never updates a PR in
 place, since it never force-pushes). The replacement is the PR of the repository's newest successful
-`open-pr` in the ledger; GitHub must report it open with a `vulnscan/*` head in the same repository, or
-nothing is closed. Candidates are only earlier `open-pr` PRs of the same repository (the newest 20). A
+`open-pr` in the ledger; GitHub must report it open with a `vulnscan/*` head in the same repository, with
+every commit by the executor's git identity, or nothing is closed (open-pr can record a PR it claimed as the
+newest). Reviews and comments on the replacement do not matter. Candidates are only earlier `open-pr` PRs of the same repository (the newest 20). A
 candidate is closed only when it is open, its head is a same-repository `vulnscan/*` branch, and it has no
 reviews, no comments and no commit by anyone but the executor's git identity; otherwise it is kept, with
 the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming the replacement (scrubbed by
@@ -2308,7 +2320,8 @@ is reported on stderr and returns `None`.
 
 The `close-superseded` operation (see the executor section). `ledger_prs(repo, rows)` lists the
 repository's successful `open-pr` PRs, oldest first; `head_problem(data)` and `touched_problem(data,
-identity)` say why a PR may not be closed. Each candidate is looked up again right before it is closed; a
+identity)` say why a PR may not be closed, and `authored_problem(data, identity)` (commits only) why a PR is not
+the executor's own (the replacement; and the PR open-pr would claim, `open_pr_with_same_change`). Each candidate is looked up again right before it is closed; a
 change in the remaining moment can still be missed, which is accepted because a closed PR can be reopened
 and its branch is kept.
 

@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### vulnscan (no duplicate PR for a fix re-staged on a later day)
+
+- **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch
+  is `vulnscan/<YYYYMMDD>-<digest>`, and open-pr found an open PR only by that exact name. So a fix re-staged
+  the next day with the same digest pushed a new branch and opened a duplicate PR (traffic-file-enrichment-app,
+  2026-10-28, beside #25). It now returns the open PR on `vulnscan/<any date>-<same digest>` (`existing: true`,
+  `same_change_as`) without pushing, but only if every commit on it is the executor's and its whole change equals
+  the staged change byte for byte (the digest, public and 40 bits, only selects candidates). Forks' PRs are
+  ignored as before; at most 3 candidates are examined; a gh or git failure opens the PR as before.
+- **`close-superseded` requires the replacement to be the executor's own PR** (every commit by its git identity),
+  since open-pr can now record a claimed PR as the newest.
+- **`open-pr` opens nothing for a change already merged.** When every staged path already has its staged content
+  on the base branch (an earlier day's PR with the same change was merged), it retires the staged fix and returns
+  `already_in_base: true` instead of opening a PR that carries nothing.
+
+### Changed
+
 ### vulnscan (conditional includes in a repository's git config are refused)
 
 - **`fix --apply` and `stage-fix` refuse a repository whose git config has an `includeIf.*` section.** Its

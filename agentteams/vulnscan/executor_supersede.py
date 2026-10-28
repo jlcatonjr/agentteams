@@ -17,11 +17,16 @@ that names the op (``open-pr`` never implies it):
 
 It runs inside the executor's grant use (``authorize`` and :mod:`.executor_guard` have already run) with the
 hardened gh environment of ``open-pr``.
+
+The inverse cases live here too: :func:`open_pr_with_same_change` lets ``open-pr`` recognise that the change it
+staged is already open under an earlier date (same digest), so it claims that PR instead of opening a duplicate, and
+:func:`already_in_base` that it was already merged, so it opens nothing.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -31,6 +36,7 @@ from agentteams.vulnscan import ledger, ops
 
 OP = "close-superseded"
 MAX_CANDIDATES = 20
+MAX_SAME_CHANGE = 3   # open PRs open-pr examines for the same change under another date (each costs a fetch)
 _VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits"
 
 
@@ -60,6 +66,11 @@ def touched_problem(data: dict[str, Any], identity: tuple[str, str]) -> str:
         return "it has reviews"
     if data.get("comments"):
         return "it has comments"
+    return authored_problem(data, identity)
+
+
+def authored_problem(data: dict[str, Any], identity: tuple[str, str]) -> str:
+    """Return why a PR's commits are not all the executor's (``identity`` as every commit's only author), or ""."""
     commits = data.get("commits")
     if not isinstance(commits, list) or not commits:
         return "its commits could not be read"
@@ -98,7 +109,8 @@ def close_superseded(repo: Path, rows: list[dict[str, Any]] | None = None, *,
     if not prs:
         raise ex.ExecError("no remediation PR of this repository is recorded; nothing supersedes anything")
     replacement = prs[-1]
-    why = head_problem(look(replacement))
+    current = look(replacement)
+    why = head_problem(current) or authored_problem(current, ex.GIT_IDENTITY)   # the executor's own PR
     if why:
         raise ex.ExecError(f"the newest remediation PR {replacement} is {why}; closing nothing")
     closed: list[str] = []
@@ -157,3 +169,80 @@ def _close(url: str, comment: str) -> None:
     proc = _gh("pr", "close", url, "--comment", comment)
     if proc.returncode:
         raise ex.ExecError(f"gh pr close failed: {(proc.stderr or proc.stdout).strip()[:300]}")
+
+
+def open_pr_with_same_change(wt: Path, target_repo: str, branch: str, base: str) -> tuple[str, str] | None:
+    """Return ``(branch, url)`` of an open executor PR in ``target_repo`` carrying the change staged on ``branch``.
+
+    Candidates are the repository's own open PRs (not a fork's) on ``vulnscan/<YYYYMMDD>-<digest>`` with ``branch``'s
+    digest under another date, at most :data:`MAX_SAME_CHANGE`. The digest only selects them (it is public and 40 bits
+    long); one is claimed only if every commit on it is the executor's (:func:`authored_problem`) and its whole change,
+    ``git diff <merge-base with base> <its head>``, equals the staged change ``git diff <base> HEAD`` byte for byte
+    (:func:`.executor.change_diff`). Reviews and comments do not stop a claim: they leave the content as it is, and
+    the operator scripts comment the orchestrator's verdict on the PR. Best effort: when gh or git fails or times out
+    there is no claim, and open-pr then opens a PR as it did before this check existed.
+
+    Args:
+        wt: The staged worktree.
+        target_repo: ``origin``'s GitHub repository (``host/owner/name``).
+        branch: The staged branch, ``vulnscan/<YYYYMMDD>-<digest>``.
+        base: The base commit the fix was staged on.
+
+    Returns:
+        The matching PR's branch and URL, or None.
+    """
+    from agentteams.vulnscan import executor as ex
+
+    digest = branch.rsplit("-", 1)[-1]
+    same = re.compile(rf"vulnscan/\d{{8}}-{re.escape(digest)}")
+    found = _gh_json("pr", "list", "--repo", target_repo, "--state", "open", "--limit", "100",
+                     "--json", "url,headRefName,isCrossRepository")
+    candidates = [pr for pr in found if isinstance(pr, dict) and isinstance(pr.get("headRefName"), str)
+                  and pr["headRefName"] != branch and same.fullmatch(pr["headRefName"])
+                  and pr.get("isCrossRepository") is False and str(pr.get("url", "")).startswith("https://")
+                  ] if isinstance(found, list) else []
+    staged = ex.change_diff(wt, base, "HEAD", check=False)
+    for pr in candidates[:MAX_SAME_CHANGE]:
+        head, url = pr["headRefName"], pr["url"]
+        view = _gh_json("pr", "view", url, "--json", _VIEW_FIELDS)
+        if not isinstance(view, dict) or authored_problem(view, ex.GIT_IDENTITY):
+            continue
+        if ex.git_proc(wt, "fetch", "--no-tags", "origin", f"refs/heads/{head}", push=True).returncode:
+            continue
+        tip = ex.git(wt, "rev-parse", "FETCH_HEAD", check=False).strip()
+        mb = ex.git(wt, "merge-base", tip, base, check=False).strip() if tip else ""
+        if mb and staged and ex.change_diff(wt, mb, tip, check=False) == staged:
+            return head, url
+    return None
+
+
+def already_in_base(wt: Path, base_branch: str, changed: list[str]) -> bool:
+    """Return whether every staged path already has its staged content on origin's ``base_branch`` now.
+
+    True means the change reached the base by another route (an earlier day's PR with the same change was merged), so
+    a new PR would carry nothing. Best effort: a failed fetch, or no recorded paths, is False (open-pr goes on).
+
+    Args:
+        wt: The staged worktree (``HEAD`` is the staged commit).
+        base_branch: The PR base branch.
+        changed: The staged paths (the staged record's ``changed``).
+
+    Returns:
+        True when the base already holds the staged content of every path.
+    """
+    from agentteams.vulnscan import executor as ex
+
+    if not changed or ex.git_proc(wt, "fetch", "--no-tags", "origin", f"refs/heads/{base_branch}", push=True).returncode:
+        return False
+    paths = [f":(literal){p}" for p in changed]   # as stage-fix stages them
+    return ex.git_proc(wt, "diff", "--quiet", "FETCH_HEAD", "HEAD", "--", *paths).returncode == 0
+
+
+def _gh_json(*args: str) -> Any:
+    """Return gh's JSON answer, or None when gh fails, times out or answers something else (best-effort lookups)."""
+    try:
+        proc = _gh(*args)
+        data = json.loads(proc.stdout) if proc.returncode == 0 else None
+    except (subprocess.TimeoutExpired, json.JSONDecodeError):
+        data = None
+    return data
