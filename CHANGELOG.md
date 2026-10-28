@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### signing and team dirs (mathAgents G7, G8)
+
+- **`--sign-decision` refuses a row the gate would refuse, before the key is read.** Previously a spec without
+  `requesting_agent` was signed and then refused as "issued by an unnamed author", wasting an operator
+  signature. It now refuses:
+  - a `scope` that lists neither the row's `action_reviewed` nor its gate action;
+  - an author (`requesting_agent`/`owner`/`author`) missing from the team's approver roster;
+  - a missing Ed25519 verify key for its `key_id` in that team dir.
+
+  The gate still judges state when the row is used: an open HALT, or a `derives_from` ancestor not yet
+  recorded.
+- **The branch modes and `--retire-bridge` print the decisions log they read.** The default team dir is the
+  first of `.claude/agents`, `.github/agents` and `.codex/agents` that has `references/`, while `--sign-decision`
+  writes to `--output`, so a clearance signed into another dir is invisible. After a "no clearance" refusal
+  (exit 3, no HALT involved) without `--team-dir`, they name any other project team dir whose log holds a PASS
+  row for the action id. The hint never appears after a HALT (C-2).
+  - This is a separate trap from item 6. "decision signing key is not configured" means the log that was read
+    holds a matching PASS row without a usable signature while signing is active. A log with no matching row
+    refuses with "no matching PASS decision found".
+- `cli.branch_switch.other_team_logs` and `team_dir_hint` are new. `operator_signing.py` and
+  `cli/retire_bridge_switch.py` are re-pinned in the integrity manifest (trust-root write).
+
 ### bridges (`--retire-bridge`; wide bridge stubs refuse the render)
 
 - **`--retire-bridge PAIR`** (new; `copilot-vscode-to-claude` only) removes what one bridge generated. It is the

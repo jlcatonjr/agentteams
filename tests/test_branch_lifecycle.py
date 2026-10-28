@@ -805,3 +805,37 @@ def test_cleanup_authorized_by_signed_waiver_with_signing_enforced(repo, tmp_pat
     plan2_path, _ = _plan(repo, tmp_path / "second")
     code, _ = bc.run_cleanup(plan2_path, _cfg(repo), team_dir=team, apply=True, api=FakeAPI())
     assert code == bc.EXIT_UNAUTHORIZED  # different plan, and the waiver is used up
+
+
+def test_cli_names_another_team_dir_whose_log_holds_the_clearance(repo, tmp_path, capsys):
+    """G7 (mathAgents, 2026-10-28): the PASS is in .github/agents, the run reads .claude/agents."""
+    _merged(repo, "feat/g7")
+    plan_path, plan = _plan(repo, tmp_path)
+    _team(repo)  # .claude/agents/references exists, so it is the dir read by default
+    other = repo.work / ".github" / "agents" / "references"
+    other.mkdir(parents=True)
+    (other / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        f"2026-10-04,security,{bc.clearance_action(plan)},PASS,,\n", encoding="utf-8")
+    rc = _main(["--branch-cleanup", str(plan_path), "--apply", "--no-api", "--project", str(repo.work)])
+    out = capsys.readouterr().out
+    assert rc == bc.EXIT_UNAUTHORIZED
+    assert f"Team dir (clearances, grants, verify keys): {(repo.work / '.claude' / 'agents').resolve()}" in out
+    assert "Hint:" in out and f"--team-dir {other.parent.resolve()}" in out
+    rc = _main(["--branch-cleanup", str(plan_path), "--apply", "--no-api", "--project", str(repo.work),
+                "--team-dir", str(other.parent)])
+    assert rc != bc.EXIT_UNAUTHORIZED and "Hint:" not in capsys.readouterr().out
+
+
+def test_no_team_dir_hint_after_a_halt(repo, tmp_path, capsys):
+    """G7 + C-2: a HALT in the dir that was read must not draw a hint toward a dir without it."""
+    _merged(repo, "feat/g7h")
+    plan_path, plan = _plan(repo, tmp_path)
+    _team(repo, f"2026-10-04,security,{bc.clearance_action(plan)},HALT,,")
+    other = repo.work / ".github" / "agents" / "references"
+    other.mkdir(parents=True)
+    (other / "security-decisions.log.csv").write_text(
+        "timestamp,requesting_agent,action_reviewed,verdict,conditions,conditions_verified\n"
+        f"2026-10-04,security,{bc.clearance_action(plan)},PASS,,\n", encoding="utf-8")
+    rc = _main(["--branch-cleanup", str(plan_path), "--apply", "--no-api", "--project", str(repo.work)])
+    assert rc != bc.EXIT_OK and "Hint:" not in capsys.readouterr().out
