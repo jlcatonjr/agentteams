@@ -80,7 +80,7 @@ def checks(mode: str) -> dict[str, bool]:
                                       for k in env),
         "rw_mount_writable": _write_works(env.get("VULNSCAN_RW", "/nonexistent")),
         "ro_mount_read_only": _write_fails(os.path.join(env.get("VULNSCAN_RO", "/nonexistent"), ".probe")),
-        "tools_present": all(shutil.which(t) for t in ("git", "ssh", "ssh-keygen", "nc", "node", "npm", "bash")),
+        "tools_present": all(shutil.which(t) for t in ("git", "git-lfs", "ssh", "ssh-keygen", "nc", "node", "npm", "bash")),
         "direct_egress_refused": _connect_fails("1.1.1.1", 443) and _connect_fails("8.8.8.8", 53),
     }
     if mode == "none":

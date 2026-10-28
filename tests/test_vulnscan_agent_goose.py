@@ -89,3 +89,25 @@ def test_a_run_the_gateway_refused_throughout_is_gateway_refused(dirs: dict[str,
     assert st["run_state"] == "gateway-refused", st
     assert "session_id" in st["reason"] and "recurs on every run" in st["reason"] and "transient" not in st["reason"]
     assert "gateway-refused" in agent_run.RUN_STATES
+
+
+def test_a_run_stopped_by_the_token_cap_is_cap_reached(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
+    """2026-10-27: the agent polled request_status until the 10M-token run cap refused the next reservation; the
+    run read as a generic agent-error. A cap refusal in spend.json is its own state, naming the cap."""
+    _launchable(dirs, monkeypatch, rc=1)
+    fake_popen = agent_run.subprocess.Popen
+    reason = "chat: reservation refused: this call could use 140000 tokens; 2000 of the 10000000-token run cap are left"
+
+    def popen_capped(argv: list[str], stdout: object = None, **kw: object) -> object:
+        gw = dirs["run"] / "gateway"
+        gw.mkdir(parents=True, exist_ok=True)
+        (gw / "spend.json").write_text(json.dumps({"calls": 92, "refused": 1, "refusal_reasons": [reason]}))
+        return fake_popen(argv, stdout=stdout, **kw)
+
+    monkeypatch.setattr(agent_run.subprocess, "Popen", popen_capped)
+    st = agent_run.run_agent({"agent": _a(dirs)}, dirs["run"])
+    assert st["run_state"] == "cap-reached", st
+    assert "run cap" in st["reason"] and "(was agent-error)" in st["reason"]
+    assert agent_run.cap_reason({"refusal_reasons": ["chat: body key 'x' is not allowed"]}) == ""
+    assert agent_run.cap_reason({"refusal_reasons": ["chat: run budget exhausted ($2.00 spent)"]})
+    assert agent_run.cap_reason(None) == ""

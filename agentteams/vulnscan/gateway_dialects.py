@@ -13,8 +13,8 @@ between dialects: tool-calling translation is where agents silently break.
 type, an ``anthropic-version`` or an ``anthropic-beta`` value outside the allowlists below, a server-side
 tool, or content the upstream would fetch from a URL or a stored file. Client headers outside the allowlist
 are not forwarded. The ``chat`` route first applies its original OpenRouter-only rewrites (:data:`STRIP_KEYS`
-removed: ``plugins``/web search, and goose's ``session_id`` grouping label; ``usage: {include: true}`` forced;
-they never touch the other routes), then the same deny-by-default checks (:data:`CHAT_KEYS`, ``function``
+removed: ``plugins``/web search; ``usage: {include: true}`` forced; they never touch the other routes) plus one
+deliberate non-OpenRouter exception, goose's ``session_id`` grouping label, stripped rather than refused, then the same deny-by-default checks (:data:`CHAT_KEYS`, ``function``
 tools only, no OpenRouter ``models``/``route`` fallbacks, ``data:`` image URLs only). Every route reserves its
 call before relaying: the output ceiling it names (chat: ``max_tokens`` / ``max_completion_tokens`` when
 present, else :data:`DEFAULT_CHAT_RESERVE_TOKENS`; responses: ``max_output_tokens``, else the gateway's
@@ -49,7 +49,9 @@ COUNT_TOKENS_REFUSAL = ("count_tokens is not served by this gateway (refused by 
 
 #: Chat keys removed before the checks, never forwarded: OpenRouter-only features (unchanged chat behaviour) and
 #: ``session_id``, the session-grouping label goose >= 1.54 sends (its value duplicates the allowed ``user``).
-#: Stripping keeps it off the upstream; refusing it stopped every goose run before its first model call.
+#: ``session_id`` is the one deliberate exception to "refused, never stripped": it is not an OpenRouter feature,
+#: but stripping keeps it off the upstream, and refusing it stopped every goose run before its first model call.
+#: Any other new client key is still refused (deny by default).
 STRIP_KEYS = ("plugins", "web_search_options", "transforms", "session_id")
 
 #: Request bytes per token for the input estimate of a reservation (deliberately low, so it over-estimates).
@@ -66,6 +68,8 @@ CHAT_KEYS = frozenset({"model", "messages", "tools", "tool_choice", "parallel_to
                        "stop", "seed", "frequency_penalty", "presence_penalty", "repetition_penalty",
                        "response_format", "reasoning", "reasoning_effort", "include_reasoning", "usage", "provider",
                        "user", "verbosity", "logprobs", "top_logprobs"})
+#: OpenRouter ``reasoning.effort`` values an operator may set (``--chat-reasoning``, ``agent.reasoning``).
+REASONING_EFFORTS = ("minimal", "low", "medium", "high")
 CHAT_TOOL_TYPES = frozenset({"function"})
 CHAT_TOOL_CHOICE = frozenset({"auto", "none", "required"})
 CHAT_SERVER_TOOLS = ("web_search", "openrouter:", "file_search", "code_interpreter", "mcp", "computer",
@@ -341,16 +345,48 @@ def _max_output(body: dict[str, Any], key: str, ceiling: int) -> int:
 Dlp = Callable[[str, dict[str, Any]], Mapping[str, int]]
 
 
+def reasoning_problem(value: object, max_output_tokens: int) -> str:
+    """Return why ``value`` is not an operator chat ``reasoning`` setting, or ``""``.
+
+    Accepted: an object with exactly one of ``effort`` (:data:`REASONING_EFFORTS`), ``max_tokens`` (an integer
+    ``1..max_output_tokens - 1``, so the reply keeps room after its reasoning) or ``enabled: false``, plus an
+    optional boolean ``exclude``.
+    """
+    if not isinstance(value, dict) or set(value) - {"effort", "max_tokens", "enabled", "exclude"}:
+        return "must be an object with effort, max_tokens or enabled (false), and optionally exclude"
+    chosen = [k for k in ("effort", "max_tokens", "enabled") if k in value]
+    if len(chosen) != 1:
+        return "must set exactly one of effort, max_tokens or enabled"
+    if "exclude" in value and not isinstance(value["exclude"], bool):
+        return "exclude must be true or false"
+    if chosen == ["effort"] and value["effort"] not in REASONING_EFFORTS:
+        return f"effort must be one of {', '.join(REASONING_EFFORTS)}"
+    if chosen == ["max_tokens"]:
+        n = value["max_tokens"]
+        if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n < max_output_tokens:
+            return f"max_tokens must be an integer 1..{max_output_tokens - 1} (below the output ceiling)"
+    if chosen == ["enabled"] and value["enabled"] is not False:
+        return "enabled may only be false (set effort or max_tokens to bound reasoning instead)"
+    return ""
+
+
 def _check_chat(raw: bytes, models: Collection[str], max_output_tokens: int, reserve: int,
-                dlp: Dlp | None = None) -> Checked:
+                dlp: Dlp | None = None, reasoning: Mapping[str, Any] | None = None) -> Checked:
     """The chat route: the OpenRouter rewrites (:func:`rewrite_body`), then deny by default and a reservation.
 
     Refused: a body key outside :data:`CHAT_KEYS` (``models``/``route`` fallbacks by name), a tool that is not a
     ``function`` (server-side tools by name), a ``tool_choice`` outside the allowlist, an ``image_url`` that is
     not a ``data:`` URL or another remote reference in ``messages``, and a ``max_tokens`` /
     ``max_completion_tokens`` outside ``1..max_output_tokens``. Reserved: that value, else ``reserve``.
+    ``reasoning`` (the operator's ``--chat-reasoning``) replaces any client ``reasoning`` / ``reasoning_effort`` /
+    ``include_reasoning``: a model that spends its whole output on reasoning never reaches a tool call (rc.9 live
+    runs).
     """
     body = json.loads(rewrite_body(raw, models))
+    if reasoning:
+        body.pop("reasoning_effort", None)
+        body.pop("include_reasoning", None)
+        body["reasoning"] = dict(reasoning)
     _check_keys(CHAT, body, CHAT_KEYS)
     _check_tools(CHAT, body.get("tools"), CHAT_TOOL_TYPES, CHAT_SERVER_TOOLS)
     _check_tool_choice(CHAT, body.get("tool_choice"), CHAT_TOOL_CHOICE, CHAT_TOOL_TYPES)
@@ -367,7 +403,7 @@ def _check_chat(raw: bytes, models: Collection[str], max_output_tokens: int, res
 def check_request(dialect: str, raw: bytes, *, models: Collection[str],
                   max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
                   chat_reserve_tokens: int = DEFAULT_CHAT_RESERVE_TOKENS, dlp: Dlp | None = None,
-                  responses_reserve_tokens: int = 0) -> Checked:
+                  responses_reserve_tokens: int = 0, chat_reasoning: Mapping[str, Any] | None = None) -> Checked:
     """Validate one request body for its dialect (deny by default) and return what to forward.
 
     Args:
@@ -380,6 +416,8 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
         dlp: The DLP hook, run on the body once the policy passed (blocks secrets, redacts the rest).
         responses_reserve_tokens: Output tokens reserved for a Responses call without ``max_output_tokens``,
             and written into the forwarded body as its ``max_output_tokens`` (0: such a call is refused).
+        chat_reasoning: The operator's ``reasoning`` object for the chat route (:func:`reasoning_problem`
+            checks it at startup), written into every chat body; None: the client's own is forwarded.
 
     Returns:
         The body to forward, its model, the reservation inputs and the DLP redaction counts.
@@ -388,7 +426,7 @@ def check_request(dialect: str, raw: bytes, *, models: Collection[str],
         PolicyError: A refusal by policy. ValueError / UnicodeDecodeError: not a JSON object.
     """
     if dialect == CHAT:
-        return _check_chat(raw, models, max_output_tokens, chat_reserve_tokens, dlp)
+        return _check_chat(raw, models, max_output_tokens, chat_reserve_tokens, dlp, chat_reasoning)
     body = json.loads(raw.decode("utf-8"))
     if not isinstance(body, dict) or body.get("model") not in models:
         raise PolicyError(_model_error(models))

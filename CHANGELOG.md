@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New gate action `retire-bridge`. The constitutional gate prompts on `--retire-bridge … --apply`. Both
     `agentteams/bridge_retire.py` (which now holds the shared `bridge_marker` predicate) and
     `cli/retire_bridge_switch.py` join the integrity manifest, which is re-recorded (trust-root write).
-    Re-render the deployed hooks on `main` and re-record. Fence `security_rules_invariant` v=18 adds the
+    Re-render the deployed hooks on `main` and re-record. Fence `security_rules_invariant` v=19 adds the
     review trigger.
   - `cli.branch_switch._team_dir` is now public as `cli.branch_switch.resolve_team_dir(project, explicit)`. It
     is unrelated to `cli.decision_log_migrate.resolve_team_dir(args)`.
@@ -55,6 +55,118 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AR_WRITE_POLICY` makes the render exit `1` before anything is written, naming each file and its fix.
   Bespoke agents keep the warning, and agentteams still never rewrites a file it did not generate.
 - Reported by mathAgents (handoff 2026-10-27, items 3 and 4).
+
+### vulnscan (no duplicate PR for a fix re-staged on a later day)
+
+- **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch
+  is `vulnscan/<YYYYMMDD>-<digest>`, and open-pr found an open PR only by that exact name. So a fix re-staged
+  the next day with the same digest pushed a new branch and opened a duplicate PR (traffic-file-enrichment-app,
+  2026-10-28, beside #25). It now returns the open PR on `vulnscan/<any date>-<same digest>` (`existing: true`,
+  `same_change_as`) without pushing, but only if every commit on it is the executor's and its whole change equals
+  the staged change byte for byte (the digest, public and 40 bits, only selects candidates). Forks' PRs are
+  ignored as before; at most 3 candidates are examined; a gh or git failure opens the PR as before.
+- **`close-superseded` requires the replacement to be the executor's own PR** (every commit by its git identity),
+  since open-pr can now record a claimed PR as the newest.
+- **`open-pr` opens nothing for a change already merged.** When every staged path already has its staged content
+  on the base branch (an earlier day's PR with the same change was merged), it retires the staged fix and returns
+  `already_in_base: true` instead of opening a PR that carries nothing.
+
+### vulnscan (conditional includes in a repository's git config are refused)
+
+- **`fix --apply` and `stage-fix` refuse a repository whose git config has an `includeIf.*` section.** Its
+  condition is evaluated where git runs. So `includeIf "gitdir:**/worktrees/**"` or `"onbranch:vulnscan/**"` could
+  add a filter driver that is invisible to the config check in the repository but live in the executor's worktree,
+  where the checkout would run it. A plain `include.path` is still allowed; what it adds is checked as before.
+- **`stage-fix` checks the config again where it is about to run git, before the checkout.** The worktree is now
+  created with `--no-checkout`, the config check runs inside it, and only then are its files checked out. Config
+  that changed during the fetch (or an include target that appeared) is refused before any filter could run.
+- **A config query git fails is a refusal**, not "no problem" ("git cannot read this repository's config").
+
+  This closes the follow-up in #311's security review.
+
+### vulnscan (a reply that is all reasoning)
+
+- **`agent.reasoning` bounds the model's reasoning.** Both rc.9 live runs (z-ai/glm-5.3) spent the whole output
+  of one reply on reasoning, hit the output-token limit before any tool call, and ended `agent-error` with no
+  report. The new chat-route setting (`null` by default: nothing changes) is an OpenRouter `reasoning` object
+  with exactly one of `effort`, `max_tokens` (below `agent.max_output_tokens`) or `enabled: false`. The
+  gateway's new `--chat-reasoning` flag writes it into every chat request, replacing the client's
+  `reasoning` / `reasoning_effort` / `include_reasoning`. Both the setting and the flag are checked at load. The self-test
+  fingerprint is unchanged.
+- **The run state names the cut-off.** The goose driver reports goose's output-limit warning as "the model's
+  reply reached its output-token limit before it called a tool". Its error-line fallback skips tool data
+  (JSON and Markdown table lines): rc.9's runs were reported as `"feed_errors": [],`.
+- **`list_requests` returns the 20 newest results, newest first** (was the 50 newest, oldest first). The
+  request history grows all day and was part of the context the model reasoned over.
+
+### vulnscan (superseded PRs and the merge digest)
+
+- **New executor op `close-superseded`.** Each `open-pr` opens a new `vulnscan/*` PR (the executor never
+  force-pushes), so an older PR for the same repository stayed open beside its replacement. Under a grant that
+  names the op, the executor closes the repository's older PRs once the newest is open: only PRs it opened
+  itself, in the same repository, with no reviews, no comments and no commit by anyone else. It posts a fixed,
+  scrubbed comment naming the replacement, keeps the branch, and never merges (`vulnscan/executor_supersede.py`).
+  The remediation agent requests it after a successful `open-pr` (`invariant_core` v3, `daily_remediation` v4);
+  `@security`'s S-VM rules say what it may close (`security_rules_invariant` v18).
+- **Daily merge digest.** Each run writes `merge-digest.sh` (0700, machine-local, never published) into its
+  run directory: one block per open, mergeable remediation PR whose checks all passed, each asking before
+  `gh pr merge --match-head-commit`. It runs with the operator's credentials and is not a grant use (the
+  grant op `merge` stays reserved). It is built only from the validated repository, number and head SHA,
+  `shlex`-quoted (`vulnscan/merge_digest.py`). The summary counts the PRs ready to merge.
+
+### vulnscan (remediation effectiveness)
+
+- **The daily summary says whether remediation lands.** A new **Remediation effectiveness** section
+  (`effectiveness.section`) counts findings fixed and new since the previous run, the remediation PRs the
+  executor opened (open, the oldest one's age, open longer than 3 days, failing CI, no CI checks, merged in
+  the last 7 days), fixes staged with no PR yet, and held repositories. Counts only: the summary is
+  published, so the section names no repository, PR, host or path. PR state comes from read-only
+  `gh pr view` on the ledger's PR URLs.
+- **New alerts.** `stale-prs` when a remediation PR is open longer than 3 days or fails CI; `agent-down` when
+  the agent has not completed for two runs in a row (the 2026-10-25 outage ran three days with only
+  per-run `agent-not-completed` messages); `repo-held` once per held repository plan.
+- **No more futile daily retries.** `stage-fix` of a repository whose last outcome was "nothing fixable without
+  a major jump" is refused (`held: …`) while its dry-run fix plan is unchanged (`retry_guard`); a changed
+  plan lifts the hold. One repository had been retried and refused six times in three days.
+- **Batch preflight.** Before a granted op's first request in a pass, and after any refusal, the executor
+  checks the tools container and that a valid grant with uses left allows the op; when not, the op's
+  remaining requests are not attempted (`not attempted: …`, one ledger row). A missing tools self-test had
+  refused the same batch of nine repositories twice, minutes apart.
+- The spool server (`serve_requests`, `quarantine_pending`, request reading) moved to
+  `vulnscan/executor_serve.py` (CH-07; `executor.py` was at 973 of 1000 lines) and is re-exported from
+  `executor`. The remediation agent's `daily_remediation` fence (v3) explains `not attempted:` and `held:`.
+- **No busy-polling.** On 2026-10-27 the agent polled one pending request 69 times in two minutes until the
+  10M-token run cap refused the next call. `request_status` now answers a pending request with an instruction
+  not to poll, and refuses after three pending answers for one id in a run. The remediation agent's workflow
+  says to queue everything and check each request once near the end.
+- **Staged fixes get `open-pr`.** The host writes `staged-fixes.json` into the run directory
+  (`executor_serve.write_staged_index`; the agent container mounts no spool): `get_fix_plans` lists those
+  repositories first, and `request` refuses a second `stage-fix` for one.
+- **New run state `cap-reached`.** A run that ends after the gateway's run budget or token cap refused a call
+  is no longer a generic `agent-error`; its reason quotes the cap refusal.
+- Docs: `session_id` is recorded as the one deliberate non-OpenRouter strip on the chat route.
+
+### vulnscan (repository aliases; grants checked before git runs)
+
+- **The remediation agent names repositories by alias.** The gateway's DLP redacts home paths, so the
+  repository paths in fix plans and findings reached the model mangled, and every `stage-fix` the agent
+  asked for named a guessed path that the executor refused. The MCP server now shows each repository as
+  `<name>-<8 hex>` (the fix plan's file-name key) in plans, the summary and findings, and `request` and
+  `escalate` map an alias named in the run's plans or findings back to the host path. `request` refuses an
+  unknown alias; `escalate` passes it through (a stop condition is never refused). Executor results
+  (`request_status`, `list_requests`) show aliases too. Two paths that share an alias are both left
+  unmapped. An absolute path is still accepted. The fix plan key, the alias and the executor's state key
+  now come from one function (`repo_alias.alias`); existing state-file names are unchanged. The
+  `vuln-remediation` agent's daily steps (fence `daily_remediation` v5) give the alias as the target. The
+  DLP is unchanged.
+- **The executor checks grant coverage before any git runs in a requested path.** A `stage-fix` or `open-pr`
+  target must be an existing directory inside an active grant's `repo_roots` (symlinks resolved) before the
+  executor resolves the repository top or runs the protected-repository checks. A path no grant covers, such
+  as `/root` or another user's home, is refused without a subprocess (`executor_guard.refuse_outside_grants`).
+  The resolved path that was checked is the one used from then on. Refusal order for a covered path is
+  unchanged. An escalation's target is canonicalised with git only inside a grant's `repo_roots`
+  (`executor_guard.canonical_if_granted`); any other target blocks every target, as before for targets that
+  do not canonicalise.
 
 ### security (S-10 release cooldown deprecated)
 
@@ -85,6 +197,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a regular (not symlinked) `.agentteams/brief.json` is unaffected.
 - **Projection never writes outside the project.** A privilege artifact whose path resolves outside the
   repository (a linked agents directory, a `../` path) is skipped with a note.
+
+### vulnscan (remediation pipeline: wire self-test, readiness, handoff gate, git-lfs, server plans)
+
+- **goose's self-test proves the gateway accepts its requests (A3).** The probe runs goose headless against a
+  loopback chat stub, with the command a run uses, and passes every request it sent through the gateway's own
+  policy (`gateway_dialects.check_request`). Two new checks: `goose_headless_ran` and `goose_wire_compatible`. A
+  goose update the gateway would refuse (as goose 1.54 was on 2026-10-24) now fails the self-test and keeps agent
+  mode off, instead of every live call failing. goose's `flags_sha256` changes, so re-run `agent-selftest` once.
+- **The daily summary says what blocks remediation (B1, B2, B4).** A new `## Remediation readiness` section, also
+  in `summary.json` as `remediation`, lists:
+  - the agentteams version;
+  - an unbound tools container;
+  - open escalations, with their scope;
+  - an unreadable executor ledger;
+  - grants expiring within 7 days;
+  - configured servers no grant names.
+
+  Two new fixed-text notifications, `remediation-blocked` and `grant-expiring`, are sent once per run. Plan-only use
+  (no grant, agent mode off) is never reported as blocked. The heartbeat records `agentteams_version` and
+  `remediation_blocked`.
+- **Schedule drift is reported (B3).** `schedule.drift(cfg)` compares the installed job's time with
+  `vulnscan.json`'s `schedule`. `vulnscan schedule status` and the readiness section print it as a warning.
+- **Handoff delivery (phase H).**
+  - `vulnerability_scanning.delivery: handoff` in a brief, or `"handoff_required": true` in `vulnscan.json`, makes
+    the executor refuse `open-pr` until the repository's own orchestrator has approved the staged fix
+    (`approve-staged` in `.vulnscan-handoff/verdicts.csv`, in the checkout or a linked worktree under
+    `<repo>.worktrees/`).
+  - Verdicts match by the fix's content digest, so a fix re-staged on a later day keeps its approval. The newest
+    verdict wins. A verdicts file git tracks, a symlink, a FIFO or an oversized or malformed file is ignored.
+  - New module `vulnscan/handoff.py`, new command `vulnscan handoff status [--json]`, and a summary section.
+  - `project-description.schema.json` gains the `handoff` delivery value.
+- **git-lfs repositories can be fixed (C2).** `fix.git_config_problem` refused every filter driver. It now allows
+  exactly git-lfs's standard filter config (`fix.LFS_FILTER`, value for value). The allowance needs git-lfs to be
+  available and none of the refused git-lfs settings: extensions, custom transfer agents and `lfs.storage`. The
+  executor's git sets `GIT_LFS_SKIP_SMUDGE=1`, never runs a pager, and reads blobs with `--no-textconv`. `stage-fix`
+  refuses to change any file that has a `filter` attribute. The tools image installs
+  `git-lfs`, and `tools_present` checks it, so rebuild the tools image and re-run `tools-selftest`.
+- **Per-host server fix plans (D1).** Each daily run writes `<state>/server-plans/<date>/server-fixplan-<host>.md`
+  (outside the run directory the agent mounts), sorting each finding to
+  the kit level that fixes it:
+  - L2 OS security updates;
+  - L3 runtimes;
+  - L4 per `apps.conf` entry, with candidate `--pin` values;
+  - Python packages no `apps.conf` entry covers;
+  - npm trees (fixed in the app's repository);
+  - host checks;
+  - the dry-run and `--apply` commands.
+
+  It changes nothing on the hosts.
+- `handoff.py`, `remediation_status.py` and `server_fixplan.py` are integrity-pinned, and the manifest is
+  re-recorded.
 
 ### vulnscan (daily agent: goose 1.54 wire compatibility)
 

@@ -318,8 +318,8 @@ def test_the_selftest_probe_runs_the_command_override(claude_cfg: dict) -> None:
     assert agent_run.selftest_argv(cfg, "img", RUN)[-1] == src         # the self-test container runs it
     assert "override-marker" in agent_run.agent_argv(cfg, "img", RUN, SESSION)   # and so does a run
     assert agent_run.flags_sha256(cfg) != agent_run.flags_sha256(claude_cfg)
-    # goose's probe runs no CLI command: an override leaves it (and goose's golden probe) unchanged
-    assert agent_run.selftest_script(agent_drivers.GOOSE, ["goose", "run"]) == agent_run.selftest_script()
+    # goose's probe runs goose headless (A3, goose_checks): an override changes goose's probe too
+    assert agent_run.selftest_script(agent_drivers.GOOSE, ["goose", "run"]) != agent_run.selftest_script()
 
 
 def test_validate_agent_refuses_every_claude_command_override() -> None:
