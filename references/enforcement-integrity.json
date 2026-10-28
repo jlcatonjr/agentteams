@@ -120,7 +120,7 @@
     "agentteams/vulnscan/gateway_dlp.py": "90d83954a421961e74cf4cc0b03b52f2d2b8dd9c6452cc7c7afc9f44ed071eea",
     "agentteams/vulnscan/gateway_peer.py": "bbd48df133b52879809bbc9159520462afdab694a050a881a472657224db17a8",
     "agentteams/vulnscan/grant.py": "2b069def4a41284b5aba893159a7e097eb5fc2f51e99f0f54e59521909471c41",
-    "agentteams/vulnscan/handoff.py": "ac87156d7d3a7e6263f6b686c8fafcba594ebba610cfae7215e041baa674736e",
+    "agentteams/vulnscan/handoff.py": "2b1fdfe578afd07b2ed94f7d159799541499628b247d4cc34abd5f47ae930581",
     "agentteams/vulnscan/ledger.py": "b0acedbe4e0f94d59b8ac063631905d3c898ca033818403c51420b5a11613518",
     "agentteams/vulnscan/manifests.py": "f7086a078127a5cbadb5a21269945c9ff3e7b8a4cac484e1b9afb38b99550a77",
     "agentteams/vulnscan/mcp.py": "998bf4b5fa241cf8d1f2d92dc8d5ec22d80c91905dbeba1169a7b67d79e6c95b",

@@ -28,7 +28,9 @@ kill -TERM "$pid" 2>/dev/null
 wait "$pid"; rc=$?
 sleep 2
 left="$(docker ps -a --filter name=agentteams-vulnscan --format '{{.Names}}' | tr '\n' ' ')"
-RUN="$(ls -1d "$HOME/.local/state/agentteams/vulnscan"/20*-*-* 2>/dev/null | tail -1)"
+# the state dir as vulnscan resolves it (AGENTTEAMS_VULNSCAN_STATE_DIR, else $XDG_STATE_HOME, else ~/.local/state)
+STATE_DIR="$("$PY" -P -c 'from agentteams.vulnscan import paths; print(paths.state_dir())')"
+RUN="$(ls -1d "$STATE_DIR"/20*-*-* 2>/dev/null | tail -1)"
 state="$("$PY" -P -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("run_state"), "|", d.get("reason",""))' "$RUN/agent/status.json" 2>/dev/null)"
 
 ok=true

@@ -179,6 +179,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Staged fixes | `<state>/worktrees/<repo>-<8 hex>-<YYYYmmddHHMMSS>-<6 hex>/` (repository name, a hash of its path, the UTC time, a random suffix) | executor-owned worktrees; removed once `open-pr` has a pull request (the branch is kept) |
 | Run lock | `<state>/agent.lock` | held for a whole agent run or debrief |
 | Self-test record | `<state>/agent-selftest.json` | tied to the image id |
+| Tools self-test record | `<state>/tools-selftest.json` | tied to the tools image id and container flags (`subproc_confine.flags_sha256`) |
 
 ---
 
@@ -236,7 +237,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
 | `cooldown_days` | `0` | Deprecated (deprecated 2026-10-26) and ignored: fix releases are not age-gated. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
-| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with the cooldown clamped to at least 14 days. The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
+| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.RELEASE_COOLDOWN_DAYS` is 0). The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
 | `scan_workers` | `4` | How many scan roots, and then how many fix plans, are looked up at once (1–8; `1` = one after another; each scan already sends up to 8 OSV requests at once). The lookups are network-bound (OSV, the package registries); results are merged in root order, so the report and the fix plans do not depend on it. Each worker runs in a copy of the caller's context, so a confinement scope applies as it would serially. `apply-worktree` staging, servers and local runtimes stay serial |
 | `notify` | `"desktop"` | `none`, `desktop`, or `command:<program and args>` (the program gets the fixed message as its last argument) |
@@ -325,7 +326,7 @@ and reported unscannable with the reason `unsupported ecosystem: <name>`:
 | NuGet | `packages.lock.json` (`*.csproj` when there is no lockfile) |
 | pnpm (npm packages) | `pnpm-lock.yaml` (run `pnpm audit` there) |
 | Rust/crates.io, conda, Lean | `Cargo.lock`, `environment.yml` / `environment.yaml`, `lake-manifest.json` |
-| container images | `Dockerfile`, `Dockerfile.*`, `*.Dockerfile`, `Containerfile`, `compose.yml` / `compose.yaml`, `docker-compose*.yml` / `.yaml` |
+| container images | `Dockerfile`, `Dockerfile.*`, `Dockerfile-*`, `*.Dockerfile`, `Containerfile`, `compose.yml` / `compose.yaml`, `docker-compose*.yml` / `.yaml` |
 
 A workspace whose only manifests are these is in the coverage state `unsupported ecosystem` (a coverage
 gap: nothing in it is checked), never `nothing to scan`. A workspace that also has supported manifests
@@ -360,10 +361,11 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 
 | Command | Purpose |
 |---|---|
-| `scan PATH` | Scan manifests under a repo or a folder of repos |
-| `inventory LOG --host H` | Analyse a server-kit audit log |
+| `scan PATH [--include-worktrees]` | Scan manifests under a repo or a folder of repos |
+| `inventory LOG [--host H]` | Analyse a server-kit audit log (the host label defaults to the log file's name without its extension) |
 | `runtimes` | Node.js, PHP and Python on this machine |
-| `fix PATH [--apply]` | Plan, or make, dependency fixes in a working tree you control. git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
+| `fix PATH [--apply] [--allow-major] [--allow-dirty] [--include-worktrees] [--no-npm]` | Plan, or make, dependency fixes in a working tree you control (`--cooldown-days` is deprecated and ignored; it prints a note). git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
+| `scan`, `inventory`, `runtimes`: `--format md\|json`, `--out FILE`, `--fail-on critical\|high\|moderate\|low\|any\|none`, `--include-dev` | Report format (default `md`) and file (default stdout); the lowest severity that exits 1 (default `high`); dev-only dependencies count toward it |
 | `init [--repo-root DIR]… [--server NAME]…` | Write a starter config (never overwrites) |
 | `daily [--catch-up]` | One full run (scan; with agent mode, the agent run and publishing). `--catch-up` runs it only when the last completed run is older than `stale_after_hours` or there is none, after a `run-stale` / `run-missing` notification; otherwise it exits 0 without output (`daily.catch_up`) |
 | `schedule install\|remove\|status [--apply] [--hour H] [--minute M]` | Manage the daily job (launchd on macOS, else a systemd user timer, else cron). Dry run without `--apply`. On macOS, `install` also installs the catch-up agent `io.agentteams.vulnscan.catchup` (`daily --catch-up` at login and every 6 hours), so a run missed while the Mac was powered off is caught up; systemd's `Persistent=true` does the same on Linux; cron does not catch up (add an `@reboot` line running `daily --catch-up` yourself) |
@@ -387,11 +389,18 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
 | `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
 | `publish [--run DATE]` | Publish a run's files now |
-| `agent-chat [--run DATE]` | Resume a past run's goose session interactively |
+| `agent-chat [--run DATE]` | Resume a past run's agent session interactively (goose and claude; copilot and codex are refused: `no debrief for <framework>`) |
 
 The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious kinds) also accept
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
+
+`grant sign` takes `--op OP` (repeatable: `stage-fix`, `open-pr`, `close-superseded`, `server-audit`,
+`server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
+`--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
+`--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
+`--owner-id`, `--governance-dir DIR`, `--days N` (default 30), `--max-uses N` (default 60) and `--key-id ID`.
+Both `revoke` actions take `--grant-id`.
 
 **The scheduled job** runs `python -P -m agentteams.vulnscan daily`. Its `PATH` is built by
 `schedule.job_path`: the directories `schedule.JOB_TOOLS` resolve to at install time plus
@@ -413,8 +422,8 @@ failed `systemctl disable` only when the units were installed.
 |---|---|---|---|---|---|
 | `scan`, `inventory`, `runtimes`, `daily` | clean | findings at or above `--fail-on` (`daily`: the config's `fail_on`) | usage or setup error: a missing `scan` path or `inventory` log; `daily`: no config | partially unscanned (`daily`: also another daily run holds the lock, or the summary or heartbeat could not be written) | 4: malicious package or compromise indicator · `daily`: 143, SIGTERM during the agent phase (both containers removed) |
 | `fix` | nothing held back | something held back or refused | usage error, a missing path | a feed failed (partially unscanned) | 4: a malicious pin |
-| `schedule` | done or dry run | errors (a time out of range, a failed command) | the config is unusable | — | — |
-| `grant sign` | signed and installed | not signed (declined, preflight) | refused (bounds; does not verify) | — | — |
+| `schedule` | done or dry run (`status`: always) | errors (a time out of range, a failed command) | the config is unusable (`install`, `remove`) | — | — |
+| `grant sign` | signed and installed | not signed (declined, preflight) | refused (bounds, the cap of 2 valid grants, a `--from-registry` refusal; does not verify) | — | — |
 | `grant revoke`, `publish-grant revoke` | revoked | no such grant | — | — | — |
 | `act` | done | refused | no config | failed | — |
 | `serve-requests` | served | — | run lock held, or no config | — | — |
@@ -426,6 +435,10 @@ failed `systemctl disable` only when the units were installed.
 | `say` | done | no such note | refused | — | — |
 | `publish-grant sign` | signed and installed | not signed | refused (also: `--node-id` / `--owner-id` empty, missing or not numeric) | — | — |
 | `publish` | published | no publish grant | no such run, or no config | failed or refused | — |
+| `enroll` | written | nothing to enrol, or aborted | refused (CI, no terminal, an unreadable or malformed registry) | — | — |
+| `roots` | listed | — | an unreadable registry, or an unusable config | — | — |
+| `status` | printed | — | no such directory, or an unusable config | — | — |
+| `tools-image build`, `tools-selftest` | built / passed | failed | a setup error (an unusable config) | — | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong
@@ -453,10 +466,11 @@ config's `governance_dir`) and exits 0 or 1 as above; with an unusable one it ex
 | `brief_off` | array of strings | repositories whose brief says `vulnerability_scanning.level: off` but that the operator enrolled or listed in `repo_roots`: scanned anyway, reported as a mismatch |
 | `excluded` | array of strings | `"repo: path in repo"`: manifests skipped by a brief's `exclude_paths` |
 | `withheld` | array of strings | `"repo: name (ecosystem)"`: private packages (a brief's `private_packages`), not checked and never sent. The daily `summary.json` (which the agent's MCP server reads) writes `"repo: (private)"` instead, one per package; only the machine-local `repos-*.json` keeps the names |
-
-In the daily aggregate these four lists name each repository under its root, as findings do
-(`<root>/<repo>`). A path inside the operator's `exclude` never appears in them.
 | `generated_at` | string | UTC ISO-8601 time, whole seconds |
+| `unscored_as` | string | what an unscored advisory counted as in this report: `critical`, `high`, `moderate` or `low` (default `high`) |
+
+In the daily aggregate the `opted_out`, `brief_off`, `excluded` and `withheld` lists name each repository under
+its root, as findings do (`<root>/<repo>`). A path inside the operator's `exclude` never appears in them.
 
 A Finding (`report.Finding`):
 
@@ -576,7 +590,17 @@ Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_id
 `markdown(rows, *, names, unsupported=None)`, `nothing_to_scan(path)`, `unsupported_manifests(path)`,
 `unsupported_only(path)`,
 `brief_lines(entries, report, *, names)`, `section(cfg, *, names, report=None)`,
-`project_state(cfg, entry, path, grants)`.
+`project_state(cfg, entry, path, grants)`, `within(path, root)` (contained after `~` expansion and symlink
+resolution), `exclusions(cfg)`, `excluded_inside(cfg, root)` (the `exclude` paths strictly inside a scanned
+root, whose findings are dropped).
+
+`agentteams.vulnscan.project_cli` runs the three commands above (`COMMANDS = ("enroll", "roots", "status")`):
+`register(sub)` adds them to the main parser, and `dispatch(args, load_cfg)` runs one (with no config file,
+`roots` uses the defaults and `status` runs without one; an unusable config exits 2).
+`cmd_enroll(args, *, ask=input, interactive=…)` returns 0 when written, 1 when there is nothing to enrol or you
+abort, and 2 when refused (CI, no terminal, an unreadable registry). `cmd_roots(cfg)` prints each candidate
+root with its source. `project_status(project, cfg)` collects the object `status --json` prints without
+touching the network, and `cmd_status(args, cfg)` prints it (exit 2 when the directory does not exist).
 
 ---
 
@@ -607,6 +631,12 @@ alias the same way but passes any other target through: a stop condition is neve
 the executor cannot place widens the escalation to every target. Two paths that share an alias are both
 left unmapped. The mapping is a convenience: the spool file still carries the absolute path and the
 executor re-validates it. The DLP is unchanged.
+
+Python API: `alias(path, *, empty="root")` gives `<name>-<8 hex>` (the sanitised name and a sha256 of the
+full path); `known(run_dir, *, extra=())` gives `{alias: path}` for every repository this run's fix plans or
+findings name, plus `extra` (two paths sharing an alias are both dropped); `resolve(target, aliases)` maps an
+alias back to its path; `hide_paths(text, aliases)` and `hide_in(value, aliases)` replace known paths with
+aliases in text and in parsed JSON (keys included).
 
 **Spool request file** (`<state>/spool/requests/<id>.json`, what the MCP server writes and the
 executor validates):
@@ -649,7 +679,7 @@ An existing grant does not cover `close-superseded` until the operator signs one
 - at least one operation, and only v1 operations;
 - `days` 1–30 and `max_uses` 1–500;
 - `repo_roots` are resolved to absolute paths and may not be `/` or your home directory itself;
-  `stage-fix` and `open-pr` need at least one;
+  `stage-fix`, `open-pr` and `close-superseded` need at least one;
 - `hosts` must be plain names, never `all`; server operations need at least one. Whether a name is
   in `hosts.conf` is checked when the operation runs;
 - `governance_dir` must contain `references/security-decisions.log.csv`.
@@ -864,7 +894,7 @@ control. Since W1 of the baseAgent security-hardening plan they run it in a thro
 | Every git command of a granted op (`stage-fix`, `open-pr`, and the protected-repository and target checks before them) and of `apply-worktree` staging | tools container | none; `fetch`, `push`, `ls-remote`: origin's host only (`host:443`, or the https URL's port); a local-path origin is mounted instead |
 | `npm audit fix` (stage-fix and staging) | tools container | `registry.npmjs.org:443` only |
 | Server kit: `server-audit`, `server-dryrun`, the daily `servers` audits | tools container | the hosts.conf target's first hop (the bastion when it jumps) only |
-| `gh pr list` / `gh pr create` (open-pr) | host | GitHub API, with your token; runs no repository content |
+| `gh pr list` / `gh pr create` (open-pr), `gh pr view` / `gh pr close` (close-superseded) | host | GitHub API, with your token; runs no repository content |
 | Fix planning (`fix_mode: plan`, `fix` without `--apply`), scanning, manifest parsing | host | pure Python parsing (plus the OSV/PyPI feeds) |
 | `vulnscan fix --apply`, `publish` (your own ops repository), operator commands, an escalation's target canonicalisation (only inside a grant's `repo_roots`) | host | unchanged (outside the unattended scope, D2) |
 
@@ -948,6 +978,31 @@ Look up `(target, Dep)` pairs in OSV and append findings to `report` in place. F
 `report.feed_errors`. `distro_check=True` marks Python packages in OS-managed locations `distro`.
 `dev_policy` maps a target to its project's `include_dev`, recorded as `Finding.count_dev`.
 
+#### `engine.scan_inventory(text, target)`
+
+Analyse a server-kit audit log (`INV`, `RUNTIME`, `HOSTCHECK`, `IOC` lines; anything else is
+ignored). Returns a `Report` for host `target`.
+
+#### `engine.local_runtimes(target=LOCAL_TARGET)`
+
+A `Report` for the Node.js (`node`), PHP (`php`) and Python (`python3`) found on this machine's `PATH`, labelled
+`target`: runtime findings, and a runtime whose version cannot be read as unscannable. The `runtimes`
+command and `daily` (with `local_runtimes: true`) call it.
+
+### `agentteams.vulnscan.runtimes`
+
+Judges an installed Node.js, PHP or Python against live release data (endoflife.date, nodejs.org,
+www.php.net).
+
+#### `runtimes.evaluate(kind, version, path="", manager="", today=None)`
+
+A frozen `RuntimeFinding(kind, version, path, manager, severity, verdict, detail, upgrade_to="")`. `verdict` is
+`eol` (the release line gets no more security fixes; HIGH), `security-release-missing` (a newer release on the
+same line is a security release; HIGH), `behind-patch` (newer, non-security patches; MODERATE), `ok`,
+`distro` (`manager` is `pkg:<name>`: an OS-packaged runtime is left to OS security updates, since
+distributions backport fixes without changing the version) or `unchecked` (a feed could not be reached;
+never reported as fine). `EOL_PRODUCT` maps each kind to its endoflife.date product.
+
 ### `agentteams.vulnscan.project_policy`
 
 A project's own scanning intent: the brief's `vulnerability_scanning` block
@@ -964,6 +1019,7 @@ A project's own scanning intent: the brief's `vulnerability_scanning` block
 | `set_level(repo, level, *, confirm, say=None)` | Creates or updates the block. Only the block's text changes; the rest keeps its key order and indentation. `confirm(diff)` sees the unified diff, and the brief is written only when it returns True. A brief is never created, never written through a symlink, and never written when it resolves outside the project. `say` receives the reason when nothing is written. Returns whether it wrote |
 | `plan_level(repo, level)` | `(brief, old text, new text, problem)` without writing |
 | `unanswered_line(project, policy)`, `report_unanswered(description)` | The one-line "unanswered" notice that `--update` and fleet runs print |
+| `repo_dir(path, root)` | The git repository holding `path`: its nearest ancestor with a `.git`, not above `root` (else `root`). The engine and `fix` key each manifest's policy by it |
 
 The privacy guard is the regex `NO_LEAK`, shared by `EXCLUDE_PATH_PATTERN`, `PRIVATE_PACKAGE_PATTERN`
 and `BASE_BRANCH_PATTERN`. The schema carries the same strings, and a test keeps them identical. It
@@ -977,20 +1033,83 @@ exclude or withhold everything.
 `open-pr`, `delivery: handoff` makes `open-pr` wait for the project orchestrator's `approve-staged` verdict
 ([handoff](#agentteamsvulnscanhandoff)), and `base_branch` is the PR base (it must exist on origin).
 
-#### `engine.scan_inventory(text, target)`
+### `agentteams.vulnscan.manifests`
 
-Analyse a server-kit audit log (`INV`, `RUNTIME`, `HOSTCHECK`, `IOC` lines; anything else is
-ignored). Returns a `Report` for host `target`.
+Finds dependency manifests and reads exact versions from them; the formats are listed under
+[Supported manifests](#supported-manifests). It also holds the two edit checks the executor's
+[`validate_diff`](#validate_diffwt-base) applies to a staged fix.
+
+#### `Dep` / `Manifest`
+
+`Dep` is frozen: `ecosystem` (the OSV name, e.g. `PyPI`, `npm`, `Packagist`), `name`, `version`, `scope`
+(`"runtime"` or `"dev"`), `source` (the manifest path or install location). `Manifest` is the parse result
+for one file: `path`, `deps`, `unscannable` (the reason, when no exact version could be read), `unpinned`
+(requirement lines without an `==` pin) and `covered` (a `pyproject.toml` whose pins the requirements
+files beside it already carry, so it has nothing of its own to report).
+
+#### `manifests.discover(root, *, include_worktrees=False)`
+
+Sorted manifest paths under `root`. Vendored and generated trees (`SKIP_DIRS`: `node_modules`, virtualenvs,
+`dist`, `build`, a repository's `tmp`, …) and `*.egg-info` are skipped, and so are linked git worktrees unless
+`include_worktrees` is set. `package.json` and `pyproject.toml` are listed only when their directory has no
+lockfile (a `pyproject.toml` next to requirements files is listed too, for its PEP 621 pins). Manifests of
+ecosystems the scanner does not read are listed so they can be reported as unscannable; `go.mod`,
+`build.gradle*` and `*.csproj` only when their directory has no lockfile of the same ecosystem.
+
+#### `manifests.parse(path)`
+
+Read one manifest into a `Manifest`. It never raises for bad input: an unreadable or malformed file comes
+back with `unscannable = "could not parse: …"`, an unsupported ecosystem with
+`"unsupported ecosystem: <name>"` (`UNSUPPORTED_REASON`, which [coverage](#project-registry) keys
+on), a `package.json` without a lockfile with a hint to run `npm install --package-lock-only`, and a file
+that yields nothing with `"no exact \`==\` pins"` or `"no dependencies listed"`.
+
+#### `unsupported_ecosystem(name)` / `is_linked_worktree(directory)`
+
+The ecosystem of a file name the scanner discovers but does not read (`Go`, `Maven`, `container images`, …),
+or `""`. `is_linked_worktree` is True when `directory/.git` is a file pointing into another repository's
+`worktrees/` (not a main checkout or a submodule).
+
+#### `check_pin_edit(rel, old, new)`
+
+Raise `ValueError` unless a requirements edit only raises `==` versions in place: the line count and every
+byte outside a changed pin's version span stay the same (name, extras, marker, options, comment, line
+ending), and each new version is a final release above the old one (`versions` ordering). A file holding
+`--hash` options is never edited. Only `requirements*.txt` (`REQ_NAME`) is ever edited; the `.lock` and `.in`
+variants (`REQ_SCAN_NAME`) are read only.
+
+#### `check_lock_edit(rel, old, new)` / `lock_entries(rel, text)`
+
+`check_lock_edit` raises `ValueError` when an npm lockfile edit changes the root package's `dependencies`,
+`devDependencies`, `optionalDependencies`, `peerDependencies`, `scripts` or `workspaces`, or when any entry
+would fetch from outside `REGISTRY_HOSTS` (`registry.npmjs.org`, `registry.yarnpkg.com`) over `https://`.
+An entry with no `resolved` URL passes only with a plain registry version. The one exception is a workspace
+link or `file:` entry kept unchanged from the base and inside the repository. `lock_entries` parses the
+lockfile type-safely and returns `(root entry, [(name, entry), …])` from `packages` and, recursively,
+`dependencies`; it raises `ValueError` for malformed JSON or a level that is not an object.
+
+### `agentteams.vulnscan.versions`
+
+Lenient, ecosystem-neutral version ordering that never raises, good enough to compare PEP 440, semver and
+Composer versions for advisory ranges and upgrade targets.
+
+| Name | Behaviour |
+|---|---|
+| `version_key(version)` | A sortable key: numeric release segments padded with zeros; an epoch (`1!2.0`) first; a leading `v` and anything after `+` ignored; pre-releases before the final release (`dev < a/alpha < b/beta < rc/c/pre/preview`); `.postN` after it. Tokens are typed, so a number is never compared with a word |
+| `is_final(version)` | True for a plain numeric release (`1.2.3`, `v1.2`), with no pre-release, dev, post or local tag |
+| `major(version)` | The leading numeric component, or `None` when there is none |
 
 ### `agentteams.vulnscan.report`
 
 #### `Report`
 
 Dataclass: `target`, `findings`, `unscannable` (`(path, reason)` tuples), `feed_errors`, `checked`,
+`opted_out`, `excluded` (`"<repo>: <path>"`), `withheld` (`"<repo>: <name> (<ecosystem>)"`), `brief_off`,
 `unscored_as`, `generated_at`. `exit_code(fail_on, include_dev)` gives the shared exit code;
 `apply_unscored(level)` counts every unscored advisory as `level` (raises `ValueError` for another
-value); `unscored_findings()` lists the findings whose severity comes from it; `to_dict()` /
-`from_dict(data)` convert to and from the [JSON shape](#json-output); `markdown(new_keys)` renders
+value); `unscored_findings()` lists the findings whose severity comes from it; `policy_counts()` gives
+`{repo: (excluded manifests, withheld packages)}`; `to_dict(*, private_names=True)` / `from_dict(data)` convert
+to and from the [JSON shape](#json-output) (`private_names=False` shows each withheld name as `(private)`); `markdown(new_keys)` renders
 `summary.md`; `merge(other)` folds another report in.
 
 #### `Finding`
@@ -1026,13 +1145,6 @@ The advisory's rank 0–4: the higher of its CVSS rank (`cvss_rank`: the highest
 fields (a scalar or object `severity`, a non-object `database_specific`, a non-list `affected`) count as absent:
 the advisory is unscored, never a crash.
 
-### `agentteams.vulnscan.cvss`
-
-`score(vector) -> float | None` (v3.0, v3.1 or v4.0; None for another version or a malformed vector),
-`score_v3(vector)`, `score_v4(vector)`, `roundup_v31(value)`, `band(score) -> "LOW" | "MODERATE" | "HIGH" |
-"CRITICAL"` (a 0.0 score is LOW: a published advisory is never unscored). No dependency; v4.0 is a port
-of the FIRST reference calculator (BSD-2-Clause).
-
 #### `osv.fix_for(record, ecosystem, name, version)`
 
 The `fixed` version of the affected range that contains `version`, or `None` when that range has no
@@ -1047,6 +1159,13 @@ paired with a range start that could not be read. A fix version outside `osv.FIX
 unusual format, for that package version in this process; `(0, 0)` for advisories it has not seen.
 `engine` calls it for each package finding and passes the two counts to `Finding` as `malformed=` and
 `fix_hidden=` (R8).
+
+### `agentteams.vulnscan.cvss`
+
+`score(vector) -> float | None` (v3.0, v3.1 or v4.0; None for another version or a malformed vector),
+`score_v3(vector)`, `score_v4(vector)`, `roundup_v31(value)`, `band(value) -> "LOW" | "MODERATE" | "HIGH" |
+"CRITICAL"` (a 0.0 score is LOW: a published advisory is never unscored). No dependency; v4.0 is a port
+of the FIRST reference calculator (BSD-2-Clause).
 
 ### `agentteams.vulnscan.fix`
 
@@ -1080,9 +1199,12 @@ them too) and say `dev only` in the note. Raises `FeedError`.
 Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`),
 `npm_notes` (lockfile → note), `npm` (`(directory, summary)` tuples), `composer`, `refused`
 (`(path, reason)` tuples), `feed_errors`, `applied`, `target` (the repository a daily plan is for)
-and `target_problem` (why `stage-fix` cannot take it). `exit_code()`: 4 a malicious version,
-3 a feed failed, 1 anything held back or refused, else 0. `markdown()` renders the fix plan; with
-`target` set it opens with ``Repository (the `stage-fix` target): `<path>` ``.
+`target_problem` (why `stage-fix` cannot take it) and `resolved` (how many advisory occurrences the
+applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious version,
+3 a feed failed, 1 anything held back or refused, else 0. `markdown()` renders the fix plan under `# Fix plan (APPLIED)` or
+`# Fix plan (dry run)`; with `target` set the heading is followed by
+``Repository (the `stage-fix` target): `<path>` ``, or, when `target_problem` is set, by
+``Directory `<path>`: `stage-fix` cannot take it (<problem>).``
 
 #### `PinChange`
 
@@ -1098,6 +1220,18 @@ Every row in order. With `verify=True` (the default) checks each MAC, the chain 
 mark, and raises `ValueError` on any break, a missing ledger that once had rows, or an incomplete
 final row. Row kinds: those in [Ledger rows](#ledger-rows) (`begun`, `done`, `failed`, `refused`,
 `escalation`, `resolved`, `notes-folded`, `publish-begun`, `publish-done`, `publish-failed`, `ack`).
+
+#### `ledger.append(kind, **fields)` / `ledger.locked()`
+
+`append` writes one MAC-chained row (`seq`, `ts`, `kind`, the fields, `prev`, `mac`), fsyncs it, then advances
+the high-water mark, and returns the row. It reads and verifies the ledger first and raises `ValueError`
+rather than append to a chain that fails `read`. Call it inside `with ledger.locked():`, the ledger's
+exclusive (blocking) lock.
+
+#### `ledger.consumed_request_ids(rows=None)`
+
+Every `request_id` any row names: the executor's replay protection (a spooled id already in the ledger
+is refused).
 
 #### `ledger.uses(grant_id, rows)`
 
@@ -1357,8 +1491,8 @@ boundary and a random-looking body; sha256 and git digests, `sha256:`/`sha512-`/
 CVE and GHSA ids, package versions and placeholders (`${{ secrets.X }}`, `process.env.X`,
 `<your-key>`) are not blocked. The regexes are linear (bounded repeats, no nested quantifiers), a
 string seen before is not scanned again (a repeated text is counted once), and a scan is bounded by
-the 16 MiB body cap. Runs pass neither host names nor private package names yet: in the container
-the gateway redacts its own (container) host name only.
+the 16 MiB body cap. Every run, self-test and debrief passes the host's names and the briefs' private package
+names to the gateway through the files described under Host context (`gateway_context.prepare`).
 
 **Unix-domain listener (host-side use).** `--listen unix:PATH` binds a socket created mode 0600 in a
 directory that must be a real directory owned by the gateway's uid and not writable by group or
@@ -1388,9 +1522,9 @@ allowed_uid, on_deny)`.
 #### `gateway_dialects`
 
 The per-dialect policy and parsers behind the gateway: `ROUTES`, the allowlists above,
-`check_request(dialect, raw, *, models, max_output_tokens, chat_reserve_tokens, dlp)` (raises `PolicyError`
+`check_request(dialect, raw, *, models, max_output_tokens, chat_reserve_tokens, dlp, responses_reserve_tokens, chat_reasoning)` (raises `PolicyError`
 for a refusal; `dlp` is the DLP hook, and `Checked.redactions` its counts),
-`upstream_headers(dialect, client, upstream, anthropic_betas)`, `usage_for(dialect, payload)`
+`upstream_headers(dialect, client, up, anthropic_betas)`, `usage_for(dialect, payload)`
 (returns `(Usage, found)`), `load_prices(path)`, `priced(prices, model, usage)` and
 `reservation(prices, checked)`.
 
@@ -1568,6 +1702,20 @@ Delete a grant (narrowing needs no signature). Returns whether one was removed.
 not owned by you, or is group/world-writable is rejected and listed in `problems`. More than two valid
 grants refuses all of them.
 
+#### `grant.cap_problem(*, now=None)`
+
+Why signing one more grant would go over the cap of two valid grants (over it, `load_active` refuses
+them all), naming the valid grants and how to revoke one; `""` when it would not. `grant sign` checks it
+first, so a third grant never silently disables the two in force.
+
+#### `grant.file_problem(path)` / `grant.unverified_values(directory, key)` / `grant.grants_dir()`
+
+`file_problem` says why one grant file may not be trusted (not a regular file, a symlink, not yours,
+group/world-writable), or `None`. `unverified_values` reads one string field from every `*.json` file in a
+grants directory **without verifying it**; it is only ever used to narrow (an unsigned or expired file may
+add a value, never widen what the executor does). `grants_dir()` is `<config>/vulnscan-grants`
+(`publish.grants_dir()`: `<config>/vulnscan-publish-grants`).
+
 #### `covers(record, op, target)`
 
 Whether the grant's scope includes `op` on `target` (use counts are the ledger's).
@@ -1688,6 +1836,13 @@ Record an agent escalation; call inside `ledger.locked()`. Returns the new or th
 
 Open (or return the open) `escalation-flood`. Returns `(escalation, newly_opened)`.
 
+#### `sanitize_evidence(text, limit=EVIDENCE_MAX)` / `describe(esc)`
+
+`sanitize_evidence` strips ANSI escapes and control and format characters (keeping newlines and tabs) from
+untrusted evidence and caps its length; every escalation's evidence goes through it before it is recorded.
+`describe` gives the one-line form `halts` prints: `"<id> [<kind>] scope=<scope> run=<run> opened=<ts>:
+<evidence, truncated>"`.
+
 #### `open_escalations(rows)`
 
 Escalations with no later `resolved` row, in ledger order.
@@ -1735,6 +1890,11 @@ List the comments on pull requests, as data. Nothing is stored.
 
 Promote one `/vulnscan note` comment to a note. The author must be the authenticated `gh` user, and
 `confirm` sees the fetched text before anything is stored.
+
+#### `notes.remove(note_id)` / `notes.notes_dir()`
+
+`remove` deletes one note: True when one was removed, False when none existed; `ValueError` for a malformed
+id, `OSError` when it exists but cannot be removed (`say --remove`). `notes_dir()` is `<config>/vulnscan-notes`.
 
 ### `agentteams.vulnscan.agent_run`
 
@@ -1819,6 +1979,7 @@ and exits 1), or when the Docker mode is refused (`userns-remap`, or root on a r
 | `codex_residual_write_blocked` (codex) | when `apply_patch` was offered, the stub answered with an `apply_patch` call adding four files (in a temp dir, the working directory, the request spool `/work/spool/requests` and the state dir `/agenthome/.codex-state`, the writable mounts), Codex returned the rejection to the model, and none of them exists (one that does is removed again before the record is written) |
 | `codex_canary_inert` (codex) | the planted files had no effect: no marker file was written, and neither the canary token nor the canary MCP server reached the requests or the output |
 | `no_capabilities`, `no_new_privs`, `non_root` | no Linux capabilities, no privilege gain, and not root: a non-zero uid (10001 on Docker Desktop, the operator's on a rootful Engine); under rootless Docker, uid 0 inside that `/proc/self/uid_map` maps to a non-zero uid outside |
+| `identity_matches` | the user the probe printed (`observed_user`) is the `container_user` the fingerprint binds; absent when the probe printed no `SELFTEST` line |
 
 The record also keeps `detail` (the probe's tool inventory: claude `init_tools`, `request_tools`,
 `mcp_servers`; copilot and codex `offered_tools`, codex `residual_tools`, `residual_outputs`, `written`,
@@ -1846,16 +2007,18 @@ not reachable (it never blocks for the 10-minute default, and never raises).
 
 #### `validate_agent(a)`
 
-Check every `agent.*` value's type and range ([the rules](#configuration-vulnscanjson)); raises
+Defined in `agentteams.vulnscan.agent_settings` and re-exported here. Check every `agent.*` value's type and range ([the rules](#configuration-vulnscanjson)); raises
 `ValueError` naming `agent.<key>`. `daily.load_config` calls it, so a bad value is refused at load.
 
 #### `team_dir_problem(path, secrets)`
 
 Defined in `agentteams.vulnscan.team_dir` and re-exported here. Why `path` may not be mounted as the
-team directory, or `None`. Always refuses a path at, inside or
-above `~/.config/agentteams` (so its `keys/`), home or an ancestor of it, and the vulnscan config and
-state directories. `secrets` (`agent_upstreams.secret_paths`: `agent.key_file`, the Messages key file
-when it is not `key_file`, and `agent.prices`) must lie outside it; the signing key named by
+team directory, or `None`. Always refuses home or an ancestor of it, and a path at, inside or
+above a `TEAM_DIR_PROTECTED` path (the write-root protected home paths: `~/.ssh`, `~/.gnupg`, `~/.config/gh`,
+the whole `~/.config/agentteams` …), `TEAM_DIR_PROTECTED_EXTRA` (`~/.config/agentteams-secrets`), or the vulnscan
+config and state directories; the directory must be owned by you and not group- or world-writable.
+`secrets` (`agent_upstreams.secret_paths`: `agent.key_file`, the Messages and Responses key files
+when they are not `key_file`, and `agent.prices`) must lie outside it; the signing key named by
 `AGENTTEAMS_DECISION_ED25519_KEYFILE` is added only when that variable is set.
 
 #### `agent_run.flags_sha256(a=None, image_id="", user=None)`
@@ -1867,8 +2030,41 @@ argv change there; the rc.5 probe's identity line still changes every digest onc
 
 #### `driver_of(a)`
 
-The runtime driver the settings select ([`agent_drivers.driver_for`](#agentteamsvulnscanagent_drivers)):
+Defined in `agentteams.vulnscan.agent_settings` and re-exported here. The runtime driver the settings select ([`agent_drivers.driver_for`](#agentteamsvulnscanagent_drivers)):
 copilot's dialect follows `copilot_provider_type`, codex's self-test probes with `agent.model`.
+
+#### `agent_run.build_image(cfg, *, cli_version, cli_sha256, python_image, source=None, framework=None)`
+
+Build the agent image for one framework (default `agent.framework`) from an agentteams source checkout
+(`agent-image build`); returns the tag. Raises `RuntimeError` when the framework has no driver, Docker is not
+reachable (both checked before `pip wheel` runs on the host), no source checkout is found, or the build fails.
+
+#### `agent_run.image_tag(a)` / `agent_run.run_lock_path()` / `read_spend(path)`
+
+`image_tag` is `agent.image`, else `agentteams-vulnscan-agent:<agentteams version>` for goose and
+`agentteams-vulnscan-agent-<framework>:<agentteams version>` for another framework. `run_lock_path()` is
+`<state>/agent.lock`, held for a whole agent run or debrief. `read_spend` reads the gateway's `spend.json`
+tolerantly: `(totals, "")`, `(None, "")` when absent, `(None, reason)` when unreadable or not a JSON object.
+
+#### `agent_argv(a, tag, run_dir, session, *, task=TASK, run_id="", user=None)` / `selftest_argv(a, tag, run_dir, user=None)`
+
+The `docker run` argv for the agent container and for the isolation self-test (the same flags). Both raise
+`ValueError` when the team directory may not be mounted (`team_dir_problem`) or the framework has no driver.
+`sigterm_raises_exit()` is the context manager that turns SIGTERM into `SystemExit` so cleanup still runs.
+
+### `agentteams.vulnscan.agent_settings`
+
+The agent's settings: defaults, the selected driver and validation. It starts no process and never touches
+Docker. `agent_run` re-exports every name here, so `agent_run.DEFAULT_AGENT`, `agent_run.validate_agent` and
+`agent_run.driver_of` (documented above) still work.
+
+| Name | Behaviour |
+|---|---|
+| `DEFAULT_AGENT` | The `agent` block's defaults ([Configuration](#configuration-vulnscanjson)): `enabled: false`, `framework: "goose"`, `model`, `upstream`, `budget_usd: 2.0`, `max_tokens_total: 10 000 000`, `max_unmetered_calls: 20`, `allow_unmetered: false`, `max_minutes: 45`, and empty `team_dir`, `recipe`, `key_file`, `image`, `command`, `dlp_skip_ok` |
+| `agent_cfg(cfg)` | The config's `agent` block merged over `DEFAULT_AGENT` |
+| `run_limits(a)` | `(max_tokens_total, max_unmetered_calls, allow_unmetered)`, the gateway's backstops for a run. It also checks `max_minutes` and `budget_usd`. Raises `ValueError` for a wrong type or range, and the run is then refused as `not-run` |
+| `positive_number(value, name, ceiling)` | `value` as a float when it is a real number in `(0, ceiling]`; bools, strings, `None`, NaN and infinity raise `ValueError` naming `name` |
+| `MAX_TOKENS_TOTAL_CEILING`, `MAX_MINUTES_CEILING`, `BUDGET_USD_CEILING` | `100 000 000` tokens, `1440` minutes (a day), `1000.0` USD: above any sane run, so a typo is refused |
 
 ### `agentteams.vulnscan.docker_mode`
 
@@ -1913,7 +2109,7 @@ changed only the working directory (it was the image's `WORKDIR`, `/work`) and m
 | Member | Meaning |
 |---|---|
 | `name`, `dialect` | the framework; the gateway route its CLI speaks (`chat`, `messages`, `responses`) |
-| `image` | `ImageRecipe(cli, version, sha256, checksum_source, install)`: the Dockerfile stage (`cli-<cli>`, build arg `AGENT_CLI`), the pinned version and the release-asset digest per `TARGETARCH` |
+| `image` | `ImageRecipe(cli, version, sha256, checksum_source, install, build_args=())`: the Dockerfile stage (`cli-<cli>`, build arg `AGENT_CLI`), the pinned version and the release-asset digest per `TARGETARCH` |
 | `default_recipe` | the team-relative agent definition (goose `.goose/recipes/vuln-remediation.yaml`) |
 | `key_env`, `model_env` | the dummy-key variable the self-test checks; the variable carrying `agent.model` |
 | `env(a, gw_url)` | the container env (dummy key, provider variables, config homes in the tmpfs home) |
@@ -2075,15 +2271,21 @@ codex's probe model from `model`); `validate_settings` runs `agent_upstreams.val
 the driver's `settings_problem`. The shared contract (`Driver`, `ImageRecipe`, the container constants) lives in
 `agent_driver_base` and is re-exported by `agent_drivers`.
 
+#### `run_env_args(driver, a)` / `fill_command(command, *, recipe, session, task, run_id)`
+
+`run_env_args` gives the driver's run environment as `docker run -e` arguments (goose: `-e GOOSE_MODEL=<model>`).
+`fill_command` (in `agent_driver_base`) fills an `agent.command` override's `{recipe}`, `{session}`, `{task}`
+and `{run_id}` placeholders.
+
 ### `agentteams.vulnscan.agent_upstreams`
 
 The gateway's upstream wiring per driver dialect and the `agent.*` keys it reads (the second key
 table under [Configuration](#configuration-vulnscanjson)). `gateway_routes(a, dialect)` returns the
-`docker run` mounts and gateway flags: for `chat` exactly the pre-driver ones (`--model`, `--key-file`,
-`--upstream`); for `messages`, `--dialects messages --upstream-messages --key-file-messages
+`docker run` mounts and gateway flags: for `chat` the pre-driver ones (`--model`, `--key-file`,
+`--upstream`), plus `--chat-reasoning` when `agent.reasoning` is set; for `messages`, `--dialects messages --upstream-messages --key-file-messages
 --max-output-tokens --anthropic-betas`; for `responses`, `--dialects responses --upstream-responses
 --key-file-responses --max-output-tokens --responses-reserve-tokens` (the key file mounted at
-`/run/secrets/responses.env`); plus `--models` and `--prices` (mounted read-only at
+`/run/secrets/responses.env`); for `messages` and `responses`, also `--models` and `--prices` (mounted read-only at
 `/run/secrets/prices.json`) when set. `validate(a, dialect)` checks those keys and the dialect's model rule
 (Messages: Anthropic models only; Responses: OpenAI models only); `secret_paths(a)` lists every host file the
 gateway mounts (for `team_dir_problem`).
@@ -2125,7 +2327,7 @@ The selected agent definition (`agent.recipe`, else the driver's), and the copy 
 
 - `selected(a, driver)`: the definition's path in the team.
 - `read_source(a, driver)` (R2): reads it strictly. It must be a regular file (not a symlink), under the resolved
-  team, at most `MAX_BYTES` (256 KiB), and UTF-8. BOM and CRLF are normalised. Otherwise it raises `ValueError`.
+  team, at most `MAX_BYTES` (256 KiB), and UTF-8. BOM and CRLF are normalised; a control character or Unicode line separator (only LF and tab are allowed) is refused. Otherwise it raises `ValueError`.
 - `copilot_copy(text, source)`: returns the Copilot copy as an `AgentCopy` (`data`, `dropped`, `sha256`, `path`,
   `bound()`, `record()`). The copy has `name: vuln-remediation`, the original `description` and the body byte
   for byte. Every other key goes into `dropped`.
@@ -2201,6 +2403,14 @@ The debrief's token cap from the agent settings `a` (as returned by `agent_run.a
 `debrief_max_tokens`, default 400 000. Anything but an integer 1–100 000 000
 (`agent_run.MAX_TOKENS_TOTAL_CEILING`) raises `ValueError`; booleans, floats and strings included.
 
+#### `session_name(run_dir)` / `resume_command(session, driver=None)` / `verify_goose_sessions(goose_version=None)`
+
+`session_name` is the session an agent run used, `vulnscan-<run dir name>`. `resume_command` is the driver's
+in-container argv that resumes it interactively (`ValueError` for an empty or non-plain name, or a driver
+without a debrief). `verify_goose_sessions` returns the verified goose session-storage and resume facts
+(`storage`, `resume`, `extensions_on_resume`, `run_name_resumable`, `container_path`, `version_notes`) with
+the source URL each rests on.
+
 ### `agentteams.vulnscan.subproc_confine`
 
 The tools-container runner ([Subprocess confinement](#subprocess-confinement-tools-container)).
@@ -2261,6 +2471,12 @@ egress proxy allowing only `registry.npmjs.org:443`. Checks (prefixed `none:` / 
 `proxy_refuses_ip_literal`, `proxy_allows_listed` (proxy). Writes `<state>/tools-selftest.json` with the
 image id and `flags_sha256`; only a full pass unlocks confined operations.
 
+#### `tools_image.register(sub)` / `tools_image.dispatch(args, load_cfg)`
+
+Add `tools-image build` and `tools-selftest` to the vulnscan parser, and run one: 0 done or passed, 1
+failed, 2 a setup error. `handoff.register` / `handoff.dispatch` do the same for `handoff status` (0
+printed, 2 an unusable config).
+
 ### `agentteams.vulnscan.daily`
 
 #### `run_daily(cfg, *, today)`
@@ -2271,6 +2487,15 @@ another run holds the lock, exit code 3 and nothing is scanned or written.
 #### `publish_run(cfg, run_dir, run_id)`
 
 Publish a run when a publish grant is active; `None` otherwise.
+
+#### `daily.init_config(path=None, *, repo_roots=None, servers=None)`
+
+Write a starter config (the defaults, with the given `repo_roots` and `servers`) at `path` (default
+`paths.config_file()`) unless one exists; never overwrites. Returns the path. The `init` command calls it.
+
+#### `daily.run_lock_path()`
+
+`<state>/daily.lock`, held for a whole daily run.
 
 #### `load_config(path)`
 
@@ -2297,6 +2522,11 @@ oldest open PR's age in days.
 `stale-prs` when an open remediation PR is stale or failing; `agent-down` when the agent has not
 completed for `AGENT_DOWN_RUNS` (2) runs in a row, counted from earlier runs' `summary.md` (a run with
 no agent section ends the streak).
+
+#### `staged_without_pr()` / `PrStats`
+
+`staged_without_pr()` counts the fixes the executor staged that have no PR yet (`<spool>/staged/*.json`);
+`PrStats` holds the counts over the remediation PRs the executor opened (never names).
 
 ### `agentteams.vulnscan.merge_digest`
 
@@ -2345,6 +2575,11 @@ directories only. Called by `executor.authorize`.
 Record a held repository at its current plan in `<state>/held-repos.json` (machine-local; returns True
 only the first time per plan, which is when `repo-held` is sent); count repositories still held.
 
+#### `plan_digest(repo, day=None)`
+
+The sha256 of the newest fix plan for `repo` written on or before `day` (any day when `None`), or `""`:
+what the guard compares to decide whether a held repository's plan has changed.
+
 ### `agentteams.vulnscan.review`
 
 #### `review.build(*, since, for_publish, gh_replies)`
@@ -2386,6 +2621,12 @@ Rename the stored report to `<name>.report.md` beside it (an earlier run's repor
 The review section for the stored report, bound to the latest agent run: a report submitted before
 the run in `<run>/agent/status.json` started is not shown, and the section says that run submitted
 none.
+
+#### `report_store.load(run_dir)` / `fence(text)`
+
+`load` returns the stored report (header, blank line, fenced body), or `None` when none was submitted; it
+raises `ValueError` when the stored report is unsafe (symlink, foreign-owned, loose mode), malformed, or its
+body no longer matches the recorded hash. `fence` wraps text in a backtick fence nothing inside can close.
 
 ### `agentteams.vulnscan.run_records`
 
@@ -2430,7 +2671,8 @@ packet `<home>/.vulnscan-handoff/<YYYYMMDD><6 digits>.md` (git-excluded) and iss
 with scope `review-vulnscan-handoff-<id>` (review only: the directive denylist refuses push and merge scopes). The
 repository's orchestrator reviews the staged branch and appends a row to `<home>/.vulnscan-handoff/verdicts.csv`
 (`handoff_id,verdict,branch,notes`; `verdict` one of `VERDICTS`: `approve-staged`, `own-pr`, `defer`, `reject`).
-A *home* is the checkout or one of its linked worktrees under `<repo>.worktrees/<name>/`.
+A *home* is the checkout or one of its linked worktrees under `<repo>.worktrees/<name>/`. agentteams ships only the
+reading side: writing packets and issuing the directive is operator tooling outside the package.
 
 - `required(cfg, repo)`: handoff delivery applies when `vulnscan.json` sets `"handoff_required": true` or the brief
   sets `vulnerability_scanning.delivery: handoff`.
@@ -2461,6 +2703,7 @@ to `summary.md` (`## Remediation readiness`) and `summary.json` (`remediation`).
   `apply-worktree`; for plan-only use nothing is reported as blocked.
 - `blocked` lists an unbound tools container, each open escalation (with its scope), an unreadable executor
   ledger, and "no valid grant".
+- `version()` is the installed agentteams version, or `unknown` when it is not installed as a distribution.
 - `markdown(st)` renders the section, and `notify(cfg, st)` sends `remediation-blocked` (when `blocked` is
   non-empty) and one `grant-expiring` per expiring grant.
 
@@ -2472,11 +2715,22 @@ Deliver one fixed notification. Returns whether a notifier ran. It never raises:
 a malformed `command:` or a notifier that cannot start or times out is reported on stderr. On macOS the text is passed
 to `osascript` as an AppleScript string literal, so non-ASCII characters show correctly.
 
+#### `notify.render(key, **fields)`
+
+The fixed message text `send` delivers. Raises `KeyError` for an unknown key and `ValueError` for a field
+that is not a safe identifier, an integer, a state or a kind word.
+
 ### `agentteams.vulnscan.paths`
 
 #### `run_dirs(state)`
 
 The completed run directories (those with a `summary.json`), oldest first.
+
+#### `config_dir()` / `config_file()` / `state_dir()` / `server_kit_dir()`
+
+Where vulnscan keeps things ([Files and locations](#files-and-locations)), honouring
+`AGENTTEAMS_VULNSCAN_CONFIG_DIR`, `AGENTTEAMS_VULNSCAN_STATE_DIR`, `AGENTTEAMS_SERVER_KIT_DIR`, `XDG_CONFIG_HOME`
+and `XDG_STATE_HOME`. None of them creates the directory.
 
 ---
 

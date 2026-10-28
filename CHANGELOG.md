@@ -18,6 +18,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (vk-data-uploader #223, closed 2026-10-28 because the coordinated upgrade #225 superseded it; data-quality-monitor
   #19 needed a hand-written reject verdict the same day). Best effort: a gh or git failure opens the PR as before.
 
+### vulnscan (documentation audit)
+
+- **Module guide.** New `agentteams/vulnscan/README.md` describes what vulnscan does (scanning, fixing, daily
+  runs, enrolment, agent-driven remediation, operator controls, what leaves the machine), with a quick start and a
+  module map. The root README links it.
+- **API reference completed and corrected** (`docs_src/api-reference/vulnscan.md`). Adds sections for
+  `manifests`, `versions`, `agent_settings`, `runtimes` and `project_cli`, and entries for about 30 public
+  functions other modules call. Fixes about 25 inaccuracies found by checking the page against the code, among
+  them a stale 14-day fix cooldown (now 0), a stale claim that runs pass no host or private names to the DLP, the
+  `Report` and `FixResult` fields, a broken JSON-output table, the exit codes of `enroll`, `roots`, `status` and
+  `tools-image`, missing CLI flags, and headings filed under the wrong module.
+- **Guides corrected and brought up to date.** The remediation guide and the automation walkthrough now cover
+  handoff delivery, the Remediation readiness and Remediation effectiveness sections, server fix plans, held
+  repositories, the newer notifications and the grant-cap refusal. The walkthrough's sample self-test output shows
+  the current goose checks and record fields.
+- **The handoff docstring no longer names an unshipped operator script.** Writing handoff packets is operator
+  tooling outside the package. The integrity manifest is re-recorded, and only `handoff.py`'s digest changes.
+- **Operator scripts 05, 06 and 09** take the state directory from `agentteams.vulnscan.paths.state_dir()`, so they
+  honour `AGENTTEAMS_VULNSCAN_STATE_DIR` and `XDG_STATE_HOME` instead of assuming `~/.local/state`.
+
 ### vulnscan (a staged change must resolve an advisory)
 
 - **`stage-fix` refuses a change that resolves no advisory.** npm audit fix can move a package within its range to
