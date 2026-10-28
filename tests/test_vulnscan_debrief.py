@@ -163,7 +163,8 @@ def test_run_debrief_holds_the_lock_and_cleans_up_on_success(env: dict[str, Any]
     assert gw[gw.index("--max-tokens-total") + 1] == str(debrief.DEFAULT_DEBRIEF_MAX_TOKENS)   # V17
     assert ["docker", "network", "connect", agent_run.NETWORK, debrief.DEBRIEF_GATEWAY] in calls
     assert agent_run.GATEWAY not in [c[-1] for c in calls if c[:3] == ["docker", "rm", "-f"]]  # never a run's gateway
-    assert calls[-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+    assert calls[-3:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],   # the gateway: SIGTERM first (rc.12)
+                          ["docker", "stop", "-t", str(agent_run.GATEWAY_STOP_SECONDS), debrief.DEBRIEF_GATEWAY],
                           ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
     status = json.loads(next((env["run"] / "debrief").glob("*/status.json")).read_text())
     assert status["exit"] == 0 and status["budget_usd"] == 0.5 and status["max_minutes"] == 20.0
@@ -172,7 +173,8 @@ def test_run_debrief_holds_the_lock_and_cleans_up_on_success(env: dict[str, Any]
 def test_cleanup_runs_when_the_container_exits_non_zero(env: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
     _popen(monkeypatch, rc=3)
     assert debrief.run_debrief(env["cfg"], env["run"]) == 3
-    assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+    assert env["calls"][-3:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+                                 ["docker", "stop", "-t", str(agent_run.GATEWAY_STOP_SECONDS), debrief.DEBRIEF_GATEWAY],
                                  ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
     with open(agent_run.run_lock_path(), "a+") as probe:     # the lock is released afterwards
         fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -192,7 +194,8 @@ def test_cleanup_runs_when_the_gateway_fails_to_start(env: dict[str, Any], monke
     with pytest.raises(RuntimeError):
         debrief.run_debrief(env["cfg"], env["run"])
     assert procs == []
-    assert calls[-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+    assert calls[-3:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],   # the gateway: SIGTERM first (rc.12)
+                          ["docker", "stop", "-t", str(agent_run.GATEWAY_STOP_SECONDS), debrief.DEBRIEF_GATEWAY],
                           ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
 
 
@@ -273,7 +276,8 @@ def test_sigterm_during_a_debrief_still_removes_container_and_gateway(env: dict[
     with pytest.raises(SystemExit) as exc:
         debrief.run_debrief(env["cfg"], env["run"])
     assert exc.value.code == agent_run.SIGTERM_EXIT
-    assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+    assert env["calls"][-3:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+                                 ["docker", "stop", "-t", str(agent_run.GATEWAY_STOP_SECONDS), debrief.DEBRIEF_GATEWAY],
                                  ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
     assert signal.getsignal(signal.SIGTERM) is before
     status = json.loads(next((env["run"] / "debrief").glob("*/status.json")).read_text())
@@ -322,7 +326,8 @@ def test_a_dlp_refusal_starts_no_debrief_and_passes_the_acknowledgements(env: di
     assert debrief.run_debrief(cfg, env["run"]) == debrief.EXIT_REFUSED
     assert seen == [ack] and started == []
     assert "debrief not started: gateway DLP" in capsys.readouterr().err
-    assert env["calls"][-2:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+    assert env["calls"][-3:] == [["docker", "rm", "-f", debrief.DEBRIEF_CONTAINER],
+                                 ["docker", "stop", "-t", str(agent_run.GATEWAY_STOP_SECONDS), debrief.DEBRIEF_GATEWAY],
                                  ["docker", "rm", "-f", debrief.DEBRIEF_GATEWAY]]
 
 

@@ -59,8 +59,8 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import (agent_drivers, agent_recipe, agent_upstreams, docker_mode, executor, executor_guard,
-                                 executor_serve, gateway_context, ledger, notes, notify, paths, report_store,
-                                 run_records, selftest_probe)
+                                 executor_serve, gateway_context, gateway_settle, ledger, notes, notify, paths,
+                                 report_store, run_records, selftest_probe)
 from agentteams.vulnscan.agent_drivers import Driver
 from agentteams.vulnscan.agent_outcome import (  # noqa: F401  (re-exports: split out, CH-07)
     NUDGE_MESSAGE, cap_reason, nudge_failure_reason, nudge_skip_reason, read_spend)
@@ -73,6 +73,7 @@ from agentteams.vulnscan.team_dir import TEAM_DIR_PROTECTED, team_dir_problem  #
 NETWORK = "agentteams-vulnscan-net"
 GATEWAY = "agentteams-vulnscan-gw"
 GW_PORT = 8080
+GATEWAY_STOP_SECONDS = 20   # docker stop's grace: above the gateway's --shutdown-grace (it settles calls in flight)
 AGENT_UID = "10001:10001"
 AGENT_HOME = agent_drivers.AGENT_HOME
 CWD_IN_CONTAINER = agent_drivers.CWD_IN_CONTAINER
@@ -465,8 +466,17 @@ def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, user: str | Non
     gateway_context.raise_if_refused(spend_dir)
 
 
-def _stop_gateway() -> None:
-    _docker(["docker", "rm", "-f", GATEWAY], check=False)
+def _stop_gateway(spend_dir: Path | None = None, name: str = GATEWAY) -> None:
+    """Stop a gateway with SIGTERM, so it settles the calls in flight (:mod:`.gateway_settle`), then remove it.
+
+    ``spend_dir``: also settle a reservation a gateway killed mid-call left in its ``spend.json`` (fail closed).
+    """
+    try:
+        _docker(["docker", "stop", "-t", str(GATEWAY_STOP_SECONDS), name], check=False, timeout=GATEWAY_STOP_SECONDS + 60)
+    finally:   # a docker client that timed out still leaves the container removed and the file settled
+        _docker(["docker", "rm", "-f", name], check=False)
+        if spend_dir is not None:
+            gateway_settle.settle_spend_file(spend_dir / "spend.json")
 
 
 def selftest(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -786,7 +796,7 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             finally:
                 try:
                     _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
-                    _stop_gateway()
+                    _stop_gateway(run_dir / "gateway")
                 except (OSError, subprocess.SubprocessError) as exc:   # cleanup must not mask the run's outcome
                     status["cleanup_error"] = f"{type(exc).__name__}: {exc}"[:300]
         # Still under the lock (closing the file releases it): a next run must not archive this run's report
