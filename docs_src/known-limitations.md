@@ -251,16 +251,19 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
   [Upgrading to 1.0, Step 2](migration-guide.md#step-2-upgrade-or-re-pad-a-legacy-log-migrate-decision-log)).
 - **Tracking:** 1.0 known limitation. Seeding the current header is planned for 1.0.x.
 
-### Adopted agents can't be put under orchestrator-only on Codex
+### Adopted agents can't be put under orchestrator-only on Codex (fixed after 1.0)
 
-- **What:** `write_policy` interop (`--interop-from … --framework codex` with the switch on) is refused. 1.0 supports
-  it for claude and goose imports only. So adopted (bespoke) agents can't be narrowed on Codex, and their earlier
-  projected TOMLs keep `sandbox_mode = "workspace-write"`. Under the launcher, the role gate still denies writes from
-  every spawned agent, but the write-policy audit flags those files.
+- **What:** in 1.0, `write_policy` interop (`--interop-from … --framework codex` with the switch on) is refused, so
+  adopted (bespoke) agents can't be narrowed on Codex, and their earlier projected TOMLs keep
+  `sandbox_mode = "workspace-write"`. Under the launcher, the role gate still denies writes from every spawned agent,
+  but the write-policy audit flags those files.
 - **Who:** Codex teams whose roster includes adopted or projected agents.
-- **Workaround:** keep the Codex surface frozen (don't render or project it) for 1.0, or run Codex only through
+- **Workaround on 1.0:** keep the Codex surface frozen (don't render or project it), or run Codex only through
   `.codex/confined-run.example.sh`.
-- **Tracking:** 1.0 known limitation. Codex `write_policy` interop is planned as a 1.0.x backport (found by
+- **Fixed:** a Codex import under the switch is accepted into a native Codex team already rendered under the switch.
+  It relies on that team's launcher and role gate, renders every imported agent read-only (any `mcp_grants` for them are not honoured on Codex), and
+  never replaces a native agent or `AGENTS.md`
+  ([`interop_write_policy`](api-reference/interop-write-policy.md#codex-imports-since-2026-10-27); found by
   mathAgents).
 
 ### The Codex role gate is not pinned to a codex-cli version
