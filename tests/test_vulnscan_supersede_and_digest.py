@@ -75,6 +75,20 @@ def test_nothing_is_closed_without_an_open_replacement() -> None:
         _run([_row(_url(1)), _row(_url(2))], {_url(1): _pr(), _url(2): _pr(headRefName="feature/x")})
 
 
+def test_a_replacement_with_a_commit_by_someone_else_closes_nothing() -> None:
+    # open-pr can claim an existing PR as the newest; only the executor's own PR may supersede others
+    rows = [_row(_url(1)), _row(_url(2))]
+    views = {_url(1): _pr(), _url(2): _pr(commits=[{"authors": [{"name": "dev", "email": "dev@x"}]}])}
+    with pytest.raises(executor.ExecError, match="not made by the executor"):
+        _run(rows, views)
+
+
+def test_a_reviewed_replacement_still_supersedes() -> None:
+    rows = [_row(_url(1)), _row(_url(2))]
+    _, closed = _run(rows, {_url(1): _pr(), _url(2): _pr(reviews=[{"state": "APPROVED"}], comments=[{"body": "ok"}])})
+    assert closed == [_url(1)]
+
+
 def test_only_this_repositorys_successful_open_pr_rows_are_candidates() -> None:
     rows = [_row(_url(1), target="/repos/elsewhere"), _row(_url(2), kind="failed"), _row(_url(3)),
             {"op": "open-pr", "kind": "done", "target": REPO, "detail": "not json"}, _row(_url(4)), _row(_url(3))]
