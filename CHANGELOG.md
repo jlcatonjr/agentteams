@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.11] - 2026-10-28
+
+### release notes
+
+agentteams 1.1.0-rc.11 is the eleventh release candidate of the 1.1 line. It closes the follow-up from #311's security
+review (conditional git includes) and stops the duplicate remediation PRs seen on 2026-10-28. The 1.0 line has no
+remediation executor and is unaffected.
+
+- **A repository whose git config has a conditional include (`includeIf.*`) is refused.**
+  - `fix --apply` and `stage-fix` both refuse it.
+  - The condition is evaluated where git runs. A filter driver added only in the executor's worktree
+    (`gitdir:**/worktrees/**`) or on its branch (`onbranch:vulnscan/**`) would otherwise escape the config check.
+  - A plain `include.path` is still allowed. What it adds is checked as before.
+- **`stage-fix` checks the config again before its checkout.** It creates the worktree with `--no-checkout`, repeats
+  the check inside it, and only then checks the files out.
+- **A config query that git fails is a refusal**, not a pass.
+- **`open-pr` reuses an open PR that already carries the same change.** A fix re-staged on a later day gets a branch
+  name with the new date. If an open PR on `vulnscan/<another date>-<same digest>` exists, `open-pr` returns that PR
+  instead of opening a duplicate. That happens only when every commit on the PR is the executor's and its whole
+  change equals the staged change byte for byte.
+- **`open-pr` opens nothing for a change that is already merged.** It retires the staged fix and returns
+  `already_in_base: true`.
+- **`close-superseded` requires the replacement to be the executor's own PR.**
+- **After upgrading:** rebuild the tools and agent images.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.11` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.11]`.
+
+### Changes since 1.1.0-rc.10
+
 ### Changed
 
 ### vulnscan (no duplicate PR for a fix re-staged on a later day)
