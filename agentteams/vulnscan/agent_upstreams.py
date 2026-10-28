@@ -18,7 +18,9 @@ values the Messages route allows; None: :data:`DEFAULT_ANTHROPIC_BETAS`), ``max_
 gateway's output ceiling, and the CLI's own output setting, e.g. ``CLAUDE_CODE_MAX_OUTPUT_TOKENS``) and
 ``max_turns`` (the CLI's turn cap where it has one); ``upstream_responses``, ``key_file_responses``;
 ``copilot_provider_type`` (``openai`` or ``anthropic``) and ``accept_residual_tools`` (codex, D4; checked by
-the driver).
+the driver); ``reasoning`` (chat only: an OpenRouter ``reasoning`` object the gateway writes into every request,
+``--chat-reasoning``; null, the default, adds no flag). A model that spends its whole output on reasoning never
+reaches a tool call: z-ai/glm-5.3 did so in both rc.9 live runs, so the operator can bound it here.
 
 Revision 13 (D2): a Messages-dialect runtime runs Anthropic models only, so ``agent.model`` (and every
 ``agent.models`` entry) must be a Claude model id (``claude-...`` or ``anthropic/...``). ``api.anthropic.com``
@@ -33,10 +35,13 @@ goose and copilot (chat) keep any OpenRouter model.
 
 from __future__ import annotations
 
+import json
 import re
 import urllib.parse
 from pathlib import Path
 from typing import Any
+
+from .gateway_dialects import reasoning_problem
 
 SECRETS_DIR = "~/.config/agentteams-secrets"
 DEFAULT_UPSTREAM_MESSAGES = "https://openrouter.ai/api/v1"
@@ -54,7 +59,7 @@ DEFAULT_ANTHROPIC_BETAS = ("claude-code-20250219", "interleaved-thinking-2025-05
 DEFAULTS: dict[str, Any] = {"upstream_messages": "", "key_file_messages": "", "models": [], "prices": "",
                             "anthropic_betas": None, "max_output_tokens": 32_000, "max_turns": 100,
                             "upstream_responses": "", "key_file_responses": "", "copilot_provider_type": "openai",
-                            "accept_residual_tools": []}
+                            "accept_residual_tools": [], "reasoning": None}
 #: In-gateway paths of the mounted files.
 CHAT_KEY_IN_GW = "/run/secrets/openrouter.env"
 MESSAGES_KEY_IN_GW = "/run/secrets/messages.env"
@@ -169,8 +174,10 @@ def gateway_routes(a: dict[str, Any], dialect: str) -> tuple[list[str], list[str
     model = str(a["model"])
     if dialect == "chat":
         key = Path(str(a["key_file"])).expanduser()
+        reasoning = _get(a, "reasoning")
         return (["-v", f"{key}:{CHAT_KEY_IN_GW}:ro"],
-                ["--model", model, "--key-file", CHAT_KEY_IN_GW, "--upstream", str(a["upstream"])])
+                ["--model", model, "--key-file", CHAT_KEY_IN_GW, "--upstream", str(a["upstream"]),
+                 *(["--chat-reasoning", json.dumps(reasoning, sort_keys=True)] if reasoning else [])])
     extra = [m for m in (_get(a, "models") or []) if m != model]
     head = ["--model", model, *(["--models", ",".join(extra)] if extra else []), "--dialects", dialect]
     ceiling = ["--max-output-tokens", str(max_output_tokens(a))]
@@ -270,4 +277,12 @@ def validate(a: dict[str, Any], dialect: str) -> None:
         raise ValueError(f"agent.accept_residual_tools must be a list of tool names (got {repr(residual)[:80]})")
     _int_in(a, "max_output_tokens", MAX_OUTPUT_TOKENS_CEILING)
     _int_in(a, "max_turns", MAX_TURNS_CEILING)
+    reasoning = _get(a, "reasoning")
+    if reasoning is not None:
+        if dialect != "chat":
+            raise ValueError("agent.reasoning applies to the chat route only (goose; copilot with the openai "
+                             f"provider type), not to {dialect}")
+        why = reasoning_problem(reasoning, max_output_tokens(a))
+        if why:
+            raise ValueError(f"agent.reasoning {why} (got {repr(reasoning)[:80]})")
     _model_rule(a, models, dialect)
