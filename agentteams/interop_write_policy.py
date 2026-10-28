@@ -16,10 +16,13 @@ from typing import Any
 
 from agentteams import write_policy as _wp
 
-#: Frameworks interop may render under the switch: the two whose session sandbox the runner relies on and whose
-#: adapters emit the agentteams_runner block. Codex holds the switch only via its launcher, which interop
-#: doesn't emit, so it is refused rather than rendered outside the guarantee.
-SUPPORTED: dict[str, tuple[str, str]] = {"claude": (".claude", "agents"), "goose": (".goose", "recipes")}
+#: Frameworks interop may render under the switch, with their canonical agents directory. Claude and Goose carry
+#: the switch in the agent files themselves. Codex holds it only through its launcher and role gate, which interop
+#: doesn't emit, so a Codex import is admitted only into a native Codex team already rendered under the switch
+#: whose launcher, hooks file and pinned role gate are present (:func:`require_native_codex_gate`); the import then
+#: relies on them, renders every imported agent read-only, and never replaces a native agent or ``AGENTS.md``.
+SUPPORTED: dict[str, tuple[str, str]] = {"claude": (".claude", "agents"), "goose": (".goose", "recipes"),
+                                         "codex": (".codex", "agents")}
 
 
 def manifest_fields(description: dict[str, Any], framework: str) -> dict[str, Any]:
@@ -31,11 +34,14 @@ def manifest_fields(description: dict[str, Any], framework: str) -> dict[str, An
 
     Returns:
         ``{}`` when the switch is off for this framework; otherwise ``write_policy`` (and ``mcp_grants`` when
-        set), plus ``goose_tool_scoping: "grant"`` for goose, as ``analyze.build_manifest`` sets it.
+        set), plus ``goose_tool_scoping: "grant"`` for goose, as ``analyze.build_manifest`` sets it, and
+        ``privilege_profile`` for codex (it turns on the role-gate reading instructions, as natively). On codex
+        ``mcp_grants`` are kept, as native generation keeps them, so a source rendered with them still matches its
+        write-policy section; they are not honoured there (:func:`codex_import_notices`).
 
     Raises:
-        ValueError: Any refusal of :func:`write_policy.resolve`; the switch on a framework other than claude or
-            goose; malformed ``mcp_grants`` (the runner's own validator, fail closed).
+        ValueError: Any refusal of :func:`write_policy.resolve`; the switch on a framework not in
+            :data:`SUPPORTED`; malformed ``mcp_grants`` (the runner's own validator, fail closed).
     """
     from agentteams.proposal_policy import ProposalError, _mcp_agents
 
@@ -45,7 +51,9 @@ def manifest_fields(description: dict[str, Any], framework: str) -> dict[str, An
         return {}
     if framework not in SUPPORTED:
         raise ValueError(f'--interop-from --description: write_policy "orchestrator-only" is supported for '
-                         f"{' and '.join(SUPPORTED)} imports only (not {framework})")
+                         f"{', '.join(SUPPORTED)} imports only (not {framework})")
+    if framework == "codex":
+        fields["privilege_profile"] = description.get("privilege_profile")
     try:
         _mcp_agents(fields.get("mcp_grants"))
     except ProposalError as exc:
@@ -70,15 +78,153 @@ def prepare(manifest: dict[str, Any], fields: dict[str, Any] | None, framework: 
         None.
 
     Raises:
-        ValueError: The server's install location is outside the project, or ``preserve_existing`` under the
-            switch (every agent must be re-rendered).
+        ValueError: The server's install location is outside the project, ``preserve_existing`` under the
+            switch (every agent must be re-rendered), or a codex target without its native gate
+            (:func:`require_native_codex_gate`).
     """
     manifest.update(fields or {})
     if _wp.enabled(manifest):
         manifest["write_policy_target_framework"] = framework  # the UNENFORCED-on-goose banner keys on it
+    if _wp.enabled(manifest) and framework == "codex":
+        manifest[_NATIVE_SLUGS_KEY] = require_native_codex_gate(target_dir)
     install_server(manifest, framework, target_dir, dry_run=True)
     if _wp.enabled(manifest) and preserve_existing:
         raise ValueError("write_policy orchestrator-only: preserve_existing is not supported (re-render every agent)")
+
+
+#: Manifest key holding the native Codex team's agent slugs, which a codex import under the switch never replaces.
+_NATIVE_SLUGS_KEY = "interop_native_codex_slugs"
+
+
+def require_native_codex_gate(target_dir: Path) -> list[str]:
+    """Refuse a codex import under the switch unless the native Codex team and its enforcement are in place.
+
+    Codex ignores a spawned agent's ``sandbox_mode`` and tool list; under the switch what keeps an imported agent
+    read-only is agentteams' launcher (``.codex/confined-run.example.sh``) and the role gate it runs as a
+    PreToolUse hook, which denies every spawned agent's writes by its runtime ``agent_type``, whatever its file
+    says. Interop emits neither, so it requires the native render to have done so.
+
+    Args:
+        target_dir: The target agents directory; it must be the project's ``.codex/agents``.
+
+    Returns:
+        The native team's agent slugs (from its build-log), which the import must not replace.
+
+    Raises:
+        ValueError: Naming every missing precondition: not the canonical ``.codex/agents``; no build-log recording
+            ``write_policy: "orchestrator-only"``; the role gate absent, a symlink, or not matching
+            ``CODEX_ROLE_GATE_SHA256``; ``.codex/hooks.json`` absent or not agentteams'; the launcher absent.
+    """
+    import hashlib
+
+    from agentteams.frameworks._codex_role_gate_emit import (
+        CODEX_HOOKS_PROJECT_PATH,
+        CODEX_ROLE_GATE_PROJECT_PATH,
+        CODEX_ROLE_GATE_SHA256,
+        codex_hooks_json_is_ours,
+    )
+    from agentteams.frameworks._codex_sandbox_emit import CODEX_RUNNER_PROJECT_PATH
+
+    target = Path(target_dir).resolve()
+    if target.parts[-2:] != SUPPORTED["codex"]:
+        raise ValueError(f"codex import under write_policy \"orchestrator-only\": the target must be the project's "
+                         f".codex/agents (not {target_dir})")
+    project = target.parent.parent
+    problems: list[str] = []
+    try:
+        data: Any = json.loads((target / "references" / "build-log.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None  # missing or unreadable: no native switch team is proven
+    if not isinstance(data, dict) or data.get("write_policy") != "orchestrator-only":
+        problems.append("no native Codex team rendered under the switch (.codex/agents/references/build-log.json "
+                        "must record write_policy \"orchestrator-only\")")
+    gate = project / CODEX_ROLE_GATE_PROJECT_PATH
+    if gate.is_symlink() or not gate.is_file() or (
+            hashlib.sha256(gate.read_bytes()).hexdigest() != CODEX_ROLE_GATE_SHA256):
+        problems.append(f"{CODEX_ROLE_GATE_PROJECT_PATH} is missing or does not match its pinned hash")
+    hooks = project / CODEX_HOOKS_PROJECT_PATH
+    if not hooks.is_file() or not codex_hooks_json_is_ours(hooks):  # is_ours alone accepts an absent file
+        problems.append(f"{CODEX_HOOKS_PROJECT_PATH} is missing or not agentteams' role-gate wiring")
+    if not (project / CODEX_RUNNER_PROJECT_PATH).is_file():
+        problems.append(f"{CODEX_RUNNER_PROJECT_PATH} (the launcher) is missing")
+    if problems:
+        raise ValueError("codex import under write_policy \"orchestrator-only\" relies on the native Codex team's "
+                         "launcher and role gate: " + "; ".join(problems) + ". Render the Codex team natively "
+                         "first: agentteams --description <brief> --framework codex")
+    slugs = {str(s) for s in data.get("agent_slug_list") or []}
+    if not slugs:
+        raise ValueError("codex import under write_policy \"orchestrator-only\": the native build-log lists no "
+                         "agent_slug_list, so the import can't tell native agents from bespoke ones; re-render the "
+                         "Codex team natively first")
+    generated = {Path(rel).stem for rel in data.get("file_hashes") or {} if str(rel).endswith(".toml")}
+    return sorted(slugs | generated | {"orchestrator"})
+
+
+def native_agent(slug: str, dest: Path, manifest: dict[str, Any]) -> list[str]:
+    """The error for an imported agent that would replace a native Codex agent, under the switch.
+
+    Args:
+        slug: The imported agent's slug.
+        dest: Its destination file.
+        manifest: The interop manifest.
+
+    Returns:
+        One error when *slug* matches a native agent (its build-log roster or generated ``.toml``, the
+        orchestrator always, compared case-insensitively), else none.
+
+    Raises:
+        Nothing.
+    """
+    if _NATIVE_SLUGS_KEY not in manifest:
+        return []
+    if slug.casefold() not in {s.casefold() for s in manifest[_NATIVE_SLUGS_KEY]}:  # case-insensitive filesystems
+        return []
+    return [f"{dest}: {slug} belongs to the native Codex team; a codex import under write_policy "
+            "\"orchestrator-only\" adds agents beside it and never replaces one (rename the bespoke agent)"]
+
+
+def keeps_native_instructions(framework: str, manifest: dict[str, Any], inst_dest: Path) -> bool:
+    """Whether a codex import under the switch must not write ``AGENTS.md`` (the native team's, the writer's prompt).
+
+    Args:
+        framework: The interop target framework.
+        manifest: The interop manifest.
+        inst_dest: The instructions file the import would write.
+
+    Returns:
+        True for a codex import under the switch, whether or not the file exists (a missing one is the native
+        render's to restore, never the import's to fill with the source's instructions).
+
+    Raises:
+        Nothing.
+    """
+    return framework == "codex" and _wp.enabled(manifest)
+
+
+def codex_import_notices(manifest: dict[str, Any], imported: list[str]) -> list[str]:
+    """What a codex import under the switch leaves to the operator.
+
+    Args:
+        manifest: The interop manifest.
+        imported: The imported agents' slugs.
+
+    Returns:
+        Notices: grants not honoured on codex, and the imported agents' routing and later native ``--update``;
+        empty when this isn't a codex import under the switch or nothing was imported.
+
+    Raises:
+        Nothing.
+    """
+    if _NATIVE_SLUGS_KEY not in manifest or not imported:
+        return []
+    notices = [f"codex: imported {', '.join(sorted(imported))} read-only (the role gate denies every spawned agent's "
+               "writes). AGENTS.md is the native team's and was not changed: route to them in its editable section. "
+               "A later native --update lists them as orphans; keep them with --adopt-orphans."]
+    granted = sorted(set(manifest.get("mcp_grants") or {}) & set(imported))
+    if granted:
+        notices.append(f"codex: mcp_grants for {', '.join(granted)} are not honoured on codex (the role gate allows "
+                       "spawned agents only the read-only agentteams_readfs tools); they hold on claude.")
+    return notices
 
 
 def left_in_place(dest: Path, manifest: dict[str, Any]) -> list[str]:
@@ -282,7 +428,8 @@ def refuse_outside_interop(mode: str, framework: str, agents_dir: Path,
         on = bool(_wp.manifest_fields(description, _wp.resolve(description, framework)))
     if on:
         fix = (f"Use: agentteams --interop-from <source agents dir> --framework {framework} --description <brief> "
-               "--overwrite" if framework in SUPPORTED else
+               "--overwrite" + (" (into a native Codex team rendered under the switch)" if framework == "codex" else "")
+               if framework in SUPPORTED else
                f"Regenerate the {framework} team natively: agentteams --description <brief> --framework {framework}")
         raise ValueError(f"{mode}: this team runs write_policy \"orchestrator-only\", which {mode} doesn't apply "
                          f"(it would write agents that can write). {fix}")

@@ -29,6 +29,36 @@ _MODELED_FM_KEYS = frozenset({
 })
 
 
+
+def json_safe(obj: Any) -> Any:
+    """Recursively coerce a CAI value to JSON-serializable types.
+
+    PyYAML parses an unquoted ISO date in agent front matter (``date: 2026-08-12``)
+    as a ``datetime.date`` object, which then rides into ``raw_front_matter``. Left
+    alone it raises ``TypeError: Object of type date is not JSON serializable`` at
+    the first ``json.dumps`` — canonical materialize, sync baselines, interop
+    bundles. Coercing dates/datetimes to ISO strings at the CAI boundary keeps the
+    representation JSON-safe by construction for every downstream writer.
+
+    Args:
+        obj: A CAI value (any nesting of dicts, lists and scalars).
+
+    Returns:
+        The same structure with every date or datetime replaced by its ISO string.
+
+    Raises:
+        Nothing.
+    """
+    from datetime import date, datetime
+
+    if isinstance(obj, dict):
+        return {k: json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return obj
+
 def capture_escape_hatches(
     content: str, framework: str,
 ) -> tuple[dict[str, Any], str | None, str | None]:

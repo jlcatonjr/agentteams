@@ -12,7 +12,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -274,25 +274,6 @@ def export_to_cai(source_dir: Path, source_framework: str | None = None) -> dict
     return _json_safe(cai_doc)
 
 
-def _json_safe(obj: Any) -> Any:
-    """Recursively coerce a CAI value to JSON-serializable types.
-
-    PyYAML parses an unquoted ISO date in agent front matter (``date: 2026-08-12``)
-    as a ``datetime.date`` object, which then rides into ``raw_front_matter``. Left
-    alone it raises ``TypeError: Object of type date is not JSON serializable`` at
-    the first ``json.dumps`` — canonical materialize, sync baselines, interop
-    bundles. Coercing dates/datetimes to ISO strings at the CAI boundary keeps the
-    representation JSON-safe by construction for every downstream writer.
-    """
-    if isinstance(obj, dict):
-        return {k: _json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_json_safe(v) for v in obj]
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    return obj
-
-
 _INVARIANT_CORE_SPAN_RE = re.compile(
     r"<!--\s*AGENTTEAMS:BEGIN\s+invariant_core\s+v=\d+\s*-->.*?<!--\s*AGENTTEAMS:END\s+invariant_core\s*-->",
     re.DOTALL,
@@ -514,6 +495,10 @@ def import_from_cai(
                      "prompt": str(h.get("prompt", "") or ""), "send": bool(h.get("send", False))}
                     for h in agent["handoffs"] if str(h.get("to", "")).strip()]})
             continue
+        native = _iwp.native_agent(slug, dest, manifest)
+        if native:
+            result.errors.extend(native)
+            continue
         if dest.exists() and not overwrite:
             result.skipped.append(str(dest))
             result.errors.extend(_iwp.left_in_place(dest, manifest))
@@ -632,6 +617,7 @@ def import_from_cai(
     if target_framework == "grok":
         result.notices += _grok_import_parity(pending, target_dir)
     result.converted.extend(_iwp.install_server(manifest, target_framework, target_dir, dry_run=dry_run))
+    result.notices += _iwp.codex_import_notices(manifest, [Path(d).stem for d, _ in pending])
     instructions_content = str(cai.get("instructions_binding", {}).get("content", ""))
     if instructions_content:
         # F.2: instructions filename + placement is framework-owned. goose's
@@ -644,7 +630,11 @@ def import_from_cai(
             inst_dest = target_dir.parent / instructions_name
         # A CAI is data: stacked/crafted ownership notices and Grok's block never reach a target (spoofing).
         instructions_content = _strip_fence(_strip_all_ownership_notices(instructions_content), _GROK_FENCE_ID)
-    if instructions_content and target_framework == "grok":
+    if instructions_content and _iwp.keeps_native_instructions(target_framework, manifest, inst_dest):
+        result.skipped.append(str(inst_dest))
+        result.notices.append(f"{inst_dest}: not written (the native Codex team's; a codex import under "
+                              "write_policy \"orchestrator-only\" never writes it)")
+    elif instructions_content and target_framework == "grok":
         _import_grok_instructions(adapter, instructions_content, inst_dest, target_dir, manifest, result,
                                   dry_run=dry_run, overwrite=overwrite, preserve_existing=preserve_existing)
     elif instructions_content:
@@ -971,4 +961,5 @@ from agentteams.interop_helpers import (
     safe_fm_key as _safe_fm_key,
     serialize_raw_fm_key as _serialize_raw_fm_key,
     merge_sidecar_handoffs as _merge_sidecar_handoffs,
+    json_safe as _json_safe,
 )
