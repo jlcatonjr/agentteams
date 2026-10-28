@@ -1756,6 +1756,36 @@ if the copy no longer matches the fingerprint the self-test vouched for (R9). It
 gateway's DLP check cannot cover every secret (`gateway_context.DlpRefused`, R5). A run whose agent exits 0
 without submitting a report of its own is `agent-error`, not `completed`.
 
+**Output-limit nudge (goose only, rc.12).** Sometimes a goose run ends because the model's reply reached its
+output-token limit before any tool call (goose's warning; the reason "the model's reply reached its output-token
+limit before it called a tool"), and no report was submitted. In that case the launcher resumes the same session
+once, in a second agent container with the same flags and mounts:
+`goose run --resume --name vulnscan-<run dir> --with-extension <MCP> --text <message>`. The session persists in
+`<run>/agent/goose-data`, and the transcript continues in the same `transcript.log`. The message is the fixed
+`agent_outcome.NUDGE_MESSAGE`: stop deliberating, queue any requests already decided on, and call
+`submit_report` now. Nothing from the run is folded into it.
+
+The nudge happens only if all of these hold:
+
+- the run did not time out;
+- at least `MIN_NUDGE_SECONDS` (120) are left before the run's own `agent.max_minutes` deadline (the second
+  container uses the same deadline);
+- `spend.json` shows no cap refusal and the budget and token cap are not used up (the gateway, still running,
+  enforces both);
+- no `agent.command` override is set.
+
+It never happens more than once, and never for another driver. `status.json` records `nudged: true` when the
+nudge happens. When the outcome called for a nudge but none was given, it records `nudge_skipped` with the reason.
+If the resumed session also ends without a report, the run stays `agent-error` (or `timed-out` if it ran into
+the deadline), and its reason adds that the session was resumed once with the nudge. A missing or unreadable
+`spend.json` skips the nudge too, since the room left is unknown.
+
+Two limits are accepted. First, the resume command is not part of the self-test (as with the debrief's resume):
+a resume whose requests the gateway refuses fails closed. Second, the agent could print goose's warning line
+itself to get its one extra turn; that turn is in the same sandbox, under the same caps and deadline.
+`agent_outcome` also holds `read_spend`, `cap_reason` and `transcript_error`, split out of `agent_run`, which
+imports them (`agent_run.read_spend` and `agent_run.cap_reason` still work).
+
 #### `fold_notes(task, run_id)`
 
 Fold the active notes into the task and ledger which ones went in.

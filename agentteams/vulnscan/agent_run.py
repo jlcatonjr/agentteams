@@ -62,6 +62,9 @@ from agentteams.vulnscan import (agent_drivers, agent_recipe, agent_upstreams, d
                                  executor_serve, gateway_context, ledger, notes, notify, paths, report_store,
                                  run_records, selftest_probe)
 from agentteams.vulnscan.agent_drivers import Driver
+from agentteams.vulnscan.agent_outcome import (  # noqa: F401  (re-exports: split out, CH-07)
+    NUDGE_MESSAGE, cap_reason, nudge_failure_reason, nudge_skip_reason, read_spend)
+from agentteams.vulnscan.agent_outcome import transcript_error as _transcript_error
 from agentteams.vulnscan.agent_settings import (  # noqa: F401  (re-exports: the settings live there)
     BUDGET_USD_CEILING, DEFAULT_AGENT, MAX_MINUTES_CEILING, MAX_TOKENS_TOTAL_CEILING, _positive_int, agent_cfg,
     driver_of, positive_number, run_limits, validate_agent)
@@ -84,7 +87,6 @@ GOOSE_STATE_IN_CONTAINER = agent_drivers.GOOSE_STATE          # goose's logs, in
 #: ``cap-reached``: the gateway's run budget or token cap refused further calls, so the run stopped short. It
 #: names the cap; raising it, or an agent that stops polling, is the fix (not a transient error).
 RUN_STATES = ("completed", "agent-error", "gateway-refused", "cap-reached", "timed-out", "not-run")
-_CAP_REFUSAL = ("run token cap", "-token run cap", "run budget", "reservation refused")
 TASK = ("Daily vulnerability remediation: follow your Daily Remediation workflow. "
         "Use the vulnscan tools: read get_summary and "
         "list_findings, triage, and request stage-fix/open-pr (then close-superseded) for fixable repo findings "
@@ -288,7 +290,7 @@ def sessions_dir(run_dir: Path, driver: Driver | None = None) -> Path:
 
 
 def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task: str = TASK,
-               run_id: str = "", user: str | None = None) -> list[str]:
+               run_id: str = "", user: str | None = None, command: list[str] | None = None) -> list[str]:
     """Return the ``docker run`` command for the agent container.
 
     The command is the driver's (:meth:`Driver.command`) unless ``agent.command`` overrides it (advanced:
@@ -304,6 +306,7 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
         task: Task text (the launcher folds operator notes into it).
         run_id: The run id.
         user: The container user (:func:`container_user`).
+        command: The in-container command instead (the goose nudge's resume, :mod:`.agent_outcome`).
 
     Returns:
         argv.
@@ -318,7 +321,9 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
         raise ValueError(f"refusing to mount the team dir: {problem}")
     team = Path(str(a["team_dir"])).expanduser().resolve()
     recipe = agent_recipe.in_container(a, d)   # copilot, goose: the copy run_agent writes (R1, R7); else the team's
-    if a.get("command"):
+    if command is not None:
+        cmd = command
+    elif a.get("command"):
         cmd = agent_drivers.fill_command(a["command"], recipe=recipe, session=session, task=task, run_id=run_id)
     else:
         cmd = d.command(a, recipe=recipe, session=session, task=task, run_id=run_id)
@@ -713,6 +718,8 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
             status["report_problem"] = str(exc)[:300]
             if state == "completed":   # an unverifiable report is not a completed run (fail closed)
                 state, status["reason"] = "agent-error", f"the agent's report could not be verified: {exc}"[:300]
+        if status.get("nudged") and state != "completed":   # the one nudge did not help (rc.12)
+            status["reason"] = nudge_failure_reason(str(status.get("reason") or ""))[:500]
         status.update(report={"request_id": mine["request id"], "submitted": mine["submitted"]} if mine else None,
                       run_state=state, state=state, finished=datetime.now(UTC).isoformat())
         out.mkdir(parents=True, exist_ok=True)
@@ -813,49 +820,6 @@ def run_agent(cfg: dict[str, Any], run_dir: Path, *, task: str = TASK, run_id: s
         return finish(state, exit=rc, timed_out=timed_out, spend=spend, **extra)
 
 
-def cap_reason(spend: dict[str, Any] | None) -> str:
-    """Return why the gateway's run budget or token cap refused calls, from ``spend.json``, or "".
-
-    Args:
-        spend: The gateway totals (:func:`read_spend`), or None.
-
-    Returns:
-        ``"the gateway's run cap refused further calls: <reason>"``, or "" when no cap refusal is recorded.
-    """
-    hits = [str(r) for r in (spend or {}).get("refusal_reasons") or [] if any(k in str(r) for k in _CAP_REFUSAL)]
-    return f"the gateway's run cap refused further calls: {hits[-1]}"[:300] if hits else ""
-
-
-def _transcript_error(path: Path, a: dict[str, Any]) -> str:
-    """Return ``": <the CLI's error line>"`` from a run transcript (:meth:`Driver.parse_outcome`), or ""."""
-    try:
-        hit = driver_of(a).parse_outcome(path.read_text(encoding="utf-8", errors="replace")).error
-    except (OSError, ValueError):
-        return ""
-    return f": {hit}" if hit else ""
-
-
-def read_spend(path: Path) -> tuple[dict[str, Any] | None, str]:
-    """Read the gateway's ``spend.json`` tolerantly (G12): a bad file never stops the status being written.
-
-    Args:
-        path: ``<run>/gateway/spend.json``.
-
-    Returns:
-        ``(spend, problem)``: the totals and ``""``; ``(None, "")`` when the file is absent; or
-        ``(None, reason)`` when it is unreadable, not JSON or not an object.
-    """
-    if not path.is_file():
-        return None, ""
-    try:
-        spend = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:   # ValueError includes UnicodeDecodeError and JSONDecodeError
-        return None, f"spend.json is unreadable ({type(exc).__name__}: {str(exc)[:200]})"
-    if not isinstance(spend, dict):
-        return None, f"spend.json is not an object ({type(spend).__name__})"
-    return spend, ""
-
-
 def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Server, status: dict[str, Any],
             task: str, run_id: str, user: str | None = None) -> tuple[bool, int]:
     """Start the gateway and the agent container and serve requests until it exits or times out.
@@ -886,11 +850,28 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
     _ensure_network()
     _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)
     _start_gateway(a, tag, run_dir / "gateway", user)
+    deadline = time.monotonic() + 60 * float(a["max_minutes"])
+    timed_out, rc = _run_container(agent_argv(a, tag, run_dir, session, task=task, run_id=run_id, user=user),
+                                   out / "transcript.log", deadline, serve)
+    serve(time.monotonic() + 120)          # requests queued in the final seconds (bounded)
+    why = None if timed_out else nudge_skip_reason(a, run_dir, deadline - time.monotonic())
+    if why:
+        status["nudge_skipped"] = why
+    elif why == "":   # once: the same session, resumed with the fixed operator message (rc.12)
+        status["nudged"] = True
+        resume = agent_drivers.GOOSE.resume_command(session, NUDGE_MESSAGE)
+        timed_out, rc = _run_container(agent_argv(a, tag, run_dir, session, user=user, command=resume),
+                                       out / "transcript.log", deadline, serve, append=True)
+        serve(time.monotonic() + 120)
+    return timed_out, rc
+
+
+def _run_container(argv: list[str], log_path: Path, deadline: float, serve: _Server, *,
+                   append: bool = False) -> tuple[bool, int]:
+    """Run the agent container to its exit or ``deadline``, serving requests; return ``(timed_out, exit code)``."""
     timed_out = False
-    with open(out / "transcript.log", "w", encoding="utf-8") as log:
-        proc = subprocess.Popen(agent_argv(a, tag, run_dir, session, task=task, run_id=run_id, user=user), stdout=log,
-                                stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + 60 * float(a["max_minutes"])
+    with open(log_path, "a" if append else "w", encoding="utf-8") as log:
+        proc = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT)
         while proc.poll() is None and time.monotonic() < deadline:
             serve(deadline)
             time.sleep(15)
@@ -898,9 +879,7 @@ def _launch(a: dict[str, Any], tag: str, run_dir: Path, session: str, serve: _Se
             timed_out = True
             _docker(["docker", "rm", "-f", AGENT_CONTAINER], check=False)   # the container, not just the client
             proc.kill()
-        rc = proc.wait()
-    serve(time.monotonic() + 120)          # requests queued in the final seconds (bounded)
-    return timed_out, rc
+        return timed_out, proc.wait()
 
 
 def build_image(cfg: dict[str, Any], *, cli_version: str, cli_sha256: str, python_image: str,

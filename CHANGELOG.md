@@ -21,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the base branch (an earlier day's PR with the same change was merged), it retires the staged fix and returns
   `already_in_base: true` instead of opening a PR that carries nothing.
 
+### vulnscan (one nudge after a goose reply cut off at the output limit)
+
+- **A goose run whose reply hit the output-token limit gets one more turn.** In the rc.9 and rc.10 live runs, the
+  model spent a whole reply on reasoning and exited with no tool call and no report (`agent-error`). Now, when the
+  goose driver's outcome is exactly that cut-off and no report was submitted, the launcher resumes the same
+  session once (`goose run --resume --name <session>`). It sends a fixed operator message: stop deliberating,
+  queue any decided requests, and call `submit_report` now. The resume runs only if at least 120 s of the run's
+  own time are left and `spend.json` shows that the gateway's budget and token cap have room (the gateway still
+  enforces both). It never
+  runs for another driver, with an `agent.command` override, or twice.
+- `status.json` records `nudged: true`, or `nudge_skipped` with the reason. If the second attempt also fails,
+  the run stays `agent-error` and its reason says the session was resumed once.
+- New pinned module `vulnscan/agent_outcome.py` holds the decision. `read_spend`, `cap_reason` and the
+  transcript error line moved there from `agent_run.py` (CH-07). New method
+  `GooseDriver.resume_command(session, text)`. The self-test fingerprint is unchanged.
+
 ### vulnscan (conditional includes in a repository's git config are refused)
 
 - **`fix --apply` and `stage-fix` refuse a repository whose git config has an `includeIf.*` section.** Its

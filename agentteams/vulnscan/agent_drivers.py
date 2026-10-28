@@ -118,6 +118,16 @@ class GooseDriver(Driver):
         """See :meth:`Driver.mcp_attach`."""
         return McpAttach("goose-extension", MCP_COMMAND)
 
+    def resume_command(self, session: str, text: str) -> list[str]:
+        """Return the headless command that resumes a run's named session with one more user message.
+
+        ``goose run --resume --name`` reopens the session in ``<run>/agent/goose-data`` (sessions.db) with its
+        history and saved extensions; the MCP extension is passed again, as a debrief does. No recipe: the
+        session already holds it. Used once per run, for the output-limit nudge (:mod:`.agent_outcome`).
+        """
+        return ["goose", "run", "--resume", "--name", session, "--with-extension", self.mcp_attach().command,
+                "--text", text]
+
     def parse_outcome(self, transcript: str) -> Outcome:
         """See :meth:`Driver.parse_outcome`: goose's output-limit warning, else the last line mentioning an error
         (goose exits 0 after one). Tool data in the transcript (JSON object and Markdown table lines) is not an
