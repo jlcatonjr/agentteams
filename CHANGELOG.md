@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+### vulnscan (no duplicate PR for a fix re-staged on a later day)
+
+- **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch
+  is `vulnscan/<YYYYMMDD>-<digest>`, and open-pr found an open PR only by that exact name. So a fix re-staged
+  the next day with the same digest pushed a new branch and opened a duplicate PR (traffic-file-enrichment-app,
+  2026-10-28, beside #25). It now returns the open PR on `vulnscan/<any date>-<same digest>` (`existing: true`,
+  `same_change_as`) without pushing, but only if every commit on it is the executor's and its whole change equals
+  the staged change byte for byte (the digest, public and 40 bits, only selects candidates). Forks' PRs are
+  ignored as before; at most 3 candidates are examined; a gh or git failure opens the PR as before.
+- **`close-superseded` requires the replacement to be the executor's own PR** (every commit by its git identity),
+  since open-pr can now record a claimed PR as the newest.
+- **`open-pr` opens nothing for a change already merged.** When every staged path already has its staged content
+  on the base branch (an earlier day's PR with the same change was merged), it retires the staged fix and returns
+  `already_in_base: true` instead of opening a PR that carries nothing.
+
+### Changed
+
+### vulnscan (conditional includes in a repository's git config are refused)
+
+- **`fix --apply` and `stage-fix` refuse a repository whose git config has an `includeIf.*` section.** Its
+  condition is evaluated where git runs. So `includeIf "gitdir:**/worktrees/**"` or `"onbranch:vulnscan/**"` could
+  add a filter driver that is invisible to the config check in the repository but live in the executor's worktree,
+  where the checkout would run it. A plain `include.path` is still allowed; what it adds is checked as before.
+- **`stage-fix` checks the config again where it is about to run git, before the checkout.** The worktree is now
+  created with `--no-checkout`, the config check runs inside it, and only then are its files checked out. Config
+  that changed during the fetch (or an include target that appeared) is refused before any filter could run.
+- **A config query git fails is a refusal**, not "no problem" ("git cannot read this repository's config").
+
+  This closes the follow-up in #311's security review.
+
 ## [1.1.0-rc.10] - 2026-10-27
 
 ### release notes
