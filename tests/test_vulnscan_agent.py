@@ -605,7 +605,9 @@ def test_daily_notifications_are_fixed_text(dirs: dict[str, Path], monkeypatch: 
            "agent": {"enabled": True, "team_dir": "x", "key_file": "y"}}
     daily.run_daily(cfg, today="2026-10-24")
     msgs = [c[-1] for c in calls]
-    assert msgs == [notify.render("run-done", state="new findings", findings=0, new=1),
+    # agent mode on with no grant: the readiness check (remediation_status, plan B2) reports it first
+    assert msgs == [notify.render("remediation-blocked", count=1),
+                    notify.render("run-done", state="new findings", findings=0, new=1),
                     notify.render("agent-not-completed", state="timed-out")]
 
 
@@ -763,7 +765,7 @@ def test_first_run_with_agent_enabled_but_unconfigured_records_why(tmp_path: Pat
     assert hb["publish"] is None                                   # no publish grant
     summary = (run_dir / "summary.md").read_text()
     assert "## Agent run" in summary and "agent.team_dir" in summary
-    assert sent == ["agent-not-completed"] and ledger.read() == []
+    assert sent == ["remediation-blocked", "agent-not-completed"] and ledger.read() == []
 
 
 def test_a_launcher_exception_through_daily_ends_agent_error(dirs: dict[str, Path], tmp_path: Path,
@@ -783,7 +785,7 @@ def test_a_launcher_exception_through_daily_ends_agent_error(dirs: dict[str, Pat
     daily.run_daily(cfg, today="2026-10-22")
     hb = json.loads(daily.heartbeat_path().read_text())
     assert hb["agent"]["state"] == "agent-error" and "docker vanished" in hb["agent"]["reason"]
-    assert report_store.NO_REPORT_LINE in report_store.render_for_review(run) and sent == ["agent-not-completed"]
+    assert report_store.NO_REPORT_LINE in report_store.render_for_review(run) and sent == ["remediation-blocked", "agent-not-completed"]
 
 
 def test_second_daily_run_on_one_date_has_one_agent_section(dirs: dict[str, Path],

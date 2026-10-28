@@ -39,6 +39,9 @@ MESSAGES: dict[str, str] = {
                   "changed. Upgrade it by hand. Run: vulnscan review"),
     "stale-prs": "{count} remediation PR(s) waiting: {old} older than {days} days, {failing} failing CI. Run: vulnscan review",
     "agent-down": "The remediation agent has not completed for {count} runs in a row. Run: vulnscan review",
+    "remediation-blocked": "Remediation is blocked ({count} reason(s)): see Remediation readiness in the summary. "
+                           "Run: vulnscan halts",
+    "grant-expiring": "Remediation grant {id} expires in {days} day(s): renew it with your key. Run: vulnscan grant list",
 }
 _STATES = {"completed", "agent-error", "gateway-refused", "cap-reached", "timed-out", "not-run", "action needed",
            "partially unscanned",

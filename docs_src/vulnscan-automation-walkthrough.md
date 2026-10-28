@@ -410,7 +410,9 @@ for a mode it cannot recognise) and the user the containers ran as (`container_u
 Docker Desktop and Docker Engine, or between rootful and rootless, re-run `agent-selftest`: a run and
 `agent-chat` refuse until you do. For goose, rc.5 adds the check `goose_recipe_valid` (`goose recipe validate`
 on the run's checked copy of the recipe), so goose operators re-run `agent-selftest` once more after
-installing rc.5.
+installing rc.5. The wire probe (`goose_headless_ran`, `goose_wire_compatible`) runs goose against a
+local stub and passes every request it sent through the gateway's policy, so a goose update the gateway would
+refuse fails the self-test instead of every live call; it too needs one more `agent-selftest` after installing it.
 
 A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
@@ -904,7 +906,7 @@ Search the message for the quoted text.
 | `holds the run lock` | an agent run or `agent-chat` is in progress | wait for it to finish |
 | `another daily run holds ... daily.lock` (exit 3) | a daily run is already in progress | wait for it to finish |
 | `origin/HEAD is not set` (`fix_mode: apply-worktree`) | the repository has no default branch recorded | `git remote set-head origin --auto` in that repository |
-| `the repository's git config defines a filter driver, which git would run — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch) | the repository's own git config defines a `filter.*` driver | apply that fix by hand |
+| `the repository's git config defines a filter driver, which git would run — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch) | the repository's own git config defines a `filter.*` driver other than git-lfs's standard `filter.lfs.*` values | apply that fix by hand |
 | `git refuses to read this repository (<git stderr>) — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `refused`, before any fetch) | git will not open the repository, e.g. `safe.directory` rejects it because another user owns it | fix what git reports (e.g. the directory's owner), or apply that fix by hand |
 | `hash-pinned (--hash) requirements are never edited` / `hash-held` | the requirements file pins `--hash` values | regenerate it yourself (`pip-compile --generate-hashes`) |
 | `invalid host name` (exit 2) | a `hosts.conf` name does not match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`, or is `all` | rename the host there and in `servers` |

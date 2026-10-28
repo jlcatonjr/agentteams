@@ -319,8 +319,7 @@ def agent_argv(a: dict[str, Any], tag: str, run_dir: Path, session: str, *, task
     team = Path(str(a["team_dir"])).expanduser().resolve()
     recipe = agent_recipe.in_container(a, d)   # copilot, goose: the copy run_agent writes (R1, R7); else the team's
     if a.get("command"):
-        cmd = [part.replace("{recipe}", recipe).replace("{session}", session).replace("{run_id}", run_id)
-               .replace("{task}", task) for part in a["command"]]
+        cmd = agent_drivers.fill_command(a["command"], recipe=recipe, session=session, task=task, run_id=run_id)
     else:
         cmd = d.command(a, recipe=recipe, session=session, task=task, run_id=run_id)
     return [*agent_base(tag, run_dir, sessions_dir(run_dir, d), team, name=AGENT_CONTAINER, driver=d, user=user),

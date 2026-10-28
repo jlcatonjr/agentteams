@@ -48,10 +48,10 @@ def test_alias_is_the_plan_file_key_and_the_state_slug() -> None:
     import hashlib
     import re
     path = "/srv/work/my repo"
-    assert repo_alias.alias(path) == daily.plan_slug(Path(path)) == executor._state_slug(Path(path))
+    assert repo_alias.alias(path) == daily.plan_slug(Path(path)) == executor.state_slug(Path(path))
     assert re.fullmatch(r"my-repo-[0-9a-f]{8}", repo_alias.alias(path))
     digest = hashlib.sha256(b"/").hexdigest()[:8]           # existing state-file names stay byte-identical
-    assert executor._state_slug(Path("/")) == f"-{digest}" and daily.plan_slug(Path("/")) == f"root-{digest}"
+    assert executor.state_slug(Path("/")) == f"-{digest}" and daily.plan_slug(Path("/")) == f"root-{digest}"
 
 
 def test_two_paths_sharing_an_alias_are_both_left_unmapped(run: dict[str, Path],

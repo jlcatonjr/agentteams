@@ -109,6 +109,57 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.8]`.
 
 ### Changed
 
+### vulnscan (remediation pipeline: wire self-test, readiness, handoff gate, git-lfs, server plans)
+
+- **goose's self-test proves the gateway accepts its requests (A3).** The probe runs goose headless against a
+  loopback chat stub, with the command a run uses, and passes every request it sent through the gateway's own
+  policy (`gateway_dialects.check_request`). Two new checks: `goose_headless_ran` and `goose_wire_compatible`. A
+  goose update the gateway would refuse (as goose 1.54 was on 2026-10-24) now fails the self-test and keeps agent
+  mode off, instead of every live call failing. goose's `flags_sha256` changes, so re-run `agent-selftest` once.
+- **The daily summary says what blocks remediation (B1, B2, B4).** A new `## Remediation readiness` section, also
+  in `summary.json` as `remediation`, lists:
+  - the agentteams version;
+  - an unbound tools container;
+  - open escalations, with their scope;
+  - an unreadable executor ledger;
+  - grants expiring within 7 days;
+  - configured servers no grant names.
+
+  Two new fixed-text notifications, `remediation-blocked` and `grant-expiring`, are sent once per run. Plan-only use
+  (no grant, agent mode off) is never reported as blocked. The heartbeat records `agentteams_version` and
+  `remediation_blocked`.
+- **Schedule drift is reported (B3).** `schedule.drift(cfg)` compares the installed job's time with
+  `vulnscan.json`'s `schedule`. `vulnscan schedule status` and the readiness section print it as a warning.
+- **Handoff delivery (phase H).**
+  - `vulnerability_scanning.delivery: handoff` in a brief, or `"handoff_required": true` in `vulnscan.json`, makes
+    the executor refuse `open-pr` until the repository's own orchestrator has approved the staged fix
+    (`approve-staged` in `.vulnscan-handoff/verdicts.csv`, in the checkout or a linked worktree under
+    `<repo>.worktrees/`).
+  - Verdicts match by the fix's content digest, so a fix re-staged on a later day keeps its approval. The newest
+    verdict wins. A verdicts file git tracks, a symlink, a FIFO or an oversized or malformed file is ignored.
+  - New module `vulnscan/handoff.py`, new command `vulnscan handoff status [--json]`, and a summary section.
+  - `project-description.schema.json` gains the `handoff` delivery value.
+- **git-lfs repositories can be fixed (C2).** `fix.git_config_problem` refused every filter driver. It now allows
+  exactly git-lfs's standard filter config (`fix.LFS_FILTER`, value for value). The allowance needs git-lfs to be
+  available and none of the refused git-lfs settings: extensions, custom transfer agents and `lfs.storage`. The
+  executor's git sets `GIT_LFS_SKIP_SMUDGE=1`, never runs a pager, and reads blobs with `--no-textconv`. `stage-fix`
+  refuses to change any file that has a `filter` attribute. The tools image installs
+  `git-lfs`, and `tools_present` checks it, so rebuild the tools image and re-run `tools-selftest`.
+- **Per-host server fix plans (D1).** Each daily run writes `<state>/server-plans/<date>/server-fixplan-<host>.md`
+  (outside the run directory the agent mounts), sorting each finding to
+  the kit level that fixes it:
+  - L2 OS security updates;
+  - L3 runtimes;
+  - L4 per `apps.conf` entry, with candidate `--pin` values;
+  - Python packages no `apps.conf` entry covers;
+  - npm trees (fixed in the app's repository);
+  - host checks;
+  - the dry-run and `--apply` commands.
+
+  It changes nothing on the hosts.
+- `handoff.py`, `remediation_status.py` and `server_fixplan.py` are integrity-pinned, and the manifest is
+  re-recorded.
+
 ### vulnscan (daily agent: goose 1.54 wire compatibility)
 
 - **The daily remediation agent reaches the model again.** Since the 2026-10-24 agent image (goose 1.54.0),
