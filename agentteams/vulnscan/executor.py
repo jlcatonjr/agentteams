@@ -17,8 +17,9 @@ Operations (v1):
   :func:`agentteams.vulnscan.fix.fix_path` (non-major, OSV-clean). It then validates the
   diff: only requirements/lockfiles (regular files, modes unchanged, none deleted), only upward
   ``==`` version edits, no root-package change, and only allowlisted registries in lockfile URLs.
-  A repository whose own git config defines a filter driver, or that git refuses to open, is refused
-  before any checkout (:func:`agentteams.vulnscan.fix.git_config_problem`). Finally it commits locally. The agent cannot
+  A repository whose own git config defines a filter driver or a conditional include, or that git refuses to
+  open, is refused before any fetch (:func:`agentteams.vulnscan.fix.git_config_problem`); the check is repeated
+  in the new worktree, created without a checkout, before its files are checked out. Finally it commits locally. The agent cannot
   influence the content.
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
@@ -478,7 +479,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         Result with worktree, branch, base and the fix plan markdown.
 
     Raises:
-        ExecError: The repository's own git config defines a filter driver (or git refuses to open it),
+        ExecError: The repository's own git config defines a filter driver or a conditional include (also
+            when found only in the new worktree, before its checkout), git refuses to open it or read its config,
             or anything else fails (the worktree, and a branch this attempt created, are removed, D4).
         subprocess.SubprocessError: A git or npm step timed out (the worktree is removed too).
     """
@@ -494,7 +496,12 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     staged = False
     branch = ""   # set once this attempt (and only it) may have created the branch
     try:
-        git(repo, "worktree", "add", "-q", "--detach", str(wt), base)
+        # no checkout yet: the config check repeats where git now runs (it can have changed during the fetch)
+        # before any smudge filter could run, then the files are checked out
+        git(repo, "worktree", "add", "-q", "--no-checkout", "--detach", str(wt), base)
+        if unsafe := fix.git_config_problem(wt):
+            raise ExecError(f"{repo}: in the executor's worktree, {unsafe}")
+        git(wt, "reset", "-q", "--hard", base)
         cooldown = RELEASE_COOLDOWN_DAYS   # the config's cooldown_days is deprecated and ignored
         res = fix.fix_path(wt, apply=True, allow_major=False, cooldown_days=cooldown)
         if res.feed_errors:

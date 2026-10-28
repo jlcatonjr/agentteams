@@ -57,7 +57,13 @@ and only within what you signed.
   ending `standalonetransferagent`, `lfs.storage`; "the repository's git-lfs config names a program or a storage
   path"). The executor's git sets `GIT_LFS_SKIP_SMUDGE=1`, so a checkout writes LFS pointer files and downloads
   nothing, and `stage-fix` refuses a change to any path with a `filter` attribute ("has filter=..."), whose commit
-  would hold the filter's output instead of the checked bytes. `open-pr` pushes a **new** `vulnscan/*` branch to `origin` and opens the pull request
+  would hold the filter's output instead of the checked bytes. A conditional include (`includeIf.*`,
+  `fix.CONDITIONAL_INCLUDE`; "the repository's git config has a conditional include (includeIf)") is refused too:
+  its condition is evaluated where git runs, so `gitdir:**/worktrees/**` or `onbranch:vulnscan/**` could add a
+  driver only in the executor's worktree. A plain `include.path` is allowed; what it adds is checked like the rest.
+  `stage-fix` creates its worktree with `--no-checkout` and repeats the check inside it before checking files out.
+  A config query git fails is a refusal ("git cannot read this repository's config"). An `include.path` target
+  outside the repository (e.g. `~/.gitconfig`) is read as it is at each check. `open-pr` pushes a **new** `vulnscan/*` branch to `origin` and opens the pull request
   on that same repository (`--repo HOST/OWNER/REPO` from `origin`'s URL; an `origin` not of that form
   fails before anything is pushed), never merging and never force-pushing. It is idempotent
   ([`open_pr`](#open_prrepo-rationale)).
@@ -357,7 +363,7 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 | `scan PATH` | Scan manifests under a repo or a folder of repos |
 | `inventory LOG --host H` | Analyse a server-kit audit log |
 | `runtimes` | Node.js, PHP and Python on this machine |
-| `fix PATH [--apply]` | Plan, or make, dependency fixes in a working tree you control. git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver, or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
+| `fix PATH [--apply]` | Plan, or make, dependency fixes in a working tree you control. git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
 | `init [--repo-root DIR]… [--server NAME]…` | Write a starter config (never overwrites) |
 | `daily [--catch-up]` | One full run (scan; with agent mode, the agent run and publishing). `--catch-up` runs it only when the last completed run is older than `stale_after_hours` or there is none, after a `run-stale` / `run-missing` notification; otherwise it exits 0 without output (`daily.catch_up`) |
 | `schedule install\|remove\|status [--apply] [--hour H] [--minute M]` | Manage the daily job (launchd on macOS, else a systemd user timer, else cron). Dry run without `--apply`. On macOS, `install` also installs the catch-up agent `io.agentteams.vulnscan.catchup` (`daily --catch-up` at login and every 6 hours), so a run missed while the Mac was powered off is caught up; systemd's `Persistent=true` does the same on Linux; cron does not catch up (add an `@reboot` line running `daily --catch-up` yourself) |
