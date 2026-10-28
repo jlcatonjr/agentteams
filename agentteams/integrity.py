@@ -309,6 +309,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # a guard (lease, drift skip, refs/pull check, HALT check) into unreviewed ref deletion.
     "agentteams/branch_inventory.py",
     "agentteams/branch_cleanup.py",
+    # Bridge retirement (2026-10-27). bridge_retire deletes the files one bridge generated under a
+    # set-bound @security clearance and holds the removal predicate (bridge_marker); a silent edit to
+    # it, the containment check or the HALT checks would turn it into unreviewed deletion of agent
+    # files. retire_bridge_switch resolves the team dir that supplies the clearance.
+    "agentteams/bridge_retire.py",
+    "agentteams/cli/retire_bridge_switch.py",
     # Shrink-guard overrides (2026-10-04). fences.py (pinned) delegates the release decision to
     # shrink_allow.key/body_digest; an unpinned edit there could drop the reviewed-body digest
     # check and release sections nobody reviewed (security A4 re-verification, finding 1).

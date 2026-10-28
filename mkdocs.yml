@@ -328,6 +328,7 @@ nav:
               - project-notes: api-reference/project-notes.md
               - shrink-allow: api-reference/shrink-allow.md
               - branch-cleanup: api-reference/branch-cleanup.md
+              - bridge-retire: api-reference/bridge-retire.md
           - Standalone modules:
               - pr-management: api-reference/pr-management.md
               - research: api-reference/research.md

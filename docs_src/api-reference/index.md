@@ -164,6 +164,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`project_notes`](project-notes.md) | The USER-EDITABLE Project-Specific Notes section of agent personas (carved from `emit`) |
 | [`shrink_allow`](shrink-allow.md) | `--shrink-allow`: operator-reviewed per-section overrides of the shrink guard (template retirements vs enrichment) |
 | [`branch_cleanup`](branch-cleanup.md) | `--branch-cleanup` / `--branch-post-merge`: guarded deletion under a plan-bound `@security` clearance or an operator Ed25519 `branch-delete` grant; hash-chained deletion ledger |
+| [`bridge_retire`](bridge-retire.md) | `--retire-bridge`: removes the enumerated files one bridge generated (pair-dir artifacts, `bridge:`-marked agents and skills) under a set-bound `@security` clearance, after a backup; entry files are reported, never touched |
 
 ## Standalone modules
 

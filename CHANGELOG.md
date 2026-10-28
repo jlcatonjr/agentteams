@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### bridges (`--retire-bridge`; wide bridge stubs refuse the render)
+
+- **`--retire-bridge PAIR`** (new; `copilot-vscode-to-claude` only) removes what one bridge generated. It is the
+  governed way from a bridge to a native team: `--revert-migration` only undoes `--migrate`, and the `--bridge-*`
+  modes only check, refresh or merge.
+  - It removes the known pair-dir artifacts, plus the agent and skill files marked `bridge: PAIR`. Entry files,
+    recall skills and unknown files are reported and kept.
+  - It is a dry run by default. `--apply` needs a `@security` PASS for `retire-bridge:PAIR:<sha256>`. The sha
+    covers every removed file's path and content, so an edit after the dry run voids the clearance. The PASS
+    is consumed. A HALT on the family, the pair or the exact id blocks the mode.
+  - A file reached through a symlink below the project root is never removed. Every file is backed up, then
+    re-hashed just before it is unlinked.
+  - New gate action `retire-bridge`. The constitutional gate prompts on `--retire-bridge … --apply`. Both
+    `agentteams/bridge_retire.py` (which now holds the shared `bridge_marker` predicate) and
+    `cli/retire_bridge_switch.py` join the integrity manifest, which is re-recorded (trust-root write).
+    Re-render the deployed hooks on `main` and re-record. Fence `security_rules_invariant` v=19 adds the
+    review trigger.
+  - `cli.branch_switch._team_dir` is now public as `cli.branch_switch.resolve_team_dir(project, explicit)`. It
+    is unrelated to `cli.decision_log_migrate.resolve_team_dir(args)`.
+- **A wide bridge-generated agent now refuses a render under `write_policy: "orchestrator-only"`** (operator
+  decision 2026-10-27, replacing warn-only for these files). An agent file with a `bridge:` marker that fails
+  `AR_WRITE_POLICY` makes the render exit `1` before anything is written, naming each file and its fix.
+  Bespoke agents keep the warning, and agentteams still never rewrites a file it did not generate.
+- Reported by mathAgents (handoff 2026-10-27, items 3 and 4).
+
 ### vulnscan (no duplicate PR for a fix re-staged on a later day)
 
 - **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch

@@ -23,9 +23,11 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
     """Validate explicit incompatible option pairs and mode-specific constraints."""
     from agentteams.cli.agent_doc_sync_switch import validate_agent_doc_sync_args
     from agentteams.cli.branch_switch import validate_branch_args
+    from agentteams.cli.retire_bridge_switch import validate_retire_bridge_args
 
     validate_agent_doc_sync_args(parser, args)
     validate_branch_args(parser, args)
+    validate_retire_bridge_args(parser, args)
     # --shrink-allow / AGENTTEAMS_SHRINK_ALLOW: an entry the run cannot apply is skipped with a warning when the
     # run resolves them (shrink_allow.resolve), never a usage error that fails the whole run.
     # The Goose source/model switch is a standalone action (dispatched in app.py before

@@ -135,7 +135,7 @@ class TeamDirError(ValueError):
     """Raised when ``--team-dir`` is not one of the project's own team agents dirs."""
 
 
-def _team_dir(project: Path, explicit: str | None) -> Path:
+def resolve_team_dir(project: Path, explicit: str | None) -> Path:
     """Resolve the team agents dir — only ever one of the project's own.
 
     The team dir supplies every trust anchor these modes rely on: the verify-key store, the
@@ -212,7 +212,7 @@ def run_branch_cli(args: argparse.Namespace) -> int:
                     print(f"  ✓  wrote {path}")
             print(f"Branch inventory: {branch_inventory.summary_line(inventory)}")
             return branch_cleanup.EXIT_OK
-        team_dir = _team_dir(project, args.team_dir)
+        team_dir = resolve_team_dir(project, args.team_dir)
         apply = bool(getattr(args, "sync_apply", False))
         if args.branch_cleanup:
             code, lines = branch_cleanup.run_cleanup(Path(args.branch_cleanup), cfg,

@@ -168,6 +168,28 @@ The two designated test teams (`example-research`, `example-collector`) are **no
 
 ---
 
+## V-b. Retiring a Bridge (`--retire-bridge`)
+
+Use this when a project replaces a bridge with a native team. `agentteams --retire-bridge copilot-vscode-to-claude
+--project <repo>` is a dry run that prints:
+
+- the removal set: the known pair-dir artifacts, plus the `.claude/agents` and `.claude/skills` files marked
+  `bridge: copilot-vscode-to-claude`;
+- each file's content digest;
+- the clearance id `retire-bridge:<pair>:<sha256>`;
+- the files it keeps: unknown files in the pair dir, entry files, and the recall skills.
+
+Before `@security` records the PASS, check that the removal set holds only generated output. A stub that someone
+hand-edited after the bridge wrote it still carries the marker, so this check is the one that catches it, and the
+`@cleanup` binding below applies. `--apply` backs every file up to `.agentteams-backups/` first. Any edit after
+the dry run changes the id and voids the clearance. Then remove the `AGENTTEAMS-BRIDGE` regions that the
+dry run lists from the entry files by hand, because a `--merge` render keeps them. After that, run
+`--update --materialize-native --merge` so the native render replaces the routing rows. Under `write_policy: "orchestrator-only"`,
+a render refuses while a wide marked stub remains (`[WRITE-POLICY]`, exit 1). For a supported pair the error
+names this command.
+
+---
+
 ## VI. Bound Operators
 
 This precaution binds:
@@ -175,7 +197,8 @@ This precaution binds:
 - **@orchestrator** — must not delegate bridge operations without surfacing this policy.
 - **@git-operations** — must verify Pre-Flight checks before any bridge command that includes `--bridge-refresh`.
 - **@security** — flags any bridge-refresh invocation against a working tree with uncommitted CLAUDE.md or .claude/ changes as a destructive risk requiring explicit user authorization.
-- **@cleanup** — must not delete bridge-emitted artifacts without first verifying they are not the only copy of user content (this is rare but possible after a forced refresh).
+- **@cleanup** — must not delete bridge-emitted artifacts without first verifying they are not the only copy of user content (this is rare but possible after a forced refresh). Use `--retire-bridge` (§V-b), not hand deletion, and review its dry-run removal set before asking `@security` for the PASS.
+- **@security** (retirement) — clears `retire-bridge:<pair>:<sha256>` only after reviewing the dry-run removal set; the PASS is bound to those exact file contents.
 
 ---
 

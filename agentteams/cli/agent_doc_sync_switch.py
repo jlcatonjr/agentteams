@@ -40,7 +40,7 @@ def add_agent_doc_sync_arguments(parser: argparse.ArgumentParser) -> None:
         default=False,
         help="With --sync-agent-docs: write .github/agents, .goose/recipes and .codex/agents targets "
              "(.claude/agents targets are staged for review unless --include-claude). With "
-             "--branch-cleanup / --branch-post-merge: execute instead of a dry run.",
+             "--branch-cleanup / --branch-post-merge / --retire-bridge: execute instead of a dry run.",
     )
     group.add_argument(
         "--include-claude",
@@ -73,9 +73,10 @@ def validate_agent_doc_sync_args(parser: argparse.ArgumentParser, args: argparse
     """
     on = bool(getattr(args, "sync_agent_docs", False))
     branch_execute = bool(getattr(args, "branch_cleanup", None)
-                          or getattr(args, "branch_post_merge", None))
+                          or getattr(args, "branch_post_merge", None)
+                          or getattr(args, "retire_bridge", None))
     if getattr(args, "sync_apply", False) and not (on or branch_execute):
-        parser.error("--apply requires --sync-agent-docs, --branch-cleanup or --branch-post-merge")
+        parser.error("--apply requires --sync-agent-docs, --branch-cleanup, --branch-post-merge or --retire-bridge")
     if getattr(args, "sync_include_claude", False) and not (on and args.sync_apply):
         parser.error("--include-claude requires --sync-agent-docs --apply")
     if getattr(args, "sync_restore_removed", False) and not (on and args.sync_apply):

@@ -201,6 +201,9 @@ def _run_template(command: str) -> tuple[int, dict | None]:
         "python build_team.py --branch-post-m x --apply",
         "python -m agentteams.cli.app --branch-cleanup p.json --apply",
         "python -c 'from agentteams import branch_cleanup as b; b.run_post_merge(x, apply=True)'",
+        "agentteams --retire-bridge copilot-vscode-to-claude --apply",
+        "agentteams --ret copilot-vscode-to-claude --appl --project ../x",
+        "python -c 'from agentteams import bridge_retire as b; b.run_retire(p, x, team_dir=t, apply=True)'",
         "git worktree remove wt",
         "rmdir somedir",
         "find . -name '*.tmp' -delete",
@@ -304,6 +307,7 @@ def test_delete_commands_require_authorization(command: str) -> None:
         "git status",
         "git push origin main:main",       # normal push, not a ref-delete
         "agentteams --branch-inventory --branch-report out",  # read-only
+        "agentteams --retire-bridge copilot-vscode-to-claude --project .",  # dry run
         "agentteams --branch-cleanup plan.json",  # dry run
         "git branch --show-current",       # not a delete flag
         "grep -rn 'drop table' migrations/",  # searching SQL != executing it

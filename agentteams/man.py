@@ -83,6 +83,7 @@ def generate_man_page(parser: argparse.ArgumentParser) -> str:
         "Error: validation failure, file not found, "
         "drift detected (with \\fB--check\\fR), "
         "security issues (with \\fB--scan-security\\fR), "
+        "a wide bridge-generated agent under write_policy orchestrator-only, "
         "or a Tier-1 (blocking) finding (with \\fB--stale-check\\fR)."
     )
     lines.append(".TP")
@@ -92,7 +93,8 @@ def generate_man_page(parser: argparse.ArgumentParser) -> str:
     lines.append(".B 3")
     lines.append(
         "Reserved: remediation attempted but unresolved "
-        "(with \\fB--stale-check --stale-remediate\\fR)."
+        "(with \\fB--stale-check --stale-remediate\\fR), or no authorization (with "
+        "\\fB--branch-cleanup\\fR, \\fB--branch-post-merge\\fR or \\fB--retire-bridge\\fR and \\fB--apply\\fR)."
     )
 
     # EXAMPLES
