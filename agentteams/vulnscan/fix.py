@@ -196,6 +196,9 @@ LFS_FILTER = {"filter.lfs.clean": "git-lfs clean -- %f", "filter.lfs.smudge": "g
 #: clean/smudge, custom transfer agents (any key, and the URL-scoped ``lfs.<url>.standalonetransferagent`` form) run one
 #: on a transfer, and ``lfs.storage`` moves where clean writes objects, possibly outside the repository.
 LFS_REFUSED_KEYS = r"^lfs\.(extension|customtransfer)\.|standalonetransferagent$|^lfs\.storage$"
+#: Conditional includes (a POSIX ERE on config key names, which git lowercases to ``includeif.``): refused, because
+#: their condition is evaluated where git runs, not where :func:`git_config_problem` looked (security follow-up, #311).
+CONDITIONAL_INCLUDE = r"^includeif\."
 
 
 def lfs_available() -> bool:
@@ -217,6 +220,13 @@ def git_config_problem(directory: Path) -> str:
     (:func:`lfs_available`) and no refused git-lfs setting is present (:data:`LFS_REFUSED_KEYS`). A repository git
     refuses to open (e.g. ``safe.directory``) is a problem too: its dirty check would otherwise read as clean.
 
+    A conditional include (``includeIf.*``, :data:`CONDITIONAL_INCLUDE`) is refused outright: its condition
+    (``gitdir:``, ``onbranch:``, ``hasconfig:``) is evaluated where git runs, so a driver it adds can be absent here
+    and present in the executor's worktree (``gitdir:**/worktrees/**``) or on its branch (``onbranch:vulnscan/**``).
+    Plain ``include.path`` resolves to the same file everywhere, so what it adds is checked here like the rest (a
+    target outside the repository, e.g. ``~/.gitconfig``, is read as it is at check time; :func:`.executor.stage_fix`
+    checks again just before its checkout). A config query git fails (not "no match") is a refusal too.
+
     Args:
         directory: A directory inside the tree (git finds the repository upwards).
 
@@ -232,8 +242,16 @@ def git_config_problem(directory: Path) -> str:
         if "not a git repository" in probe.stderr:
             return ""
         return f"git refuses to read this repository ({probe.stderr.strip()[:200]}) — fix it by hand"
+    cond = executor.query_git(directory, "config", "--name-only", "--get-regexp", CONDITIONAL_INCLUDE)
+    if cond.returncode not in (0, 1):   # 1: no match; anything else (an unreadable config) refuses
+        return f"git cannot read this repository's config ({cond.stderr.strip()[:200]}) — fix it by hand"
+    if cond.returncode == 0 and cond.stdout.strip():
+        return ("the repository's git config has a conditional include (includeIf), which can add settings only "
+                "where the executor runs git — fix it by hand")
     proc = executor.query_git(directory, "config", "--get-regexp", r"^filter\..*\.(clean|process|smudge)$")
-    if proc.returncode != 0 or not proc.stdout.strip():
+    if proc.returncode not in (0, 1):
+        return f"git cannot read this repository's config ({proc.stderr.strip()[:200]}) — fix it by hand"
+    if proc.returncode == 1 or not proc.stdout.strip():
         return ""
     pairs = [(line.split(" ", 1) + [""])[:2] for line in proc.stdout.splitlines() if line.strip()]
     if not all(LFS_FILTER.get(key) == value for key, value in pairs):
@@ -241,6 +259,8 @@ def git_config_problem(directory: Path) -> str:
     if not lfs_available():
         return "the repository uses git-lfs filters but git-lfs is not installed where the executor runs git"
     refused = executor.query_git(directory, "config", "--get-regexp", LFS_REFUSED_KEYS)
+    if refused.returncode not in (0, 1):
+        return f"git cannot read this repository's config ({refused.stderr.strip()[:200]}) — fix it by hand"
     if refused.returncode == 0 and refused.stdout.strip():
         return ("the repository's git-lfs config names a program or a storage path (an extension, a custom transfer "
                 "agent or lfs.storage) — fix it by hand")
