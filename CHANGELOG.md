@@ -6,6 +6,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.9] - 2026-10-27
+
+### release notes
+
+agentteams 1.1.0-rc.9 is the ninth release candidate of the 1.1 line. It makes daily vulnscan remediation land and
+shows whether it is working. It fixes the failures found in rc.8's first live agent run. The 1.0 line has no agent
+gateway and is unaffected.
+
+- **The agent can name repositories again.** The gateway's DLP redacts home paths, so the agent never saw a usable
+  repo target and guessed. The agent now names each repo by an alias (`<name>-<8 hex>`), which is mapped back to the
+  host path for that run only. The DLP is unchanged, and home paths still never reach the model provider.
+- **Grants are checked first.** The executor refuses a target outside every granted repo root before any git
+  subprocess runs. Escalations are canonicalised only inside a grant.
+- **No busy-polling.** `request_status` tells the agent a pending request is queued and refuses after three polls of
+  the same request. A repo with a staged fix gets `open-pr`, not a second `stage-fix`. A run that hits its token
+  cap is reported as `cap-reached`.
+- **Futile retries stop.** A `stage-fix` whose last result was "nothing fixable without a major jump" is held
+  (`held:`) until the repo's fix plan changes. The operator gets one `repo-held` notice.
+- **Remediation effectiveness in every daily summary.** It reports findings fixed versus new, open vulnscan PRs (count,
+  oldest age, CI state), PRs merged in the last 7 days, and fixes staged with no PR. It shows counts only.
+- **Alerts:** `stale-prs` (a vulnscan PR older than 3 days or with failing CI), `agent-down` (two runs in a row not
+  completed) and `repo-held`.
+- **Superseded PRs are closed.** A new grant-scoped `close-superseded` op closes the executor's own older vulnscan PR
+  once its replacement is open, and only if no one has reviewed, commented or pushed to it. Nothing is force-pushed.
+- **Merge digest.** Each run writes a machine-local `merge-digest.sh`. It merges green vulnscan PRs on your own
+  credentials, asks before each one and uses `--match-head-commit`. The executor still never merges.
+- **Remediation readiness in every daily summary.** It lists the agentteams version, an unbound tools container,
+  open escalations, expiring grants, servers no grant names and schedule drift. New notices: `remediation-blocked`
+  and `grant-expiring`. The heartbeat records the version.
+- **The goose self-test checks the wire.** It runs goose headless against a loopback stub and passes every request
+  through the gateway's own policy, so a goose update the gateway would refuse fails the self-test instead of every
+  live call.
+- **Optional handoff gate.** With `delivery: handoff` (brief) or `handoff_required` (operator config), `open-pr` waits
+  for the repository orchestrator's `approve-staged` verdict, matched by the fix's content digest. New command:
+  `vulnscan handoff status`. The default delivery is unchanged (`pr`).
+- **git-lfs repositories can be fixed.** git-lfs's standard filter config is allowed value for value, with smudge
+  skipped and no textconv. LFS extensions and custom transfer agents are still refused, and `stage-fix` never changes
+  a file that has a `filter` attribute. The tools image installs git-lfs.
+- **Server fix plans.** Each L1 audit writes `server-fixplan-<host>.md` outside the directory the agent sees.
+- **After upgrading:**
+  - Re-sign the repo grant with `--op close-superseded` added. Only two grants can be active, so revoke the old repo
+    grant first.
+  - Rebuild the tools and agent images, then check the `git lfs version` the rebuild prints against CVE-2025-26625
+    and CVE-2024-53263.
+  - Re-render teams to pick up the vuln-remediation fence `daily_remediation` v5 and `security_rules_invariant` v18.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.9` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.9]`.
+
+### Changes since 1.1.0-rc.8
+
 ### Changed
 
 ### vulnscan (superseded PRs and the merge digest)
@@ -79,36 +131,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is no longer a generic `agent-error`; its reason quotes the cap refusal.
 - Docs: `session_id` is recorded as the one deliberate non-OpenRouter strip on the chat route.
 
-## [1.1.0-rc.8] - 2026-10-27
-
-### release notes
-
-agentteams 1.1.0-rc.8 is the eighth release candidate of the 1.1 line. It restores the daily vulnscan remediation
-agent, which has made no model calls since its tools image moved to goose 1.54. The 1.0 line has no agent gateway
-and is unaffected.
-
-- **The daily remediation agent reaches the model again.** goose 1.54 sends a `session_id` body key, and the gateway's
-  deny-by-default chat route refused every call, so runs ended as `agent-error` with no spend. The gateway now strips
-  `session_id` before forwarding; it is never sent upstream.
-- **goose's output ceiling is capped at the source.** The goose driver sets `GOOSE_MAX_TOKENS` to
-  `agent.max_output_tokens` (default 32000). Without it, goose 1.54 asks for the model's whole context window, which
-  the route refuses.
-- **New run state `gateway-refused`.** A run with no model call and gateway refusals no longer reads as a transient
-  `agent-error`. Its reason lists the refusals and says the failure will recur until the allowlist or the CLI pin
-  changes.
-- **`grant sign` refuses a grant past the aggregate cap.** It names the active grants and asks for one to be revoked
-  first. Before, a third grant made every grant invalid and silently stopped remediation.
-- **After upgrading:** reinstall the scheduled vulnscan (pipx) from the verified tag. The next daily run should show
-  agent state `completed`. No team re-render is needed for this release.
-- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.8` tag (release key `SHA256:IPdnLwlF…`,
-  as in `SECURITY.md`).
-
-The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.8]`.
-
-### Changes since 1.1.0-rc.7
-
-### Changed
-
 ### vulnscan (remediation pipeline: wire self-test, readiness, handoff gate, git-lfs, server plans)
 
 - **goose's self-test proves the gateway accepts its requests (A3).** The probe runs goose headless against a
@@ -159,6 +181,36 @@ The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.8]`.
   It changes nothing on the hosts.
 - `handoff.py`, `remediation_status.py` and `server_fixplan.py` are integrity-pinned, and the manifest is
   re-recorded.
+
+## [1.1.0-rc.8] - 2026-10-27
+
+### release notes
+
+agentteams 1.1.0-rc.8 is the eighth release candidate of the 1.1 line. It restores the daily vulnscan remediation
+agent, which has made no model calls since its tools image moved to goose 1.54. The 1.0 line has no agent gateway
+and is unaffected.
+
+- **The daily remediation agent reaches the model again.** goose 1.54 sends a `session_id` body key, and the gateway's
+  deny-by-default chat route refused every call, so runs ended as `agent-error` with no spend. The gateway now strips
+  `session_id` before forwarding; it is never sent upstream.
+- **goose's output ceiling is capped at the source.** The goose driver sets `GOOSE_MAX_TOKENS` to
+  `agent.max_output_tokens` (default 32000). Without it, goose 1.54 asks for the model's whole context window, which
+  the route refuses.
+- **New run state `gateway-refused`.** A run with no model call and gateway refusals no longer reads as a transient
+  `agent-error`. Its reason lists the refusals and says the failure will recur until the allowlist or the CLI pin
+  changes.
+- **`grant sign` refuses a grant past the aggregate cap.** It names the active grants and asks for one to be revoked
+  first. Before, a third grant made every grant invalid and silently stopped remediation.
+- **After upgrading:** reinstall the scheduled vulnscan (pipx) from the verified tag. The next daily run should show
+  agent state `completed`. No team re-render is needed for this release.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.8` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.8]`.
+
+### Changes since 1.1.0-rc.7
+
+### Changed
 
 ### vulnscan (daily agent: goose 1.54 wire compatibility)
 
