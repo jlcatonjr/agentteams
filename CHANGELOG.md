@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.10] - 2026-10-27
+
+### release notes
+
+agentteams 1.1.0-rc.10 is the tenth release candidate of the 1.1 line. It fixes the failure found in rc.9's live
+agent runs: in each run, the model spent the whole output of one reply on reasoning, so it never called a tool or
+filed a report. The 1.0 line has no agent gateway and is unaffected.
+
+- **`agent.reasoning` bounds the model's reasoning.**
+  - It is a chat-route setting, `null` by default, which changes nothing.
+  - Set it to an OpenRouter `reasoning` object with exactly one of `effort` (minimal/low/medium/high), `max_tokens`
+    (below `agent.max_output_tokens`) or `enabled: false`.
+  - The gateway's new `--chat-reasoning` flag writes it into every chat request, replacing the client's own
+    reasoning keys.
+  - It is checked at config load and at gateway startup. The self-test fingerprint is unchanged.
+- **The run state names the cut-off.** A run whose reply stopped at the output-token limit is reported as "the
+  model's reply reached its output-token limit before it called a tool", not as a line of tool data.
+- **`list_requests` returns the 20 newest results, newest first.** It used to return the 50 newest, oldest first,
+  and the history grows all day.
+- **After upgrading:**
+  - Rebuild the tools and agent images.
+  - If your model over-reasons, set `agent.reasoning`, for example `{"effort": "low"}`. If the model ignores that,
+    use `{"enabled": false}`.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.10` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.10]`.
+
+### Changes since 1.1.0-rc.9
+
 ### Changed
 
 ### vulnscan (a reply that is all reasoning)
