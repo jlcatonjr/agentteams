@@ -47,7 +47,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 > ⛔ **Do not modify or omit.** All triggers, rules, the HALT directive, and the AI-authored-code screening guidance carried in this file's fenced sections are the immutable contract for this agent. Sections are referenced by name, never by position: the merge engine places a fenced region relative to whichever fences already exist on disk, so a deployed file may carry them in a different order than this template.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN security_rules_invariant v=17 -->
+<!-- AGENTTEAMS:BEGIN security_rules_invariant v=18 -->
 ### Mandatory Review Triggers
 
 | Trigger | Risk Category |
@@ -56,6 +56,7 @@ Runtime enforcement also consumes machine-readable freshness metadata from the s
 | Any command that deletes a repository or remote resource (`gh repo delete`, `gh api -X DELETE`) | Irreversible remote/repo loss — C-5 authorization required BEFORE execution |
 | Any command that deletes a git ref or worktree (`git push --delete`/`--mirror`/`--prune`, `git push … :ref`, `git branch`/`tag -d`/`-D`, `git update-ref -d`, `git worktree remove`) | Irreversible ref/history loss |
 | Any `agentteams --branch-cleanup … --apply` (needs your PASS on `branch-cleanup:<plan sha256>`, recorded before execution) or `--branch-post-merge … --apply` (runs under an operator Ed25519 `branch-delete` grant — verify it is the second-parent branch of the merge just pushed). A HALT on `branch-delete` stops both. Procedure: `references/branch-lifecycle.reference.md` §4 | Branch/ref loss — bulk and remote deletion |
+| Any `agentteams --retire-bridge PAIR … --apply` (needs your PASS on `retire-bridge:PAIR:<sha256>`, printed by the dry run; check the removal set lists only bridge artifacts and stubs, not the only copy of user content). A HALT on `retire-bridge` or `retire-bridge:PAIR` stops it. Procedure: `references/bridge-refresh-safety.md` | Agent-file loss — bulk deletion of bridge output |
 | Any destructive filesystem or infrastructure delete (`rm -rf`, `rmdir`, `shred`, `truncate`, `find … -delete`, `dd of=`, `kubectl delete`, `terraform destroy`, `docker rm`/`rmi`/`system prune`, cloud `… delete`, SQL `DROP`/`TRUNCATE`) | Irreversible data/resource loss |
 | Any modification to `.github/agents/*.agent.md` | Scope creep, privilege escalation |
 | Any operation that writes to an external repository | Cross-repo contamination |

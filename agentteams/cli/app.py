@@ -128,6 +128,12 @@ def _main_dispatch(
         from agentteams.cli.branch_switch import run_branch_cli
         return run_branch_cli(args)
 
+    # --retire-bridge: standalone, reads no brief.
+    from agentteams.cli.retire_bridge_switch import retire_bridge_active
+    if retire_bridge_active(args):
+        from agentteams.cli.retire_bridge_switch import run_retire_bridge_cli
+        return run_retire_bridge_cli(args)
+
     import build_team  # lazy: resident helpers (events/migrate/etc.) stay in build_team
 
     # --backup-mirror overrides AGENTTEAMS_BACKUP_MIRROR for this run so the

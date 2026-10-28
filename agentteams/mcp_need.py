@@ -35,6 +35,27 @@ USE_RUNNER_PATH = "USE_RUNNER_PATH"
 _SEED_STATUS = {USE_RUNNER_PATH: "waiting", DEFER_TO_SECURITY_REVIEW: "open", REFUSE: "refused"}
 
 
+def seed_rows_under_switch(manifest: dict[str, Any]) -> list[dict[str, str]] | None:
+    """Brief-hint rows for a new MCP need register, dated today, under ``write_policy`` only (phase N4).
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        :func:`seed_rows` for today when the switch is on, else None (no register is seeded).
+
+    Raises:
+        ValueError: As :func:`seed_rows`.
+    """
+    from datetime import date
+
+    from agentteams import write_policy
+
+    if not write_policy.enabled(manifest):
+        return None
+    return seed_rows(manifest, date.today().isoformat())
+
+
 def seed_rows(manifest: dict[str, Any], today: str) -> list[dict[str, str]]:
     """Register rows for the brief's ``mcp_hints``, per agent, as decided at generation (phase N4).
 

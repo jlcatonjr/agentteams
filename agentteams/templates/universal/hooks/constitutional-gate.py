@@ -181,6 +181,8 @@ _BASH_REVIEW_TRIGGERS: tuple[tuple[str, str], ...] = (
     (r"\b(?:agentteams|build_team)\b(?=[^\n]*--branch-[cp])(?=[^\n]*--appl)|"
      r"\bbranch_cleanup\b[^\n]*\b(?:run_cleanup|run_post_merge|execute_items)\b",
      "branch deletion through agentteams (its git deletes run inside the tool, unseen here)"),
+    (r"\b(?:agentteams|build_team)\b(?=[^\n]*--ret)(?=[^\n]*--appl)|\bbridge_retire\b[^\n]*\brun_retire\b",
+     "bridge retirement through agentteams (agent and skill files deleted inside the tool, unseen here)"),
     (r"\brm\s+\S|\b(?:unlink|srm|wipe|rmdir|shred|truncate)\b|\bfind\b[^\n]*\s-delete\b|"
      r"\bdd\b[^\n]*\bof=|>\|\s*\S|(?:^|[;&|])\s*:\s*>\s*\S|\bmv\b[^\n]*\s/dev/null\b|\bcp\s+/dev/null\b",
      "irreversible filesystem deletion or truncation/overwrite"),

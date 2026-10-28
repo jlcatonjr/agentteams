@@ -308,7 +308,7 @@ def test_the_pre_upgrade_report_names_newly_blocking_halts(tmp_path):
 
 def test_every_gate_call_site_is_listed():
     """@adversarial: the reverse direction. Every literal or constant action passed to a gate is in
-    GATE_ACTIONS, and a variable action appears only at the one dynamic site (branch-cleanup:<sha>)."""
+    GATE_ACTIONS, and a variable action appears only at the dynamic sites (branch-cleanup:<sha>, retire-bridge:<pair>:<sha>)."""
     import re as _re
     from pathlib import Path as _P
 
@@ -327,7 +327,7 @@ def test_every_gate_call_site_is_listed():
                 assert arg.strip('"') in GATE_ACTIONS, (path.name, arg)
             elif arg.isupper() or arg in constants:
                 assert constants[arg] in GATE_ACTIONS, (path.name, arg)
-            elif arg == "action" and path.name in {"branch_cleanup.py", "security_gate.py"}:
+            elif arg == "action" and path.name in {"branch_cleanup.py", "bridge_retire.py", "security_gate.py"}:
                 dynamic.append(path.name)
             else:
                 raise AssertionError(f"unlisted gate action {arg!r} in {path.name}")

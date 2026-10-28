@@ -205,6 +205,13 @@ every one.
   leaves it as it is. After each render under the switch, agentteams runs the `AR_WRITE_POLICY` check on the
   agent files it doesn't generate (adopted ones, not files it skipped), and prints `[WRITE-POLICY]` naming any that fail. It changes no file and
   no exit code. Narrow them yourself, for example with `agentteams.write_policy.apply`, or the audit fails.
+- **Bridge-generated agents are refused, not warned** (operator decision, 2026-10-27). A failing file with a
+  `bridge:` front-matter marker is a bridge stub carrying its source's tools, not the project's own agent.
+  The render exits `1` before writing anything and names each such file with its fix:
+  [`--retire-bridge`](../cli-reference.md#--retire-bridge-pair) for a supported pair, otherwise delete or
+  narrow it. agentteams still never rewrites the file. An empty `bridge:` value counts.
+  Residue (stated): deleting the `bridge:` line turns the refusal back into the bespoke warning, and
+  `AR_WRITE_POLICY` still fails the audit. `--check` does not run the refusal.
 
 ## Residual risk (stated, not hidden)
 

@@ -20,7 +20,8 @@ from pathlib import Path
 from agentteams import analyze, emit, fences, git_hooks, ingest, liaison_logs, render, shrink_allow, template_pins
 from agentteams import write_policy as _write_policy
 from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
-from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
+from agentteams.cli.write_policy_warning import bridge_agent_refusal, warn_unnarrowed_adopted
+from agentteams.mcp_need import seed_rows_under_switch
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
 from agentteams.cli.artifacts import (
@@ -77,17 +78,6 @@ __all__ = ["_finalize_exit_code", "run_generate"]
 _SCRIPT_DIR = Path(__file__).resolve().parents[2]
 TEMPLATES_DIR = _SCRIPT_DIR / "agentteams" / "templates"
 
-
-
-def _mcp_seed_rows(manifest: dict) -> list[dict[str, str]] | None:
-    """Brief-hint rows for a new MCP need register under the switch (MCP-need protocol N4), else ``None``."""
-    if not _write_policy.enabled(manifest):
-        return None
-    from datetime import date
-
-    from agentteams.mcp_need import seed_rows
-
-    return seed_rows(manifest, date.today().isoformat())
 
 def run_generate(
     args: argparse.Namespace,
@@ -335,6 +325,13 @@ def _run_generate_inner(
         from agentteams import front_matter_reconcile as _fmr
 
         return _fmr.run_reconcile(args, final_rendered, output_dir)
+
+    # A bridge-generated agent left wide under write_policy is refused before anything is written
+    # (cli/write_policy_warning.py; operator decision 2026-10-27).
+    refusal = bridge_agent_refusal(manifest, output_dir, [rel for rel, _ in final_rendered])
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 1
 
     # -----------------------------------------------------------------------
     # Step 5b: Handle --update (structural + content drift, manual preservation)
@@ -687,7 +684,7 @@ def _run_generate_inner(
 
         if not args.dry_run and result.success:
             created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest),
-                                                  mcp_seed_rows=_mcp_seed_rows(manifest))
+                                                  mcp_seed_rows=seed_rows_under_switch(manifest))
             if created:
                 print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
             build_team._write_run_log(manifest, result, output_dir, template_hashes)
@@ -926,7 +923,7 @@ def _run_generate_inner(
 
     if not args.dry_run and result.success:
         created = liaison_logs.init_csv_stubs(output_dir / "references", mcp_needs=_write_policy.enabled(manifest),
-                                              mcp_seed_rows=_mcp_seed_rows(manifest))
+                                              mcp_seed_rows=seed_rows_under_switch(manifest))
         if created:
             print(f"  ✓  Created CSV log stubs: {', '.join(created)}")
 

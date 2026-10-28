@@ -6,6 +6,12 @@ content only). Before this, only the ``AR_WRITE_POLICY`` audit flagged such an a
 successful: mathAgents' first P5 render was reverted at a stop-condition for exactly that. This runs the same
 check on the agent files this render did not write, and prints a named warning. It changes no file and no exit
 code (operator decision: warn, never rewrite files agentteams did not generate).
+
+Bridge-generated agents are refused, not warned (operator decision, 2026-10-27). A file with a ``bridge:``
+front-matter key (:func:`agentteams.bridge_retire.bridge_marker`; an empty value counts) is a stub a bridge wrote with its source's
+tools, not the project's own agent, so leaving it wide is never intended. :func:`bridge_agent_refusal` names
+each one, and the render returns 1 before writing anything. Files are still never rewritten: the fix is
+``--retire-bridge`` or deleting or narrowing the stub. Bespoke agents keep the warning.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from agentteams.bridge_retire import SUPPORTED_PAIRS, bridge_marker
 from agentteams.audit import _load_files_from_disk
 from agentteams.audit_agent_contract import _check_write_policy
 from agentteams.audit_types import _agent_file_ext
@@ -61,10 +68,42 @@ def warn_unnarrowed_adopted(manifest: dict[str, Any], output_dir: Path, rendered
     Raises:
         Nothing.
     """
-    names = unnarrowed_adopted_agents(manifest, output_dir, rendered)
+    names = [n for n in unnarrowed_adopted_agents(manifest, output_dir, rendered)
+             if bridge_marker(output_dir / n) is None]
     if not names:
         return
     print(f"  ⚠  [WRITE-POLICY] {len(names)} agent file(s) agentteams does not generate are not narrowed under "
           "write_policy \"orchestrator-only\": " + ", ".join(names))
     print("     agentteams does not rewrite files it did not generate. Narrow them yourself (e.g. apply "
           "agentteams.write_policy.apply to each), or AR_WRITE_POLICY will fail the audit.")
+
+
+def bridge_agent_refusal(manifest: dict[str, Any], output_dir: Path, rendered: list[str]) -> str | None:
+    """The refusal for bridge-generated agent files that ``write_policy`` does not cover, if any.
+
+    Called once the render is known and before anything is written, so a refused run changes nothing.
+
+    Args:
+        manifest: The team manifest.
+        output_dir: The team (agents) directory.
+        rendered: Team-relative paths of every file this render generates.
+
+    Returns:
+        The error text naming each file and its fix; None when there is nothing to refuse (including when
+        the switch is off).
+
+    Raises:
+        Nothing.
+    """
+    found = [(n, bridge_marker(output_dir / n)) for n in unnarrowed_adopted_agents(manifest, output_dir, rendered)]
+    stubs = [(n, marker) for n, marker in found if marker is not None]
+    if not stubs:
+        return None
+    lines = [f"Error: [WRITE-POLICY] {len(stubs)} bridge-generated agent file(s) are not narrowed under write_policy "
+             '"orchestrator-only" (a bridge stub copies its source\'s tools). Nothing was written.']
+    project = output_dir.resolve().parent.parent
+    for name, marker in stubs:
+        fix = (f"agentteams --retire-bridge {marker} --project {project}" if marker in SUPPORTED_PAIRS
+               else "delete it, or narrow its tools")
+        lines.append(f"  {name} (bridge: {marker or '?'}): {fix}")
+    return "\n".join(lines)

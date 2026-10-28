@@ -24,10 +24,11 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 
 #: The action ids agentteams' own gates are called with (``_assert_destructive_action_allowed``,
 #: ``check_clearance``, ``_assert_no_unretracted_halt``); ``branch-cleanup`` is the family of the
-#: per-plan ``branch-cleanup:<sha256>`` id. The pre-upgrade report checks old HALTs against these; a
-#: test checks both directions against the call sites.
+#: per-plan ``branch-cleanup:<sha256>`` id, and ``retire-bridge`` of ``retire-bridge:<pair>:<sha256>``.
+#: The pre-upgrade report checks old HALTs against these; a test checks both directions against the
+#: call sites.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
-                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish")
+                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "retire-bridge")
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:

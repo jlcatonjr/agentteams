@@ -53,3 +53,42 @@ def test_a_generated_file_is_never_reported_even_if_unwritten(tmp_path):
     assert unnarrowed_adopted_agents(manifest, tmp_path, ["x.md"]) == []
     assert unnarrowed_adopted_agents(manifest, tmp_path, []) == ["x.md"]
     assert unnarrowed_adopted_agents({"framework": "claude"}, tmp_path, []) == []   # switch off: silent
+
+
+# Bridge-generated agents are refused, not warned (operator decision, 2026-10-27).
+_STUB = _BESPOKE.replace("name: bespoke-writer\n", "name: legacy-helper\nbridge: copilot-vscode-to-claude\n")
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    # The vulnerability watch is written by the test harness's seed_offline_intel on every _render call.
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*")
+            if p.is_file() and p.name != "security-vulnerability-watch.json"}
+
+
+def test_a_wide_bridge_stub_refuses_the_render_and_nothing_is_written(project):
+    agents = project / ".claude" / "agents"
+    (agents / "legacy-helper.md").write_text(_STUB)
+    before = _tree(agents)
+    out = _render(project, "--update", "--merge")
+    assert out.returncode == 1
+    assert "bridge-generated agent file(s) are not narrowed" in out.stderr
+    assert ("legacy-helper.md (bridge: copilot-vscode-to-claude): agentteams --retire-bridge copilot-vscode-to-claude"
+            in out.stderr)
+    assert _tree(agents) == before                        # refused before any write (heal, prune, backup, emit)
+
+
+def test_a_wide_bridge_stub_also_fails_a_dry_run(project):
+    (project / ".claude" / "agents" / "legacy-helper.md").write_text(_STUB)
+    out = _render(project, "--update", "--merge", "--dry-run")
+    assert out.returncode == 1 and "Error: [WRITE-POLICY]" in out.stderr
+
+
+def test_bridge_refusal_names_only_bridge_files(tmp_path):
+    from agentteams.cli.write_policy_warning import bridge_agent_refusal
+    manifest = {"framework": "claude", "write_policy": "orchestrator-only"}
+    (tmp_path / "bespoke.md").write_text(_BESPOKE)
+    assert bridge_agent_refusal(manifest, tmp_path, []) is None          # bespoke: warning only
+    (tmp_path / "odd.md").write_text(_BESPOKE.replace("name: bespoke-writer\n", "name: odd\nbridge:\n"))
+    text = bridge_agent_refusal(manifest, tmp_path, [])
+    assert text and "odd.md (bridge: ?): delete it, or narrow its tools" in text and "bespoke.md" not in text
+    assert bridge_agent_refusal({"framework": "claude"}, tmp_path, []) is None   # switch off

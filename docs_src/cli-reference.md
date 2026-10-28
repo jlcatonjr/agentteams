@@ -232,6 +232,36 @@ Non-destructive bridge update. Regenerates bridge-internal artifacts under `refe
 
 Suppress emission of `.claude/skills/recall/SKILL.md` (Claude target only). The recall skill wraps `agentteams --query-index` for in-session memory-index retrieval; disable when your team manages skills via another channel.
 
+### `--retire-bridge PAIR`
+
+Remove what one bridge generated in `--project`, under a `@security` clearance. Use this when a project
+moves from a bridge to a native team. Standalone, and it reads no brief. Supported pair:
+`copilot-vscode-to-claude`; any other pair is refused.
+
+- **Removes:** the known artifacts in `references/bridges/PAIR/`, plus the `.claude/agents/*.md` and
+  `.claude/skills/*/SKILL.md` files whose front matter says `bridge: PAIR`. The pair directory goes only
+  when nothing else is left in it; any other file there is reported and kept.
+- **Never touches:** entry files (`CLAUDE.md`, `.claude/agent-team.md`, …), unmarked skills such as the
+  recall skills, hooks or schedule artifacts, and anything reached through a symlink. Entry files are
+  reported with the `AGENTTEAMS-BRIDGE` regions they still hold.
+- **Authorization:** a dry run by default. `--apply` needs a `@security` PASS for
+  `retire-bridge:PAIR:<sha256>`, where the sha covers every removed file's path and content. The dry run
+  prints that id. A file changed after the dry run changes the id, so no clearance matches. The clearance
+  is consumed. A HALT on `retire-bridge`, on `retire-bridge:PAIR` or on the exact id blocks the mode.
+  Signing works as for `--branch-cleanup` (see [Branch Lifecycle](#branch-lifecycle)). The dry run prints
+  which security log the clearance is read from.
+- **Before removal:** every file is backed up to `.agentteams-backups/<timestamp>/` (restore by copying
+  back), and re-hashed just before it is unlinked.
+- **Afterwards:** remove the reported `AGENTTEAMS-BRIDGE` regions from the entry files by hand. A `--merge`
+  render keeps them, and the bridge check keys on them. Then run
+  `agentteams --framework claude --update --materialize-native --merge`.
+- **Exit codes:** `0` done or dry run, `1` refused or nothing to retire, `3` no clearance.
+- **Options:** `--team-dir` picks the team dir holding the security log, as for the branch modes.
+
+Under `write_policy: "orchestrator-only"`, a render refuses (exit `1`, nothing written) while a wide
+agent file with a `bridge:` marker sits in the agents directory. An empty marker counts. For a supported
+pair the error names this command as the fix; otherwise it says to delete or narrow the file. `--check` does not run this refusal.
+
 ---
 
 ## How These Three Options Differ
@@ -1662,7 +1692,8 @@ baseline.
 state dir), so an unattended run never writes Claude agent files.
 
 With `--branch-cleanup` or `--branch-post-merge`: execute instead of the default dry run (see
-[Branch Lifecycle](#branch-lifecycle)).
+[Branch Lifecycle](#branch-lifecycle)). With `--retire-bridge`: remove the reported set (see
+[`--retire-bridge`](#--retire-bridge-pair)).
 
 ### `--include-claude`
 
@@ -1782,6 +1813,6 @@ Do not query GitHub. Merged-by-PR is not evaluated, and no remote deletion is pl
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Error (validation failure, file not found, drift detected with `--check`, security issues with `--scan-security`, or a Tier-1 blocking finding with `--stale-check`) |
+| `1` | Error (validation failure, file not found, drift detected with `--check`, security issues with `--scan-security`, a wide bridge-generated agent under `write_policy: "orchestrator-only"`, or a Tier-1 blocking finding with `--stale-check`) |
 | `2` | Baseline drift detected (with `--check-baseline`) |
-| `3` | Remediation attempted but unresolved (with `--stale-check --stale-remediate`) |
+| `3` | Remediation attempted but unresolved (with `--stale-check --stale-remediate`), or no authorization (with `--branch-cleanup`, `--branch-post-merge` or `--retire-bridge` and `--apply`: an operator or `@security` step is needed) |
