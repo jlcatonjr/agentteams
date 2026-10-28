@@ -35,7 +35,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import agent_drivers, agent_run, agent_upstreams, docker_mode, executor, gateway_context, paths
+from agentteams.vulnscan import (agent_drivers, agent_run, agent_upstreams, docker_mode, executor, gateway_context,
+                                 gateway_settle, paths)
 from agentteams.vulnscan.agent_drivers import Driver
 
 DEBRIEF_CONTAINER = "agentteams-vulnscan-debrief"
@@ -294,9 +295,10 @@ def _start_gateway(a: dict[str, Any], tag: str, spend_dir: Path, budget_usd: flo
     gateway_context.raise_if_refused(spend_dir)
 
 
-def _cleanup() -> None:
+def _cleanup(spend_dir: Path | None = None) -> None:
+    """Remove the debrief container and stop its gateway (SIGTERM first; ``spend_dir``: settle what it left)."""
     agent_run._docker(["docker", "rm", "-f", DEBRIEF_CONTAINER], check=False)
-    agent_run._docker(["docker", "rm", "-f", DEBRIEF_GATEWAY], check=False)
+    agent_run._stop_gateway(spend_dir, name=DEBRIEF_GATEWAY)
 
 
 def run_debrief(cfg: dict[str, Any], run_dir: Path) -> int:
@@ -386,9 +388,9 @@ def _locked_debrief(a: dict[str, Any], run_dir: Path, budget: float, minutes: fl
             terminated, rc = True, agent_run.SIGTERM_EXIT
         raise
     finally:
-        _cleanup()
+        _cleanup(out)
         record = {"session": session_name(run_dir), "started": started.isoformat(),
                   "finished": datetime.now(UTC).isoformat(), "exit": rc, "timed_out": timed_out,
                   "terminated": terminated, "budget_usd": budget, "max_minutes": minutes}
-        (out / "status.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+        gateway_settle.write_atomic(out / "status.json", json.dumps(record, indent=2))   # out: gateway-writable
     return rc

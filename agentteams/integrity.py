@@ -219,6 +219,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/agent_upstreams.py",  # per-driver gateway upstreams, key files, model rules
     "agentteams/vulnscan/selftest_canary.py",  # headless CLI tool-inventory and planted-file canary
     "agentteams/vulnscan/gateway.py",
+    "agentteams/vulnscan/gateway_settle.py",   # charges a call still in flight at shutdown its reservation (rc.12)
     "agentteams/vulnscan/mcp.py",
     # R6 operator loop (2026-10-22, metaplan vulnscan-r6 T1): escalations.py and publish.py sign through the operator
     # flow and verify Ed25519 resolutions / the publish grant (publish.py also holds the only push of agent-derived
