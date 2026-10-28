@@ -66,8 +66,8 @@ Dead citation (do not use): `docs.github.com/en/copilot/github-copilot-in-the-cl
 
 ## Observed Upstream Tokens — `copilot_cli` (Daily Pipeline)
 
-Recorded by the daily pipeline on `2026-09-11` from `https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli`.
+Recorded by the daily pipeline on `2026-09-24` from `https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-custom-agents-for-cli`.
 
-- Upstream tokens observed: —
+- Upstream tokens observed: description, tools
 - Upstream locations observed: .github/agents
 - Fetch status: `ok`
