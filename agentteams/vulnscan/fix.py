@@ -15,6 +15,10 @@
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
 - **composer.lock**: guidance only (``composer update <pkg> --no-install --no-scripts --no-plugins``).
 
+With ``apply``, every manifest a change touches is re-read against OSV before and after, and
+:attr:`FixResult.resolved` counts the advisory occurrences the change removed: npm can move a package within
+its range to a release that is still affected, a change that fixes nothing (``stage-fix`` refuses it).
+
 This module never commits, pushes or opens PRs. Point it at a worktree you control.
 ``daily`` does that in its ``apply-worktree`` mode. A file with uncommitted changes is
 refused unless ``allow_dirty`` (checked with the executor's hardened git, so the tree's own git
@@ -30,6 +34,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -71,6 +76,9 @@ class FixResult:
     applied: bool = False
     target: str = ""           # the git repository the plan is for (the ``stage-fix`` target), when known
     target_problem: str = ""   # why ``stage-fix`` cannot take ``target`` (e.g. not a git repository)
+    # advisory occurrences the applied changes removed; None: not measured (a dry run, or a changed manifest
+    # without exact versions)
+    resolved: int | None = None
 
     def exit_code(self) -> int:
         """Return the shared exit code for a fix run.
@@ -501,6 +509,44 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> 
     return (proc.stdout + proc.stderr) or f"npm exited {proc.returncode}"
 
 
+def advisory_counts(path: Path, private: tuple[str, ...] = ()) -> Counter[tuple[str, str, str]] | None:
+    """Count one manifest's (ecosystem, package, advisory) occurrences, one per installed copy.
+
+    Args:
+        path: A manifest :func:`parse` reads.
+        private: The project's ``private_packages`` patterns: those packages are never looked up.
+
+    Returns:
+        The counts, or None when the manifest yields no exact versions.
+
+    Raises:
+        FeedError: OSV could not be read.
+    """
+    m = parse(path)
+    if m.unscannable or not m.deps:
+        return None
+    deps = [d for d in m.deps if not project_policy.is_private(d.name, private, d.ecosystem)]
+    hits = osv.vulnerable_ids((d.ecosystem, d.name, d.version) for d in deps)
+    return Counter((d.ecosystem, d.name, i) for d in deps for i in hits.get((d.ecosystem, d.name, d.version), ()))
+
+
+def _add_resolved(res: FixResult, path: Path, old: bytes, rel: str, private: tuple[str, ...]) -> None:
+    """Add the advisory occurrences ``path`` lost since it held ``old`` to ``res.resolved``."""
+    if res.resolved is None or path.read_bytes() == old:
+        return
+    try:
+        with tempfile.TemporaryDirectory(prefix="agentteams-before-") as tmp:
+            before_path = Path(tmp) / path.name   # parse() reads by file name
+            before_path.write_bytes(old)
+            before = advisory_counts(before_path, private)
+        after = advisory_counts(path, private)
+    except _http.FeedError as exc:
+        res.feed_errors.append(f"{rel}: {exc}")   # stage-fix fails closed on a feed error
+        res.resolved = None
+        return
+    res.resolved = None if before is None or after is None else res.resolved + sum((before - after).values())
+
+
 def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 0,
              include_worktrees: bool = False, allow_dirty: bool = False, npm: bool = True,
              manifests: list[Path] | None = None) -> FixResult:
@@ -524,7 +570,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         recorded under ``refused`` (X2/M5).
     """
     root = root.resolve()
-    res = FixResult(applied=apply)
+    res = FixResult(applied=apply, resolved=0 if apply else None)
     found = discover(root, include_worktrees=include_worktrees) if manifests is None else sorted(manifests)
     policies = project_policy.PolicyCache()
     for path in found:
@@ -560,7 +606,9 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
                 elif _dirty(path) and not allow_dirty:
                     res.refused.append((rel, "uncommitted changes — commit/stash first or use a worktree"))
                 else:
+                    old = path.read_bytes()
                     apply_requirements(path, changes)
+                    _add_resolved(res, path, old, rel, private)
         elif path.name in NPM_LOCKFILES and not apply:
             try:
                 rows, res.npm_notes[rel] = plan_npm_lock(path, cooldown_days=cooldown_days, label=rel, private=private)
@@ -578,7 +626,9 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             if apply and _dirty(path) and not allow_dirty:
                 res.refused.append((rel, "uncommitted changes — commit/stash first or use a worktree"))
                 continue
+            old = path.read_bytes()
             res.npm.append((str(path.parent.relative_to(root)) or ".", npm_fix(path.parent, cooldown_days=cooldown_days, apply=apply)))
+            _add_resolved(res, path, old, rel, private)
         elif path.name == "composer.lock":
             res.composer.append(f"`{rel}`: composer update <pkg> --no-install --no-scripts --no-plugins "
                                 "(then `composer audit`)")
