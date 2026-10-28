@@ -279,6 +279,25 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
 
 # ---------------------------------------------------------------- repo operations
 
+def change_diff(wt: Path, *revs: str, check: bool = True) -> str:
+    """Return ``git diff <revs>`` as a staged branch's digest hashes it (no external diff, no textconv).
+
+    Shared by :func:`stage_fix` and :func:`.executor_supersede.open_pr_with_same_change`, which compares it in full.
+
+    Args:
+        wt: The worktree to run git in.
+        *revs: The revisions ``git diff`` compares.
+        check: Raise when git fails (else the output so far, usually "").
+
+    Returns:
+        The diff text.
+
+    Raises:
+        ExecError: git failed and ``check`` is set.
+    """
+    return git(wt, "diff", "--no-ext-diff", "--no-textconv", *revs, check=check)
+
+
 def _repo_root(target: str) -> Path:
     p = Path(target).expanduser()
     if not p.is_absolute():
@@ -512,7 +531,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
                             "nothing fixable without a major jump")
         _refuse_filtered(wt, changed)   # C2: a filtered file's commit would not hold what validate_diff checked
-        digest = hashlib.sha256(git(wt, "diff", "--no-ext-diff", "--no-textconv", base).encode()).hexdigest()[:10]
+        digest = hashlib.sha256(change_diff(wt, base).encode()).hexdigest()[:10]   # names the branch
         name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
         _release_own_branch(repo, name)   # the branch is absent from here on, or this raised
         git(wt, "checkout", "-q", "-b", name)
@@ -545,7 +564,11 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
 
     Idempotent (D4): when the remote branch already exists, an open PR for it is returned as is;
     without one, the PR is created from the remote branch only if it is exactly the staged commit
-    (a push that succeeded before ``gh pr create`` failed). After the PR exists the executor's
+    (a push that succeeded before ``gh pr create`` failed). The branch name carries the staging date, so the same
+    change re-staged on a later day has a new name: an open PR on ``vulnscan/<date>-<same digest>`` whose own change
+    reproduces the digest is returned as is too (:func:`.executor_supersede.open_pr_with_same_change`), and nothing
+    is pushed. When the staged files already match the base branch (the change was merged meanwhile, e.g. through an
+    earlier day's PR), the staged state is retired and nothing is opened (``already_in_base``). After the PR exists the executor's
     worktree and staged state are removed; the local branch is kept.
 
     Args:
@@ -586,7 +609,14 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         if remote_sha != git(wt, "rev-parse", "HEAD").strip():
             raise ExecError(f"remote branch {branch} already exists at another commit and has no open PR "
                             "— not overwriting")
+    elif executor_supersede.already_in_base(wt, base_branch, st.get("changed") or []):   # merged by another route
+        _finish_open_pr(repo, wt, staged)
+        return {"repo": str(repo), "branch": branch, "pr": "", "already_in_base": True}
     else:
+        same = executor_supersede.open_pr_with_same_change(wt, target_repo, branch, st["base"])
+        if same:   # the same change, staged on an earlier day, already has an open PR: claim it, open no duplicate
+            _finish_open_pr(repo, wt, staged)
+            return {"repo": str(repo), "branch": branch, "pr": same[1], "existing": True, "same_change_as": same[0]}
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
     body = (f"Automated security fix staged by the agentteams **vulnscan executor** "
             f"(deterministic; dependency pins and lockfiles only).\n\n{st['plan']}\n\n"
