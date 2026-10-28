@@ -53,8 +53,9 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, ledger, notify, paths, report_store
-from agentteams.vulnscan import executor_supersede, repo_alias, retry_guard, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
+from agentteams.vulnscan import executor_supersede, report_store, repo_alias, retry_guard, subproc_confine
+from agentteams.vulnscan import subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 from agentteams.vulnscan.ops import REPO_OPS   # repo-targeted ops: executor_guard applies
 
@@ -104,6 +105,7 @@ _GIT_HARDENING = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"
                   "-c", "submodule.recurse=false", "-c", "fetch.recurseSubmodules=false", "-c", "credential.helper=",
                   "-c", "commit.gpgsign=false", "-c", "tag.gpgSign=false",   # never a repo-configured gpg.program
                   "-c", "core.askPass=",   # never a repo-configured askpass program (it would see the push token)
+                  "-c", "core.pager=cat",   # never a repo-configured pager (output is captured; defence in depth)
                   # Transports: https, ssh and file only (no ext::, no remote helpers).
                   "-c", "protocol.allow=never", "-c", "protocol.https.allow=always",
                   "-c", "protocol.ssh.allow=always", "-c", "protocol.file.allow=always",
@@ -143,7 +145,9 @@ def _unsafe_origin(repo: Path, env: dict[str, str]) -> str:
 def _clean_git_env(global_config: str) -> dict[str, str]:
     """Return the environment without ``GIT_*`` variables, system config off and ``global_config`` as global config."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": global_config, "GIT_TERMINAL_PROMPT": "0"})
+    # GIT_LFS_SKIP_SMUDGE: git-lfs (fix.LFS_FILTER, plan C2) writes pointer files on checkout and downloads nothing
+    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": global_config, "GIT_TERMINAL_PROMPT": "0",
+                "GIT_LFS_SKIP_SMUDGE": "1"})
     return env
 
 
@@ -247,6 +251,11 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
         executor_guard.refuse_by_brief(op, target)
         if why := retry_guard.futile_reason(op, target, rows):   # nothing fixable, plan unchanged since
             raise ExecError(why)
+    if op == "open-pr" and handoff.required(cfg, Path(target)):   # H3: the repository's orchestrator approves first
+        branch = handoff.staged_branch(Path(target))
+        problem = handoff.approval_problem(Path(target), branch) if branch else ""   # no staged fix: open_pr says so
+        if problem:
+            raise ExecError(problem)
     grants, problems = grant.load_active()
     usable = [g for g in grants if grant.covers(g, op, target) and ledger.uses(g["grant_id"], rows) < int(g["max_uses"])]
     if not usable:
@@ -285,8 +294,38 @@ def _repo_root(target: str) -> Path:
     return p
 
 
-def _state_slug(repo: Path) -> str:
+def state_slug(repo: Path) -> str:
+    """Return the slug naming a repository's spool record and worktrees (:func:`.repo_alias.alias`).
+
+    Args:
+        repo: Canonical repository path.
+
+    Returns:
+        ``<name>-<8 hex>``.
+    """
     return repo_alias.alias(str(repo), empty="")   # "": state-file names stay byte-identical (no "root")
+
+
+def staged_file(repo: Path) -> Path:
+    """Return the path of the executor's record of the fix staged for ``repo`` (it may not exist)."""
+    return spool_dir() / "staged" / f"{state_slug(repo)}.json"
+
+
+def staged_records() -> list[dict[str, Any]]:
+    """Return every readable staged-fix record (``repo``, ``branch``, ``worktree`` ...), in file-name order.
+
+    Returns:
+        The records that parse as JSON objects; unreadable files are skipped.
+    """
+    out = []
+    for f in sorted((spool_dir() / "staged").glob("*.json")):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):   # an unreadable record lists nothing
+            data = None
+        if isinstance(data, dict):
+            out.append(data)
+    return out
 
 
 def _worktrees_dir() -> Path:
@@ -361,6 +400,25 @@ def _stage_changed(wt: Path, base: str, changed: list[str]) -> None:
         raise ExecError(f"staged paths differ from the validated change: {sorted(staged ^ set(changed))}")
 
 
+def _refuse_filtered(wt: Path, changed: list[str]) -> None:
+    """Refuse a change to any path with a ``filter`` attribute (git-lfs's included).
+
+    ``git add`` would commit the filter's output (for git-lfs, a pointer) instead of the bytes :func:`validate_diff`
+    judged. ``check-attr`` only reads ``.gitattributes``; it runs no filter.
+
+    Args:
+        wt: Worktree.
+        changed: The changed paths (:func:`validate_diff`).
+
+    Raises:
+        ExecError: A changed path has a filter.
+    """
+    parts = git(wt, "check-attr", "-z", "filter", "--", *changed).split("\0")
+    for rel, _attr, value in zip(parts[0::3], parts[1::3], parts[2::3]):
+        if value not in ("unspecified", "unset"):
+            raise ExecError(f"refusing change: {rel} has filter={value} (git-lfs or another filter); fix it by hand")
+
+
 def validate_diff(wt: Path, base: str) -> list[str]:
     """Check that a staged change touches only what fix.py may touch (B1, X1, M1).
 
@@ -397,7 +455,7 @@ def validate_diff(wt: Path, base: str) -> list[str]:
         if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111:
             raise ExecError(f"refusing {rel}: not a regular file, or its mode changed (symlink or exec bit)")
         new = (wt / rel).read_bytes()
-        shown = git_proc(wt, "show", f"{base}:{rel}", text=False)
+        shown = git_proc(wt, "show", "--no-textconv", f"{base}:{rel}", text=False)   # never a diff.<driver>.textconv
         old = b"" if shown.returncode else shown.stdout
         try:
             if REQ_NAME.search(Path(rel).name):
@@ -431,7 +489,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     head = executor_guard.brief_base_ref(repo) or \
         git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD", check=False).strip() or "origin/main"
     base = git(repo, "rev-parse", head).strip()
-    wt = _worktrees_dir() / f"{_state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}-{os.urandom(3).hex()}"
+    wt = _worktrees_dir() / f"{state_slug(repo)}-{datetime.now(UTC):%Y%m%d%H%M%S}-{os.urandom(3).hex()}"
     wt.parent.mkdir(parents=True, exist_ok=True)
     staged = False
     branch = ""   # set once this attempt (and only it) may have created the branch
@@ -446,6 +504,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
                             "nothing fixable without a major jump")
+        _refuse_filtered(wt, changed)   # C2: a filtered file's commit would not hold what validate_diff checked
         digest = hashlib.sha256(git(wt, "diff", "--no-ext-diff", "--no-textconv", base).encode()).hexdigest()[:10]
         name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
         _release_own_branch(repo, name)   # the branch is absent from here on, or this raised
@@ -465,7 +524,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
               "changed": changed, "plan": res.markdown()}
-    _write_json(spool_dir() / "staged" / f"{_state_slug(repo)}.json", result)
+    _write_json(staged_file(repo), result)
     return result
 
 
@@ -493,10 +552,10 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         ExecError: No staged change, the remote ref holds another commit with no open PR, or
             push / PR listing / PR creation failed.
     """
-    staged_file = spool_dir() / "staged" / f"{_state_slug(repo)}.json"
-    if not staged_file.is_file():
+    staged = staged_file(repo)
+    if not staged.is_file():
         raise ExecError("no staged fix for this repo — request stage-fix first")
-    st = json.loads(staged_file.read_text(encoding="utf-8"))
+    st = json.loads(staged.read_text(encoding="utf-8"))
     wt, branch = Path(st["worktree"]), st["branch"]
     if not branch.startswith("vulnscan/") or not wt.is_dir() or not wt.resolve().is_relative_to(
             _worktrees_dir().resolve()):
@@ -515,7 +574,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
             git(wt, "fetch", "--no-tags", "origin", ref, push=True)
             if git(wt, "rev-parse", f"{remote_sha}^{{tree}}").strip() != git(wt, "rev-parse", "HEAD^{tree}").strip():
                 raise ExecError(f"open PR {url} on {branch} does not hold the staged change — not claiming it")
-            _finish_open_pr(repo, wt, staged_file)
+            _finish_open_pr(repo, wt, staged)
             return {"repo": str(repo), "branch": branch, "pr": url, "existing": True}
         if remote_sha != git(wt, "rev-parse", "HEAD").strip():
             raise ExecError(f"remote branch {branch} already exists at another commit and has no open PR "
@@ -538,7 +597,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     if proc.returncode:
         raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
     url = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
-    _finish_open_pr(repo, wt, staged_file)
+    _finish_open_pr(repo, wt, staged)
     return {"repo": str(repo), "branch": branch, "pr": url}
 
 
@@ -593,10 +652,10 @@ def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
     return next((u for u in urls if isinstance(u, str) and u.startswith("https://")), "")
 
 
-def _finish_open_pr(repo: Path, wt: Path, staged_file: Path) -> None:
+def _finish_open_pr(repo: Path, wt: Path, staged: Path) -> None:
     """Remove the executor's worktree and staged state once the PR exists (the branch is kept, D4)."""
     git(repo, "worktree", "remove", "--force", str(wt))
-    staged_file.unlink(missing_ok=True)
+    staged.unlink(missing_ok=True)
 
 
 def _origin_repo(wt: Path) -> str:

@@ -8,8 +8,9 @@ The brief's ``vulnerability_scanning`` block is committed with the project. It s
 - ``private_packages``: case-insensitive fnmatch patterns of package names never sent to OSV,
   PyPI or npm (PyPI names compared per PEP 503); the report counts them as "not checked (private)";
 - ``include_dev``: whether this project's dev-only findings count toward the exit threshold;
-- ``delivery`` (``pr`` | ``plan``: the executor then refuses ``open-pr``) and ``base_branch`` (the PR
-  base; ``stage-fix`` refuses when origin has no such branch).
+- ``delivery`` (``pr`` | ``plan``: the executor then refuses ``open-pr`` | ``handoff``: ``open-pr`` waits for the
+  project's orchestrator to approve the staged fix, :mod:`.handoff`) and ``base_branch`` (the PR base; ``stage-fix``
+  refuses when origin has no such branch).
 
 Operator choices win: a brief only narrows what leaves the machine, never what is checked. When the
 operator enrols a repository or lists it in ``repo_roots``, ``level: off`` does not stop the scan; it is
@@ -41,7 +42,7 @@ from pathlib import Path
 
 POLICY_KEY = "vulnerability_scanning"
 LEVELS = ("off", "scan", "remediate")
-DELIVERIES = ("pr", "plan")
+DELIVERIES = ("pr", "plan", "handoff")
 KEYS = ("level", "exclude_paths", "private_packages", "include_dev", "delivery", "base_branch")
 MAX_ITEMS = 100
 ENROLL_HINT = "python -m agentteams.vulnscan enroll"
@@ -80,7 +81,7 @@ class ProjectPolicy:
     exclude_paths: tuple[str, ...] = ()     # repository-relative globs
     private_packages: tuple[str, ...] = ()  # fnmatch patterns, case-insensitive
     include_dev: bool | None = None
-    delivery: str = "pr"                    # "pr" | "plan"
+    delivery: str = "pr"                    # "pr" | "plan" | "handoff"
     base_branch: str | None = None
     brief_path: Path | None = None
     problem: str = ""                       # why the block is invalid ("" if fine); invalid => level None

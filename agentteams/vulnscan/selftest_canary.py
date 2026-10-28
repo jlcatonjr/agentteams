@@ -345,3 +345,82 @@ def evaluate_claude(run: StubRun, token: str, fired: list[str]) -> tuple[dict[st
               "result_subtype": (result or {}).get("subtype"), "requests": len(run.requests),
               "stderr_tail": run.stderr[-300:]}
     return checks, detail
+
+
+# ---------------------------------------------------------------- goose: wire compatibility (plan A3)
+
+def wire_problems(requests: list[dict[str, Any]], dialect: str, models: frozenset[str]) -> list[str]:
+    """Run the gateway's own request policy over what the stub received; return each refusal.
+
+    A CLI update that sends a body the gateway refuses (goose 1.54's ``session_id`` and whole-context
+    ``max_tokens``, 2026-10-24) then fails the self-test instead of every live call.
+
+    Args:
+        requests: The stub's recorded requests (:attr:`StubRun.requests`).
+        dialect: The gateway dialect (``chat``, ``messages``, ``responses``).
+        models: The model ids the gateway would allow.
+
+    Returns:
+        One line per refused request (the gateway's own redacted reason), in request order.
+    """
+    from agentteams.vulnscan import gateway_dialects as gd   # lazy: only the probe needs the policy
+
+    problems = []
+    for n, req in enumerate(requests):
+        try:
+            gd.check_request(dialect, req.get("text", "").encode("utf-8"), models=models)
+        except gd.PolicyError as exc:
+            problems.append(f"request {n}: {exc}"[:300])
+        except (ValueError, UnicodeDecodeError):
+            problems.append(f"request {n}: not a JSON object")
+    return problems
+
+
+def goose_checks(argv: list[str], run_env: dict[str, str], *, model: str, binary: list[str] | None = None,
+                 timeout: float = 120.0) -> tuple[dict[str, bool], dict[str, Any]]:
+    """Run goose headless against the chat stub; return (checks, detail).
+
+    goose starts in an empty working directory (as a run does: the developer extension reads ``.goosehints`` and
+    ``AGENTS.md`` from it, so nothing is planted there) with ``OPENROUTER_HOST`` pointed at the stub.
+
+    Args:
+        argv: The run command, the recipe path already the checked copy a run loads.
+        run_env: The per-run env for the probe's model (``GOOSE_MODEL``).
+        model: The model id the probe names; the only one :func:`wire_problems` allows.
+        binary: Replace ``argv[0]`` (tests run a fake CLI).
+        timeout: Seconds for the CLI run.
+
+    Returns:
+        ``({"goose_headless_ran", "goose_wire_compatible"}, detail)``.
+    """
+    tmp = Path(tempfile.mkdtemp(prefix="vulnscan-wire-"))
+    try:
+        cmd = [*binary, *argv[1:]] if binary else list(argv)
+        run = stub_run(cmd, {**os.environ, **run_env}, cwd=str(tmp), dialect="chat", base_env="OPENROUTER_HOST",
+                       timeout=timeout)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return evaluate_goose(run, frozenset({model}))
+
+
+def evaluate_goose(run: StubRun, models: frozenset[str]) -> tuple[dict[str, bool], dict[str, Any]]:
+    """Judge a headless goose run (see :func:`goose_checks`); split out so tests can feed it directly.
+
+    Args:
+        run: What the run produced.
+        models: The model ids the gateway would allow.
+
+    Returns:
+        ``({"goose_headless_ran", "goose_wire_compatible"}, detail)``; the detail lists up to five refusals and the
+        redacted body keys.
+    """
+    from agentteams.vulnscan import gateway_dialects as gd
+
+    chat = [r for r in run.requests if "count_tokens" not in r.get("path", "")]
+    problems = wire_problems(chat, gd.CHAT, models)
+    keys = sorted({gd.safe(k) for r in chat if isinstance(r.get("body"), dict) for k in r["body"]})
+    checks = {"goose_headless_ran": run.rc == 0 and bool(chat),
+              "goose_wire_compatible": bool(chat) and not problems}
+    detail = {"framework": "goose", "rc": run.rc, "requests": len(chat), "wire_problems": problems[:5],
+              "body_keys": keys[:40], "stderr_tail": run.stderr[-300:]}
+    return checks, detail

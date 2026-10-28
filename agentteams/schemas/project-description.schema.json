@@ -316,10 +316,11 @@
         "type": "string",
         "enum": [
           "pr",
-          "plan"
+          "plan",
+          "handoff"
         ],
         "default": "pr",
-        "description": "How remediation delivers fixes: pr (a vulnscan/* branch and PR; vulnscan never merges) or plan (a fix plan only)."
+        "description": "How remediation delivers fixes: pr (a vulnscan/* branch and PR; vulnscan never merges), plan (a fix plan only) or handoff (the project's own orchestrator reviews the staged fix first; the PR opens only after its approve-staged verdict)."
       },
       "base_branch": {
         "type": "string",

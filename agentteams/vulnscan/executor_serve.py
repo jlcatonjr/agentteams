@@ -56,15 +56,7 @@ def write_staged_index(run_dir: Path) -> list[str]:
     Returns:
         The repository paths listed.
     """
-    repos: list[str] = []
-    staged = ex.spool_dir() / "staged"
-    for path in sorted(staged.glob("*.json")) if staged.is_dir() else []:
-        try:
-            repo = json.loads(path.read_text(encoding="utf-8")).get("repo")
-        except (OSError, ValueError, AttributeError):   # an unreadable staged state lists nothing
-            repo = None
-        if isinstance(repo, str) and repo.startswith("/"):
-            repos.append(repo)
+    repos = [r for rec in ex.staged_records() if isinstance(r := rec.get("repo"), str) and r.startswith("/")]
     ex._write_json(run_dir / STAGED_INDEX, {"repos": repos})
     return repos
 
