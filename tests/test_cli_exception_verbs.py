@@ -78,6 +78,12 @@ def test_sign_decision_mints_and_appends(tmp_path, monkeypatch):
     keyfile = _keypair(tmp_path)
     monkeypatch.setenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", str(keyfile))
     spec = tmp_path / "spec.json"
+    # The ancestor first: the gate pools derives_from per action id, so a row naming an unrecorded one is refused.
+    spec.write_text(json.dumps({
+        "date": "2026-09-14", "action_reviewed": "approved-cleanup", "verdict": "PASS",
+        "key_id": "op-2026", "author": "security",
+    }))
+    assert build_team.main(["--sign-decision", str(spec), "--output", str(tmp_path)]) == 0
     spec.write_text(json.dumps({
         "date": "2026-09-14", "action_reviewed": "grant-cross-repo-write", "verdict": "PASS",
         "effect_grants": "write:cross-repo", "derives_from": "approved-cleanup",
@@ -86,6 +92,22 @@ def test_sign_decision_mints_and_appends(tmp_path, monkeypatch):
     assert build_team.main(["--sign-decision", str(spec), "--output", str(tmp_path)]) == 0
     log = (tmp_path / "references" / "security-decisions.log.csv").read_text()
     assert "ed25519" in log and "grant-cross-repo-write" in log
+
+
+def test_sign_decision_refuses_a_dangling_lineage_before_the_key(tmp_path, monkeypatch, capsys):
+    """G8 + mathAgents 2026-10-28: a signed row naming an unrecorded ancestor would poison its action id."""
+    keyfile = _keypair(tmp_path)
+    monkeypatch.setenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", str(keyfile))
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps({
+        "date": "2026-09-14", "action_reviewed": "grant-cross-repo-write", "verdict": "PASS",
+        "effect_grants": "write:cross-repo", "derives_from": "release-policy-1.0",
+        "key_id": "op-2026", "author": "security",
+    }))
+    assert build_team.main(["--sign-decision", str(spec), "--output", str(tmp_path)]) == 1
+    err = capsys.readouterr().err
+    assert "the gate would refuse this row" in err and "release-policy-1.0" in err and "key was not read" in err
+    assert not (tmp_path / "references" / "security-decisions.log.csv").exists()
 
 
 def test_sign_decision_refuses_non_eligible(tmp_path, monkeypatch):

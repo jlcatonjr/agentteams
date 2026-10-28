@@ -1266,10 +1266,12 @@ refuse the row:
 - a `scope` that lists neither its `action_reviewed` nor its gate action;
 - an author (the first non-empty `requesting_agent`, `owner` or `author`) not on the team's
   `references/security-approvers.txt` roster (default: `security`);
+- an operator-path row whose `derives_from` chain doesn't resolve against the log (sign ancestors first:
+  the gate pools lineage across every row of an action id, so a dangling ancestor would make that id
+  unclearable);
 - no Ed25519 verify key `references/authorized-verify-keys/<key_id>.pub.pem` in that team dir.
 
-An open HALT or an unrecorded `derives_from` ancestor is judged by the gate when the row is used, not at
-signing. Keep `security`
+An open HALT is judged by the gate when the row is used, because a retraction may follow. Keep `security`
 on the roster when you add approvers: it is the decision-author roster too.
 
 ### `--write-integrity-manifest`

@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signature. It now refuses:
   - a `scope` that lists neither the row's `action_reviewed` nor its gate action;
   - an author (`requesting_agent`/`owner`/`author`) missing from the team's approver roster;
+  - an operator-path row whose `derives_from` chain doesn't resolve against the log. The gate pools lineage
+    across every row of an action id, so one signed row naming an unrecorded ancestor makes that id
+    unclearable until the ancestor is recorded, and forever for a mistyped one. Sign ancestors first.
+    Found by mathAgents, who lost two of the operator's signed rows this way.
   - a missing Ed25519 verify key for its `key_id` in that team dir.
 
-  The gate still judges state when the row is used: an open HALT, or a `derives_from` ancestor not yet
-  recorded.
+  An open HALT is still judged by the gate when the row is used, because a retraction may follow.
 - **The branch modes and `--retire-bridge` print the decisions log they read.** The default team dir is the
   first of `.claude/agents`, `.github/agents` and `.codex/agents` that has `references/`, while `--sign-decision`
   writes to `--output`, so a clearance signed into another dir is invisible. After a "no clearance" refusal
