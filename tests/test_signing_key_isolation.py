@@ -407,7 +407,10 @@ def test_sign_decision_prints_the_location_warning(tmp_path, monkeypatch, capsys
     (tmp_path / "references").mkdir()
     (tmp_path / "references" / "build-log.json").write_text("{}\n")  # a team dir (F-2)
     spec = tmp_path / "spec.json"
-    spec.write_text(json.dumps({"action_reviewed": "grant-x"}))
+    # G8: a gate-valid author and a provisioned verify key, so the run reaches the location warning.
+    spec.write_text(json.dumps({"action_reviewed": "grant-x", "requesting_agent": "security", "key_id": "k"}))
+    (tmp_path / "references" / "authorized-verify-keys").mkdir()
+    (tmp_path / "references" / "authorized-verify-keys" / "k.pub.pem").write_text("placeholder\n")
     outside = _key(tmp_path / "op.key", 0o644)
     monkeypatch.setenv("AGENTTEAMS_DECISION_ED25519_KEYFILE", str(outside))
     build_team.main(["--sign-decision", str(spec), "--output", str(tmp_path)])

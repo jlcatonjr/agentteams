@@ -232,3 +232,14 @@ def test_cli_apply_is_accepted_with_retire_bridge(project, capsys):
                 str(project / ".github" / "agents")])
     assert rc == br.EXIT_UNAUTHORIZED
     assert "no usable clearance" in capsys.readouterr().out
+
+
+def test_cli_names_another_team_dir_whose_log_holds_the_clearance(project, capsys):
+    """G7: .claude/agents has references/ (read by default) while the PASS is in .github/agents."""
+    plan = br.build_plan(project, PAIR)
+    _team(project, f"2026-10-27,security,{plan.action},PASS,,")
+    (project / ".claude" / "agents" / "references").mkdir()
+    rc = _main(["--retire-bridge", PAIR, "--apply", "--project", str(project)])
+    out = capsys.readouterr().out
+    assert rc == br.EXIT_UNAUTHORIZED
+    assert f"--team-dir {(project / '.github' / 'agents').resolve()}" in out

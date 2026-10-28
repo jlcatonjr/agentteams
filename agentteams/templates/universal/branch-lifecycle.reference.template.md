@@ -116,6 +116,13 @@ hold in the report.
   clone, which the runtime gate also only prompts on. In that case **the operator prompt is the
   only real control,** so read the `--project` path before approving an `--apply`.
 
+- **Which team dir is read.** Without `--team-dir`, the modes read the first of `.claude/agents`,
+  `.github/agents` and `.codex/agents` that has `references/`, and print it. Record (or `--sign-decision
+  --output`) the clearance in that dir, or pass `--team-dir`. A run refused for want of a clearance (no HALT
+  involved) names another team dir whose log holds a PASS row for the action id.
+- **Give the PASS row an approved author.** Set `requesting_agent` to a name on
+  `references/security-approvers.txt` (`security` when there is no roster). `--sign-decision` refuses a row
+  the gate would refuse on author or scope before the key is read.
 - **HALT:** a `@security` HALT on `branch-delete` stops both modes.
 - **Operator prompt:** both `--apply` forms are also routed to the operator by the runtime delete
   gate.

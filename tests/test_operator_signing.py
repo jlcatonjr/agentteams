@@ -69,7 +69,9 @@ def _team(tmp: Path, *, pub: bytes = _PUB, roster: bool = True) -> Path:
     (team / "references" / "agent-privilege.json").write_text("{}\n", encoding="utf-8")
     (store / f"{_KEY_ID}.pub.pem").write_bytes(pub)
     if roster:
-        (team / "references" / "security-approvers.txt").write_text("alice\n", encoding="utf-8")
+        # `security` too: the roster is also the decision-author roster, and --sign-decision now refuses a row the
+        # gate would refuse on its author before the key is read (G8, 2026-10-28).
+        (team / "references" / "security-approvers.txt").write_text("alice\nsecurity\n", encoding="utf-8")
     return team
 
 
@@ -568,6 +570,33 @@ def test_signing_closure_covers_every_module_run_with_the_key(tmp_path):
         assert rel in operator_signing.SIGNING_CLOSURE
         assert rel in integrity.ENFORCEMENT_MODULES
 
+
+
+@pytest.mark.parametrize("spec,needle", [
+    (_decision(author=None), "its author '(none)' is not an approved security author"),
+    (_decision(author="mallory"), "its author 'mallory' is not an approved security author"),
+    (_decision(scope="prune"), "lists neither its action_reviewed 'grant-cross-repo-write' nor its gate action"),
+    (_decision(key_id="absent-key"), "no Ed25519 verify key references/authorized-verify-keys/absent-key.pub.pem"),
+])
+def test_a_row_the_gate_would_refuse_is_never_signed(spec, needle, tmp_path, monkeypatch, capsys):
+    """G8 (mathAgents, 2026-10-28): refused on author/scope before the key is read, nothing appended."""
+    argv = _sd(tmp_path, monkeypatch, spec=spec)
+    team = Path(argv[argv.index("--output") + 1])
+    capsys.readouterr()
+    assert _invoke(argv) == 1
+    err = capsys.readouterr().err
+    assert "the gate would refuse this row" in err and needle in err and "The key was not read." in err
+    assert not (team / "references" / "security-decisions.log.csv").exists()
+
+
+def test_a_scope_naming_the_gate_action_passes_the_precheck(tmp_path):
+    """G8 mirrors the gate: scope is checked against the gate action (`prune`), not only the instance id."""
+    from agentteams.cli.operator_signing import gate_refusal
+
+    team = _team(tmp_path)
+    row = {"action_reviewed": "prune-001", "verdict": "PASS", "scope": "prune", "requesting_agent": "security",
+           "key_id": _KEY_ID}
+    assert gate_refusal(row, team) is None
 
 
 @pytest.fixture(autouse=True)

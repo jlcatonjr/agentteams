@@ -183,6 +183,72 @@ def _print_table(inventory: dict) -> None:
           f"(clearance action branch-cleanup:{plan['sha256']})")
 
 
+def other_team_logs(project: Path, team_dir: Path, action: str) -> list[Path]:
+    """Decisions logs in this project's other team dirs holding a PASS row for *action* (mathAgents G7, 2026-10-28).
+
+    The modes read one team dir (:func:`resolve_team_dir`: the first with ``references/``), while
+    ``--sign-decision`` writes wherever ``--output`` points, so a clearance recorded in another team dir is
+    invisible to the run. This names the log that holds one, so the operator can pass ``--team-dir``. It
+    authorizes nothing: only an explicit ``--team-dir`` changes which log is read, and the gate then checks that
+    log in full (HALTs included).
+
+    Args:
+        project: The resolved project root.
+        team_dir: The team dir that was read.
+        action: The clearance action id the run needed.
+
+    Returns:
+        The other candidates' ``security-decisions.log.csv`` paths with a row whose ``action_reviewed`` is *action*
+        and whose verdict is ``PASS`` or ``CONDITIONAL PASS``.
+
+    Raises:
+        Nothing: an unreadable or malformed log is not named.
+    """
+    import csv
+    import io
+
+    found = []
+    for rel in _TEAM_DIR_CANDIDATES:
+        candidate = (project / rel).resolve()
+        log = candidate / "references" / "security-decisions.log.csv"
+        if candidate == team_dir.resolve() or not log.is_file():
+            continue
+        try:
+            rows = list(csv.DictReader(io.StringIO(log.read_text(encoding="utf-8", errors="replace"))))
+        except (OSError, csv.Error):
+            rows = []  # unreadable: nothing to point at
+        if any((r.get("action_reviewed") or "").strip() == action
+               and (r.get("verdict") or "").strip().upper() in ("PASS", "CONDITIONAL PASS") for r in rows):
+            found.append(log)
+    return found
+
+
+def team_dir_hint(project: Path, team_dir: Path, action: str, code: int, lines: list[str]) -> list[str]:
+    """Report lines pointing at another team dir's log with a PASS for *action* (see :func:`other_team_logs`).
+
+    Only for a "no authorization" refusal (exit 3) that names no HALT: a hint after a HALT would steer the operator
+    to a log that lacks it (C-2).
+
+    Args:
+        project: The resolved project root.
+        team_dir: The team dir that was read.
+        action: The clearance action id the run needed.
+        code: The run's exit code.
+        lines: The run's report lines.
+
+    Returns:
+        One line per such log; empty otherwise.
+
+    Raises:
+        Nothing.
+    """
+    if code != 3 or any("HALT" in line for line in lines):
+        return []
+    return [f"  Hint: no usable clearance in {team_dir / 'references' / 'security-decisions.log.csv'}, but {log} "
+            f"holds a PASS row for {action!r}. If that is the clearance, re-run with --team-dir {log.parent.parent}."
+            for log in other_team_logs(project, team_dir, action)]
+
+
 def run_branch_cli(args: argparse.Namespace) -> int:
     """Run the requested branch mode for a validated namespace.
 
@@ -213,10 +279,15 @@ def run_branch_cli(args: argparse.Namespace) -> int:
             print(f"Branch inventory: {branch_inventory.summary_line(inventory)}")
             return branch_cleanup.EXIT_OK
         team_dir = resolve_team_dir(project, args.team_dir)
+        print(f"Team dir (clearances, grants, verify keys): {team_dir}; decisions log: "
+              f"{team_dir / 'references' / 'security-decisions.log.csv'}")
         apply = bool(getattr(args, "sync_apply", False))
         if args.branch_cleanup:
             code, lines = branch_cleanup.run_cleanup(Path(args.branch_cleanup), cfg,
                                                      team_dir=team_dir, apply=apply)
+            if not args.team_dir:
+                action = branch_cleanup.clearance_action(branch_cleanup.load_plan(Path(args.branch_cleanup)))
+                lines += team_dir_hint(project, team_dir, action, code, lines)
         else:
             code, lines = branch_cleanup.run_post_merge(args.branch_post_merge, cfg,
                                                         team_dir=team_dir, team_id=args.team_id,

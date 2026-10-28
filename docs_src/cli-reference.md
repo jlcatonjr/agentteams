@@ -1260,6 +1260,20 @@ Read-only: list every entry in `references/exception-registry.json` under `--out
 
 **Operator-only.** Mint an **Ed25519-signed** constraint-relaxing security decision from a JSON spec (`date`, `action_reviewed`, `verdict`, the structured `effect_*` fields, `derives_from`, `key_id`, `author`) and append it to `references/security-decisions.log.csv` under `--output`/`--project` (else CWD), which must be a **team dir** — it must hold `references/agent-privilege.json` or `references/build-log.json` (e.g. `--output .claude/agents`); anything else is refused, because the gate never reads a log outside the team dir (F-2; `--project .` always names the project root and is therefore refused). The new signature is verified against that team's `references/authorized-verify-keys/<key_id>.pub.pem` before the row is appended, so a key provisioned into the wrong dir fails at mint time. When the log has a `text_digest` column (a new log does; `--migrate-decision-log` adds it), the row's `text_digest` is computed from its `conditions` and `evidence` (a spec cannot supply one) and signed, so editing that text later makes the row fail verification; into a log without the column a **constraint-relaxing** row is refused, naming `--migrate-decision-log` (so deleting the column cannot downgrade a relaxing row to an unbound one), and any other row signs as before with a one-line notice that its text is not bound. The operator private key is read from the file named by `AGENTTEAMS_DECISION_ED25519_KEYFILE` — never from an agent environment. Before writing, it refuses a categorically non-eligible decision (one that would write a governance/trust root, such as the verify-key store) and prints the row's full **derived material effect** for a deliberate second look. This is the *only* minter of Ed25519 relaxing rows. Keep the key in `~/.config/agentteams/keys/` (the provisioning script's default; `--migrate` moves keys from the old `~/.config/agentteams/` location): every emitted sandbox read-denies that directory, so once the key lives there the key **file** is unreadable in-sandbox and running `--sign-decision` there fails closed. For the Claude arm on Linux that was verified on 2026-09-30 (PF1; Claude Code 2.1.251, Ubuntu, with Claude Code's documented bwrap AppArmor profile installed), and it holds only for the file: the environment variables `AGENTTEAMS_DECISION_ED25519_KEYFILE` and `AGENTTEAMS_*_SIGNING_KEY` **are inherited** by Claude-sandboxed commands (only `sandbox/confine-run.sh` scrubs the environment), so never export them into the shell that launches an agent. A keyfile outside `keys/`, symlinked, or wider than mode 600 draws a warning but still signs. A relaxing authorization is *valid-but-insufficient* under HMAC — only this Ed25519 signature, verified against the public key in the team's `references/authorized-verify-keys/<key-id>.pub.pem` (provisioned with the operator helper's `--team-dir`), clears the elevated path in a governed workspace. Since rc.11 the gate also dispatches on the row's signed `sig_scheme` everywhere else: a row declaring `ed25519` — any authorizing verdict, `PASS`, `CONDITIONAL PASS` or `HALT-RETRACTED`, with `enforce_decision_signing` on or off — is verified against that team's public key and never falls back to HMAC, so an operator-signed retraction clears its HALT and no `AGENTTEAMS_DECISION_SIGNING_KEY` is needed in the render environment. A failed Ed25519 check fails closed; `text_digest`, the author roster and the retraction evidence rule still apply, and HMAC rows are unchanged.
 
+**Refused before the key is read: a row the gate would refuse** (since 2026-10-28). `--sign-decision` refuses, says why, and never reads the key or spends a signature when the gate would
+refuse the row:
+
+- a `scope` that lists neither its `action_reviewed` nor its gate action;
+- an author (the first non-empty `requesting_agent`, `owner` or `author`) not on the team's
+  `references/security-approvers.txt` roster (default: `security`);
+- an operator-path row whose `derives_from` chain doesn't resolve against the log (sign ancestors first:
+  the gate pools lineage across every row of an action id, so a dangling ancestor would make that id
+  unclearable);
+- no Ed25519 verify key `references/authorized-verify-keys/<key_id>.pub.pem` in that team dir.
+
+An open HALT is judged by the gate when the row is used, because a retraction may follow. Keep `security`
+on the roster when you add approvers: it is the decision-author roster too.
+
 ### `--write-integrity-manifest`
 
 Re-record `references/enforcement-integrity.json` from the enforcement modules on disk, then exit.
@@ -1805,6 +1819,14 @@ Do not query GitHub. Merged-by-PR is not evaluated, and no remote deletion is pl
   supply its own trust anchors.
 - `--team-id`: the grant holder id for `--branch-post-merge`. The default is the slug of the build
   log's `project_name`.
+
+Each run prints the team dir it reads. Without `--team-dir`, that is the first of `.claude/agents`,
+`.github/agents` and `.codex/agents` that has a `references/` directory. `--sign-decision` writes to
+whatever `--output` names, so a clearance can sit in another team dir. When `--branch-cleanup` or
+`--retire-bridge` is refused for want of a clearance (exit `3`, no HALT involved) and another of those
+dirs has a decisions log with a PASS row for the action id, the run names it and suggests `--team-dir`.
+The hint authorizes nothing; only `--team-dir` changes which log is read, and the gate then checks that
+log in full.
 
 ---
 

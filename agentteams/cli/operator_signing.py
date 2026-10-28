@@ -448,6 +448,58 @@ def sign_decision_team_refusal(output_dir: Path) -> str | None:
             "dir). Refusing to sign (fail-closed).")
 
 
+def gate_refusal(row: dict[str, str], output_dir: Path) -> str | None:
+    """Why the gate would refuse *row*, checked before the key is read (G8, 2026-10-28).
+
+    The read-only checks the gate applies to an authorizing row (``decision_log._assert_authorizing_row_is_authentic``
+    and ``security_gate._assert_destructive_action_allowed``), so no operator signature is spent on a row the gate
+    refuses. A spec without an author used to be signed and then refused as "issued by an unnamed author".
+
+    * ``scope``, when set, must list ``action_reviewed`` or the gate action it is an instance of (``prune`` for
+      ``prune-001``);
+    * the author (the first non-empty ``requesting_agent``, ``owner`` or ``author``) must be on the team's roster;
+    * a row on the operator path must be traceable: its ``derives_from`` chain, overlaid on the log, must resolve
+      (``decision_log._assert_relaxing_row_is_traceable``). The gate pools lineage across every row of an action
+      id (``decision_lineage._build_lineage_map``), so one signed row naming an unrecorded ancestor makes that id
+      unclearable until the ancestor is recorded, and forever for a mistyped one. Sign ancestors first;
+    * the verify key ``references/authorized-verify-keys/<key_id>.pub.pem`` must exist in this team dir.
+
+    An open HALT is not checked here: a retraction may legitimately follow the signature.
+
+    Args:
+        row: The decision row built from the spec.
+        output_dir: The team dir the row is signed into (its roster is the one the gate reads).
+
+    Returns:
+        The reason, or None when author and scope would pass.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.cli import decision_log as dl
+
+    from agentteams.cli.action_ids import GATE_ACTIONS, action_matches
+
+    action = (row.get("action_reviewed") or "").strip()
+    gate_actions = [action, *(g for g in GATE_ACTIONS if action_matches(action, g))]
+    if not any(dl._scope_permits(row, a) for a in gate_actions):
+        return f"its scope {row.get('scope')!r} lists neither its action_reviewed {action!r} nor its gate action"
+    author = dl._decision_author(row)
+    approved = sorted({a.lower().lstrip("@") for a in dl._approved_decision_authors(output_dir)})
+    if author not in approved:
+        return (f"its author {author or '(none)'!r} is not an approved security author {approved} (set "
+                "requesting_agent in the spec to one of them)")
+    try:  # the gate pools derives_from across every row of an action id: a dangling one poisons that id
+        dl._assert_relaxing_row_is_traceable(row, output_dir=output_dir, action=action)
+    except RuntimeError as exc:
+        return str(exc)
+    key_id = (row.get("key_id") or "").strip()
+    if not (output_dir / "references" / "authorized-verify-keys" / f"{key_id}.pub.pem").is_file():
+        return (f"this team dir has no Ed25519 verify key references/authorized-verify-keys/{key_id}.pub.pem for its "
+                f"key_id {key_id!r} (provision it into {output_dir}, or sign into the team dir that has it)")
+    return None
+
+
 def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | None = None,
                   allow_checkout: bool = False) -> int:
     """Mint and append one operator Ed25519-signed constraint-relaxing decision row.
@@ -559,6 +611,11 @@ def sign_decision(output_dir: Path, spec_path: str, *, confirm_sha256: str | Non
         # PR-E domain separation: never sign a decision payload that is also a grant payload.
         print("Error: refusing to sign — this decision's payload begins with the capability-"
               "grant purpose tag (use --sign-grant for grants).", file=sys.stderr)
+        return 1
+    refusal = gate_refusal(row, output_dir)
+    if refusal:  # G8: never spend an operator signature on a row the gate refuses
+        print(f"Error: refusing to sign: the gate would refuse this row, because {refusal}. The key was not read.",
+              file=sys.stderr)
         return 1
     preflight = _signing_preflight(_project_roots(output_dir), allow_checkout)
     if preflight is None:
