@@ -597,7 +597,10 @@ _GH = """#!/bin/sh
 d="$(dirname "$0")"
 echo "$@" >> "$d/gh.log"
 case "$1 $2" in
-  "pr list") if [ -f "$d/open.json" ]; then cat "$d/open.json"; else echo "[]"; fi ;;
+  "pr list") case "$*" in
+               *"--state closed"*) if [ -f "$d/closed.json" ]; then cat "$d/closed.json"; else echo "[]"; fi ;;
+               *) if [ -f "$d/open.json" ]; then cat "$d/open.json"; else echo "[]"; fi ;;
+             esac ;;
   "pr create") if [ -f "$d/fail" ]; then echo "HTTP 502" >&2; exit 1; fi
                echo https://github.example.com/o/svc/pull/9 ;;
   *) exit 2 ;;
@@ -712,7 +715,8 @@ def test_d4_open_pr_retry_after_pr_create_failed_is_idempotent(env: dict, monkey
     second = executor.act("open-pr", str(repo), env["cfg"])
     assert second["status"] == "done" and second["pr"].endswith("/pull/9"), second
     calls = _gh_calls(bindir)
-    assert calls[-2].startswith(f"pr list --repo github.com/o/svc --head {staged['branch']} ")
+    assert calls[-3].startswith(f"pr list --repo github.com/o/svc --head {staged['branch']} ")
+    assert calls[-2].startswith("pr list --repo github.com/o/svc --state closed ")   # none closed: not withheld
     assert calls[-1].startswith("pr create --repo github.com/o/svc ")
     assert _sh(remote, "rev-parse", f"refs/heads/{staged['branch']}").strip() == pushed
     assert not Path(staged["worktree"]).exists() and _executor_worktrees(repo) == []    # (c)
