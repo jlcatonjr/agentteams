@@ -410,7 +410,9 @@ for a mode it cannot recognise) and the user the containers ran as (`container_u
 Docker Desktop and Docker Engine, or between rootful and rootless, re-run `agent-selftest`: a run and
 `agent-chat` refuse until you do. For goose, rc.5 adds the check `goose_recipe_valid` (`goose recipe validate`
 on the run's checked copy of the recipe), so goose operators re-run `agent-selftest` once more after
-installing rc.5.
+installing rc.5. The wire probe (`goose_headless_ran`, `goose_wire_compatible`) runs goose against a
+local stub and passes every request it sent through the gateway's policy, so a goose update the gateway would
+refuse fails the self-test instead of every live call; it too needs one more `agent-selftest` after installing it.
 
 A refused precondition prints `{"passed": false, "checks": {"<what>": false}, "error": "<why>"}`
 instead, exits 1 and records nothing. Without Docker, or without the image, `<what>` is
@@ -526,7 +528,7 @@ supervised run (GLM 5.3 through OpenRouter, a private test repository with two v
 About a minute and six cents: `unmetered: 0` shows the route reports usage on every reply, so the budget
 cap is exact.
 
-`run_state` is `completed`, `agent-error`, `gateway-refused`, `timed-out` or `not-run`. A refused run, a launcher
+`run_state` is `completed`, `agent-error`, `gateway-refused`, `cap-reached`, `timed-out` or `not-run`. A refused run, a launcher
 failure or a SIGTERM has `reason` in place of `exit`, `timed_out` and `spend` (a held run lock also
 adds `"status_written": false`, and nothing is written); `stale_requests`, `spend_problem`, `report_problem` and
 `cleanup_error` appear only when they apply. A run whose agent exits 0 without a single model call
@@ -534,6 +536,9 @@ adds `"status_written": false`, and nothing is written); `stale_requests`, `spen
 from `<run>/agent/transcript.log`. When the gateway refused those calls by policy it is `gateway-refused`
 instead, with the refusal reasons: it recurs on every run until the allowlist or the CLI pin changes.
 (goose exits 0 after such a refusal; a refused run whose agent exits non-zero stays `agent-error`.)
+A run that stopped after the gateway's run budget or token cap refused a call is `cap-reached`, with the
+cap refusal as its `reason`: raise `agent.max_tokens_total` or the budget, or look for an agent polling in a
+loop.
 The sample above predates two later fields: `report` (the
 `request_id` and `submitted` time of the report this run submitted, or `null`) and, when an earlier
 run on the same date was set aside, `archived_previous` (its records move to `<run>/agent/runs/<run id>/`
@@ -600,9 +605,14 @@ governance directory and of the publish ops repository (worktrees included), wha
 ```bash
 AGENTTEAMS_DECISION_ED25519_KEYFILE=~/.config/agentteams/keys/decision-signing-<key-id>.pem \
 python -P -m agentteams.vulnscan grant sign --key-id <key-id> --days 14 --max-uses 50 \
-    --op stage-fix --op open-pr --repo-root ~/code/shop-api --repo-root ~/code/billing \
+    --op stage-fix --op open-pr --op close-superseded --repo-root ~/code/shop-api --repo-root ~/code/billing \
     --governance-dir ~/ops-team/.goose/recipes
 ```
+
+`--op close-superseded` lets the agent have the executor close a repository's older remediation PRs once
+the newest is open (only untouched PRs it opened itself; never a merge). After each daily run,
+`<state>/<date>/merge-digest.sh` lists the PRs ready to merge and asks before each one; run it yourself
+when you want to merge.
 
 Add `--op server-audit --op server-dryrun --host web1` to let the agents audit and dry-run servers.
 `merge` and `server-apply` are refused: no grant can cover them. At most two grants may be valid at
@@ -896,7 +906,8 @@ Search the message for the quoted text.
 | `holds the run lock` | an agent run or `agent-chat` is in progress | wait for it to finish |
 | `another daily run holds ... daily.lock` (exit 3) | a daily run is already in progress | wait for it to finish |
 | `origin/HEAD is not set` (`fix_mode: apply-worktree`) | the repository has no default branch recorded | `git remote set-head origin --auto` in that repository |
-| `the repository's git config defines a filter driver, which git would run — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch) | the repository's own git config defines a `filter.*` driver | apply that fix by hand |
+| `the repository's git config defines a filter driver, which git would run — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch) | the repository's own git config defines a `filter.*` driver other than git-lfs's standard `filter.lfs.*` values | apply that fix by hand |
+| `the repository's git config has a conditional include (includeIf), which can add settings only where the executor runs git — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch; or `<repo>: in the executor's worktree, …` when found only there, after the fetch and before the checkout) | the repository's own git config (or a file it includes) has an `includeIf.*` section | move the setting out of the `includeIf`, or apply that fix by hand |
 | `git refuses to read this repository (<git stderr>) — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `refused`, before any fetch) | git will not open the repository, e.g. `safe.directory` rejects it because another user owns it | fix what git reports (e.g. the directory's owner), or apply that fix by hand |
 | `hash-pinned (--hash) requirements are never edited` / `hash-held` | the requirements file pins `--hash` values | regenerate it yourself (`pip-compile --generate-hashes`) |
 | `invalid host name` (exit 2) | a `hosts.conf` name does not match `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`, or is `all` | rename the host there and in `servers` |

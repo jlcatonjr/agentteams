@@ -135,6 +135,11 @@ def test_golden_selftest_argv_and_probe(fixed: dict) -> None:
     entry = selftest_probe.goose_recipe_entry("/work/run/agentdef/recipe.yaml") + "\n"   # entries are newline-joined
     assert old.count(entry) == 1
     old = old.replace(entry, "")
+    # 2026-10-26 plan A3 (deliberate): goose's probe also runs goose headless against a chat stub and passes every
+    # request through the gateway's policy (selftest_canary.goose_checks); it is the last driver entry.
+    wire = agent_drivers.GOOSE.selftest_entries()[2] + "\n"
+    assert "goose_checks" in wire and old.count(wire) == 1
+    old = old.replace(wire, "")
     # rc.5 R4 (deliberate, @security): the probe reports the uid:gid the container really ran as.
     identity = 'print("SELFTEST-IDENTITY %d:%d" % (os.getuid(), os.getgid()))   # what the container really ran as\n'
     assert old.count(identity) == 1

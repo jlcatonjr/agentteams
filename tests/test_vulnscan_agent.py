@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import agent_run, daily, executor, gateway, selftest_probe
+from agentteams.vulnscan import agent_run, daily, executor, executor_serve, gateway, selftest_probe
 from agentteams.vulnscan import team_dir as team_dir_mod
 from agentteams.vulnscan.mcp import Server, ToolError
 from tests._vulnscan_helpers import goose_recipe
@@ -63,7 +63,7 @@ def test_mcp_tools_and_requests_match_the_executor_schema(dirs: dict[str, Path])
     assert [f["name"] for f in s.call("list_findings", {"min_severity": "high"})["findings"]] == ["PyJWT"]
     q = s.call("request", {"op": "server-audit", "target": "web1", "rationale": "daily audit"})
     path = dirs["requests"] / f"{q['id']}.json"
-    assert executor._read_request(path)["op"] == "server-audit"          # the executor accepts what the MCP writes
+    assert executor_serve._read_request(path)["op"] == "server-audit"          # the executor accepts what the MCP writes
     assert s.call("request_status", {"id": q["id"]})["status"] == "pending"
     (dirs["results"] / f"{q['id']}.json").write_text(json.dumps({"id": q["id"], "status": "done"}))
     assert s.call("request_status", {"id": q["id"]})["status"] == "done"
@@ -80,10 +80,10 @@ def test_mcp_escalate_and_submit_report_write_payload_requests(dirs: dict[str, P
     assert mcp.ESCALATION_KINDS == executor.AGENT_ESCALATION_KINDS   # the container copy stays in step
     s = Server(dirs["run"], dirs["requests"], dirs["results"])
     e = s.call("escalate", {"target": "web1", "kind": "ioc", "evidence": "x" * 5000})
-    req = executor._read_request(dirs["requests"] / f"{e['id']}.json")
+    req = executor_serve._read_request(dirs["requests"] / f"{e['id']}.json")
     assert req["op"] == "escalate" and req["payload"]["kind"] == "ioc" and len(req["payload"]["evidence"]) == 2000
     r = s.call("submit_report", {"markdown": "# Run report\n" + "y" * 100_000})
-    req = executor._read_request(dirs["requests"] / f"{r['id']}.json")
+    req = executor_serve._read_request(dirs["requests"] / f"{r['id']}.json")
     assert req["op"] == "report" and req["target"] == "run" and req["payload"]["markdown"].startswith("# Run report")
     for name, bad in (("escalate", {"target": "web1", "kind": "escalation-flood", "evidence": "e"}),
                       ("escalate", {"target": "a\nb", "kind": "ioc", "evidence": "e"}),
@@ -605,7 +605,9 @@ def test_daily_notifications_are_fixed_text(dirs: dict[str, Path], monkeypatch: 
            "agent": {"enabled": True, "team_dir": "x", "key_file": "y"}}
     daily.run_daily(cfg, today="2026-10-24")
     msgs = [c[-1] for c in calls]
-    assert msgs == [notify.render("run-done", state="new findings", findings=0, new=1),
+    # agent mode on with no grant: the readiness check (remediation_status, plan B2) reports it first
+    assert msgs == [notify.render("remediation-blocked", count=1),
+                    notify.render("run-done", state="new findings", findings=0, new=1),
                     notify.render("agent-not-completed", state="timed-out")]
 
 
@@ -763,7 +765,7 @@ def test_first_run_with_agent_enabled_but_unconfigured_records_why(tmp_path: Pat
     assert hb["publish"] is None                                   # no publish grant
     summary = (run_dir / "summary.md").read_text()
     assert "## Agent run" in summary and "agent.team_dir" in summary
-    assert sent == ["agent-not-completed"] and ledger.read() == []
+    assert sent == ["remediation-blocked", "agent-not-completed"] and ledger.read() == []
 
 
 def test_a_launcher_exception_through_daily_ends_agent_error(dirs: dict[str, Path], tmp_path: Path,
@@ -783,7 +785,7 @@ def test_a_launcher_exception_through_daily_ends_agent_error(dirs: dict[str, Pat
     daily.run_daily(cfg, today="2026-10-22")
     hb = json.loads(daily.heartbeat_path().read_text())
     assert hb["agent"]["state"] == "agent-error" and "docker vanished" in hb["agent"]["reason"]
-    assert report_store.NO_REPORT_LINE in report_store.render_for_review(run) and sent == ["agent-not-completed"]
+    assert report_store.NO_REPORT_LINE in report_store.render_for_review(run) and sent == ["remediation-blocked", "agent-not-completed"]
 
 
 def test_second_daily_run_on_one_date_has_one_agent_section(dirs: dict[str, Path],
