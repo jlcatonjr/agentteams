@@ -195,6 +195,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # mcp.py is the agents' only request channel (@security P3 review, MAJOR 4).
     "agentteams/vulnscan/paths.py",
     "agentteams/vulnscan/agent_run.py",
+    "agentteams/vulnscan/agent_outcome.py",    # run outcome and the one goose output-limit nudge (rc.12)
     "agentteams/vulnscan/selftest_probe.py",   # the self-test probe a passing self-test vouches for
     "agentteams/vulnscan/docker_mode.py",      # R4: the container user per Docker mode (never real root)
     "agentteams/vulnscan/run_records.py",      # archives earlier runs' status, transcript and report
