@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (a remediation PR closed unmerged is not re-opened)
+
+- **`open-pr` opens nothing for a change a person closed without merging.** After its open-PR claims and before
+  pushing, it looks for the repository's own closed, unmerged PRs on `vulnscan/<any date>-<same digest>`, found by
+  the digest in their title, at most 3. One counts only if every commit is by the executor's identity and its
+  change, read from `refs/pull/<n>/head` (kept after the branch is deleted), equals the staged change byte for
+  byte, so a closed PR cannot hold back a fix it does not carry. PRs that `close-superseded` closed do not count.
+  When one counts, it retires the staged fix and returns `closed_unmerged`, like `already_in_base`. Before, the fix
+  kept its approve-staged verdict, the same-change claim matched only open PRs, and the next run pushed it again
+  (vk-data-uploader #223, closed 2026-10-28 because the coordinated upgrade #225 superseded it; data-quality-monitor
+  #19 needed a hand-written reject verdict the same day). Best effort: a gh or git failure opens the PR as before.
+
 ### vulnscan (a staged change must resolve an advisory)
 
 - **`stage-fix` refuses a change that resolves no advisory.** npm audit fix can move a package within its range to

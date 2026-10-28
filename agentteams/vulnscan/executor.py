@@ -571,15 +571,16 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     change re-staged on a later day has a new name: an open PR on ``vulnscan/<date>-<same digest>`` whose own change
     reproduces the digest is returned as is too (:func:`.executor_supersede.open_pr_with_same_change`), and nothing
     is pushed. When the staged files already match the base branch (the change was merged meanwhile, e.g. through an
-    earlier day's PR), the staged state is retired and nothing is opened (``already_in_base``). After the PR exists the executor's
-    worktree and staged state are removed; the local branch is kept.
+    earlier day's PR), the staged state is retired and nothing is opened (``already_in_base``); so too, after those
+    claims and before any push, when a person closed an executor PR with this change unmerged (``closed_unmerged``).
+    After the PR exists the executor's worktree and staged state are removed; the local branch is kept.
 
     Args:
         repo: Repository root.
         rationale: The agent's rationale (untrusted; quoted and neutralised in the body).
 
     Returns:
-        Result with the PR URL (``existing`` is True when an open PR was found).
+        Result with the PR URL (``existing``: an open PR was found; ``already_in_base``, ``closed_unmerged``: none).
 
     Raises:
         ExecError: No staged change, the remote ref holds another commit with no open PR, or
@@ -620,6 +621,10 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         if same:   # the same change, staged on an earlier day, already has an open PR: claim it, open no duplicate
             _finish_open_pr(repo, wt, staged)
             return {"repo": str(repo), "branch": branch, "pr": same[1], "existing": True, "same_change_as": same[0]}
+    if closed := executor_supersede.closed_pr_for_change(wt, target_repo, branch, st["base"]):   # a person's call
+        _finish_open_pr(repo, wt, staged)
+        return {"repo": str(repo), "branch": branch, "pr": "", "closed_unmerged": closed, "detail": "not re-opened"}
+    if not remote_sha:
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
     body = (f"Automated security fix staged by the agentteams **vulnscan executor** "
             f"(deterministic; dependency pins and lockfiles only).\n\n{st['plan']}\n\n"

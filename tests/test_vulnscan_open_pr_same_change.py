@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("cryptography")
-from agentteams.vulnscan import executor, fix  # noqa: E402
+from agentteams.vulnscan import executor, executor_supersede, fix  # noqa: E402
 from tests.test_vulnscan_executor import (  # noqa: E402
     _GH,
     _gh_calls,
@@ -163,3 +163,87 @@ def test_a_base_without_the_change_still_gets_its_pr(env: dict, monkeypatch: pyt
     _fake_gh(env, monkeypatch)
     res = executor.act("open-pr", str(repo), env["cfg"])
     assert res["status"] == "done" and res["pr"].endswith("/pull/9") and "already_in_base" not in res, res
+
+
+# ---------------------------------------------------------------- a change a person closed unmerged
+
+def _closed(bindir: Path, wt: Path, branch: str, *, pull_head: str = "HEAD", **extra: object) -> None:
+    """List a closed PR #5 on ``branch`` and put ``pull_head`` at its ``refs/pull/5/head`` (GitHub keeps it)."""
+    _git(wt, "push", "-q", "origin", f"{pull_head}:refs/pull/5/head")
+    (bindir / "closed.json").write_text(json.dumps([
+        {"number": 5, "url": "https://github.example.com/o/svc/pull/5", "headRefName": branch,
+         "isCrossRepository": False, "mergedAt": None, **extra}]))
+
+
+def _staged(env: dict, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, dict]:
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-fix", "open-pr"], hosts=[], max_uses=20)
+    monkeypatch.setattr(fix, "fix_path", _pin_fix)
+    return repo, executor.act("stage-fix", str(repo), env["cfg"])
+
+
+def test_a_change_closed_unmerged_is_not_reopened(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    # vk-data-uploader #223 (2026-10-28): closed, superseded by a coordinated upgrade; its branch was deleted
+    repo, staged = _staged(env, monkeypatch)
+    bindir = _fake_gh(env, monkeypatch)
+    _closed(bindir, Path(staged["worktree"]), f"vulnscan/20000101-{staged['branch'].rsplit('-', 1)[-1]}")
+    res = executor.act("open-pr", str(repo), env["cfg"])
+    assert res["status"] == "done" and res["pr"] == "" and res["closed_unmerged"].endswith("/pull/5"), res
+    assert any("--state closed" in c and "in:title" in c for c in _gh_calls(bindir))
+    assert not any(c.startswith("pr create") for c in _gh_calls(bindir))
+    assert _git(env["tmp"] / "remote.git", "branch", "--list", "vulnscan/*") == ""   # nothing pushed
+    assert not Path(staged["worktree"]).exists() and not executor.staged_file(repo.resolve()).exists()
+
+
+def test_the_same_branch_closed_with_its_ref_left_is_not_reopened(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    # the remote branch still holds the staged commit and has no open PR: before, open-pr re-created the PR
+    repo, staged = _staged(env, monkeypatch)
+    wt = Path(staged["worktree"])
+    _git(wt, "push", "-q", "origin", f"HEAD:refs/heads/{staged['branch']}")
+    bindir = _fake_gh(env, monkeypatch)
+    _closed(bindir, wt, staged["branch"])
+    res = executor.act("open-pr", str(repo), env["cfg"])
+    assert res["status"] == "done" and res["closed_unmerged"].endswith("/pull/5"), res
+    assert not any(c.startswith("pr create") for c in _gh_calls(bindir))
+
+
+def test_an_open_pr_for_the_change_is_claimed_before_a_closed_one_counts(env: dict,
+                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    repo, staged = _staged(env, monkeypatch)
+    wt = Path(staged["worktree"])
+    earlier = _earlier_pr(wt, staged["branch"])
+    bindir = _fake_gh(env, monkeypatch)
+    (bindir / "open.json").write_text(json.dumps([
+        {"url": "https://github.example.com/o/svc/pull/7", "headRefName": earlier, "isCrossRepository": False}]))
+    _closed(bindir, wt, f"vulnscan/19990101-{staged['branch'].rsplit('-', 1)[-1]}")
+    res = executor.act("open-pr", str(repo), env["cfg"])
+    assert res["pr"].endswith("/pull/7") and res.get("existing") is True and "closed_unmerged" not in res, res
+
+
+@pytest.mark.parametrize("why", ["merged", "fork", "foreign author", "other digest", "other content",
+                                 "closed by close-superseded", "unreadable view"])
+def test_only_a_person_closing_this_executor_change_counts(env: dict, monkeypatch: pytest.MonkeyPatch,
+                                                           why: str) -> None:
+    repo, staged = _staged(env, monkeypatch)
+    wt = Path(staged["worktree"])
+    bindir = _fake_gh(env, monkeypatch, author=("someone", "someone@example.com") if why == "foreign author"
+                      else executor.GIT_IDENTITY)
+    if why == "closed by close-superseded":
+        view = json.loads((bindir / "view.json").read_text())
+        view["comments"].append({"body": f"Superseded by x. Closed by the {executor_supersede.SUPERSEDED_BY_EXECUTOR}."})
+        (bindir / "view.json").write_text(json.dumps(view))
+    if why == "unreadable view":
+        (bindir / "view.json").write_text("not json")
+    digest = "0000000000" if why == "other digest" else staged["branch"].rsplit("-", 1)[-1]
+    _closed(bindir, wt, f"vulnscan/20000101-{digest}", pull_head="HEAD~1" if why == "other content" else "HEAD",
+            **{"merged": {"mergedAt": "2026-10-28T12:00:00Z"}, "fork": {"isCrossRepository": True}}.get(why, {}))
+    res = executor.act("open-pr", str(repo), env["cfg"])
+    assert res["status"] == "done" and res["pr"].endswith("/pull/9") and "closed_unmerged" not in res, res
+
+
+def test_an_unreadable_closed_list_opens_the_pr_as_before(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo, _ = _staged(env, monkeypatch)
+    bindir = _fake_gh(env, monkeypatch)
+    (bindir / "closed.json").write_text("not json")
+    res = executor.act("open-pr", str(repo), env["cfg"])
+    assert res["status"] == "done" and res["pr"].endswith("/pull/9"), res

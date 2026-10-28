@@ -19,8 +19,9 @@ It runs inside the executor's grant use (``authorize`` and :mod:`.executor_guard
 hardened gh environment of ``open-pr``.
 
 The inverse cases live here too: :func:`open_pr_with_same_change` lets ``open-pr`` recognise that the change it
-staged is already open under an earlier date (same digest), so it claims that PR instead of opening a duplicate, and
-:func:`already_in_base` that it was already merged, so it opens nothing.
+staged is already open under an earlier date (same digest), so it claims that PR instead of opening a duplicate,
+:func:`already_in_base` that it was already merged, and :func:`closed_pr_for_change` that a person closed it without
+merging, so in both cases it opens nothing.
 """
 
 from __future__ import annotations
@@ -36,7 +37,8 @@ from agentteams.vulnscan import ledger, ops
 
 OP = "close-superseded"
 MAX_CANDIDATES = 20
-MAX_SAME_CHANGE = 3   # open PRs open-pr examines for the same change under another date (each costs a fetch)
+MAX_SAME_CHANGE = 3   # open, and closed, PRs open-pr examines for the same change (each match costs a fetch)
+SUPERSEDED_BY_EXECUTOR = "agentteams vulnscan executor (close-superseded)"   # in the comment close-superseded posts
 _VIEW_FIELDS = "state,headRefName,isCrossRepository,reviews,comments,commits"
 
 
@@ -136,7 +138,7 @@ def close_superseded(repo: Path, rows: list[dict[str, Any]] | None = None, *,
             continue
         shut(url, publish.rewrite_paths(
             f"Superseded by {replacement}, a newer automated security fix for the same repository. Closed by the "
-            "agentteams vulnscan executor (close-superseded); the branch is kept and nothing was merged."))
+            f"{SUPERSEDED_BY_EXECUTOR}; the branch is kept and nothing was merged."))
         closed.append(url)
     return {"repo": str(repo), "replacement": replacement, "closed": closed, "kept": kept}
 
@@ -207,13 +209,65 @@ def open_pr_with_same_change(wt: Path, target_repo: str, branch: str, base: str)
         view = _gh_json("pr", "view", url, "--json", _VIEW_FIELDS)
         if not isinstance(view, dict) or authored_problem(view, ex.GIT_IDENTITY):
             continue
-        if ex.git_proc(wt, "fetch", "--no-tags", "origin", f"refs/heads/{head}", push=True).returncode:
-            continue
-        tip = ex.git(wt, "rev-parse", "FETCH_HEAD", check=False).strip()
-        mb = ex.git(wt, "merge-base", tip, base, check=False).strip() if tip else ""
-        if mb and staged and ex.change_diff(wt, mb, tip, check=False) == staged:
+        if _holds_change(wt, f"refs/heads/{head}", base, staged):
             return head, url
     return None
+
+
+def closed_pr_for_change(wt: Path, target_repo: str, branch: str, base: str) -> str:
+    """Return the URL of an executor PR carrying the change staged on ``branch`` that a person closed unmerged, or "".
+
+    Closing a remediation PR unmerged is a person's decision about that change (vk-data-uploader #223, superseded by
+    a coordinated upgrade, 2026-10-28); re-opening it on the next run would undo it. Candidates are the repository's
+    own closed, unmerged PRs (not a fork's) on ``vulnscan/<YYYYMMDD>-<digest>`` with ``branch``'s digest under any
+    date, found by the digest in their title (``open_pr`` puts it there), at most :data:`MAX_SAME_CHANGE`. As in
+    :func:`open_pr_with_same_change` the public digest only selects them: one counts only if every commit on it is
+    the executor's (:func:`authored_problem`) and its change, read from ``refs/pull/<n>/head`` (kept after the branch
+    is deleted), equals the staged change byte for byte, so a closed PR cannot hold back a fix it does not carry. A PR
+    the executor closed itself (``close-superseded``'s comment) is not a person's decision and does not count. Best
+    effort: when gh or git fails or times out the answer is "" and open-pr opens the PR as before.
+
+    Args:
+        wt: The staged worktree.
+        target_repo: ``origin``'s GitHub repository (``host/owner/name``).
+        branch: The staged branch, ``vulnscan/<YYYYMMDD>-<digest>``.
+        base: The base commit the fix was staged on.
+
+    Returns:
+        The closed PR's URL, or "".
+    """
+    from agentteams.vulnscan import executor as ex
+
+    digest = branch.rsplit("-", 1)[-1]
+    same = re.compile(rf"vulnscan/\d{{8}}-{re.escape(digest)}")
+    found = _gh_json("pr", "list", "--repo", target_repo, "--state", "closed", "--limit", "20",
+                     "--search", f"{digest} in:title", "--json", "number,url,headRefName,isCrossRepository,mergedAt")
+    candidates = [pr for pr in found if isinstance(pr, dict) and isinstance(pr.get("headRefName"), str)
+                  and same.fullmatch(pr["headRefName"]) and pr.get("isCrossRepository") is False
+                  and not pr.get("mergedAt") and isinstance(pr.get("number"), int)
+                  and str(pr.get("url", "")).startswith("https://")
+                  ] if isinstance(found, list) else []
+    staged = ex.change_diff(wt, base, "HEAD", check=False)
+    for pr in candidates[:MAX_SAME_CHANGE]:
+        view = _gh_json("pr", "view", pr["url"], "--json", _VIEW_FIELDS)
+        if not isinstance(view, dict) or authored_problem(view, ex.GIT_IDENTITY) or any(
+                SUPERSEDED_BY_EXECUTOR in str(c.get("body", "")) for c in view.get("comments") or []
+                if isinstance(c, dict)):
+            continue
+        if _holds_change(wt, f"refs/pull/{pr['number']}/head", base, staged):
+            return pr["url"]
+    return ""
+
+
+def _holds_change(wt: Path, ref: str, base: str, staged: str) -> bool:
+    """Return whether origin's ``ref`` carries exactly the ``staged`` change (``git diff <merge-base> <its tip>``)."""
+    from agentteams.vulnscan import executor as ex
+
+    if not staged or ex.git_proc(wt, "fetch", "--no-tags", "origin", ref, push=True).returncode:
+        return False
+    tip = ex.git(wt, "rev-parse", "FETCH_HEAD", check=False).strip()
+    mb = ex.git(wt, "merge-base", tip, base, check=False).strip() if tip else ""
+    return bool(mb) and ex.change_diff(wt, mb, tip, check=False) == staged
 
 
 def already_in_base(wt: Path, base_branch: str, changed: list[str]) -> bool:
