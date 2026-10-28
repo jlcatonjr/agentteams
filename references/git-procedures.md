@@ -447,7 +447,8 @@ agentteams --branch-inventory --branch-report tmp/by-week/<week>/branch-audit   
 agentteams --branch-cleanup tmp/by-week/<week>/branch-audit/branch-deletion-plan.json      # dry run
 # @security records PASS for action branch-cleanup:<plan sha256> (printed above). This repo
 # enforces signed decisions, so the operator authenticates it with a one-use waiver instead
-# (branch-lifecycle reference §4, "When the workspace enforces signed decisions"). Then:
+# (branch-lifecycle reference §4, "When an unsigned PASS is refused": a `signature` column in the
+# decisions log activates signing even with enforce_decision_signing false). Then:
 agentteams --branch-cleanup tmp/by-week/<week>/branch-audit/branch-deletion-plan.json --apply
 ```
 

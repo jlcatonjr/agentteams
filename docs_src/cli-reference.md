@@ -1726,6 +1726,11 @@ its restore command.
 Execute a deletion plan. The default is a dry run, which consumes nothing. With `--apply` it
 requires a `@security` **PASS** recorded for the action `branch-cleanup:<plan
 sha256>` (the full digest). That clearance covers exactly that plan, and the gate consumes it.
+The PASS row must be signed whenever decision signing is active, which happens when the decisions
+log has a `signature` column or `AGENTTEAMS_DECISION_SIGNING_KEY` is set. That is independent of
+`enforce_decision_signing`. Without a key, the refusal reads "decision signing key is not configured".
+Leave the row's `effect_class` empty so that it is derived. The branch-lifecycle reference §4 covers
+the waiver fallback.
 
 Before acting, it re-inventories and skips any ref whose tip or verdict drifted. Each deletion then
 works as follows:
@@ -1761,6 +1766,14 @@ is refused. With no usable grant it exits `3`; use `--branch-cleanup` under a cl
 
 Repeatable. Author emails treated as the operator. `git config user.email` is always included, and
 any other author of a branch's own commits places an Owner hold.
+
+### `--maintained-release REGEX`
+
+Repeatable, with `--branch-inventory` or `--branch-cleanup`. A release line that receives backports:
+it is classified `release-maintained` and kept, never planned for tag-then-delete. Matching uses an
+unanchored `re.search`, so anchor the pattern (`'^release/1\.0$'`). A cleanup run given the flag skips
+a planned branch that now matches, as drift. An invalid regex, or the flag without either mode, exits
+`2`.
 
 ### `--no-api`
 

@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### branch lifecycle (maintained release lines; signing docs)
+
+- **`--maintained-release REGEX`** (repeatable, with `--branch-inventory` or `--branch-cleanup`). It keeps a
+  maintained release line out of tag-then-delete by passing it to `InventoryConfig.maintained_patterns`, which
+  the CLI did not expose before. Previously a merged `release/*` was always `release-finished`, so consumers
+  had to keep a release line alive with link holds. Plan hashes are unchanged.
+- **Documented: an unsigned PASS can be refused with `enforce_decision_signing: false`.** Decision signing is
+  active whenever the decisions log has a `signature` column or `AGENTTEAMS_DECISION_SIGNING_KEY` is set. With
+  no key, `--branch-cleanup --apply` refuses with "decision signing key is not configured". The branch-lifecycle
+  reference §4 now states both triggers and the waiver fallback. It also says to leave `effect_class` empty,
+  because a destructive bulk row derives as relaxing and a disagreeing declaration is refused. Reported by
+  mathAgents.
+
 ### vulnscan (no duplicate PR for a fix re-staged on a later day)
 
 - **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch

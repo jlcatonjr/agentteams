@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -68,6 +69,12 @@ def add_branch_arguments(parser: argparse.ArgumentParser) -> None:
         help="Author email treated as the operator (repeatable; git config user.email is always "
              "included). Other authors place an Owner hold.",
     )
+    group.add_argument(
+        "--maintained-release", metavar="REGEX", action="append", dest="maintained_releases", default=[],
+        help="With --branch-inventory or --branch-cleanup: a release line that is maintained, so it is "
+             "kept and never planned for tag-then-delete (repeatable; matched with an unanchored "
+             "re.search, so anchor it, e.g. '^release/1\\.0$').",
+    )
     group.add_argument("--no-api", action="store_true", dest="branch_no_api", default=False,
                        help="Do not query GitHub (no Merged-by-PR; no remote deletions planned).")
     group.add_argument(
@@ -115,6 +122,14 @@ def validate_branch_args(parser: argparse.ArgumentParser, args: argparse.Namespa
         parser.error(f"{' and '.join(modes)} are mutually exclusive")
     if getattr(args, "branch_report", None) and not getattr(args, "branch_inventory", False):
         parser.error("--branch-report requires --branch-inventory")
+    maintained = getattr(args, "maintained_releases", None) or []
+    if maintained and not (getattr(args, "branch_inventory", False) or getattr(args, "branch_cleanup", None)):
+        parser.error("--maintained-release requires --branch-inventory or --branch-cleanup")
+    for pattern in maintained:
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            parser.error(f"--maintained-release {pattern!r} is not a valid regex: {exc}")
     if not modes:
         return
     if getattr(args, "stale_days", 14) < 1:
@@ -198,7 +213,7 @@ def run_branch_cli(args: argparse.Namespace) -> int:
     cfg = branch_inventory.InventoryConfig(
         repo=project, push_remote=args.push_remote, default_branch=args.default_branch,
         stale_days=args.stale_days, operator_emails=tuple(args.operator_emails),
-        use_api=not args.branch_no_api,
+        use_api=not args.branch_no_api, maintained_patterns=tuple(args.maintained_releases),
     )
     try:
         if args.branch_inventory:
