@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (conditional includes in a repository's git config are refused)
+
+- **`fix --apply` and `stage-fix` refuse a repository whose git config has an `includeIf.*` section.** Its
+  condition is evaluated where git runs. So `includeIf "gitdir:**/worktrees/**"` or `"onbranch:vulnscan/**"` could
+  add a filter driver that is invisible to the config check in the repository but live in the executor's worktree,
+  where the checkout would run it. A plain `include.path` is still allowed; what it adds is checked as before.
+- **`stage-fix` checks the config again where it is about to run git, before the checkout.** The worktree is now
+  created with `--no-checkout`, the config check runs inside it, and only then are its files checked out. Config
+  that changed during the fetch (or an include target that appeared) is refused before any filter could run.
+- **A config query git fails is a refusal**, not "no problem" ("git cannot read this repository's config").
+
+  This closes the follow-up in #311's security review.
+
 ### vulnscan (a reply that is all reasoning)
 
 - **`agent.reasoning` bounds the model's reasoning.** Both rc.9 live runs (z-ai/glm-5.3) spent the whole output
