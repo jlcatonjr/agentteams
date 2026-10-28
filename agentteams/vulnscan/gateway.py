@@ -12,7 +12,8 @@ internal network the agent container sits on, and a bridge out. It enforces:
   plus ``--models``; exact match). On the chat route OpenRouter ``plugins``/web-search features are
   stripped and ``usage: {include: true}`` is forced so cost is reported (OpenRouter-only rewrites).
   One non-OpenRouter key is stripped there too, as a deliberate exception: goose's ``session_id``
-  grouping label (a duplicate of the allowed ``user``), so it never reaches the upstream.
+  grouping label (a duplicate of the allowed ``user``), so it never reaches the upstream. With
+  ``--chat-reasoning`` (``agent.reasoning``) the operator's ``reasoning`` object replaces the client's.
   Every route is then **deny by default**: body keys, tool types, ``anthropic-*`` header values
   outside the allowlists, server-side tools, OpenRouter fallback ``models`` and content the upstream
   would fetch are refused (400, counted as ``refused``), never stripped. Routes match the exact path;
@@ -283,7 +284,8 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                  anthropic_betas: Collection[str] = (),
                  chat_reserve_tokens: int = d.DEFAULT_CHAT_RESERVE_TOKENS,
                  dlp_filter: dlp.Filter | None = None,
-                 dlp_responses: bool = False, responses_reserve_tokens: int = 0) -> type[BaseHTTPRequestHandler]:
+                 dlp_responses: bool = False, responses_reserve_tokens: int = 0,
+                 chat_reasoning: Mapping[str, Any] | None = None) -> type[BaseHTTPRequestHandler]:
     """Build the request handler class bound to this gateway's settings.
 
     Args:
@@ -304,6 +306,8 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
             ``dlp_response_flags`` (the reply is relayed unchanged).
         responses_reserve_tokens: Output tokens reserved for a Responses call without ``max_output_tokens``
             (Codex sends none); 0 refuses such a call.
+        chat_reasoning: The operator's ``reasoning`` object, written into every chat request
+            (:func:`.gateway_dialects.reasoning_problem`); None: the client's own is forwarded.
 
     Returns:
         A ``BaseHTTPRequestHandler`` subclass.
@@ -371,7 +375,8 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
             try:
                 checked = d.check_request(dialect, self.rfile.read(length), models=allowed,
                                           max_output_tokens=max_output_tokens, chat_reserve_tokens=chat_reserve_tokens,
-                                          dlp=scanner.apply, responses_reserve_tokens=responses_reserve_tokens)
+                                          dlp=scanner.apply, responses_reserve_tokens=responses_reserve_tokens,
+                                          chat_reasoning=chat_reasoning)
                 headers = d.upstream_headers(dialect, self.headers, ups[dialect], anthropic_betas)
             except dlp.DlpBlocked as exc:   # the class name only: the matched text is never kept or echoed
                 meter.refuse(f"{dialect}: dlp: {exc.cls}", dlp_class=exc.cls)
@@ -553,6 +558,8 @@ def _parser() -> argparse.ArgumentParser:
                    help="output tokens reserved for a chat call without max_tokens")
     p.add_argument("--responses-reserve-tokens", type=int, default=0,
                    help="output tokens reserved for a responses call without max_output_tokens (0: refuse it)")
+    p.add_argument("--chat-reasoning", default="",
+                   help='reasoning object written into every chat request, e.g. \'{"effort": "low"}\' (default: none)')
     p.add_argument("--drain-timeout", type=float, default=DEFAULT_DRAIN_TIMEOUT,
                    help="seconds to keep reading a reply after the client hung up")
     p.add_argument("--budget-usd", type=float, default=2.0)
@@ -668,6 +675,13 @@ def _validate(p: argparse.ArgumentParser, a: argparse.Namespace) -> tuple[list[s
         p.error("--responses-reserve-tokens must be 0..--max-output-tokens")
     if not (math.isfinite(a.drain_timeout) and a.drain_timeout >= 0):
         p.error("--drain-timeout must be a finite number >= 0")
+    if a.chat_reasoning:
+        try:
+            why = d.reasoning_problem(json.loads(a.chat_reasoning), a.max_output_tokens)
+        except ValueError:
+            why = "must be JSON"
+        if why:
+            p.error(f"--chat-reasoning {why}")
     if not (a.model or _csv(a.models)):
         p.error("give the allowed model(s): --model and/or --models")
     dialects = _csv(a.dialects)
@@ -742,7 +756,8 @@ def main(argv: list[str] | None = None) -> int:
                            max_output_tokens=a.max_output_tokens, drain_timeout=a.drain_timeout,
                            anthropic_betas=frozenset(_csv(a.anthropic_betas)),
                            chat_reserve_tokens=a.chat_reserve_tokens, dlp_filter=scanner,
-                           dlp_responses=a.dlp_responses, responses_reserve_tokens=a.responses_reserve_tokens)
+                           dlp_responses=a.dlp_responses, responses_reserve_tokens=a.responses_reserve_tokens,
+                           chat_reasoning=json.loads(a.chat_reasoning) if a.chat_reasoning else None)
     server = _server(p, a, handler, meter)
     models = ",".join(m for m in (a.model, *_csv(a.models)) if m)
     routes = " ".join(f"{k}={v}" for k, v in urls.items())

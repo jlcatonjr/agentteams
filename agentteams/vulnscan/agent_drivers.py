@@ -76,6 +76,10 @@ r.update(_checks)
 print("SELFTEST-DETAIL " + json.dumps(_detail))'''
 #: The model id goose's self-test run names (a local stub answers; nothing is billed).
 GOOSE_SELFTEST_MODEL = "vulnscan/selftest-goose"
+#: goose 1.54's line when a reply stops at the output-token limit; the reply then carries no tool call.
+GOOSE_OUTPUT_LIMIT = "Warning: Response reached the model's output-token limit"
+OUTPUT_LIMIT_ERROR = ("the model's reply reached its output-token limit before it called a tool (reasoning can use "
+                      "it all: see agent.reasoning)")
 
 
 @dataclass(frozen=True)
@@ -115,8 +119,13 @@ class GooseDriver(Driver):
         return McpAttach("goose-extension", MCP_COMMAND)
 
     def parse_outcome(self, transcript: str) -> Outcome:
-        """See :meth:`Driver.parse_outcome`: the last line mentioning an error (goose exits 0 after one)."""
-        hit = next((ln.strip() for ln in reversed(transcript.splitlines()) if "error" in ln.lower()), "")
+        """See :meth:`Driver.parse_outcome`: goose's output-limit warning, else the last line mentioning an error
+        (goose exits 0 after one). Tool data in the transcript (JSON object and Markdown table lines) is not an
+        error line: rc.9's live runs were reported as ``"feed_errors": [],``."""
+        lines = [ln.strip() for ln in transcript.splitlines()]
+        if any(ln.startswith(GOOSE_OUTPUT_LIMIT) for ln in lines):
+            return Outcome(error=OUTPUT_LIMIT_ERROR)
+        hit = next((s for s in reversed(lines) if "error" in s.lower() and not s.startswith(('"', "{", "|"))), "")
         return Outcome(error=hit[:300])
 
     def selftest_entries(self, command: list[str] | None = None) -> list[str]:
