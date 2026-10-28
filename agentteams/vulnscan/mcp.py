@@ -72,6 +72,7 @@ _FINDING_KEYS = ("kind", "target", "name", "version", "ecosystem", "scope", "sev
 PLAN_LEVELS_FILE = "plan-levels.json"
 STAGED_FILE = "staged-fixes.json"     # repositories with a staged fix and no PR yet (host-written, read-only)
 MAX_PENDING_POLLS = 3                 # pending answers per request id before request_status refuses
+MAX_LISTED_REQUESTS = 20              # results list_requests returns, newest first (the history grows all day)
 PENDING_NOTE = ("pending: the executor processes requests on its own schedule, not on demand. Do not poll "
                 "again: continue with other work, or submit your report and end the run; the next run reads "
                 "this result.")
@@ -112,7 +113,8 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "request_status": {"description": ("Result of a queued request (pending until the executor processes it, on "
                                        "its own schedule). Never poll in a loop: a pending answer means move on."),
                        "inputSchema": {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}},
-    "list_requests": {"description": "Recent request results.", "inputSchema": {"type": "object", "properties": {}}},
+    "list_requests": {"description": f"The {MAX_LISTED_REQUESTS} most recent request results, newest first.",
+                      "inputSchema": {"type": "object", "properties": {}}},
 }
 
 
@@ -200,7 +202,8 @@ class Server:
                 raise ToolError(f"polling refused: asked {polls} times about a pending request. {PENDING_NOTE}")
             return {"id": rid, "status": "pending", "note": PENDING_NOTE}
         if name == "list_requests":
-            files = sorted(self.results.glob("*.json"), key=lambda p: p.stat().st_mtime)[-50:]
+            files = sorted(self.results.glob("*.json"), key=lambda p: p.stat().st_mtime,
+                           reverse=True)[:MAX_LISTED_REQUESTS]
             return repo_alias.hide_in([json.loads(p.read_text(encoding="utf-8")) for p in files], self._aliases())
         raise ToolError(f"unknown tool {name!r}")
 

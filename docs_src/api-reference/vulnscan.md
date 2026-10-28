@@ -206,7 +206,9 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
   `key_file_messages`, `key_file_responses`, `prices`: strings; `models`: a list of model ids;
   `anthropic_betas`: `null` or a list of beta names; `copilot_provider_type`: `openai` or `anthropic`;
   `accept_residual_tools`: a list of tool names; `max_output_tokens`: an integer 1–128 000; `max_turns`: an
-  integer 1–1000;
+  integer 1–1000; `reasoning`: `null`, or (chat route only) an object with exactly one of `effort`
+  (`minimal`, `low`, `medium`, `high`), `max_tokens` (an integer below `max_output_tokens`) or
+  `enabled: false`, plus an optional boolean `exclude`;
 - `recipe`: a string (empty: the driver's agent definition);
 - `upstream`: an `http://` or `https://` URL with a host;
 - `command`: a list of strings (empty: the driver's command);
@@ -279,6 +281,7 @@ unchanged):
 | `key_file_responses` | `""` | That upstream's key file (gateway only). Empty: `~/.config/agentteams-secrets/openai.env` (`OPENAI_API_KEY=...`) for `api.openai.com`, else `key_file` |
 | `copilot_provider_type` | `"openai"` | copilot's BYOK provider type: `openai` (chat completions through the chat route, `upstream`/`key_file`, any OpenRouter model) or `anthropic` (Messages through the Messages route, `upstream_messages`, Claude models only) |
 | `accept_residual_tools` | `[]` | Built-in tools you accept although no switch removes them (decision D4). codex requires `["apply_patch"]`; its writes are rejected by the read-only sandbox, which the self-test checks (`codex_residual_write_blocked`) |
+| `reasoning` | `null` | Chat route only (goose; copilot with the `openai` provider type): an OpenRouter `reasoning` object, e.g. `{"effort": "low"}`, that the gateway writes into every request (`--chat-reasoning`), replacing the client's `reasoning` / `reasoning_effort` / `include_reasoning`. Set it when the model spends its whole output on reasoning and never reaches a tool call: the run ends `agent-error` with the reason "the model's reply reached its output-token limit". How a model maps `effort` or `max_tokens` is up to OpenRouter and the provider; `{"enabled": false}` turns reasoning off where the model allows it. The self-test fingerprint is unchanged by this setting |
 
 The `confine` block (`subproc_confine.settings`; any other key, or a wrong type, is refused at load):
 
@@ -586,7 +589,7 @@ container. Everything it returns that came from advisories or repositories is pr
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
-| `list_requests` | — | The 50 most recent results |
+| `list_requests` | — | The 20 most recent results, newest first |
 
 **Repository aliases** (`agentteams.vulnscan.repo_alias`). The gateway's DLP redacts home paths in
 everything the model reads, so the tools never show a repository path: each repository appears as
@@ -1171,6 +1174,7 @@ flag; you never run it by hand.
 | `--prices PATH` | none | price table (below) |
 | `--max-output-tokens N` | `64000` | ceiling for `max_tokens` (Messages, chat), `max_completion_tokens` (chat) and `max_output_tokens` (Responses); ≥ 1 |
 | `--chat-reserve-tokens N` | `8192` | output tokens reserved for a chat call that names no `max_tokens`; ≥ 1 |
+| `--chat-reasoning JSON` | none | a `reasoning` object written into every chat request, replacing the client's `reasoning` / `reasoning_effort` / `include_reasoning` (`agent.reasoning`); checked at startup like `agent.reasoning` |
 | `--responses-reserve-tokens N` | `0` | output tokens reserved for a Responses call that names no `max_output_tokens`, and set as that call's `max_output_tokens` upstream (Codex sends none; runs of `framework: codex` pass `agent.max_output_tokens`); 0 refuses such a call; at most `--max-output-tokens` |
 | `--drain-timeout S` | `120` | seconds to keep reading a reply after the client hung up; finite, ≥ 0 |
 | `--budget-usd X` | `2.0` | spend cap; finite and ≥ 0 |
