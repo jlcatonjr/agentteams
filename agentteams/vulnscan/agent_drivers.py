@@ -42,6 +42,7 @@ from agentteams.vulnscan.agent_driver_base import (  # noqa: F401  (re-exported:
     ImageRecipe,
     McpAttach,
     Outcome,
+    fill_command,
     json_or_none,
 )
 from agentteams.vulnscan.agent_drivers_codex import CODEX, CodexDriver  # noqa: F401
@@ -67,6 +68,18 @@ r["goose_dirs_writable"] = all(can_mkdir(os.path.join(os.environ.get(var) or hom
                                for var, dflt, sub in (("XDG_STATE_HOME", "/.local/state", "logs"),
                                                       ("XDG_DATA_HOME", "/.local/share", "sessions"),
                                                       ("XDG_CONFIG_HOME", "/.config", "")))'''
+
+_GOOSE_WIRE_PROBE = r'''# goose: a headless run against a local chat stub; the gateway's policy must accept every request it sent (A3)
+from agentteams.vulnscan import selftest_canary as _canary
+_checks, _detail = _canary.goose_checks(json.loads(%r), json.loads(%r), model=%r)
+r.update(_checks)
+print("SELFTEST-DETAIL " + json.dumps(_detail))'''
+#: The model id goose's self-test run names (a local stub answers; nothing is billed).
+GOOSE_SELFTEST_MODEL = "vulnscan/selftest-goose"
+#: goose 1.54's line when a reply stops at the output-token limit; the reply then carries no tool call.
+GOOSE_OUTPUT_LIMIT = "Warning: Response reached the model's output-token limit"
+OUTPUT_LIMIT_ERROR = ("the model's reply reached its output-token limit before it called a tool (reasoning can use "
+                      "it all: see agent.reasoning)")
 
 
 @dataclass(frozen=True)
@@ -106,18 +119,34 @@ class GooseDriver(Driver):
         return McpAttach("goose-extension", MCP_COMMAND)
 
     def parse_outcome(self, transcript: str) -> Outcome:
-        """See :meth:`Driver.parse_outcome`: the last line mentioning an error (goose exits 0 after one)."""
-        hit = next((ln.strip() for ln in reversed(transcript.splitlines()) if "error" in ln.lower()), "")
+        """See :meth:`Driver.parse_outcome`: goose's output-limit warning, else the last line mentioning an error
+        (goose exits 0 after one). Tool data in the transcript (JSON object and Markdown table lines) is not an
+        error line: rc.9's live runs were reported as ``"feed_errors": [],``."""
+        lines = [ln.strip() for ln in transcript.splitlines()]
+        if any(ln.startswith(GOOSE_OUTPUT_LIMIT) for ln in lines):
+            return Outcome(error=OUTPUT_LIMIT_ERROR)
+        hit = next((s for s in reversed(lines) if "error" in s.lower() and not s.startswith(('"', "{", "|"))), "")
         return Outcome(error=hit[:300])
 
     def selftest_entries(self, command: list[str] | None = None) -> list[str]:
-        """See :meth:`Driver.selftest_entries`: ``goose_dirs_writable`` and ``goose_recipe_valid``.
+        """See :meth:`Driver.selftest_entries`: ``goose_dirs_writable``, ``goose_recipe_valid`` and the wire probe.
 
         The second runs ``goose recipe validate`` on the checked copy a run loads (R7, rc.5). It parses only, so
-        unknown keys pass: :func:`agent_recipe.goose_recipe_problem` stays the policy check.
+        unknown keys pass: :func:`agent_recipe.goose_recipe_problem` stays the policy check. The third
+        (:func:`agentteams.vulnscan.selftest_canary.goose_checks`: ``goose_headless_ran``, ``goose_wire_compatible``)
+        runs the command a run uses (the ``agent.command`` override when set) against a local stub and passes every
+        request through the gateway's policy, so a goose update whose requests the gateway would refuse keeps agent
+        mode off (plan A3; goose 1.54, 2026-10-24).
         """
         copy = f"{agent_recipe.AGENTDEF_IN_CONTAINER}/{agent_recipe.COPY_PATH['goose']}"
-        return [_GOOSE_DIRS_PROBE, selftest_probe.goose_recipe_entry(copy)]
+        probe = {"model": GOOSE_SELFTEST_MODEL, "max_output_tokens": DEFAULT_MAX_OUTPUT_TOKENS}
+        session, task, run_id = "vulnscan-selftest", "Reply with the single word ok.", "selftest"
+        if command:
+            argv = fill_command(command, recipe=copy, session=session, task=task, run_id=run_id)
+        else:
+            argv = self.command(probe, recipe=copy, session=session, task=task, run_id=run_id)
+        wire = _GOOSE_WIRE_PROBE % (json.dumps(argv), json.dumps(self.run_env(probe)), GOOSE_SELFTEST_MODEL)
+        return [_GOOSE_DIRS_PROBE, selftest_probe.goose_recipe_entry(copy), wire]
 
     def debrief(self) -> DebriefSupport:
         """See :meth:`Driver.debrief`: resume by session name, re-passing the MCP extension."""
@@ -253,8 +282,7 @@ class ClaudeDriver(Driver):
         probe = {"model": SELFTEST_MODEL, "max_turns": 2, "max_output_tokens": 1024}
         session, task, run_id = "vulnscan-selftest", "Reply with the single word ok.", "selftest"
         if command:
-            argv = [part.replace("{session}", session).replace("{run_id}", run_id).replace("{task}", task)
-                    for part in command]
+            argv = fill_command(command, recipe="{recipe}", session=session, task=task, run_id=run_id)
         else:
             argv = self.command(probe, recipe="{recipe}", session=session, task=task, run_id=run_id)
         recipe = f"{TEAM_IN_CONTAINER}/{self.selected_recipe()}"   # the file a run loads (agent.recipe)
