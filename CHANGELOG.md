@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (a call in flight at the end of a run is metered)
+
+- **A stopped gateway settles the call it is still relaying.** In an rc.9 live run (2026-10-27) the reply was cut
+  off at the output-token limit and goose exited. The launcher then removed the gateway with `docker rm -f` while
+  the gateway was still relaying that call. `spend.json` kept the call reserved and counted only the call before
+  it. The gateway now handles SIGTERM: it stops accepting, answers new calls with 503, and waits up to
+  `--shutdown-grace` (10 s) for the call in flight. If the call is still unmetered after that, it is charged its
+  reservation: the reserved USD and tokens, one call, and also an unmetered call if the reservation had no price.
+  The final `spend.json` has `reserved_usd` and `reserved_tokens` at 0, and a new `settled_inflight` count.
+  Metering and releasing a reservation are now one step, so a call is never counted twice.
+- **Runs, self-tests and debriefs stop the gateway with `docker stop -t 20`** before removing it. If a run's or
+  debrief's gateway is killed anyway, the launcher settles the reservation it left in `spend.json` the same way
+  (`settled_by: "launcher"`; new pinned module `vulnscan/gateway_settle.py`). It follows no symlink in that
+  gateway-writable directory. The self-test fingerprint is
+  unchanged. The gateway's own settling needs a rebuilt agent image; the launcher's works with the current one.
+
 ### vulnscan (no duplicate PR for a fix re-staged on a later day)
 
 - **`open-pr` claims an open PR that already carries the same change under an earlier date.** The staged branch

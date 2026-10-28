@@ -36,6 +36,11 @@ internal network the agent container sits on, and a bridge out. It enforces:
   a call that could cross a cap is refused (402) before it is sent. When the
   client hangs up mid-stream, the upstream reply is still read to its end (``--drain-timeout``) so
   the billed usage is metered.
+- **Shutdown settles every call in flight.** On SIGTERM (``docker stop``) or SIGINT the gateway stops accepting,
+  refuses further calls (503) and waits up to ``--shutdown-grace`` seconds for the calls in flight to be metered;
+  any still unmetered then is charged its reservation (spend and tokens, counted as a call, and as unmetered when
+  the reservation had no price) and ``reserved_*`` is 0 in the final ``spend.json``. A gateway killed outright
+  leaves its reservation in ``spend.json``; the launcher settles it the same way (:func:`.gateway_settle.settle_spend_file`).
 - **DLP (bounds T6, never closes it).** Every request that passes the policy is scanned
   (:mod:`.gateway_dlp`): a secret or key (the upstream keys and the secrets files' values by exact
   match, known credential formats, secret-like assignments) is refused (400, ``refused``, reason
@@ -65,6 +70,7 @@ import json
 import math
 import os
 import re
+import signal
 import sys
 import threading
 import time
@@ -79,12 +85,18 @@ from typing import Any
 from . import gateway_dialects as d
 from . import gateway_dlp as dlp
 from . import gateway_peer
+from . import gateway_settle as settle
 
 # The chat helpers live in gateway_dialects; these names stay importable from here.
 ROUTE, STRIP_KEYS, rewrite_body, usage_from = d.ROUTE, d.STRIP_KEYS, d.rewrite_body, d.usage_from
 MAX_BODY = 16 * 1024 * 1024
 MAX_REASONS = 20
 DEFAULT_DRAIN_TIMEOUT = 120.0
+#: Seconds a stopping gateway waits for the calls in flight before charging their reservations; the launcher's
+#: ``docker stop -t`` (:data:`agentteams.vulnscan.agent_run.GATEWAY_STOP_SECONDS`) must exceed it.
+DEFAULT_SHUTDOWN_GRACE = 10.0
+#: What a stopping gateway answers (503; not counted as a refusal: no cap or policy was hit).
+SHUTTING_DOWN = "the gateway is shutting down; no further calls are relayed"
 _number = d.number
 
 
@@ -110,6 +122,9 @@ class Meter:
         self.prompt_tokens = self.completion_tokens = 0
         self.reserved_usd, self.reserved_tokens = 0.0, 0
         self.drained = self.drain_cut = 0   # replies read on after a client hang-up; drains cut by the timeout
+        self.inflight = 0                   # reserved calls not yet metered (at most one: calls are serialised)
+        self.settled_inflight = 0           # calls charged their reservation at shutdown (never metered)
+        self.closing = self.closed = False  # closing: no new reservation; closed: settled, totals final
         self.reasons: list[str] = []        # the last distinct refusal reasons (refuse)
         # DLP (gateway_dlp): blocked requests and redactions per class; secrets flagged in replies (--dlp-responses)
         self.dlp_blocks: Counter[str] = Counter()
@@ -154,9 +169,19 @@ class Meter:
         # absent, or present but all zero: nothing metered
         self.record(cost, int(prompt or 0), int(completion or 0), unmetered=not any((cost, prompt, completion)))
 
-    def record(self, cost: float | None, prompt: int, completion: int, *, unmetered: bool) -> None:
-        """Record one response: its spend (None: unknown), its tokens, and whether it counts as unmetered."""
+    def record(self, cost: float | None, prompt: int, completion: int, *, unmetered: bool,
+               reserved: tuple[float, int] | None = None) -> None:
+        """Record one response: its spend (None: unknown), its tokens, and whether it counts as unmetered.
+
+        ``reserved``: the call's reservation ``(usd, tokens)``, released in the same step, so a shutdown never sees
+        a call both metered and still reserved. Once :meth:`settle_inflight` ran a reserved call is not recorded:
+        it was charged its reservation already (a call that reserved nothing still is).
+        """
         with self.lock:
+            if self.closed and reserved is not None:
+                return
+            if reserved is not None:
+                self._unreserve(*reserved)
             self.calls += 1
             if unmetered:
                 self.unmetered += 1
@@ -178,6 +203,8 @@ class Meter:
         with self.lock:
             left_usd = self.budget - self.spent - self.reserved_usd
             left_tokens = self.max_tokens - self.prompt_tokens - self.completion_tokens - self.reserved_tokens
+            if self.closing:
+                return SHUTTING_DOWN
             if usd > left_usd:
                 return (f"reservation refused: this call could cost ${usd:.4f}; ${max(left_usd, 0.0):.4f} of the "
                         f"${self.budget:.2f} run budget is left (lower the output ceiling, or raise the budget)")
@@ -186,15 +213,56 @@ class Meter:
                         f"{self.max_tokens}-token run cap are left")
             self.reserved_usd += usd
             self.reserved_tokens += tokens
+            self.inflight += 1
             self._persist()
             return ""
 
     def release(self, usd: float, tokens: int) -> None:
-        """Release a reservation once the call is metered."""
+        """Release a reservation once the call is metered (or failed); nothing once the meter is settled."""
         with self.lock:
-            self.reserved_usd = max(0.0, self.reserved_usd - usd)
-            self.reserved_tokens = max(0, self.reserved_tokens - tokens)
+            if self.closed:
+                return
+            self._unreserve(usd, tokens)
             self._persist()
+
+    def _unreserve(self, usd: float, tokens: int) -> None:
+        """Take one call's reservation back. Called with :attr:`lock` held."""
+        self.reserved_usd = max(0.0, self.reserved_usd - usd)
+        self.reserved_tokens = max(0, self.reserved_tokens - tokens)
+        self.inflight = max(0, self.inflight - 1)
+
+    def settle_inflight(self) -> int:
+        """Charge every call still reserved its reservation and freeze the totals (shutdown; fail closed).
+
+        Each such call counts as a call; its reserved spend is added to ``spent_usd`` and its reserved tokens to
+        ``completion_tokens`` (the upper bound the call was allowed); a reservation without a price (no price-table
+        entry) also counts the call as unmetered, since its spend is unknown. ``reserved_*`` end at 0. Later
+        :meth:`record` / :meth:`release` calls from a relay thread still running are ignored.
+
+        Returns:
+            The number of calls settled this way.
+        """
+        with self.lock:
+            settled = settle.charge_reservation(self, self.inflight)
+            self.closing = self.closed = True
+            self._persist()
+            return settled
+
+    def shutdown(self, grace: float) -> int:
+        """Refuse new calls, wait up to ``grace`` seconds for the calls in flight, then :meth:`settle_inflight`.
+
+        Returns:
+            The number of calls charged their reservation.
+        """
+        with self.lock:
+            self.closing = True
+        deadline = time.monotonic() + max(grace, 0.0)
+        while time.monotonic() < deadline:
+            with self.lock:
+                if not self.inflight:
+                    break
+            time.sleep(0.05)
+        return self.settle_inflight()
 
     def drain(self, *, cut: bool) -> None:
         """Count a reply read on after the client hung up; ``cut``: the drain timeout ended it early."""
@@ -257,23 +325,13 @@ class Meter:
                            "completion_tokens": self.completion_tokens,
                            "reserved_usd": round(self.reserved_usd, 6), "reserved_tokens": self.reserved_tokens,
                            "drained": self.drained, "drain_cut": self.drain_cut,
+                           "settled_inflight": self.settled_inflight,
                            "refusal_reasons": self.reasons,
                            "dlp_blocks": dlp.from_mapping(self.dlp_blocks),
                            "dlp_redactions": dlp.from_mapping(self.dlp_redactions),
                            "dlp_response_flags": dlp.from_mapping(self.dlp_response_flags),
                            "updated": datetime.now(UTC).isoformat()}, indent=2)
-        tmp = self.out.with_name(f".{self.out.name}.tmp")
-        replaced = False
-        try:
-            with open(tmp, "w", encoding="utf-8") as fh:
-                fh.write(text)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp, self.out)
-            replaced = True
-        finally:
-            if not replaced:   # the error propagates; only the temp is removed
-                tmp.unlink(missing_ok=True)
+        settle.write_atomic(self.out, text)
 
 
 def make_handler(*, model: str = "", key: str = "", upstream: str = "https://openrouter.ai", meter: Meter,
@@ -325,6 +383,7 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.0"   # responses end at connection close (simple streaming relay)
+        _held: tuple[float, int] | None = None   # this call's reservation until the record releases it
 
         def log_message(self, fmt: str, *args: object) -> None:  # no request/content logging
             return
@@ -362,6 +421,9 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
             if dialect not in ups:
                 self._deny(403, f"only {served} is relayed")
                 return
+            if meter.closing:   # stopping: not a cap or policy refusal, so not counted
+                self._deny(503, SHUTTING_DOWN, dialect)
+                return
             if self._refused(dialect):   # early answer: an exhausted run never waits on the gate
                 return
             raw_length = (self.headers.get("Content-Length") or "0").strip()
@@ -396,15 +458,19 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
                 if self._refused(dialect):   # re-checked under the gate: the previous call is metered now
                     return
                 why = meter.reserve(usd, tokens) if tokens else ""
+                if why == SHUTTING_DOWN:
+                    self._deny(503, why, dialect)
+                    return
                 if why:
                     meter.refuse(f"{dialect}: {why}")
                     self._deny(402, why, dialect)
                     return
+                self._held = (usd, tokens) if tokens else None
                 try:
                     self._relay(dialect, checked, headers)
                 finally:
-                    if tokens:
-                        meter.release(usd, tokens)
+                    if self._held is not None:   # not metered (an upstream error): released here
+                        meter.release(*self._held)
 
         def _refused(self, dialect: str) -> bool:
             """Answer 402 and count the refusal when a cap is used up; return whether it was."""
@@ -488,7 +554,8 @@ def make_handler(*, model: str = "", key: str = "", upstream: str = "https://ope
             used = bool(cost or usage.prompt_total or usage.output_tokens)
             # chat keeps its rule (a reply with tokens is metered); the new dialects also need a known spend
             unmetered = not used if dialect == d.CHAT else (cost is None or not used)
-            meter.record(cost, usage.prompt_total, usage.output_tokens, unmetered=unmetered)
+            held, self._held = self._held, None   # released with the record, in one step
+            meter.record(cost, usage.prompt_total, usage.output_tokens, unmetered=unmetered, reserved=held)
 
     return Handler
 
@@ -562,6 +629,8 @@ def _parser() -> argparse.ArgumentParser:
                    help='reasoning object written into every chat request, e.g. \'{"effort": "low"}\' (default: none)')
     p.add_argument("--drain-timeout", type=float, default=DEFAULT_DRAIN_TIMEOUT,
                    help="seconds to keep reading a reply after the client hung up")
+    p.add_argument("--shutdown-grace", type=float, default=DEFAULT_SHUTDOWN_GRACE,
+                   help="seconds a stopping gateway waits for calls in flight before charging their reservations")
     p.add_argument("--budget-usd", type=float, default=2.0)
     p.add_argument("--spend-file", type=Path, default=None)
     p.add_argument("--max-tokens-total", type=int, default=0, help="prompt + completion token cap (0: none)")
@@ -675,6 +744,8 @@ def _validate(p: argparse.ArgumentParser, a: argparse.Namespace) -> tuple[list[s
         p.error("--responses-reserve-tokens must be 0..--max-output-tokens")
     if not (math.isfinite(a.drain_timeout) and a.drain_timeout >= 0):
         p.error("--drain-timeout must be a finite number >= 0")
+    if not (math.isfinite(a.shutdown_grace) and a.shutdown_grace >= 0):
+        p.error("--shutdown-grace must be a finite number >= 0")
     if a.chat_reasoning:
         try:
             why = d.reasoning_problem(json.loads(a.chat_reasoning), a.max_output_tokens)
@@ -764,8 +835,39 @@ def main(argv: list[str] | None = None) -> int:
     print(f"gateway: models={models} {routes} budget=${a.budget_usd:.2f} listening {a.listen} "
           f"dlp: {len(scanner.secrets)} exact secret(s), {len(scanner.hostnames)} host name(s), "
           f"{len(scanner.private_names)} private-name pattern(s)", flush=True)
-    server.serve_forever()
+    serve_until_stopped(server, meter, a.shutdown_grace)
     return 0
+
+
+def serve_until_stopped(server: Any, meter: Meter, grace: float) -> int:
+    """Serve until SIGTERM or SIGINT, then stop accepting and settle the calls in flight (:meth:`Meter.shutdown`).
+
+    Before rc.12 a stopped gateway died mid-call: ``docker rm -f`` ended it while a reply was still streaming or
+    draining, so the call stayed reserved in ``spend.json`` and was never counted (rc.9 live run, 2026-10-27).
+    Installed from the main thread (Python allows no other; the previous handlers are restored on return); the
+    server runs in a daemon thread. A server that stops serving on its own ends the wait too, without
+    settling (nothing asked the gateway to stop).
+
+    Returns:
+        The number of calls charged their reservation.
+    """
+    stop = threading.Event()
+    previous = {sig: signal.signal(sig, lambda signum, frame: stop.set()) for sig in (signal.SIGTERM, signal.SIGINT)}
+    serving = threading.Thread(target=server.serve_forever, name="gateway-serve", daemon=True)
+    try:
+        serving.start()
+        while serving.is_alive() and not stop.wait(0.5):
+            pass
+        if not stop.is_set():   # the server ended on its own (a stand-in in tests): nothing asked to stop
+            return 0
+        if serving.is_alive():
+            server.shutdown()   # the accept loop ends; relay threads already running carry on
+        settled = meter.shutdown(grace)
+    finally:
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+    print(f"gateway: stopped; {settled} call(s) in flight charged their reservation", flush=True)
+    return settled
 
 
 if __name__ == "__main__":

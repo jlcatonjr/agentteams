@@ -1183,6 +1183,7 @@ flag; you never run it by hand.
 | `--chat-reasoning JSON` | none | a `reasoning` object written into every chat request, replacing the client's `reasoning` / `reasoning_effort` / `include_reasoning` (`agent.reasoning`); checked at startup like `agent.reasoning` |
 | `--responses-reserve-tokens N` | `0` | output tokens reserved for a Responses call that names no `max_output_tokens`, and set as that call's `max_output_tokens` upstream (Codex sends none; runs of `framework: codex` pass `agent.max_output_tokens`); 0 refuses such a call; at most `--max-output-tokens` |
 | `--drain-timeout S` | `120` | seconds to keep reading a reply after the client hung up; finite, ≥ 0 |
+| `--shutdown-grace S` | `10` | seconds a stopping gateway waits for the call in flight before charging its reservation; finite, ≥ 0 |
 | `--budget-usd X` | `2.0` | spend cap; finite and ≥ 0 |
 | `--spend-file PATH` | none | where `spend.json` is written |
 | `--max-tokens-total N` | `0` | prompt + completion token cap across all routes; 0 means none (runs and debriefs always pass a positive cap) |
@@ -1270,6 +1271,17 @@ metered.
 **Client hang-up.** When the client disconnects mid-reply, the gateway keeps reading the upstream reply
 to its end, for at most `--drain-timeout` seconds, and meters it. A drain the timeout cuts short
 usually has no usage and counts as unmetered (fail closed).
+
+**Shutdown (rc.12).** On SIGTERM or SIGINT the gateway stops accepting, answers further calls with HTTP 503
+(not counted as `refused`), and waits up to `--shutdown-grace` seconds for the call in flight to be metered.
+A call still unmetered then is charged its reservation: the reserved USD is added to `spent_usd`, the reserved
+tokens to `completion_tokens`, the call to `calls` and to `settled_inflight` (and to `unmetered` when the
+reservation had no price). The final `spend.json` has `reserved_usd` and `reserved_tokens` at 0. Runs, self-tests
+and debriefs stop their gateway with `docker stop -t 20` before removing it (`agent_run.GATEWAY_STOP_SECONDS`;
+before rc.12 it was `docker rm -f`, which killed it mid-call). After a run or a debrief the launcher also settles a
+reservation left in `spend.json` by a gateway that was killed anyway (`gateway_settle.settle_spend_file`; it adds
+`settled_by: "launcher"`). That directory is writable by the gateway container, so the launcher follows no
+symlink there: `spend.json` must be a regular file (at most 1 MiB) and the new one goes through an `O_EXCL` temp file. At most one call is ever reserved, because calls are serialised.
 
 **Price table** (`--prices`), USD per million tokens:
 
@@ -1368,7 +1380,8 @@ another uid than `--peer-uid`, or whose uid cannot be read, is closed before a b
 counted as `refused`. Runs and debriefs keep TCP on the internal container network.
 
 **`spend.json`** adds `reserved_usd` and `reserved_tokens` (0 between calls), `drained` (replies read
-on after a client hang-up), `drain_cut` (drains cut short by the timeout), `refusal_reasons`, and
+on after a client hang-up), `drain_cut` (drains cut short by the timeout), `settled_inflight` (calls charged
+their reservation at shutdown; see **Shutdown**), `refusal_reasons`, and
 the DLP counts `dlp_blocks`, `dlp_redactions` and `dlp_response_flags` (each `{class: count}`; class
 names only). The agent run copies `spend.json` into `status.json`, and `vulnscan review` lists DLP
 blocks and reply flags of the latest run under **Anomalies**, with the redaction counts beside them.
