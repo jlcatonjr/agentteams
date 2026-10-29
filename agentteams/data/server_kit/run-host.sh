@@ -5,6 +5,7 @@
 #   ./run-host.sh <host> --apply                  # OS security updates, Node, containers, app pins
 #   ./run-host.sh <host> --apply --restart-services --reboot
 #   ./run-host.sh <host> --apply --node-major 24
+#   ./run-host.sh <host> --apply --allow-fresh    # Node fix inside the release cooldown (scan-detected vulnerability)
 #   ./run-host.sh all                             # dry run across hosts.conf
 #
 # Order: L1 audit → L2 OS security updates → L3 Node runtime → L5 containers →
@@ -13,20 +14,24 @@
 # either when the audit did not complete (exit 2 config / 3 incomplete) or the host is unreachable (1).
 # Afterwards the exit is the worst step: 0 all ran clean, 1 a step reported action needed,
 # 3 a step failed (see its log), 4 the post-change audit found compromise indicators.
-# Flags: --apply  --restart-services  --reboot  --all-updates  --node-major N
+# Flags: --apply  --restart-services  --reboot  --all-updates  --node-major N  --allow-fresh
+# --allow-fresh is Rule S-10's remediation carve-out: L3 may take a Node release younger than the 14-day
+# cooldown, for every Node install L3 finds on the host. Use it only when the vulnerability scan reported
+# a Node runtime on this host as vulnerable;
+# `all --allow-fresh` is refused (exit 2): name each flagged host.
 # apps.conf's flags column tunes L4 only: an entry carrying --apply, --restart-services or --reboot is
 # skipped (exit 3), so a dry run stays a dry run.
 set -uo pipefail
 set -f   # never glob-expand values read from hosts.conf / apps.conf
 KIT="$(cd "$(dirname "$0")" && pwd)"
 CONF="${AGENTTEAMS_SERVER_KIT_CONFIG:-$KIT}"
-usage(){ sed -n '2,15p' "$0"; }
+usage(){ sed -n '2,21p' "$0"; }
 [ $# -ge 1 ] || { usage; exit 2; }
 HOST="$1"; shift
-APPLY=false; RESTART=false; REBOOT=false; ALLUPD=false; NODEMAJ=""
+APPLY=false; RESTART=false; REBOOT=false; ALLUPD=false; NODEMAJ=""; FRESH=false
 while [ $# -gt 0 ]; do case "$1" in
   --apply) APPLY=true;; --restart-services) RESTART=true;; --reboot) REBOOT=true;;
-  --all-updates) ALLUPD=true;;
+  --all-updates) ALLUPD=true;; --allow-fresh) FRESH=true;;
   --node-major)
     if [ $# -lt 2 ] || ! [[ $2 =~ ^[0-9]+$ ]]; then
       echo "--node-major needs a major version number (e.g. --node-major 24)" >&2; usage >&2; exit 2
@@ -40,6 +45,8 @@ valid_host(){ [[ $1 =~ $HOST_RE ]] && [ "$1" != "all" ]; }
 HOST_RULE="names match [A-Za-z0-9][A-Za-z0-9._-]{0,63} and are not 'all'"
 
 if [ "$HOST" = "all" ]; then
+  # the carve-out covers only what the scan flagged, host by host
+  ! $FRESH || { echo "--allow-fresh needs a host name, not 'all': use it only for a host whose Node runtime the scan flagged" >&2; exit 2; }
   [ -f "$CONF/hosts.conf" ] || { echo "no $CONF/hosts.conf — copy hosts.conf.example and edit it" >&2; exit 2; }
   names=(); bad=""
   while IFS= read -r h; do
@@ -81,7 +88,7 @@ step(){   # record a step's exit: 1 = action needed, 4 = compromise, anything el
 
 L2=(${A[@]+"${A[@]}"} ${RS[@]+"${RS[@]}"}); $ALLUPD && L2+=(--all)
 "${R[@]}" "$HOST" L2-os-patch.sh ${L2[@]+"${L2[@]}"}; step $?
-L3=(${A[@]+"${A[@]}"} ${RS[@]+"${RS[@]}"}); [ -n "$NODEMAJ" ] && L3+=(--major "$NODEMAJ")
+L3=(${A[@]+"${A[@]}"} ${RS[@]+"${RS[@]}"}); [ -n "$NODEMAJ" ] && L3+=(--major "$NODEMAJ"); $FRESH && L3+=(--allow-fresh)
 "${R[@]}" "$HOST" L3-node-runtime.sh ${L3[@]+"${L3[@]}"}; step $?
 "${R[@]}" "$HOST" L5-containers.sh ${A[@]+"${A[@]}"}; step $?
 

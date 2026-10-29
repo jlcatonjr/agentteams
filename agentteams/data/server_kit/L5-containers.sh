@@ -5,22 +5,21 @@
 #
 #   ./remote.sh <host> L5-containers.sh            # list containers, check for newer images
 #   ./remote.sh <host> L5-containers.sh --apply    # pull + recreate Compose-managed containers
-#   ... --cooldown-days N (default 0)   refuse to recreate on an image built less than N days ago
-#                                       (Rule S-10's cooldown is deprecated since 2026-10-26: no wait by default)
-#   ... --allow-fresh                   recreate anyway when a --cooldown-days is set
+#   ... --cooldown-days N (default 14)  refuse to recreate on an image built less than N days ago (Rule S-10)
+#   ... --allow-fresh                   recreate anyway. vulnscan does not scan images, so Rule S-10's remediation
+#                                       carve-out never covers this: it needs a recorded @security clearance
 #
 # Compose projects (com.docker.compose.* labels) are recreated with
 # `docker compose pull && up -d`. Standalone `docker run` containers are never
 # recreated automatically (their run flags can't be reconstructed safely): the
 # script pulls the image and prints the steps. A floating tag re-pulled today can
-# carry a compromised release; pin a reviewed digest where that matters.
+# carry a compromised release, so a freshly built image is held for the cooldown.
 set -uo pipefail
-APPLY=false; COOLDOWN=0; FRESH=false
+APPLY=false; COOLDOWN=14; FRESH=false
 need(){ case "${2-}" in ""|--*) echo "option $1 needs a value" >&2; exit 2;; esac; }   # missing value: usage error (2), never an unbound-variable crash
 while [ $# -gt 0 ]; do case "$1" in
   --apply) APPLY=true;; --cooldown-days) need "$@"; COOLDOWN="$2"; shift;; --allow-fresh) FRESH=true;;
   *) echo "unknown option: $1" >&2; exit 2;; esac; shift; done
-[ "$COOLDOWN" = 0 ] || echo "note: --cooldown-days is deprecated (Rule S-10's cooldown, 2026-10-26); honoured as an explicit opt-in" >&2
 
 main(){
   command -v docker >/dev/null 2>&1 || { echo "no docker on $(hostname)"; return 0; }

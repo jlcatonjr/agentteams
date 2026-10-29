@@ -492,8 +492,8 @@ def test_stage_worktree_fixes_stages_a_validated_pin_change(xdg: Path, feed: Fee
 
 
 @needs_git
-def test_stage_worktree_fixes_ignores_the_deprecated_cooldown(xdg: Path, feed: Feed,
-                                                             monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stage_worktree_fixes_ignores_the_cooldown_setting(xdg: Path, feed: Feed,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _repo_with_remote(xdg)
     seen: list[int] = []
     real = fix.fix_path
@@ -504,7 +504,7 @@ def test_stage_worktree_fixes_ignores_the_deprecated_cooldown(xdg: Path, feed: F
     monkeypatch.setattr(daily.fix, "fix_path", spy)
     daily.stage_worktree_fixes(repo, _cfg(cooldown_days=1), "2026-10-22")
     daily.stage_worktree_fixes(repo, _cfg(cooldown_days=30), "2026-10-23")
-    assert seen == [0, 0] and executor.RELEASE_COOLDOWN_DAYS == 0   # cooldown_days is deprecated (2026-10-26)
+    assert seen == [0, 0] and executor.REMEDIATION_COOLDOWN_DAYS == 0   # S-10's remediation carve-out
 
 
 @needs_git
