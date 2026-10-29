@@ -11,7 +11,8 @@
 #      publishes none unless --trust-download is given), and, for the version agentteams pins
 #      (agent_drivers.<CLI>.image), against the digest recorded there too; codex: when cosign is installed,
 #      also verifies the binary's sigstore bundle (identity: openai/codex's rust-release workflow for the tag),
-#      and a version other than the pinned one must be 14 days old (Rule S-10) unless --trust-download;
+#      and a version other than the pinned one must be 14 days old (Rule S-10) unless --trust-download
+#      (not S-10's scan-remediation carve-out: a younger CLI needs a recorded @security clearance);
 #      copilot: no release checksum exists; the build runs `npm ci --ignore-scripts` from the committed
 #      lockfile (agentteams/data/vulnscan_agent/copilot/) and `npm audit signatures`, and checks the installed
 #      tree's hash against the one agentteams pins (only the pinned version has a lockfile);
@@ -147,7 +148,7 @@ else
 fi
 if [ "$FRAMEWORK" = codex ]; then
   if [ "$GV" != "$PINV" ] && [ "$AGE" -lt 14 ] && ! $TRUST; then
-    echo "codex v$GV was published $AGE day(s) ago (unknown: -1): Rule S-10 needs 14; use the pinned v$PINV or --trust-download" >&2; exit 1
+    echo "codex v$GV was published $AGE day(s) ago (unknown: -1): Rule S-10 needs 14; use the pinned v$PINV, or --trust-download with a recorded @security clearance" >&2; exit 1
   fi
   ID="https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/$TAG"
   if command -v cosign >/dev/null; then

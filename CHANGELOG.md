@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
+
+- **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the
+  2026-10-26 deprecation below, in every ecosystem. **New: only the latest stable release is adopted**: no
+  pre-releases, no yanked or deprecated releases, no older release when a newer stable one has cleared the
+  cooldown; holding a package back needs a recorded `@security` clearance.
+- **Carve-out: neither rule ever blocks remediating a vulnerability the vulnerability scan detected.** The fix
+  release may be adopted inside the cooldown and need not be the latest stable release. It must still pass
+  the known-vulnerability search (no OSV `MAL-*` entry) and Rule S-9's identity check, and the carve-out covers
+  only the packages the scan flagged (and the dependencies their fix pulls in). Generated `@security` agents carry it in Rule S-10 (fence v19), the S-VM
+  deadline paragraph, the verdict table and the install trigger; the orchestrator's vulnscan-PR steps and the
+  security feed playbook follow.
+- vulnscan only ever remediates scan findings, so `fix`, `stage-fix` and the daily job keep adopting fix
+  releases without an age gate. The constant is renamed `executor.REMEDIATION_COOLDOWN_DAYS` (still 0), and
+  `cooldown_days` / `fix --cooldown-days` stay ignored, with notes that name the carve-out.
+- Server kit: `L3-node-runtime.sh` and `L5-containers.sh` default to a 14-day cooldown again; `--allow-fresh`
+  is the carve-out. `run-host.sh --allow-fresh` passes it on to L3 (never L5), and a server fix plan puts it in
+  its commands when the scan found the host's Node runtime missing a security release.
+- The carve-out stays per flagged host: `run-host.sh all --allow-fresh` is refused (exit 2). L5's `--allow-fresh`
+  and `vulnscan-agent-image.sh --trust-download` (which lifts the script's codex age check) say they need a recorded
+  `@security` clearance, since vulnscan does not scan container images or the agent CLIs. The API reference (server fix plans, npm
+  fixes without `--before`), the vulnscan README and the remediation guide describe the carve-out.
+
 ### vulnscan (Rust lockfiles, honest coverage, launcher versions, a sturdier server kit)
 
 - **Rust `Cargo.lock` files are scanned (crates.io).** Crates from the crates.io index (`registry+` and `sparse+`
