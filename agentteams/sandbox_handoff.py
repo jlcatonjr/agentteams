@@ -13,7 +13,8 @@ This module renders and checks those scripts so every team produces the same, re
 * ``tmp/by-week/YYYY-Www/<slug>.handoff.sh`` — a ``bash`` script with a header the operator reads first
   (purpose, why the sandbox blocked it, what it touches, whether it is destructive and under which
   ``@security`` clearance), ``set -euo pipefail``, an absolute ``cd``, tool preflight, every command echoed
-  before it runs, an optional confirmation prompt, and post-run verify commands.
+  before it runs, a confirmation prompt only when the script is destructive or the spec sets ``confirm``
+  (running the script is the operator's approval), and post-run verify commands.
 * ``tmp/by-week/YYYY-Www/<slug>.handoff.log`` — written by the script as it runs. It lives inside the
   project, so the sandboxed agent can read it back (:func:`handoff_status`) and continue: the result line,
   the failing step, and the script's own SHA-256 (so an edited or regenerated script is reported, not
@@ -155,7 +156,8 @@ class HandoffSpec:
         touches: Everything the script writes or changes outside the sandbox's grant.
         destructive: True when any step deletes, force-pushes, resets or rewrites (C-5).
         clearance: The recorded ``@security`` clearance a destructive script runs under.
-        confirm: Prompt before running (default on; always on when ``destructive``).
+        confirm: Prompt before running (default off — running the script is the approval; always on
+            when ``destructive``).
         cwd: Directory to run in, relative to the project root (default: the root).
         plan: Optional plan slug this handoff belongs to (recorded in the header).
     """
@@ -169,7 +171,7 @@ class HandoffSpec:
     touches: tuple[str, ...] = ()
     destructive: bool = False
     clearance: str = ""
-    confirm: bool = True
+    confirm: bool = False
     cwd: str = ""
     plan: str = ""
 
@@ -282,7 +284,7 @@ def spec_from_dict(data: Mapping[str, Any]) -> HandoffSpec:
         touches=_strings(data.get("touches"), "touches"),
         destructive=bool(data.get("destructive", False)),
         clearance=str(data.get("clearance", "") or "").strip(),
-        confirm=bool(data.get("confirm", True)),
+        confirm=bool(data.get("confirm", False)),
         cwd=str(data.get("cwd", "") or "").strip(),
         plan=str(data.get("plan", "") or "").strip(),
     )
@@ -327,6 +329,55 @@ def trust_roots_named(spec: HandoffSpec) -> list[str]:
     return sorted(hits)
 
 
+# Commands whose effect is destructive whatever the spec declares (C-5, Rule 15: derived, not
+# self-declared). A non-destructive script runs without a prompt, so a missing ``destructive`` flag
+# must not be the only thing standing between a deletion and the operator. Deliberately broad: a
+# false positive (``gh pr create --body "rm the shim"``) costs a clearance citation, a false negative
+# an unprompted deletion. It is a backstop, not a proof: overwrites by ``mv``/``cp``/``> file`` and
+# commands built at run time are out of a pattern's reach, and the spec author still declares them.
+_B = r"(?:^|[\s;&|()`'\"/\\])"
+_GIT = _B + r"git(?:\s+-[Cc]\s+\S+|\s+--?[\w-]+(?:=\S+)?)*\s+"
+_ARGS = r"[^;&|]*"
+_DESTRUCTIVE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("file deletion (rm/rmdir/unlink/shred)", re.compile(_B + r"(?:rm|rmdir|unlink|shred)\s")),
+    ("find -delete", re.compile(_B + r"find\s.*\s-delete\b")),
+    ("forced, mirroring or deleting git push", re.compile(
+        _GIT + r"push\b" + _ARGS + r"(?:\s--(?:force|force-with-lease|mirror|delete|prune)\b|\s-[a-zA-Z]*[fd][a-zA-Z]*\b"
+        r"|\s\+\S|\s:\S)")),
+    ("git reset --hard", re.compile(_GIT + r"reset\b" + _ARGS + r"--hard\b")),
+    ("git clean", re.compile(_GIT + r"clean\b")),
+    ("git branch/tag deletion", re.compile(_GIT + r"(?:branch|tag)\b" + _ARGS + r"\s(?:-[a-zA-Z]*[dD][a-zA-Z]*|--delete)\b")),
+    ("git worktree remove", re.compile(_GIT + r"worktree\s+(?:remove|prune)\b")),
+    ("discarding git checkout/switch/restore", re.compile(
+        _GIT + r"(?:checkout\s+(?:--\s|-f\b|--force\b)|switch\b" + _ARGS + r"--discard-changes\b|restore\s)")),
+    ("git history rewrite", re.compile(_GIT + r"(?:rebase|filter-branch|filter-repo|update-ref\s+-d)\b")),
+    ("gh deletion", re.compile(_B + r"gh\s+(?:(?:repo|release|secret|variable|label|run|cache)\s+delete\b"
+                               r"|pr\s+merge\b" + _ARGS + r"--delete-branch\b"
+                               r"|api\b" + _ARGS + r"(?:-X|--method)\s*DELETE\b)")),
+    ("agentteams destructive mode", re.compile(
+        r"(?:agentteams|build_team\.py)\b" + _ARGS + r"(?:--(?:bridge-refresh|branch-cleanup|overwrite|prune)\b"
+        r"|--branch-post-merge\b" + _ARGS + r"--apply\b)")),
+)
+
+
+def destructive_commands(spec: HandoffSpec) -> list[str]:
+    """Name the destructive operations found in a spec's commands.
+
+    Args:
+        spec: The spec whose ``steps`` and ``verify`` commands are scanned.
+
+    Returns:
+        One ``"<kind>: <command>"`` entry per matching command, in order; empty when none match.
+    """
+    found = []
+    for step in (*spec.steps, *spec.verify):
+        for kind, pattern in _DESTRUCTIVE_PATTERNS:
+            if pattern.search(step.run):
+                found.append(f"{kind}: {step.run}")
+                break
+    return found
+
+
 def validate_spec(spec: HandoffSpec) -> None:
     """Check a spec against the handoff contract.
 
@@ -335,7 +386,7 @@ def validate_spec(spec: HandoffSpec) -> None:
 
     Raises:
         HandoffError: On a bad slug, an empty purpose/blocked_by/steps list, a destructive spec without a
-            clearance, a ``cwd`` that escapes the root, a malformed ``requires`` name, a single-line field
+            clearance, a destructive command in a spec not marked ``destructive``, a ``cwd`` that escapes the root, a malformed ``requires`` name, a single-line field
             containing a newline, a trust-root path or signing-key name, or credential-shaped content.
     """
     if not _SLUG_RE.match(spec.slug):
@@ -348,6 +399,11 @@ def validate_spec(spec: HandoffSpec) -> None:
         raise HandoffError("'steps' must contain at least one command")
     if spec.destructive and not spec.clearance:
         raise HandoffError("a destructive handoff must cite its recorded @security clearance in 'clearance' (C-5)")
+    if not spec.destructive:
+        found = destructive_commands(spec)
+        if found:
+            raise HandoffError("these commands are destructive; set 'destructive': true and cite the recorded "
+                               "@security clearance (C-5): " + "; ".join(found))
     if spec.cwd and (spec.cwd.startswith("/") or ".." in Path(spec.cwd).parts):
         raise HandoffError("'cwd' must be a path inside the project root")
     for name in spec.requires:
@@ -488,10 +544,9 @@ def render_script(spec: HandoffSpec, *, root: Path, log: Path, script: Path,
             "done",
             "",
         ]
-    lines += ['cd "$WORKDIR"', ""]
+    lines += ['cd "$WORKDIR"', "printf 'About to run: %s\\n' " + shlex.quote(_comment(spec.purpose)), ""]
     if confirm:
         lines += [
-            "printf 'About to run: %s\\n' " + shlex.quote(_comment(spec.purpose)),
             'if [ "${AGENTTEAMS_HANDOFF_YES:-}" != 1 ]; then',
             '  read -r -p "Proceed? [y/N] " answer < /dev/tty',
             '  case "$answer" in y|Y|yes|YES) ;; *) echo "Aborted by operator."; exit 65 ;; esac',

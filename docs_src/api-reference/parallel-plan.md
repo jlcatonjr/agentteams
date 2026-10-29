@@ -30,7 +30,9 @@ typed handoffs over those rows are validated by [`handoff_payloads`](handoff_pay
 - `plan_footprint(csv_path)` → `PlanFootprint` — union read/write footprint for a whole
   plan; the building block `independent_plans()` is built on.
 - `independent_plans(csv_paths)` — cross-plan *any-order* (non-blocking) grouping by
-  disjoint footprints (a scheduling note, **not** a claim of simultaneous execution).
+  disjoint footprints (a scheduling note, **not** a claim of simultaneous execution; file paths
+  only — shared mutable state is not compared). Workflow 0C metaplans use it to find the
+  ordering edges between item plans.
 - `to_json(schedule)` / `render_markdown(schedule)` — serialise the schedule.
 - `render_skill()` — the `parallelize-plan` Claude skill (emitted via `bridge.py`,
   gated by the `bridge:copilot-vscode-to-claude:parallelize` host-feature token; no

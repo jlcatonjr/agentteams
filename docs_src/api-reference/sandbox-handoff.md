@@ -28,7 +28,7 @@ A JSON object with these keys. Any other key is refused, and so is a boolean fie
 | `requires` | Executables checked on the operator's `PATH` before anything runs. |
 | `touches` | Everything the script changes outside the sandbox's grant (shown in the header). |
 | `destructive`, `clearance` | `destructive: true` requires a `clearance` citing the recorded authorization (C-5), and forces the confirmation prompt. |
-| `confirm` | Ask `Proceed? [y/N]` before running. Defaults to `true`; `AGENTTEAMS_HANDOFF_YES=1` answers it. |
+| `confirm` | Ask `Proceed? [y/N]` before running. Defaults to `false`: running a non-destructive handoff is the operator's approval. Destructive scripts always ask once. `AGENTTEAMS_HANDOFF_YES=1` answers it. |
 | `cwd`, `plan` | Optional: a directory inside the root to run in, and the plan slug for the header. |
 
 **Refused:**

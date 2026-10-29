@@ -86,9 +86,27 @@ enforces this.
 
 `python -m agentteams.parallel_plan` over several `*.steps.csv` reports which open
 plans are mutually **non-blocking** (disjoint footprints — safe to advance in any
-order). In a single orchestrator session this is a *scheduling note*, not
-simultaneous execution; genuine cross-plan concurrency needs a separate substrate
-and is out of scope.
+order). On its own this is a *scheduling note*, not simultaneous execution;
+concurrency across independent sessions needs a separate substrate and is out of
+scope.
+
+## Metaplans: several plans in one session (Workflow 0C)
+
+To implement several plans concurrently in **one** orchestrator session, bind them
+under a metaplan: an ordinary `<meta-slug>.plan.md` + `<meta-slug>.steps.csv` whose
+rows are the item plans, each with that plan's whole footprint as `inputs`/`outputs`,
+so this analyzer schedules the items like steps. Run it over the item plans' CSVs as
+well. `independent_plans()` compares file paths only, so the metaplan gets a
+`depends_on` edge for every pair it reports as blocking, for every plan it lists as
+undetermined, and for any two items that touch the same shared mutable state. Workflow
+0B's `coordinate` tag works inside one CSV and is not used across item plans.
+
+Implementation runs in rounds. Each round dispatches the next Workflow 0A wave of
+every item whose prerequisites are done; the orchestrator dispatches each step and
+runs every audit itself. At the round's join, `@conflict-auditor` runs per member and
+`@adversarial` runs once over the remaining steps of every open item plan, which keeps
+each plan's per-step audit. A singleton (below) runs alone in its own round, not
+beside another item's members.
 
 ## Coordinated concurrency for overlapping work
 

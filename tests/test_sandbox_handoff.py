@@ -105,11 +105,20 @@ def test_destructive_with_clearance_forces_confirmation(tmp_path):
     assert "Proceed? [y/N]" in text
 
 
-def test_confirmation_is_on_by_default_and_can_be_turned_off(tmp_path):
+def test_confirmation_is_off_by_default_and_can_be_turned_on(tmp_path):
+    # Running a non-destructive handoff is the operator's approval: no prompt unless asked for.
     script, log = sh.handoff_paths(tmp_path, "push-feat-x", "2026-W43")
-    on = sh.render_script(sh.spec_from_dict(_spec()), root=tmp_path, log=log, script=script)
-    off = sh.render_script(sh.spec_from_dict(_spec(confirm=False)), root=tmp_path, log=log, script=script)
-    assert "Proceed? [y/N]" in on and "Proceed? [y/N]" not in off
+    default = sh.render_script(sh.spec_from_dict(_spec()), root=tmp_path, log=log, script=script)
+    on = sh.render_script(sh.spec_from_dict(_spec(confirm=True)), root=tmp_path, log=log, script=script)
+    assert "Proceed? [y/N]" not in default and "Proceed? [y/N]" in on
+    assert sh.HandoffSpec(slug="s", purpose="p", blocked_by="b", steps=()).confirm is False
+
+
+def test_destructive_without_confirm_key_still_prompts_once(tmp_path):
+    spec = sh.spec_from_dict(_spec(destructive=True, clearance="security-decisions row 7"))
+    script, log = sh.handoff_paths(tmp_path, spec.slug, "2026-W43")
+    text = sh.render_script(spec, root=tmp_path, log=log, script=script)
+    assert text.count("Proceed? [y/N]") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -301,3 +310,40 @@ def test_parallel_plan_isolates_operator_steps():
     schedule = compute_waves(steps)
     assert "operator handoff" in schedule.reasons["2"]
     assert all(len(w) == 1 for w in schedule.waves if "2" in w)
+
+
+def test_reference_template_limits_scripts_to_refused_work_and_running_as_approval():
+    ref = (Path(__file__).parent.parent / "agentteams" / "templates" / "universal"
+           / "sandbox-handoff.reference.template.md").read_text(encoding="utf-8")
+    assert "**only** the operations the sandbox refused" in ref
+    assert "**Running the script is the operator's approval**" in ref
+    assert "`confirm` (default `false`" in ref
+
+
+@pytest.mark.parametrize("cmd", [
+    "rm -rf build", "git push --force origin x", "git push origin --delete feat/x", "git push origin :feat/x",
+    "git reset --hard origin/main", "git clean -fdx", "git branch -D feat/x", "git worktree remove ../wt",
+    "git checkout -- .", "git rebase main", "gh repo delete me/x --yes", "find . -name '*.pyc' -delete",
+    "agentteams --self --update --overwrite --yes", "agentteams --branch-post-merge feat/x --apply",
+    "cd x && rm out.txt", "git -C ../wt push --force origin x", "git -C ../wt reset --hard HEAD~1",
+    "git push -fu origin x", "git push --mirror backup", "bash -c \"rm -rf build\"", "/bin/rm x",
+    "gh pr merge 5 --squash --delete-branch", "gh api -X DELETE repos/me/x/git/refs/heads/y",
+    "git switch main --discard-changes", "git checkout -f main", "python -m agentteams --project . --bridge-refresh",
+])
+def test_destructive_command_without_destructive_flag_is_refused(cmd):
+    # Running a non-destructive script is unprompted, so destructiveness is derived from the commands.
+    with pytest.raises(sh.HandoffError, match="destructive"):
+        sh.spec_from_dict(_spec(steps=[{"title": "x", "run": cmd}]))
+    spec = sh.spec_from_dict(_spec(steps=[{"title": "x", "run": cmd}], destructive=True, clearance="row 9"))
+    assert sh.destructive_commands(spec)
+
+
+@pytest.mark.parametrize("cmd", [
+    "git push -u origin feat/x", "gh pr create --fill --base main", "git worktree add ../wt feat/x",
+    "agentteams --self --update --merge --yes", "python -m pip install pkg==1.2.3", "git branch -vv",
+    "echo format > out.txt", "git fetch --prune origin", "git -C ../wt push -u origin feat/x",
+    "gh pr view feat/x --json mergeable,mergeStateStatus", "git checkout -b feat/y",
+    "agentteams --branch-inventory", "git branch -vv --list",
+])
+def test_ordinary_handoff_commands_are_not_flagged(cmd):
+    assert sh.destructive_commands(sh.spec_from_dict(_spec(steps=[{"title": "x", "run": cmd}]))) == []

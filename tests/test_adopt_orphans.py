@@ -4,6 +4,8 @@ team roster without regenerating their files (agentteams.analyze.adopt_orphan_ag
 
 from __future__ import annotations
 
+import re
+
 from pathlib import Path
 
 import pytest
@@ -119,7 +121,7 @@ def test_adopted_rows_render_inside_routing_fence_sorted(tmp_path):
     m = _manifest()
     analyze.adopt_orphan_agents(m, ["zeta", "alpha"], meta, agent_dir=".claude/agents", agent_ext=".md")
     out = render.resolve_placeholders(_ORCH_TEMPLATE.read_text(), m["auto_resolved_placeholders"])
-    fence = out.split("<!-- AGENTTEAMS:BEGIN routing_table_rows v=3 -->")[1].split(
+    fence = re.split(r"<!-- AGENTTEAMS:BEGIN routing_table_rows v=\d+ -->", out)[1].split(
         "<!-- AGENTTEAMS:END routing_table_rows -->")[0]
     rows = [ln for ln in fence.splitlines() if "*(adopted)*" in ln]
     assert rows == [

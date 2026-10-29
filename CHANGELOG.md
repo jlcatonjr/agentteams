@@ -6,6 +6,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Operator Decision Query: decisions go through the interactive picker)
+
+- **Operator Decision Query**, a new orchestrator sub-protocol (`available_workflows` fence v9, routing row in
+  `routing_table_rows` v5) backed by a new always-emitted `references/operator-decision.reference.md`. A decision
+  only the operator can make is put through the host's interactive selection interface (`AskUserQuestion`,
+  `vscode/askQuestions`, `ask_user`, `request_user_input`). The agent offers its 2–4 best options with the
+  recommended one first and a consequence line for each. Without a picker it asks with a numbered list in the
+  same shape. The agent holding the operator's session asks (normally `@orchestrator`); subagents return the
+  decision to whoever spawned them. An answer never clears a HALT, replaces a clearance or widens a capability.
+  Non-interactive runs log the question to the escalation log, never assume an approval, and take the
+  recommendation only when it is reversible. Workflows 0, 0C, 12 and 14, `@pr-manager`'s disposition prompt
+  (fence v2) and `@security` Rule S-4 (fence v20) hand their operator decisions to it.
+- Not in this release: a canonical `ask` capability that would grant the picker tool to a scoped orchestrator
+  (`claude --agent`, a VS Code custom agent). Until then a scoped orchestrator uses the numbered-list fallback.
+
+### added (Workflow 0C: complex-task metaplans) · changed (sandbox handoffs: running the script is the approval)
+
+- **Workflow 0C (Complex-Task Metaplan)** in the orchestrator template (`available_workflows` fence v8, routing
+  row in `routing_table_rows` v4). A request with two or more separable items gets one development or
+  remediation plan per item, then a metaplan (`<meta-slug>.metaplan.md` + `.metaplan.steps.csv`, one row per
+  item plan) that schedules them with `agentteams.parallel_plan`. The metaplan **and every plan it targets** are
+  audited by `@adversarial` and `@conflict-auditor` and revised before anything is implemented; then the
+  metaplan is implemented in rounds that keep each item plan's per-step audit. Workflow 0 step 5 hands complex
+  requests to it, and the parallelization reference gains a *Metaplans* section.
+- **Sandbox handoff scripts no longer prompt unless they are destructive.** `HandoffSpec.confirm` and the spec's
+  `confirm` key now default to `false`: reading the script and running its command is the operator's approval.
+  A destructive script still asks one `y/N`, on top of the `@security` clearance recorded before it was written.
+  Because an unprompted script must not be mislabelled, destructiveness is now also **derived from the
+  commands** (`sandbox_handoff.destructive_commands()`): a spec whose steps delete, force-push, reset, rewrite
+  history, or run a destructive `gh`/`agentteams` mode is refused unless it is marked `destructive` with a
+  clearance. Every script now prints its purpose before the first step (it used to print only inside the prompt). The
+  sandbox-handoff reference (fence v2) and the orchestrator's handoff step also say a script holds **only** the
+  operations the sandbox refused; everything the agent can do itself stays with the agent.
+
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
 - **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the

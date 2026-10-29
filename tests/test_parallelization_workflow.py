@@ -112,8 +112,8 @@ def test_workflow_0b_fences_are_at_v3():
     """Both fences carrying the 0B feature were bumped v=1 -> v=2 (0B), then v=2 -> v=3 when the
     spawn-authority query funnel added its routing rows + Workflows 12/13 to the same fences."""
     orch = _orch()
-    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=3" in orch
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=7" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review
+    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=5" in orch
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=9" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query
 
 
 def test_reference_template_has_coordinated_concurrency_sections():
@@ -137,3 +137,60 @@ def test_no_rule_18_added_to_constitutional_rules():
     # No numbered rule 18 anywhere in the region (line-anchored and inline).
     assert "18. " not in region
     assert "\n18." not in region
+
+
+def test_workflow_0c_metaplan_is_fenced_and_routed():
+    """Workflow 0C must sit in the fenced workflows region and have a routing row, so
+    --update --merge carries it to existing teams."""
+    orch = _orch()
+    begin = orch.index("<!-- AGENTTEAMS:BEGIN available_workflows")
+    end = orch.index("<!-- AGENTTEAMS:END available_workflows")
+    assert begin < orch.index("### Workflow 0C: Complex-Task Metaplan") < end
+    rbegin = orch.index("<!-- AGENTTEAMS:BEGIN routing_table_rows")
+    rend = orch.index("<!-- AGENTTEAMS:END routing_table_rows")
+    assert rbegin < orch.index("`@orchestrator` → Workflow 0C") < rend
+    assert "steps 5–8 run as **Workflow 0C (Complex-Task Metaplan)** instead" in orch
+
+
+def test_workflow_0c_audits_every_target_plan_before_implementing():
+    orch = _orch()
+    wf = orch[orch.index("### Workflow 0C"):orch.index("### Pre-Execution Security Check")]
+    assert "**and every\nplan it targets**" in wf
+    assert "`<meta-slug>.steps.csv`" in wf
+    assert "**runs alone in its own round**" in wf
+    assert "python -m agentteams.parallel_plan <every item .steps.csv>" in wf
+    # Audit and revision precede implementation, and implementation keeps the per-step cadence.
+    assert wf.index("**Audit the metaplan and every target plan.**") < wf.index("**Revise.**") \
+        < wf.index("**Implement the metaplan.**")
+    assert "per member and one `@adversarial` pass over the remaining steps" in wf
+
+
+def test_reference_template_documents_metaplans():
+    body = REF.read_text(encoding="utf-8")
+    assert "## Metaplans: several plans in one session (Workflow 0C)" in body
+    assert "genuine cross-plan concurrency needs a separate substrate" not in body
+
+
+def test_operator_decision_query_is_fenced_routed_and_wired():
+    orch = _orch()
+    begin = orch.index("<!-- AGENTTEAMS:BEGIN available_workflows")
+    end = orch.index("<!-- AGENTTEAMS:END available_workflows")
+    assert begin < orch.index("### Operator Decision Query") < end
+    assert "`@orchestrator` → Operator Decision Query" in orch
+    proto = orch[orch.index("### Operator Decision Query"):orch.index("### Sandbox Operator Handoff")]
+    assert "`AskUserQuestion`" in proto and "`(Recommended)`" in proto
+    assert "The agent holding the operator's session asks" in proto
+    assert "An approval (waiver, trust root" in proto  # never assumed when no operator is present
+    # Workflows 0, 0C, 12 and 14 all hand their operator decisions to it.
+    assert orch.count("**Operator Decision Query**") >= 5
+
+
+def test_operator_decision_reference_is_emitted_and_fenced():
+    from agentteams import output_plan
+    ref = (TEMPLATES / "universal" / "operator-decision.reference.template.md").read_text(encoding="utf-8")
+    assert "<!-- AGENTTEAMS:BEGIN operator_decision v=1 -->" in ref
+    assert "<!-- AGENTTEAMS:END operator_decision -->" in ref
+    for tool in ("`AskUserQuestion`", "`vscode/askQuestions`", "`ask_user`", "`request_user_input`"):
+        assert tool in ref
+    assert "numbered list" in ref and "needs_user_review=yes" in ref
+    assert "references/operator-decision.reference.md" in Path(output_plan.__file__).read_text(encoding="utf-8")

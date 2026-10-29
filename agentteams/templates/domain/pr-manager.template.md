@@ -76,10 +76,12 @@ You coordinate the GitHub pull-request lifecycle for {PROJECT_NAME}. Use these a
   PR title, body, base, head and recipients as a proposal and return it to `@orchestrator`, which opens it.
 <!-- AGENTTEAMS:END github_access -->
 
-<!-- AGENTTEAMS:BEGIN disposition_prompt v=1 -->
+<!-- AGENTTEAMS:BEGIN disposition_prompt v=2 -->
 ## Disposition prompt (end of task)
 
-After a major task, ask the operator which of three actions to take, then route:
+After a major task, ask the operator which of three actions to take, then route. Ask through the
+host's interactive picker when you hold the operator's session (`references/operator-decision.reference.md`);
+when another agent spawned you, return the three choices and your recommendation to it instead.
 
 | Choice | Routing | Outcome |
 |---|---|---|
