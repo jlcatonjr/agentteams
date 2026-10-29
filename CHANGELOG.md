@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (API Impact Review: a pre-commit hook plus review, audit and revision of what a change touches)
+
+- **`agentteams.api_impact`** detects API impact from git alone: Python modules and public symbols (functions,
+  classes, public methods, `__all__`) added, removed, renamed or re-signed; `add_argument` options and
+  `add_parser` subcommands; `*.schema.json` changes; and other tracked files added, removed or renamed outside
+  docs, tests and work records. `status` computes each commit's review state since the branch base (merge-base
+  with the default branch; the unpushed commits on the default branch; never a pass without a base). A commit
+  is reviewed when its stable patch-id has a ledger file in `references/api-impact-reviews/` committed at `HEAD`;
+  `record --note` writes those files (a self-attestation, visible in the PR). `status` also prints an audit
+  checklist of the files that mention each changed name.
+- **The `pre-commit` hook** gains an API-impact step (all teams; `git_hooks._render_hook_block`): it prints the
+  staged impact and never fails the commit. It needs Python 3.11+ and runs with `-P`. In the agentteams
+  repository, `git config agentteams.regenerateMan true` also makes it regenerate and stage `agentteams.1`
+  when the parser changes.
+- **Orchestrator:** a new **API Impact Review** sub-protocol (scope → review and update the API → audit the
+  related infrastructure → revise → record) and Workflow 11 gate **6b**, which runs before the push and keeps
+  the session open as *API review pending* until the branch's impactful commits are reviewed
+  (`available_workflows` v10, `routing_table_rows` v6). New always-emitted `references/api-impact.reference.md`.
+  `@module-doc-validator`'s Change Impact Analysis takes the reported names as its scope.
+- Docs: `api-reference/api-impact.md`, the git-hooks page and figure, and the user guide.
+
 ### added (Operator Decision Query: decisions go through the interactive picker)
 
 - **Operator Decision Query**, a new orchestrator sub-protocol (`available_workflows` fence v9, routing row in

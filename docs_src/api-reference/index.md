@@ -78,6 +78,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`graph`](graph.md) | Directed graph inference for agent team topology |
 | [`architecture`](architecture.md) | Module-dependency map of a repository's own Python package, built from its imports |
 | [`git-hooks`](git-hooks.md) | Commit-triggered refresh of the topology and architecture maps (`--install-git-hooks`); blocking env-file guard |
+| [`api-impact`](api-impact.md) | Detects commits that change the API or structure; review state from a patch-id ledger (API Impact Review) |
 | [`model-routing`](model-routing.md) | Framework-neutral model-routing contracts for cost/capability tiering |
 | [`eval_suite`](eval-suite.md) | Build behavioral evaluation specs for agent team runs |
 | [`eval-adapters`](eval-adapters.md) | Convert neutral eval-suite contracts into Inspect AI and OpenAI Evals artifacts |

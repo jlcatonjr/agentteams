@@ -51,7 +51,8 @@ You do **not** rewrite documentation. All corrections route to `@module-doc-auth
 
 ## Change Impact Analysis
 
-When invoked for change-impact analysis, perform the following:
+When invoked for change-impact analysis, perform the following. Invoked from the orchestrator's API Impact
+Review, take the names reported by `python -m agentteams.api_impact status` as the scope and check them first.
 
 ### Step 1: Hash Comparison
 

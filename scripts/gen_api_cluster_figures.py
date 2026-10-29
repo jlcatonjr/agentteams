@@ -143,31 +143,35 @@ AUDITCHAIN_EDGES = [
     ("emit", "scan"), ("integrity", "scan"), ("integrity", "redteam"),
 ]
 
-# --- C5 git-hooks: three independent, separately-guarded refreshes (NOT one fan-out) ---
-# Verified git_hooks.py:384-408: agent-files staged -> pipeline-graph; *.py staged -> architecture;
-# opt-in script/dep files -> gitignored code-index cache (no git add). Distinct trigger conditions.
+# --- C5 git-hooks: four independent, separately-guarded steps (NOT one fan-out) ---
+# Verified git_hooks._render_hook_block: agent-files staged -> pipeline-graph; *.py staged -> architecture;
+# opt-in script/dep files -> gitignored code-index cache (no git add); anything staged -> api-impact
+# (report + opt-in man-page regeneration). Distinct trigger conditions.
 GITHOOKS_NODES = [
     ("hook", "pre-commit block (git_hooks)", "stage", "agentteams/git_hooks.py"),
     ("c_agent", "agent files staged", "cond", ""),
     ("c_py", "*.py files staged", "cond", ""),
     ("c_dep", "script/dep files staged (opt-in)", "cond", ""),
+    ("c_any", "anything staged", "cond", ""),
     ("r_graph", "refresh pipeline-graph", "refresh", "agentteams/graph.py"),
     ("r_arch", "refresh architecture maps", "refresh", "agentteams/architecture.py"),
     ("r_code", "warm code-index (gitignored)", "refresh", "agentteams/code_index.py"),
+    ("r_api", "api-impact report", "refresh", "agentteams/api_impact.py"),
     ("o_graph", "pipeline-graph.md/.svg", "data", ""),
     ("o_arch", "architecture-graph + modules.svg", "data", ""),
     ("o_code", "code-index cache", "data", ""),
+    ("o_api", "summary + agentteams.1 (opt-in)", "data", ""),
 ]
 GITHOOKS_EDGES = [
-    ("hook", "c_agent"), ("hook", "c_py"), ("hook", "c_dep"),
-    ("c_agent", "r_graph"), ("c_py", "r_arch"), ("c_dep", "r_code"),
-    ("r_graph", "o_graph"), ("r_arch", "o_arch"), ("r_code", "o_code"),
+    ("hook", "c_agent"), ("hook", "c_py"), ("hook", "c_dep"), ("hook", "c_any"),
+    ("c_agent", "r_graph"), ("c_py", "r_arch"), ("c_dep", "r_code"), ("c_any", "r_api"),
+    ("r_graph", "o_graph"), ("r_arch", "o_arch"), ("r_code", "o_code"), ("r_api", "o_api"),
 ]
 
 FIGURES = [
     ("api-cluster-pipeline", "Pipeline: ingest to emit", PIPELINE_NODES, PIPELINE_EDGES),
     ("api-cluster-audit-chain", "Post-emit audit chain + standing guards", AUDITCHAIN_NODES, AUDITCHAIN_EDGES),
-    ("api-fig-git-hooks", "git-hooks: three guarded refreshes", GITHOOKS_NODES, GITHOOKS_EDGES),
+    ("api-fig-git-hooks", "git-hooks: four guarded steps", GITHOOKS_NODES, GITHOOKS_EDGES),
     ("api-cluster-pinned-sync", "Multi-framework pinned sync", SYNC_NODES, SYNC_EDGES),
     ("api-cluster-plan-steps", "steps.csv: three readers + a chain check", STEPS_NODES, STEPS_EDGES),
     ("api-cluster-host-features", "Host-feature token to emitter to output", HOSTFEAT_NODES, HOSTFEAT_EDGES),

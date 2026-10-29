@@ -6,17 +6,18 @@ same commit — so the committed maps are always in step with the committed sour
 
 ## Refresh flow at a glance
 
-The installed hook runs three **independent, separately-guarded** refreshes — each fires only when
+The installed hook runs four **independent, separately-guarded** steps — each fires only when
 its own kind of file is staged, so unrelated commits pay no cost. Generated deterministically from
 `scripts/gen_api_cluster_figures.py`.
 
-![git-hooks: three guarded refreshes](../book/figures/api-clusters/api-fig-git-hooks.svg)
+![git-hooks: four guarded steps](../book/figures/api-clusters/api-fig-git-hooks.svg)
 
-Two maps are refreshed, each under its own guard, plus an optional third capability:
+Two maps are refreshed, each under its own guard, plus an optional cache warm-up and the API-impact check:
 
 - agent files staged → `<agent-dir>/references/pipeline-graph.md` (agent topology, kept *with the team* — same location `--update`/emit writes — via [`graph`](graph.md))
 - `*.py` files staged → `references/architecture-graph.md` (repo-level module architecture, via [`architecture`](architecture.md))
 - (opt-in via `--code-index-hook`) script/dependency files staged → warm the [code & API index cache](code-index.md) (`references/code-index/`, gitignored — never staged) via `refresh_code_index()`
+- anything staged (deletions included) → `python3 -P -m agentteams.api_impact --pre-commit` ([`api-impact`](api-impact.md)): a one-line summary of the staged API impact, and in the agentteams repository with `git config agentteams.regenerateMan true` a regenerated, staged `agentteams.1`. Needs Python 3.11+; otherwise it prints `api-impact unavailable`. Never fails the commit.
 
 > *Source: `agentteams/git_hooks.py`*
 

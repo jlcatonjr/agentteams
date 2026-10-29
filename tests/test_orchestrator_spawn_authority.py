@@ -70,8 +70,8 @@ def test_escalation_ledger_stub_created_with_header(tmp_path):
 
 def test_orchestrator_routing_and_workflow_versions_bumped():
     text = ORCH.read_text(encoding="utf-8")
-    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=5 -->" in text
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=9 -->" in text  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query
+    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=6 -->" in text
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=10 -->" in text  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query; v=10: API Impact Review
 
 
 def test_orchestrator_has_funnel_routing_row_and_workflows():

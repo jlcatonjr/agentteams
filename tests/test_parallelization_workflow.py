@@ -112,8 +112,8 @@ def test_workflow_0b_fences_are_at_v3():
     """Both fences carrying the 0B feature were bumped v=1 -> v=2 (0B), then v=2 -> v=3 when the
     spawn-authority query funnel added its routing rows + Workflows 12/13 to the same fences."""
     orch = _orch()
-    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=5" in orch
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=9" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query
+    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=6" in orch
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=10" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query; v=10: API Impact Review
 
 
 def test_reference_template_has_coordinated_concurrency_sections():
