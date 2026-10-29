@@ -77,6 +77,16 @@ def test_x1_hash_pinned_requirements_are_never_edited(env: dict, tmp_path: Path)
         executor.validate_diff(repo, base)
 
 
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_a_cargo_lock_change_is_never_staged(env: dict, tmp_path: Path) -> None:
+    """Cargo.lock fixes are plan-only (fix.plan_cargo_lock): validate_diff refuses any change to one."""
+    old = b'version = 3\n\n[[package]]\nname = "smallvec"\nversion = "1.6.0"\n'
+    repo, base = _committed(tmp_path / "r", {"Cargo.lock": old})
+    (repo / "Cargo.lock").write_bytes(old.replace(b"1.6.0", b"1.6.1"))
+    with pytest.raises(executor.ExecError, match="outside dependency pins/lockfiles: Cargo.lock"):
+        executor.validate_diff(repo, base)
+
+
 def _rename_lock(repo: Path, tmp: Path) -> None:
     _sh(repo, "-c", "diff.renames=true", "mv", "package-lock.json", "npm-shrinkwrap.json")
 

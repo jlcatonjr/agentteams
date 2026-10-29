@@ -199,6 +199,11 @@ def _pep503(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
+def _crate_name(name: str) -> str:
+    """Return a crate name as Cargo compares it: lowercase, ``_`` and ``-`` one character."""
+    return name.lower().replace("_", "-")
+
+
 def is_private(name: str, patterns: Iterable[str], ecosystem: str = "") -> bool:
     """Return whether a package name matches one of a project's ``private_packages`` patterns.
 
@@ -206,12 +211,13 @@ def is_private(name: str, patterns: Iterable[str], ecosystem: str = "") -> bool:
         name: Package name as written in a manifest.
         patterns: fnmatch patterns; matching is case-insensitive.
         ecosystem: ``PyPI`` normalises the name and every pattern per PEP 503 first, so
-            ``Acme_Core``, ``acme.core`` and ``acme-core`` are one package (as pip treats them).
+            ``Acme_Core``, ``acme.core`` and ``acme-core`` are one package (as pip treats them);
+            ``crates.io`` treats ``-`` and ``_`` as one (as Cargo does), so ``acme_core`` matches ``acme-core``.
 
     Returns:
         True when the name must not leave the machine.
     """
-    norm = _pep503 if ecosystem == "PyPI" else str.lower
+    norm = _pep503 if ecosystem == "PyPI" else _crate_name if ecosystem == "crates.io" else str.lower
     low = norm(name)
     return any(fnmatch.fnmatchcase(low, norm(p)) for p in patterns)
 
