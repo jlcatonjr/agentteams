@@ -143,7 +143,9 @@ set -e
 echo "agent-run exit $rc (0 completed, 3 not run or agent error, 143 stopped)"
 
 echo "== 5/5 outcome, spend, refusals"
-RUN="$(ls -1d "$HOME/.local/state/agentteams/vulnscan"/20*-*-* 2>/dev/null | tail -1)"
+# the state dir as vulnscan resolves it (AGENTTEAMS_VULNSCAN_STATE_DIR, else $XDG_STATE_HOME, else ~/.local/state)
+STATE_DIR="$("$PY" -P -c 'from agentteams.vulnscan import paths; print(paths.state_dir())')"
+RUN="$(ls -1d "$STATE_DIR"/20*-*-* 2>/dev/null | tail -1)"
 [ -n "$RUN" ] || { echo "no run directory found" >&2; exit 1; }
 "$PY" -P - "$RUN" <<'PY'
 import json, re, sys

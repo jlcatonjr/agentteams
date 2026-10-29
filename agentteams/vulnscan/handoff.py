@@ -13,9 +13,10 @@ branch (H3, :func:`approval_problem`): this module reads the verdict, the execut
 the vulnscan container writes can satisfy it: the verdicts live in the repository's handoff directory, which the
 container never mounts.
 
-A *home* is the checkout itself or one of its linked worktrees under ``<repo>.worktrees/<name>/`` (where
-``vulnscan-target-agents.sh`` renders a goose team without touching the checkout). Every home's handoff directory is
-read (:func:`handoff_dirs`).
+A *home* is the checkout itself or one of its linked worktrees under ``<repo>.worktrees/<name>/`` (where an
+operator can render the repository's goose team without touching the checkout). Every home's handoff directory is
+read (:func:`handoff_dirs`). agentteams ships the reading side only: writing packets and issuing the directive is
+operator tooling, outside this package.
 
 A verdict applies to a staged fix by its **content digest**, the suffix of the branch name
 ``vulnscan/<YYYYMMDD>-<digest>``: a fix re-staged on a later day is the same change under a new branch name. The

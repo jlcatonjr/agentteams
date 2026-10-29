@@ -61,8 +61,11 @@ component table.
     - `scripts/vulnscan-operator/`: `01-install.sh` (install), `02-sandbox-repo.sh` (a test
       repository), `03-configure.sh` (Steps 1, 4, 5, 6), `05-first-run.sh` (Steps 8, 9),
       `06-sigterm-check.sh` ([Part D](#part-d-acceptance-checks-on-your-machine) #9),
-      `07-schedule.sh` (Step 3), `08-enable-agent.sh` (Step 10). There is no `04`.
+      `07-schedule.sh` (Step 3), `08-enable-agent.sh` (Step 10), `09-accept-framework.sh` (an acceptance run
+      on [another framework](#using-claude-code-instead-of-goose)), `10-accept-tools-container.sh` (an
+      acceptance run of the tools container, Step 7b). There is no `04`.
     - `scripts/vulnscan-agent-image.sh`: [Step 7](#step-7-build-the-agent-image-and-prove-its-isolation).
+    - `scripts/vulnscan-tools-image.sh`: [Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in).
     - `scripts/vulnscan-acceptance.sh`: the read-only checks of [Part D](#part-d-acceptance-checks-on-your-machine).
 
 Install `agentteams` somewhere an agent cannot edit: `pipx install` from a release you verified.
@@ -158,6 +161,10 @@ marked `UNSCORED (as HIGH)`:
 
 *Demo findings, written through the real report code. One advisory id is real
 (GHSA-ffqj-6fqr-9h24, PyJWT); `DEMO-0001` is not.*
+
+The summary also has **Remediation readiness** and **Remediation effectiveness** sections, and each
+configured server with findings gets a fix plan in `~/.local/state/agentteams/vulnscan/server-plans/<date>/` (see
+[Daily, automatically](vulnerability-remediation-guide.md#daily-automatically)).
 
 `daily` exits with:
 
@@ -335,8 +342,10 @@ Add the `agent` block to `~/.config/agentteams/vulnscan.json`, with `enabled` of
 
 ### Step 7: Build the agent image and prove its isolation
 
-Pick a goose version from the [goose releases page](https://github.com/block/goose/releases).
-Recipe validation and goose's flags were verified live with **goose 1.37.0**. The image downloads
+`scripts/vulnscan-agent-image.sh` does all of this for the goose version agentteams pins (**1.54.0** in this
+release), checking the download against GitHub's published digest. To do it by hand, pick a goose version from
+the [goose releases page](https://github.com/block/goose/releases).
+Recipe validation and goose's flags were first verified live with **goose 1.37.0**. The image downloads
 `goose-<arch>.tar.bz2` from `releases/download/v<X.Y.Z>/`, where `<arch>` is
 `x86_64-unknown-linux-gnu` on an Intel/AMD Docker host and `aarch64-unknown-linux-gnu` on Apple
 silicon or another arm64 host. Download the same file yourself and hash it:
@@ -374,8 +383,9 @@ secrets mounts, the masks below, and for copilot and goose the checked copy of t
 The run directory is mounted read-only, with its `gateway/` and `debrief/` subdirectories hidden behind an
 empty read-only tmpfs: the agent cannot read the DLP list or the spend files.
 
-A passing self-test, as printed on a real first setup (macOS, Docker Desktop, goose 1.37.0; also saved
-to `<state>/agent-selftest.json`):
+A passing goose self-test looks like this (also saved to `<state>/agent-selftest.json`). The digests and
+times are placeholders: yours will differ. Another framework replaces the four `goose_*` checks with its own
+([the full list](api-reference/vulnscan.md#selftestcfg)):
 
 ```text
 $ python -P -m agentteams.vulnscan agent-selftest
@@ -385,22 +395,38 @@ $ python -P -m agentteams.vulnscan agent-selftest
     "no_credential_paths": true,
     "no_token_env": true,
     "internet_blocked": true,
+    "provider_apis_blocked": true,
     "gateway_reachable": true,
     "readonly_rootfs": true,
     "readonly_run_dir": true,
     "readonly_results": true,
     "spool_writable": true,
+    "cwd_empty": true,
     "goose_dirs_writable": true,
+    "goose_recipe_valid": true,
+    "goose_headless_ran": true,
+    "goose_wire_compatible": true,
     "no_capabilities": true,
     "no_new_privs": true,
-    "non_root": true
+    "non_root": true,
+    "identity_matches": true
   },
-  "image": "sha256:cb71cf61b47e3f66ed71a687045c3c66844afdf0c997ed5243f4982a317b163f",
-  "flags_sha256": "2f589ad2606b1e8a3a8639eca809317b17caab9c84a8d4290253fba8c273a647",
-  "at": "2026-10-23T16:09:39.102160+00:00",
-  "stderr": ""
+  "framework": "goose",
+  "image": "sha256:<64 hex>",
+  "flags_sha256": "<64 hex>",
+  "docker_mode": "desktop",
+  "container_user": "10001:10001",
+  "observed_user": "10001:10001",
+  "at": "2026-10-28T16:09:39.102160+00:00",
+  "detail": { … },
+  "stderr": "",
+  "agent_definition": {"source": "…", "copy": "agentdef/recipe.yaml", "sha256": "<64 hex>", "removed_keys": []}
 }
 ```
+
+The first real setup (macOS, Docker Desktop, goose 1.37.0) printed twelve of these checks: all but
+`provider_apis_blocked`, `cwd_empty`, `goose_recipe_valid`, `goose_headless_ran`, `goose_wire_compatible` and
+`identity_matches`, each added by a later release (installing that release needs one more `agent-selftest`).
 
 The `image` and `flags_sha256` values are yours to compare against later runs: a different image or
 different container flags need a new self-test.
@@ -616,7 +642,8 @@ when you want to merge.
 
 Add `--op server-audit --op server-dryrun --host web1` to let the agents audit and dry-run servers.
 `merge` and `server-apply` are refused: no grant can cover them. At most two grants may be valid at
-once (a third makes all of them invalid), so revoke the first one. `grant list` prints each valid
+once: with three, vulnscan refuses all of them, so `grant sign` refuses to sign a third
+(`refused: 2 valid grant(s) already …`). Revoke the first one once the new grant is installed. `grant list` prints each valid
 grant as JSON; take the first grant's `grant_id` from it:
 
 ```bash
@@ -771,7 +798,7 @@ python -m agentteams.vulnscan say --list
   import it with `say --from-gh <comment URL>`. Only your own comments are accepted, and you see the
   full text before it is stored. `review --gh-replies` lists the replies on the agents' pull
   requests as data.
-- **Ask a past run why:** `agent-chat [--run <date>]` resumes that run's goose session in the
+- **Ask a past run why:** `agent-chat [--run <date>]` resumes that run's goose (or Claude Code) session in the
   container. The spool is read-only there, so it can explain but not act. It has its own spend, time
   and token caps (`agent.debrief_*` in the
   [configuration reference](api-reference/vulnscan.md#configuration-vulnscanjson)). The config
@@ -904,6 +931,10 @@ Search the message for the quoted text.
 | `origin is not a GitHub repository URL` | `open-pr` on a repository whose `origin` URL is not `HOST/OWNER/REPO` | give it a GitHub `origin`, or leave it out of `open-pr` grants |
 | `gh pr create failed` | gh is not signed in to `origin`'s host, or `origin` is not on GitHub | `gh auth status`; leave non-GitHub repositories out of `open-pr` grants |
 | `holds the run lock` | an agent run or `agent-chat` is in progress | wait for it to finish |
+| `refused: 2 valid grant(s) already (…); one more exceeds the aggregate cap of 2` (`grant sign`, exit 2) | two grants are valid; a third would make vulnscan refuse all of them | `grant revoke --grant-id <id>` one first (`08-enable-agent.sh` offers this) |
+| `nothing fixable without a major jump: the change resolves no advisory` / `held: stage-fix found nothing fixable …` | the staged change fixed no advisory (e.g. npm stayed inside a range that is still affected); the repository is then held until its fix plan changes | make the major upgrade by hand; the hold lifts when the fix plan changes |
+| `handoff delivery — no verdict from the repository's orchestrator for … yet` (`open-pr`) | the project's brief says `delivery: handoff`, or `vulnscan.json` sets `handoff_required` | have the repository's orchestrator review the staged fix; `handoff status` shows the state ([Handoff delivery](vulnerability-remediation-guide.md#handoff-delivery)) |
+| `the model's reply reached its output-token limit before it called a tool` (`agent-error`) | the model spent a whole reply's output on reasoning (goose) | bound it with `agent.reasoning`, an OpenRouter `reasoning` object with one of `effort`, `max_tokens` (below `agent.max_output_tokens`) or `"enabled": false` (chat route only) |
 | `another daily run holds ... daily.lock` (exit 3) | a daily run is already in progress | wait for it to finish |
 | `origin/HEAD is not set` (`fix_mode: apply-worktree`) | the repository has no default branch recorded | `git remote set-head origin --auto` in that repository |
 | `the repository's git config defines a filter driver, which git would run — fix it by hand` (`fix --apply`; `stage-fix`: `<repo>: …`, ledgered `failed`, before any fetch) | the repository's own git config defines a `filter.*` driver other than git-lfs's standard `filter.lfs.*` values | apply that fix by hand |

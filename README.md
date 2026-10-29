@@ -40,6 +40,13 @@ instruction file — see [`SECURITY.md`](SECURITY.md#the-agentteamsresearch-extr
 for the full boundary statement and the `research-analyst` archetype for the recommended way to
 orchestrate it from an agent.
 
+**Also included: dependency vulnerability scanning and remediation.** `python -m agentteams.vulnscan`
+checks your repositories, workstation runtimes and Linux servers against live advisory data (OSV.dev,
+nodejs.org, php.net, endoflife.date) every day, plans the smallest safe upgrade, and can let a generated
+agent team carry fixes through to pull requests, with every change made by a deterministic executor under
+grants you sign. It runs on your machine as an operator tool, not inside the projects it scans. See
+[`agentteams/vulnscan/README.md`](agentteams/vulnscan/README.md) for what it does and how to start.
+
 ---
 
 ## Workflow
@@ -975,6 +982,7 @@ agentteams/
 - [agentteams/templates/FENCE-CONVENTIONS.md](agentteams/templates/FENCE-CONVENTIONS.md) — Section fencing specification
 - [agentteams/templates/PLACEHOLDER-CONVENTIONS.md](agentteams/templates/PLACEHOLDER-CONVENTIONS.md) — Placeholder syntax rules
 - [docs_src/how-it-works.md](docs_src/how-it-works.md) — Four-tier agent taxonomy and pipeline overview
+- [agentteams/vulnscan/README.md](agentteams/vulnscan/README.md) — Vulnerability scanning and agent-driven remediation: capabilities, quick start, module map
 - [schemas/project-description.schema.json](schemas/project-description.schema.json) — JSON Schema for project descriptions
 - [schemas/team-manifest.schema.json](schemas/team-manifest.schema.json) — JSON Schema for the internal team manifest
 
