@@ -7,6 +7,7 @@ Supported formats:
 | PyPI | ``requirements*.txt``, ``requirements*.lock`` and ``requirements*.in``, also with a ``-``/``_``/``.``-ended prefix such as ``ci-requirements.txt`` (``==`` pins), ``poetry.lock``, ``uv.lock``, ``Pipfile.lock``; a ``pyproject.toml`` next to requirements files (PEP 621 ``==`` pins) |
 | npm | ``package-lock.json`` and ``npm-shrinkwrap.json`` (v1–v3), ``yarn.lock`` (classic and berry) |
 | Packagist | ``composer.lock`` |
+| crates.io | ``Cargo.lock`` (v1–v4; crates from the crates.io index only, every one ``runtime``) |
 
 A manifest that yields no exact versions is reported as *unscannable*, not skipped
 silently. Examples are an unpinned ``requirements.txt`` and a ``pyproject.toml`` with no
@@ -23,14 +24,14 @@ one with nothing to scan:
 | RubyGems | ``Gemfile.lock`` |
 | NuGet | ``packages.lock.json`` (``*.csproj`` when there is no lockfile) |
 | pnpm (npm) | ``pnpm-lock.yaml`` |
-| Rust/crates.io, conda, Lean | ``Cargo.lock``, ``environment.yml`` / ``.yaml``, ``lake-manifest.json`` |
+| conda, Lean | ``environment.yml`` / ``.yaml``, ``lake-manifest.json`` |
 | container images | ``Dockerfile``, ``Dockerfile.*``, ``*.Dockerfile``, ``Containerfile``, ``compose.y(a)ml``, ``docker-compose*.y(a)ml`` |
 
 Only ``requirements*.txt`` (:data:`REQ_NAME`) is ever edited by a staged fix; the ``.lock``
 and ``.in`` variants are read, never edited (:data:`REQ_SCAN_NAME`).
 
 Discovery skips vendored and generated trees (``node_modules``, virtualenvs, build
-output). It also skips **linked git worktrees** by default, because they repeat their
+output, Lean's ``.lake`` package cache). It also skips **linked git worktrees** by default, because they repeat their
 main checkout's manifests.
 
 :func:`check_pin_edit` and :func:`check_lock_edit` decide which edits of these files the
@@ -56,6 +57,9 @@ SKIP_DIRS: frozenset[str] = frozenset({
     # Scratch space: a repository's "tmp" folder often holds throwaway clones of sibling repositories; scanning
     # them reports the same findings twice and invites duplicate fixes.
     "tmp",
+    # Lean's Lake package cache (``.lake/packages``), vendored like node_modules. Skipping it also hides lockfiles
+    # *inside* vendored Lean packages: their own tooling, never installed by the project.
+    ".lake",
 })
 
 #: Requirements files a staged fix may edit (``executor.validate_diff`` checks them with :func:`check_pin_edit`):
@@ -68,9 +72,17 @@ REQ_PIN = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)(\[[^\]]*\])?\s*==\s*([^\
 _REQ_ANY = re.compile(r"^\s*[A-Za-z0-9][A-Za-z0-9._-]*")
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.lock",
              "poetry.lock", "uv.lock", "Pipfile.lock")
+#: Lockfiles discovered apart from :data:`LOCKFILES`: they do not hide a sibling ``package.json`` or
+#: ``pyproject.toml`` (a wasm-pack or maturin directory holds both, and its npm/PyPI packages stay reported).
+CRATE_LOCKS = ("Cargo.lock",)
+#: ``source`` prefixes of crates.io packages in a ``Cargo.lock`` (git index, sparse index).
+CRATES_IO_SOURCES = ("registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/")
+#: What a crates.io crate name and a Cargo.lock version may be (crates.io allows ASCII letters, digits, ``-`` and
+#: ``_``, at most 64; versions are SemVer). Anything else makes the lockfile unscannable (:func:`_cargo_lock`).
+CRATE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+CRATE_VERSION = re.compile(r"[0-9][0-9A-Za-z.+-]{0,63}")
 #: Manifests of ecosystems that are not scanned (file name -> ecosystem): discovered, reported unscannable.
 UNSUPPORTED: dict[str, str] = {
-    "Cargo.lock": "Rust/crates.io",
     "environment.yml": "conda",
     "environment.yaml": "conda",
     "lake-manifest.json": "Lean",
@@ -104,7 +116,7 @@ _LOCK_ROOT_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "p
 class Dep:
     """One exact dependency version found in a manifest or on a host."""
 
-    ecosystem: str          # "PyPI" | "npm" | "Packagist"
+    ecosystem: str          # "PyPI" | "npm" | "Packagist" | "crates.io"
     name: str
     version: str
     scope: str = "runtime"  # "runtime" | "dev"
@@ -170,8 +182,8 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
 
     Returns:
         Sorted manifest paths. ``package.json`` and ``pyproject.toml`` are listed only when
-        their directory has no lockfile (a ``pyproject.toml`` next to requirements files is listed
-        too: :func:`parse` reads its PEP 621 pins). Manifests of unsupported ecosystems
+        their directory has no npm, Composer or PyPI lockfile (a ``Cargo.lock`` does not count; a
+        ``pyproject.toml`` next to requirements files is listed too: :func:`parse` reads its PEP 621 pins). Manifests of unsupported ecosystems
         (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable; ``go.mod``,
         ``build.gradle*`` and ``*.csproj`` only when their directory has no lockfile of the same ecosystem.
     """
@@ -188,7 +200,8 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         dirnames[:] = sorted(keep)
         names = set(filenames)
         for name in sorted(names):
-            if name in LOCKFILES or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) or _DOCKERFILE.match(name):
+            if name in LOCKFILES or name in CRATE_LOCKS or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) \
+                    or _DOCKERFILE.match(name):
                 found.append(here / name)
             elif name in _UNSUPPORTED_FALLBACK and _UNSUPPORTED_FALLBACK[name][1] not in names:
                 found.append(here / name)
@@ -227,6 +240,8 @@ def parse(path: Path) -> Manifest:
             _toml_lock(path, m)
         elif name == "Pipfile.lock":
             _pipfile_lock(path, m)
+        elif name in CRATE_LOCKS:
+            _cargo_lock(path, m)
         elif name == "pyproject.toml":
             _pyproject(path, m)
         elif name == "package.json":
@@ -362,6 +377,35 @@ def _pipfile_lock(path: Path, m: Manifest) -> None:
             ver = str(info.get("version", ""))
             if ver.startswith("=="):
                 m.deps.append(Dep("PyPI", name, ver[2:], scope, str(path)))
+
+
+def _cargo_lock(path: Path, m: Manifest) -> None:
+    """Read a ``Cargo.lock`` (v1–v4): every ``[[package]]`` from the crates.io index, as ``runtime``.
+
+    Path and git packages (the workspace's own crates, or sources OSV does not know) and alternate registries are
+    not crates.io packages and are skipped. Cargo.lock records no dev/build distinction, so every crate is
+    ``runtime``: it over-reports, never hides.
+
+    The lockfile is repository content: a crates.io entry whose name or version is not a plain string of crate-name
+    / version characters makes the whole file unscannable (reported, never silently dropped), so no such text
+    reaches a fix plan the agents read.
+    """
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    for pkg in data.get("package") or []:
+        if not isinstance(pkg, dict):
+            raise TypeError("a [[package]] entry is not a table")
+        source = pkg.get("source")
+        if not (isinstance(source, str) and source.startswith(CRATES_IO_SOURCES)):
+            continue
+        name, version = pkg.get("name"), pkg.get("version")
+        if not (isinstance(name, str) and isinstance(version, str)
+                and CRATE_NAME.fullmatch(name) and CRATE_VERSION.fullmatch(version)):
+            m.deps.clear()
+            m.unscannable = "a crates.io entry with an unusual name or version: not read"
+            return
+        m.deps.append(Dep("crates.io", name, version, "runtime", str(path)))
+    if not m.deps:
+        m.unscannable = "no crates.io packages"
 
 
 # ---------------------------------------------------------------- edit checks (executor.validate_diff)

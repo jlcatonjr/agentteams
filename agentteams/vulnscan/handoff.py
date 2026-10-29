@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams import launcher_lineage
+
 HANDOFF_DIR = ".vulnscan-handoff"
 VERDICTS_FILE = "verdicts.csv"
 VERDICTS = ("approve-staged", "own-pr", "defer", "reject")
@@ -51,6 +53,8 @@ _BRANCH = re.compile(r"^vulnscan/\d{8}-([0-9a-f]{6,64})$")
 _HANDOFF_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 #: A handoff packet is ``<YYYYMMDD><6 digits>.md``; anything else in the directory (review notes, plans) is not one.
 _PACKET_ID = re.compile(r"^\d{14}$")
+#: The worktree under ``<repo>.worktrees/`` where the operator's handoff tooling renders a repository's goose team.
+GOOSE_TEAM_WORKTREE = "goose-agent-team"
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,22 @@ class RepoHandoff:
     homes: list[str] = field(default_factory=list)
     pending: list[str] = field(default_factory=list)   # packet ids with no verdict row
     problems: list[str] = field(default_factory=list)
+    launcher: str = ""               # the sandbox/confine-run.sh the handoff's goose session would run under, or ""
+    launcher_state: str = ""         # agentteams.launcher_lineage state, or "unknown" (lineage unreadable)
+    launcher_detail: str = ""
+
+    @property
+    def launcher_warning(self) -> str:
+        """A warning line unless the launcher is ``current`` (informational: the launcher's own checks gate)."""
+        if self.launcher_state == "current":
+            return ""
+        if self.launcher_state == "missing":
+            return "no sandbox/confine-run.sh: the handoff refuses to run goose unconfined"
+        if self.launcher_state == "older":
+            return f"the launcher is an older release ({self.launcher_detail}); regenerate the team"
+        if self.launcher_state == "modified":
+            return f"the launcher matches no released version ({self.launcher_detail}); review it"
+        return f"the launcher could not be checked ({self.launcher_detail})"
 
     @property
     def state(self) -> str:
@@ -95,7 +115,8 @@ class RepoHandoff:
         """Return the record as plain data (the ``handoff status --json`` shape)."""
         return {"repo": self.repo, "required": self.required, "state": self.state, "staged_branch": self.staged_branch,
                 "verdict": self.verdict, "verdict_handoff": self.verdict_handoff, "homes": self.homes,
-                "pending": self.pending, "problems": self.problems}
+                "pending": self.pending, "problems": self.problems, "launcher": self.launcher,
+                "launcher_state": self.launcher_state, "launcher_detail": self.launcher_detail}
 
 
 def digest_of(branch: str) -> str:
@@ -322,21 +343,84 @@ def staged_branch(repo: Path) -> str:
     return branch if isinstance(branch, str) and digest_of(branch) else ""
 
 
-def status(cfg: dict[str, Any] | None, repos: list[Path]) -> list[RepoHandoff]:
+def goose_home(repo: Path) -> Path | None:
+    """Return where the repository's goose team lives, as the operator's handoff tooling finds it.
+
+    Args:
+        repo: Canonical repository path.
+
+    Returns:
+        The checkout when it has ``.goose/recipes/orchestrator.yaml``, else the
+        ``<repo>.worktrees/goose-agent-team`` worktree when that has it, else None.
+    """
+    for home in (repo, repo.parent / f"{repo.name}.worktrees" / GOOSE_TEAM_WORKTREE):
+        if (home / ".goose" / "recipes" / "orchestrator.yaml").is_file():
+            return home
+    return None
+
+
+def fallback_launcher(cfg: dict[str, Any] | None) -> Path | None:
+    """Return the operator's fallback launcher: ``<agent.team_dir>/sandbox/confine-run.sh``.
+
+    The handoff tooling runs goose under the home's own ``sandbox/confine-run.sh`` and falls back to the vulnscan
+    team's (``agent.team_dir``) when the home has none.
+
+    Args:
+        cfg: Daily config.
+
+    Returns:
+        The path, or None when ``agent.team_dir`` is not set.
+    """
+    agent = cfg.get("agent") if isinstance(cfg, dict) else None
+    team = str(agent.get("team_dir") or "").strip() if isinstance(agent, dict) else ""
+    return Path(team).expanduser() / launcher_lineage.PROJECT_PATH if team else None
+
+
+def handoff_launcher(repo: Path, fallback: Path | None) -> Path | None:
+    """Return the launcher a handoff's goose session for ``repo`` would actually run under.
+
+    Args:
+        repo: Canonical repository path.
+        fallback: The operator's fallback launcher (:func:`fallback_launcher`), or None.
+
+    Returns:
+        The goose home's (:func:`goose_home`, else the checkout's) ``sandbox/confine-run.sh`` when it is a file,
+        else *fallback* when that is a file, else None (the handoff refuses to run goose).
+    """
+    own = (goose_home(repo) or repo) / launcher_lineage.PROJECT_PATH
+    if own.is_file():   # like the tooling's [[ -f ]]: a symlink to a file counts (and is then reported modified)
+        return own
+    return fallback if fallback is not None and fallback.is_file() else None
+
+
+def _launcher_fields(launcher: Path | None) -> dict[str, str]:
+    if launcher is None:
+        return {"launcher": "", "launcher_state": "missing", "launcher_detail": "no launcher in the home or fallback"}
+    found = launcher_lineage.safe_state(launcher)
+    return {"launcher": str(launcher), "launcher_state": found.state, "launcher_detail": found.detail}
+
+
+def status(cfg: dict[str, Any] | None, repos: list[Path], *, fallback: Path | None = None) -> list[RepoHandoff]:
     """Return the handoff state of each repository (H4: what the summary and ``handoff status`` show).
+
+    Each record also names the launcher the handoff would run goose under (:func:`handoff_launcher`) and its
+    :mod:`agentteams.launcher_lineage` state. That is informational and changes no gate.
 
     Args:
         cfg: Daily config.
         repos: Canonical repository paths.
+        fallback: The operator's fallback launcher; None derives it from ``agent.team_dir``
+            (:func:`fallback_launcher`).
 
     Returns:
         One record per repository, in order.
     """
+    fallback = fallback if fallback is not None else fallback_launcher(cfg)
     out = []
     for repo in repos:
         rec = RepoHandoff(repo=str(repo), required=required(cfg, repo), staged_branch=staged_branch(repo),
                           homes=[str(h) for h in homes(repo) if (h / HANDOFF_DIR).is_dir()],
-                          pending=pending_packets(repo))
+                          pending=pending_packets(repo), **_launcher_fields(handoff_launcher(repo, fallback)))
         if rec.staged_branch:
             found, rec.problems = latest_verdict(repo, rec.staged_branch)
             if found is not None:
@@ -376,6 +460,8 @@ def markdown(records: list[RepoHandoff]) -> str:
             bits.append(f"staged {r.staged_branch}")
         if r.pending:
             bits.append(f"{len(r.pending)} packet(s) awaiting a verdict")
+        if r.launcher_state and r.launcher_state != "current":
+            bits.append(f"launcher {r.launcher_state}")
         lines.append(f"- {Path(r.repo).name} ({mode}): " + "; ".join(bits))
     lines.append("- details: `python -m agentteams.vulnscan handoff status`")
     return "\n".join(lines) + "\n"
@@ -436,6 +522,9 @@ def dispatch(args: argparse.Namespace, load_cfg: Callable[[], dict[str, Any]]) -
             print(f"  verdict: {rec.verdict} (handoff {rec.verdict_handoff})")
         if rec.pending:
             print(f"  packets awaiting a verdict: {', '.join(rec.pending)}")
+        print(f"  launcher: {rec.launcher or '—'} ({rec.launcher_state}: {rec.launcher_detail})")
+        if rec.launcher_warning:
+            print(f"  warning: {rec.launcher_warning}")
         for p in rec.problems:
             print(f"  problem: {p}")
     return 0

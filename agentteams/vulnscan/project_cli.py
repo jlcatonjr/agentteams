@@ -4,7 +4,7 @@
 |---|---|
 | ``enroll [DIR ...] [--discover DIR] [--level L]`` | Operator only (a terminal, never CI): group the projects by owner, answer their level in bulk, write the registry |
 | ``roots`` | Each candidate scan root and its source (registry level, ``repo_roots``, excluded, opted out, unanswered, duplicate) |
-| ``status --project DIR [--json]`` | Read-only, no network: identity, enrolment, coverage state (:data:`coverage.STATES`, including ``nothing to scan`` for a project with no dependency manifest and ``unsupported ecosystem`` for one whose only manifests vulnscan cannot read), the manifests no scan reads, last scan and whether it was partial, open findings, recorded fix branches and PRs, grant coverage |
+| ``status --project DIR [--json]`` | Read-only, no network: identity, enrolment, coverage state (:data:`coverage.STATES`, including ``nothing to scan`` for a project with no dependency manifest and ``unsupported ecosystem`` for one whose only manifests vulnscan cannot read), the manifests no scan reads, last scan and whether it was partial, open findings, recorded fix branches and PRs, grant coverage, and the project's ``sandbox/confine-run.sh`` (:mod:`agentteams.launcher_lineage`: current, older, modified or missing) |
 
 ``enroll`` is the only writer of the registry (:mod:`.registry`). Levels live in each project's brief
 (:mod:`.project_policy`); ``enroll`` copies them, and writes one into a brief only through
@@ -25,6 +25,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from agentteams import launcher_lineage
 from agentteams.vulnscan import coverage, paths, project_policy, registry
 from agentteams.vulnscan.report import Report
 
@@ -264,6 +265,21 @@ def _recorded_fixes(checkouts: list[str]) -> tuple[list[dict[str, str]], str]:
     return out, note
 
 
+def launcher_status(path: Path) -> dict[str, Any]:
+    """Return what the launcher copy at ``path`` is (:func:`agentteams.launcher_lineage.launcher_state`).
+
+    Informational: the launcher's own fail-closed checks remain the gate.
+
+    Args:
+        path: A launcher copy (``<project>/sandbox/confine-run.sh``).
+
+    Returns:
+        ``{"path", "state", "detail", "newer", "newer_security"}``; ``state`` is ``unknown`` when the shipped
+        lineage cannot be read.
+    """
+    return {"path": str(path), **launcher_lineage.safe_state(path).to_dict()}
+
+
 def project_status(project: Path, cfg: dict[str, Any] | None) -> dict[str, Any]:
     """Collect one project's status without the network.
 
@@ -308,7 +324,8 @@ def project_status(project: Path, cfg: dict[str, Any] | None) -> dict[str, Any]:
     target = out["fix_checkout"] or out["project"]
     out["grant_covers_fix_checkout"] = any(grant.covers(g, "stage-fix", target) for g in grants)
     out["coverage_state"] = coverage.project_state(cfg, entry, project.expanduser().resolve(), grants)
-    out["unsupported_manifests"] = coverage.unsupported_manifests(out["fix_checkout"] or out["project"])[0]
+    out["unsupported_manifests"] = coverage.unsupported_manifests(target, cfg or {})[0]
+    out["launcher"] = launcher_status(project.expanduser().resolve() / launcher_lineage.PROJECT_PATH)
     out["problems"] = problems + [f"grant: {p}" for p in grant_problems]
     return out
 
@@ -342,6 +359,7 @@ def cmd_status(args: argparse.Namespace, cfg: dict[str, Any] | None) -> int:
              f"grant        {'covers the fix checkout' if st['grant_covers_fix_checkout'] else 'does not cover it'}"]
     if "scanned_daily" in st:
         lines.append(f"daily scan   {'yes' if st['scanned_daily'] else 'no'}")
+    lines.append(f"launcher     {st['launcher']['state']} ({st['launcher']['detail']})")
     lines += [f"not scanned  {m} — unsupported ecosystem" for m in st["unsupported_manifests"]]
     lines += [f"fix          {f['ts']} {f['op']} {f['branch']} {f['pr']}".rstrip() for f in st["recorded_fixes"]]
     lines += [f"problem      {p}" for p in st["problems"]]

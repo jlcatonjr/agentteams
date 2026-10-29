@@ -93,7 +93,7 @@ def test_pyproject_alone_or_empty_beside_requirements(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(("name", "eco"), [
-    ("Cargo.lock", "Rust/crates.io"), ("environment.yml", "conda"), ("environment.yaml", "conda"),
+    ("environment.yml", "conda"), ("environment.yaml", "conda"),
     ("lake-manifest.json", "Lean")])
 def test_unsupported_lockfiles_are_reported_unscannable(tmp_path: Path, name: str, eco: str) -> None:
     (tmp_path / name).write_text("content\n")
@@ -111,7 +111,7 @@ def test_scan_reports_unsupported_and_honours_the_brief_for_new_manifests(tmp_pa
                                          '"lib-b==3.0"]\n')
     (repo / "requirements-gpu.lock").write_text("lib-c==4.0\n")
     (repo / "crate").mkdir()
-    (repo / "crate" / "Cargo.lock").write_text("version = 3\n")
+    (repo / "crate" / "Cargo.lock").write_text("version = 3\n")   # no crates.io packages: unscannable
     (repo / "skipped").mkdir()
     (repo / "skipped" / "requirements.lock").write_text("lib-hidden==0.1\n")
     (repo / "node_modules" / "x").mkdir(parents=True)
@@ -124,7 +124,7 @@ def test_scan_reports_unsupported_and_honours_the_brief_for_new_manifests(tmp_pa
     rep = engine.scan_path(tmp_path)
     assert sorted(rec.sent) == [("lib-a", "1.0"), ("lib-b", "3.0"), ("lib-c", "4.0")]   # lib-a once
     assert rep.withheld == ["app: acme-core (PyPI)"] and rep.excluded == ["app: skipped/requirements.lock"]
-    assert rep.unscannable == [("app/crate/Cargo.lock", "unsupported ecosystem: Rust/crates.io")]
+    assert rep.unscannable == [("app/crate/Cargo.lock", "no crates.io packages")]
 
 
 def test_fix_never_plans_or_edits_scan_only_requirements(tmp_path: Path, rec: Recorder) -> None:

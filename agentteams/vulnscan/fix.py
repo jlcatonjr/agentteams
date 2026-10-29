@@ -14,6 +14,10 @@
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
 - **composer.lock**: guidance only (``composer update <pkg> --no-install --no-scripts --no-plugins``).
+- **Cargo.lock**: plan only (:func:`plan_cargo_lock`): each vulnerable crate with the smallest version the
+  advisories call fixed and the command ``cargo update -p <name>@<installed> --precise <version>`` for a person
+  to run. It is never applied, and ``stage-fix`` cannot stage it (``executor.validate_diff`` refuses a
+  ``Cargo.lock`` change).
 
 With ``apply``, every manifest a change touches is re-read against OSV before and after, and
 :attr:`FixResult.resolved` counts the advisory occurrences the change removed: npm can move a package within
@@ -39,12 +43,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.vulnscan import _http, osv, project_policy, subproc_confine
-from agentteams.vulnscan.manifests import REQ_NAME, REQ_PIN, discover, parse
+from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
 NPM_REGISTRY = "https://registry.npmjs.org/"    # fixed: a repository .npmrc cannot redirect the unattended fix
 NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
+#: Heads every Cargo.lock section of a fix plan (agents read it through ``get_fix_plans``).
+CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
+              "request `stage-fix` for these rows; report them for a person to run the command shown, then "
+              "`cargo build` and the tests. \"→\" is the smallest version the advisories call fixed.")
+#: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
+#: repository content: a name that could break the command or the table gets no command).
+_CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
+
+
+def _plain(text: str) -> str:
+    """Return ``text`` for a fix-plan table cell, or ``(unusual)`` when it is not plain crate-name / version text."""
+    return text if _CRATE_SPEC.fullmatch(text) else "(unusual)"
 
 
 @dataclass
@@ -56,7 +72,7 @@ class PinChange:
     old: str
     new: str = ""
     # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious; npm rows (plan_npm_lock)
-    # also workspace-held | npm-unavailable
+    # also workspace-held | npm-unavailable; Cargo.lock rows (plan_cargo_lock) plan-only | no-clean-release | malicious
     action: str = "fix"
     ids: list[str] = field(default_factory=list)
     note: str = ""
@@ -71,6 +87,7 @@ class FixResult:
     npm_notes: dict[str, str] = field(default_factory=dict)        # lockfile -> what stage-fix does there
     npm: list[tuple[str, str]] = field(default_factory=list)       # (dir, summary)
     composer: list[str] = field(default_factory=list)
+    cargo_plan: list[PinChange] = field(default_factory=list)      # Cargo.lock: plan-only, never applied or staged
     refused: list[tuple[str, str]] = field(default_factory=list)   # (path, reason)
     feed_errors: list[str] = field(default_factory=list)
     applied: bool = False
@@ -85,9 +102,9 @@ class FixResult:
 
         Returns:
             4 if a malicious pin was found, 3 if a feed failed, 1 if anything was held back or
-            refused (major jump, cooldown, no clean release, dirty file), else 0.
+            refused (major jump, cooldown, no clean release, dirty file, a plan-only Cargo.lock row), else 0.
         """
-        rows = self.changes + self.npm_plan
+        rows = self.changes + self.npm_plan + self.cargo_plan
         if any(c.action == "malicious" for c in rows):
             return 4
         if self.feed_errors:
@@ -128,6 +145,12 @@ class FixResult:
             out += [f"## npm: {self._code(d)}", "", "```", summary.strip()[-3000:], "```", ""]
         if self.composer:
             out += ["## composer", ""] + [f"- {c}" for c in self.composer] + [""]
+        for lock in dict.fromkeys(c.path for c in self.cargo_plan):
+            out += [f"## crates.io: {self._code(lock)} — plan-only (no staged edit)", "", CARGO_NOTE, "",
+                    "| Crate | Installed | → | Action | Command / notes |", "|---|---|---|---|---|"]
+            out += [f"| {_plain(c.name)} | {_plain(c.old)} | {c.new or '—'} | {c.action} | {c.note} |"
+                    for c in self.cargo_plan if c.path == lock]
+            out.append("")
         if self.refused:
             out += ["## Refused", ""] + [f"- `{p}`: {r}" for p, r in self.refused] + [""]
         if self.feed_errors:
@@ -449,6 +472,56 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
     return changes, note
 
 
+def plan_cargo_lock(path: Path, *, label: str = "", private: tuple[str, ...] = ()) -> list[PinChange]:
+    """List each vulnerable crate of one ``Cargo.lock`` with the command that fixes it (plan only, never applied).
+
+    A row's ``new`` is the smallest version the advisories call fixed (:func:`osv.minimal_fix`) and its note the
+    command ``cargo update -p <name>@<installed> --precise <new>`` (the ``@<installed>`` picks one copy when the
+    lockfile holds several versions of the crate). Cargo, not this plan, checks that the version fits the ranges of
+    the crates that depend on it. Rows: ``plan-only``; ``malicious`` (never a bump); ``no-clean-release``
+    when no advisory names a fix.
+
+    Args:
+        path: Cargo.lock.
+        label: Path shown in the plan (defaults to ``path``).
+        private: The project's ``private_packages`` patterns: those crates are never looked up.
+
+    Returns:
+        One :class:`PinChange` per vulnerable crate version (none when the lockfile is unscannable).
+
+    Raises:
+        FeedError: OSV could not be read.
+    """
+    label = label or str(path)
+    m = parse(path)
+    if m.unscannable:
+        return []
+    crates = sorted({(d.name, d.version) for d in m.deps
+                     if not project_policy.is_private(d.name, private, "crates.io")})
+    hits = osv.vulnerable_ids(("crates.io", n, v) for n, v in crates)
+    changes: list[PinChange] = []
+    for name, ver in crates:
+        ids = hits.get(("crates.io", name, ver))
+        if not ids:
+            continue
+        c = PinChange(label, name, ver, action="plan-only", ids=ids)
+        changes.append(c)
+        if any(osv.is_malicious(i) for i in ids):
+            c.action, c.note = "malicious", "MALICIOUS version installed — isolate, rebuild, rotate credentials; do not just bump"
+            continue
+        fixed, unfixed = osv.minimal_fix(ids, "crates.io", name, ver)
+        c.new = fixed or ""
+        if not c.new:
+            c.action, c.note = "no-clean-release", f"{len(ids)} advisories; no advisory names a fixed version"
+            continue
+        if not (_CRATE_SPEC.fullmatch(name) and _CRATE_SPEC.fullmatch(ver)):
+            c.note = f"{len(ids)} advisories; the crate name or version has an unusual form: fix by hand"
+            continue
+        c.note = f"`cargo update -p {name}@{ver} --precise {c.new}` ({len(ids)} advisories"
+        c.note += f", {unfixed} without a fix)" if unfixed else ")"
+    return changes
+
+
 def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> str:
     """Run npm's lockfile-only, script-free audit fix for ``directory``.
 
@@ -632,5 +705,10 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         elif path.name == "composer.lock":
             res.composer.append(f"`{rel}`: composer update <pkg> --no-install --no-scripts --no-plugins "
                                 "(then `composer audit`)")
+        elif path.name in CRATE_LOCKS:   # plan only, with or without apply: nothing here edits a Cargo.lock
+            try:
+                res.cargo_plan += plan_cargo_lock(path, label=rel, private=private)
+            except _http.FeedError as exc:
+                res.feed_errors.append(f"{rel}: {exc}")
     return res
 
