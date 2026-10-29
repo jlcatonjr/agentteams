@@ -1,0 +1,8 @@
+{
+  "patch_id": "c533f3c3f8ca10f977778fac4eee53cf4ca56885",
+  "commit": "c7768af053f358ae2e3489d4745e26e9bd977e65",
+  "subject": "feat: API Impact Review \u2014 pre-commit API-impact detection, review ledger, gate 6b",
+  "impact": "1 modules added, 13 symbols added, 10 cli added, 1 structural added",
+  "note": "API Impact Review (dogfood): api-reference/api-impact.md documents all 9 public functions plus Impact/CommitStatus; parity --check, man-page diff and stale-check clean for the touched pages; checklist empty (additions only); related infrastructure (orchestrator gate 6b + sub-protocol, reference, git_hooks docs and figure, module-doc-validator, user guide) audited by @conflict-auditor and @adversarial at the round join and revised (base resolution, committed-ledger check, record ordering, opt-in man regeneration, narrowed except).",
+  "recorded_at": "2026-10-29T22:54:53Z"
+}
