@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (the reference is checked against the code)
+
+- **`tests/test_vulnscan_doc_conformity.py`** fails when `docs_src/api-reference/vulnscan.md` drifts from the
+  code. It checks every configuration key and its default (`DEFAULT_CONFIG`, `DEFAULT_AGENT`, the upstream,
+  confinement and debrief defaults), every notification word for word (`notify.MESSAGES`), every subcommand in
+  the command reference and the exit codes, every long option, and every module (its own section, or the one
+  `_DOCUMENTED_IN` names). The 2026-10-28 audit found about 25 such drifts that no test caught. The reference now
+  lists `handoff status`'s exit codes and which module defines which commands. The PR template asks for the
+  reference to be updated with vulnscan changes.
+
 ### vulnscan (a remediation PR closed unmerged is not re-opened)
 
 - **`open-pr` opens nothing for a change a person closed without merging.** After its open-PR claims and before

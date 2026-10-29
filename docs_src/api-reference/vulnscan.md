@@ -359,6 +359,11 @@ All commands are `python -m agentteams.vulnscan <command>`. Every command except
 and `schedule remove` first warns (on stderr) when the last daily run is stale or missing, partially
 scanned, or found compromise indicators (`daily.stale_warning`).
 
+`__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
+them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
+`agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`)
+and `handoff` (`handoff status`).
+
 | Command | Purpose |
 |---|---|
 | `scan PATH [--include-worktrees]` | Scan manifests under a repo or a folder of repos |
@@ -439,6 +444,7 @@ failed `systemctl disable` only when the units were installed.
 | `roots` | listed | — | an unreadable registry, or an unusable config | — | — |
 | `status` | printed | — | no such directory, or an unusable config | — | — |
 | `tools-image build`, `tools-selftest` | built / passed | failed | a setup error (an unusable config) | — | — |
+| `handoff status` | printed | — | an unusable config | — | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong

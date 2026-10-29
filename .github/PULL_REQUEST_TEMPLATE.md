@@ -14,6 +14,8 @@ https://jlcatonjr.github.io/agentteams/contribute/what-your-pr-needs/
 - New behavior has a test; no new runtime dependency.
 - CHANGELOG entry under [Unreleased] if users are affected.
 - Public API/CLI changed? Update docs_src/api-reference/ or docs_src/cli-reference.md and regenerate agentteams.1.
+- vulnscan changed (a config key, notification, command, option or module)? Update
+  docs_src/api-reference/vulnscan.md; tests/test_vulnscan_doc_conformity.py checks it.
 - Docs changed? `mkdocs build --strict` and `python scripts/check_docs_site.py pages _site` pass.
 -->
 
