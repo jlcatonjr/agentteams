@@ -123,7 +123,8 @@ EOF
     [[ "$t" == "$REPOS_ROOT"/* ]] || continue
     top="$(git -C "$t" rev-parse --show-toplevel 2>/dev/null)" || continue
     url="$(git -C "$top" remote get-url origin 2>/dev/null || true)"
-    if [[ "$url" =~ github\.com[:/]$REPO_ORG/ ]]; then echo "$top"; else echo "  skipped (not $REPO_ORG: ${url:-no origin}): $top" >&2; fi
+    org_re="${REPO_ORG//./\\.}"   # dots in the org match literally
+    if [[ "$url" =~ github\.com[:/]$org_re/ ]]; then echo "$top"; else echo "  skipped (not $REPO_ORG: ${url:-no origin}): $top" >&2; fi
   done | sort -u
 }
 

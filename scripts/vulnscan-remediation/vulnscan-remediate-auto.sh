@@ -56,6 +56,12 @@ install_job() {
       > "$REMEDIATION_CONF"
     warn "wrote $REMEDIATION_CONF commented out: set VULNSCAN_GITHUB_ORG there, or no repo is handed off"
   fi
+  # Refuse to schedule a job that would fail every attempt: no org means no repo is handed off, and the runner
+  # needs the installed package's remediation-report (deploy the package first).
+  [[ -n "$REPO_ORG" ]] || { bad "VULNSCAN_GITHUB_ORG is not set in $REMEDIATION_CONF: not installing"; exit 2; }
+  [[ -d "$REPOS_ROOT" ]] || { bad "VULNSCAN_REPOS_ROOT $REPOS_ROOT does not exist: not installing"; exit 2; }
+  "${VS[@]}" remediation-report --help >/dev/null 2>&1 ||
+    { bad "the installed agentteams has no 'remediation-report' (deploy the package first): not installing"; exit 2; }
   path="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$(dirname "$(command -v node 2>/dev/null || echo /usr/bin/node)"):/usr/bin:/bin:/usr/sbin:/sbin"
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -165,6 +171,7 @@ say "vulnscan remediation $(date '+%F %T') — run $(basename "$latest")"
 problems=()
 
 say "Preflight"
+[[ -n "$REPO_ORG" ]] || problems+=("VULNSCAN_GITHUB_ORG not set in $REMEDIATION_CONF: no repo can be handed off")
 command -v goose >/dev/null && ok "goose $(goose --version 2>/dev/null | head -1)" || problems+=("goose not on PATH")
 host="$(awk '/^OPENROUTER_HOST:/{print $2; exit}' "$HOME/.config/goose/config.yaml" 2>/dev/null || true)"
 if [[ -n "$host" ]] && curl -s -o /dev/null -m 5 "$host"; then ok "route proxy answering at $host"

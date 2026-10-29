@@ -196,6 +196,8 @@ def outcome(ledger: str | Path, since: str) -> Outcome:
     Raises:
         ValueError: ``since`` is not an ISO timestamp.
     """
+    if not isinstance(since, str):
+        raise ValueError(f"since must be an ISO timestamp string, not {type(since).__name__}")
     parse_ts(since)   # a bad SINCE is a usage error, not an unreadable ledger
     try:
         text = Path(ledger).read_text(encoding="utf-8")

@@ -39,7 +39,10 @@ infra_partial_today() {
   (( n < MAX_INFRA_RETRIES )) || { log "infra retries for $(basename "$run") used up ($n/$MAX_INFRA_RETRIES)"; return 1; }
   "$PY" -P -c 'import json, sys
 s = json.load(open(sys.argv[1]))
-sys.exit(0 if any("tools container unavailable" in e for e in s.get("feed_errors", [])) else 1)' "$run/summary.json"
+import re
+# anchored to the wording the daily run itself writes: "<host>: not scanned: tools container unavailable: ..."
+pat = re.compile(r"^[\w.-]+: not scanned: tools container unavailable:")
+sys.exit(0 if any(pat.match(e) for e in s.get("feed_errors", []) if isinstance(e, str)) else 1)' "$run/summary.json"
 }
 
 rescan() {   # keep the partial summary, run the daily scan again, count the retry only if a scan actually ran

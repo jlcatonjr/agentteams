@@ -137,7 +137,7 @@
     "agentteams/vulnscan/project_policy.py": "302661da886e11f9a46e14354a6ea26ba1e382bebf24501cc052974a64267b42",
     "agentteams/vulnscan/publish.py": "980b9c0ade6f444b0bbec8845aaad9421f9c54d05707573bca90ac8c689c3fdb",
     "agentteams/vulnscan/registry.py": "414520680be05195007e5077da28cd38224366f17f4767dec0f128c5c1612d0b",
-    "agentteams/vulnscan/remediation_report.py": "ecb5fc167553d2815704db78b15c200af47a183298a0633c4a79602521ee529c",
+    "agentteams/vulnscan/remediation_report.py": "35af10fceb17c894c8f1f4f6317c858185b20cb4dca1c13b4ddf56bb5f8727c9",
     "agentteams/vulnscan/remediation_status.py": "d272844b0ca459431daccb711eb13f84ba4be811d3d4f923db7e00ea616e16cd",
     "agentteams/vulnscan/repo_alias.py": "78892855e38070e47549982023a223c50e09137837f3832d1644c818b4e2f46c",
     "agentteams/vulnscan/report.py": "fac940a1e123ad3e1540125ff521021088254f2834ddcb9df7ac4997b774b6bf",

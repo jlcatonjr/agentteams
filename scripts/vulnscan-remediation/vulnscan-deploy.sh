@@ -76,9 +76,11 @@ PY="$HOME/.local/pipx/venvs/agentteams/bin/python"
 VS=("$PY" -P -m agentteams.vulnscan)
 "$PY" -P -c 'import importlib.metadata as m; print("agentteams", m.version("agentteams"))'
 agent_on="$("$PY" -P -c 'from agentteams.vulnscan import daily, agent_run as ar
+import sys
 try: a = ar.agent_cfg(daily.load_config())
-except Exception: a = {}
-print(1 if a.get("enabled") else 0, a.get("framework") or "goose")' 2>/dev/null || echo "0 goose")"
+except (OSError, ValueError, KeyError) as exc:   # say so: a skipped agent image must not look like "agent off"
+    print(f"WARN vulnscan config unreadable ({type(exc).__name__}: {exc}); agent image not checked", file=sys.stderr); a = {}
+print(1 if a.get("enabled") else 0, a.get("framework") or "goose")' || echo "0 goose")"
 read -r agent_enabled framework <<<"$agent_on"
 
 if [[ "$images" == 1 ]]; then
