@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### vulnscan (baseAgent integration: Rust lockfiles, honest coverage, launcher versions, a sturdier server kit)
+### vulnscan (Rust lockfiles, honest coverage, launcher versions, a sturdier server kit)
 
 - **Rust `Cargo.lock` files are scanned (crates.io).** Crates from the crates.io index (`registry+` and `sparse+`
   sources) are checked against OSV; path, git and other-registry crates are skipped, and a lockfile with none is
