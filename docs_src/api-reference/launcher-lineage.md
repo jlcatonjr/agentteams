@@ -26,7 +26,7 @@ print(st.state, st.detail)        # current released version 761d9440 (2026-10-1
 `safe_state(path)` is the same but never raises: when the shipped lineage cannot be read it returns state
 `UNKNOWN` (`"unknown"`) with the reason, which is what the status outputs use. `PROJECT_PATH` is where a team carries
 its launcher (`sandbox/confine-run.sh`, the emitter's landing path).
-`lineage` defaults to `load_lineage()`. The file is read once through `atomicio.read_regular_nofollow`: bounded, without following a symlink, and a FIFO
+`lineage` defaults to `load_lineage()`. The launcher file is read once through `atomicio.read_regular_nofollow`: bounded, without following a symlink, and a FIFO
 cannot hang it.
 
 ## `load_lineage(path=LINEAGE_PATH) -> list[dict]`

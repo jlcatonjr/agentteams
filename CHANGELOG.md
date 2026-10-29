@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names the launcher the handoff's goose session would run under and warns unless it is current. Informational only.
 - **The server kit runs from a verified copy.** `run_kit` used to mount the kit straight from the installed package.
   On 2026-10-28 a catch-up daily reported all three servers unscanned because Docker could not find that directory
-  in the pipx venv (140 findings missing, the run partial). The kit is now copied once per process into a 0700
+  in the pipx venv (140 findings missing, the run partial). The kit is now copied, when first needed, into a 0700
   directory under the state dir: regular files only (symlinks and subdirectories refused), every required script
   present. A long-running executor re-stages when the packaged kit changes. Each run re-hashes the copy and refuses
   one that changed after staging. A missing kit fails closed with a reason instead of `docker exit 125`. Not covered:
