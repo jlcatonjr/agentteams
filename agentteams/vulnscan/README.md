@@ -62,6 +62,9 @@ tools container also need Docker; `open-pr` needs the GitHub CLI (`gh`); server 
 
 - `fix PATH` plans the smallest upgrade that clears each finding, preferring the same major version
   (`allow_major` widens it). `fix PATH --apply` makes the edit in a working tree you control.
+- Every fix remediates a vulnerability the scan detected, so Rule S-10's remediation carve-out applies:
+  the 14-day release cooldown and the latest-stable rule do not hold it. A requirements fix still moves
+  only to a final release that OSV reports clean.
 - Edits are narrow by construction. A requirements file may only have `==` versions raised in place to a
   final release. An npm lockfile may not change its root package, and every entry must still resolve to
   the public npm registry over HTTPS. Hash-pinned requirements files are never edited.

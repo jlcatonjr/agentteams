@@ -303,7 +303,7 @@ def test_a_real_target_tagged_halt_row_stops_every_grant_use(env: dict, monkeypa
 
 
 @pytest.mark.skipif(not GIT, reason="git not available")
-def test_stage_fix_ignores_the_deprecated_cooldown(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stage_fix_ignores_the_cooldown_setting(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _repo_with_remote(env["tmp"])
     _install(env, ops=["stage-fix"], hosts=[])
     seen = {}
@@ -314,7 +314,7 @@ def test_stage_fix_ignores_the_deprecated_cooldown(env: dict, monkeypatch: pytes
 
     monkeypatch.setattr(fix, "fix_path", spy)
     executor.act("stage-fix", str(repo), {**env["cfg"], "cooldown_days": 30})
-    assert seen["cooldown_days"] == executor.RELEASE_COOLDOWN_DAYS == 0
+    assert seen["cooldown_days"] == executor.REMEDIATION_COOLDOWN_DAYS == 0   # S-10's remediation carve-out
 
 
 def test_ledger_tail_truncation_and_deletion_are_detected(env: dict) -> None:

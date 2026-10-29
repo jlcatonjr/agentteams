@@ -55,6 +55,24 @@ def test_a_plan_sorts_each_finding_to_the_kit_level_that_fixes_it() -> None:
     assert "STOP" not in md and "requests | 2.31.0" not in md   # another host's finding is not in this plan
 
 
+def test_a_node_runtime_missing_a_security_release_gets_the_s10_carve_out() -> None:
+    """Rule S-10's remediation carve-out: the plan's commands let L3 take a fix inside the 14-day cooldown."""
+    vuln = Finding(kind="runtime", target="vk-api", name="node", version="24.10.0", severity=3,
+                   detail="security-release-missing: missing security release(s) 24.11.1 [tarball]")
+    md = server_fixplan.markdown("vk-api", [vuln], [], kit="KIT")
+    assert "`KIT/run-host.sh vk-api --apply --allow-fresh`" in md and "`KIT/run-host.sh vk-api --allow-fresh`" in md
+    assert "remediation carve-out" in md
+    for detail, sev in (("eol: node 18 is end-of-life — no more security fixes [tarball]", 3),
+                        ("behind-patch: behind latest 24.x patch [tarball]", 2)):
+        other = Finding(kind="runtime", target="vk-api", name="node", version="24.10.0", severity=sev, detail=detail)
+        md = server_fixplan.markdown("vk-api", [other], [], kit="KIT")
+        assert "--allow-fresh" not in md and "`KIT/run-host.sh vk-api --apply`" in md
+    assumed = Finding(kind="runtime", target="vk-api", name="node", version="24.10.0", severity=3,
+                      detail="behind-patch: behind latest 24.x patch; security-release data unavailable, so assume "
+                             "the newer patch is a security release [tarball]")
+    assert "--apply --allow-fresh" in server_fixplan.markdown("vk-api", [assumed], [], kit="KIT")
+
+
 def test_compromise_indicators_come_first() -> None:
     md = server_fixplan.markdown("vk-api", [Finding(kind="ioc", target="vk-api", name="litellm", version="1.107.0",
                                                     detail="known-compromised release")], [])
