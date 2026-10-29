@@ -74,6 +74,10 @@ python -m agentteams.parallel_plan tmp/by-week/YYYY-Www/<plan-slug>.steps.csv
 
 Independence is conservative and fail-safe: steps share a wave only when their read/write footprints are disjoint and neither touches shared mutable state (git, databases, locks, the network, migrations). Destructive, cross-repository, and `--bridge-refresh` steps always run alone. Actual concurrency happens only where the host runtime supports concurrent subagents (e.g. Claude's `agent` tool); elsewhere the independent set is surfaced as an "any-order" recommendation. The per-step `@conflict-auditor` cadence is preserved (run per member at wave join). Full contract: `references/parallelization.reference.md`.
 
+### Complex Requests: Item Plans and a Metaplan
+
+When a request bundles two or more separable items (several features, defects, or audit findings), the orchestrator runs Workflow 0C. It writes one development or remediation plan per item, then a metaplan, `tmp/by-week/YYYY-Www/<meta-slug>.plan.md` + `.steps.csv`, with one row per item plan, and schedules them with `agentteams.parallel_plan`. `@adversarial` and `@conflict-auditor` audit the metaplan and every item plan, and the plans are revised on their findings before any implementation starts. Implementation then runs in rounds: independent items advance together, and a destructive, cross-repository, shared-state or operator step runs alone.
+
 ### Reviewing Plan Status
 
 You can review plans at any time by asking:

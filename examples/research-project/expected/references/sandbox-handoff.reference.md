@@ -5,7 +5,7 @@ SECTION MANIFEST
 | sandbox_handoff | FENCED      |
 -->
 
-<!-- AGENTTEAMS:BEGIN sandbox_handoff v=1 -->
+<!-- AGENTTEAMS:BEGIN sandbox_handoff v=2 -->
 # Sandbox Operator Handoff Reference — ResearchPaperProject
 
 How an agent running inside an OS sandbox finishes work the sandbox refuses: it writes a reviewable
@@ -16,7 +16,11 @@ check, and Workflow 11's closeout gates. Tool: `python -m agentteams.sandbox_han
 
 ## 1. When it applies
 
-The trigger is a **refused operation**, not a guess that a sandbox is present. Typical refusals:
+The trigger is a **refused operation**, not a guess that a sandbox is present. A handoff script holds
+**only** the operations the sandbox refused (and the `verify` commands that check them). Everything the
+agent can do inside the sandbox — edits, tests, local commits, builds that need no network — the agent
+does itself first; it never moves work into a script to save itself steps or to get it done unreviewed.
+Typical refusals:
 
 | Refusal | Typical work behind it |
 |---|---|
@@ -61,8 +65,10 @@ reviewable shape:
   remote it changes (`touches`), whether it is destructive and under which recorded `@security`
   clearance, and the plan slug;
 - `set -euo pipefail`, an absolute `cd`, a preflight for each required tool, every command echoed
-  before it runs, a `y/N` confirmation (default on; forced on when destructive), and post-run `verify`
-  commands;
+  before it runs, and post-run `verify` commands. **Running the script is the operator's approval**, so a
+  non-destructive script asks nothing further unless the spec sets `confirm`. A destructive script asks one `y/N` before its first
+  step, on top of the `@security` clearance recorded before it was written. Never add prompts per step
+  or interactive commands that wait on the operator (use `--yes`/`--fill`/non-interactive flags);
 - a refusal to run when a sandbox marker is set (so an agent cannot run its own handoff and fail half-way
   inside the sandbox; `AGENTTEAMS_HANDOFF_ALLOW_SANDBOX=1` overrides);
 - a log, `tmp/by-week/YYYY-Www/<slug>.handoff.log`, holding the output, the script's own SHA-256 and a
@@ -98,8 +104,9 @@ Steps that depend on an operator step's result wait for it; independent in-sandb
 {"slug": "push-feat-x", "plan": "feat-x", "purpose": "Push feat/x and open its PR", "blocked_by": "sandbox network allowlist excludes github.com", "requires": ["git", "gh"], "touches": ["origin/feat/x (remote branch)", "GitHub pull request"], "steps": [{"title": "Push branch", "run": "git push -u origin feat/x"}, {"title": "Open PR", "run": "gh pr create --base main --head feat/x --fill"}], "verify": [{"title": "PR URL", "run": "gh pr view feat/x --json url -q .url"}]}
 ```
 
-Optional keys: `destructive` (JSON boolean; `true` requires `clearance`), `clearance`, `confirm` (default
-`true`), `cwd` (inside the root). Any other key, or a boolean given as a string, is refused.
+Optional keys: `destructive` (JSON boolean; `true` requires `clearance` and forces the one prompt),
+`clearance`, `confirm` (default `false`; set `true` only when the operator asked to be prompted), `cwd`
+(inside the root). Any other key, or a boolean given as a string, is refused.
 
 ```
 python -m agentteams.sandbox_handoff write spec.json --root .          # prints script, log, sha256, command
@@ -139,8 +146,10 @@ guard as `if <cmd>; then echo '<why>' >&2; exit 1; fi` instead.
   `references/security-decisions.log.csv` row, or, for a branch deletion by `agentteams --branch-post-merge`,
   the operator's `branch-delete` grant (`references/branch-lifecycle.reference.md`). A `@security` HALT
   stops the handoff too (C-2).
-- **The operator's review is the gate.** The agent never presents a handoff as approved, never asks the
-  operator to run it unread, and never splits a destructive action across scripts to hide it.
+- **The operator's review is the gate.** Reading the script and running the command is the approval;
+  that is why non-destructive scripts carry no prompt. The agent never presents a handoff as approved,
+  never asks the operator to run it unread, never widens a script past what was refused, and never splits
+  a destructive action across scripts to hide it.
 - **`--bridge-refresh`** handoffs carry the `references/bridge-refresh-safety.md` Pre-Flight like any
   other run.
 

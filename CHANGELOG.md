@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (Workflow 0C: complex-task metaplans) · changed (sandbox handoffs: running the script is the approval)
+
+- **Workflow 0C (Complex-Task Metaplan)** in the orchestrator template (`available_workflows` fence v8, routing
+  row in `routing_table_rows` v4). A request with two or more separable items gets one development or
+  remediation plan per item, then a metaplan (`<meta-slug>.metaplan.md` + `.metaplan.steps.csv`, one row per
+  item plan) that schedules them with `agentteams.parallel_plan`. The metaplan **and every plan it targets** are
+  audited by `@adversarial` and `@conflict-auditor` and revised before anything is implemented; then the
+  metaplan is implemented in rounds that keep each item plan's per-step audit. Workflow 0 step 5 hands complex
+  requests to it, and the parallelization reference gains a *Metaplans* section.
+- **Sandbox handoff scripts no longer prompt unless they are destructive.** `HandoffSpec.confirm` and the spec's
+  `confirm` key now default to `false`: reading the script and running its command is the operator's approval.
+  A destructive script still asks one `y/N`, on top of the `@security` clearance recorded before it was written.
+  Because an unprompted script must not be mislabelled, destructiveness is now also **derived from the
+  commands** (`sandbox_handoff.destructive_commands()`): a spec whose steps delete, force-push, reset, rewrite
+  history, or run a destructive `gh`/`agentteams` mode is refused unless it is marked `destructive` with a
+  clearance. Every script now prints its purpose before the first step (it used to print only inside the prompt). The
+  sandbox-handoff reference (fence v2) and the orchestrator's handoff step also say a script holds **only** the
+  operations the sandbox refused; everything the agent can do itself stays with the agent.
+
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
 - **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the

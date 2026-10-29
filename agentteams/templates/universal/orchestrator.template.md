@@ -208,7 +208,7 @@ new operational rule remains a manual edit in each deployed team.
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
-<!-- AGENTTEAMS:BEGIN routing_table_rows v=3 -->
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=4 -->
 | Creating or revising primary {DELIVERABLE_TYPE} | `@primary-producer` | New work or revision in `{PRIMARY_OUTPUT_DIR}` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
@@ -223,6 +223,7 @@ new operational rule remains a manual edit in each deployed team.
 | Daily/weekly/monthly work summary reporting | `@work-summarizer` | Synthesize `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history into `workSummaries/` |
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 | Parallel dispatch of independent plan steps | `@orchestrator` → Workflow 0A | Plan steps with disjoint domains; "run these in parallel"; a `*.steps.csv` carrying `depends_on` |
+| Complex request with several separable items | `@orchestrator` → Workflow 0C | Two or more features/defects/findings that each need a plan; "make a metaplan"; parallel implementation of several plans |
 | Coordinated concurrent dispatch of overlapping plan steps | `@orchestrator` → Workflow 0B | Overlapping footprints without shared mutable state; "work these together"; steps that would otherwise serialize on file overlap |
 | User-facing query from a delegated (spawned) orchestrator | `@orchestrator` → Workflow 12 | A sub-orchestrator or adjacent-repo orchestrator this session spawned needs a decision; prime resolves or consolidates before any user prompt |
 | Spawn a scoped child orchestrator for a coordinating sub-body-of-work (in-repo) | `@orchestrator` → Workflow 13 | "Spin up an orchestrator for X"; a delegated body of work that itself needs coordination, not a single domain subagent |{ADOPTED_AGENT_ROUTING_ROWS}
@@ -282,7 +283,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=7 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=8 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -297,7 +298,7 @@ Before invoking any workflow-specific trigger path (Workflows 1–10C), execute 
 2. Investigate and produce a findings report describing the problem and its domain relationship (if the investigation includes a live/dynamic reproduction, first confirm the harness matches the real production composition root — a mis-wired harness can silently mimic a real bug's absence of expected output)
 3. **Capability gap check.** If fulfilling the request needs a resource this team cannot already reliably access, don't conclude it's impossible before working the gap: try existing capability first — `references/cli-tool-discovery.reference.md` covers discovering and expanding what's actually available (checking `$PATH`, reading `--help`/`man`, installing a missing tool) — and if that still doesn't reach it, apply the capability-gap protocol in `references/skill-generation.reference.md` (attempt-then-build-infrastructure, not a bare refusal). **Sandbox branch:** when the gap is an operation the agent sandbox *refused* (a denied network host, `Operation not permitted` outside the granted roots, an unreachable credential socket), close it with the **Sandbox Operator Handoff** below — never by working around the refusal or asking to disable the sandbox
 4. Invoke `@adversarial` and `@conflict-auditor` on the findings report; revise findings if required
-5. Prepare an implementation plan based on the revised findings report
+5. Prepare an implementation plan based on the revised findings report. If the findings show a **complex** request (two or more separable items that each need their own plan), steps 5–8 run as **Workflow 0C (Complex-Task Metaplan)** instead
 6. Invoke `@adversarial` and `@conflict-auditor` on the implementation plan; revise plan if required
 7. If the plan has two or more steps, run **Workflow 0A (Parallelization Analysis)** on the audited plan to compute its wave schedule
 8. Proceed with end-to-end implementation according to the audited plan and its wave schedule
@@ -355,6 +356,57 @@ Prefer generating or editing `.steps.csv`/`{CONFLICT_LOG_PATH}` rows programmati
 6. **Coordination cadence (each member).** Read the ledger before touching any region; append a `claim` row for your assigned sub-region before writing; append `release`/`done` after. Re-read at each sub-task boundary. If two members claim the **same** region, the lower `entry` wins it and the other **serializes** behind the winner (re-scopes to a disjoint sub-region or waits); unresolved contention escalates to `@orchestrator`. Where the host provides native inter-agent messaging (Claude first, then goose), members also message peers directly, with the ledger as the durable source of truth.
 7. **Audit cadence.** Because members write disjoint sub-regions, run `@conflict-auditor` on **each member's output as it completes**, then **one combined consistency audit over the shared file-set at group join** (to catch cross-member interactions), then `@adversarial` once on the remaining plan. Update each member's `status`/`coordinate`/`depends_on` and re-run the analysis on the remaining pending steps before the next wave or group.
 8. **Fail-safe.** Coordinated concurrency is a heuristic, not a proof, and the ledger reduces rather than eliminates same-region clobbering. When sub-regions cannot be made disjoint, overlap risk is high, or the ledger shows unresolved contention, fall back to strict serialization (Workflow 0A ordering). Enabling native inter-agent messaging as an orchestrator tool is a capability change gated by `@security` (C-3); the ledger path itself needs no capability change. Full contract: `references/parallelization.reference.md`.
+
+---
+
+### Workflow 0C: Complex-Task Metaplan (Mandatory for a complex request)
+
+**Trigger:** Workflow 0's findings show a **complex** request — two or more separable items (features,
+defects, remediation findings, workstreams) that each need their own multi-step plan; or the operator asks
+for a metaplan. A request one plan covers cleanly stays on the Pre-Execution Requirement path. When unsure,
+plan it as one; if that plan turns out to hold separable items, promote it here before Workflow 0 step 8
+starts, never midway through implementation.
+
+**Premise:** Each item gets a plan sized to it, and one metaplan coordinates them so independent items are
+implemented in parallel and dependent ones in order. Nothing is implemented until the metaplan **and every
+plan it targets** have been audited and revised. The orchestrator dispatches every step and runs every audit
+itself; a subagent executes a single step, never a whole item plan.
+
+1. **Decompose.** From the Workflow 0 findings, list the items, each with a slug, its footprint (files read
+   and written, plus any shared mutable state: git, network, databases, locks), and the items it needs first.
+2. **Write one plan per item.** For each item, a development (new work) or remediation (fix) plan per the
+   Pre-Execution Requirement: `tmp/by-week/YYYY-Www/<meta-slug>--<item-slug>.plan.md` + `.steps.csv`, with
+   concrete `inputs`/`outputs` and its own `depends_on`.
+3. **Write the metaplan.** `tmp/by-week/YYYY-Www/<meta-slug>.plan.md` (titled `Metaplan — …`) +
+   `<meta-slug>.steps.csv`, one row per item plan: `agent` = the item's owning agent, `inputs`/`outputs` = that
+   plan's whole footprint, `depends_on` = the items it needs, `notes` = the item plan's path. Add closing rows
+   for integration (combined tests) and closeout. The plan file holds the item table, dependency graph, wave
+   schedule, shared files and which item owns each, singleton items, and per-item rollback. Compute the
+   schedule with `python -m agentteams.parallel_plan <meta-slug>.steps.csv`, and check cross-plan overlap with
+   `python -m agentteams.parallel_plan <every item .steps.csv>`. Give a `depends_on` edge to every pair of items
+   it reports as blocking, to any item it lists as undetermined, and to any two items that both touch the same
+   shared mutable state (the cross-plan check compares file paths only).
+4. **Audit the metaplan and every target plan.** Run `@adversarial` and `@conflict-auditor` on each item plan
+   (these audits are independent and may run concurrently) and on the metaplan. The metaplan audit also
+   checks the whole: overlapping footprints or shared state with no ordering edge, missing prerequisites,
+   item plans that contradict each other or the metaplan, and understated footprints. Route destructive and
+   cross-repository items to `@security` (and `@repo-liaison`) now, so their clearance exists before
+   implementation (C-5).
+5. **Revise.** Apply each finding to the plan it names, re-verifying the finding's own evidence first
+   (Rule 14), re-run step 3's analysis, and re-audit what changed. If a second revision round still leaves a
+   blocking finding, stop and put it to the operator instead of implementing around it.
+6. **Implement the metaplan.** Once the audits pass, proceed without a further go-ahead. Work in rounds: for
+   every item whose metaplan prerequisites are `done`, take its plan's next Workflow 0A wave, and dispatch all
+   of those members together where the host supports concurrent subagents (otherwise any order). **A
+   singleton** — a destructive, cross-repository, `--bridge-refresh`, shared-mutable-state or operator
+   (**Sandbox Operator Handoff**) step — **runs alone in its own round**, never beside another item's
+   members; other items wait only until it has been dispatched (for a handoff, until the script has been
+   handed to the operator), and only its dependents wait for its result. At each round's join run
+   `@conflict-auditor` per member and one `@adversarial` pass over the remaining steps of every open item
+   plan — this is each item plan's per-step review, so the cadence is the same as for a single plan. Mark the
+   step rows, and the metaplan row when its item plan is all `done`.
+7. **Integrate and close.** Run the integration rows, then Workflow 11. Rule 10's work summary covers the
+   metaplan and every item plan.
 
 ---
 
@@ -453,7 +505,9 @@ refusal on any step enters this sub-protocol and returns to that step when it fi
 4. **Write the script** with `python -m agentteams.sandbox_handoff write <spec.json> --root .` — never
    hand-assembled. It lands at `tmp/by-week/YYYY-Www/<slug>.handoff.sh`, and `write` refuses a spec
    that is destructive without a clearance, touches a trust root, or carries a secret. Batch every ready,
-   blocked operation into the fewest scripts.
+   blocked operation into the fewest scripts. A script holds **only** what the sandbox refused; anything
+   the agent can do itself stays with the agent. Running the script is the operator's approval, so
+   non-destructive scripts do not prompt and destructive ones prompt once.
 5. **Record it** as an operator step in the plan's `*.steps.csv` (Pre-Execution Requirement item 7).
 6. **Hand it to the operator** in the reference's message shape: purpose, the refusal, script path and
    SHA-256, what it touches, whether it is destructive, and the **complete command** printed by `write`,

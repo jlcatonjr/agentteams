@@ -582,8 +582,9 @@ def independent_plans(csv_paths: list[Path | str]) -> dict[str, list[list[str]]]
     """Group plans that do not block each other (write-disjoint = any-order).
 
     NOTE: this reports plans that are safe to advance in *any order* — it is NOT
-    a claim of concurrent execution (a single orchestrator session interleaves;
-    true cross-plan concurrency needs a separate substrate and is out of scope).
+    a claim of concurrent execution. It compares file paths only (no shared-mutable-
+    state check). Running several plans concurrently in one session goes through a
+    metaplan (orchestrator Workflow 0C), which adds the ordering edges this misses.
 
     Returns a dict with:
         ``any_order_groups``: groups of plan paths with pairwise-disjoint write
