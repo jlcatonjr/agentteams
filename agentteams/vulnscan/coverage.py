@@ -180,11 +180,24 @@ def nothing_to_scan(path: str | Path) -> bool:
     return p.is_dir() and not discover(p)
 
 
-def unsupported_manifests(path: str | Path) -> tuple[list[str], bool]:
+def _skipped_by(cfg: dict[str, Any] | None, workspace: Path) -> list[Path] | None:
+    """Return the config's ``exclude`` paths at or inside ``workspace``, resolved; None without a config."""
+    if cfg is None:
+        return None
+    real = _real(workspace)
+    return [x for x in (_real(e) for e in exclusions(cfg)) if x == real or real in x.parents]
+
+
+def unsupported_manifests(path: str | Path, cfg: dict[str, Any] | None = None) -> tuple[list[str], bool]:
     """Return a workspace's manifests of unsupported ecosystems, and whether they are all it has.
+
+    With ``cfg``, manifests the scan would never read are left out, as ``daily`` and ``scan_path`` leave them
+    out: those at or inside one of the config's ``exclude`` paths, and those matching the workspace brief's
+    ``exclude_paths``. Without it every discovered manifest counts.
 
     Args:
         path: The workspace directory.
+        cfg: Daily config, or None.
 
     Returns:
         ``(["<path in workspace> (<ecosystem>)", ...], only)``: ``only`` is True when the workspace has
@@ -194,20 +207,34 @@ def unsupported_manifests(path: str | Path) -> tuple[list[str], bool]:
     if not p.is_dir():
         return [], False
     found = discover(p)
+    inner = _skipped_by(cfg, p)
+    if inner is not None:
+        from agentteams.vulnscan import project_policy   # lazy: briefs are read only for a config-aware view
+
+        brief_excl = project_policy.read_policy(p).exclude_paths
+
+        def kept(m: Path) -> bool:
+            real = _real(m)
+            if any(x == real or x in real.parents for x in inner):
+                return False
+            return not (brief_excl and project_policy.is_excluded(m.relative_to(p).as_posix(), brief_excl))
+
+        found = [m for m in found if kept(m)]
     labels = [f"{m.relative_to(p).as_posix()} ({eco})" for m in found if (eco := unsupported_ecosystem(m.name))]
     return labels, bool(found) and len(labels) == len(found)
 
 
-def unsupported_only(path: str | Path) -> bool:
+def unsupported_only(path: str | Path, cfg: dict[str, Any] | None = None) -> bool:
     """Return whether every manifest of a workspace is of an unsupported ecosystem (and it has some).
 
     Args:
         path: The workspace directory.
+        cfg: Daily config, or None (see :func:`unsupported_manifests`).
 
     Returns:
         True for the ``unsupported ecosystem`` coverage state.
     """
-    return unsupported_manifests(path)[1]
+    return unsupported_manifests(path, cfg)[1]
 
 
 def states(cfg: dict[str, Any], entries: Iterable[registry.Entry], grants: list[dict[str, Any]],
@@ -242,7 +269,7 @@ def states(cfg: dict[str, Any], entries: Iterable[registry.Entry], grants: list[
             state = "excluded"
         elif nothing_to_scan(e.fix_checkout):
             state = "nothing to scan"
-        elif (found := unsupported_manifests(e.fix_checkout))[1]:
+        elif (found := unsupported_manifests(e.fix_checkout, cfg))[1]:
             state = "unsupported ecosystem"
         elif e.level == "remediate":
             state = "fixable" if _grant_covers(grants, e.fix_checkout) else "not covered by the grant yet"
@@ -386,7 +413,7 @@ def project_state(cfg: dict[str, Any] | None, entry: registry.Entry | None, path
         return states(cfg or {}, [entry], grants)[0][1]
     if nothing_to_scan(path):
         return "nothing to scan"
-    if unsupported_only(path):
+    if unsupported_only(path, cfg or {}):
         return "unsupported ecosystem"
     roots = [r for r in effective_roots(cfg or {}, []) if r.scanned]
     if not any(within(path, r.path) for r in roots):

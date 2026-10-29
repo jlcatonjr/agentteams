@@ -308,7 +308,7 @@ def project_status(project: Path, cfg: dict[str, Any] | None) -> dict[str, Any]:
     target = out["fix_checkout"] or out["project"]
     out["grant_covers_fix_checkout"] = any(grant.covers(g, "stage-fix", target) for g in grants)
     out["coverage_state"] = coverage.project_state(cfg, entry, project.expanduser().resolve(), grants)
-    out["unsupported_manifests"] = coverage.unsupported_manifests(out["fix_checkout"] or out["project"])[0]
+    out["unsupported_manifests"] = coverage.unsupported_manifests(target, cfg or {})[0]
     out["problems"] = problems + [f"grant: {p}" for p in grant_problems]
     return out
 
