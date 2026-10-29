@@ -1594,6 +1594,13 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
 - When the remote branch does not exist and every staged path already has its staged content on origin's base
   branch (the change was merged meanwhile, e.g. through an earlier day's pull request), nothing is pushed or
   opened: the staged state is retired and the result says `already_in_base: true` (`pr` is empty).
+- Otherwise, when a person closed an executor pull request carrying this change without merging it, nothing is
+  pushed or opened: re-opening it would undo their decision. Candidates are the repository's own closed, unmerged
+  pull requests on `vulnscan/<any date>-<same digest>` (found by the digest in their title, the first 3). One counts
+  only if every commit is the executor's and its change, read from `refs/pull/<n>/head`, equals the staged change
+  byte for byte; one that `close-superseded` closed does not count. The staged state is retired and the result
+  says `closed_unmerged: <its URL>` (`pr` is empty, `detail: "not re-opened"`). Best effort: if gh or git fails,
+  the pull request is opened as before (`executor_supersede.closed_pr_for_change`).
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
