@@ -183,3 +183,34 @@ def test_cli_text_output(env: dict, capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert f"{repo}: defer (direct delivery)" in out and "staged: vulnscan/20261026-10fd455261" in out
     assert "verdict: defer (handoff 20261026138634)" in out and "packets awaiting a verdict: 20261025177303" in out
+
+
+def test_status_reports_the_launcher_the_handoff_would_use(env: dict, capsys: pytest.CaptureFixture[str]) -> None:
+    from agentteams import launcher_lineage
+
+    repo = _git_repo(env["tmp"] / "repos" / "svc").resolve()
+    _stage(repo, "vulnscan/20261026-4b4656f6a5")
+    current = launcher_lineage.TEMPLATE_PATH.read_bytes()
+    ops = env["tmp"] / "ops-team"
+    (ops / "sandbox").mkdir(parents=True)
+    (ops / "sandbox" / "confine-run.sh").write_bytes(current)
+    cfg = {"agent": {"team_dir": str(ops)}}
+    assert handoff.fallback_launcher(cfg) == ops / "sandbox" / "confine-run.sh"
+    [rec] = handoff.status(cfg, [repo])   # the home has none: the operator fallback (agent.team_dir) is used
+    assert rec.launcher == str(ops / "sandbox" / "confine-run.sh") and rec.launcher_state == "current"
+    assert rec.launcher_warning == "" and "launcher" not in handoff.markdown([rec])
+    assert rec.to_dict()["launcher_state"] == "current"
+    [rec] = handoff.status({}, [repo])     # no fallback either: goose would not run
+    assert rec.launcher == "" and rec.launcher_state == "missing" and "refuses" in rec.launcher_warning
+    assert "launcher missing" in handoff.markdown([rec])
+    wt = repo.parent / f"{repo.name}.worktrees" / handoff.GOOSE_TEAM_WORKTREE   # the goose team's worktree home
+    (wt / ".goose" / "recipes").mkdir(parents=True)
+    (wt / ".goose" / "recipes" / "orchestrator.yaml").write_text("x", encoding="utf-8")
+    (wt / "sandbox").mkdir()
+    (wt / "sandbox" / "confine-run.sh").write_bytes(current + b"# local edit\n")
+    [rec] = handoff.status(cfg, [repo])    # the home's own launcher wins over the fallback
+    assert rec.launcher == str(wt / "sandbox" / "confine-run.sh") and rec.launcher_state == "modified"
+    from agentteams.vulnscan.__main__ import main
+    assert main(["handoff", "status", "--repo", str(repo)]) == 0
+    out = capsys.readouterr().out
+    assert "  launcher: " in out and "  warning: the launcher matches no released version" in out

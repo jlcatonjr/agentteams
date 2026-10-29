@@ -319,6 +319,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # repository. An unpinned edit to either would widen what a merge may delete.
     "agentteams/fence_twins.py",
     "agentteams/data/template_lineage.json",
+    # Launcher lineage (2026-10-28, P6). launcher_lineage tells a team's sandbox/confine-run.sh copy current /
+    # older / modified / missing by matching its bytes against this lineage. Informational, but an unpinned edit
+    # adding a sha256 would label a tampered launcher a released one (`modified` must never read as benign).
+    "agentteams/launcher_lineage.py",
+    "agentteams/data/launcher_lineage.json",
     # Kept-twin acknowledgements (2026-10-11). fence_twin_acks validates the operator ledger (digest
     # format, the 40-character reason) whose rows turn a kept twin's fleet REVIEW into a notice; an
     # unpinned edit there could let an unreviewed or reasonless row silence REVIEW. It cannot delete.

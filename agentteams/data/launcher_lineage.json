@@ -1,0 +1,176 @@
+{
+ "generator": "scripts/build_launcher_lineage.py",
+ "note": "Generated from git history; never edit by hand. One entry per commit that changed the sandbox launcher template, oldest first; the newest is the shipped template. agentteams.launcher_lineage reads it to tell a derived launcher copy current / older / modified / missing.",
+ "template": "agentteams/templates/universal/sandbox/confine-run.sh",
+ "version": 1,
+ "versions": [
+  {
+   "commit": "bd7521a6880a114de6f3dc18faf59d86d4669fed",
+   "date": "2026-08-31T20:44:34-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "7d6f3a514d188496ced87652ca671b80e8b1387644bb170f9773eb7767609bd8",
+   "subject": "feat(sandbox): framework-neutral Linux OS-confinement emitter (Linux \"works like Seatbelt\")"
+  },
+  {
+   "commit": "d5c52a0abe9bba72376946e27bfdfa56a23aad08",
+   "date": "2026-09-01T06:09:39-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "a52ec827dc95e6e62e743ebe474e39cbac52e1ab07b6d00c0fe0e1bb48eac7cc",
+   "subject": "fix(sandbox): audit follow-ups — close Linux false-confinement, pin the boundary asset, de-drift comments"
+  },
+  {
+   "commit": "75ec59be51dc9371703dd3d51fb2e8a561604767",
+   "date": "2026-09-01T17:50:16-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "688a5cbc19fe6aae8e568f22b8b51f499910ddb0aef5576dc1f790509b65c95b",
+   "subject": "feat(sandbox): macOS augmentation for the framework-neutral confinement launcher"
+  },
+  {
+   "commit": "df6343e0456cae81759e13e7e928d81c58eb960d",
+   "date": "2026-09-05T03:20:23-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "743b90ca44a757886fa5af57287c2e47bf64a562ff78700411b38f00f829b059",
+   "subject": "fix(ci): make the main test matrix green — 5 pre-existing failures (#20)"
+  },
+  {
+   "commit": "38132d0c0553fd855144674c0a37c1dde0dafeea",
+   "date": "2026-09-14T15:23:42-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "97ca07d8b2534d9e5fbe895a5b41d6173f82b18fc68d95d9c1d57b440054a896",
+   "subject": "Exception-governance hardening (WS-D/A/C/B/E/F + G phase) (#46)"
+  },
+  {
+   "commit": "a0694ea349e6173e2fa2b116b1a749b3b4ccba7d",
+   "date": "2026-09-15T10:46:03-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "92867e5e0a074afe366540bde818a06e5e3cce21c1669cb11375d522745bde9f",
+   "subject": "Goose file-based cross-repo coordination surface (merged with exception-governance hardening) (#49)"
+  },
+  {
+   "commit": "f49449dfefc7227abc857ffad8edad3cd8de8cf4",
+   "date": "2026-09-30T13:58:45-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "8e3ea124535fd360fd0cce8712a74a8e604779410f04ab3c5beb254ec5511cd6",
+   "subject": "fix(sandbox): isolate the operator signing key; bind built-in tools with permissions.deny (F-1, R11) (#77)"
+  },
+  {
+   "commit": "fb8db9dcaada5dce327a0d804e122e38c8c19ab6",
+   "date": "2026-09-30T14:27:46-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "3d9eacee7fc818ac3e17ad3a479d38fc8f8b32acb201f727d405830549c2f512",
+   "subject": "fix(sandbox): the control plane cannot be renamed away (F-4) (#78)"
+  },
+  {
+   "commit": "cca1659f21f224a74daba99f61d5446c84de9f33",
+   "date": "2026-09-30T15:38:22-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "912092bdd0de333fd053df85e0f3fd9dc14b66e46c5f825af5ceb41ab63c89bc",
+   "subject": "fix(sandbox): remaining trust roots — launcher anchor, rosters, missing manifest, preflight, F-2 (PR-D) (#80)"
+  },
+  {
+   "commit": "4efabf3ff68cec7828e87b25cf89490bba2bda3c",
+   "date": "2026-09-30T19:22:34-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "93f07c914cc1a38804ca1d4cddee8f378d0240af734f9ade503a6554d3543f1a",
+   "subject": "fix(sandbox): protect the .github/agents and .codex/agents team-dir control planes (#83)"
+  },
+  {
+   "commit": "f72e43153c965edbec24112b9f577a4db3ddef39",
+   "date": "2026-09-30T22:44:15-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "1ba764d12864d4c63758019998a995a87395fcb223e944081406be30c487c1f8",
+   "subject": "fix(sandbox): emit the verify-key-store sentinel for every team (goose Linux launcher regression) (#85)"
+  },
+  {
+   "commit": "2b5f13ad0e3dee5b38c29d613f2fd60a95766e24",
+   "date": "2026-09-30T23:07:29-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "4dc71aa90716d5edd33f216d639e8190810fad968949b3ceb63a12795a3185f0",
+   "subject": "fix(sandbox): validate brief write roots in every emitter; operator acceptance for external roots (#86)"
+  },
+  {
+   "commit": "5b5a679e5db49ec1b680053c411982f0971cffcb",
+   "date": "2026-10-01T00:04:55-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "d221332a2e33f6020e88c65e1c9c5a0b83e2cdabab310524c7b5ba0163fd113d",
+   "subject": "fix(sandbox): diagnose planted team markers; warn on planted Codex config keys (#88)"
+  },
+  {
+   "commit": "9d409533f9e30c30c48140b4b0c63b013f378cae",
+   "date": "2026-10-01T01:31:18-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "653197f6b7c59518926f89f0c0391c079ae1ea59d61a4d46f2fd274f855b44b5",
+   "subject": "feat(prompt-roots): opt-in prompt-root prevention (#93)"
+  },
+  {
+   "commit": "d31d4a0f1173b7d30b91c91426c2c6ec25965c26",
+   "date": "2026-10-01T11:31:25-05:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": false,
+   "sha256": "064d47060768ecfe629c000ce8d1cbf2bec533fa0b8fb1f665ab4df8f439dea5",
+   "subject": "fix(interop): projected teams get a team marker (Codex teams recognised) (#97)"
+  },
+  {
+   "commit": "d749048214f73ff6cebbd992a450e00af9910458",
+   "date": "2026-10-07T21:59:19-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "187bb211020edca1db7f9912703e7b8368d846dc7acd1d3214a4c3ebc1e6cd07",
+   "subject": "fix(launcher): control-plane protection on macOS (F-4 parity with Linux)"
+  },
+  {
+   "commit": "410825708cf0d75201c7ce66ff15d4cdeef9c91b",
+   "date": "2026-10-08T09:16:25-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "6779fa05d24b3befa2e3bee9c79aab32866c21e4e00a2405ed8fca6578f725a7",
+   "subject": "feat(codex): run Codex under agentteams' launcher (Phase 1a)"
+  },
+  {
+   "commit": "b8a0de4e6be71b539c1870a4caae84bb02029f5f",
+   "date": "2026-10-14T15:29:57-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "b340661ece6281f0617ee2dde241792d6b1554e99fd7b1b9a0d232354fcf4240",
+   "subject": "feat(grok): xAI Grok Build framework adapter, Phase 1 (generate-only)"
+  },
+  {
+   "commit": "9c1ee1122b2b0b38067ccf82b9772c62f3c6197d",
+   "date": "2026-10-14T19:56:01-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "6f7ecc61485e83b85b90ac120a78fd9578be0e074857da82e68cd25538735ff0",
+   "subject": "feat(grok): Phase 2a — managed .grok/config.toml, .grok control plane, grant class"
+  },
+  {
+   "commit": "323b60a93132654ad1d8f98b333513208f63740f",
+   "date": "2026-10-14T22:53:33-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "b523c57e6f5fcf2ba87e2d0644e53a35ea2a828cca71aa64ab3062db54654163",
+   "subject": "fix(grok): Phase 2 review follow-ups (@security step 12e, @code-hygiene step 12f)"
+  },
+  {
+   "commit": "761d944067c1afd02c7fbcc266cc2bc2be240b13",
+   "date": "2026-10-14T23:02:11-04:00",
+   "path": "agentteams/templates/universal/sandbox/confine-run.sh",
+   "security": true,
+   "sha256": "37e852098a5e6b92aeaf8f61ae087c8580631cfbe86a0907884edf0d58ec06b1",
+   "subject": "fix(grok): Phase 2 conflict-audit close-out (Rule 8)"
+  }
+ ]
+}

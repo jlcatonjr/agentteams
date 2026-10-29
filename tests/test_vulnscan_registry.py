@@ -464,6 +464,24 @@ def test_status_of_an_unenrolled_project(xdg: Path, capsys: pytest.CaptureFixtur
     assert main(["status", "--project", str(xdg / "missing")]) == 2
 
 
+def test_status_reports_the_projects_launcher(xdg: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from agentteams import launcher_lineage
+
+    p = xdg / "p"
+    p.mkdir()
+    assert main(["status", "--project", str(p), "--json"]) == 0
+    st = json.loads(capsys.readouterr().out)
+    assert st["launcher"]["state"] == "missing"
+    assert st["launcher"]["path"] == str((p / "sandbox" / "confine-run.sh").resolve())
+    (p / "sandbox").mkdir()
+    (p / "sandbox" / "confine-run.sh").write_bytes(launcher_lineage.TEMPLATE_PATH.read_bytes())
+    assert main(["status", "--project", str(p)]) == 0
+    assert "launcher     current (released version" in capsys.readouterr().out
+    (p / "sandbox" / "confine-run.sh").write_bytes(b"#!/bin/sh\nexec \"$@\"\n")
+    assert main(["status", "--project", str(p)]) == 0
+    assert "launcher     modified (sha256 " in capsys.readouterr().out
+
+
 # ---------------------------------------------------------------- review findings (S1, S3, S5, C1, C4, C7)
 
 def test_load_refuses_a_registry_others_can_write_or_a_symlink(xdg: Path) -> None:
