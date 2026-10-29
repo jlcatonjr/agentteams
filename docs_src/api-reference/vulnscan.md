@@ -178,7 +178,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Server fix plans | `<state>/server-plans/<YYYY-MM-DD>/server-fixplan-<host>.md` | outside the run directory the agent container mounts ([server_fixplan](#agentteamsvulnscanserver_fixplan)) |
 | Heartbeat | `<state>/heartbeat.json` | read by the stale-run warning; written atomically. Also records `agentteams_version` and `remediation_blocked` (the number of [readiness](#agentteamsvulnscanremediation_status) blockers) |
 | Daily run lock | `<state>/daily.lock` | held for a whole daily run; a second run exits 3 |
-| Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json`, `fixplan-*.md`, `agent/` (earlier agent runs of the day under `agent/runs/<run id>/`), `agent-report/`, `gateway/` |
+| Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json` (a same-day re-run first copies them to `summary.<HHMMSS>.{json,md}`, the time the earlier one was written; only `summary.json` is read back), `infra-retry.count` (catch-up retries), `fixplan-*.md`, `agent/` (earlier agent runs of the day under `agent/runs/<run id>/`), `agent-report/`, `gateway/` |
 | Request spool | `<state>/spool/requests/`, `results/`, `processed/` | the only path the agents write besides their sessions |
 | Staged fixes | `<state>/worktrees/<repo>-<8 hex>-<YYYYmmddHHMMSS>-<6 hex>/` (repository name, a hash of its path, the UTC time, a random suffix) | executor-owned worktrees; removed once `open-pr` has a pull request (the branch is kept) |
 | Run lock | `<state>/agent.lock` | held for a whole agent run or debrief |
@@ -251,6 +251,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `handoff_required` | `false` | `true` puts every repository under handoff delivery: `open-pr` waits for the repository orchestrator's `approve-staged` verdict ([handoff](#agentteamsvulnscanhandoff)). A project's brief can ask for it alone with `vulnerability_scanning.delivery: handoff` |
 | `agent` | see below | Agent mode |
 | `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
+| `catch_up` | `{"max_retries_per_day": 2}` | `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (a `tools container unavailable` feed error, or an `infra.*` code in `remediation.docker`) and Docker is ready now, at most `max_retries_per_day` times per date (0–10; counted in the run directory's `infra-retry.count`) ([`catch_up_due`](#dailycatch_up_duecfg-dailycatch_upcfg)) |
 | `docker` | `{"autostart": false, "start_timeout_s": 240, "auto_selftest": "on-change"}` | Docker readiness, checked once before each scan ([`docker_readiness`](#agentteamsvulnscandocker_readiness)); a partial block is merged over these defaults (table below) |
 
 The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
@@ -1313,10 +1314,15 @@ daily summary's remediation readiness section repeats it.
 #### `daily.catch_up_due(cfg)` / `daily.catch_up(cfg)`
 
 `catch_up_due` gives `(due, hours since the last completed run)`: due when the heartbeat is missing,
-unreadable (hours `None`) or older than `stale_after_hours`. `catch_up` first checks the daily run lock
+unreadable (hours `None`) or older than `stale_after_hours`, or when `daily.infra_retry_due(cfg)` names today's run
+directory: the last run exited 3, its `summary.json` names Docker as a cause (a `tools container unavailable` feed
+error, or an `infra.*` code in `remediation.docker`), fewer than `catch_up.max_retries_per_day` retries have run for
+that date, and `docker_readiness.ensure(cfg, start=False)` is ready now. `catch_up` first checks the daily run lock
 (`daily.run_in_progress()`): while another daily run holds it, it prints one line on stderr and returns `None`
-without notifying. Otherwise it sends `run-missing` or `run-stale` and runs `run_daily` when due, else returns
-`None` and does nothing.
+without notifying. When the last run is stale it sends `run-missing` or `run-stale` and runs `run_daily`; when an
+infrastructure retry is due it counts the retry in `infra-retry.count`, prints one line on stderr and runs
+`run_daily` without a notification; otherwise it returns `None` and does nothing. Before a re-run writes its
+summary, `daily._finish` copies the earlier `summary.json` and `summary.md` to `summary.<HHMMSS>.{json,md}`.
 
 #### `schedule.job_environment()`
 

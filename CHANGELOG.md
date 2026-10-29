@@ -124,6 +124,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
   `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
 
+### vulnscan (catch-up retries a run Docker left partial; a re-run keeps the earlier summary)
+
+- `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (a `tools container unavailable`
+  feed error, or an `infra.*` reason code in `remediation.docker`) and Docker is ready now. New config key
+  `catch_up.max_retries_per_day` (default 2) bounds it; the count is kept in the run directory's
+  `infra-retry.count`. A retry sends no `run-stale` notification. Until now a recent partial run was never retried.
+- A same-day re-run first copies the earlier `summary.json` / `summary.md` to `summary.<HHMMSS>.{json,md}` (the
+  time the earlier one was written), so it no longer overwrites a full run's summary. Readers still read only
+  `summary.json`.
+
 ### vulnscan (one Docker readiness check, with reason codes)
 
 - **New `docker_readiness` module and `vulnscan ready [--ensure] [--json]`** (exit 0 ready, 3 degraded, 2 an

@@ -39,6 +39,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -99,7 +100,15 @@ DEFAULT_CONFIG: dict = {
     # Docker readiness (docker_readiness.ensure, before each scan): starting Docker is the operator's opt-in
     # (autostart); a self-test whose record is for another image is re-run once (auto_selftest "on-change" | "off").
     "docker": dict(docker_readiness.DEFAULTS),
+    # daily --catch-up also re-runs a same-day run left partial by Docker, once Docker is ready: at most this often
+    "catch_up": {"max_retries_per_day": 2},
 }
+
+#: Retries of a same-day run left partial by Docker (catch_up), counted in the run directory.
+INFRA_RETRY_FILE = "infra-retry.count"
+MAX_RETRIES_PER_DAY = 10
+#: The tools-container feed error prefix (subproc_confine.Unavailable) that marks a Docker-partial run.
+_INFRA_FEED_ERROR = "tools container unavailable"
 
 
 def _is_int(value: Any) -> bool:
@@ -159,6 +168,12 @@ def _config_problem(cfg: dict[str, Any]) -> str:
         return problem
     if problem := docker_readiness.config_problem(cfg):
         return problem
+    catch = cfg.get("catch_up", {})
+    if not isinstance(catch, dict) or set(catch) - {"max_retries_per_day"}:
+        return f"catch_up must be an object with only max_retries_per_day{got(catch)}"
+    retries = catch.get("max_retries_per_day", 2)
+    if not _is_int(retries) or not 0 <= retries <= MAX_RETRIES_PER_DAY:
+        return f"catch_up.max_retries_per_day must be a whole number 0-{MAX_RETRIES_PER_DAY}{got(retries)}"
     when = cfg["schedule"]
     if not isinstance(when, dict):
         return f"schedule must be an object with hour and minute{got(when)}"
@@ -312,16 +327,8 @@ def stale_warning(max_hours: float | None = None) -> str:
     return ""
 
 
-def catch_up_due(cfg: dict) -> tuple[bool, int | None]:
-    """Return whether a catch-up run is due: no completed run within ``stale_after_hours``.
-
-    Args:
-        cfg: Daily config.
-
-    Returns:
-        ``(due, hours since the last completed run)``; the hours are None when there is no usable heartbeat
-        (none yet, or unreadable: due as well).
-    """
+def _stale(cfg: dict) -> tuple[bool, int | None]:
+    """Return (no completed run within ``stale_after_hours``, hours since the last one or None)."""
     if not heartbeat_path().exists():
         return True, None
     beat = _read_heartbeat()
@@ -329,6 +336,70 @@ def catch_up_due(cfg: dict) -> tuple[bool, int | None]:
         return True, None
     age = (_dt.datetime.now(_dt.UTC) - beat[0]).total_seconds() / 3600
     return age > float(cfg.get("stale_after_hours", DEFAULT_CONFIG["stale_after_hours"])), max(int(age), 0)
+
+
+def _max_retries(cfg: dict) -> int:
+    catch = cfg.get("catch_up") if isinstance(cfg.get("catch_up"), dict) else {}
+    return int(catch.get("max_retries_per_day", DEFAULT_CONFIG["catch_up"]["max_retries_per_day"]))
+
+
+def _retries(run_dir: Path) -> int:
+    """Return how many infrastructure retries ran for ``run_dir`` (0 when none, or the count is unreadable)."""
+    try:
+        text = (run_dir / INFRA_RETRY_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return 0
+    return int(text) if text.isdigit() else 0
+
+
+def infra_retry_due(cfg: dict, *, today: str | None = None) -> Path | None:
+    """Return today's run directory when its run is worth re-running now because Docker made it partial, else None.
+
+    All of: the last run (heartbeat) exited 3; it is today's run; its ``summary.json`` names Docker as a cause (a
+    ``tools container unavailable`` feed error, or an ``infra.*`` code in ``remediation.docker``); fewer than
+    ``catch_up.max_retries_per_day`` retries have run for that date (:data:`INFRA_RETRY_FILE` in the run
+    directory); and Docker is ready now (:func:`docker_readiness.ensure`, read-only: nothing is started here,
+    the retry's own run does that when ``docker.autostart`` allows it).
+
+    Args:
+        cfg: Daily config.
+        today: Override the date (tests).
+
+    Returns:
+        The run directory, or None.
+    """
+    beat = _read_heartbeat()
+    if isinstance(beat, str) or beat[1] != EXIT_UNSCANNED:
+        return None
+    run_dir = paths.state_dir() / (today or _dt.date.today().isoformat())
+    try:
+        data = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    errors = [e for e in data.get("feed_errors") or [] if isinstance(e, str)]
+    rem = data.get("remediation") if isinstance(data.get("remediation"), dict) else {}
+    layers = rem.get("docker") if isinstance(rem.get("docker"), dict) else {}
+    codes = [v.get("code", "") for v in layers.values() if isinstance(v, dict)]
+    infra = any(_INFRA_FEED_ERROR in e for e in errors) or any(str(c).startswith("infra.") for c in codes)
+    if not infra or _retries(run_dir) >= _max_retries(cfg):
+        return None
+    return run_dir if docker_readiness.ensure(cfg, start=False).ok else None
+
+
+def catch_up_due(cfg: dict) -> tuple[bool, int | None]:
+    """Return whether a catch-up run is due: no completed run within ``stale_after_hours``, or an infra retry.
+
+    Args:
+        cfg: Daily config.
+
+    Returns:
+        ``(due, hours since the last completed run)``; the hours are None when there is no usable heartbeat
+        (none yet, or unreadable: due as well). A recent run is due again when :func:`infra_retry_due` says so.
+    """
+    stale, hours = _stale(cfg)
+    return stale or infra_retry_due(cfg) is not None, hours
 
 
 def run_in_progress() -> bool:
@@ -350,16 +421,28 @@ def catch_up(cfg: dict) -> tuple[Report, int, Path] | None:
     Args:
         cfg: Daily config.
 
+    A recent run is re-run without a notification when Docker left it partial and is ready now
+    (:func:`infra_retry_due`); the retry is counted in the run directory before it starts, and the summary it
+    replaces is kept (:func:`_archive_summary`).
+
     Returns:
-        :func:`run_daily`'s result, or None when the last run is recent or a daily run is in progress (nothing
-        done, nothing sent: the lock is checked first, so no "running now" message precedes a refused run).
+        :func:`run_daily`'s result, or None when the last run is recent (and no infra retry is due) or a daily run
+        is in progress (nothing done, nothing sent: the lock is checked first, so no "running now" message
+        precedes a refused run).
     """
     if run_in_progress():
         print("vulnscan daily --catch-up: a daily run is in progress; not starting another", file=sys.stderr)
         return None
-    due, hours = catch_up_due(cfg)
-    if not due:
-        return None
+    stale, hours = _stale(cfg)
+    if not stale:
+        retry = infra_retry_due(cfg)
+        if retry is None:
+            return None
+        n = _retries(retry) + 1
+        _write_atomic(retry / INFRA_RETRY_FILE, f"{n}\n")
+        print(f"vulnscan daily --catch-up: re-running {retry.name}, left partial by Docker (retry {n} of "
+              f"{_max_retries(cfg)})", file=sys.stderr)
+        return run_daily(cfg)
     if hours is None:
         notify.send(cfg, "run-missing")
     else:
@@ -940,6 +1023,34 @@ def _handoff_section(cfg: dict) -> str:
         return f"\n## Handoffs to repository orchestrators\n\n- could not read the handoff state: {exc}\n"
 
 
+def _archive_summary(run_dir: Path) -> list[Path]:
+    """Copy an existing ``summary.json`` / ``.md`` to ``summary.<HHMMSS>.{json,md}`` before a re-run rewrites them.
+
+    ``HHMMSS`` is the local time the earlier summary was written (``-1``, ``-2`` ... on a clash). Readers keep
+    reading ``summary.json`` only (:func:`_previous_summary`, :func:`paths.run_dirs`).
+
+    Returns:
+        The copies written.
+
+    Raises:
+        OSError: A copy failed (the caller then writes nothing: the earlier summary stays in place).
+    """
+    old = [p for p in (run_dir / "summary.json", run_dir / "summary.md") if p.is_file()]
+    if not old:
+        return []
+    stamp = _dt.datetime.fromtimestamp(old[0].stat().st_mtime).strftime("%H%M%S")
+    base, n = stamp, 0
+    while any((run_dir / f"summary.{base}{p.suffix}").exists() for p in old):
+        n += 1
+        base = f"{stamp}-{n}"
+    out = []
+    for p in old:
+        dest = run_dir / f"summary.{base}{p.suffix}"
+        shutil.copy2(p, dest)
+        out.append(dest)
+    return out
+
+
 def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
             staged: list[str]) -> tuple[Report, int, bool]:
     """Write summary + heartbeat, notify, and return (report, exit code, whether the files were written).
@@ -967,6 +1078,7 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
         md += "\n## Fixes staged in worktrees (review, test, commit, open a PR)\n\n" + "\n".join(staged) + "\n"
     written = True
     try:
+        _archive_summary(run_dir)   # a same-day re-run never loses the earlier summary (R5)
         (run_dir / "summary.md").write_text(md, encoding="utf-8")
         # private package names stay in the machine-local repos-*.json; the MCP server reads summary.json
         (run_dir / "summary.json").write_text(json.dumps({**total.to_dict(private_names=False),
