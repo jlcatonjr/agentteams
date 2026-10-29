@@ -3,7 +3,7 @@
 ``python -m agentteams.vulnscan`` finds dependencies and runtimes with published
 vulnerabilities and drives their remediation:
 
-- ``scan PATH`` reads lockfiles and pinned manifests (PyPI, npm, Packagist) under a
+- ``scan PATH`` reads lockfiles and pinned manifests (PyPI, npm, Packagist, crates.io) under a
   repository or a parent directory and checks every exact version against OSV.dev.
 - ``inventory LOG`` judges what a server reported. The bundled server kit's audit script
   prints the packages and runtimes installed on a host; this command applies the same
