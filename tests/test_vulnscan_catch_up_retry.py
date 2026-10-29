@@ -32,10 +32,14 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return w
 
 
-def _last_run(exit_code: int, *, feed_errors: list[str], docker: dict | None = None, hours_ago: float = 1) -> Path:
+def _last_run(exit_code: int, *, feed_errors: list[str], docker: dict | None = None, hours_ago: float = 1,
+              infra_codes: list[str] | None = None) -> Path:
+    if infra_codes is None:   # what the run records when Docker caused its feed error (daily._note_infra)
+        infra_codes = [dr.DAEMON] if feed_errors == INFRA else []
     run = paths.state_dir() / TODAY
     run.mkdir(parents=True, exist_ok=True)
-    (run / "summary.json").write_text(json.dumps({"feed_errors": feed_errors, "remediation": {"docker": docker or {}}}))
+    (run / "summary.json").write_text(json.dumps({"feed_errors": feed_errors, "remediation": {"docker": docker or {}},
+                                                  "infra_codes": infra_codes}))
     when = dt.datetime.now(dt.UTC) - dt.timedelta(hours=hours_ago)
     daily.heartbeat_path().write_text(json.dumps({"last_run": when.isoformat(), "exit": exit_code}))
     return run
@@ -58,6 +62,23 @@ def test_a_docker_reason_code_alone_also_counts(env: dict) -> None:
     _last_run(EXIT_UNSCANNED, feed_errors=["x: audit timed out"],
               docker={"daemon": {"state": "fail", "code": dr.DAEMON, "message": "down"}})
     assert daily.catch_up_due({**daily.DEFAULT_CONFIG})[0]
+
+
+def test_a_non_docker_container_refusal_is_not_retried(env: dict) -> None:
+    """The same prefix covers ssh, mount and allowlist refusals: only a reason code marks Docker as the cause."""
+    _last_run(EXIT_UNSCANNED, feed_errors=["vk-api: not scanned: tools container unavailable: no known_hosts line "
+                                           "for vk-api; connect once from this machine"], infra_codes=[])
+    assert daily.catch_up_due({**daily.DEFAULT_CONFIG}) == (False, 1)
+
+
+def test_the_run_records_only_docker_reason_codes(env: dict) -> None:
+    from agentteams.vulnscan import subproc_confine
+    with daily._fresh_rows():
+        daily._note_infra(subproc_confine.Unavailable("tools container unavailable: down", code=dr.DAEMON))
+        daily._note_infra(subproc_confine.Unavailable("tools container unavailable: no known_hosts line"))
+        assert daily._INFRA.get() == {dr.DAEMON}
+    assert daily._INFRA.get() is None
+    daily._note_infra(subproc_confine.Unavailable("x", code=dr.DAEMON))   # outside a run: ignored, no error
 
 
 @pytest.mark.parametrize(("exit_code", "errors", "docker", "why"), [

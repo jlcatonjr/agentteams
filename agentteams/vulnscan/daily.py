@@ -109,8 +109,18 @@ DEFAULT_CONFIG: dict = {
 #: Retries of a same-day run left partial by Docker (catch_up), counted in the run directory.
 INFRA_RETRY_FILE = "infra-retry.count"
 MAX_RETRIES_PER_DAY = 10
-#: The tools-container feed error prefix (subproc_confine.Unavailable) that marks a Docker-partial run.
-_INFRA_FEED_ERROR = "tools container unavailable"
+#: The run's Docker reason codes (``infra.*``, from :class:`subproc_confine.Unavailable` ``code``), from
+#: _collect to _finish; written to ``summary.json["infra_codes"]`` (None outside a run). Only these mark a run
+#: Docker left partial: the ``tools container unavailable`` text also covers ssh, mount and allowlist refusals,
+#: which a retry cannot fix.
+_INFRA: contextvars.ContextVar[set[str] | None] = contextvars.ContextVar("vulnscan_infra", default=None)
+
+
+def _note_infra(exc: subproc_confine.Unavailable) -> None:
+    """Record ``exc``'s Docker reason code (if any) for this run's ``summary.json["infra_codes"]``."""
+    code = getattr(exc, "code", "")
+    if (codes := _INFRA.get()) is not None and code in docker_readiness.CODES:
+        codes.add(code)
 
 
 def _is_int(value: Any) -> bool:
@@ -357,8 +367,8 @@ def _retries(run_dir: Path) -> int:
 def infra_retry_due(cfg: dict, *, today: str | None = None) -> Path | None:
     """Return today's run directory when its run is worth re-running now because Docker made it partial, else None.
 
-    All of: the last run (heartbeat) exited 3; it is today's run; its ``summary.json`` names Docker as a cause (a
-    ``tools container unavailable`` feed error, or an ``infra.*`` code in ``remediation.docker``); fewer than
+    All of: the last run (heartbeat) exited 3; it is today's run; its ``summary.json`` names Docker as a cause (an
+    ``infra.*`` code in ``infra_codes`` or ``remediation.docker``; feed error text is never matched); fewer than
     ``catch_up.max_retries_per_day`` retries have run for that date (:data:`INFRA_RETRY_FILE` in the run
     directory); and Docker is ready now (:func:`docker_readiness.ensure`, read-only: nothing is started here,
     the retry's own run does that when ``docker.autostart`` allows it).
@@ -380,11 +390,11 @@ def infra_retry_due(cfg: dict, *, today: str | None = None) -> Path | None:
         return None
     if not isinstance(data, dict):
         return None
-    errors = [e for e in data.get("feed_errors") or [] if isinstance(e, str)]
     rem = data.get("remediation") if isinstance(data.get("remediation"), dict) else {}
     layers = rem.get("docker") if isinstance(rem.get("docker"), dict) else {}
     codes = [v.get("code", "") for v in layers.values() if isinstance(v, dict)]
-    infra = any(_INFRA_FEED_ERROR in e for e in errors) or any(str(c).startswith("infra.") for c in codes)
+    codes += data.get("infra_codes") if isinstance(data.get("infra_codes"), list) else []
+    infra = any(isinstance(c, str) and c.startswith("infra.") for c in codes)
     if not infra or _retries(run_dir) >= _max_retries(cfg):
         return None
     return run_dir if docker_readiness.ensure(cfg, start=False).ok else None
@@ -535,6 +545,7 @@ def stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
         with subproc_confine.scope(cfg, scratch=[repo.parent / f"{repo.name}.worktrees"]):
             return _stage_worktree_fixes(repo, cfg, date)
     except subproc_confine.Unavailable as exc:
+        _note_infra(exc)
         return "", f"{repo}: nothing staged: {exc}"
 
 
@@ -629,6 +640,7 @@ def _scan_server(host: str, kit: Path, out_dir: Path) -> Report:
         rep.feed_errors.append(f"{host}: audit timed out")
         return rep
     except subproc_confine.Unavailable as exc:   # fail closed: unscanned, never run on the host instead
+        _note_infra(exc)
         rep = Report(target=host)
         rep.feed_errors.append(f"{host}: not scanned: {exc}")
         return rep
@@ -836,6 +848,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             with subproc_confine.scope(cfg):
                 total.merge(_scan_server(host, kit, run_dir))
         except subproc_confine.Unavailable as exc:   # fail closed: the host is reported unscanned
+            _note_infra(exc)
             total.feed_errors.append(f"{host}: not scanned: {exc}")
 
 
@@ -848,11 +861,12 @@ _FRESH: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.Contex
 def _fresh_rows() -> Iterator[list[dict[str, Any]]]:
     """Collect the run's checkout-freshness rows (:data:`_FRESH`) for the duration of the block."""
     rows: list[dict[str, Any]] = []
-    token = _FRESH.set(rows)
+    token, infra = _FRESH.set(rows), _INFRA.set(set())   # and the run's Docker reason codes (_note_infra)
     try:
         yield rows
     finally:
         _FRESH.reset(token)
+        _INFRA.reset(infra)
 
 
 def _freshness(root: Path, rep: Report) -> list[dict[str, Any]]:
@@ -1208,7 +1222,8 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
         (run_dir / "summary.md").write_text(md, encoding="utf-8")
         # private package names stay in the machine-local repos-*.json; the MCP server reads summary.json
         (run_dir / "summary.json").write_text(json.dumps({**total.to_dict(private_names=False),
-                                                          "remediation": readiness}, indent=2), encoding="utf-8")
+                                                          "remediation": readiness,
+                                                          "infra_codes": sorted(_INFRA.get() or ())}, indent=2), encoding="utf-8")
         _write_atomic(heartbeat_path(), json.dumps({
             "last_run": _dt.datetime.now(_dt.UTC).isoformat(), "exit": code, "findings": len(total.findings),
             "new": len(new), "unscanned": len(total.feed_errors), "summary": str(run_dir / "summary.md"),

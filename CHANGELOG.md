@@ -137,8 +137,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### vulnscan (catch-up retries a run Docker left partial; a re-run keeps the earlier summary)
 
-- `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (a `tools container unavailable`
-  feed error, or an `infra.*` reason code in `remediation.docker`) and Docker is ready now. New config key
+- `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (an `infra.*` reason code in the
+  new `summary.json["infra_codes"]` or in `remediation.docker`; feed error text is never matched, because the
+  `tools container unavailable` prefix also covers ssh, mount and allowlist refusals) and Docker is ready now. New config key
   `catch_up.max_retries_per_day` (default 2) bounds it; the count is kept in the run directory's
   `infra-retry.count`. A retry sends no `run-stale` notification. Until now a recent partial run was never retried.
 - A same-day re-run first copies the earlier `summary.json` / `summary.md` to `summary.<HHMMSS>.{json,md}` (the

@@ -252,7 +252,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `handoff_required` | `false` | `true` puts every repository under handoff delivery: `open-pr` waits for the repository orchestrator's `approve-staged` verdict ([handoff](#agentteamsvulnscanhandoff)). A project's brief can ask for it alone with `vulnerability_scanning.delivery: handoff` |
 | `agent` | see below | Agent mode |
 | `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
-| `catch_up` | `{"max_retries_per_day": 2}` | `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (a `tools container unavailable` feed error, or an `infra.*` code in `remediation.docker`) and Docker is ready now, at most `max_retries_per_day` times per date (0–10; counted in the run directory's `infra-retry.count`) ([`catch_up_due`](#dailycatch_up_duecfg-dailycatch_upcfg)) |
+| `catch_up` | `{"max_retries_per_day": 2}` | `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (an `infra.*` code in `summary.json["infra_codes"]` or `remediation.docker`) and Docker is ready now, at most `max_retries_per_day` times per date (0–10; counted in the run directory's `infra-retry.count`) ([`catch_up_due`](#dailycatch_up_duecfg-dailycatch_upcfg)) |
 | `docker` | `{"autostart": false, "start_timeout_s": 240, "auto_selftest": "on-change"}` | Docker readiness, checked once before each scan ([`docker_readiness`](#agentteamsvulnscandocker_readiness)); a partial block is merged over these defaults (table below) |
 
 The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
@@ -1330,8 +1330,8 @@ daily summary's remediation readiness section repeats it.
 
 `catch_up_due` gives `(due, hours since the last completed run)`: due when the heartbeat is missing,
 unreadable (hours `None`) or older than `stale_after_hours`, or when `daily.infra_retry_due(cfg)` names today's run
-directory: the last run exited 3, its `summary.json` names Docker as a cause (a `tools container unavailable` feed
-error, or an `infra.*` code in `remediation.docker`), fewer than `catch_up.max_retries_per_day` retries have run for
+directory: the last run exited 3, its `summary.json` names Docker as a cause (an `infra.*` code in `infra_codes`, the
+run's Docker reason codes, or in `remediation.docker`; feed error text is never matched), fewer than `catch_up.max_retries_per_day` retries have run for
 that date, and `docker_readiness.ensure(cfg, start=False)` is ready now. `catch_up` first checks the daily run lock
 (`daily.run_in_progress()`): while another daily run holds it, it prints one line on stderr and returns `None`
 without notifying. When the last run is stale it sends `run-missing` or `run-stale` and runs `run_daily`; when an
