@@ -49,12 +49,8 @@ xml_esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&
 
 install_job() {
   local interval="${1:-1800}" f path bak
+  [[ "$interval" =~ ^[0-9]+$ && "$interval" -ge 60 ]] || { bad "interval must be whole seconds, at least 60: $interval"; exit 2; }
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$(dirname "$PLIST")"
-  bak="$CFG_DIR/vulnscan-remediation-backups/$(date +%Y%m%dT%H%M%S)"   # what this install replaces, kept
-  for f in "${FILES[@]}"; do [[ -f "$INSTALL_DIR/$f" ]] && { mkdir -p "$bak"; cp -p "$INSTALL_DIR/$f" "$bak/"; }; done
-  [[ -f "$PLIST" ]] && { mkdir -p "$bak"; cp -p "$PLIST" "$bak/"; }
-  [[ -d "$bak" ]] && ok "backed up the replaced scripts and plist to $bak"
-  for f in "${FILES[@]}"; do install -m 0755 "$SRC/$f" "$INSTALL_DIR/$f"; done
   [[ -f "$OPERATOR_ACTIONS" ]] || warn "no $OPERATOR_ACTIONS: the handoff steps are reported as a problem until it exists"
   if [[ ! -f "$REMEDIATION_CONF" ]]; then
     printf '%s\n' "# vulnscan remediation site settings (KEY=VALUE; read, never sourced). See vulnscan-handoff-lib.sh." \
@@ -68,6 +64,12 @@ install_job() {
   [[ -d "$REPOS_ROOT" ]] || { bad "VULNSCAN_REPOS_ROOT $REPOS_ROOT does not exist: not installing"; exit 2; }
   "${VS[@]}" remediation-report --help >/dev/null 2>&1 ||
     { bad "the installed agentteams has no 'remediation-report' (deploy the package first): not installing"; exit 2; }
+  # Only now replace what the loaded job runs (a refused install changes nothing), keeping what it replaces.
+  bak="$CFG_DIR/vulnscan-remediation-backups/$(date +%Y%m%dT%H%M%S)"
+  for f in "${FILES[@]}"; do [[ -f "$INSTALL_DIR/$f" ]] && { mkdir -p "$bak"; cp -p "$INSTALL_DIR/$f" "$bak/"; }; done
+  [[ -f "$PLIST" ]] && { mkdir -p "$bak"; cp -p "$PLIST" "$bak/"; }
+  [[ -d "$bak" ]] && ok "backed up the replaced scripts and plist to $bak"
+  for f in "${FILES[@]}"; do install -m 0755 "$SRC/$f" "$INSTALL_DIR/$f"; done
   path="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$(dirname "$(command -v node 2>/dev/null || echo /usr/bin/node)"):/usr/bin:/bin:/usr/sbin:/sbin"
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>

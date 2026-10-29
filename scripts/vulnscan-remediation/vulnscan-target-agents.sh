@@ -32,7 +32,7 @@ echo "Standard agent runtime: goose --provider $GOOSE_PROVIDER_STD --model $GOOS
 say "Management-directive signing key ($MGMT_KEYFILE)"
 if [[ -f "$MGMT_KEYFILE" ]]; then
   ok "present"
-elif ask "No key yet. Generate a 256-bit key there (0600; it signs and verifies handoff directives)?"; then
+elif gate "No key yet. Generate a 256-bit key there (0600; it signs and verifies handoff directives)?"; then   # a trust root: operator-only
   mkdir -p "$(dirname "$MGMT_KEYFILE")"; chmod 700 "$(dirname "$MGMT_KEYFILE")"
   ( umask 077; openssl rand -hex 32 > "$MGMT_KEYFILE" )
   ok "generated (never put it in a shell profile or an agent session)"
