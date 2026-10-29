@@ -124,6 +124,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
   `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
 
+### vulnscan (findings already fixed upstream are labelled, not counted as fixed)
+
+- `summary.md` gets a **Checkout freshness** section after the per-repository sections: each scanned repository's
+  branch, commits behind `origin/HEAD` and the age of `FETCH_HEAD`, read from the local refs (no fetch, no
+  credentials).
+- A package finding whose `name==version` is gone from the same file at `origin/HEAD` gets `fixed_upstream: true`
+  in `summary.json`, and its Notes cell ends with `fixed upstream (checkout behind)`. It stays in the findings.
+  Nested repositories and third-party clones are skipped.
+- *Remediation effectiveness* has a new row for these findings, which are not counted as fixed; the other rows are
+  unchanged. Scanning `origin/HEAD` instead of the working tree stays out of scope.
+
 ### vulnscan (catch-up retries a run Docker left partial; a re-run keeps the earlier summary)
 
 - `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (a `tools container unavailable`

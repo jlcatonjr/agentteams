@@ -92,8 +92,9 @@ section and the agent phase use that record instead of probing again, and `summa
    (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
    the previous run, the remediation PRs the executor opened (open, the oldest one's age, open longer
    than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, PRs ready
-   to merge (open, mergeable, every check passed), and
-   repositories held by the futile-retry guard. PR state comes from read-only `gh pr view` calls on the
+   to merge (open, mergeable, every check passed),
+   repositories held by the futile-retry guard, and, on a row of its own, findings already fixed upstream
+   (`fixed_upstream`, never counted as fixed). PR state comes from read-only `gh pr view` calls on the
    PR URLs in the ledger (the newest 50); a failed lookup is counted as unknown. Then `stale-prs` is sent
    when any open remediation PR is older than 3 days or fails CI. These counts are taken before the
    agent phase, so the next run reflects what the agent did. The same lookups write the run's
@@ -440,6 +441,19 @@ nothing. `--hour` must be 0–23 and `--minute` 0–59, or nothing is written. A
 `%` is escaped in the crontab line and the systemd unit. Under systemd, `schedule remove` reports a
 failed `systemctl disable` only when the units were installed.
 
+### Checkout freshness
+
+After scanning each root, `daily._freshness` checks every repository with package findings, read-only and
+offline: no fetch, and the hardened git (`daily._git`: no hooks, no stored credentials; `git show` for file content)
+on the local remote-tracking refs as of the last fetch. `summary.md` gets a `## Checkout freshness` section after
+the per-repository sections: each repository's checked-out branch, the commits `HEAD` lacks from `origin/HEAD` (`no
+origin/HEAD` when it is not set), the age of `FETCH_HEAD`, and how many findings are already fixed upstream. A
+package finding is labelled `fixed_upstream` when the checkout is behind and every file it was found in still
+exists at `origin/HEAD` but no longer pins that `name==version` (a file removed upstream proves nothing); its Notes
+cell ends with `fixed upstream (checkout behind)`. Repositories nested in another inside the scan root, and
+third-party clones (`daily.foreign_clone`), are skipped; a git query that fails leaves the repository unlabelled.
+What is scanned, the fix plans, grants and handoffs are unchanged: the working tree is still what is scanned.
+
 ### Exit codes
 
 | Command | 0 | 1 | 2 | 3 | Other |
@@ -516,6 +530,7 @@ A Finding (`report.Finding`):
 | `unfixed` | integer | advisories with no fixed version that may be shown (includes `fix_hidden`) |
 | `malformed` | integer | advisories whose OSV record had malformed parts, which were skipped (0 in a report written before rc.4) |
 | `fix_hidden` | integer | advisories whose fix version has an unusual format (outside `[A-Za-z0-9.+~:_-]{1,64}`): not shown and not offered; also counted in `unfixed` |
+| `fixed_upstream` | boolean | daily runs only: the checkout is behind `origin/HEAD`, and every file the finding was found in still exists there but no longer pins this `name==version` (read-only, as of the last fetch; see [Checkout freshness](#checkout-freshness)). The finding stays in the list and is not counted as fixed |
 | `ids` | array of strings | advisory ids (GHSA, PYSEC, CVE, `MAL-*`, …) |
 | `locations` | array of strings | manifest paths or install locations |
 | `malicious` | boolean | an OSV `MAL-*` record matches (exit 4) |

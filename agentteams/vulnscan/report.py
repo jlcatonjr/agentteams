@@ -44,6 +44,7 @@ class Finding:
     unscored: int = 0               # advisories with neither a CVSS vector nor a severity label
     malformed: int = 0              # advisories whose record had malformed parts, skipped (osv.quirks; R8)
     fix_hidden: int = 0             # advisories whose fix version has an unusual format (not shown, counted unfixed)
+    fixed_upstream: bool = False    # name==version is gone from the same file at origin/HEAD (the checkout is behind)
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -260,6 +261,8 @@ class Report:
                     notes.append(f.detail)
                 if f.locations:
                     notes.append("at " + ", ".join(f"`{loc}`" for loc in f.locations[:2]))
+                if f.fixed_upstream:   # last, so the existing notes keep their place
+                    notes.append("fixed upstream (checkout behind)")
                 out.append(f"| {mark} | {sev} | {f.kind} | {item} | {f.version} | {f.fix or '—'} | {'; '.join(notes)} |")
             out.append("")
         if unscored:
