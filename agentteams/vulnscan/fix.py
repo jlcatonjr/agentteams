@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.vulnscan import _http, osv, project_policy, subproc_confine
-from agentteams.vulnscan.manifests import REQ_NAME, REQ_PIN, discover, parse
+from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
@@ -56,6 +56,11 @@ CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor r
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
+
+
+def _plain(text: str) -> str:
+    """Return ``text`` for a fix-plan table cell, or ``(unusual)`` when it is not plain crate-name / version text."""
+    return text if _CRATE_SPEC.fullmatch(text) else "(unusual)"
 
 
 @dataclass
@@ -143,7 +148,7 @@ class FixResult:
         for lock in dict.fromkeys(c.path for c in self.cargo_plan):
             out += [f"## crates.io: {self._code(lock)} — plan-only (no staged edit)", "", CARGO_NOTE, "",
                     "| Crate | Installed | → | Action | Command / notes |", "|---|---|---|---|---|"]
-            out += [f"| {c.name} | {c.old} | {c.new or '—'} | {c.action} | {c.note} |"
+            out += [f"| {_plain(c.name)} | {_plain(c.old)} | {c.new or '—'} | {c.action} | {c.note} |"
                     for c in self.cargo_plan if c.path == lock]
             out.append("")
         if self.refused:
@@ -700,7 +705,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         elif path.name == "composer.lock":
             res.composer.append(f"`{rel}`: composer update <pkg> --no-install --no-scripts --no-plugins "
                                 "(then `composer audit`)")
-        elif path.name == "Cargo.lock":   # plan only, with or without apply: nothing here edits a Cargo.lock
+        elif path.name in CRATE_LOCKS:   # plan only, with or without apply: nothing here edits a Cargo.lock
             try:
                 res.cargo_plan += plan_cargo_lock(path, label=rel, private=private)
             except _http.FeedError as exc:

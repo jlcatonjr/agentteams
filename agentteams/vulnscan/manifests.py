@@ -77,6 +77,10 @@ LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.
 CRATE_LOCKS = ("Cargo.lock",)
 #: ``source`` prefixes of crates.io packages in a ``Cargo.lock`` (git index, sparse index).
 CRATES_IO_SOURCES = ("registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/")
+#: What a crates.io crate name and a Cargo.lock version may be (crates.io allows ASCII letters, digits, ``-`` and
+#: ``_``, at most 64; versions are SemVer). Anything else makes the lockfile unscannable (:func:`_cargo_lock`).
+CRATE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+CRATE_VERSION = re.compile(r"[0-9][0-9A-Za-z.+-]{0,63}")
 #: Manifests of ecosystems that are not scanned (file name -> ecosystem): discovered, reported unscannable.
 UNSUPPORTED: dict[str, str] = {
     "environment.yml": "conda",
@@ -236,7 +240,7 @@ def parse(path: Path) -> Manifest:
             _toml_lock(path, m)
         elif name == "Pipfile.lock":
             _pipfile_lock(path, m)
-        elif name == "Cargo.lock":
+        elif name in CRATE_LOCKS:
             _cargo_lock(path, m)
         elif name == "pyproject.toml":
             _pyproject(path, m)
@@ -381,12 +385,25 @@ def _cargo_lock(path: Path, m: Manifest) -> None:
     Path and git packages (the workspace's own crates, or sources OSV does not know) and alternate registries are
     not crates.io packages and are skipped. Cargo.lock records no dev/build distinction, so every crate is
     ``runtime``: it over-reports, never hides.
+
+    The lockfile is repository content: a crates.io entry whose name or version is not a plain string of crate-name
+    / version characters makes the whole file unscannable (reported, never silently dropped), so no such text
+    reaches a fix plan the agents read.
     """
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     for pkg in data.get("package") or []:
+        if not isinstance(pkg, dict):
+            raise TypeError("a [[package]] entry is not a table")
         source = pkg.get("source")
-        if isinstance(source, str) and source.startswith(CRATES_IO_SOURCES):
-            m.deps.append(Dep("crates.io", pkg["name"], str(pkg["version"]), "runtime", str(path)))
+        if not (isinstance(source, str) and source.startswith(CRATES_IO_SOURCES)):
+            continue
+        name, version = pkg.get("name"), pkg.get("version")
+        if not (isinstance(name, str) and isinstance(version, str)
+                and CRATE_NAME.fullmatch(name) and CRATE_VERSION.fullmatch(version)):
+            m.deps.clear()
+            m.unscannable = "a crates.io entry with an unusual name or version: not read"
+            return
+        m.deps.append(Dep("crates.io", name, version, "runtime", str(path)))
     if not m.deps:
         m.unscannable = "no crates.io packages"
 

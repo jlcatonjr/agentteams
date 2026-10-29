@@ -24,12 +24,13 @@ from __future__ import annotations
 import errno
 import hashlib
 import json
-import os
 import re
-import stat
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from agentteams import atomicio
+from agentteams.frameworks._linux_sandbox_emit import LINUX_SANDBOX_LAUNCHER_PROJECT_PATH
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 #: The shipped lineage (see the module docstring).
@@ -39,6 +40,10 @@ TEMPLATE_PATH = _PACKAGE_DIR / "templates" / "universal" / "sandbox" / "confine-
 #: A launcher larger than this is not read (it is ``modified``: no released version is near this size).
 MAX_LAUNCHER_BYTES = 1_000_000
 STATES = ("current", "older", "modified", "missing")
+#: What :func:`safe_state` reports when the shipped lineage itself cannot be read (never a state of a copy).
+UNKNOWN = "unknown"
+#: Where a team carries its launcher, relative to the project root (the emitter's landing path).
+PROJECT_PATH = Path(LINUX_SANDBOX_LAUNCHER_PROJECT_PATH)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -99,24 +104,17 @@ def load_lineage(path: Path = LINEAGE_PATH) -> list[dict[str, Any]]:
 def _read_bounded(path: Path) -> tuple[bytes | None, str]:
     """Return (bytes, "") for a regular file, (None, "") when absent, or (None, why) when refused."""
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        return atomicio.read_regular_nofollow(path, MAX_LAUNCHER_BYTES), ""
     except (FileNotFoundError, NotADirectoryError):
         return None, ""
+    except atomicio.FileTooLargeError:
+        return None, f"{path} is larger than {MAX_LAUNCHER_BYTES} bytes (no released version is)"
+    except ValueError:
+        return None, f"{path} is not a regular file"
     except OSError as exc:
         if exc.errno == errno.ELOOP:
             return None, f"{path} is a symlink (refused, not followed)"
         return None, f"{path} is unreadable ({exc.strerror})"
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            return None, f"{path} is not a regular file"
-        data = os.read(fd, MAX_LAUNCHER_BYTES + 1)
-    except OSError as exc:
-        return None, f"{path} is unreadable ({exc.strerror})"
-    finally:
-        os.close(fd)
-    if len(data) > MAX_LAUNCHER_BYTES:
-        return None, f"{path} is larger than {MAX_LAUNCHER_BYTES} bytes (no released version is)"
-    return data, ""
 
 
 def launcher_state(path: Path, lineage: list[dict[str, Any]] | None = None) -> LauncherState:
@@ -156,3 +154,23 @@ def launcher_state(path: Path, lineage: list[dict[str, Any]] | None = None) -> L
                                    f"version(s){', including a security fix' if security else ''}; newest "
                                    f"{newest['commit'][:8]} ({newest['date'][:10]})"),
                          newer=newer, newer_security=security)
+
+
+def safe_state(path: Path) -> LauncherState:
+    """Return :func:`launcher_state` for *path*, or state :data:`UNKNOWN` when the shipped lineage is unreadable.
+
+    For status output, which must not fail because the install is damaged.
+
+    Args:
+        path: A launcher copy.
+
+    Returns:
+        The state; ``unknown`` with the reason as detail when the lineage cannot be read or is malformed.
+
+    Raises:
+        Nothing.
+    """
+    try:
+        return launcher_state(path)
+    except (OSError, ValueError) as exc:
+        return LauncherState(UNKNOWN, f"launcher lineage unreadable: {exc}")

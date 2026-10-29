@@ -25,6 +25,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from agentteams import launcher_lineage
 from agentteams.vulnscan import coverage, paths, project_policy, registry
 from agentteams.vulnscan.report import Report
 
@@ -276,14 +277,7 @@ def launcher_status(path: Path) -> dict[str, Any]:
         ``{"path", "state", "detail", "newer", "newer_security"}``; ``state`` is ``unknown`` when the shipped
         lineage cannot be read.
     """
-    from agentteams import launcher_lineage
-
-    try:
-        found = launcher_lineage.launcher_state(path).to_dict()
-    except (OSError, ValueError) as exc:
-        found = {"state": "unknown", "detail": f"launcher lineage unreadable: {exc}", "newer": 0,
-                 "newer_security": False}
-    return {"path": str(path), **found}
+    return {"path": str(path), **launcher_lineage.safe_state(path).to_dict()}
 
 
 def project_status(project: Path, cfg: dict[str, Any] | None) -> dict[str, Any]:
@@ -331,7 +325,7 @@ def project_status(project: Path, cfg: dict[str, Any] | None) -> dict[str, Any]:
     out["grant_covers_fix_checkout"] = any(grant.covers(g, "stage-fix", target) for g in grants)
     out["coverage_state"] = coverage.project_state(cfg, entry, project.expanduser().resolve(), grants)
     out["unsupported_manifests"] = coverage.unsupported_manifests(target, cfg or {})[0]
-    out["launcher"] = launcher_status(project.expanduser().resolve() / "sandbox" / "confine-run.sh")
+    out["launcher"] = launcher_status(project.expanduser().resolve() / launcher_lineage.PROJECT_PATH)
     out["problems"] = problems + [f"grant: {p}" for p in grant_problems]
     return out
 

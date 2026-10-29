@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -344,6 +345,52 @@ def refuse_scan_only(target: str) -> None:
     entry = entry or (by_path[0] if by_path else None)
     if entry is not None and entry.level != "remediate":
         raise _exec_error(f"{target} is enrolled at {entry.level}: scanning only")
+
+
+def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
+    """Refuse a ``stage-fix`` on a repository whose only fix plans are plan-only (crates.io ``Cargo.lock``).
+
+    Checked before a grant use is spent: ``stage-fix`` could only fail there, with a reason that does not apply
+    ("nothing fixable without a major jump"), and the retry guard lets it try again whenever the plan changes.
+    A repository with any manifest ``stage-fix`` may edit, or with no ``Cargo.lock``, is left to the usual checks.
+
+    Args:
+        op: Requested operation.
+        target: Canonical repository path.
+        editable: The executor's pattern of files a staged fix may change (``executor.ALLOWED_CHANGED``).
+
+    Raises:
+        ExecError: ``op`` is ``stage-fix`` and every manifest the scan reads there is a plan-only lockfile.
+    """
+    if op != "stage-fix":
+        return
+    from agentteams.vulnscan import manifests, project_policy   # lazy: only stage-fix walks the repository
+
+    repo = Path(target)
+    excl = project_policy.read_policy(repo).exclude_paths
+    found = [m.relative_to(repo).as_posix() for m in manifests.discover(repo)]
+    found = [rel for rel in found if not (excl and project_policy.is_excluded(rel, excl))]
+    plan_only = [rel for rel in found if rel.rsplit("/", 1)[-1] in manifests.CRATE_LOCKS]
+    if plan_only and not any(editable.search(rel) for rel in found):
+        raise _exec_error(f"{repo.name}: only plan-only fixes here ({len(plan_only)} Cargo.lock file(s)); stage-fix "
+                          "never edits a Cargo.lock: run the fix plan's commands by hand")
+
+
+def refuse_repo_op(op: str, target: str, editable: re.Pattern[str]) -> None:
+    """Apply the per-repository refusals, in order: :func:`refuse_scan_only`, :func:`refuse_by_brief`,
+    :func:`refuse_plan_only`.
+
+    Args:
+        op: Requested operation.
+        target: Canonical repository path.
+        editable: The executor's pattern of files a staged fix may change.
+
+    Raises:
+        ExecError: Whichever refusal applies first.
+    """
+    refuse_scan_only(target)
+    refuse_by_brief(op, target)
+    refuse_plan_only(op, target, editable)
 
 
 def refuse_by_brief(op: str, target: str) -> None:

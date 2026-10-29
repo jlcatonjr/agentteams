@@ -15,7 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   daily run. Fixes are **plan-only**: the plan gives `cargo update -p <name>@<installed> --precise <fix>`; the
   executor never edits a `Cargo.lock` (`validate_diff` refuses it) and the agents are told not to request
   `stage-fix` for these rows. `Cargo.lock` does not join `LOCKFILES`, so a `package.json` or `pyproject.toml`
-  beside one is still reported. `private_packages` match crate names with `-` and `_` alike.
+  beside one is still reported. `private_packages` match crate names with `-` and `_` alike. A lockfile is
+  repository content: a crates.io entry whose name or version is not plain crate-name / version text makes the whole
+  file unscannable, so no such text reaches a fix plan the agents read. `stage-fix` on a repository whose only
+  manifests are plan-only is refused before a grant use is spent (`executor_guard.refuse_plan_only`).
+  **Expect a one-time burst:** the first daily after upgrading reports every existing crates.io finding as new.
 - **Lean's `.lake` package cache is skipped** like `node_modules`. Its vendored packages' own lockfiles are not
   the project's dependencies.
 - **`status --project` and the coverage section no longer list manifests the scan never reads.** Before, files
@@ -31,8 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   On 2026-10-28 a catch-up daily reported all three servers unscanned because Docker could not find that directory
   in the pipx venv (140 findings missing, the run partial). The kit is now copied once per process into a 0700
   directory under the state dir: regular files only (symlinks and subdirectories refused), every required script
-  present. Each run re-hashes the copy and refuses one that changed after staging. A missing kit fails closed with a
-  reason instead of `docker exit 125`.
+  present. A long-running executor re-stages when the packaged kit changes. Each run re-hashes the copy and refuses
+  one that changed after staging. A missing kit fails closed with a reason instead of `docker exit 125`. Not covered:
+  a kit altered on disk before staging (the integrity pins are not shipped in an installed package).
 - **Integrity:** `references/enforcement-integrity.json` is regenerated for the changed pinned modules and newly pins
   `agentteams/launcher_lineage.py` and `agentteams/data/launcher_lineage.json`.
 

@@ -116,3 +116,29 @@ def test_run_kit_mounts_and_runs_the_staged_copy(tmp_path: Path, monkeypatch: py
     assert seen["argv"][0] == "bash" and Path(seen["argv"][1]).name == "remote.sh"
     assert kit.is_relative_to(tmp_path / "state") and not kit.is_relative_to(src)
     assert kit in seen["readonly"] and src not in seen["readonly"]
+
+
+def test_a_changed_package_is_staged_again_and_the_old_copy_removed(tmp_path: Path) -> None:
+    src = _kit(tmp_path)
+    first, d1 = ssh.stage_kit(src)
+    (src / "ioc-x.txt").write_text("bad==2\n", encoding="utf-8")   # an upgrade under a long-running executor
+    second, d2 = ssh.stage_kit(src)
+    assert second != first and d2 != d1 and not first.exists()
+    assert (second / "ioc-x.txt").read_text(encoding="utf-8") == "bad==2\n"
+
+
+def test_a_fifo_in_the_kit_is_refused_without_hanging(tmp_path: Path) -> None:
+    src = _kit(tmp_path)
+    os.mkfifo(src / "planted")
+    with pytest.raises(Unavailable, match="planted refused"):
+        ssh.stage_kit(src)
+
+
+def test_copies_left_by_a_killed_process_are_removed(tmp_path: Path) -> None:
+    base = tmp_path / "state" / "tools"
+    orphan = base / "kit-999999-abc" / "kit"
+    orphan.mkdir(parents=True)
+    mine_alive = base / f"kit-{os.getppid()}-def"   # a live process's copy is kept
+    mine_alive.mkdir()
+    ssh.stage_kit(_kit(tmp_path))
+    assert not orphan.parent.exists() and mine_alive.exists()

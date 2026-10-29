@@ -248,8 +248,7 @@ def authorize(op: str, target: str, request_id: str, cfg: dict[str, Any]) -> dic
             executor_guard.refuse_protected_repos(target, cfg)
         except grant.GrantError as exc:   # an unreadable grant file could name a protected repo: refuse
             raise ExecError(f"cannot tell which repositories are protected ({exc}); refusing") from exc
-        executor_guard.refuse_scan_only(target)
-        executor_guard.refuse_by_brief(op, target)
+        executor_guard.refuse_repo_op(op, target, ALLOWED_CHANGED)   # enrolment, brief, plan-only manifests
         if why := retry_guard.futile_reason(op, target, rows):   # nothing fixable, plan unchanged since
             raise ExecError(why)
     if op == "open-pr" and handoff.required(cfg, Path(target)):   # H3: the repository's orchestrator approves first

@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams import launcher_lineage
+
 HANDOFF_DIR = ".vulnscan-handoff"
 VERDICTS_FILE = "verdicts.csv"
 VERDICTS = ("approve-staged", "own-pr", "defer", "reject")
@@ -51,8 +53,6 @@ _BRANCH = re.compile(r"^vulnscan/\d{8}-([0-9a-f]{6,64})$")
 _HANDOFF_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 #: A handoff packet is ``<YYYYMMDD><6 digits>.md``; anything else in the directory (review notes, plans) is not one.
 _PACKET_ID = re.compile(r"^\d{14}$")
-#: The launcher a home carries, relative to it.
-LAUNCHER_REL = Path("sandbox") / "confine-run.sh"
 #: The worktree under ``<repo>.worktrees/`` where the operator's handoff tooling renders a repository's goose team.
 GOOSE_TEAM_WORKTREE = "goose-agent-team"
 
@@ -373,7 +373,7 @@ def fallback_launcher(cfg: dict[str, Any] | None) -> Path | None:
     """
     agent = cfg.get("agent") if isinstance(cfg, dict) else None
     team = str(agent.get("team_dir") or "").strip() if isinstance(agent, dict) else ""
-    return Path(team).expanduser() / LAUNCHER_REL if team else None
+    return Path(team).expanduser() / launcher_lineage.PROJECT_PATH if team else None
 
 
 def handoff_launcher(repo: Path, fallback: Path | None) -> Path | None:
@@ -387,22 +387,16 @@ def handoff_launcher(repo: Path, fallback: Path | None) -> Path | None:
         The goose home's (:func:`goose_home`, else the checkout's) ``sandbox/confine-run.sh`` when it is a file,
         else *fallback* when that is a file, else None (the handoff refuses to run goose).
     """
-    own = (goose_home(repo) or repo) / LAUNCHER_REL
+    own = (goose_home(repo) or repo) / launcher_lineage.PROJECT_PATH
     if own.is_file():   # like the tooling's [[ -f ]]: a symlink to a file counts (and is then reported modified)
         return own
     return fallback if fallback is not None and fallback.is_file() else None
 
 
 def _launcher_fields(launcher: Path | None) -> dict[str, str]:
-    from agentteams import launcher_lineage   # lazy: read only for status
-
     if launcher is None:
         return {"launcher": "", "launcher_state": "missing", "launcher_detail": "no launcher in the home or fallback"}
-    try:
-        found = launcher_lineage.launcher_state(launcher)
-    except (OSError, ValueError) as exc:
-        return {"launcher": str(launcher), "launcher_state": "unknown",
-                "launcher_detail": f"launcher lineage unreadable: {exc}"}
+    found = launcher_lineage.safe_state(launcher)
     return {"launcher": str(launcher), "launcher_state": found.state, "launcher_detail": found.detail}
 
 

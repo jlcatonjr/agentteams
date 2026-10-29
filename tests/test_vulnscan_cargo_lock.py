@@ -116,13 +116,19 @@ def test_lock_without_crates_io_packages_is_unscannable(tmp_path: Path, text: st
 @pytest.mark.parametrize("text", [
     "version = 3\n[[package]\n",                                        # not TOML
     'package = ["x"]\n',                                                # package entries are not tables
-    f'[[package]]\nversion = "1.0.0"\nsource = "{CRATES_GIT}"\n',       # no name
     b"\xff\xfe".decode("latin-1")])                                     # not UTF-8 once written as latin-1
 def test_malformed_lock_is_unscannable_and_never_raises(tmp_path: Path, text: str) -> None:
     path = tmp_path / "Cargo.lock"
     path.write_bytes(text.encode("latin-1"))
     m = manifests.parse(path)
     assert not m.deps and m.unscannable.startswith("could not parse")
+
+
+def test_a_crates_io_entry_without_a_name_is_unscannable(tmp_path: Path) -> None:
+    path = tmp_path / "Cargo.lock"
+    path.write_text(f'[[package]]\nversion = "1.0.0"\nsource = "{CRATES_GIT}"\n', encoding="utf-8")
+    m = manifests.parse(path)
+    assert not m.deps and m.unscannable == "a crates.io entry with an unusual name or version: not read"
 
 
 def test_cargo_lock_is_no_longer_an_unsupported_ecosystem() -> None:
@@ -222,3 +228,48 @@ def test_fix_plan_withholds_private_crates_and_flags_malicious(tmp_path: Path, f
     ("1.0.0-beta.2", "1.0.0-beta.11"), ("1.0.0-rc.1", "1.0.0"), ("1.0.0", "1.0.1-alpha")])
 def test_version_key_orders_semver_prereleases(low: str, high: str) -> None:
     assert version_key(low) < version_key(high)
+
+
+@pytest.mark.parametrize("entry", [
+    'name = "evil|crate"\nversion = "1.0.0"',
+    'name = "ok"\nversion = "1.0.0\\n| injected | row |"',
+    'name = "ok"\nversion = "1.0.0`whoami`"',
+    'name = 7\nversion = "1.0.0"',
+    'name = "ok"\nversion = 1',
+])
+def test_a_hostile_crates_io_entry_makes_the_lock_unscannable(tmp_path: Path, entry: str) -> None:
+    lock = tmp_path / "Cargo.lock"
+    lock.write_text(f'version = 3\n\n[[package]]\nname = "fine"\nversion = "0.1.0"\nsource = "{CRATES_GIT}"\n\n'
+                    f'[[package]]\n{entry}\nsource = "{CRATES_GIT}"\n', encoding="utf-8")
+    m = manifests.parse(lock)
+    assert m.deps == [] and m.unscannable == "a crates.io entry with an unusual name or version: not read"
+    assert fix.plan_cargo_lock(lock) == []   # nothing of it reaches a fix plan
+
+
+def test_unusual_text_never_reaches_a_plan_table_cell() -> None:
+    res = fix.FixResult()
+    res.cargo_plan = [fix.PinChange("Cargo.lock", "x|y", "1.0`id`", "", "no-clean-release", ["RUSTSEC-0"], "n")]
+    table = res.markdown()
+    assert "x|y" not in table and "`id`" not in table and "| (unusual) | (unusual) |" in table
+
+
+def test_executor_refuses_stage_fix_where_every_manifest_is_plan_only(tmp_path: Path) -> None:
+    from agentteams.vulnscan import executor, executor_guard
+
+    repo = tmp_path / "rusty"
+    (repo / "crate").mkdir(parents=True)
+    (repo / "crate" / "Cargo.lock").write_text(LOCK_V3, encoding="utf-8")
+    with pytest.raises(executor.ExecError, match="only plan-only fixes here"):
+        executor_guard.refuse_plan_only("stage-fix", str(repo), executor.ALLOWED_CHANGED)
+    executor_guard.refuse_plan_only("open-pr", str(repo), executor.ALLOWED_CHANGED)   # other ops: not this check
+    (repo / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
+    executor_guard.refuse_plan_only("stage-fix", str(repo), executor.ALLOWED_CHANGED)   # editable manifest: allowed
+
+
+def test_the_plan_only_guard_runs_before_a_grant_use_is_spent() -> None:
+    import inspect
+
+    from agentteams.vulnscan import executor
+
+    src = inspect.getsource(executor.authorize)
+    assert src.index("refuse_repo_op") < src.index('ledger.append("begun"')

@@ -64,3 +64,11 @@ def test_an_exclude_outside_the_workspace_changes_nothing(tmp_path: Path) -> Non
     other = tmp_path / "elsewhere"
     other.mkdir()
     assert coverage.unsupported_manifests(ws, {"exclude": [str(other)]}) == coverage.unsupported_manifests(ws)
+
+
+def test_a_workspace_whose_manifests_are_all_excluded_has_nothing_to_scan(tmp_path: Path) -> None:
+    ws = _workspace(tmp_path)
+    cfg = {"exclude": [str(ws / "proofs"), str(ws / "condaenv"), str(ws / "requirements.txt")]}
+    assert coverage.nothing_to_scan(ws) is False
+    assert coverage.nothing_to_scan(ws, cfg) is True
+    assert coverage.project_state(cfg, None, ws, []) == "nothing to scan"

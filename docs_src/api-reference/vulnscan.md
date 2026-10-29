@@ -313,7 +313,9 @@ The `confine` block (`subproc_confine.settings`; any other key, or a wrong type,
 | PyPI | `pyproject.toml` alone (no lockfile, no requirements) | unscannable: "pyproject.toml without a lockfile" |
 | npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml`) |
 | Packagist | `composer.lock` | |
-| crates.io | `Cargo.lock` (v1–v4; `CRATE_LOCKS`) | only `[[package]]` entries whose `source` is the crates.io index (`CRATES_IO_SOURCES`: `registry+https://github.com/rust-lang/crates.io-index`, `sparse+https://index.crates.io/`); path, git and other-registry crates are skipped. Every crate is `runtime` (the lockfile records no dev/build split). A lock with none is unscannable: "no crates.io packages". Not in `LOCKFILES`, so it never hides a `package.json` / `pyproject.toml` beside it. Fixes are plan-only |
+| crates.io | `Cargo.lock` (v1–v4; `CRATE_LOCKS`) | only `[[package]]` entries whose `source` is the crates.io index (an entry with a name or version outside
+`CRATE_NAME` / `CRATE_VERSION` makes the whole lock unscannable: "a crates.io entry with an unusual name or version:
+not read") (`CRATES_IO_SOURCES`: `registry+https://github.com/rust-lang/crates.io-index`, `sparse+https://index.crates.io/`); path, git and other-registry crates are skipped. Every crate is `runtime` (the lockfile records no dev/build split). A lock with none is unscannable: "no crates.io packages". Not in `LOCKFILES`, so it never hides a `package.json` / `pyproject.toml` beside it. Fixes are plan-only |
 
 Manifests of ecosystems vulnscan does not read are discovered too (`manifests.unsupported_ecosystem(name)`)
 and reported unscannable with the reason `unsupported ecosystem: <name>`:
@@ -562,7 +564,7 @@ sent to OSV, and repositories enrolled at `off` are skipped (`engine.scan_path(.
 names per state grouped by owner (the published review has totals only). Each entry's fix checkout is in
 exactly one state, in this order of precedence: `missing on disk`, `not a git repository`, `excluded`,
 `nothing to scan` (the checkout holds no dependency manifest that `manifests.discover` lists, unsupported
-ones included; `coverage.nothing_to_scan(path)`; not a coverage gap, and Rule S-VM does not report
+ones included; `coverage.nothing_to_scan(path, cfg)`, which applies the same exclusions as `unsupported_manifests`; not a coverage gap, and Rule S-VM does not report
 it), `unsupported ecosystem` (every manifest it holds is of an ecosystem vulnscan does not read, see
 [Supported manifests](#supported-manifests); `coverage.unsupported_only(path)`; a coverage gap that Rule
 S-VM reports), then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
@@ -591,7 +593,8 @@ Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_id
 `discover(root) -> dict[str, list[Path]]`, `pick_fix_checkout(paths) -> Path`, `registry_path()`,
 `is_ci()`, `LEVELS`, `SCANNED_LEVELS`. `agentteams.vulnscan.coverage`: `effective_roots(cfg, entries)
 -> list[Root]`, `operator_skips(cfg, entries)`, `states(cfg, entries, grants, unsupported=None)`,
-`markdown(rows, *, names, unsupported=None)`, `nothing_to_scan(path)`, `unsupported_manifests(path, cfg=None)`,
+`markdown(rows, *, names, unsupported=None)`, `scanned_manifests(path, cfg=None)` (the discovered manifests minus the
+config's `exclude` paths and the brief's `exclude_paths`), `nothing_to_scan(path, cfg=None)`, `unsupported_manifests(path, cfg=None)`,
 `unsupported_only(path, cfg=None)`,
 `brief_lines(entries, report, *, names)`, `section(cfg, *, names, report=None)`,
 `project_state(cfg, entry, path, grants)`, `within(path, root)` (contained after `~` expansion and symlink
@@ -1686,6 +1689,8 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `target_origins(target)` | The target's origin identities: the config text's `origin` URL and the push URL git itself would use (hardened `remote get-url --push origin`); refuses an unreadable identity |
 | `refuse_scan_only(target)` | Refuses a target whose registry entry (by identity, or by a registered checkout containing it) is not at `remediate`, whose origin changed since enrolment, or that is an unregistered repository nested in a registered checkout; an unreadable registry or identity refuses |
 | `refuse_by_brief(op, target)` | Refuses when the brief's level is set and is not `remediate`, and `open-pr` when `delivery` is `plan` |
+| `refuse_plan_only(op, target, editable)` | Refuses `stage-fix` on a repository whose every scanned manifest (brief `exclude_paths` applied) is plan-only — today a crates.io `Cargo.lock` — and none matches `editable` (`executor.ALLOWED_CHANGED`): stage-fix could only fail there, so it is refused before a grant use is spent |
+| `refuse_repo_op(op, target, editable)` | What `authorize` calls for a repository op: `refuse_scan_only`, `refuse_by_brief`, `refuse_plan_only`, in that order |
 | `brief_base_ref(repo)` | `origin/<base_branch>` when the brief sets one (refuses when origin lacks it), else `None` |
 | `require_remote_branch(wt, branch)` | Refuses `open-pr` unless origin has `branch` now (`ls-remote`) |
 | `protected_repo_paths(cfg)` | The agentteams checkout, `agent.team_dir`, every grant file's `governance_dir`, every publish ops repo |
@@ -2474,10 +2479,14 @@ check, and the flags fingerprint a self-test record must match.
 One packaged server-kit script against one hosts.conf host in the tools container: `build_ssh_files`
 writes the run's ssh config and known_hosts lines (from `ssh -G` and `ssh-keygen -F` on the host) into
 a fresh directory that is removed afterwards; the egress allowlist is the first hop. The kit is not mounted from
-the installed package: `stage_kit(src) -> (copy, digests)` copies it once per process into a fresh 0700 directory
-under `<state dir>/tools/` (regular files only, at most `KIT_MAX_BYTES` each, every `KIT_REQUIRED` script present;
-a symlink or subdirectory is refused, never followed), and each run re-hashes the copy and refuses one that
-changed after staging. A missing kit raises `Unavailable` naming a possible reinstall.
+the installed package: `stage_kit(src) -> (copy, digests)` copies it into a fresh 0700 directory under
+`<state dir>/tools/` (regular files only, read with `atomicio.read_regular_nofollow`, at most `KIT_MAX_BYTES` each,
+every `KIT_REQUIRED` script present; a symlink, FIFO or subdirectory is refused, never followed). The packaged files
+are re-read on each call: unchanged, the copy is reused; changed (an upgrade under a long-running executor), a new
+copy replaces it; gone (a reinstall in progress), the existing copy is used. Copies left by killed processes are
+removed. Each run re-hashes the copy and refuses one that changed after staging. A kit already altered on disk before
+staging is not detected here (the integrity pins are not shipped in an installed package). A missing kit that was
+never staged raises `Unavailable` naming a possible reinstall.
 
 ### `agentteams.vulnscan.tools_image`
 
