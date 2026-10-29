@@ -7,7 +7,9 @@ blanket escalation refused every stage-fix, open-pr and server op for a day):
 
 - the agentteams version that ran (B4; a reinstall changes the tools image tag, :func:`subproc_confine.image_tag`);
 - the schedule drift (:func:`schedule.drift`, B3);
-- the tools container's binding (:func:`subproc_confine.unavailable_reason`) when subprocess confinement is on;
+- the tools container's binding when subprocess confinement is on (:func:`subproc_confine.unavailable_reason`, whose
+  probe is :mod:`.docker_readiness`: inside a daily run, that run's one check), with its reason code, and the run's
+  per-layer Docker record (``docker``);
 - open escalations (:func:`escalations.open_escalations`): each blocks its scope until the operator resolves it;
 - the active grants, those expiring within :data:`EXPIRY_WARN_DAYS`, the grant directory's problems, and the
   configured servers no active grant names for ``server-audit`` / ``server-dryrun``.
@@ -50,16 +52,20 @@ def collect(cfg: dict[str, Any], *, now: datetime | None = None) -> dict[str, An
         now: The time to judge expiry against (tests).
 
     Returns:
-        ``{"agentteams_version", "schedule_drift", "tools_container", "open_escalations", "grants",
-        "grants_expiring", "grant_problems", "servers_uncovered", "configured", "blocked"}``;
+        ``{"agentteams_version", "schedule_drift", "tools_container", "tools_container_code", "docker",
+        "open_escalations", "grants", "grants_expiring", "grant_problems", "servers_uncovered", "configured",
+        "blocked"}``; ``docker`` is the daily run's :class:`.docker_readiness.Readiness` as
+        ``{layer: {state, code, message}}`` ({} outside a daily run);
         ``blocked`` lists the reasons no executor op can run for some scope (empty: none found). Remediation counts
         as ``configured`` when a grant exists (valid or not), agent mode is on, or ``fix_mode`` is
         ``apply-worktree``; otherwise nothing is reported as blocked.
     """
-    from agentteams.vulnscan import escalations, grant, schedule, subproc_confine
+    from agentteams.vulnscan import docker_readiness, escalations, grant, schedule, subproc_confine
 
     now = now or datetime.now(UTC)
+    run_docker = docker_readiness.current()
     out: dict[str, Any] = {"agentteams_version": version(), "schedule_drift": "", "tools_container": "",
+                           "tools_container_code": "", "docker": run_docker.to_dict() if run_docker else {},
                            "open_escalations": [], "grants": [], "grants_expiring": [], "grant_problems": [],
                            "servers_uncovered": [], "blocked": []}
     out["schedule_drift"] = schedule.drift(cfg)
@@ -88,8 +94,8 @@ def collect(cfg: dict[str, Any], *, now: datetime | None = None) -> dict[str, An
         return out
     try:   # only the executor's ops need the tools container, and they need a grant (or apply-worktree staging)
         if (grants or cfg.get("fix_mode") == "apply-worktree") and not subproc_confine.opted_out(cfg):
-            out["tools_container"] = subproc_confine.unavailable_reason(
-                subproc_confine.image_tag(subproc_confine.settings(cfg)))
+            why = subproc_confine.unavailable_reason(subproc_confine.image_tag(subproc_confine.settings(cfg)))
+            out["tools_container"], out["tools_container_code"] = str(why), getattr(why, "code", "")
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         out["tools_container"] = f"could not check: {type(exc).__name__}: {exc}"[:300]
     if out["tools_container"]:

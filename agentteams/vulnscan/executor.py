@@ -907,8 +907,9 @@ def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, reque
     try:
         confined = subproc_confine.scope(cfg, scratch=[_worktrees_dir()])
     except subproc_confine.Unavailable as exc:   # nothing runs on the host instead
-        ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
-        return {"status": "refused", "detail": str(exc)}
+        code = {"reason_code": exc.code} if exc.code else {}   # docker_readiness: infra.* (T2-A)
+        ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000], **code)
+        return {"status": "refused", "detail": str(exc), **code}
     with confined:
         return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id)
 

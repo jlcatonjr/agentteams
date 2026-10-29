@@ -124,6 +124,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
   `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
 
+### vulnscan (one Docker readiness check, with reason codes)
+
+- **New `docker_readiness` module and `vulnscan ready [--ensure] [--json]`** (exit 0 ready, 3 degraded, 2 an
+  unusable config). It checks the docker CLI, the daemon, the tools and agent images and their self-test records,
+  and gives each failure a stable reason code: `infra.docker_daemon`, `infra.tools_image`, `infra.selftest` or
+  `infra.no_gui_session`. A stopped daemon, an image that is not built and a stale self-test no longer share one
+  message.
+- The four Docker probes now delegate to it, with unchanged signatures: `subproc_confine.unavailable_reason`,
+  `agent_run.docker_unreachable`, the `tools_container` entry of `remediation_status.collect`, and the executor's
+  batch check. A refused ledger row for an unavailable tools container gains `reason_code`; its detail keeps the
+  `tools container unavailable:` prefix.
+- **The daily run checks Docker once, before it scans.** The servers, the staging, the remediation readiness
+  section and the agent phase use that record instead of probing again. `summary.json` records it as
+  `remediation.docker`, `{layer: {state, code, message}}`.
+- New `docker` config block: `autostart` (default **false**: only an operator's opt-in lets the run start Docker,
+  with `open -g -a Docker` or `systemctl --user start`, never sudo), `start_timeout_s` (240) and `auto_selftest`
+  (`on-change`: a self-test whose record is for another image is re-run, once per image change). It never builds
+  an image.
+
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
 - **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the

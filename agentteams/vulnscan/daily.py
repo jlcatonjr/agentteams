@@ -47,8 +47,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, merge_digest, notify, osv, paths
-from agentteams.vulnscan import registry, remediation_status, repo_alias, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import coverage, docker_readiness, effectiveness, engine, executor, fix, merge_digest, notify
+from agentteams.vulnscan import osv, paths, registry, remediation_status, repo_alias
+from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
@@ -95,6 +96,9 @@ DEFAULT_CONFIG: dict = {
     # Tools container for git, npm and the server kit in executor ops and apply-worktree staging (subproc_confine):
     # {} = the defaults (subprocesses on, fail closed); "subprocesses": false is the operator's opt-out.
     "confine": {},
+    # Docker readiness (docker_readiness.ensure, before each scan): starting Docker is the operator's opt-in
+    # (autostart); a self-test whose record is for another image is re-run once (auto_selftest "on-change" | "off").
+    "docker": dict(docker_readiness.DEFAULTS),
 }
 
 
@@ -152,6 +156,8 @@ def _config_problem(cfg: dict[str, Any]) -> str:
         except ValueError as exc:
             return str(exc)
     if problem := subproc_confine.config_problem(cfg):
+        return problem
+    if problem := docker_readiness.config_problem(cfg):
         return problem
     when = cfg["schedule"]
     if not isinstance(when, dict):
@@ -579,20 +585,26 @@ def run_daily(cfg: dict, *, today: str | None = None) -> tuple[Report, int, Path
 
 
 def _run_locked(cfg: dict, today: str, state: Path, run_dir: Path) -> tuple[Report, int, Path]:
-    """The body of :func:`run_daily`, under the daily run lock."""
+    """The body of :func:`run_daily`, under the daily run lock.
+
+    Docker readiness is ensured once, first (:func:`docker_readiness.ensure`: it may start Docker or re-run a
+    stale self-test only as the ``docker`` config allows); the servers, the staging, the summary's remediation
+    readiness and the agent phase all use that record instead of probing again.
+    """
     run_dir.mkdir(parents=True, exist_ok=True)
     total = Report(target="daily")
     staged: list[str] = []
-    try:
-        _collect(cfg, today, run_dir, total, staged)
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
-        # Deliberately wide (named, not broad): whatever stops collection, the run must still write its
-        # summary and heartbeat and exit 3 (unscanned), visibly naming the error, rather than die silently.
-        total.feed_errors.append(f"daily run stopped early: {type(exc).__name__}: {exc}")
-    report, code, written = _finish(cfg, state, today, run_dir, total, staged)
-    agent = cfg.get("agent") or {}
-    if written and agent.get("enabled"):
-        _agent_phase(cfg, run_dir)
+    with docker_readiness.using(docker_readiness.ensure(cfg, start=True)):
+        try:
+            _collect(cfg, today, run_dir, total, staged)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+            # Deliberately wide (named, not broad): whatever stops collection, the run must still write its
+            # summary and heartbeat and exit 3 (unscanned), visibly naming the error, rather than die silently.
+            total.feed_errors.append(f"daily run stopped early: {type(exc).__name__}: {exc}")
+        report, code, written = _finish(cfg, state, today, run_dir, total, staged)
+        agent = cfg.get("agent") or {}
+        if written and agent.get("enabled"):
+            _agent_phase(cfg, run_dir)
     return report, code, run_dir
 
 
@@ -600,8 +612,14 @@ def _agent_phase(cfg: dict, run_dir: Path) -> None:
     """Run the agent on this scan, record it in the summary and heartbeat, publish, and notify."""
     from agentteams.vulnscan import agent_run
 
+    rec = docker_readiness.current()
+    blocked = rec.agent() if rec is not None else ""
     try:
-        status = agent_run.run_agent(cfg, run_dir)
+        if blocked:   # the run's Docker check already says the container cannot start: no second probe
+            status = {"state": "not-run", "run_state": "not-run", "status_written": False,
+                      "reason": f"{getattr(blocked, 'code', '')}: {blocked}"}
+        else:
+            status = agent_run.run_agent(cfg, run_dir)
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:   # docker / launcher failure
         status = {"state": "agent-error", "run_state": "agent-error",
                   "reason": f"launcher failed: {type(exc).__name__}: {exc}"[:300]}

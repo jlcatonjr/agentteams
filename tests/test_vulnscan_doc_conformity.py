@@ -11,7 +11,7 @@ table of its own (a documented key, notification, command or module the code no 
 
 * each configuration block's keys and defaults, against that block's table: `daily.DEFAULT_CONFIG`,
   `agent_settings.DEFAULT_AGENT` (with the debrief defaults), `agent_upstreams.DEFAULTS`,
-  `subproc_confine.DEFAULTS`. Keys are compared per block, because `image` is in two of them;
+  `subproc_confine.DEFAULTS`, `docker_readiness.DEFAULTS`. Keys are compared per block, because `image` is in two of them;
 * every notification, word for word (`notify.MESSAGES`);
 * every subcommand, in the command table and in the exit codes;
 * every long option and positional choice of every subcommand and sub-subcommand, in a table row or
@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import agent_settings, agent_upstreams, daily, debrief, notify, subproc_confine
+from agentteams.vulnscan import agent_settings, agent_upstreams, daily, debrief, docker_readiness, notify, subproc_confine
 from agentteams.vulnscan.__main__ import build_parser
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +68,7 @@ _CONFIG_BLOCKS: list[tuple[str, dict[str, object]]] = [
                "debrief_max_tokens": debrief.DEFAULT_DEBRIEF_MAX_TOKENS}),
     ("agent (upstreams)", dict(agent_upstreams.DEFAULTS)),
     ("confine", dict(subproc_confine.DEFAULTS)),
+    ("docker", dict(docker_readiness.DEFAULTS)),
 ]
 
 #: Defaults the reference states differently from the literal value, on purpose: (block, key) -> cell.

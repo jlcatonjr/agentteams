@@ -22,9 +22,9 @@ def test_a_hung_or_missing_docker_client_reads_as_unreachable(monkeypatch: pytes
 
     monkeypatch.setattr(agent_run, "_docker", fake)
     assert agent_run._image_id("img:tag") == ""
-    assert "agent image img:tag is not built" in agent_run.docker_unreachable("img:tag")
+    assert agent_run.docker_unreachable("img:tag").startswith("docker is not reachable")   # the daemon, not the image
     assert agent_run.docker_unreachable().startswith("docker is not reachable")
-    assert timeouts and all(t == 60 for t in timeouts)        # never the 10-minute default
+    assert timeouts and all(t <= 60 for t in timeouts)        # never the 10-minute default
 
 
 def test_selftest_ok_reports_unreachable_instead_of_raising(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

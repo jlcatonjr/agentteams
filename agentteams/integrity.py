@@ -272,6 +272,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/subproc_confine.py",
     "agentteams/vulnscan/subproc_confine_ssh.py",
     "agentteams/vulnscan/tools_image.py",
+    "agentteams/vulnscan/docker_readiness.py",   # T2-A: the probe behind the tools container's fail-closed check
     "agentteams/data/vulnscan_tools/Dockerfile",
     "agentteams/data/vulnscan_tools/egress_proxy.py",
     "agentteams/data/vulnscan_tools/selftest.py",
