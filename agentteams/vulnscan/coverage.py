@@ -167,7 +167,7 @@ def _grant_covers(grants: list[dict[str, Any]], path: str) -> bool:
 def nothing_to_scan(path: str | Path) -> bool:
     """Return whether a workspace directory holds no dependency manifest the scanner would list.
 
-    Unsupported lockfiles (``Cargo.lock`` and the like) count as manifests: they are reported as
+    Unsupported manifests (``go.sum``, ``lake-manifest.json`` and the like) count as manifests: they are reported as
     unscannable, never as nothing to scan. Vendored and generated trees are skipped as in a scan.
 
     Args:

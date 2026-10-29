@@ -123,7 +123,8 @@ with a stop condition, escalate anyway and mention the note in the evidence.
    lists under *Already staged* has a fix staged with no PR yet: request `open-pr` for it, never a second
    `stage-fix`. Then, for each other repo whose fix plan contains a `fix` action:
    - request `stage-fix`, giving as target exactly the alias in that plan's ``stage-fix target`` heading
-     (the repository itself, never a folder that contains it);
+     (the repository itself, never a folder that contains it). A section marked *plan-only (no staged
+     edit)*, such as a crates.io `Cargo.lock`, is never staged: report its commands for a person instead;
    - when `request_status` shows `done`, request `open-pr` for the same alias;
    - when `open-pr` is `done`, request `close-superseded` for the same alias, so an older remediation PR
      does not stay open beside the new one.

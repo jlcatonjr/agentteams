@@ -313,6 +313,7 @@ The `confine` block (`subproc_confine.settings`; any other key, or a wrong type,
 | PyPI | `pyproject.toml` alone (no lockfile, no requirements) | unscannable: "pyproject.toml without a lockfile" |
 | npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml`) |
 | Packagist | `composer.lock` | |
+| crates.io | `Cargo.lock` (v1–v4; `CRATE_LOCKS`) | only `[[package]]` entries whose `source` is the crates.io index (`CRATES_IO_SOURCES`: `registry+https://github.com/rust-lang/crates.io-index`, `sparse+https://index.crates.io/`); path, git and other-registry crates are skipped. Every crate is `runtime` (the lockfile records no dev/build split). A lock with none is unscannable: "no crates.io packages". Not in `LOCKFILES`, so it never hides a `package.json` / `pyproject.toml` beside it. Fixes are plan-only |
 
 Manifests of ecosystems vulnscan does not read are discovered too (`manifests.unsupported_ecosystem(name)`)
 and reported unscannable with the reason `unsupported ecosystem: <name>`:
@@ -325,7 +326,7 @@ and reported unscannable with the reason `unsupported ecosystem: <name>`:
 | RubyGems | `Gemfile.lock` |
 | NuGet | `packages.lock.json` (`*.csproj` when there is no lockfile) |
 | pnpm (npm packages) | `pnpm-lock.yaml` (run `pnpm audit` there) |
-| Rust/crates.io, conda, Lean | `Cargo.lock`, `environment.yml` / `environment.yaml`, `lake-manifest.json` |
+| conda, Lean | `environment.yml` / `environment.yaml`, `lake-manifest.json` |
 | container images | `Dockerfile`, `Dockerfile.*`, `Dockerfile-*`, `*.Dockerfile`, `Containerfile`, `compose.yml` / `compose.yaml`, `docker-compose*.yml` / `.yaml` |
 
 A workspace whose only manifests are these is in the coverage state `unsupported ecosystem` (a coverage
@@ -567,8 +568,9 @@ it), `unsupported ecosystem` (every manifest it holds is of an ecosystem vulnsca
 S-VM reports), then by level: `fixable` (remediate, and a valid grant covers `stage-fix` on it), `not covered by the
 grant yet` (remediate, no such grant), `scan-only`, `opted out` (`off`), `unanswered`. Every further
 checkout is a `duplicate checkout` (or `missing on disk`). The unsupported manifests of every workspace
-that has some are listed under *Not scanned (unsupported ecosystem)* (`coverage.unsupported_manifests(path)`;
-the published review has the counts only). A `### Project briefs` part then lists each
+that has some are listed under *Not scanned (unsupported ecosystem)* (`coverage.unsupported_manifests(path, cfg)`,
+which leaves out manifests at or inside the config's `exclude` paths and those matching the workspace brief's
+`exclude_paths`, as the scan does; the published review has the counts only). A `### Project briefs` part then lists each
 `brief says off; scanned by operator enrolment` mismatch and, per repository, how many manifests its
 brief excluded and how many private packages it withheld (counts only, never package names; the
 published review has totals only).
@@ -578,7 +580,9 @@ a project the registry does not know and no `repo_roots` entry scans; one an exp
 `fixable` or `scan-only` by the grant; one with no dependency manifest is `nothing to scan` either way, one with
 only unsupported manifests `unsupported ecosystem`), `unsupported_manifests` (`"<path> (<ecosystem>)"`, printed
 as `not scanned` lines), `last_scan_partial` / `last_scan_unscanned` (the last run's feed
-errors), `brief_level`, and a `mismatch:` problem for a brief that says `off` on a scanned project.
+errors), `brief_level`, `launcher` (the project's `sandbox/confine-run.sh` by
+[`launcher_lineage.launcher_state`](launcher-lineage.md): `current`, `older`, `modified`, `missing`, or `unknown` when the
+shipped lineage cannot be read), and a `mismatch:` problem for a brief that says `off` on a scanned project.
 
 Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_identity(repo) -> (str, str)`,
 `origin_identity(url) -> str | None`,
@@ -587,8 +591,8 @@ Python API. `agentteams.vulnscan.registry`: `identity(repo) -> str`, `checked_id
 `discover(root) -> dict[str, list[Path]]`, `pick_fix_checkout(paths) -> Path`, `registry_path()`,
 `is_ci()`, `LEVELS`, `SCANNED_LEVELS`. `agentteams.vulnscan.coverage`: `effective_roots(cfg, entries)
 -> list[Root]`, `operator_skips(cfg, entries)`, `states(cfg, entries, grants, unsupported=None)`,
-`markdown(rows, *, names, unsupported=None)`, `nothing_to_scan(path)`, `unsupported_manifests(path)`,
-`unsupported_only(path)`,
+`markdown(rows, *, names, unsupported=None)`, `nothing_to_scan(path)`, `unsupported_manifests(path, cfg=None)`,
+`unsupported_only(path, cfg=None)`,
 `brief_lines(entries, report, *, names)`, `section(cfg, *, names, report=None)`,
 `project_state(cfg, entry, path, grants)`, `within(path, root)` (contained after `~` expansion and symlink
 resolution), `exclusions(cfg)`, `excluded_inside(cfg, root)` (the `exclude` paths strictly inside a scanned
@@ -1050,7 +1054,7 @@ files beside it already carry, so it has nothing of its own to report).
 #### `manifests.discover(root, *, include_worktrees=False)`
 
 Sorted manifest paths under `root`. Vendored and generated trees (`SKIP_DIRS`: `node_modules`, virtualenvs,
-`dist`, `build`, a repository's `tmp`, …) and `*.egg-info` are skipped, and so are linked git worktrees unless
+`dist`, `build`, a repository's `tmp`, Lean's `.lake` package cache, …) and `*.egg-info` are skipped, and so are linked git worktrees unless
 `include_worktrees` is set. `package.json` and `pyproject.toml` are listed only when their directory has no
 lockfile (a `pyproject.toml` next to requirements files is listed too, for its PEP 621 pins). Manifests of
 ecosystems the scanner does not read are listed so they can be reported as unscannable; `go.mod`,
@@ -1179,7 +1183,17 @@ never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests
 Each repository's brief applies here as in `scan_path`. A manifest in an `off` repository or under
 `exclude_paths` is recorded in `refused` and never read. Private packages are never looked up
 (`plan_requirements` and `plan_npm_lock` take `private=`). An npm lockfile that holds a private package is
-refused, because `npm audit` would send it to the registry.
+refused, because `npm audit` would send it to the registry. A `Cargo.lock` is planned by `plan_cargo_lock` in
+a dry run and with `apply` alike, and never written.
+
+#### `fix.plan_cargo_lock(path, *, label="", private=())`
+
+Plan-only rows for one `Cargo.lock`, from OSV: `plan-only` with `new` the minimal fixed version and the note
+`cargo update -p <name>@<installed> --precise <new>` (the `@<installed>` keeps it unambiguous when the lock holds
+two versions; written only when the name and versions are plain crate-name / version characters, else "fix by
+hand"), `no-clean-release`, or `malicious`. Private crates (`project_policy.is_private`, `-` and `_` alike) are
+never sent to OSV. `markdown()` renders them under `## crates.io: <lock> — plan-only (no staged edit)`; the agent is
+told never to request `stage-fix` for them, and `executor.validate_diff` refuses a `Cargo.lock` change anyway.
 
 #### `fix.plan_npm_lock(path, *, cooldown_days, label, private=())`
 
@@ -1196,7 +1210,8 @@ them too) and say `dev only` in the note. Raises `FeedError`.
 
 #### `FixResult`
 
-Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`),
+Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`), `cargo_plan`
+(`PinChange` list from `plan_cargo_lock`, counted by `exit_code()` like held rows),
 `npm_notes` (lockfile → note), `npm` (`(directory, summary)` tuples), `composer`, `refused`
 (`(path, reason)` tuples), `feed_errors`, `applied`, `target` (the repository a daily plan is for)
 `target_problem` (why `stage-fix` cannot take it) and `resolved` (how many advisory occurrences the
@@ -1210,7 +1225,7 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 
 Dataclass for one requirements edit or npm plan row: `path`, `name`, `old`, `new`, `action` (`fix`,
 `major-held`, `no-clean-release`, `cooldown-held`, `hash-held`, `malicious`; npm rows also
-`workspace-held`, `npm-unavailable`), `ids`, `note`.
+`workspace-held`, `npm-unavailable`; Cargo rows `plan-only`), `ids`, `note`.
 
 ### `agentteams.vulnscan.ledger`
 
@@ -2458,7 +2473,11 @@ check, and the flags fingerprint a self-test record must match.
 
 One packaged server-kit script against one hosts.conf host in the tools container: `build_ssh_files`
 writes the run's ssh config and known_hosts lines (from `ssh -G` and `ssh-keygen -F` on the host) into
-a fresh directory that is removed afterwards; the egress allowlist is the first hop.
+a fresh directory that is removed afterwards; the egress allowlist is the first hop. The kit is not mounted from
+the installed package: `stage_kit(src) -> (copy, digests)` copies it once per process into a fresh 0700 directory
+under `<state dir>/tools/` (regular files only, at most `KIT_MAX_BYTES` each, every `KIT_REQUIRED` script present;
+a symlink or subdirectory is refused, never followed), and each run re-hashes the copy and refuses one that
+changed after staging. A missing kit raises `Unavailable` naming a possible reinstall.
 
 ### `agentteams.vulnscan.tools_image`
 
@@ -2694,7 +2713,10 @@ reading side: writing packets and issuing the directive is operator tooling outs
 - `status(cfg, repos)` returns a `RepoHandoff` per repository (`state`: `no staged fix`, `approved`,
   `awaiting review` or the newest verdict word), `repos_with_staged_fixes()` the repositories with an executor
   spool record, `pending_packets(repo)` the packets without a verdict row, and `markdown(records)` the daily
-  summary's `## Handoffs to repository orchestrators` section.
+  summary's `## Handoffs to repository orchestrators` section. Each `RepoHandoff` also carries `launcher` (the
+  `sandbox/confine-run.sh` the handoff's goose session would run under: the goose home's, else
+  `<agent.team_dir>/sandbox/confine-run.sh`), `launcher_state` / `launcher_detail` (see
+  [launcher_lineage](launcher-lineage.md)) and `launcher_warning()`, printed by `handoff status` unless `current`.
 
 ### `agentteams.vulnscan.remediation_status`
 
