@@ -253,6 +253,16 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # Operator decision query (always — @orchestrator's Operator Decision Query sub-protocol). How an
+    # agent puts a decision to the operator through the host's interactive selection interface, with
+    # the recommended option first, and what to do when no operator is present.
+    files.append({
+        "path": "references/operator-decision.reference.md",
+        "template": f"{agents_dir}operator-decision.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Instruction-authority ordering (always). The project's authority_sources hierarchy ranks
     # sources of *fact*; this ranks sources of *instruction*, which is the ordering a prompt
     # injection actually attacks. Deliberately fenceless so emit wraps it whole — see the note at

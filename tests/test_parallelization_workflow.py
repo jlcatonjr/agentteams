@@ -112,8 +112,8 @@ def test_workflow_0b_fences_are_at_v3():
     """Both fences carrying the 0B feature were bumped v=1 -> v=2 (0B), then v=2 -> v=3 when the
     spawn-authority query funnel added its routing rows + Workflows 12/13 to the same fences."""
     orch = _orch()
-    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=4" in orch
-    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=8" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan
+    assert "<!-- AGENTTEAMS:BEGIN routing_table_rows v=5" in orch
+    assert "<!-- AGENTTEAMS:BEGIN available_workflows v=9" in orch  # v=6: Sandbox Operator Handoff; v=7: vulnscan PR review; v=8: Workflow 0C metaplan; v=9: Operator Decision Query
 
 
 def test_reference_template_has_coordinated_concurrency_sections():
@@ -169,3 +169,28 @@ def test_reference_template_documents_metaplans():
     body = REF.read_text(encoding="utf-8")
     assert "## Metaplans: several plans in one session (Workflow 0C)" in body
     assert "genuine cross-plan concurrency needs a separate substrate" not in body
+
+
+def test_operator_decision_query_is_fenced_routed_and_wired():
+    orch = _orch()
+    begin = orch.index("<!-- AGENTTEAMS:BEGIN available_workflows")
+    end = orch.index("<!-- AGENTTEAMS:END available_workflows")
+    assert begin < orch.index("### Operator Decision Query") < end
+    assert "`@orchestrator` → Operator Decision Query" in orch
+    proto = orch[orch.index("### Operator Decision Query"):orch.index("### Sandbox Operator Handoff")]
+    assert "`AskUserQuestion`" in proto and "`(Recommended)`" in proto
+    assert "The agent holding the operator's session asks" in proto
+    assert "An approval (waiver, trust root" in proto  # never assumed when no operator is present
+    # Workflows 0, 0C, 12 and 14 all hand their operator decisions to it.
+    assert orch.count("**Operator Decision Query**") >= 5
+
+
+def test_operator_decision_reference_is_emitted_and_fenced():
+    from agentteams import output_plan
+    ref = (TEMPLATES / "universal" / "operator-decision.reference.template.md").read_text(encoding="utf-8")
+    assert "<!-- AGENTTEAMS:BEGIN operator_decision v=1 -->" in ref
+    assert "<!-- AGENTTEAMS:END operator_decision -->" in ref
+    for tool in ("`AskUserQuestion`", "`vscode/askQuestions`", "`ask_user`", "`request_user_input`"):
+        assert tool in ref
+    assert "numbered list" in ref and "needs_user_review=yes" in ref
+    assert "references/operator-decision.reference.md" in Path(output_plan.__file__).read_text(encoding="utf-8")

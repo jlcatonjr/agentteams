@@ -78,6 +78,10 @@ Independence is conservative and fail-safe: steps share a wave only when their r
 
 When a request bundles two or more separable items (several features, defects, or audit findings), the orchestrator runs Workflow 0C. It writes one development or remediation plan per item, then a metaplan, `tmp/by-week/YYYY-Www/<meta-slug>.plan.md` + `.steps.csv`, with one row per item plan, and schedules them with `agentteams.parallel_plan`. `@adversarial` and `@conflict-auditor` audit the metaplan and every item plan, and the plans are revised on their findings before any implementation starts. Implementation then runs in rounds: independent items advance together, and a destructive, cross-repository, shared-state or operator step runs alone.
 
+### Decisions You Are Asked to Make
+
+When the orchestrator reaches a decision only you can make (a preference, a trade-off, an approval, a fork that would be costly to undo), it asks through your host's interactive selection interface: `AskUserQuestion` in Claude Code, `vscode/askQuestions` in VS Code Copilot, `ask_user` in Copilot CLI, `request_user_input` in Codex Plan mode. You get its 2–4 best options with the recommended one first, each with a line on what it leads to; you can always choose "Other" and type an answer instead. It does not ask about things it can look up, choices with a conventional default, or whether to proceed with a plan it has already audited. Subagents route their decisions to the agent you are talking to, so the questions come from one place. Where no picker is available, the same question arrives as a numbered list. In a non-interactive run the question, its options and the recommendation go to `references/orchestrator-escalation.log.csv` for your review; approvals are never assumed, and other decisions take the recommendation only when it is reversible. Full contract: `references/operator-decision.reference.md`.
+
 ### Reviewing Plan Status
 
 You can review plans at any time by asking:
