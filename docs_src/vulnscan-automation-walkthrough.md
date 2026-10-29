@@ -870,7 +870,7 @@ mode, and it is recorded in `operator-clearances.log`.
 | `vulnscan-remediate-auto.sh` | Once per scan: preflight (goose, route proxy, grants, `halts`, Docker), then target setup and the handoff steps, then `remediation.md` and a notification |
 | `vulnscan-ensure-docker.sh` | Starts Docker Desktop if needed and checks the tools and agent images and their self-test records. It prints `READY …` or a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). `--no-start` only checks |
 | `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
-| `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster |
+| `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
 | `vulnscan-deploy.sh` | Reinstalls the package from a commit; see [Deploying a new version](#deploying-a-new-version) |
 

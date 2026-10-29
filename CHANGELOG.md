@@ -97,6 +97,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MANAGER_TEAM_DIR`) come from `~/.config/agentteams/vulnscan-remediation.conf` (read, never sourced) or the
   environment. Without `VULNSCAN_GITHUB_ORG`, no repository is handed off. The handoff steps stay in a site-local
   `vulnscan-operator-actions.sh`, which is not published.
+- **Roster enrolment and goose-team creation are operator-only** (`gate`, not `ask`). The scheduled job used to
+  approve both in auto mode. It now only reports a repository without a goose team or without the manager on its
+  roster, because a roster is a trust root and the drafted brief comes from README text. `MANAGER_TEAM` must be a
+  plain team name. `--install` backs up the scripts and plist it replaces, and XML-escapes the plist values.
 - **New `python -m agentteams.vulnscan remediation-report LEDGER SINCE`** (`agentteams.vulnscan.remediation_report`)
   replaces the runner's standalone outcome script. A refused or failed ledger row counts as infrastructure, and
   is retried, only when its detail *starts with* `tools container unavailable:` or its `reason_code` starts with

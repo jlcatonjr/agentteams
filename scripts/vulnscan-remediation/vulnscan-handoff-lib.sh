@@ -32,6 +32,9 @@ MANAGER_TEAM_DIR="$(conf_get MANAGER_TEAM_DIR "$HOME/$MANAGER_TEAM")"
 if [[ -n "$REPO_ORG" && ! "$REPO_ORG" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
   echo "VULNSCAN_GITHUB_ORG is not a GitHub owner name: $REPO_ORG (ignored)" >&2; REPO_ORG=""
 fi
+if [[ ! "$MANAGER_TEAM" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then   # it is written into rosters and briefs
+  echo "MANAGER_TEAM is not a team name: $MANAGER_TEAM (using ops-team)" >&2; MANAGER_TEAM=ops-team
+fi
 VK="$REPOS_ROOT" VK_ORG="$REPO_ORG"   # the names a site-local vulnscan-operator-actions.sh may still use
 MGMT_KEYFILE="${MGMT_KEYFILE:-$CFG_DIR/keys/management-signing.key}"   # AGENTTEAMS_MANAGEMENT_SIGNING_KEY value
 APPROVER="${APPROVER:-operator:$(git config --global user.name 2>/dev/null || whoami)}"

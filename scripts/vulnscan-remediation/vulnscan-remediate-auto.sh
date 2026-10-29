@@ -45,9 +45,15 @@ OPERATOR_ACTIONS="${VULNSCAN_OPERATOR_ACTIONS:-$INSTALL_DIR/vulnscan-operator-ac
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-8}"
 GIVE_UP_HOUR="${GIVE_UP_HOUR:-17}"
 
+xml_esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }   # bash 3.2 and 5 alike
+
 install_job() {
-  local interval="${1:-1800}" f path
+  local interval="${1:-1800}" f path bak
   mkdir -p "$INSTALL_DIR" "$STATE_DIR" "$(dirname "$PLIST")"
+  bak="$CFG_DIR/vulnscan-remediation-backups/$(date +%Y%m%dT%H%M%S)"   # what this install replaces, kept
+  for f in "${FILES[@]}"; do [[ -f "$INSTALL_DIR/$f" ]] && { mkdir -p "$bak"; cp -p "$INSTALL_DIR/$f" "$bak/"; }; done
+  [[ -f "$PLIST" ]] && { mkdir -p "$bak"; cp -p "$PLIST" "$bak/"; }
+  [[ -d "$bak" ]] && ok "backed up the replaced scripts and plist to $bak"
   for f in "${FILES[@]}"; do install -m 0755 "$SRC/$f" "$INSTALL_DIR/$f"; done
   [[ -f "$OPERATOR_ACTIONS" ]] || warn "no $OPERATOR_ACTIONS: the handoff steps are reported as a problem until it exists"
   if [[ ! -f "$REMEDIATION_CONF" ]]; then
@@ -68,17 +74,17 @@ install_job() {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>$LABEL</string>
+  <key>Label</key><string>$(xml_esc "$LABEL")</string>
   <key>ProgramArguments</key>
-  <array><string>/bin/bash</string><string>$INSTALL_DIR/vulnscan-remediate-auto.sh</string></array>
+  <array><string>/bin/bash</string><string>$(xml_esc "$INSTALL_DIR/vulnscan-remediate-auto.sh")</string></array>
   <key>StartInterval</key><integer>$interval</integer>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>HOME</key><string>$HOME</string>
-    <key>PATH</key><string>$path</string>
+    <key>HOME</key><string>$(xml_esc "$HOME")</string>
+    <key>PATH</key><string>$(xml_esc "$path")</string>
   </dict>
-  <key>StandardOutPath</key><string>$STATE_DIR/remediate-scheduler.log</string>
-  <key>StandardErrorPath</key><string>$STATE_DIR/remediate-scheduler.log</string>
+  <key>StandardOutPath</key><string>$(xml_esc "$STATE_DIR/remediate-scheduler.log")</string>
+  <key>StandardErrorPath</key><string>$(xml_esc "$STATE_DIR/remediate-scheduler.log")</string>
   <key>ProcessType</key><string>Background</string>
 </dict>
 </plist>

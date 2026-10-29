@@ -82,7 +82,8 @@ create_goose_team() {   # $1 = repo
   local repo="$1" name wt base branch brief
   name="$(basename "$repo")"; wt="$(team_worktree "$repo")"
   echo "  no goose orchestrator yet"
-  ask "Create worktree ${wt#"$REPOS_ROOT"/} on a new branch and render a goose team for $name there?" || return 1
+  # operator-only: the brief is drafted from README text and the rendered agents then run headless (C-4)
+  gate "Create worktree ${wt#"$REPOS_ROOT"/} on a new branch and render a goose team for $name there?" || return 1
   git -C "$repo" fetch -q origin
   base="$(git -C "$repo" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
   if [[ -z "$base" ]]; then
@@ -104,7 +105,7 @@ create_goose_team() {   # $1 = repo
     [[ "$AUTO" == 1 ]] || read -r -p "  Press Enter to continue once the brief is right... " _ </dev/tty
   else
     echo "  brief: ${brief#"$REPOS_ROOT"/}"
-    ask "Add '$MANAGER_TEAM' to its authorized_managers (privileged roster change, on the new branch only)?" || return 1
+    gate "Add '$MANAGER_TEAM' to its authorized_managers (privileged roster change, on the new branch only)?" || return 1
     add_manager_to_brief "$brief"
   fi
   "$AT" --description "$brief" --project "$wt" --framework goose --merge --yes
@@ -116,7 +117,8 @@ enrol_manager() {   # $1 = home (checkout or team worktree), $2 = recipes dir
   local home="$1" tdir="$2" brief
   brief="$(brief_of "$home")"
   echo "  roster: ${tdir#"$home"/}/references/authorized-managers.txt   ($(repo_state "$home"))"
-  ask "Enrol '$MANAGER_TEAM' as an authorized manager there (privileged roster change; left uncommitted)?" || return 1
+  # operator-only: a roster is a trust root (Rule 15(c)), never changed unattended
+  gate "Enrol '$MANAGER_TEAM' as an authorized manager there (privileged roster change; left uncommitted)?" || return 1
   mkdir -p "$tdir/references"
   printf '%s\n' "$MANAGER_TEAM" >> "$tdir/references/authorized-managers.txt"
   [[ -n "$brief" ]] && add_manager_to_brief "$brief"   # keep the brief in step, or the next --update drops it
