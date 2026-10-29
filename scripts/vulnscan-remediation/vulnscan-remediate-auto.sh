@@ -29,7 +29,7 @@
 # --install copies the tracked scripts to ~/.config/agentteams/vulnscan-remediation/ (so the job does not depend
 # on this checkout or its branch), writes ~/Library/LaunchAgents/io.agentteams.vulnscan-remediate.plist and loads
 # it. Installing is your standing authorization for auto mode; it is recorded in the clearance log. Deploy the
-# package first (pipx install): the installed script calls the installed package's remediation-report.
+# package first (vulnscan-deploy.sh): the installed script calls the installed package's remediation-report.
 
 set -euo pipefail
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -143,7 +143,7 @@ lock_state="" _lock_owner=""; read -r -u 9 lock_state _lock_owner || true
 exec 9<&-
 case "$lock_state" in
   locked) ;;
-  held) echo "$(date -u +%FT%TZ) another remediation run is active (pid ${_lock_owner:-?})"; exit 0 ;;
+  held) echo "$(date -u +%FT%TZ) remediate.flock is held: another remediation run (pid ${_lock_owner:-?}) or a deploy"; exit 0 ;;
   *) echo "$(date -u +%FT%TZ) could not take $LOCK (the pipx python $PY did not answer)"; exit 1 ;;
 esac
 

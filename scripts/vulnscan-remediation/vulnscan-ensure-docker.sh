@@ -2,7 +2,7 @@
 # Make the vulnscan containers usable, or say exactly why not (macOS, Docker Desktop).
 # Installed as ~/.config/agentteams/vulnscan-remediation/vulnscan-ensure-docker.sh by
 # vulnscan-remediate-auto.sh --install; called by vulnscan-daily-wrapped.sh, vulnscan-remediate-auto.sh and
-# deploy checks (--no-start). User-level only: never sudo, never builds an image, never changes a grant.
+# vulnscan-deploy.sh (--no-start). User-level only: never sudo, never builds an image, never changes a grant.
 #
 #   vulnscan-ensure-docker.sh [--no-start] [--no-selftest]
 #

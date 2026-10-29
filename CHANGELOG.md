@@ -74,6 +74,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sandbox-handoff reference (fence v2) and the orchestrator's handoff step also say a script holds **only** the
   operations the sandbox refused; everything the agent can do itself stays with the agent.
 
+### vulnscan (deploy safety: wait on both job locks, and say which images are missing)
+
+- **New `scripts/vulnscan-remediation/vulnscan-deploy.sh [REF]`** (default `origin/main`) reinstalls the package
+  the daily job runs, from a `git archive` of the commit extracted outside any work tree. During
+  `pipx install --force` it holds the remediation lock (`remediate.flock`) and then `daily.lock`, the same order
+  the runner takes them, waiting up to 30 minutes for each (`--no-wait` refuses at once). It refuses while a
+  legacy `remediate.lock` directory has a live owner.
+- After installing, it prints each Docker image tag the installed version needs and whether
+  `docker image inspect` finds it. The tags follow the package version, so a version bump orphans the old
+  images. It then runs `vulnscan ready --json` when the installed version has that command, else
+  `vulnscan-ensure-docker.sh --no-start`, followed by `halts`, `handoff status` and `schedule status`.
+- It rebuilds the tools image, and the agent image when agent mode is on (`--skip-images` skips both).
+  `--with-scripts` re-installs the runner's scripts from the same commit. It signs, merges and pushes nothing.
+
 ### vulnscan (the unattended remediation runner is tracked; its outcome comes from the ledger)
 
 - **`scripts/vulnscan-remediation/`** now holds the macOS remediation runner that operators had installed by

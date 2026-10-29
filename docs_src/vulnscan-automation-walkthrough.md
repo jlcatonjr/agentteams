@@ -872,6 +872,7 @@ mode, and it is recorded in `operator-clearances.log`.
 | `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
 | `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster |
 | `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
+| `vulnscan-deploy.sh` | Reinstalls the package from a commit; see [Deploying a new version](#deploying-a-new-version) |
 
 The handoff steps themselves come from a site-local `vulnscan-operator-actions.sh` in the install folder
 (or `VULNSCAN_OPERATOR_ACTIONS`). It is not in the repository, because its steps name your own servers.
@@ -901,6 +902,26 @@ its recorded pid runs and removed once that owner is gone.
 
 Never done unattended: grant signing, destructive deletes, server `--apply`, merging, and pushing a
 team's own branch.
+
+### Deploying a new version
+
+`scripts/vulnscan-remediation/vulnscan-deploy.sh [REF]` (default `origin/main`) reinstalls the package
+the daily job runs, from a `git archive` of that commit extracted outside any work tree. It does not
+sign, merge or push.
+
+1. **Locks.** It waits for a running remediation attempt (`remediate.flock`) and then for a daily scan
+   (`daily.lock`), up to 30 minutes each (`--no-wait`: refuse at once). It holds both while
+   `pipx install --force` replaces the venv, so neither job starts on a venv being replaced.
+2. **Images.** It rebuilds the tools image and, when agent mode is on, the agent image and their
+   self-tests (`--skip-images` skips this).
+3. **Readiness.** The image tags follow the package version, so a version bump leaves the old images
+   behind. The script prints each tag the installed version needs and whether `docker image inspect`
+   finds it. Then it runs the `ready` command (JSON output) when the installed version has
+   that command, else `vulnscan-ensure-docker.sh --no-start`, followed by `halts`, `handoff status` and
+   `schedule status`.
+
+`--with-scripts` also re-runs `vulnscan-remediate-auto.sh --install` from the same commit, so the
+installed scripts match the package. Deploy outside the daily job's window.
 
 ### Your routine
 
