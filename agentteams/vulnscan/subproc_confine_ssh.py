@@ -14,12 +14,20 @@ builds, in a fresh directory that is removed afterwards:
 The egress allowlist is the first hop (the bastion, else the target) at its port. Refused (fail closed, with the
 reason): a ``ProxyCommand``, a multi-hop ``ProxyJump``, a host with no known_hosts line, no identity file, or a key
 that needs ssh-agent (``BatchMode`` cannot prompt; the agent socket is never forwarded).
+
+The kit itself is not mounted from the installed package: :func:`stage_kit` copies it once per process into the
+state dir (regular files only, symlinks refused) and every run re-checks the copy against the digests taken then.
+A reinstall that replaces the package directory during a run cannot remove the mount source of later runs, and an
+edit to the copy after staging is refused rather than run on a server.
 """
 
 from __future__ import annotations
 
+import atexit
+import hashlib
 import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -38,6 +46,13 @@ _VALUE_OPTS = set("BbcDEeFIiJLlmOoPpQRSWw")
 CONFIG_IN = "/etc/ssh/ssh_config"
 KNOWN_IN = "/etc/ssh/vulnscan_known_hosts"
 _UNSAFE = set(" \t\r\n\"'\\#")
+#: Kit files a staged copy must hold; a package missing one is refused, never run in part.
+KIT_REQUIRED = ("remote.sh", "run-host.sh", "L1-audit.sh", "L2-os-patch.sh", "L3-node-runtime.sh",
+                "L4-python-app.sh", "L5-containers.sh")
+#: A kit file larger than this is not staged (the packaged scripts are a few KiB each).
+KIT_MAX_BYTES = 1_000_000
+#: Source kit dir -> (staged copy, {file name: sha256}) for this process (:func:`stage_kit`).
+_STAGED: dict[str, tuple[Path, dict[str, str]]] = {}
 
 
 def kit_target(conf_dir: Path, host: str) -> str:
@@ -193,12 +208,94 @@ def build_ssh_files(dest: str, jump: str, workdir: Path, proxy: str, *, identity
     return mounts, f"{first['hostname']}:{first['port']}"
 
 
+def _read_regular(path: Path) -> tuple[bytes, int]:
+    """Return a kit file's bytes and mode bits, refusing a symlink, a non-regular file or an oversized one."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise Unavailable(f"tools container unavailable: server kit file {path.name} unreadable ({exc.strerror})") from exc
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode):
+        os.close(fd)
+        raise Unavailable(f"tools container unavailable: server kit entry {path.name} is not a regular file")
+    with os.fdopen(fd, "rb") as fh:
+        if st.st_size > KIT_MAX_BYTES:
+            raise Unavailable(f"tools container unavailable: server kit file {path.name} is too large")
+        return fh.read(KIT_MAX_BYTES + 1), stat.S_IMODE(st.st_mode)
+
+
+def _remove_staged() -> None:
+    for copy, _digests in _STAGED.values():
+        shutil.rmtree(copy.parent, ignore_errors=True)
+    _STAGED.clear()
+
+
+def stage_kit(src: Path) -> tuple[Path, dict[str, str]]:
+    """Return this process's verified copy of the packaged server kit ``src``, making it on first use.
+
+    The copy lives in a fresh 0700 directory under ``<state dir>/tools/`` and is removed when the process exits.
+    Every entry of ``src`` must be a regular file (a symlink or a subdirectory is refused, never followed) and
+    every :data:`KIT_REQUIRED` file must be present.
+
+    Args:
+        src: The packaged kit directory (:func:`agentteams.vulnscan.executor.kit_dir`).
+
+    Returns:
+        ``(copy dir, {file name: sha256})``.
+
+    Raises:
+        Unavailable: The kit is missing, incomplete or holds anything but regular files.
+    """
+    key = str(src)
+    if key in _STAGED:
+        return _STAGED[key]
+    try:
+        names = sorted(os.listdir(src))
+    except OSError as exc:
+        raise Unavailable(f"tools container unavailable: the packaged server kit is missing ({exc.strerror}); "
+                          "was agentteams reinstalled during the run?") from exc
+    missing = [n for n in KIT_REQUIRED if n not in names]
+    if missing:
+        raise Unavailable(f"tools container unavailable: the packaged server kit lacks {', '.join(missing)}")
+    files = {n: _read_regular(src / n) for n in names}
+    base = paths.state_dir() / "tools"
+    base.mkdir(parents=True, exist_ok=True)
+    root = base / f"kit-{os.getpid()}-{os.urandom(6).hex()}"
+    root.mkdir(mode=0o700)
+    copy = root / "kit"
+    copy.mkdir(mode=0o700)
+    digests: dict[str, str] = {}
+    for name, (data, mode) in files.items():
+        fd = os.open(copy / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode & 0o755)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        digests[name] = hashlib.sha256(data).hexdigest()
+    if not _STAGED:
+        atexit.register(_remove_staged)
+    _STAGED[key] = (copy, digests)
+    return copy, digests
+
+
+def _check_staged(copy: Path, digests: dict[str, str]) -> None:
+    """Refuse a staged kit whose files changed, appeared or disappeared since :func:`stage_kit` made it."""
+    try:
+        names = sorted(os.listdir(copy))
+    except OSError as exc:
+        raise Unavailable(f"tools container unavailable: the staged server kit is gone ({exc.strerror})") from exc
+    if names != sorted(digests):
+        raise Unavailable("tools container unavailable: the staged server kit changed after staging")
+    for name in names:
+        if hashlib.sha256(_read_regular(copy / name)[0]).hexdigest() != digests[name]:
+            raise Unavailable(f"tools container unavailable: staged server kit file {name} changed after staging")
+
+
 def run_kit(script: Path, host: str, script_args: list[str], *, conf_dir: Path, logs: Path,
             timeout: float = 3600) -> subprocess.CompletedProcess:
     """Run one packaged server-kit script (``bash script host args``) against ``host`` in the tools container.
 
     Args:
-        script: The packaged ``remote.sh`` or ``run-host.sh`` (its directory is mounted read-only).
+        script: The packaged ``remote.sh`` or ``run-host.sh``; its directory is staged (:func:`stage_kit`) and the
+            verified copy is mounted read-only.
         host: Exact hosts.conf name.
         script_args: Further arguments (``L1-audit.sh`` for an audit).
         conf_dir: The server-kit config dir (``hosts.conf``, ``apps.conf``, ``ioc-*.txt``), mounted read-only.
@@ -209,7 +306,8 @@ def run_kit(script: Path, host: str, script_args: list[str], *, conf_dir: Path, 
         The completed process.
 
     Raises:
-        Unavailable: No scope, an unknown or unsupported target, or the container could not run.
+        Unavailable: No scope, an unknown or unsupported target, a missing or altered kit, or the container could
+            not run.
         subprocess.TimeoutExpired: The run took longer than ``timeout``.
     """
     st = active()
@@ -227,8 +325,10 @@ def run_kit(script: Path, host: str, script_args: list[str], *, conf_dir: Path, 
         mounts, endpoint = build_ssh_files(dest, jump, work, proxy, identity=st.ssh_identity)
         env = {"AGENTTEAMS_SERVER_KIT_CONFIG": str(conf_dir.resolve()), "AGENTTEAMS_SERVER_KIT_LOGS": str(logs.resolve()),
                "AGENTTEAMS_VULNSCAN_NO_REPORT": "1"}
-        return run_confined("server-kit", ["bash", str(script.resolve()), host, *script_args], writable=[logs],
-                            readonly=[script.resolve().parent, conf_dir], mounts=mounts, egress=(endpoint,),
+        kit, digests = stage_kit(script.parent)
+        _check_staged(kit, digests)
+        return run_confined("server-kit", ["bash", str(kit / script.name), host, *script_args], writable=[logs],
+                            readonly=[kit, conf_dir], mounts=mounts, egress=(endpoint,),
                             env=env, timeout=timeout, proxy_name=proxy)
     finally:
         shutil.rmtree(work, ignore_errors=True)
