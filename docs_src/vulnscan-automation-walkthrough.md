@@ -67,6 +67,8 @@ component table.
     - `scripts/vulnscan-agent-image.sh`: [Step 7](#step-7-build-the-agent-image-and-prove-its-isolation).
     - `scripts/vulnscan-tools-image.sh`: [Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in).
     - `scripts/vulnscan-acceptance.sh`: the read-only checks of [Part D](#part-d-acceptance-checks-on-your-machine).
+    - `scripts/vulnscan-remediation/`: the [unattended remediation runner](#unattended-remediation-runner)
+      (macOS launchd jobs).
 
 Install `agentteams` somewhere an agent cannot edit: `pipx install` from a release you verified.
 This works on Homebrew's Python too. Signing refuses to run when the `agentteams` package or a
@@ -855,6 +857,50 @@ prints the result (`publish.publish`) and exits 0 only on `done`:*
 {"status": "failed", "detail": "<why>", "local_commit": "<sha>"}
 {"status": "refused", "detail": "<why>"}
 ```
+
+### Unattended remediation runner
+
+On macOS, `scripts/vulnscan-remediation/` runs the remediation loop after each daily scan without you.
+`vulnscan-remediate-auto.sh --install` copies the scripts to `~/.config/agentteams/vulnscan-remediation/`
+and loads a launchd job that runs every 30 minutes. Installing it is your standing authorization for auto
+mode, and it is recorded in `operator-clearances.log`.
+
+| Script | What it does |
+|---|---|
+| `vulnscan-remediate-auto.sh` | Once per scan: preflight (goose, route proxy, grants, `halts`, Docker), then target setup and the handoff steps, then `remediation.md` and a notification |
+| `vulnscan-ensure-docker.sh` | Starts Docker Desktop if needed and checks the tools and agent images and their self-test records. It prints `READY …` or a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). `--no-start` only checks |
+| `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
+| `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster |
+| `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
+
+The handoff steps themselves come from a site-local `vulnscan-operator-actions.sh` in the install folder
+(or `VULNSCAN_OPERATOR_ACTIONS`). It is not in the repository, because its steps name your own servers.
+Site settings go in `~/.config/agentteams/vulnscan-remediation.conf`, as `KEY=VALUE` lines that are read,
+never sourced. An environment variable of the same name wins:
+
+```ini
+VULNSCAN_REPOS_ROOT=~/code          # the checkouts remediation may touch
+VULNSCAN_GITHUB_ORG=your-org        # unset: no repository is handed off
+MANAGER_TEAM=ops-team
+```
+
+**When an attempt counts as done.** `python -m agentteams.vulnscan remediation-report LEDGER SINCE`
+reads the executor's ledger rows since the attempt started, not the log text. It writes
+`<run>/remediation.md` and prints the counts as JSON. Every `refused` or `failed` row is listed under
+*Needs you*. A row counts as infrastructure, and is retried, only when its detail **starts with**
+`tools container unavailable:` or its `reason_code` starts with `infra.`. Text that merely contains
+those words stays a policy refusal, because a detail can echo repository text. A ledger that cannot be
+read counts as an infrastructure refusal, so the attempt is retried. With no infrastructure refusal the
+run gets `remediation.done`. Otherwise it gets `remediation.blocked` and the next tick retries, up to
+`MAX_ATTEMPTS` (8) or `GIVE_UP_HOUR` (17:00 local), and then gives up with a notification.
+
+**One run at a time.** The job holds `remediate.flock` in the state folder through a small holder
+process, for exactly as long as the script's process lives. A killed run frees the lock at once, and
+no child process inherits it. A `remediate.lock` directory left by an earlier version is honoured while
+its recorded pid runs and removed once that owner is gone.
+
+Never done unattended: grant signing, destructive deletes, server `--apply`, merging, and pushing a
+team's own branch.
 
 ### Your routine
 

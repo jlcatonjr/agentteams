@@ -74,6 +74,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sandbox-handoff reference (fence v2) and the orchestrator's handoff step also say a script holds **only** the
   operations the sandbox refused; everything the agent can do itself stays with the agent.
 
+### vulnscan (the unattended remediation runner is tracked; its outcome comes from the ledger)
+
+- **`scripts/vulnscan-remediation/`** now holds the macOS remediation runner that operators had installed by
+  hand: `vulnscan-remediate-auto.sh` (the 30-minute launchd job), `vulnscan-ensure-docker.sh`,
+  `vulnscan-daily-wrapped.sh`, `vulnscan-target-agents.sh` and `vulnscan-handoff-lib.sh`. `--install` copies
+  these from the tracked folder. Site settings (`VULNSCAN_REPOS_ROOT`, `VULNSCAN_GITHUB_ORG`, `MANAGER_TEAM`,
+  `MANAGER_TEAM_DIR`) come from `~/.config/agentteams/vulnscan-remediation.conf` (read, never sourced) or the
+  environment. Without `VULNSCAN_GITHUB_ORG`, no repository is handed off. The handoff steps stay in a site-local
+  `vulnscan-operator-actions.sh`, which is not published.
+- **New `python -m agentteams.vulnscan remediation-report LEDGER SINCE`** (`agentteams.vulnscan.remediation_report`)
+  replaces the runner's standalone outcome script. A refused or failed ledger row counts as infrastructure, and
+  is retried, only when its detail *starts with* `tools container unavailable:` or its `reason_code` starts with
+  `infra.`. The match is anchored, never a substring, because details can echo repository text. An unreadable
+  ledger fails closed: it counts as infrastructure. The command also writes `remediation.md`, and every refusal
+  is listed under *Needs you*.
+- The runner's `mkdir` lock is now `remediate.flock`, held by a holder process for exactly as long as the
+  script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
+  `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
+
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
 - **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the
