@@ -1,0 +1,8 @@
+{
+  "patch_id": "b8fd021d2a1bf370d25f02526bb60e38205e5921",
+  "commit": "a4dcc435254936f6356ae9fcc4fb255f0b9623ba",
+  "subject": "vulnscan: keep executor.py under the module ceiling and drop a swallow-only handler",
+  "impact": "2 symbols added",
+  "note": "Moves executor._nothing_vulnerable to public retry_guard.nothing_vulnerable and adds retry_guard.zero_change_detail; executor.stage_fix behaviour and refusal texts unchanged; checkout_freshness change is control-flow only.",
+  "recorded_at": "2026-10-30T17:19:09Z"
+}
