@@ -181,4 +181,29 @@ def test_bad_agent_since_is_reported_never_a_retry(tmp_path: Path, capsys: pytes
     out = tmp_path / "remediation.md"
     assert main(["remediation-report", str(led), SINCE, "--agent-since", "not-a-time", "--out", str(out)]) == 0
     assert json.loads(capsys.readouterr().out)["infra_count"] == 0
-    assert "agent run rows not listed: agent run start unreadable" in out.read_text(encoding="utf-8")
+    assert "agent run rows not listed: agent run time unreadable" in out.read_text(encoding="utf-8")
+
+
+def test_agent_window_ends_at_its_finish_so_attempt_one_is_not_listed(tmp_path: Path) -> None:
+    led = _ledger(tmp_path,
+                  _row("refused", ts="2026-10-29T12:50:00Z", detail="agent's"),
+                  _row("refused", ts="2026-10-29T12:58:00Z", detail="attempt one's"),
+                  _row("done"))
+    _, md = rr.report(led, SINCE, agent_since="2026-10-29T12:45:00Z", agent_until="2026-10-29T12:55:00Z")
+    assert "agent's" in md and "attempt one's" not in md
+
+
+@pytest.mark.parametrize("start, until", [("2026-10-29T13:30:00Z", None), ("-x", None),
+                                          ("2026-10-29T12:45:00Z", "garbage")])
+def test_out_of_range_or_bad_agent_window_is_a_note(tmp_path: Path, start: str, until: str | None) -> None:
+    led = _ledger(tmp_path, _row("refused", ts="2026-10-29T12:50:00Z", detail="x"), _row("done"))
+    res, md = rr.report(led, SINCE, agent_since=start, agent_until=until)
+    assert res.infra_count == 0
+    assert "agent run rows not listed:" in md and "Not listed:" in md
+
+
+def test_leading_dash_value_in_equals_form_is_not_an_option(tmp_path: Path,
+                                                            capsys: pytest.CaptureFixture[str]) -> None:
+    led = _ledger(tmp_path, _row("done"))
+    assert main(["remediation-report", str(led), SINCE, "--agent-since=-x", "--agent-until=-y"]) == 0
+    assert json.loads(capsys.readouterr().out)["infra_count"] == 0

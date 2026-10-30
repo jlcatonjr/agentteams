@@ -18,7 +18,7 @@ counts as one infra refusal, so the attempt is retried instead of marked done. S
 the CLI's ``--out`` file.
 
 With ``--agent-since`` (the day's agent run start, from ``<run>/agent/status.json``), the rows from then up to the
-attempt's start (the agent's own executor requests) are reported in their own section and their refusals listed
+agent's ``--agent-until`` (its ``finished``; else the attempt's start) are reported in their own section and their refusals listed
 under *Needs you*. They never count toward ``infra_count``: a remediation retry does not redo the agent's requests.
 """
 
@@ -260,14 +260,32 @@ def render_markdown(res: Outcome, *, run_name: str, attempt: int, log_text: str 
     out += [f"- {p}" for p in prs] + ["", "## Per repo", ""] + [f"- {ln}" for ln in sorted(latest.values())]
     if agent is not None:
         out += ["", "## Agent run (executor rows)", "",
+                f"Not listed: {agent.error}" if agent.error else
                 f"Before this attempt, the agent's requests: {agent.done} done, "
                 f"{len(agent.infra) + len(agent.policy)} refused (listed under Needs you; never retried here)"]
     out += ["", "## Needs you", ""] + ([f"- {ln}" for ln in needs] or ["- nothing"])
     return "\n".join(out) + "\n"
 
 
+def _agent_outcome(ledger: str | Path, since: str, agent_since: str, agent_until: str | None) -> Outcome:
+    """Return the agent run's rows in ``[agent_since, min(agent_until, since))``; a bad window is an error, not a raise.
+
+    ``agent/status.json`` is the agent run's own file, so a malformed or out-of-range time is reported under
+    *Needs you* and never becomes a usage error (which the runner would count as infra and retry).
+    """
+    try:
+        start, attempt = parse_ts(agent_since), parse_ts(since)
+        end = min(parse_ts(agent_until), attempt) if agent_until else attempt
+    except ValueError:
+        return Outcome(error=f"agent run time unreadable ({_one_line(agent_since)[:40]!r})")
+    if start >= end:
+        return Outcome(error="agent run start is not before this attempt (out of range)")
+    return outcome(ledger, start.isoformat(), until=end.isoformat())
+
+
 def report(ledger: str | Path, since: str, *, run_name: str = "", attempt: int = 1,
-           log_text: str = "", agent_since: str | None = None) -> tuple[Outcome, str]:
+           log_text: str = "", agent_since: str | None = None,
+           agent_until: str | None = None) -> tuple[Outcome, str]:
     """Return one attempt's outcome and its ``remediation.md`` text.
 
     Args:
@@ -276,7 +294,9 @@ def report(ledger: str | Path, since: str, *, run_name: str = "", attempt: int =
         run_name: The scan run's name.
         attempt: The attempt number.
         log_text: This attempt's log text.
-        agent_since: The day's agent run start (ISO), or None: its rows up to ``since`` get their own section.
+        agent_since: The day's agent run start (ISO), or None: its rows get their own section.
+        agent_until: The agent run's end (ISO), or None for ``since``; the window never extends past ``since``,
+            so a later attempt's rows (attempt 1's, seen from attempt 2) are never listed as the agent's.
 
     Returns:
         ``(outcome, markdown)``.
@@ -287,15 +307,13 @@ def report(ledger: str | Path, since: str, *, run_name: str = "", attempt: int =
     res = outcome(ledger, since)
     agent = None
     if agent_since:
-        try:
-            agent = outcome(ledger, agent_since, until=since)
-        except ValueError:   # status.json is the agent run's file: a bad start is reported, never a usage error
-            agent = Outcome(error=f"agent run start unreadable ({_one_line(agent_since)[:40]!r})")
+        agent = _agent_outcome(ledger, since, agent_since, agent_until)
     return res, render_markdown(res, run_name=run_name, attempt=attempt, log_text=log_text, agent=agent)
 
 
 def register(sub: Any) -> None:
-    """Add ``remediation-report LEDGER SINCE [--log F] [--run NAME] [--attempt N] [--out F] [--agent-since TS]``.
+    """Add ``remediation-report LEDGER SINCE [--log F] [--run NAME] [--attempt N] [--out F] [--agent-since TS]
+    [--agent-until TS]``.
 
     Args:
         sub: The parser's subparsers action.
@@ -310,6 +328,7 @@ def register(sub: Any) -> None:
     sp.add_argument("--out", type=Path, default=None, help="write remediation.md here (default: not written)")
     sp.add_argument("--agent-since", default=None,
                     help="the day's agent run start (ISO): report its executor rows before SINCE, never retried")
+    sp.add_argument("--agent-until", default=None, help="the agent run's end (ISO; default SINCE)")
 
 
 def dispatch(args: argparse.Namespace, load_cfg: Any = None) -> int:
@@ -330,7 +349,8 @@ def dispatch(args: argparse.Namespace, load_cfg: Any = None) -> int:
             log_text = f"WARN this attempt's log is unreadable: {type(exc).__name__}"
     try:
         res, md = report(args.ledger, args.since, run_name=args.run, attempt=args.attempt, log_text=log_text,
-                         agent_since=getattr(args, "agent_since", None))
+                         agent_since=getattr(args, "agent_since", None),
+                         agent_until=getattr(args, "agent_until", None))
     except ValueError as exc:
         print(f"remediation-report: bad SINCE: {exc}", file=sys.stderr)
         return 2

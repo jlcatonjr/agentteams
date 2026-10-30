@@ -258,12 +258,18 @@ THIS_RUN="$(mktemp)"; tail -c "+$RLOG_FROM" "$RLOG" > "$THIS_RUN"
 # The outcome comes from this attempt's ledger rows (agentteams.vulnscan.remediation_report), which also writes
 # remediation.md. If the report cannot run at all, it fails closed: counted as infra, so the attempt is retried.
 # The agent's own executor requests ran before this attempt: report them too (never counted toward a retry)
-AGENT_SINCE="$("$PY" -P -c 'import json, sys
-try: print(json.load(open(sys.argv[1], encoding="utf-8")).get("started") or "")
-except (OSError, ValueError): print("")' "$latest/agent/status.json" 2>/dev/null || true)"
+# (--agent-since=VALUE form: a value from the agent's file can never be read as an option)
+AGENT_ARGS=()
+while IFS= read -r a; do [[ -n "$a" ]] && AGENT_ARGS+=("$a"); done < <("$PY" -P -c 'import json, sys
+try: s = json.load(open(sys.argv[1], encoding="utf-8"))
+except (OSError, ValueError): s = {}
+for k in ("started", "finished"):
+    v = s.get(k) if isinstance(s, dict) else None
+    if isinstance(v, str) and v and "\n" not in v:
+        print(f"--agent-{'since' if k == 'started' else 'until'}={v}")' "$latest/agent/status.json" 2>/dev/null || true)
 if ! OUTCOME="$("${VS[@]}" remediation-report "$STATE_DIR/ledger.jsonl" "$ATTEMPT_START" --log "$THIS_RUN" \
                 --run "$(basename "$latest")" --attempt "$ATTEMPT" --out "$latest/remediation.md" \
-                ${AGENT_SINCE:+--agent-since "$AGENT_SINCE"})"; then
+                ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"})"; then
   OUTCOME='{"infra_count": 1, "error": "remediation-report did not run"}'
   printf '# Vulnscan remediation — %s (attempt %s)\n\n## Needs you\n\n- remediation outcome unknown: %s\n' \
     "$(basename "$latest")" "$ATTEMPT" "remediation-report did not run (is the installed package current?)" \
