@@ -136,6 +136,8 @@ python -m agentteams.api_impact status [--range BASE..HEAD] [--json]   # 0 revie
 python -m agentteams.api_impact record [--range BASE..HEAD] --note TEXT
 ```
 
+`--repo` may name any directory inside the repository; every command resolves its top level first.
+
 ## Key functions
 
 ### `surface(source: str) -> dict[str, str] | None`

@@ -46,7 +46,9 @@ stages anything it runs `python3 -P -m agentteams.api_impact --pre-commit --stri
   `workSummaries/`, `references/` or `agents/`, pages named `index`, `readme` or `changelog`, and
   symlinks, never match. A line appears when the module has pages and none is staged (`not updated`), when
   a new public module (no leading `_`, with new public names) has no page, or when the pages miss added
-  names (`undocumented`) or still mention removed ones (`stale`). CLI options are not mapped to pages;
+  names (`undocumented`) or still mention removed ones (`stale`). Pages in the index and in `HEAD` both
+  count, so a page staged for deletion is reported, not dropped. CLI options are not mapped to pages, and a
+  common stem (`config`, `utils`, `main`) can match an unrelated page of the same name;
 - in the agentteams repository, when the operator has opted in with `git config agentteams.regenerateMan true`,
   regenerates the CLI man page `agentteams.1` from the parser and stages it when `build_team.py`,
   `agentteams/cli/` or `agentteams/man.py` is staged (skipped, with a note, when those paths also hold
