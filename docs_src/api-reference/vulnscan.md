@@ -1029,7 +1029,7 @@ vulnscan or to test an integration.
 
 ### `agentteams.vulnscan.engine`
 
-#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=())`
+#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=(), gradle_lockfiles=False)`
 
 Scan every manifest under `root` (a repository or a folder of repositories). Returns a
 [`Report`](#json-output) whose targets are repositories relative to `root`. A feed failure lands
@@ -1335,7 +1335,7 @@ of the FIRST reference calculator (BSD-2-Clause).
 
 ### `agentteams.vulnscan.fix`
 
-#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests)`
+#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests, gradle_lockfiles=False)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
 `allow_major=False`, `cooldown_days=0` (no release-age gate, under Rule S-10's remediation carve-out; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
@@ -1357,7 +1357,7 @@ hand"), `no-clean-release`, or `malicious`. Private crates (`project_policy.is_p
 never sent to OSV. `markdown()` renders them under `## crates.io: <lock> — plan-only (no staged edit)`; the agent is
 told never to request `stage-fix` for them, and `executor.validate_diff` refuses a `Cargo.lock` change anyway.
 
-#### `fix.plan_lockfile(path, *, label="", private=())` / `fix.lockfile_note(name)`
+#### `fix.plan_lockfile(path, *, label="", private=(), hidden=None)` / `fix.lockfile_note(name)`
 
 Plan-only rows for one `lockfiles.FORMATS` file (`go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`,
 `gradle.lockfile`, `packages.lock.json`), from OSV, as `plan_cargo_lock` makes them: `plan-only` with `new` the
