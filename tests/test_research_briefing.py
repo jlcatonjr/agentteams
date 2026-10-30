@@ -101,6 +101,21 @@ def test_identical_claims_are_audited_against_their_own_pages() -> None:
     assert sorted(seen) == sorted([PAGES["https://reuters.com/a"][0], PAGES["https://apnews.com/b"][0]])
 
 
+def test_identical_claims_are_refuted_only_where_their_own_page_contradicts() -> None:
+    """One audit call over all claims; a verdict maps back to its own claim, not to its twin."""
+    async def critic(messages, *, want_json=False):
+        evidence = messages[1]["content"].split("EVIDENCE:\n", 1)[1]
+        if evidence == PAGES["https://reuters.com/a"][0]:
+            return json.dumps({"contradicted": True, "correction": "Operators reported more intrusion attempts."})
+        return json.dumps({"contradicted": False, "correction": None})
+    claim = "Operators reported fewer attempts on the power grid."
+    r, _ = retriever()
+    b = run(build_briefing("grids", chat([{"claim": claim, "kind": "reported", "sensitive": False}]),
+                           critic_fn=critic, retriever=r))
+    assert b.stats.refuted == 1
+    assert [c.source_domain for c in b.claims] == ["apnews.com"]
+
+
 def test_max_pages_bounds_fetches() -> None:
     r, fetched = retriever()
     run(build_briefing("t", chat([]), retriever=r, max_pages=1))

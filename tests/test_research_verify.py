@@ -10,7 +10,9 @@ import pytest
 from agentteams.research.verify import (
     Claim,
     Verdict,
+    _fold,
     _supported_by_evidence,
+    audit_claim_pairs,
     audit_claims,
     extract_claims,
     revise,
@@ -48,6 +50,86 @@ def test_supported_by_evidence_excludes_claim_terms_from_requirement() -> None:
 
 def test_supported_by_evidence_false_on_empty_required_terms() -> None:
     assert not _supported_by_evidence(correction="", claim="x", evidence="anything")
+
+
+# --- inflection folding in the backstop (#5) and what it newly permits (Rule 12) -------------
+
+
+def test_supported_by_evidence_accepts_an_inflected_refutation() -> None:
+    assert _supported_by_evidence(
+        correction="Regulators rejected the merger.",
+        claim="The merger was approved.",
+        evidence="Two regulators are rejecting the merger outright.",
+    )
+    assert _supported_by_evidence(
+        correction="The study covered three model families.",
+        claim="The paper tested one system.",
+        evidence="Three families of models were covered by the studies.",
+    )
+
+
+def test_supported_by_evidence_still_rejects_a_word_absent_in_every_form() -> None:
+    assert not _supported_by_evidence(
+        correction="Regulators fined the companies.",
+        claim="The merger was approved.",
+        evidence="Two regulators are rejecting the companies' merger.",
+    )
+
+
+def test_supported_by_evidence_false_when_only_inflections_of_claim_words() -> None:
+    assert not _supported_by_evidence(
+        correction="Models.",
+        claim="The model shipped.",
+        evidence="Models are everywhere in this evidence.",
+    )
+
+
+def test_supported_by_evidence_rejects_decade_for_year() -> None:
+    """Digits never fold: evidence saying "1990s" does not vouch for a correction naming 1990."""
+    assert not _supported_by_evidence(
+        correction="It happened in 1990.",
+        claim="It happened in 2005.",
+        evidence="Accounts place it in the 1990s.",
+    )
+
+
+def test_supported_by_evidence_rejects_a_folding_collision() -> None:
+    """ "united" must not vouch for "units": -ed/-ing fold to a verb-form key, not the bare stem."""
+    assert not _supported_by_evidence(
+        correction="Sold in units.",
+        claim="Sold by weight.",
+        evidence="The united buyers sold the goods.",
+    )
+    assert not _supported_by_evidence(
+        correction="Sold united.",
+        claim="Sold by weight.",
+        evidence="The goods were sold in units.",
+    )
+
+
+@pytest.mark.parametrize(
+    ("term", "folded"),
+    [
+        ("models", "model"),
+        ("studies", "study"),
+        ("classes", "class"),
+        ("status", "status"),
+        ("analysis", "analysis"),
+        ("glass", "glass"),
+        ("1990s", "1990s"),
+        ("cats", "cats"),
+        ("NASA", "nasa"),
+        ("GPUS", "gpus"),
+        ("rejected", "reject~v"),
+        ("rejecting", "reject~v"),
+        ("united", "unit~v"),
+        ("units", "unit"),
+        ("used", "used"),
+        ("being", "being"),
+    ],
+)
+def test_fold_rules(term: str, folded: str) -> None:
+    assert _fold(term) == folded
 
 
 # --- mock ChatFn fixtures ---------------------------------------------------------------------
@@ -128,6 +210,29 @@ def test_audit_claims_per_claim_evidence_never_pooled() -> None:
     second_user = next(m["content"] for m in chat_fn.calls[1]["messages"] if m["role"] == "user")
     assert "evidence about A only" in first_user and "evidence about B only" not in first_user
     assert "evidence about B only" in second_user and "evidence about A only" not in second_user
+
+
+def test_audit_claim_pairs_audits_identical_texts_against_their_own_evidence() -> None:
+    first, second = Claim(text="same claim"), Claim(text="same claim")
+    chat_fn = _make_json_chat_fn(
+        [json.dumps({"contradicted": False}), json.dumps({"contradicted": False})]
+    )
+    verdicts = asyncio.run(
+        audit_claim_pairs([(first, "page one text"), (second, "page two text")], chat_fn)
+    )
+    users = [next(m["content"] for m in c["messages"] if m["role"] == "user") for c in chat_fn.calls]
+    assert sum("page one text" in u for u in users) == 1
+    assert sum("page two text" in u for u in users) == 1
+    assert "page two text" not in users[0] and "page one text" not in users[1]
+    assert verdicts[0].claim is first and verdicts[1].claim is second
+
+
+def test_audit_claim_pairs_skips_empty_evidence_and_keeps_claim_identity() -> None:
+    kept = Claim(text="kept")
+    chat_fn = _make_json_chat_fn([json.dumps({"contradicted": False})])
+    verdicts = asyncio.run(audit_claim_pairs([(Claim(text="kept"), "  "), (kept, "evidence")], chat_fn))
+    assert len(verdicts) == 1 and verdicts[0].claim is kept
+    assert len(chat_fn.calls) == 1
 
 
 def test_audit_claims_survived_when_not_contradicted() -> None:

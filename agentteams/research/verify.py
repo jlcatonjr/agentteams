@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Literal, Protocol
+from typing import Awaitable, Callable, Literal, Protocol, Sequence
 
 
 class ChatFn(Protocol):
@@ -159,17 +159,62 @@ async def audit_claims(
     entry (or an empty one) is skipped for this lens, not audited against unrelated evidence. This
     per-claim pairing is a deliberate, audited fix in this pattern's origin: pooling all evidence
     for every claim let evidence support one claim be mistakenly treated as also relevant to an
-    unrelated claim.
+    unrelated claim. Because the map is keyed by text, two claims with the same text share one
+    evidence string; when identical texts come from different sources, use
+    :func:`audit_claim_pairs`, which pairs each claim object with its own evidence.
 
     Every ``contradicted`` verdict is additionally checked against :func:`_supported_by_evidence`
     — a deterministic, non-LLM backstop — before being accepted; an LLM-proposed correction that
     doesn't actually derive from the claim's own evidence is downgraded back to ``"survived"``
     rather than trusted at face value.
+
+    Args:
+        claims: The claims to audit, in order.
+        evidence_by_claim: Claim text to that claim's own evidence string.
+        chat_fn: The caller's chat callable (see :class:`ChatFn`).
+        lens: ``"adversarial"`` (fresh evidence) or ``"conflict"`` (already-established facts).
+
+    Returns:
+        One :class:`Verdict` per claim that had non-empty evidence, in input order.
+
+    Raises:
+        KeyError: If ``lens`` is not a known lens.
+    """
+    pairs = [(claim, evidence_by_claim.get(claim.text, "")) for claim in claims]
+    return await audit_claim_pairs(pairs, chat_fn, lens=lens)
+
+
+async def audit_claim_pairs(
+    pairs: Sequence[tuple[Claim, str]],
+    chat_fn: ChatFn,
+    lens: Literal["adversarial", "conflict"] = "adversarial",
+) -> list[Verdict]:
+    """Audit each ``(claim, evidence)`` pair against that pair's evidence only.
+
+    The pairing form of :func:`audit_claims`: each claim object carries its own evidence, so two
+    claims with identical text from different sources are each audited against their own page,
+    never one against the other's. A pair with empty evidence is skipped for this lens. Each
+    returned :class:`Verdict` holds the very ``Claim`` object from its pair, so callers map
+    verdicts back by identity (``verdict.claim is claim``) — ``Claim`` compares by value, so
+    equality would conflate identical texts.
+
+    Every ``contradicted`` verdict passes the deterministic :func:`_supported_by_evidence`
+    backstop before it is accepted as ``"refuted"``; otherwise it is downgraded to ``"survived"``.
+
+    Args:
+        pairs: ``(claim, evidence)`` tuples, in order.
+        chat_fn: The caller's chat callable (see :class:`ChatFn`).
+        lens: ``"adversarial"`` (fresh evidence) or ``"conflict"`` (already-established facts).
+
+    Returns:
+        One :class:`Verdict` per pair with non-empty evidence, in input order.
+
+    Raises:
+        KeyError: If ``lens`` is not a known lens.
     """
     verdicts: list[Verdict] = []
     instruction = _LENS_INSTRUCTIONS[lens] + _AUDIT_INSTRUCTION_SUFFIX
-    for claim in claims:
-        evidence = evidence_by_claim.get(claim.text, "")
+    for claim, evidence in pairs:
         if not evidence.strip():
             continue
         raw = await chat_fn(
@@ -201,8 +246,44 @@ async def audit_claims(
 _ACRONYM_RE = re.compile(r"^[A-Z]{2,6}$")
 
 
+_MIN_STEM = 4
+# The past-tense and progressive forms fold to one shared verb-form key, never to the bare stem:
+# "united" and "uniting" match each other, but neither matches "unit"/"units". Folding them to the
+# bare stem would let an evidence word ("united") vouch for an unrelated correction word ("units").
+_VERB_FORM = "~v"
+
+
+def _fold(term: str) -> str:
+    """Conservative English inflection folding for the anti-fabrication backstop.
+
+    Only purely alphabetic ASCII tokens fold, and never an acronym (tested on the original case);
+    digits never fold ("1990s" stays distinct from "1990"). Rules, first match wins, each applied
+    only when the folded stem keeps at least ``_MIN_STEM`` characters: ``sses→ss``, ``ies→y``,
+    a trailing ``s`` (not after ``s``, ``u`` or ``i``), and ``ing``/``ed`` to a shared verb-form
+    key. Folding only merges inflections of one word; it adds no synonyms.
+    """
+    if _ACRONYM_RE.match(term) or not (term.isascii() and term.isalpha()):
+        return term.lower()
+    t = term.lower()
+    if t.endswith("sses"):
+        stem = t[:-2]
+    elif t.endswith("ies"):
+        stem = t[:-3] + "y"
+    elif t.endswith("s") and not t.endswith(("ss", "us", "is")):
+        stem = t[:-1]
+    elif t.endswith("ing") and len(t) - 3 >= _MIN_STEM:
+        return t[:-3] + _VERB_FORM
+    elif t.endswith("ed") and len(t) - 2 >= _MIN_STEM:
+        return t[:-2] + _VERB_FORM
+    else:
+        return t
+    return stem if len(stem) >= _MIN_STEM else t
+
+
 def _content_terms(text: str) -> set[str]:
-    return {t.lower() for t in re.findall(r"\w+", text) if len(t) >= 4 or _ACRONYM_RE.match(t)}
+    return {
+        _fold(t) for t in re.findall(r"\w+", text) if len(t) >= 4 or _ACRONYM_RE.match(t)
+    }
 
 
 def _supported_by_evidence(correction: str, claim: str, evidence: str) -> bool:
@@ -211,8 +292,10 @@ def _supported_by_evidence(correction: str, claim: str, evidence: str) -> bool:
     Every significant content word (length >= 4, or a short all-caps acronym) in ``correction``
     must also appear in ``evidence`` — EXCLUDING words already present in ``claim`` itself (a
     correction that just repeats the claim's own vocabulary proves nothing about whether the
-    evidence actually supports it). A correction with no qualifying content words at all is
-    treated as unsupported (returns False) rather than vacuously true.
+    evidence actually supports it). Words are compared after :func:`_fold` merges inflections
+    ("models" matches "model"); a word absent from the evidence in every form still fails. A
+    correction with no qualifying content words at all is treated as unsupported (returns False)
+    rather than vacuously true.
     """
     correction_terms = _content_terms(correction)
     claim_terms = _content_terms(claim)

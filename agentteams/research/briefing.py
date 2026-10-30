@@ -17,7 +17,7 @@ the origin; LingoFriend's background "dossier" team is the pattern this package 
 4. **Digest** each page with the caller's ``chat_fn`` into at most ``claims_per_source`` short
    claims, the page fenced under :data:`RETRIEVAL_CONTENT_AUTHORITY`. Only the fixed JSON shape is
    accepted, and each claim is screened again.
-5. **Audit** each claim against its own page only (:func:`audit_claims`) with ``critic_fn`` (ideally
+5. **Audit** each claim against its own page only (:func:`audit_claim_pairs`) with ``critic_fn`` (ideally
    a different model family from ``chat_fn``; the caller says which via ``critic_label``). Refuted
    claims are dropped.
 6. **Corroborate**: a claim is ``single_source`` unless another domain makes a similar one.
@@ -40,7 +40,7 @@ from agentteams.research.news import is_news_source, perspective_attribution
 from agentteams.research.reputable import DEFAULT_CONFIG, ReputableSource, ReputableSourceAllowlist
 from agentteams.research.scholarly import ScholarlyWork, scholarly_search
 from agentteams.research.search import fetch_text_and_date, is_public_https, web_search_with_provenance
-from agentteams.research.verify import ChatFn, Claim, audit_claims, extract_json
+from agentteams.research.verify import ChatFn, Claim, audit_claim_pairs, extract_json
 from agentteams.research.screen import scan_read_content
 
 ClaimKind = Literal["reported", "contested", "web", "scholarly"]
@@ -271,12 +271,15 @@ async def build_briefing(
             await add(w.abstract[:page_chars], _domain_of(w.url) or "doi.org", _scholarly_attribution(w),
                       str(w.year) if w.year else None, lambda k: "scholarly")
 
+    # Each claim is paired with its own page: two sources can make the same claim word for word,
+    # and a text-keyed evidence map would audit one against the other's page. Claim compares by
+    # value, so verdicts map back by identity, never by equality.
+    pairs = [(Claim(text=c["claim"]), evidence) for c, evidence in raw]
+    verdicts = await audit_claim_pairs(pairs, critic_fn or chat_fn)
+    refuted = [v.claim for v in verdicts if v.status == "refuted"]
     kept = []
-    for c, evidence in raw:
-        # One audit per (claim, its own page): two sources can make the same claim word for word,
-        # and a text-keyed evidence map would audit one against the other's page.
-        verdicts = await audit_claims([Claim(text=c["claim"])], {c["claim"]: evidence}, critic_fn or chat_fn)
-        if any(v.status == "refuted" for v in verdicts):
+    for (c, _), (claim, _) in zip(raw, pairs):
+        if any(r_claim is claim for r_claim in refuted):
             stats.refuted += 1
         else:
             kept.append(c)
