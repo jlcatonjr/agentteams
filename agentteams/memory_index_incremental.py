@@ -67,30 +67,19 @@ def _old_tf_for_doc(index: dict[str, Any], doc_id: int) -> dict[str, int]:
 def _new_doc_and_tf(
     path: Path, doc_id: int, root: Path | None = None
 ) -> tuple[dict[str, Any], dict[str, int]] | None:
+    """Rebuild the changed document through the full builder's per-document routine.
+
+    Routing through ``mi._index_document`` keeps incremental and full builds in
+    agreement, including JSON Lines sources (one passage per record).
+    """
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    tokens = mi._tokenize(text)
-    if not tokens:
-        return None
-
-    tf: dict[str, int] = {}
-    for token in tokens:
-        tf[token] = tf.get(token, 0) + 1
-
-    paragraphs = mi._extract_paragraphs(text)
-    doc = {
-        "doc_id": doc_id,
-        "path": mi.store_path(path, root),
-        "title": mi._title_for(path, text),
-        "length": len(tokens),
-        "snippet": mi._snippet_from_paragraphs(paragraphs) or mi._snippet(text),
-        "paragraphs": paragraphs,
-        "source_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "source_mtime": _source_mtime(path),
-    }
-    return doc, tf
+    return mi._index_document(
+        doc_id, mi.store_path(path, root), path.name, text,
+        jsonl=mi._is_jsonl(path.name), source_mtime=_source_mtime(path),
+    )
 
 
 def _format_doc_inner_lines(doc: dict[str, Any]) -> list[str]:

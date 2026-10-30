@@ -36,9 +36,10 @@ import math
 import os
 import re
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 #: Authority label for every memory- and code-index hit, shared by the CLI and the recall MCP server.
 #: Indexed text includes agent-written plans and summaries that may quote read content, so a hit is
@@ -151,11 +152,16 @@ def _tokenize(text: str) -> list[str]:
 
 
 def _title_for(path: Path, text: str) -> str:
+    return _title_from(text, path.name)
+
+
+def _title_from(text: str, fallback: str) -> str:
+    """First ``# `` heading in *text*, else *fallback*."""
     for line in text.splitlines():
         s = line.strip()
         if s.startswith("# "):
             return s[2:].strip()
-    return path.name
+    return fallback
 
 
 def _is_substantive_paragraph(paragraph: str) -> bool:
@@ -234,6 +240,68 @@ def _extract_paragraphs(text: str, max_count: int = _MAX_PARAGRAPHS_PER_DOC) -> 
             result.append(redact_local_paths(body)[:480])
             if len(result) >= max_count:
                 break
+    return result
+
+
+#: JSON-object fields whose string values lead a JSONL record's passage, in this order.
+_RECORD_TEXT_KEYS = ("text", "content", "message")
+
+
+def _is_jsonl(name: str) -> bool:
+    """True when a source name (file path or in-memory id) denotes JSON Lines."""
+    return name.lower().endswith(".jsonl")
+
+
+def _record_text(line: str) -> str:
+    """Return the passage text for one JSONL record line.
+
+    A line that parses as a JSON object yields every string value inside it (depth-first,
+    the ``_RECORD_TEXT_KEYS`` fields first at each level) joined by spaces, so a transcript
+    record's message text leads and its keys and punctuation are not indexed. Any other
+    line (malformed JSON, or a JSON array/scalar) is used as-is.
+    """
+    try:
+        parsed = json.loads(line)
+    except (ValueError, RecursionError):
+        return line
+    if not isinstance(parsed, dict):
+        return line
+    parts: list[str] = []
+    stack: list[Any] = [parsed]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, str):
+            if node.strip():
+                parts.append(" ".join(node.split()))
+        elif isinstance(node, dict):
+            keys = [k for k in _RECORD_TEXT_KEYS if k in node]
+            keys += [k for k in node if k not in _RECORD_TEXT_KEYS]
+            stack.extend(node[k] for k in reversed(keys))
+        elif isinstance(node, list):
+            stack.extend(reversed(node))
+    return " ".join(parts)
+
+
+def _record_texts(text: str) -> list[str]:
+    """Passage text (untruncated, unredacted) for every non-empty line of JSONL *text*."""
+    return [_record_text(line.strip()) for line in text.splitlines() if line.strip()]
+
+
+def _extract_records(records: list[str], max_count: int = _MAX_PARAGRAPHS_PER_DOC) -> list[str]:
+    """Return up to *max_count* stored passages from JSONL record texts, one per record.
+
+    The JSONL counterpart of :func:`_extract_paragraphs`: a JSONL file has no blank lines, so
+    paragraph splitting would make the whole file one passage. Records with no indexable token
+    are skipped; each passage is redacted (:func:`redact_local_paths`) and truncated to 480
+    characters exactly as a paragraph is.
+    """
+    result: list[str] = []
+    for record in records:
+        if not _tokenize(record):
+            continue
+        result.append(redact_local_paths(record)[:480])
+        if len(result) >= max_count:
+            break
     return result
 
 
@@ -382,35 +450,134 @@ def build_memory_index(
     source_paths = [Path(p) for p in sources]
     documents: list[dict[str, Any]] = []
     postings: dict[str, list[dict[str, int]]] = {}
-    doc_lengths: list[int] = []
 
     for path in source_paths:
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        tokens = _tokenize(text)
-        if not tokens:
-            continue
-        doc_id = len(documents)
-        tf: dict[str, int] = {}
-        for t in tokens:
-            tf[t] = tf.get(t, 0) + 1
-        for term, freq in tf.items():
-            postings.setdefault(term, []).append({"doc_id": doc_id, "tf": freq})
-        paragraphs = _extract_paragraphs(text)
-        documents.append({
-            "doc_id": doc_id,
-            "path": store_path(path, root),
-            "title": _title_for(path, text),
-            "length": len(tokens),
-            "snippet": _snippet_from_paragraphs(paragraphs) or _snippet(text),
-            "paragraphs": paragraphs,
-            "source_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            "source_mtime": _source_mtime(path),
-        })
-        doc_lengths.append(len(tokens))
+        built = _index_document(
+            len(documents), store_path(path, root), path.name, text,
+            jsonl=_is_jsonl(path.name), source_mtime=_source_mtime(path),
+        )
+        if built is not None:
+            _add_document(documents, postings, *built)
 
+    return _finish_index(
+        documents, postings, source_count=len(source_paths),
+        project_name=project_name, framework=framework,
+    )
+
+
+def build_memory_index_from_texts(
+    texts: Mapping[str, str],
+    *,
+    project_name: str = "",
+    framework: str = "",
+    jsonl: bool | None = None,
+) -> dict[str, Any]:
+    """Build a lexical BM25 index over in-memory *texts*, without writing files. Pure.
+
+    The output has the same schema as :func:`build_memory_index` and answers
+    :func:`query_index` the same way. Each key is stored verbatim as the document's
+    ``path`` — an opaque id, not relativized or redacted — and the title is the text's
+    first ``# `` heading or else the id. ``source_mtime`` is ``0.0`` and ``source_hash``
+    is the text's SHA-256. :func:`is_index_stale` skips such documents when no file
+    exists at their id, so a texts-built index is never stale on their account.
+
+    Args:
+        texts: Document id → document text, indexed in mapping order. A text with no
+            indexable token is skipped (``source_count`` still counts it).
+        project_name: Recorded in the index metadata.
+        framework: Recorded in the index metadata.
+        jsonl: ``True`` indexes every text as JSON Lines (one passage per record),
+            ``False`` as prose (one passage per paragraph); ``None`` decides per id —
+            JSON Lines when the id ends in ``.jsonl``.
+
+    Returns:
+        The index payload.
+
+    Raises:
+        TypeError: If a key or value of *texts* is not a ``str``.
+    """
+    documents: list[dict[str, Any]] = []
+    postings: dict[str, list[dict[str, int]]] = {}
+    for doc_key, text in texts.items():
+        if not isinstance(doc_key, str) or not isinstance(text, str):
+            raise TypeError(
+                f"texts must map str to str; got {type(doc_key).__name__} -> {type(text).__name__}"
+            )
+        as_jsonl = _is_jsonl(doc_key) if jsonl is None else jsonl
+        built = _index_document(
+            len(documents), doc_key, doc_key, text, jsonl=as_jsonl, source_mtime=0.0
+        )
+        if built is not None:
+            _add_document(documents, postings, *built)
+    return _finish_index(
+        documents, postings, source_count=len(texts),
+        project_name=project_name, framework=framework,
+    )
+
+
+def _index_document(
+    doc_id: int,
+    path_str: str,
+    title_fallback: str,
+    text: str,
+    *,
+    jsonl: bool,
+    source_mtime: float,
+) -> tuple[dict[str, Any], dict[str, int]] | None:
+    """Build one document record and its term frequencies, or ``None`` when it has no tokens.
+
+    The single per-document routine shared by both builders and by the incremental
+    updater (``memory_index_incremental``), so all three agree on what a document looks
+    like. For JSON Lines the tokens and passages come from the record texts
+    (:func:`_record_texts`), not the raw JSON; ``source_hash`` is always over *text*.
+    """
+    records = _record_texts(text) if jsonl else []
+    tokens = _tokenize("\n".join(records) if jsonl else text)
+    if not tokens:
+        return None
+    tf: dict[str, int] = {}
+    for t in tokens:
+        tf[t] = tf.get(t, 0) + 1
+    paragraphs = _extract_records(records) if jsonl else _extract_paragraphs(text)
+    doc = {
+        "doc_id": doc_id,
+        "path": path_str,
+        "title": _title_from(text, title_fallback),
+        "length": len(tokens),
+        "snippet": _snippet_from_paragraphs(paragraphs) or _snippet(text),
+        "paragraphs": paragraphs,
+        "source_hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "source_mtime": source_mtime,
+    }
+    return doc, tf
+
+
+def _add_document(
+    documents: list[dict[str, Any]],
+    postings: dict[str, list[dict[str, int]]],
+    doc: dict[str, Any],
+    tf: dict[str, int],
+) -> None:
+    """Append *doc* and its postings (its ``doc_id`` must be ``len(documents)``)."""
+    for term, freq in tf.items():
+        postings.setdefault(term, []).append({"doc_id": doc["doc_id"], "tf": freq})
+    documents.append(doc)
+
+
+def _finish_index(
+    documents: list[dict[str, Any]],
+    postings: dict[str, list[dict[str, int]]],
+    *,
+    source_count: int,
+    project_name: str,
+    framework: str,
+) -> dict[str, Any]:
+    """Add vector norms and the contract metadata, returning the index payload."""
+    doc_lengths = [d["length"] for d in documents]
     avgdl = (sum(doc_lengths) / len(doc_lengths)) if doc_lengths else 0.0
 
     # Precompute each document's full IDF-weighted TF-IDF vector norm-squared
@@ -432,7 +599,7 @@ def build_memory_index(
     built_at = _utc_now_iso()
     source_fingerprint = _documents_fingerprint(documents)
     index_build_id = hashlib.sha256(
-        f"{source_fingerprint}|{built_at}|{len(source_paths)}".encode("utf-8")
+        f"{source_fingerprint}|{built_at}|{source_count}".encode("utf-8")
     ).hexdigest()
 
     return {
@@ -449,7 +616,7 @@ def build_memory_index(
         "project_name": project_name,
         "framework": framework,
         "built_at": built_at,
-        "source_count": len(source_paths),
+        "source_count": source_count,
         "documents": documents,
         "postings": postings,
         "avgdl": avgdl,
@@ -462,7 +629,10 @@ def is_index_stale(
 ) -> bool:
     """Return True when any source file is newer than the index build time.
 
-    Invalid/missing timestamp metadata is treated as stale for safety.
+    Invalid/missing timestamp metadata is treated as stale for safety. A document
+    with ``source_mtime == 0.0`` whose ``path`` names no existing file was built from
+    in-memory text (:func:`build_memory_index_from_texts`) and is skipped, so an index
+    built only from texts is stale only when *sources* holds a file newer than it.
 
     Args:
         index: A parsed index payload.
@@ -472,6 +642,9 @@ def is_index_stale(
             against the process CWD, the hash read fails, and the index is reported
             stale on every call, triggering a full rebuild per query. Defaults to
             ``None`` for indexes that store absolute paths.
+
+    Returns:
+        ``True`` when the index is stale and should be rebuilt.
     """
     built_at = index.get("built_at")
     if not isinstance(built_at, str) or not built_at:
@@ -490,7 +663,11 @@ def is_index_stale(
         path_str = doc.get("path")
         expected_hash = doc.get("source_hash")
         if isinstance(path_str, str) and isinstance(expected_hash, str) and expected_hash:
-            actual_hash = _source_text_hash(resolve_path(path_str, root))
+            resolved = resolve_path(path_str, root)
+            if doc.get("source_mtime") == 0.0 and not resolved.exists():
+                # Built from in-memory text (build_memory_index_from_texts): no file to compare.
+                continue
+            actual_hash = _source_text_hash(resolved)
             if not actual_hash or actual_hash != expected_hash:
                 return True
 
@@ -706,6 +883,7 @@ __all__ = [
     "VECTOR_RUNTIME_MODE",
     "FALLBACK_POLICY",
     "build_memory_index",
+    "build_memory_index_from_texts",
     "is_index_stale",
     "query_index",
 ]
