@@ -476,6 +476,38 @@ specifically to avoid an import cycle (`search` → `news` → `reputable` → `
 
 ---
 
+## `briefing` — topic briefings composed from search, fetch, screen, digest and audit
+
+> *Source: `agentteams/research/briefing.py`*
+
+`build_briefing(topic, chat_fn, *, critic_fn=None, critic_label="", retriever=None, max_pages=6,
+page_chars=4000, claims_per_source=3, extra_patterns=())` is an async function that returns a
+`Briefing`: up to a few dated, attributed claims about one topic. It works in six steps:
+
+1. **Find.** Rated outlets (`ReputableSourceAllowlist`), then general web results, then scholarly
+   abstracts. The topic is the only query; nothing is searched or fetched because a page said so.
+2. **Fetch.** At most `max_pages` pages, each only after `is_public_https`.
+3. **Screen.** Every page goes through `screen.scan_read_content` (below); a page that directs its
+   reader is dropped and counted.
+4. **Digest.** `chat_fn` turns each page, fenced under `RETRIEVAL_CONTENT_AUTHORITY`, into claims of
+   the fixed shape `{claim, kind: reported|contested, sensitive}`. Each claim is screened again.
+5. **Audit.** Each claim is checked against its own page only (`audit_claims`, one call per claim,
+   so two sources with word-for-word identical claims never share evidence), with `critic_fn`
+   (default `chat_fn`, a weaker check; record which in `critic_label`).
+6. **Corroborate.** A claim is `single_source` unless another domain makes a similar one.
+
+`BriefingClaim` fields: `claim`, `source_domain`, `attribution` (`perspective_attribution` for
+news), `published_at`, `kind` (`reported`, `contested`, `web`, `scholarly`), `single_source`,
+`sensitive`. `default_candidates(topic, allowlist=None, k_rated=4, k_web=8)` is the default
+source finder (rated outlets, then web hits, deduplicated by URL). `BriefingStats` holds counts only: `candidates`, `fetched`, `unsafe_url`,
+`injection`, `digest_rejected` and `refuted`. `Retriever` injects the network side for tests.
+`max_pages`, `page_chars` and `claims_per_source` must be positive ints (`ValueError`). Exceptions
+from `chat_fn`, `critic_fn` or an injected `Retriever` propagate: no partial briefing is returned.
+`verify.extract_json` is the tolerant JSON parser the digest step shares with `verify`.
+
+Storage, expiry and serving are the caller's concern; the module writes nothing beyond the
+research cache. Honesty ceiling: a rated outlet is provenance, not truth; a surviving claim is
+"survived", never "verified".
 ## `screen` — read-content screening for fetched pages and retrieved passages
 
 > *Source: `agentteams/research/screen.py`*

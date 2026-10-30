@@ -85,6 +85,13 @@ def _extract_json(text: str) -> dict | list | None:
     return None
 
 
+def extract_json(text: str) -> dict | list | None:
+    """Public form of the tolerant JSON extraction every function here uses on a ``ChatFn`` reply:
+    raw JSON, a fenced block, or the widest balanced span; ``None`` on total failure, never raises.
+    For callers composing their own prompts over a ``ChatFn`` (e.g. :mod:`agentteams.research.briefing`)."""
+    return _extract_json(text)
+
+
 _EXTRACT_CLAIMS_INSTRUCTION = (
     "Extract every discrete, checkable factual claim from the text below. Restate ONLY what the "
     "text literally asserts — add no dates, tenses, qualifiers, or outside knowledge; do not "

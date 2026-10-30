@@ -15,6 +15,14 @@ verdicts are "survived" or "refuted" — never "verified" or "proven."
 from __future__ import annotations
 
 from agentteams.research.backends import available_backends, backend_names
+from agentteams.research.briefing import (
+    Briefing,
+    BriefingClaim,
+    BriefingStats,
+    Candidate,
+    Retriever,
+    build_briefing,
+)
 from agentteams.research.news import (
     PerspectiveKind,
     is_news_source,
@@ -59,6 +67,7 @@ from agentteams.research.verify import (
     Verdict,
     audit_claims,
     extract_claims,
+    extract_json,
     revise,
 )
 
@@ -69,11 +78,16 @@ __all__ = [
     "RESEARCH_CONFIG",
     "SOFTWARE_CONFIG",
     "AllowlistConfig",
+    "Briefing",
+    "BriefingClaim",
+    "BriefingStats",
+    "Candidate",
     "ChatFn",
     "Claim",
     "PerspectiveKind",
     "ReputableSource",
     "ReputableSourceAllowlist",
+    "Retriever",
     "ScholarlyWork",
     "SearchProvenance",
     "Source",
@@ -81,8 +95,10 @@ __all__ = [
     "audit_claims",
     "available_backends",
     "backend_names",
+    "build_briefing",
     "config_for_project_type",
     "extract_claims",
+    "extract_json",
     "extract_published_date",
     "fetch_text",
     "fetch_text_and_date",

@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (research: topic briefings)
+
+- **`agentteams.research.briefing.build_briefing`** (async) composes the package into a topic briefing: rated
+  outlets, web and scholarly sources found from the topic alone (no link-following); `is_public_https` before
+  each fetch; `scan_read_content` on every page and every digested claim; a caller `chat_fn` digest into a fixed
+  claim shape under `RETRIEVAL_CONTENT_AUTHORITY`; `audit_claims` per claim against its own page with a caller
+  `critic_fn`; and cross-domain corroboration (`single_source`). It returns `Briefing` / `BriefingClaim` /
+  `BriefingStats` in memory; storage and expiry are the caller's. `Retriever` injects the network for tests.
+  Ported from masterTeacher's briefing tool (nx1f N21), after LingoFriend's dossier pattern.
+
 ### added (research: a read-content screen for fetched pages and retrieved passages)
 
 - **`agentteams.research.screen.scan_read_content` and `is_inert_read_content`** screen C-4 read content before a
