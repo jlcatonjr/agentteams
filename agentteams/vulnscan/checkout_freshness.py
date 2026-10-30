@@ -24,7 +24,8 @@ def _freshness(root: Path, rep: Report) -> list[dict[str, Any]]:
 
     Read-only and offline: the local remote-tracking refs as of the last fetch (no fetch, no credentials: the
     hardened :func:`daily._git`, ``git show`` for file content). For each repository with package findings it returns
-    ``{"repo", "branch", "behind", "fetch_age_h", "fixed_upstream"}``: ``behind`` is the commits ``HEAD`` lacks
+    ``{"repo", "branch", "behind", "fetch_age_h", "fixed_upstream"}``, plus ``error`` when a git query failed
+    (the row is then shown, unlabelled): ``behind`` is the commits ``HEAD`` lacks
     from ``origin/HEAD`` (None without ``origin/HEAD``), ``fetch_age_h`` the age of ``FETCH_HEAD`` (None: never
     fetched). A finding gets ``fixed_upstream`` when the checkout is behind and every file it was found in still
     exists at ``origin/HEAD`` but no longer holds that ``name==version`` (a file gone upstream proves nothing).
@@ -46,8 +47,9 @@ def _freshness(root: Path, rep: Report) -> list[dict[str, Any]]:
         repo = root if rel == "." else root / rel
         try:
             row = _repo_freshness(repo, [f for f in rep.findings if f.kind == "package" and f.target == rel], root)
-        except daily._ITEM_ERRORS:   # a hung or broken git: no label, no error
-            row = None
+        except daily._ITEM_ERRORS as exc:   # a hung or broken git: no label, and the row says so
+            row = {"branch": "?", "behind": None, "fetch_age_h": None, "fixed_upstream": 0,
+                   "error": f"git query failed ({type(exc).__name__})"}
         if row is not None:
             rows.append({"repo": rel, **row})
     return rows
@@ -118,7 +120,7 @@ def _freshness_section(fresh: list[dict[str, Any]]) -> str:
              "| Repository | Branch | Behind origin/HEAD | Last fetch | Findings already fixed upstream |",
              "|---|---|---|---|---|"]
     for r in fresh:
-        behind = "no origin/HEAD" if r["behind"] is None else str(r["behind"])
+        behind = r.get("error") or ("no origin/HEAD" if r["behind"] is None else str(r["behind"]))
         age = "never" if r["fetch_age_h"] is None else f"{r['fetch_age_h']:.0f}h ago"
         lines.append(f"| `{r['repo']}` | `{r['branch']}` | {behind} | {age} | {r['fixed_upstream']} |")
     lines += ["", "A finding noted *fixed upstream (checkout behind)* is gone from that file at `origin/HEAD`: "

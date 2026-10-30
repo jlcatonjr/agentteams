@@ -51,7 +51,7 @@ from typing import Any
 from agentteams.vulnscan import coverage, docker_readiness, effectiveness, engine, executor, fix, merge_digest, notify
 from agentteams.vulnscan import osv, paths, registry, remediation_status, repo_alias
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
-# Split from this module and re-exported, so ``daily.<name>`` keeps working (scripts and tests use it):
+# Split from this module and the names scripts and tests use are re-exported, so ``daily.<name>`` keeps working for them:
 from agentteams.vulnscan.checkout_freshness import _freshness, _freshness_section
 from agentteams.vulnscan.infra_retry import (INFRA_RETRY_FILE, _archive_summary, _max_retries,
                                              _retries, _stale, infra_retry_due)

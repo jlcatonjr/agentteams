@@ -122,3 +122,18 @@ def test_effectiveness_counts_the_label_on_its_own_row(tmp_path: Path, monkeypat
     assert "| Findings fixed since the previous run | 0 |" in md   # the label is not a fix
     other = [ln for ln in md.splitlines() if "already fixed upstream" not in ln]
     assert other == [ln for ln in unlabelled.splitlines() if "already fixed upstream" not in ln]
+
+
+def test_a_failed_git_query_is_shown_not_dropped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import checkout_freshness
+
+    def hung(*_a: object, **_k: object) -> None:
+        raise subprocess.TimeoutExpired("git", 60)
+
+    monkeypatch.setattr(checkout_freshness, "_repo_freshness", hung)
+    rep = _report()
+    rows = checkout_freshness._freshness(tmp_path, rep)
+    assert rows == [{"repo": "app", "branch": "?", "behind": None, "fetch_age_h": None, "fixed_upstream": 0,
+                     "error": "git query failed (TimeoutExpired)"}]
+    assert not any(f.fixed_upstream for f in rep.findings)
+    assert "| git query failed (TimeoutExpired) |" in checkout_freshness._freshness_section(rows)
