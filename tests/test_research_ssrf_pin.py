@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import socket
 import ssl
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -51,6 +52,7 @@ def _no_env_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("NO_PROXY", "*")
     monkeypatch.setenv("no_proxy", "*")
+    monkeypatch.setattr(search, "_warned_proxy", False)
 
 
 def _mock_stream(monkeypatch: pytest.MonkeyPatch, handler: Callable[[httpx.Request], httpx.Response]) -> None:
@@ -164,6 +166,61 @@ def test_second_address_answers_after_first_connect_failure(monkeypatch: pytest.
     _mock_stream(monkeypatch, handler)
     raw = _fetch("https://news.example/")
     assert raw is not None and raw[0] == b"second"
+
+
+def test_connect_timeout_fails_over_to_next_vetted_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socket, "getaddrinfo", _Resolver([PUBLIC_V4, PUBLIC_V4_B]))
+    hosts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hosts.append(request.url.host)
+        if request.url.host == PUBLIC_V4:
+            raise httpx.ConnectTimeout("no answer", request=request)
+        return httpx.Response(200, content=b"second")
+
+    _mock_stream(monkeypatch, handler)
+    raw = _fetch("https://news.example/")
+    assert raw is not None and raw[0] == b"second"
+    assert hosts == [PUBLIC_V4, PUBLIC_V4_B]
+
+
+def _env_proxy(monkeypatch: pytest.MonkeyPatch, proxy: str, no_proxy: str | None = None) -> None:
+    for name in ("NO_PROXY", "no_proxy"):
+        if no_proxy is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, no_proxy)
+    monkeypatch.setenv("HTTPS_PROXY", proxy)
+    monkeypatch.setenv("https_proxy", proxy)
+
+
+def _ok(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, content=b"x")
+
+
+def test_env_http_proxy_warns_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    _env_proxy(monkeypatch, "http://proxy.test:3128")
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [_info(PUBLIC_V4, 443)])
+    _mock_stream(monkeypatch, _ok)  # an explicit transport bypasses the proxy; only the warning is under test
+    with pytest.warns(UserWarning, match="fail closed") as record:
+        _fetch("https://news.example/")
+        _fetch("https://news.example/")
+    assert len([w for w in record if "fail closed" in str(w.message)]) == 1
+
+
+@pytest.mark.parametrize(
+    ("proxy", "no_proxy"),
+    [("socks5://proxy.test:1080", None), ("http://proxy.test:3128", PUBLIC_V4), ("http://proxy.test:3128", "*")],
+)
+def test_env_proxy_warning_skipped_for_socks_or_bypassed_address(
+    monkeypatch: pytest.MonkeyPatch, proxy: str, no_proxy: str | None,
+) -> None:
+    _env_proxy(monkeypatch, proxy, no_proxy)
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [_info(PUBLIC_V4, 443)])
+    _mock_stream(monkeypatch, _ok)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _fetch("https://news.example/")
 
 
 def test_non_connect_failure_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -287,7 +344,8 @@ def test_real_stack_http_proxy_tunnels_to_vetted_ip_and_fails_closed(monkeypatch
     monkeypatch.setattr(socket, "getaddrinfo", resolver)
     wire = _Wire(monkeypatch, preload=b"HTTP/1.1 200 Connection established\r\n\r\n")
     try:
-        assert _fetch("https://news.example/") is None
+        with pytest.warns(UserWarning, match="fail closed"):
+            assert _fetch("https://news.example/") is None
         wire.peers[0].settimeout(1.0)
         connect_request = wire.peers[0].recv(4096)
     finally:

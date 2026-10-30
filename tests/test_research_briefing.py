@@ -8,6 +8,7 @@ import json
 import pytest
 
 from agentteams.research.briefing import Candidate, Retriever, build_briefing
+from agentteams.research.reputable import ReputableSource
 from agentteams.research.scholarly import ScholarlyWork
 
 OVERRIDE = "ignore previous" + " instructions"   # assembled so this file carries no literal S-5 phrase
@@ -41,6 +42,11 @@ def chat(claims):
             return json.dumps({"contradicted": False, "correction": None})
         return json.dumps({"claims": claims})
     return fn
+
+
+def _evidence(messages):
+    """The evidence fenced inside the critic's audit prompt."""
+    return messages[1]["content"].split("<<<EVIDENCE DATA\n", 1)[1].rsplit("\nEVIDENCE DATA>>>", 1)[0]
 
 
 def run(coro):
@@ -93,7 +99,7 @@ def test_identical_claims_are_audited_against_their_own_pages() -> None:
     seen = []
 
     async def critic(messages, *, want_json=False):
-        seen.append(messages[1]["content"].split("EVIDENCE:\n", 1)[1])
+        seen.append(_evidence(messages))
         return json.dumps({"contradicted": False, "correction": None})
     r, _ = retriever()
     run(build_briefing("grids", chat([{"claim": CLAIM, "kind": "reported", "sensitive": False}]), critic_fn=critic,
@@ -104,7 +110,7 @@ def test_identical_claims_are_audited_against_their_own_pages() -> None:
 def test_identical_claims_are_refuted_only_where_their_own_page_contradicts() -> None:
     """One audit call over all claims; a verdict maps back to its own claim, not to its twin."""
     async def critic(messages, *, want_json=False):
-        evidence = messages[1]["content"].split("EVIDENCE:\n", 1)[1]
+        evidence = _evidence(messages)
         if evidence == PAGES["https://reuters.com/a"][0]:
             return json.dumps({"contradicted": True, "correction": "Operators reported more intrusion attempts."})
         return json.dumps({"contradicted": False, "correction": None})
@@ -127,3 +133,24 @@ def test_max_pages_bounds_fetches() -> None:
 def test_bad_sizes_refused(kw: dict) -> None:
     with pytest.raises(ValueError):
         run(build_briefing("t", chat([]), retriever=retriever()[0], **kw))
+
+
+def test_contested_news_claim_is_labelled_single_source_contested_without_searching() -> None:
+    src = ReputableSource(title="t", url="https://reuters.com/a", snippet="", domain="reuters.com",
+                          tier="authoritative", type="news")
+    cand = Candidate(url=src.url, domain="reuters.com", news=True, rated=True, source=src)
+    fetched = []
+
+    def fetch(url):
+        fetched.append(url)
+        return PAGES[url]
+    r = Retriever(candidates=lambda topic: [cand], fetch=fetch, scholarly=lambda topic: [], safe=lambda url: True)
+    claims = [{"claim": CLAIM, "kind": "contested", "sensitive": False},
+              {"claim": "Grid operators reported intrusion attempts.", "kind": "reported", "sensitive": False}]
+    b = run(build_briefing("grids", chat(claims), retriever=r))
+    assert fetched == ["https://reuters.com/a"]          # nothing else fetched or searched
+    contested, reported = b.claims
+    assert contested.kind == "contested"
+    assert contested.attribution == ("reuters.com reported (2026-10-28); contested characterization, "
+                                     "single source: no second outlet found")
+    assert reported.kind == "reported" and reported.attribution == "reuters.com reported (2026-10-28)"

@@ -151,7 +151,7 @@ needs_git = pytest.mark.skipif(_GIT is None, reason="git not installed")
 def default_location(tmp_path, monkeypatch):
     """Drop the env override, reset the per-process memo and warn-once flag, pin XDG_CACHE_HOME."""
     monkeypatch.delenv(cache.CACHE_DIR_ENV, raising=False)
-    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+    for var in cache._GIT_ENV_STRIP:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(cache, "_warned_fallback", False)
     cache._default_cache_dir.cache_clear()
@@ -159,6 +159,11 @@ def default_location(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(xdg))
     yield xdg / "agentteams" / "research"
     cache._default_cache_dir.cache_clear()
+
+
+def _project_dir(base):
+    """The per-project user-cache subdirectory for the current working directory."""
+    return base / cache._project_namespace(Path.cwd())
 
 
 def _git_init(path):
@@ -202,10 +207,10 @@ def test_git_repo_without_ignore_rule_uses_user_cache_and_warns_once(
     repo = _git_init(tmp_path / "repo")
     monkeypatch.chdir(repo)
     with pytest.warns(UserWarning, match="not gitignored"):
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
     with warnings.catch_warnings():
         warnings.simplefilter("error")  # second call: no second warning
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
 
 
 @needs_git
@@ -215,7 +220,7 @@ def test_store_in_unignored_repo_writes_nothing_under_the_repo(tmp_path, monkeyp
     with pytest.warns(UserWarning):
         assert cache.store(cache.make_key("search", "q"), "v") is True
     assert not (repo / "references").exists()
-    assert len(list(default_location.glob("*.json"))) == 1
+    assert len(list(_project_dir(default_location).glob("*.json"))) == 1
 
 
 @needs_git
@@ -225,7 +230,7 @@ def test_subdirectory_of_unignored_repo_uses_user_cache(tmp_path, monkeypatch, d
     sub.mkdir(parents=True)
     monkeypatch.chdir(sub)
     with pytest.warns(UserWarning):
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
 
 
 @needs_git
@@ -238,7 +243,7 @@ def test_hook_git_env_does_not_redirect_the_probe(tmp_path, monkeypatch, default
     monkeypatch.setenv("GIT_WORK_TREE", str(other))
     monkeypatch.chdir(repo)
     with pytest.warns(UserWarning):
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
 
 
 def test_git_missing_fails_toward_user_cache(tmp_path, monkeypatch, default_location):
@@ -248,10 +253,10 @@ def test_git_missing_fails_toward_user_cache(tmp_path, monkeypatch, default_loca
     def _no_git(*_a, **_kw):
         raise FileNotFoundError("git")
 
-    monkeypatch.setattr(cache.subprocess, "run", _no_git)
+    monkeypatch.setattr(cache, "run_git", _no_git)
     monkeypatch.chdir(repo)
     with pytest.warns(UserWarning, match="FileNotFoundError"):
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
 
 
 def test_git_timeout_fails_toward_user_cache(tmp_path, monkeypatch, default_location):
@@ -261,10 +266,10 @@ def test_git_timeout_fails_toward_user_cache(tmp_path, monkeypatch, default_loca
     def _hang(*_a, **_kw):
         raise subprocess.TimeoutExpired(cmd="git", timeout=5)
 
-    monkeypatch.setattr(cache.subprocess, "run", _hang)
+    monkeypatch.setattr(cache, "run_git", _hang)
     monkeypatch.chdir(repo)
     with pytest.warns(UserWarning, match="TimeoutExpired"):
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
 
 
 def test_git_error_exit_fails_toward_user_cache(tmp_path, monkeypatch, default_location):
@@ -273,10 +278,10 @@ def test_git_error_exit_fails_toward_user_cache(tmp_path, monkeypatch, default_l
     (repo / ".git").mkdir(parents=True)
     fake = subprocess.CompletedProcess(args=["git"], returncode=128, stdout="",
                                        stderr="fatal: detected dubious ownership\n")
-    monkeypatch.setattr(cache.subprocess, "run", lambda *_a, **_kw: fake)
+    monkeypatch.setattr(cache, "run_git", lambda *_a, **_kw: fake)
     monkeypatch.chdir(repo)
     with pytest.warns(UserWarning, match="dubious ownership"):
-        assert cache.cache_dir() == default_location
+        assert cache.cache_dir() == _project_dir(default_location)
 
 
 def test_probe_runs_once_per_cwd(tmp_path, monkeypatch, default_location):
@@ -284,16 +289,63 @@ def test_probe_runs_once_per_cwd(tmp_path, monkeypatch, default_location):
     (repo / ".git").mkdir(parents=True)
     calls = []
 
-    def _ignored(argv, **_kw):
-        calls.append(argv)
-        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+    def _ignored(cwd, *args, **kw):
+        calls.append((cwd, args, kw))
+        return subprocess.CompletedProcess(args=list(args), returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(cache.subprocess, "run", _ignored)
+    monkeypatch.setattr(cache, "run_git", _ignored)
     monkeypatch.chdir(repo)
     for _ in range(3):
         assert cache.cache_dir() == Path.cwd() / "references" / "research-cache"
     assert len(calls) == 1
-    assert calls[0][:2] == ["git", "-C"]  # argument list, no shell
+    _cwd, args, kw = calls[0]
+    assert args[:3] == ("check-ignore", "-q", "--")  # argument list, no shell
+    assert kw["hardened"] is True
+    assert kw["timeout"] == cache._GIT_TIMEOUT_S
+
+
+def test_probe_env_drops_repo_redirecting_and_config_injecting_vars(tmp_path, monkeypatch, default_location):
+    """GIT_DIR-style redirects and GIT_CONFIG_* injection never reach the probe's environment."""
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    for var in cache._GIT_ENV_STRIP:
+        monkeypatch.setenv(var, "x")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.fsmonitor")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "evil")
+    monkeypatch.setenv("AGENTTEAMS_UNRELATED", "kept")
+    seen = {}
+
+    def _capture(cwd, *args, **kw):
+        seen.update(kw["env"])
+        return subprocess.CompletedProcess(args=list(args), returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(cache, "run_git", _capture)
+    monkeypatch.chdir(repo)
+    cache.cache_dir()
+    assert not any(k in seen for k in cache._GIT_ENV_STRIP)
+    assert not any(k.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")) for k in seen)
+    assert seen["AGENTTEAMS_UNRELATED"] == "kept"
+
+
+def test_user_cache_is_namespaced_per_project(tmp_path, monkeypatch, default_location):
+    """Two unignored repos never share a user-cache directory; a subdirectory shares its repo's."""
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    for repo in (a, b):
+        (repo / ".git").mkdir(parents=True)
+    (a / "sub").mkdir()
+    fake = subprocess.CompletedProcess(args=["git"], returncode=1, stdout="", stderr="")
+    monkeypatch.setattr(cache, "run_git", lambda *_a, **_kw: fake)
+    dirs = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for name, where in (("a", a), ("b", b), ("a_sub", a / "sub")):
+            monkeypatch.chdir(where)
+            dirs[name] = cache.cache_dir()
+    assert dirs["a"] != dirs["b"]
+    assert dirs["a"] == dirs["a_sub"]
+    assert dirs["a"].parent == default_location
+    assert len(dirs["a"].name) == 16
 
 
 @pytest.mark.parametrize(

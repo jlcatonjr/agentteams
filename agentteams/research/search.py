@@ -16,11 +16,14 @@ content-type fix) — the origin of the ``max_pdf_bytes``/``pdf_timeout_s`` spli
 
 from __future__ import annotations
 
+import enum
 import html as _html
 import ipaddress
 import re
 import socket
 import time
+import urllib.request
+import warnings
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -496,20 +499,63 @@ _DEFAULT_MAX_BYTES = 400_000
 #: connect timeout, so the cap bounds the worst case for a host with many unreachable records.
 _MAX_PINNED_ADDRESSES = 3
 
-#: Returned by ``_stream_pinned`` when the connection to one address failed (refused, unreachable,
-#: or TLS rejected), so the caller tries the next vetted address rather than giving up.
-_NEXT_ADDRESS = object()
+class _NextAddress(enum.Enum):
+    """Single-member sentinel type ``_stream_pinned`` returns when the connection to one address
+    failed (refused, unreachable, timed out, or TLS rejected), so the caller tries the next vetted
+    address rather than giving up."""
+
+    TOKEN = "next-address"
+
+
+_NEXT_ADDRESS = _NextAddress.TOKEN
+
+#: What one pinned attempt yields: the response, a plain failure, or "try the next address".
+_StreamOutcome = tuple[bytes, str, str] | _NextAddress | None
+
+#: Whether the "pinned fetch through an HTTP(S) proxy fails closed" warning has been emitted.
+_warned_proxy = False
+
+
+def _warn_if_env_proxy_applies(pinned_host: str) -> None:
+    """Warn once per process when an environment-configured HTTP(S) proxy would carry a pinned fetch.
+
+    Uses the same environment resolution httpx's ``trust_env`` path uses
+    (``urllib.request.getproxies``) and ``urllib.request.proxy_bypass`` for ``NO_PROXY``. The
+    bypass check runs against ``pinned_host`` — the vetted IP — because that is the host httpx
+    sees in the pinned URL and matches ``NO_PROXY`` against; a ``NO_PROXY`` entry naming only the
+    hostname does not keep a pinned fetch off the proxy. SOCKS proxies are not warned about: they
+    honour ``sni_hostname``.
+
+    Args:
+        pinned_host: The vetted address the request will be sent to.
+    """
+    global _warned_proxy
+    if _warned_proxy:
+        return
+    proxies = urllib.request.getproxies()
+    proxy = proxies.get("https") or proxies.get("all")
+    if not proxy or proxy.lower().startswith("socks") or urllib.request.proxy_bypass(pinned_host):
+        return
+    _warned_proxy = True
+    warnings.warn(
+        "research fetch: an HTTP(S) proxy is configured in the environment; DNS-pinned fetches "
+        "through it fail closed (httpcore 1.0.x verifies the tunnelled certificate against the "
+        "pinned IP), so fetch_text returns empty. Unset the proxy or use a SOCKS proxy.",
+        UserWarning,
+        stacklevel=4,
+    )
 
 
 def _stream_pinned(
     pinned: httpx.URL, host_header: str, sni_hostname: str,
     max_bytes: int, timeout_s: float, max_pdf_bytes: int, pdf_timeout_s: float,
-) -> tuple[bytes, str, str] | None | object:
+) -> _StreamOutcome:
     """One GET of ``pinned`` (the vetted IP in place of the host), size- and time-capped.
 
     Returns ``(body, content_type, encoding)``; ``None`` on a non-200 or any other HTTP failure;
     or ``_NEXT_ADDRESS`` when the connection itself failed (``httpx.ConnectError`` — refused,
-    unreachable, or a certificate that does not match ``sni_hostname``).
+    unreachable, or a certificate that does not match ``sni_hostname`` — or
+    ``httpx.ConnectTimeout``).
     """
     try:
         deadline = time.monotonic() + timeout_s
@@ -537,9 +583,10 @@ def _stream_pinned(
                     break
             body = b"".join(chunks)
             encoding = resp.encoding or "utf-8"
-    except httpx.ConnectError:
-        # CH-24: named type — this one address refused, was unreachable, or failed TLS
-        # verification against the hostname; the caller moves to the next vetted address.
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        # CH-24: named types — this one address refused, was unreachable, did not answer within
+        # the connect timeout, or failed TLS verification against the hostname; the caller moves
+        # to the next vetted address.
         return _NEXT_ADDRESS
     except httpx.HTTPError:
         # CH-24: named type — see web_search()'s identical rationale; this streams the same
@@ -562,16 +609,21 @@ def _fetch_raw(
     ``ssl.SSLContext.wrap_socket`` as ``server_hostname`` — so SNI and certificate verification
     are still against the name, never the IP. httpx never resolves the name, so a DNS server that
     answers public for the check and private for the fetch gains nothing. Vetted addresses are
-    tried in order (at most ``_MAX_PINNED_ADDRESSES``) only on a connection failure. Redirects are
+    tried in order (at most ``_MAX_PINNED_ADDRESSES``) only on a connection failure or connect
+    timeout. Redirects are
     not followed, so the pin covers the whole exchange. The URL is refused when httpx and
     ``urlparse`` disagree on its host or port, so the name verified is the name resolved.
 
-    **Residual — HTTP(S) proxies from the environment.** ``trust_env`` is left at httpx's default.
-    Through an HTTP proxy the CONNECT target is the vetted IP (the proxy does not resolve the
-    name, so the pin holds), but httpcore 1.0.x's tunnel path ignores ``sni_hostname`` and
-    verifies the certificate against the IP, which an ordinary certificate does not cover: the
-    fetch fails closed (``None``), it is not redirected anywhere. ``NO_PROXY`` entries are matched
-    against the IP, not the name. SOCKS proxies honour ``sni_hostname``.
+    **Residual — HTTP(S) proxies from the environment (httpcore 1.0.x).** ``trust_env`` is left
+    at httpx's default. Through an ``http://`` or ``https://`` proxy the CONNECT target is the
+    vetted IP (the proxy does not resolve the name, so the pin holds), but httpcore 1.0.x's tunnel
+    path ignores the request's ``sni_hostname`` and verifies the target certificate against the
+    IP, which an ordinary certificate does not cover. An ``https://`` proxy fails the same way: the
+    ``sni_hostname`` extension is consumed by the TLS handshake with the proxy itself, not the
+    tunnelled one. Either way the fetch fails closed (``None``); it is not redirected anywhere.
+    ``NO_PROXY`` entries are matched against the IP, not the name. One ``UserWarning`` per process
+    says so when such a proxy applies. SOCKS proxies honour ``sni_hostname``. Later httpcore
+    versions may change the tunnel path; this is verified against 1.0.x only.
     """
     addrs = _vetted_addresses(url)
     if addrs is None:
@@ -588,13 +640,15 @@ def _fetch_raw(
         return None
     host_header = target.netloc.decode("ascii")
     sni_hostname = target.raw_host.decode("ascii")
+    _warn_if_env_proxy_applies(addrs[0])
     for addr in addrs[:_MAX_PINNED_ADDRESSES]:
         outcome = _stream_pinned(
             target.copy_with(host=addr), host_header, sni_hostname,
             max_bytes, timeout_s, max_pdf_bytes, pdf_timeout_s,
         )
-        if outcome is not _NEXT_ADDRESS:
-            return outcome if isinstance(outcome, tuple) else None
+        if isinstance(outcome, _NextAddress):
+            continue
+        return outcome
     return None
 
 

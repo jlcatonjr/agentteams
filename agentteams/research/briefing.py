@@ -23,7 +23,9 @@ the origin; LingoFriend's background "dossier" team is the pattern this package 
 6. **Corroborate**: a claim is ``single_source`` unless another domain makes a similar one.
 
 Honesty ceiling, as for the package: a rated outlet is provenance, not truth; a surviving claim is
-"survived", never "verified"; news is a dated perspective (:func:`perspective_attribution`).
+"survived", never "verified"; news is a dated perspective (:func:`perspective_attribution`), and a
+news claim the digest marks ``contested`` is labelled as a single-source contested characterization
+(:func:`perspective_summary`) — no second outlet is searched for, since only the topic is sent.
 Storage, expiry and serving are the caller's concern; this module writes nothing to disk except
 through the research cache the underlying calls already use.
 """
@@ -36,7 +38,7 @@ from typing import Callable, Literal
 from urllib.parse import urlsplit
 
 from agentteams.memory_index import RETRIEVAL_CONTENT_AUTHORITY
-from agentteams.research.news import is_news_source, perspective_attribution
+from agentteams.research.news import PerspectiveSet, is_news_source, perspective_attribution, perspective_summary
 from agentteams.research.reputable import DEFAULT_CONFIG, ReputableSource, ReputableSourceAllowlist
 from agentteams.research.scholarly import ScholarlyWork, scholarly_search
 from agentteams.research.search import fetch_text_and_date, is_public_https, web_search_with_provenance
@@ -147,8 +149,17 @@ def _terms(text: str) -> set[str]:
     return set(_WORD.findall(text.lower()))
 
 
-def _attribution(c: Candidate, published_at: str | None) -> str:
+def _attribution(c: Candidate, published_at: str | None, kind: str = "reported", claim: str = "") -> str:
+    """The attribution for one claim from ``c``.
+
+    A news source's ``contested`` claim gets the single-source contested wording of
+    :func:`perspective_summary` (no search: briefings send only the topic); its other claims get
+    :func:`perspective_attribution`. Every other source is named with whether it is rated.
+    """
     if c.news and c.source is not None:
+        if kind == "contested":
+            ps = PerspectiveSet(claim=claim, kind="contested", outlets=((c.source.domain, published_at),))
+            return perspective_summary(ps)[:ATTRIBUTION_MAX_CHARS]
         return perspective_attribution(c.source, published_at)[:ATTRIBUTION_MAX_CHARS]
     return f"{c.domain} ({'rated source' if c.rated else 'web page, not rated'})"[:ATTRIBUTION_MAX_CHARS]
 
@@ -236,7 +247,7 @@ async def build_briefing(
     stats = brief.stats
     raw: list[tuple[dict, str]] = []          # (claim without single_source, its own evidence)
 
-    async def add(text: str, domain: str, attribution: str, published_at: str | None,
+    async def add(text: str, domain: str, attribution_of: Callable[[str, str], str], published_at: str | None,
                   kind_of: Callable[[str], ClaimKind]) -> None:
         if scan_read_content(text, source=domain, extra_patterns=extra_patterns):
             stats.injection += 1
@@ -249,7 +260,8 @@ async def build_briefing(
             if scan_read_content(d["claim"], source=domain, extra_patterns=extra_patterns):
                 stats.injection += 1
                 continue
-            raw.append(({"claim": d["claim"], "source_domain": domain, "attribution": attribution,
+            raw.append(({"claim": d["claim"], "source_domain": domain,
+                         "attribution": attribution_of(kind_of(d["kind"]), d["claim"]),
                          "published_at": published_at, "kind": kind_of(d["kind"]), "sensitive": d["sensitive"]}, text))
 
     candidates = find(topic)
@@ -264,11 +276,12 @@ async def build_briefing(
         if not text:
             continue
         stats.fetched += 1
-        await add(text, c.domain, _attribution(c, published_at), published_at,
-                  (lambda k: k) if c.news else (lambda k: "web"))
+        await add(text, c.domain, lambda kind, claim, c=c, at=published_at: _attribution(c, at, kind, claim),
+                  published_at, (lambda k: k) if c.news else (lambda k: "web"))
     for w in find_scholarly(topic):
         if w.abstract:
-            await add(w.abstract[:page_chars], _domain_of(w.url) or "doi.org", _scholarly_attribution(w),
+            await add(w.abstract[:page_chars], _domain_of(w.url) or "doi.org",
+                      lambda _kind, _claim, w=w: _scholarly_attribution(w),
                       str(w.year) if w.year else None, lambda k: "scholarly")
 
     # Each claim is paired with its own page: two sources can make the same claim word for word,

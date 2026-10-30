@@ -21,7 +21,12 @@ Security posture — this cache persists **untrusted third-party bytes**, so:
   entry that reads as valid.
 - The default location never lands in a git-tracked path: inside a git work tree whose
   ``.gitignore`` does not cover ``references/research-cache``, entries go to the per-user
-  cache directory instead (see :func:`cache_dir`).
+  cache directory instead (see :func:`cache_dir`), under a per-project subdirectory so one
+  project cannot read or poison another's entries.
+- The ``git check-ignore`` probe runs through :func:`agentteams.git_exec.run_git` with
+  ``hardened=True`` (no ``core.fsmonitor``, no hooks, no untracked cache, no optional locks, no
+  prompt) and without the environment variables that would point it at a different repository or
+  inject config (``GIT_DIR``, ``GIT_CONFIG_PARAMETERS``, ``GIT_CONFIG_KEY_*`` ...).
 
 Disable entirely with ``AGENTTEAMS_RESEARCH_NO_CACHE=1``.
 """
@@ -40,6 +45,8 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+from agentteams.git_exec import run_git
+
 #: Kill switch. Any non-empty value other than "0"/"false" disables read and write.
 NO_CACHE_ENV = "AGENTTEAMS_RESEARCH_NO_CACHE"
 
@@ -56,8 +63,17 @@ _USER_CACHE_REL = Path("agentteams") / "research"
 #: Seconds allowed for the one ``git check-ignore`` probe.
 _GIT_TIMEOUT_S = 5
 
-#: Variables a git hook exports that would point the probe at a different repository or index.
-_GIT_ENV_STRIP = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+#: Variables a git hook (or a hostile parent) exports that would point the probe at a different
+#: repository or index, or inject config that outranks the hardening overrides.
+_GIT_ENV_STRIP = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+    "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+)
+#: Prefixes of the numbered ``GIT_CONFIG_KEY_<n>``/``GIT_CONFIG_VALUE_<n>`` variables, also stripped.
+_GIT_ENV_STRIP_PREFIXES = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
+
+#: Hex digits of the project-root digest that name a project's subdirectory of the user cache.
+_PROJECT_NAMESPACE_CHARS = 16
 
 #: Whether the "using the user cache directory" warning has been emitted in this process.
 _warned_fallback = False
@@ -92,8 +108,11 @@ def cache_dir() -> Path:
     2. ``<cwd>/references/research-cache`` when the working directory is not inside a git work
        tree (there is nothing to commit it to).
     3. The same in-repo path when git reports it ignored (``git check-ignore``).
-    4. Otherwise the per-user cache directory (:func:`user_cache_dir`), with one
-       ``UserWarning`` per process saying why. A git error of any kind — ``git`` not installed,
+    4. Otherwise ``<user cache>/<project>`` — :func:`user_cache_dir` joined with the first 16
+       hex digits of the SHA-256 of the resolved project root (the nearest ancestor holding
+       ``.git``; the working directory when there is none) — with one ``UserWarning`` per
+       process saying why. Each project gets its own subdirectory, so entries one project
+       stored can never be served to (or planted for) another. A git error of any kind — ``git`` not installed,
        a timeout, "dubious ownership" — counts as "not ignored" and lands here too.
 
     The git probe runs at most once per working directory per process, so a ``.gitignore``
@@ -113,7 +132,10 @@ def cache_dir() -> Path:
 
 
 def user_cache_dir() -> Path:
-    """Return the per-user research cache directory.
+    """Return the base per-user research cache directory, shared by every project.
+
+    :func:`cache_dir` never uses this base directly: its fallback is a per-project subdirectory
+    of it (see :func:`cache_dir`, step 4).
 
     Returns:
         ``$XDG_CACHE_HOME/agentteams/research`` when ``XDG_CACHE_HOME`` is an absolute path,
@@ -145,7 +167,23 @@ def _default_cache_dir(cwd: str) -> tuple[Path, str | None]:
     ignored, detail = _git_ignores(Path(cwd), _DEFAULT_CACHE_REL / "probe.json")
     if ignored:
         return in_repo, None
-    return user_cache_dir(), detail
+    return user_cache_dir() / _project_namespace(Path(cwd)), detail
+
+
+def _project_namespace(cwd: Path) -> str:
+    """Name the user-cache subdirectory for the project ``cwd`` belongs to.
+
+    Args:
+        cwd: The working directory.
+
+    Returns:
+        The first :data:`_PROJECT_NAMESPACE_CHARS` hex digits of the SHA-256 of the resolved
+        project root: the nearest ancestor of ``cwd`` (or ``cwd`` itself) holding ``.git``, else
+        ``cwd``. Every subdirectory of one repository therefore shares one namespace.
+    """
+    start = cwd.resolve()
+    root = next((c for c in (start, *start.parents) if (c / ".git").exists()), start)
+    return hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:_PROJECT_NAMESPACE_CHARS]
 
 
 def _inside_git_work_tree(start: Path) -> bool:
@@ -174,20 +212,18 @@ def _git_ignores(cwd: Path, rel: Path) -> tuple[bool, str]:
         returns False so the cache fails toward the out-of-repo location. ``detail`` explains
         the outcome for the fallback warning.
     """
-    env = {k: v for k, v in os.environ.items() if k not in _GIT_ENV_STRIP}
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in _GIT_ENV_STRIP and not k.startswith(_GIT_ENV_STRIP_PREFIXES)
+    }
     target = rel.parent.as_posix()
     try:
-        proc = subprocess.run(
-            ["git", "-C", str(cwd), "check-ignore", "-q", "--", rel.as_posix()],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT_S,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        # CH-24: named types — git not installed / not executable, or a hung probe. Either way
-        # we cannot prove the path is ignored, so fail toward the per-user directory.
+        proc = run_git(cwd, "check-ignore", "-q", "--", rel.as_posix(),
+                       hardened=True, env=env, timeout=_GIT_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        # CH-24: named types — git not installed / not executable (OSError), a hung probe
+        # (TimeoutExpired, a SubprocessError), or undecodable output (ValueError). Either way we
+        # cannot prove the path is ignored, so fail toward the per-user directory.
         return False, f"could not run git to check {target} ({type(exc).__name__})"
     if proc.returncode == 0:
         return True, ""

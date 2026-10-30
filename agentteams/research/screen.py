@@ -46,8 +46,19 @@ _SOURCE_LABEL = "<read-content>"
 
 
 def _normalize(line: str) -> str:
-    """NFKC, then drop format (``Cf``) characters, lower-cased: the same canonicalisation ``scan``
-    applies before literal matching (a zero-width space must not split a phrase)."""
+    """Canonicalise one line for the :data:`READ_CONTENT_PATTERNS` pass only.
+
+    Mirrors ``scan``'s private canonicalisation (NFKC, then drop format (``Cf``) characters, so a
+    zero-width space cannot split a phrase) and lower-cases the result. Kept here because that
+    helper is private to ``scan``. :func:`agentteams.scan.match_injection` receives the raw line
+    and normalises it separately, so this function does not feed the S-5/C-1 pass.
+
+    Args:
+        line: One raw line of read content.
+
+    Returns:
+        The canonical, lower-cased line.
+    """
     text = unicodedata.normalize("NFKC", line)
     return "".join(ch for ch in text if unicodedata.category(ch) != "Cf").lower()
 
@@ -91,5 +102,17 @@ def scan_read_content(
 
 
 def is_inert_read_content(content: str, *, extra_patterns: Iterable[str] = ()) -> bool:
-    """True when :func:`scan_read_content` finds nothing in ``content``."""
+    """Whether :func:`scan_read_content` matched no pattern in ``content``.
+
+    ``True`` means only "no pattern matched" — not "safe". The pattern lists are literal and few,
+    so novel wording passes. All read content stays inert Tier-6 data (C-4) whatever this
+    returns: a ``True`` result never lets the text direct its reader.
+
+    Args:
+        content: The read content to screen.
+        extra_patterns: Further literal phrases to flag, as for :func:`scan_read_content`.
+
+    Returns:
+        ``True`` when no finding was produced, ``False`` otherwise.
+    """
     return not scan_read_content(content, extra_patterns=extra_patterns)

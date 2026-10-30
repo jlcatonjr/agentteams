@@ -5,7 +5,7 @@
 
 - Modules mapped: **339**
 - Packages: **11**
-- Internal import edges: **1076**
+- Internal import edges: **1078**
 - Distinct external dependencies: **11**
 
 ---
@@ -206,7 +206,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.front_matter_baseline` | `agentteams.drift`, `agentteams.front_matter_merge` | `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.fleet` |
 | `agentteams.front_matter_merge` | — | `agentteams.audit_agent_contract`, `agentteams.emit`, `agentteams.fences`, `agentteams.front_matter_baseline`, `agentteams.front_matter_reconcile`, `agentteams.sync_classifier`, `agentteams.unfenced` |
 | `agentteams.front_matter_reconcile` | `agentteams.front_matter_merge`, `agentteams.yaml_frontmatter` | `agentteams.cli.generate`, `agentteams.cli.generate_helpers` |
-| `agentteams.git_exec` | — | `agentteams._fleet_twin_acks`, `agentteams.cli.operator_signing`, `agentteams.cli.signer_location`, `agentteams.env_hygiene`, `agentteams.fleet`, `agentteams.integrity`, `agentteams.multi_sync`, `agentteams.proposals`, `agentteams.source_provenance` |
+| `agentteams.git_exec` | — | `agentteams._fleet_twin_acks`, `agentteams.cli.operator_signing`, `agentteams.cli.signer_location`, `agentteams.env_hygiene`, `agentteams.fleet`, `agentteams.integrity`, `agentteams.multi_sync`, `agentteams.proposals`, `agentteams.research.cache`, `agentteams.source_provenance` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
 | `agentteams.governance_logs` | — | `agentteams.cli.commands`, `agentteams.interop_grant_check` |
@@ -239,7 +239,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.mcp_servers._stdio` | — | `agentteams.mcp_servers`, `agentteams.mcp_servers.gitread`, `agentteams.mcp_servers.recall` |
 | `agentteams.mcp_servers.gitread` | `agentteams.mcp_servers._stdio` | — |
 | `agentteams.mcp_servers.recall` | `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.errors`, `agentteams.mcp_servers._stdio`, `agentteams.memory_index`, `agentteams.memory_index_store` | — |
-| `agentteams.memory_index` | — | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.mcp_servers.recall`, `agentteams.memory_index_incremental`, `agentteams.research.briefing` |
+| `agentteams.memory_index` | — | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.mcp_servers.recall`, `agentteams.memory_index_incremental`, `agentteams.research.briefing`, `agentteams.research.verify` |
 | `agentteams.memory_index_incremental` | `agentteams.memory_index` | `agentteams.cli.artifacts` |
 | `agentteams.memory_index_store` | `agentteams.atomicio`, `agentteams.errors` | `agentteams.cli.artifacts`, `agentteams.mcp_servers.recall` |
 | `agentteams.model_routing` | — | `agentteams.cli.artifacts` |
@@ -285,13 +285,13 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.research.backends` | — | `agentteams.research`, `agentteams.research.search` |
 | `agentteams.research.briefing` | `agentteams.memory_index`, `agentteams.research.news`, `agentteams.research.reputable`, `agentteams.research.scholarly`, `agentteams.research.screen`, `agentteams.research.search`, `agentteams.research.verify` | `agentteams.research` |
 | `agentteams.research.browser` | `agentteams.research.search` | `agentteams.research.__main__` |
-| `agentteams.research.cache` | — | `agentteams.research.scholarly`, `agentteams.research.search` |
+| `agentteams.research.cache` | `agentteams.git_exec` | `agentteams.research.scholarly`, `agentteams.research.search` |
 | `agentteams.research.news` | `agentteams.research.reputable`, `agentteams.research.search` | `agentteams.research`, `agentteams.research.briefing` |
 | `agentteams.research.reputable` | `agentteams.research.search` | `agentteams.research`, `agentteams.research.briefing`, `agentteams.research.news` |
 | `agentteams.research.scholarly` | `agentteams.research.cache` | `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.briefing` |
 | `agentteams.research.screen` | `agentteams.scan` | `agentteams.research`, `agentteams.research.briefing` |
 | `agentteams.research.search` | `agentteams.research.backends`, `agentteams.research.cache` | `agentteams.redteam.freshness`, `agentteams.research`, `agentteams.research.__main__`, `agentteams.research.briefing`, `agentteams.research.browser`, `agentteams.research.news`, `agentteams.research.reputable` |
-| `agentteams.research.verify` | — | `agentteams.research`, `agentteams.research.briefing` |
+| `agentteams.research.verify` | `agentteams.memory_index` | `agentteams.research`, `agentteams.research.briefing` |
 | `agentteams.runner_mcp` | `agentteams.backup` | `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner` |
 | `agentteams.sandbox_handoff` | `agentteams.atomicio`, `agentteams.cli.governance_targets`, `agentteams.scan` | — |
 | `agentteams.scan` | `agentteams.backup`, `agentteams.scan_operational` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.research.screen`, `agentteams.sandbox_handoff`, `agentteams.vulnscan.publish`, `agentteams.whole_body_migration` |
@@ -3372,7 +3372,9 @@ digraph "agentteams architecture" {
       "package": "agentteams.research",
       "path": "agentteams/research/cache.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.git_exec"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -3439,7 +3441,9 @@ digraph "agentteams architecture" {
       "package": "agentteams.research",
       "path": "agentteams/research/verify.py",
       "is_package": false,
-      "imports_internal": [],
+      "imports_internal": [
+        "agentteams.memory_index"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -7739,6 +7743,10 @@ digraph "agentteams architecture" {
       "target": "agentteams.research.search"
     },
     {
+      "source": "agentteams.research.cache",
+      "target": "agentteams.git_exec"
+    },
+    {
       "source": "agentteams.research.news",
       "target": "agentteams.research.reputable"
     },
@@ -7765,6 +7773,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.research.search",
       "target": "agentteams.research.cache"
+    },
+    {
+      "source": "agentteams.research.verify",
+      "target": "agentteams.memory_index"
     },
     {
       "source": "agentteams.runner_mcp",

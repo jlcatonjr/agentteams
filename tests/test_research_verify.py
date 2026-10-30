@@ -7,6 +7,7 @@ import json
 
 import pytest
 
+from agentteams.memory_index import RETRIEVAL_CONTENT_AUTHORITY
 from agentteams.research.verify import (
     Claim,
     Verdict,
@@ -59,6 +60,12 @@ def test_supported_by_evidence_accepts_an_inflected_refutation() -> None:
     assert _supported_by_evidence(
         correction="Regulators rejected the merger.",
         claim="The merger was approved.",
+        evidence="Two regulators rejected the merger outright.",
+    )
+    # -ed and -ing are distinct keys: the progressive form does not vouch for the past tense.
+    assert not _supported_by_evidence(
+        correction="Regulators rejected the merger.",
+        claim="The merger was approved.",
         evidence="Two regulators are rejecting the merger outright.",
     )
     assert _supported_by_evidence(
@@ -94,7 +101,7 @@ def test_supported_by_evidence_rejects_decade_for_year() -> None:
 
 
 def test_supported_by_evidence_rejects_a_folding_collision() -> None:
-    """ "united" must not vouch for "units": -ed/-ing fold to a verb-form key, not the bare stem."""
+    """ "united" must not vouch for "units": -ed/-ing fold to their own keys, not the bare stem."""
     assert not _supported_by_evidence(
         correction="Sold in units.",
         claim="Sold by weight.",
@@ -105,6 +112,34 @@ def test_supported_by_evidence_rejects_a_folding_collision() -> None:
         claim="Sold by weight.",
         evidence="The goods were sold in units.",
     )
+
+
+def test_supported_by_evidence_rejects_a_tense_only_correction() -> None:
+    """Evidence saying "planning" does not vouch for a correction that only says "planned"."""
+    assert not _supported_by_evidence(
+        correction="The launch was planned.",
+        claim="The launch is set for May.",
+        evidence="Officials said planning for the May launch continues.",
+    )
+
+
+def test_tense_only_correction_is_downgraded_to_survived() -> None:
+    claim = Claim(text="The launch is set for May.")
+    chat_fn = _make_json_chat_fn(
+        [json.dumps({"contradicted": True, "correction": "The launch was planned."})]
+    )
+    (verdict,) = asyncio.run(
+        audit_claim_pairs([(claim, "Officials said planning for the May launch continues.")], chat_fn)
+    )
+    assert verdict.status == "survived" and verdict.correction is None
+
+
+def test_audit_prompt_fences_evidence_as_read_content() -> None:
+    chat_fn = _make_json_chat_fn([json.dumps({"contradicted": False})])
+    asyncio.run(audit_claim_pairs([(Claim(text="c"), "page text")], chat_fn))
+    user = next(m["content"] for m in chat_fn.calls[0]["messages"] if m["role"] == "user")
+    assert RETRIEVAL_CONTENT_AUTHORITY in user
+    assert "<<<EVIDENCE DATA\npage text\nEVIDENCE DATA>>>" in user
 
 
 @pytest.mark.parametrize(
@@ -120,9 +155,11 @@ def test_supported_by_evidence_rejects_a_folding_collision() -> None:
         ("cats", "cats"),
         ("NASA", "nasa"),
         ("GPUS", "gpus"),
-        ("rejected", "reject~v"),
-        ("rejecting", "reject~v"),
-        ("united", "unit~v"),
+        ("rejected", "reject~ed"),
+        ("rejecting", "reject~ing"),
+        ("united", "unit~ed"),
+        ("planned", "plann~ed"),
+        ("planning", "plann~ing"),
         ("units", "unit"),
         ("used", "used"),
         ("being", "being"),

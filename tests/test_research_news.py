@@ -182,3 +182,26 @@ def test_no_search_fn_means_no_search() -> None:
 def test_summary_rejects_empty_outlets() -> None:
     with pytest.raises(ValueError):
         perspective_summary(PerspectiveSet(claim=CLAIM, kind="contested", outlets=()))
+
+
+@pytest.mark.parametrize("kind", ["opinion", "", "Contested"])
+def test_unknown_kind_is_rejected(kind: str) -> None:
+    with pytest.raises(ValueError, match="kind"):
+        gather_perspectives(CLAIM, _news_source(), None, kind=kind)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("k", [-1, 1.5, "3", True])
+def test_invalid_k_is_rejected(k: object) -> None:
+    with pytest.raises(ValueError, match="k must be"):
+        gather_perspectives(CLAIM, _news_source(), None, k=k)  # type: ignore[arg-type]
+
+
+def test_k_zero_searches_nothing() -> None:
+    search = _stub([Source("t", "https://apnews.com/1", MATCHING_SNIPPET)])
+    ps = gather_perspectives(CLAIM, _news_source(), None, search_fn=search, k=0)
+    assert search.calls == [] and ps.coverage == "single-source"
+
+
+def test_contested_summary_leads_with_the_attribution_wording() -> None:
+    ps = PerspectiveSet(claim=CLAIM, kind="contested", outlets=(("bbc.com", "2026-07-18"),))
+    assert perspective_summary(ps).startswith(perspective_attribution(_news_source(), "2026-07-18") + "; ")

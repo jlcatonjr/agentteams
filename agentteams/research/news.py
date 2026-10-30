@@ -32,7 +32,6 @@ original source *texts*, e.g. gutenberg.org). "Contemporaneous account" is used 
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -44,6 +43,7 @@ from agentteams.research.reputable import (
     ReputableSource,
     ReputableSourceAllowlist,
 )
+from agentteams.research.reputable import _fold as _fold_case_and_accents
 
 if TYPE_CHECKING:
     from agentteams.research.search import Source
@@ -76,31 +76,50 @@ across this framework use the same two labels rather than independently-invented
 """
 
 
+_KINDS: frozenset[str] = frozenset({"reported", "contested"})
+
+
 def is_news_source(source: ReputableSource) -> bool:
-    """``True`` when ``source`` is tagged ``type="news"``. Exists so callers don't hardcode the
-    string literal ``"news"`` in more than one place."""
+    """Whether ``source`` is tagged ``type="news"``. Exists so callers don't hardcode the string
+    literal ``"news"`` in more than one place.
+
+    Args:
+        source: A classified source.
+
+    Returns:
+        ``True`` when ``source.type == "news"``.
+    """
     return source.type == "news"
 
 
 def perspective_attribution(source: ReputableSource, published_at: str | None) -> str:
     """The single, shared place that formats a consistent attribution string for a news-typed
-    source — every consumer (example-research's docs, a downstream product's prompt construction)
-    references or mirrors this wording rather than inventing its own.
+    source — every consumer (example-research's docs, a downstream product's prompt construction,
+    :func:`perspective_summary`) references or mirrors this wording rather than inventing its own.
 
-    Degrades honestly when no date was extractable — never fabricates one.
+    Args:
+        source: The news source the claim came from.
+        published_at: Its publish date as extracted, or ``None`` when none was available.
+
+    Returns:
+        ``"<domain> reported (<date>)"``, or ``"<domain> reported (date not available)"`` when
+        ``published_at`` is falsy — never a fabricated date.
     """
-    return f"{source.domain} reported{_when(published_at)}"
+    return _reported(source.domain, published_at)
+
+
+def _reported(domain: str, published_at: str | None) -> str:
+    """The one wording behind :func:`perspective_attribution` and :func:`perspective_summary`."""
+    return f"{domain} reported{_when(published_at)}"
 
 
 def _when(published_at: str | None) -> str:
     return f" ({published_at})" if published_at else " (date not available)"
 
 
-def _content_terms(text: str) -> set[str]:
+def _claim_words(text: str) -> set[str]:
     """Case- and diacritic-folded words of four or more characters, minus :data:`_STOPWORDS`."""
-    decomposed = unicodedata.normalize("NFKD", text.lower())
-    folded = "".join(c for c in decomposed if not unicodedata.combining(c))
-    return {t for t in re.findall(r"\w+", folded) if len(t) >= 4 and t not in _STOPWORDS}
+    return {t for t in re.findall(r"\w+", _fold_case_and_accents(text)) if len(t) >= 4 and t not in _STOPWORDS}
 
 
 def _shares_claim_terms(claim_terms: set[str], snippet: str) -> bool:
@@ -110,7 +129,7 @@ def _shares_claim_terms(claim_terms: set[str], snippet: str) -> bool:
     if not claim_terms:
         return False
     needed = min(_MIN_SHARED_TERMS, len(claim_terms))
-    return len(claim_terms & _content_terms(snippet)) >= needed
+    return len(claim_terms & _claim_words(snippet)) >= needed
 
 
 @dataclass(frozen=True)
@@ -156,7 +175,7 @@ def perspective_summary(ps: PerspectiveSet) -> str:
     if not ps.outlets:
         raise ValueError("PerspectiveSet has no outlets to attribute")
     first_domain, first_date = ps.outlets[0]
-    lead = f"{first_domain} reported{_when(first_date)}"
+    lead = _reported(first_domain, first_date)
     if ps.kind != "contested":
         return lead
     if ps.coverage == "single-source":
@@ -184,6 +203,10 @@ def gather_perspectives(
     date, so added outlets have ``published_at=None``. A ``"reported"`` claim, or no
     ``search_fn``, is never searched.
 
+    **The claim text leaves the process.** For a searched claim, ``claim`` is passed verbatim to
+    ``search_fn`` — with :func:`agentteams.research.search.web_search`, a third-party search
+    engine. Callers must not pass claims that carry sensitive or private content.
+
     Args:
         claim: The claim's text; used as the search query and for the snippet-overlap check.
         first: The outlet the claim came from.
@@ -193,15 +216,23 @@ def gather_perspectives(
             ``None`` (default) performs no search.
         allowlist: Classifies hits; defaults to one built on
             :data:`~agentteams.research.reputable.DEFAULT_CONFIG`.
-        k: Maximum number of additional outlets to add.
+        k: Maximum number of additional outlets to add (a non-negative int; ``0`` searches
+            nothing).
 
     Returns:
         A :class:`PerspectiveSet` with ``first`` as its first outlet.
 
     Raises:
-        Nothing for search failures: an ``httpx.HTTPError`` or ``OSError`` from ``search_fn``
-        leaves the set single-source. Any other exception from ``search_fn`` propagates.
+        ValueError: ``kind`` is not ``"reported"``/``"contested"``, or ``k`` is not a
+            non-negative int.
+        Exception: Search failures are not raised — an ``httpx.HTTPError`` or ``OSError`` from
+            ``search_fn`` leaves the set single-source — but any other exception from
+            ``search_fn`` propagates.
     """
+    if kind not in _KINDS:
+        raise ValueError(f"kind must be 'reported' or 'contested', got {kind!r}")
+    if not isinstance(k, int) or isinstance(k, bool) or k < 0:
+        raise ValueError(f"k must be a non-negative int, got {k!r}")
     outlets: list[tuple[str, str | None]] = [(first.domain, published_at)]
     if kind != "contested" or search_fn is None or k <= 0:
         return PerspectiveSet(claim=claim, kind=kind, outlets=tuple(outlets))
@@ -210,7 +241,7 @@ def gather_perspectives(
         hits = list(search_fn(claim))
     except (httpx.HTTPError, OSError):  # CH-24: named transport failures — degrade to single-source
         return PerspectiveSet(claim=claim, kind=kind, outlets=tuple(outlets))
-    claim_terms = _content_terms(claim)
+    claim_terms = _claim_words(claim)
     seen = {first.domain}
     for hit in hits:
         if len(outlets) > k:
