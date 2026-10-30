@@ -266,7 +266,7 @@ except (OSError, ValueError): s = {}
 for k in ("started", "finished"):
     v = s.get(k) if isinstance(s, dict) else None
     if isinstance(v, str) and v and "\n" not in v:
-        print(f"--agent-{'since' if k == 'started' else 'until'}={v}")' "$latest/agent/status.json" 2>/dev/null || true)
+        print("--agent-" + ("since" if k == "started" else "until") + "=" + v)' "$latest/agent/status.json" || true)
 if ! OUTCOME="$("${VS[@]}" remediation-report "$STATE_DIR/ledger.jsonl" "$ATTEMPT_START" --log "$THIS_RUN" \
                 --run "$(basename "$latest")" --attempt "$ATTEMPT" --out "$latest/remediation.md" \
                 ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"})"; then

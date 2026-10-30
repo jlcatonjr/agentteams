@@ -126,6 +126,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   browser's per-request route guard inherits the fix. The DNS-rebinding window between the check and the fetch
   is closed for `fetch_text` by the research hardening follow-up above (the browser keeps it, documented). Reported from masterTeacher's briefing tool (nx1f N21, @security condition 5).
 
+### fixed (vulnscan remediation runner: the agent window was never passed)
+
+- `vulnscan-remediate-auto.sh` built `--agent-since`/`--agent-until` with a Python snippet that used single quotes
+  inside the script's single-quoted `python -c` string. Bash ended the string early, Python raised `NameError`, and
+  `2>/dev/null || true` hid it, so `remediation.md` never got its "Agent run (executor rows)" section (found in the
+  2026-10-30 re-run). The snippet now uses double quotes only and no longer hides its errors. A new test runs the
+  tracked script's own fragment under bash. Re-run `vulnscan-remediate-auto.sh --install` after deploying.
+
 ### fixed (vulnscan: an unreadable ledger key is a clear refusal, not a crash)
 
 - **`vulnscan.ledger`:** when the ledger key exists but cannot be read (a sandbox, a permission), `vulnscan

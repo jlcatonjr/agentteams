@@ -207,3 +207,31 @@ def test_leading_dash_value_in_equals_form_is_not_an_option(tmp_path: Path,
     led = _ledger(tmp_path, _row("done"))
     assert main(["remediation-report", str(led), SINCE, "--agent-since=-x", "--agent-until=-y"]) == 0
     assert json.loads(capsys.readouterr().out)["infra_count"] == 0
+
+
+def _runner_agent_args(tmp_path: Path, status: str) -> list[str]:
+    """Run the runner's own AGENT_ARGS fragment (from the tracked script) under bash; return the arguments."""
+    import subprocess
+    import sys
+
+    script = (Path(__file__).resolve().parents[1] / "scripts/vulnscan-remediation/vulnscan-remediate-auto.sh")
+    lines = script.read_text(encoding="utf-8").splitlines()
+    start = lines.index("AGENT_ARGS=()")
+    end = next(i for i in range(start, len(lines)) if '"$latest/agent/status.json"' in lines[i])
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "agent" / "status.json").write_text(status, encoding="utf-8")
+    frag = "\n".join(lines[start:end + 1]) + '\nprintf "%s\\n" "${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}"\n'
+    proc = subprocess.run(["bash", "-c", f'latest="$1"; PY="$2"\n{frag}', "_", str(tmp_path), sys.executable],
+                          capture_output=True, text=True, check=False)
+    assert proc.returncode == 0 and not proc.stderr, proc.stderr   # a Python error in the fragment must show
+    return [a for a in proc.stdout.splitlines() if a]
+
+
+def test_the_runner_fragment_passes_the_agent_window(tmp_path: Path) -> None:
+    args = _runner_agent_args(tmp_path, '{"started": "2026-10-30T18:34:58+00:00", "finished": "2026-10-30T18:37:00Z"}')
+    assert args == ["--agent-since=2026-10-30T18:34:58+00:00", "--agent-until=2026-10-30T18:37:00Z"]
+
+
+@pytest.mark.parametrize("status", ['{"started": "-x\\nmore"}', "not json", '["list"]', "{}"])
+def test_the_runner_fragment_passes_nothing_unusable(tmp_path: Path, status: str) -> None:
+    assert _runner_agent_args(tmp_path, status) == []
