@@ -1026,8 +1026,44 @@ Look up `(target, Dep)` pairs in OSV and append findings to `report` in place. F
 
 #### `engine.scan_inventory(text, target)`
 
-Analyse a server-kit audit log (`INV`, `RUNTIME`, `HOSTCHECK`, `IOC` lines; anything else is
-ignored). Returns a `Report` for host `target`.
+Analyse a server-kit audit log. Returns a `Report` for host `target`. Lines are tab-separated; a line with
+another prefix or field count is ignored:
+
+| Prefix | Fields |
+|---|---|
+| `INV` | ecosystem, name, version, location |
+| `RUNTIME` | kind (a `runtimes.PRODUCTS` key), version, path, manager |
+| `OSREL` | os-release `ID`, `VERSION_ID`, `PRETTY_NAME` (`L1-audit.sh` parses the file, never sources it) |
+| `ESM` | esm-infra, esm-apps: `enabled`, `disabled` or `unknown` (Ubuntu only, read from `/var/lib/ubuntu-advantage/status.json`; the kit never runs `pro`) |
+| `HOSTCHECK` | severity, message |
+| `IOC` | message |
+
+A `RUNTIME` manager says where a package-manager install came from. `pkg:<package>` (or
+`pkg:<package>:universe` for Ubuntu universe/multiverse) means the installed version comes from an
+allowlisted distribution archive: `*archive.ubuntu.com`, `security.ubuntu.com`, `esm.ubuntu.com`,
+`*ports.ubuntu.com`, `deb.debian.org`, `security.debian.org`, the Amazon Linux repositories
+(`amazonlinux*.amazonaws.com`, `al2023-repos-*.amazonaws.com`, `cdn.amazonlinux.com`), `cdn.redhat.com`,
+`*.rockylinux.org` and `*.almalinux.org`. Any other origin is `repo:<host>:<package>`, and an unreadable one
+(including an installed version only `/var/lib/dpkg/status` knows, such as a local `.deb`) is
+`repo:unknown:<package>`. On apt hosts the origin is the `***` block of `apt-cache policy`; on dnf hosts it is
+`dnf -C repoquery --installed --qf '%{from_repo}'` (or `yumdb`), resolved to a host through
+`/etc/yum.repos.d`. Only `pkg:` is left to distro updates; `repo:` is judged upstream.
+
+`OSREL` is judged by `runtimes.evaluate_os`. The finding is `kind="host"`, `name="os-release"` (`OS_RELEASE`),
+`fix` the newest supported release:
+
+| OS release | Severity | Detail |
+|---|---|---|
+| supported | none (counted in `checked`) | |
+| end-of-life | HIGH | `eol: OS release <pretty> is end-of-life: distro security updates have stopped` |
+| Ubuntu past standard support (its ESM has not ended), esm-infra not `enabled` or no `ESM` line | HIGH | `standard-support-ended: … standard support ended; ESM/Pro required for security updates (esm-infra <state>)` |
+| as above, esm-infra `enabled` | LOW | `… on ESM (main only); universe packages need esm-apps` (`on ESM (esm-infra and esm-apps enabled)` when both are) |
+| as above, esm-infra `enabled`, a `pkg:<name>:universe` runtime present, esm-apps not `enabled` | MODERATE | the LOW detail plus the universe packages |
+| `ID` not in `runtimes.OS_PRODUCTS` | unscannable | `OS <ID> not judged by this vulnscan version` |
+| no `VERSION_ID`, or a release line endoflife.date does not list | unscannable | |
+| feed failure | feed error | |
+
+An audit without an `OSREL` line (a kit staged before it) has no OS release result.
 
 #### `engine.local_runtimes(target=LOCAL_TARGET)`
 
@@ -1086,13 +1122,21 @@ A `RuntimeFinding` for an OS release, judged on its release line alone (`behind-
 supported release), `ok`, or `unchecked` (an OS not in `OS_PRODUCTS`, a release line endoflife.date does not
 list, or a feed failure). `version_id` may be a codename in `OS_CODENAMES`.
 
+#### `runtimes.os_extended_support(os_id, version_id, today=None)`
+
+Whether an OS release's extended support (Ubuntu ESM: endoflife.date `eoesFrom`, or `extendedSupport` in its v0
+API) is still running: `True`, `False` once it has ended or the release has none, `None` when the OS, release line
+or data is unknown or the feed fails. `scan_inventory` uses it to tell an Ubuntu release past standard support
+from one whose ESM has ended too.
+
 #### `runtimes.evaluate(kind, version, path="", manager="", today=None)`
 
 A frozen `RuntimeFinding(kind, version, path, manager, severity, verdict, detail, upgrade_to="")`. `verdict` is
 `eol` (the release line gets no more security fixes; HIGH), `security-release-missing` (a newer release on the
 same line is a security release; HIGH), `behind-patch` (newer, non-security patches; MODERATE), `ok`,
-`distro` (`manager` is `pkg:<name>`: an OS-packaged runtime is left to OS security updates, since
-distributions backport fixes without changing the version) or `unchecked` (a feed could not be reached, the
+`distro` (`manager` is `pkg:<name>`: a runtime packaged by the distribution's own archive is left to OS
+security updates, since distributions backport fixes without changing the version; a `repo:<origin>:<name>`
+package from a third-party or unknown origin is judged like an upstream install) or `unchecked` (a feed could not be reached, the
 release line is unknown to endoflife.date, or `kind` is not in `PRODUCTS`; never reported as fine). Only a
 product with a security feed can be `security-release-missing`, and only such a product's `behind-patch` is
 raised to HIGH when its security data is unavailable. The others are judged on end of life and latest patch
@@ -2832,12 +2876,15 @@ findings, and the summary lists them by file name. A plan
 sorts each finding to the kit level that fixes it:
 
 - compromise indicators first (the kit refuses to patch such a host in place);
+- the OS release, when it is end-of-life or past standard support (the `os-release` finding), on its own line:
+  "plan an OS release upgrade; no kit lever applies";
 - the `run-host.sh` dry-run and `--apply` commands, with `--allow-fresh` and a note saying why when the scan found
   the host's Node.js missing a security release (a `security-release-missing` runtime finding, or `behind-patch` at
   HIGH): Rule S-10's remediation carve-out, so the kit's 14-day release cooldown does not hold the L3 fix (L3 then
   takes the newest release of the line for every Node install on the host, checked by SHA-256, not by OSV);
 - **L2** OS security updates for OS-managed packages;
-- **L3** runtimes;
+- **L3** runtimes: Node.js (L3 updates it), and every other runtime or server software (nginx, OpenSSL,
+  PostgreSQL, …) marked "upgrade through the package manager or the vendor (no kit lever)";
 - **L4** per `apps.conf` entry whose app directory holds the packages, with the entry's current pins and candidate
   `--pin` values;
 - Python packages that no `apps.conf` entry covers (`run-host.sh` never updates them);

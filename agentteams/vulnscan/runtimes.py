@@ -15,9 +15,12 @@ or image name). Three findings are possible for a runtime:
 
 An OS release (:func:`evaluate_os`) is judged on its release line alone: end of life or not.
 
-Runtimes owned by an OS package manager (dpkg/rpm, reported as ``pkg:<name>``) are not
-compared with upstream versions. Distributions backport fixes without changing the
-upstream number, so those runtimes are left to OS security updates and reported as such.
+Runtimes owned by an OS package manager and installed from the distribution's own archive
+(reported as ``pkg:<name>``, optionally ``pkg:<name>:universe``) are not compared with upstream
+versions. Distributions backport fixes without changing the upstream number, so those runtimes
+are left to OS security updates and reported as such. A package-manager install from any other
+origin (``repo:<host>:<name>``, ``repo:unknown:<name>``: nginx.org, PGDG, docker, a PPA, a local
+``.deb``) gets no distro backports and is judged like an upstream install.
 
 Data sources: endoflife.date (release lines, EOL dates, latest patch), nodejs.org,
 www.php.net. When a source is unreachable, or the release line is unknown to it, the
@@ -171,7 +174,7 @@ class RuntimeFinding:
     kind: str          # a PRODUCTS key, or an OS_PRODUCTS key for evaluate_os
     version: str
     path: str
-    manager: str       # "pkg:<name>", "brew", "nvm", "tarball", ...
+    manager: str       # "pkg:<name>", "repo:<origin>:<name>", "brew", "nvm", "tarball", ...
     severity: int      # 0..4 (see osv.SEVERITY_NAME); 0 = fine / informational
     verdict: str       # "ok" | "eol" | "security-release-missing" | "behind-patch" | "distro" | "unchecked"
     detail: str
@@ -212,10 +215,12 @@ def _eol_cycles(product: str) -> list[dict]:
             cycles = [{"cycle": str(r.get("name")),
                        "eol": r.get("eolFrom") if r.get("isEol") or r.get("eolFrom") else False,
                        "is_eol": bool(r.get("isEol")),
+                       "eoes": r.get("eoesFrom"), "is_eoes": r.get("isEoes"),
                        "latest": str(((r.get("latest") or {}).get("name")) or "")} for r in rels]
         except _http.FeedError:
             data = _http.fetch_json(f"https://endoflife.date/api/{product}.json")
             cycles = [{"cycle": str(r.get("cycle")), "eol": r.get("eol"), "is_eol": None,
+                       "eoes": r.get("extendedSupport"), "is_eoes": None,
                        "latest": str(r.get("latest") or "")} for r in (data or [])]
         _CACHE[key] = cycles
     return _CACHE[key]  # type: ignore[return-value]
@@ -231,6 +236,19 @@ def _is_eol(cycle: dict, today: _dt.date) -> bool:
         return _dt.date.fromisoformat(str(eol)) <= today
     except ValueError:
         return False
+
+
+def _extended_active(cycle: dict, today: _dt.date) -> bool | None:
+    """Return whether a cycle's extended support (Ubuntu ESM) still runs; None when the data does not say."""
+    if isinstance(cycle.get("is_eoes"), bool):
+        return not cycle["is_eoes"]
+    eoes = cycle.get("eoes")
+    if isinstance(eoes, bool):
+        return eoes          # v0 API: true = offered with no end date, false = none
+    try:
+        return _dt.date.fromisoformat(str(eoes)) > today
+    except ValueError:
+        return None
 
 
 def _security_releases(feed: str | None, cycle: str) -> list[str] | None:
@@ -284,7 +302,8 @@ def evaluate(kind: str, version: str, path: str = "", manager: str = "",
         kind: A :data:`PRODUCTS` key (``"node"``, ``"php"``, ``"python"``, ``"java"``, ...).
         version: Installed version, e.g. ``"24.22.0"``, ``"v24.22.0"`` or ``"1.8.0_412"``.
         path: Binary path, for the report.
-        manager: How it was installed (``pkg:<name>`` means the OS package manager).
+        manager: How it was installed. ``pkg:<name>`` (the distribution's archive) gives verdict ``distro``;
+            ``repo:<origin>:<name>`` (a third-party or unknown origin) and everything else are judged upstream.
         today: Date for EOL comparison (tests); defaults to today.
 
     Returns:
@@ -368,3 +387,32 @@ def evaluate_os(os_id: str, version_id: str, today: _dt.date | None = None) -> R
         return RuntimeFinding(os_id, version, "", "", 0, "ok", f"{product.label} {cycle} is a supported release")
     except _http.FeedError as exc:
         return RuntimeFinding(os_id, version, "", "", 0, "unchecked", f"release data unavailable: {exc}")
+
+
+def os_extended_support(os_id: str, version_id: str, today: _dt.date | None = None) -> bool | None:
+    """Return whether an OS release's extended support (Ubuntu ESM) is still running.
+
+    endoflife.date's ``eol`` for Ubuntu is the end of standard support; extended support (``eoesFrom``,
+    or ``extendedSupport`` in the v0 API) runs later. :mod:`.engine` uses this to tell "standard support
+    ended, ESM still possible" from a release whose ESM has ended too.
+
+    Args:
+        os_id: An :data:`OS_PRODUCTS` key (``"ubuntu"``).
+        version_id: The os-release ``VERSION_ID`` or a codename in :data:`OS_CODENAMES`.
+        today: Date for the comparison (tests); defaults to today.
+
+    Returns:
+        True while extended support runs, False once it has ended (or the release has none), None when the
+        OS, its release line or the data is unknown, or the feed cannot be read.
+    """
+    os_id = os_id.strip().lower()
+    product = OS_PRODUCTS.get(os_id)
+    if product is None:
+        return None
+    version_id = version_id.strip().strip('"')
+    version = OS_CODENAMES.get(os_id, {}).get(version_id.lower(), version_id)
+    try:
+        info, _newest = _release_line(product.eol, _cycle_with(product, version), today or _dt.date.today())
+    except _http.FeedError:
+        return None
+    return None if info is None else _extended_active(info, today or _dt.date.today())

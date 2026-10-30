@@ -12,8 +12,19 @@ Server inventory line formats (one per line; anything else is ignored):
 |---|---|
 | ``INV`` | ecosystem, name, version, location |
 | ``RUNTIME`` | kind (a ``runtimes.PRODUCTS`` key; any other is unscannable), version, path, manager |
+| ``OSREL`` | os-release ``ID``, ``VERSION_ID``, ``PRETTY_NAME`` (an ``ID`` not in ``runtimes.OS_PRODUCTS`` is unscannable) |
+| ``ESM`` | esm-infra, esm-apps: ``enabled``, ``disabled`` or ``unknown`` (Ubuntu Pro, from its status file) |
 | ``HOSTCHECK`` | severity, message |
 | ``IOC`` | message |
+
+A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
+distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
+judged against upstream versions (:func:`runtimes.evaluate`).
+
+An end-of-life OS release is a HIGH ``host`` finding named ``os-release``. Ubuntu's endoflife.date ``eol``
+is the end of *standard* support, so an Ubuntu release past it whose ESM has not ended is judged on the
+``ESM`` line: esm-infra not enabled (or no line) is HIGH; esm-infra enabled is LOW, or MODERATE when a
+universe package (``pkg:<name>:universe``) runtime is present without esm-apps.
 """
 
 from __future__ import annotations
@@ -209,19 +220,73 @@ def _runtime_findings(target: str, items: list[tuple[str, str, str, str]], repor
                                            detail=f"{v.verdict}: {v.detail} [{manager or 'unknown install'}]"))
 
 
+#: ``ESM`` line values (anything else reads as ``unknown``).
+ESM_STATES = ("enabled", "disabled", "unknown")
+#: Finding ``name`` of the OS release check (``kind="host"``); :mod:`.server_fixplan` gives it its own line.
+OS_RELEASE = "os-release"
+
+
+def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str, str] | None,
+                 managers: list[str], report: Report) -> None:
+    """Judge the ``OSREL`` line (plan N5): end-of-life, Ubuntu past standard support (per ``ESM``), or fine."""
+    if osrel is None:
+        return   # an audit from a kit older than OSREL: nothing to judge, and not a gap of this scan
+    os_id, version_id, pretty = (x.strip() for x in osrel)
+    key = os_id.lower()
+    if key not in runtimes.OS_PRODUCTS:
+        report.unscannable.append((OS_RELEASE, f"OS {os_id or 'unknown'} not judged by this vulnscan version"))
+        return
+    if not version_id:
+        report.unscannable.append((OS_RELEASE, f"OS {os_id} reports no VERSION_ID: its release was not judged"))
+        return
+    v = runtimes.evaluate_os(key, version_id)
+    if v.verdict == "unchecked":
+        if v.detail.startswith("release data unavailable"):
+            report.feed_errors.append(f"{target}: OS {os_id} {version_id}: {v.detail}")
+        else:
+            report.unscannable.append((OS_RELEASE, f"OS {os_id} {version_id}: {v.detail}"))
+        return
+    report.checked += 1
+    if v.verdict != "eol":
+        return
+    label = pretty or f"{os_id} {version_id}"
+    if key == "ubuntu" and runtimes.os_extended_support(key, version_id) is not False:
+        infra, apps = esm or ("unknown", "unknown")
+        verdict = "standard-support-ended"
+        if infra != "enabled":
+            sev = 3
+            detail = (f"OS release {label}: standard support ended; ESM/Pro required for security updates "
+                      f"(esm-infra {infra})")
+        elif apps == "enabled":
+            sev, detail = 1, f"OS release {label}: standard support ended; on ESM (esm-infra and esm-apps enabled)"
+        else:
+            universe = sorted({m.split(":")[1] for m in managers if m.startswith("pkg:") and m.endswith(":universe")})
+            sev = 2 if universe else 1
+            detail = f"OS release {label}: standard support ended; on ESM (main only); universe packages need esm-apps"
+            if universe:
+                detail += f" (universe runtime packages without esm-apps: {', '.join(universe)})"
+    else:
+        sev, verdict = 3, "eol"
+        detail = f"OS release {label} is end-of-life: distro security updates have stopped"
+    report.findings.append(Finding(kind="host", target=target, name=OS_RELEASE, version=v.version, severity=sev,
+                                   fix=v.upgrade_to, locations=["/etc/os-release"], detail=f"{verdict}: {detail}"))
+
+
 def scan_inventory(text: str, target: str) -> Report:
     """Analyze the inventory lines a server-kit audit printed.
 
     Args:
-        text: The audit log.
+        text: The audit log (line formats in this module's docstring).
         target: Host label for the report.
 
     Returns:
-        The report.
+        The report: package, runtime, host (including the ``os-release`` check) and indicator findings.
     """
     report = Report(target=target)
     deps: list[tuple[str, Dep]] = []
     rts: list[tuple[str, str, str, str]] = []
+    osrel: tuple[str, str, str] | None = None
+    esm: tuple[str, str] | None = None
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
@@ -230,6 +295,10 @@ def scan_inventory(text: str, target: str) -> Report:
             deps.append((target, Dep(eco, name, ver, "runtime", loc)))
         elif tag == "RUNTIME" and len(parts) == 5:
             rts.append((parts[1], parts[2], parts[3], parts[4]))
+        elif tag == "OSREL" and len(parts) == 4:
+            osrel = (parts[1], parts[2], parts[3])
+        elif tag == "ESM" and len(parts) == 3:
+            esm = tuple(p if p in ESM_STATES else "unknown" for p in parts[1:3])  # type: ignore[assignment]
         elif tag == "HOSTCHECK" and len(parts) == 3:
             sev = osv.SEVERITY_RANK.get(parts[1].upper(), 2)
             report.findings.append(Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2]))
@@ -238,6 +307,7 @@ def scan_inventory(text: str, target: str) -> Report:
                                            severity=4, detail=parts[1]))
     analyze(deps, report, distro_check=True)
     _runtime_findings(target, rts, report)
+    _os_findings(target, osrel, esm, [m for _k, _v, _p, m in rts], report)
     return report
 
 

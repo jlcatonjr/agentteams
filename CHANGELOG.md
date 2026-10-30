@@ -31,6 +31,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: `api-reference/vulnscan.md` (`runtimes` section with the product table, `local_runtimes`, the config and
   command tables).
 
+### vulnscan (server kit: more runtime and server-software probes, package origin, OS release and ESM check)
+
+- **`L1-audit.sh`** emits `RUNTIME` lines for `nginx`, `openssl` (LibreSSL is emitted as `libressl` and reported
+  as not judged), `postgresql` (the server binary; `psql` only when none is found), `mysql`/`mariadb` (from
+  `mysqld`/`mariadbd` output), `redis`, `ruby`, `go` (`GOTOOLCHAIN=local`), `java`/`java-corretto`, `dotnet` (one
+  line per runtime version) and `docker` (server version over the local socket only; no socket access is a plain
+  `INFO` line, never a `HOSTCHECK`). Each probe only prints a version, runs under `timeout 10` where `timeout`
+  exists, and reads `/dev/null` as stdin; a binary is run by its found path and reported by its resolved one.
+- **Package origin.** A dpkg- or rpm-owned binary's manager is `pkg:<package>` only when the installed version
+  comes from an allowlisted distro archive host (`apt-cache policy`'s `***` block; `dnf -C repoquery --installed
+  --qf '%{from_repo}'` or `yumdb`, resolved through `/etc/yum.repos.d`). Anything else, including a status-only
+  version such as a local `.deb`, is `repo:<host>:<package>` or `repo:unknown:<package>` and is judged against
+  upstream versions. Ubuntu universe/multiverse packages are `pkg:<package>:universe`. This also applies to the
+  existing php/node/python lines.
+- **`OSREL`** (`ID`, `VERSION_ID`, `PRETTY_NAME`; `/etc/os-release` is now parsed, never sourced) and, on Ubuntu,
+  **`ESM`** (esm-infra, esm-apps from `/var/lib/ubuntu-advantage/status.json`; `pro status` is never run).
+  `engine.scan_inventory` judges them: an end-of-life release is a HIGH `host` finding named `os-release`; an
+  Ubuntu release past standard support is HIGH without esm-infra, LOW with it, and MODERATE with it when a
+  universe runtime is present without esm-apps; an unknown `ID` is unscannable. An audit from an older kit has no
+  `OSREL` line and no OS result. New `runtimes.os_extended_support()`; endoflife.date's extended-support dates are
+  now read with each release line.
+- **`server_fixplan`**: an `os-release` finding gets its own section before the commands, "plan an OS release
+  upgrade; no kit lever applies"; non-Node runtimes in the L3 section say "upgrade through the package manager or
+  the vendor (no kit lever)". The kit's `--apply` paths are unchanged.
+- **Fleet-wide effect:** after the kit is re-staged, the next audit of each host can add OS release findings and
+  judge third-party-repository installs (nginx.org, PGDG, NodeSource, docker-ce, PPAs) that were `distro` before.
+- Tests: fake-binary L1 harness for the new probes, origins, `OSREL`/`ESM`; a read-only grep over `L1-audit.sh`
+  (no service, install, `/etc` write, `pro` or network verb). Docs: `api-reference/vulnscan.md`, the remediation
+  guide's kit table. The integrity manifest is re-recorded; the kit's own sha256s are computed at staging time.
+
 ### security (research hardening, follow-up to the briefing PR)
 
 - **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every
