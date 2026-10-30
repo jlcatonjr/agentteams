@@ -110,12 +110,12 @@ Build the same index from in-memory id→text mappings, without reading or writi
 - `framework` (`str`, keyword-only) — Recorded in the index metadata. Default: `""`.
 - `jsonl` (`bool | None`, keyword-only) — `True` indexes every text as JSON Lines (one passage per record), `False` as prose (one passage per paragraph). Default `None` decides per id: JSON Lines when the id ends in `.jsonl`.
 
-**Returns:** `dict[str, Any]` — The same payload as `build_memory_index`. Each document's `title` is the text's first `# ` heading or else its id; `source_mtime` is `0.0` and `source_hash` is the SHA-256 of the text.
+**Returns:** `dict[str, Any]` — The same payload as `build_memory_index`. Each document's `title` is the text's first `# ` heading or else its id; `source_mtime` is `0.0`, `source_hash` is the SHA-256 of the text, and each document carries `"origin": "text"`.
 
 **Behavior:**
 
 - Paragraph and `.jsonl` record extraction are the same as `build_memory_index`'s (one passage per record, max 20, for JSON Lines).
-- Staleness: `is_index_stale` skips these documents unless a file exists at the id, so an index built only from texts is stale only when its `sources` hold a file newer than the index.
+- Staleness: `is_index_stale` skips documents marked `"origin": "text"` (whether or not a file exists at the id), so an index built only from texts is stale only when its `sources` hold a file newer than the index.
 
 **Raises:**
 
@@ -137,7 +137,7 @@ Check if any source file is newer than the index's `built_at` timestamp or no lo
 
 **Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise.
 
-**Safety:** Invalid/missing timestamps are treated as stale (conservative). Missing/unreadable files for hashed documents are also treated as stale, except that documents with `source_mtime` `0.0` and no file at `path` are skipped: they were built from in-memory text (`build_memory_index_from_texts`) and have no file to compare.
+**Safety:** Invalid/missing timestamps are treated as stale (conservative), and so is an `index_format_version` other than the current `INDEX_FORMAT_VERSION` (`json-bm25-postings-v3`): an index written in the v2 format is rebuilt once. Missing/unreadable files for hashed documents are also treated as stale, except that documents marked `"origin": "text"` are skipped: they were built from in-memory text (`build_memory_index_from_texts`) and have no file to compare.
 
 ---
 

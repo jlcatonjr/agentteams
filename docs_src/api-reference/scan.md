@@ -155,8 +155,11 @@ Used by `agentteams.research.screen.scan_read_content`.
 - `previous_line` (`str`) — The raw preceding line, so a phrase split across a line break is still
   caught. Default: `''`.
 
-**Returns:** `str | None` — The message of the first finding, or `None` when the line is clean.
-Never raises.
+**Returns:** `str | None` — The message of the first finding, or `None` when no pattern matched.
+
+**Raises:**
+
+- `TypeError` — `line` or `previous_line` is not a `str` (raised by Unicode normalisation).
 
 ---
 

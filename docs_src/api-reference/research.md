@@ -15,7 +15,7 @@ the recommended way to give an LLM agent instructions for orchestrating it.
 [stability policy](https://github.com/jlcatonjr/agentteams/blob/main/STABILITY.md) — covered by
 the normal SemVer contract like any other documented module.
 
-> *Source: `agentteams/research/{search,backends,cache,scholarly,reputable,news,verify,browser}.py`*
+> *Source: `agentteams/research/{search,backends,cache,scholarly,reputable,news,briefing,screen,verify,browser}.py`*
 
 ## Backend fallback at a glance
 
@@ -144,15 +144,21 @@ rejection — never raises.
   meaningfully longer than typical HTML front-matter.
 - **Pinned to the vetted address (DNS rebinding).** The host is resolved once, and the fetch is
   refused unless every address is public (the `is_public_https` rule below). The request then goes
-  to one of those vetted addresses (up to 3, tried in order only on a connection failure), while
-  the `Host` header, TLS SNI and certificate verification still use the hostname. httpx never
-  resolves the name itself, so a DNS answer that changes between the check and the fetch cannot
-  redirect the request. Redirects are not followed, so the pin covers the whole exchange.
-  `fetch_text_and_date` shares this path.
-- **Through an HTTP(S) proxy set in the environment, the fetch fails closed** (empty result): the
-  proxy's CONNECT target is the vetted IP, but httpcore's tunnel ignores the SNI hostname and
-  checks the certificate against the IP, which an ordinary certificate does not cover. `NO_PROXY`
-  entries are matched against the IP, not the name. SOCKS proxies keep the hostname for SNI.
+  to one of those vetted addresses (up to 3, tried in order only on a connection failure or
+  connect timeout), while the `Host` header, TLS SNI and certificate verification still use the
+  hostname. httpx never resolves the name itself, so a DNS answer that changes between the check
+  and the fetch cannot redirect the request. Redirects are not followed, so the pin covers the
+  whole exchange. `fetch_text_and_date` shares this path. Because each address gets its own
+  `timeout_s`, a host whose addresses all time out can take up to 3 × `timeout_s` to fail.
+- **Through an HTTP(S) proxy set in the environment, the fetch fails closed** (empty result;
+  verified against httpcore 1.0.x only): the proxy's CONNECT target is the vetted IP, but
+  httpcore 1.0.x's tunnel ignores the SNI hostname and checks the certificate against the IP,
+  which an ordinary certificate does not cover. An `https://` proxy fails the same way, because
+  the SNI hostname is spent on the TLS handshake with the proxy itself. `NO_PROXY` entries are
+  matched against the IP, not the name. One `UserWarning` per process says so when such a proxy
+  applies to the pinned address. SOCKS proxies keep the hostname for SNI and are not warned about.
+  The warning is a heuristic: it uses urllib's `NO_PROXY` matching on the first vetted address,
+  which can disagree with httpx's, so an absent warning does not prove the fetch bypassed a proxy.
 - `python -m agentteams.research fetch <url> [--max-chars N] [--max-bytes N] [--timeout-s S]`
   invokes this function directly and prints `{"url": ..., "text": ...}` as JSON to stdout.
 
@@ -187,7 +193,8 @@ caller used.
 
 ### `is_public_https(url) -> bool`
 
-The SSRF guard `fetch_text`/`fetch_text_and_date` apply before every request: `https` scheme only,
+The SSRF rule `fetch_text`/`fetch_text_and_date` apply before every request (they apply the same
+rule, not this function; see below): `https` scheme only,
 and **every** address the hostname resolves to (`getaddrinfo`, IPv4 and IPv6) must be globally
 routable unicast: no private, loopback, link-local, reserved, multicast, unspecified or shared
 (CGNAT, `100.64.0.0/10`) address. An IPv6 answer that carries an IPv4 address (IPv4-mapped, NAT64, 6to4, Teredo) is also judged by that IPv4 address. One non-public
@@ -310,8 +317,8 @@ genuinely matched nothing will only match less precise nothing when shortened.
 
 Search, fetch, and scholarly results are cached for 6 hours by default. The default location never
 lands where git could commit it: `references/research-cache/` under the working directory when that
-path cannot be committed (no git work tree, or git confirms it is ignored), otherwise the per-user
-cache directory (`user_cache_dir()`). Disable with `AGENTTEAMS_RESEARCH_NO_CACHE=1`; relocate with
+path cannot be committed (no git work tree, or git confirms it is ignored), otherwise a
+per-project subdirectory of the per-user cache directory (`user_cache_dir()`). Disable with `AGENTTEAMS_RESEARCH_NO_CACHE=1`; relocate with
 `AGENTTEAMS_RESEARCH_CACHE_DIR`.
 
 This cache persists **untrusted third-party bytes**, so its failure behaviour is part of its
@@ -331,21 +338,30 @@ The directory cache entries live in. Resolution order:
 
 1. `AGENTTEAMS_RESEARCH_CACHE_DIR`, when set (an explicit path inside a repository is the
    caller's responsibility).
-2. `references/research-cache` under the current working directory, when neither it nor any
-   ancestor holds a `.git` entry (not a git work tree: nothing to commit it to).
+2. `references/research-cache` under the current working directory, when the working directory
+   is not inside a git work tree (neither it nor any ancestor holds a `.git` entry: nothing to
+   commit it to).
 3. The same in-repo path, when `git check-ignore` reports it ignored.
-4. Otherwise `user_cache_dir()`, with one `UserWarning` per process saying why. Any git error
-   (git not installed, a timeout, "dubious ownership") counts as "not ignored" and lands here too.
+4. Otherwise `user_cache_dir()/<project>`, where `<project>` is the first 16 hex digits of the
+   SHA-256 of the resolved project root (the nearest ancestor holding `.git`, or the working
+   directory when there is none), with one `UserWarning` per process saying why. Each project
+   gets its own subdirectory, so entries one project stored are never served to another. Any git
+   error (git not installed, a timeout, "dubious ownership") counts as "not ignored" and lands
+   here too.
 
 The git probe runs at most once per working directory per process, so a `.gitignore` edit made
-during a run is not noticed until the next process. Not created here; `store()` creates it lazily
-on first write.
+during a run is not noticed until the next process. It runs hardened through
+`agentteams.git_exec.run_git` (no `core.fsmonitor`, no hooks), with `GIT_DIR`, `GIT_WORK_TREE`,
+`GIT_INDEX_FILE`, `GIT_COMMON_DIR` and the `GIT_CONFIG_*` injection variables stripped from its
+environment, so it cannot be pointed at another repository or handed extra config. Not created
+here; `store()` creates it lazily on first write.
 
 ### `user_cache_dir() -> Path`
 
-The per-user research cache directory: `$XDG_CACHE_HOME/agentteams/research` when `XDG_CACHE_HOME`
-is an absolute path, else `~/Library/Caches/agentteams/research` on macOS, else
-`~/.cache/agentteams/research`. Not created here.
+The base per-user research cache directory, shared by every project:
+`$XDG_CACHE_HOME/agentteams/research` when `XDG_CACHE_HOME` is an absolute path, else
+`~/Library/Caches/agentteams/research` on macOS, else `~/.cache/agentteams/research`. `cache_dir()`
+never uses this base directly; its fallback is a per-project subdirectory of it. Not created here.
 
 ### `make_key(kind, *parts)`
 
@@ -495,7 +511,8 @@ reporting the same event differently.
 origin of (what happened). `"contested"` — a claim about how a source *characterized* something
 (e.g. an outlet's editorializing description of a person or event), which deserves more hedging
 than a bare factual report. This module doesn't decide which applies to a given claim — that
-judgment needs the claim's own text — it only exports the shared vocabulary so callers across the
+judgment is the caller's (even `gather_perspectives`, which sees the claim text, takes `kind` as
+given) — it only exports the shared vocabulary so callers across the
 framework use the same two labels rather than independently-invented near-synonyms.
 
 ### `is_news_source(source) -> bool`
@@ -524,6 +541,12 @@ its snippet shares the claim's content words (two or more, or all of them when t
 fewer; case- and diacritic-folded words of four or more characters, minus common news-prose
 words). Added outlets have `published_at=None`: search hits carry no date.
 
+`gather_perspectives` is the one function in `news` that sees a claim's text; the others never
+do. It uses that text only as a search query and for the snippet check, and never judges whether
+the claim is true. **The claim text leaves the process:** a searched claim is passed verbatim to
+`search_fn`, which with `search.web_search` is a third-party search engine. Do not pass claims
+that carry sensitive or private content.
+
 **Args:**
 
 - `claim` (`str`) — The claim's text; used only as the search query and for the snippet check.
@@ -536,12 +559,15 @@ words). Added outlets have `published_at=None`: search hits carry no date.
   `search.web_search`. Default `None`: no search, so the core stays network-free.
 - `allowlist` (`ReputableSourceAllowlist | None`) — Classifies hits. Default: one built on
   `DEFAULT_CONFIG`.
-- `k` (`int`) — Maximum number of additional outlets. Default `5`; `k <= 0` performs no search.
+- `k` (`int`) — Maximum number of additional outlets, a non-negative int. Default `5`; `k=0`
+  performs no search.
 
 **Returns:** `PerspectiveSet` with `first` as its first outlet.
 
-**Raises:** Nothing for transport failures: an `httpx.HTTPError` or `OSError` from `search_fn`
-leaves the set single-source. Any other exception from `search_fn` propagates.
+**Raises:** `ValueError` when `kind` is not `"reported"`/`"contested"`, or `k` is not a
+non-negative int (a `bool` is rejected too). Nothing for transport failures: an `httpx.HTTPError`
+or `OSError` from `search_fn` leaves the set single-source. Any other exception from `search_fn`
+propagates.
 
 ### `perspective_summary(ps) -> str`
 
@@ -558,7 +584,8 @@ outlet wrote about the claim, not that it gave the same account. Raises `ValueEr
 `(domain, published_at)` pairs with the first outlet first (`published_at` is `None` when no date
 was available, never a fabricated one). Its `coverage` property is `"multi-outlet"` when two or more
 distinct domains are present, otherwise `"single-source"`. `Coverage` is the
-`Literal["multi-outlet", "single-source"]` alias.
+`Literal["multi-outlet", "single-source"]` alias. It is not the same flag as `briefing`'s
+`single_source` (see `briefing` below), which any domain can clear.
 
 ---
 
@@ -577,15 +604,21 @@ page_chars=4000, claims_per_source=3, extra_patterns=())` is an async function t
    reader is dropped and counted.
 4. **Digest.** `chat_fn` turns each page, fenced under `RETRIEVAL_CONTENT_AUTHORITY`, into claims of
    the fixed shape `{claim, kind: reported|contested, sensitive}`. Each claim is screened again.
-5. **Audit.** Each claim is checked against its own page only (`audit_claim_pairs`, one call for
-   all claims, each paired with its own page, so two sources with word-for-word identical claims
+5. **Audit.** Each claim is checked against its own page only (one `audit_claim_pairs` call, one
+   critic request per claim, each paired with its own page, so two sources with word-for-word identical claims
    never share evidence), with `critic_fn`
    (default `chat_fn`, a weaker check; record which in `critic_label`).
-6. **Corroborate.** A claim is `single_source` unless another domain makes a similar one.
+6. **Corroborate.** A claim is `single_source` unless a claim from another domain (any domain,
+   rated or not) is similar: a content-word Jaccard overlap of at least 0.4. This is not the
+   `news` `Coverage` value `"single-source"`, which counts only allowlisted news outlets sharing
+   two or more claim words; the two flags answer different questions.
 
-`BriefingClaim` fields: `claim`, `source_domain`, `attribution` (`perspective_attribution` for
-news), `published_at`, `kind` (`reported`, `contested`, `web`, `scholarly`), `single_source`,
-`sensitive`. `default_candidates(topic, allowlist=None, k_rated=4, k_web=8)` is the default
+`BriefingClaim` fields: `claim`, `source_domain`, `attribution`, `published_at`, `kind` (`reported`, `contested`, `web`, `scholarly`), `single_source`,
+`sensitive`. For a news source, `attribution` is the `perspective_attribution` wording, except
+that a claim the digest marks `contested` gets `perspective_summary`'s single-source wording
+("`<domain>` reported (`<date>`); contested characterization, single source: no second outlet
+found"). No second outlet is searched for, since a briefing sends only the topic. Every
+attribution is capped at 120 characters. `default_candidates(topic, allowlist=None, k_rated=4, k_web=8)` is the default
 source finder (rated outlets, then web hits, deduplicated by URL). `BriefingStats` holds counts only: `candidates`, `fetched`, `unsafe_url`,
 `injection`, `digest_rejected` and `refuted`. `Retriever` injects the network side for tests.
 `max_pages`, `page_chars` and `claims_per_source` must be positive ints (`ValueError`). Exceptions
@@ -595,6 +628,9 @@ from `chat_fn`, `critic_fn` or an injected `Retriever` propagate: no partial bri
 Storage, expiry and serving are the caller's concern; the module writes nothing beyond the
 research cache. Honesty ceiling: a rated outlet is provenance, not truth; a surviving claim is
 "survived", never "verified".
+
+---
+
 ## `screen` — read-content screening for fetched pages and retrieved passages
 
 > *Source: `agentteams/research/screen.py`*
@@ -608,7 +644,8 @@ content can never open a YAML front-matter block, and gets no code-span exemptio
 "tell the user" that agent files may legitimately contain (so `scan_content` never runs them), plus
 any caller `extra_patterns`. It returns `category="injection"`, `severity="high"` findings, at most one
 per line. Credential and path findings are not returned. `is_inert_read_content(content, *,
-extra_patterns=())` is the boolean form. `match_injection` is the one public addition this needed in
+extra_patterns=())` is the boolean form: `True` means no pattern matched, not that the content is
+safe. All read content stays inert data (C-4) whatever the screen returns. `match_injection` is the one public addition this needed in
 `scan.py`, a pinned enforcement module (re-pinned in `references/enforcement-integrity.json`).
 
 ---
@@ -651,11 +688,16 @@ text share one evidence string; it builds `(claim, evidence)` pairs and delegate
   back to `"survived"`.
 - The backstop compares words after conservative inflection folding, so a real refutation is not
   downgraded over "models" against "model". Rules, first match wins: `sses`→`ss`, `ies`→`y`, a
-  trailing `s` (not after `s`, `u` or `i`), and `-ed`/`-ing` to one shared verb-form key (so
-  "united" matches "uniting" but never "unit"). A rule applies only when the stem keeps at least 4
-  characters, and only to purely alphabetic, non-acronym tokens: digits never fold ("1990s" never
-  stands in for "1990"), nor do acronyms. Folding adds no synonyms; a word absent from the evidence
-  in every form is still rejected.
+  trailing `s` (not after `s`, `u` or `i`), `-ing` to its own `stem~ing` key and `-ed` to its own
+  `stem~ed` key. The two verb forms stay separate from each other and from the bare stem: "united"
+  never matches "unit", and "planned" never matches "planning", so a correction that only changes
+  tense or aspect gets no support from the other form and is downgraded to `"survived"`. A rule
+  applies only when the stem keeps at least 4 characters, and only to purely alphabetic ASCII
+  tokens that are not acronyms (2 to 6 capitals): digits never fold ("1990s" never stands in for
+  "1990"), nor do acronyms. Folding adds no synonyms; a word absent from the evidence in every
+  form is still rejected.
+- The audit prompt fences each claim's evidence as data under `RETRIEVAL_CONTENT_AUTHORITY`, the
+  same way `briefing` fences a page for its digest: text inside the evidence is never followed.
 
 ### `audit_claim_pairs(pairs, chat_fn, lens="adversarial") -> list[Verdict]`
 

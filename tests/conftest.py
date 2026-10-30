@@ -241,6 +241,11 @@ def _report_stale_integrity_manifest(session: pytest.Session) -> None:
 def pytest_sessionstart(session):  # noqa: D103
     if not _TEST_INSTALLED:
         _assert_agentteams_from_this_tree()
+    else:
+        # Opt-out active: say which copy is under test, so a stray export is visible.
+        import agentteams
+        print(f"AGENTTEAMS_TEST_INSTALLED=1: testing agentteams from {agentteams.__file__}",
+              file=sys.stderr, flush=True)
     _tree_watch["prev"] = _snapshot_watched_tree()
     _report_stale_integrity_manifest(session)
 
