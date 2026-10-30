@@ -240,6 +240,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
 | `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
+| `unpinned_ranges` | `false` | Also check the ranges of Python requirements without exact pins, sending their names (no versions) to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check the runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
@@ -427,8 +428,8 @@ requirements' ranges against every advisory OSV holds for the name (`engine.anal
 [`specifiers`](#agentteamsvulnscanspecifiers)). It never guesses one version and never asks PyPI.
 
 - **Switch.** `unpinned_ranges` (boolean, default `false`): `engine.scan_path(..., unpinned_ranges=True)` or
-  `scan PATH --unpinned-ranges`. The daily run does not read it yet: the `vulnscan.json` key and its `daily`
-  wiring follow once the config changes in flight there have merged. Turn it on after reviewing one run.
+  `scan PATH --unpinned-ranges`, and for the daily run the `vulnscan.json` key `unpinned_ranges`. Turn it on
+  after reviewing one run.
 - **Egress.** When on, it sends unpinned direct requirement names to OSV (`/v1/querybatch`, the package name
   with no `version` key), the same host and the same names pinned scanning already sends; nothing goes to
   pypi.org. Withheld, as for pinned packages: names matching `private_packages`, and a whole file that names

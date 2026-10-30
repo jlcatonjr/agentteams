@@ -29,12 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names an index (or cannot be read or parsed), every unpinned-range file of that repository is withheld too
   (security review P-s1). Requirements files and `pyproject.toml` over 64 MiB are not read.
 - **Exit code:** range findings count toward `--fail-on`. With the feature on, a whole-range HIGH finding makes
-  `scan` (and, once wired, the daily run) exit 1 where it exited 0 before; partial-range findings stay at most
+  `scan` (and the daily run) exit 1 where it exited 0 before; partial-range findings stay at most
   MODERATE, below the default `high`.
 - Range findings are never routed to a fix (`stage-fix` edits only `==` pins); `summary.md` lists the
   lower-bound raises under "Requirement ranges — plan-only (no staged edit)". The *Remediation effectiveness*
   fixed/new counts leave them out and count them on their own line.
-- Not yet: the `vulnscan.json` key `unpinned_ranges` and its `daily` wiring (a follow-up).
+- **`vulnscan.json` key `unpinned_ranges`** (boolean, default `false`): the daily run passes it to `scan_path`.
 
 ### vulnscan (container base images: support status and pinning)
 
