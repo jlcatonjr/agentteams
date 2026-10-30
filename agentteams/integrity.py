@@ -235,6 +235,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/notify.py",
     "agentteams/vulnscan/review.py",
     "agentteams/vulnscan/daily.py",
+    "agentteams/vulnscan/checkout_freshness.py",   # split from daily.py: labels findings fixed upstream
+    "agentteams/vulnscan/infra_retry.py",          # split from daily.py: when a partial run is re-run
+    "agentteams/vulnscan/worktree_fixes.py",       # split from daily.py: apply-worktree staging
     "agentteams/vulnscan/debrief.py",
     # G1 T2 condition: __main__.py wires grant signing and the operator commands; manifests.py's REQ_PIN decides
     # what validate_diff lets stage-fix change.

@@ -45,10 +45,12 @@ _DOCUMENTED_IN: dict[str, str] = {
     "agent_driver_base": "### `agentteams.vulnscan.agent_drivers`",
     "agent_drivers_codex": "### `agentteams.vulnscan.agent_drivers`",
     "agent_drivers_copilot": "### `agentteams.vulnscan.agent_drivers`",
+    "checkout_freshness": "### `agentteams.vulnscan.daily`",   # split from daily.py, re-exported by it
     "coverage": "## Project registry",
     "registry": "## Project registry",
     "project_cli": "## Project registry",
     "executor_serve": "### `agentteams.vulnscan.executor`",
+    "infra_retry": "### `agentteams.vulnscan.daily`",
     "gateway_context": "### `agentteams.vulnscan.gateway`",
     "gateway_dialects": "### `agentteams.vulnscan.gateway`",
     "gateway_dlp": "### `agentteams.vulnscan.gateway`",
@@ -57,6 +59,7 @@ _DOCUMENTED_IN: dict[str, str] = {
     "repo_alias": "## The agents' interface: MCP tools",
     "operator_cli": "## Command reference",
     "team_dir": "### `agentteams.vulnscan.agent_run`",
+    "worktree_fixes": "### `agentteams.vulnscan.daily`",
 }
 
 #: The configuration blocks, in the order of their tables under Configuration.

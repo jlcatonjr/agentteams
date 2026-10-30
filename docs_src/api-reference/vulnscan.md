@@ -443,7 +443,7 @@ failed `systemctl disable` only when the units were installed.
 
 ### Checkout freshness
 
-After scanning each root, `daily._freshness` checks every repository with package findings, read-only and
+After scanning each root, `daily._freshness` (in `checkout_freshness`, re-exported by `daily`) checks every repository with package findings, read-only and
 offline: no fetch, and the hardened git (`daily._git`: no hooks, no stored credentials; `git show` for file content)
 on the local remote-tracking refs as of the last fetch. `summary.md` gets a `## Checkout freshness` section after
 the per-repository sections: each repository's checked-out branch, the commits `HEAD` lacks from `origin/HEAD` (`no
@@ -1329,7 +1329,7 @@ daily summary's remediation readiness section repeats it.
 #### `daily.catch_up_due(cfg)` / `daily.catch_up(cfg)`
 
 `catch_up_due` gives `(due, hours since the last completed run)`: due when the heartbeat is missing,
-unreadable (hours `None`) or older than `stale_after_hours`, or when `daily.infra_retry_due(cfg)` names today's run
+unreadable (hours `None`) or older than `stale_after_hours`, or when `daily.infra_retry_due(cfg)` (in `infra_retry`) names today's run
 directory: the last run exited 3, its `summary.json` names Docker as a cause (an `infra.*` code in `infra_codes`, the
 run's Docker reason codes, or in `remediation.docker`; feed error text is never matched), fewer than `catch_up.max_retries_per_day` retries have run for
 that date, and `docker_readiness.ensure(cfg, start=False)` is ready now. `catch_up` first checks the daily run lock
@@ -2493,7 +2493,7 @@ The tools-container runner ([Subprocess confinement](#subprocess-confinement-too
 Context in which `run_git`, `run_npm` and `subproc_confine_ssh.run_kit` run confined. Raises
 `Unavailable` at once when confinement is on and Docker, the image or its passing self-test is
 missing; opted out (`confine.subprocesses: false`) it prints `OPT_OUT_WARNING` and runs them on the
-host. `executor._granted` and `daily.stage_worktree_fixes` / the `servers` loop open one.
+host. `executor._granted` and `daily.stage_worktree_fixes` (in `worktree_fixes`) / the `servers` loop open one.
 
 #### `run_git(repo, args, *, hardening, env, push=False, timeout=600, text=True, readonly=False)`
 
@@ -2619,6 +2619,12 @@ Write a starter config (the defaults, with the given `repo_roots` and `servers`)
 #### `daily.run_lock_path()`
 
 `<state>/daily.lock`, held for a whole daily run.
+
+#### Split modules
+
+`checkout_freshness` (the checkout-freshness rows and section), `infra_retry` (`infra_retry_due`,
+`INFRA_RETRY_FILE`, the archived summaries) and `worktree_fixes` (`stage_worktree_fixes`) hold code split from
+`daily`; `daily` re-exports those names, so `daily.<name>` keeps working.
 
 #### `load_config(path)`
 

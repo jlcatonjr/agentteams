@@ -134,6 +134,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the same day, and a hold can now also mean "already fixed on the default branch".
 - New `versions.is_prerelease()`; the `vuln-remediation` agent template says a `held:` refusal can also mean the
   default branch already has the fix and the local checkout is behind.
+- Internal, behaviour unchanged: `vulnscan/daily.py` (1243 lines, over the 1000-line module ceiling) is split into
+  `checkout_freshness.py`, `infra_retry.py` and `worktree_fixes.py`. `daily` re-exports the moved names
+  (`daily.infra_retry_due`, `daily.stage_worktree_fixes`, ...), and the moved code still runs git through
+  `daily._git`. The three modules are pinned in the integrity manifest.
 
 ### vulnscan (stage-fix: a fix already on the default branch is not reported as a major jump)
 

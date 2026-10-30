@@ -40,10 +40,8 @@ import json
 import math
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from collections import defaultdict
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -53,9 +51,14 @@ from typing import Any
 from agentteams.vulnscan import coverage, docker_readiness, effectiveness, engine, executor, fix, merge_digest, notify
 from agentteams.vulnscan import osv, paths, registry, remediation_status, repo_alias
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
-from agentteams.vulnscan.manifests import discover, parse
+# Split from this module and re-exported, so ``daily.<name>`` keeps working (scripts and tests use it):
+from agentteams.vulnscan.checkout_freshness import _freshness, _freshness_section
+from agentteams.vulnscan.infra_retry import (INFRA_RETRY_FILE, _archive_summary, _max_retries,
+                                             _retries, _stale, infra_retry_due)
+from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
+from agentteams.vulnscan.worktree_fixes import stage_worktree_fixes   # re-exported, as above
 
 #: The audit's final verdict line; its presence proves the script ran to completion.
 _AUDIT_DONE = re.compile(r"^RESULT (clean|action-needed|COMPROMISE)", re.M)
@@ -65,7 +68,6 @@ RUN_LABELS: dict[int, str] = {EXIT_COMPROMISE: "COMPROMISE INDICATORS", EXIT_UNS
                               EXIT_FINDINGS: "action needed"}
 NEW_FINDINGS_LABEL = "new findings"
 
-_FETCH_TIMEOUT = 300          # seconds for ``git fetch`` (an unreachable remote must not hang the daily run)
 _GIT_TIMEOUT = 600            # seconds for any other git step
 
 _FAIL_ON = ("critical", "high", "moderate", "low", "any", "none")
@@ -106,8 +108,6 @@ DEFAULT_CONFIG: dict = {
     "catch_up": {"max_retries_per_day": 2},
 }
 
-#: Retries of a same-day run left partial by Docker (catch_up), counted in the run directory.
-INFRA_RETRY_FILE = "infra-retry.count"
 MAX_RETRIES_PER_DAY = 10
 #: The run's Docker reason codes (``infra.*``, from :class:`subproc_confine.Unavailable` ``code``), from
 #: _collect to _finish; written to ``summary.json["infra_codes"]`` (None outside a run). Only these mark a run
@@ -339,67 +339,6 @@ def stale_warning(max_hours: float | None = None) -> str:
     return ""
 
 
-def _stale(cfg: dict) -> tuple[bool, int | None]:
-    """Return (no completed run within ``stale_after_hours``, hours since the last one or None)."""
-    if not heartbeat_path().exists():
-        return True, None
-    beat = _read_heartbeat()
-    if isinstance(beat, str):
-        return True, None
-    age = (_dt.datetime.now(_dt.UTC) - beat[0]).total_seconds() / 3600
-    return age > float(cfg.get("stale_after_hours", DEFAULT_CONFIG["stale_after_hours"])), max(int(age), 0)
-
-
-def _max_retries(cfg: dict) -> int:
-    catch = cfg.get("catch_up") if isinstance(cfg.get("catch_up"), dict) else {}
-    return int(catch.get("max_retries_per_day", DEFAULT_CONFIG["catch_up"]["max_retries_per_day"]))
-
-
-def _retries(run_dir: Path) -> int:
-    """Return how many infrastructure retries ran for ``run_dir`` (0 when none, or the count is unreadable)."""
-    try:
-        text = (run_dir / INFRA_RETRY_FILE).read_text(encoding="utf-8").strip()
-    except OSError:
-        return 0
-    return int(text) if text.isdigit() else 0
-
-
-def infra_retry_due(cfg: dict, *, today: str | None = None) -> Path | None:
-    """Return today's run directory when its run is worth re-running now because Docker made it partial, else None.
-
-    All of: the last run (heartbeat) exited 3; it is today's run; its ``summary.json`` names Docker as a cause (an
-    ``infra.*`` code in ``infra_codes`` or ``remediation.docker``; feed error text is never matched); fewer than
-    ``catch_up.max_retries_per_day`` retries have run for that date (:data:`INFRA_RETRY_FILE` in the run
-    directory); and Docker is ready now (:func:`docker_readiness.ensure`, read-only: nothing is started here,
-    the retry's own run does that when ``docker.autostart`` allows it).
-
-    Args:
-        cfg: Daily config.
-        today: Override the date (tests).
-
-    Returns:
-        The run directory, or None.
-    """
-    beat = _read_heartbeat()
-    if isinstance(beat, str) or beat[1] != EXIT_UNSCANNED:
-        return None
-    run_dir = paths.state_dir() / (today or _dt.date.today().isoformat())
-    try:
-        data = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    rem = data.get("remediation") if isinstance(data.get("remediation"), dict) else {}
-    layers = rem.get("docker") if isinstance(rem.get("docker"), dict) else {}
-    codes = [v.get("code", "") for v in layers.values() if isinstance(v, dict)]
-    codes += data.get("infra_codes") if isinstance(data.get("infra_codes"), list) else []
-    infra = any(isinstance(c, str) and c.startswith("infra.") for c in codes)
-    if not infra or _retries(run_dir) >= _max_retries(cfg):
-        return None
-    return run_dir if docker_readiness.ensure(cfg, start=False).ok else None
-
-
 def catch_up_due(cfg: dict) -> tuple[bool, int | None]:
     """Return whether a catch-up run is due: no completed run within ``stale_after_hours``, or an infra retry.
 
@@ -497,112 +436,6 @@ def _git(repo: Path, *args: str, timeout: int = _GIT_TIMEOUT, push: bool = False
         subprocess.TimeoutExpired: git ran longer than ``timeout`` seconds.
     """
     return executor.git_proc(repo, *args, timeout=timeout, push=push)
-
-
-def _reuse_problem(repo: Path, wt: Path, branch: str, head: str) -> tuple[str, str]:
-    """Check an existing same-day worktree before staging into it again.
-
-    It must be a registered worktree of ``repo`` on ``branch``, with no commits that are not on
-    ``head`` and no change :func:`executor.validate_diff` refuses.
-
-    Returns:
-        (problem or "", the worktree's HEAD commit to validate against).
-    """
-    if wt.is_symlink():
-        return "it is a symbolic link", ""
-    entry: dict[str, str] = {}
-    for block in _git(repo, "worktree", "list", "--porcelain").stdout.split("\n\n"):
-        fields = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
-        if fields.get("worktree") and Path(fields["worktree"]).resolve() == wt.resolve():
-            entry = fields
-    if not entry:
-        return "it is not a worktree of this repository", ""
-    if entry.get("branch") != f"refs/heads/{branch}":
-        return f"it is not on {branch}", ""
-    base = entry.get("HEAD", "")
-    if not base or _git(repo, "merge-base", "--is-ancestor", base, head).returncode:
-        return f"it has commits that are not on {head}", ""
-    try:
-        executor.validate_diff(wt, base)
-    except executor.ExecError as exc:
-        return f"it has changes the daily run did not make ({exc})", ""
-    return "", base
-
-
-def _discard_worktree(repo: Path, wt: Path, branch: str) -> None:
-    """Remove a staged worktree and its branch (a refused change is never left for review)."""
-    _git(repo, "worktree", "remove", "--force", str(wt))
-    _git(repo, "branch", "-D", branch)
-
-
-def stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
-    """Stage fixes for ``repo`` (:func:`_stage_worktree_fixes`) with git and npm in the tools container.
-
-    Fail closed: when confinement is on and the tools container is unavailable, nothing is staged and the
-    reason is returned (``confine.subprocesses: false`` runs them on the host, as before).
-    """
-    try:
-        with subproc_confine.scope(cfg, scratch=[repo.parent / f"{repo.name}.worktrees"]):
-            return _stage_worktree_fixes(repo, cfg, date)
-    except subproc_confine.Unavailable as exc:
-        _note_infra(exc)
-        return "", f"{repo}: nothing staged: {exc}"
-
-
-def _stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
-    """Create ``<repo>.worktrees/vulnscan-<date>`` off ``origin/HEAD`` and apply fixes there.
-
-    Fix releases are not age-gated (:data:`executor.REMEDIATION_COOLDOWN_DAYS`: Rule S-10's remediation carve-out)
-    and the result must pass
-    :func:`executor.validate_diff` (only dependency pins and lockfiles change); a refused result is
-    removed. A same-day rerun reuses the worktree only after :func:`_reuse_problem` finds nothing.
-    Without ``origin/HEAD`` the default branch is unknown and nothing is staged.
-
-    Args:
-        repo: Repository root.
-        cfg: Daily config.
-        date: Run date (YYYY-MM-DD).
-
-    Returns:
-        (worktree path or "", markdown fix result or the reason nothing was staged).
-    """
-    if not (repo / ".git").exists():
-        return "", f"{repo}: not a git repository"
-    notes: list[str] = []
-    try:
-        fetched = _git(repo, "fetch", "-q", "origin", timeout=_FETCH_TIMEOUT, push=True)
-    except subprocess.TimeoutExpired:
-        notes.append(f"`git fetch` timed out after {_FETCH_TIMEOUT}s; staged on the last fetched origin/HEAD")
-    else:
-        if fetched.returncode:
-            notes.append(f"`git fetch` failed ({fetched.stderr.strip()[:200]}); staged on the last fetched origin/HEAD")
-    head = _git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout.strip()
-    if not head:
-        return "", (f"{repo}: origin/HEAD is not set, so the default branch is unknown; nothing staged "
-                    "(run `git remote set-head origin --auto`)")
-    base = _git(repo, "rev-parse", "--verify", "--quiet", f"{head}^{{commit}}").stdout.strip()
-    if not base:
-        return "", f"{repo}: {head} does not resolve to a commit; nothing staged"
-    wt = repo.parent / f"{repo.name}.worktrees" / f"vulnscan-{date}"
-    branch = f"vulnscan/{date}"
-    if wt.exists() or wt.is_symlink():
-        problem, base = _reuse_problem(repo, wt, branch, head)
-        if problem:
-            return "", f"{repo}: not reusing {wt}: {problem}"
-    else:
-        made = _git(repo, "worktree", "add", "-q", "-b", branch, str(wt), base)
-        if made.returncode:
-            return "", f"{repo}: worktree add failed: {made.stderr.strip()}"
-    cooldown = executor.REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
-    found = [m for m in discover(wt) if not _operator_excluded(cfg, repo / m.relative_to(wt))]
-    res = fix.fix_path(wt, apply=True, allow_major=False,   # unattended: never a major jump
-                       cooldown_days=cooldown, manifests=found)
-    try:
-        executor.validate_diff(wt, base)
-    except executor.ExecError as exc:
-        _discard_worktree(repo, wt, branch)
-        return "", f"{repo}: staged change refused, worktree removed: {exc}\n\n{res.markdown()}"
-    return str(wt), res.markdown() + "".join(f"\n- {n}" for n in notes) + ("\n" if notes else "")
 
 
 def _scan_server(host: str, kit: Path, out_dir: Path) -> Report:
@@ -852,7 +685,6 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             total.feed_errors.append(f"{host}: not scanned: {exc}")
 
 
-_FRESH_GIT_TIMEOUT = 60   # seconds for each read-only git query of the freshness check
 #: The run's checkout-freshness rows (:func:`_freshness`), from _collect to _finish (None outside a run).
 _FRESH: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar("vulnscan_fresh", default=None)
 
@@ -867,109 +699,6 @@ def _fresh_rows() -> Iterator[list[dict[str, Any]]]:
     finally:
         _FRESH.reset(token)
         _INFRA.reset(infra)
-
-
-def _freshness(root: Path, rep: Report) -> list[dict[str, Any]]:
-    """Label the root's package findings already fixed upstream, and return each repository's checkout freshness.
-
-    Read-only and offline: the local remote-tracking refs as of the last fetch (no fetch, no credentials: the
-    hardened :func:`_git`, ``git show`` for file content). For each repository with package findings it returns
-    ``{"repo", "branch", "behind", "fetch_age_h", "fixed_upstream"}``: ``behind`` is the commits ``HEAD`` lacks
-    from ``origin/HEAD`` (None without ``origin/HEAD``), ``fetch_age_h`` the age of ``FETCH_HEAD`` (None: never
-    fetched). A finding gets ``fixed_upstream`` when the checkout is behind and every file it was found in still
-    exists at ``origin/HEAD`` but no longer holds that ``name==version`` (a file gone upstream proves nothing).
-    Repositories nested in another inside the scan root, and third-party clones (:func:`foreign_clone`), are
-    skipped; a git query that fails
-    leaves that repository unlabelled, never an error.
-
-    Args:
-        root: The resolved scan root.
-        rep: The root's report (targets relative to ``root``).
-
-    Returns:
-        One row per repository checked, ``repo`` relative to ``root``.
-    """
-    rows = []
-    for rel in sorted({f.target for f in rep.findings if f.kind == "package"}):
-        repo = root if rel == "." else root / rel
-        try:
-            row = _repo_freshness(repo, [f for f in rep.findings if f.kind == "package" and f.target == rel], root)
-        except _ITEM_ERRORS:   # a hung or broken git: no label, no error
-            continue
-        if row is not None:
-            rows.append({"repo": rel, **row})
-    return rows
-
-
-def _repo_freshness(repo: Path, findings: list[Any], root: Path) -> dict[str, Any] | None:
-    """One repository's freshness row, labelling its ``findings`` (see :func:`_freshness`); None when skipped."""
-    nested = any((p / ".git").exists() for p in repo.parents if p == root or root in p.parents)
-    if not (repo / ".git").exists() or nested or foreign_clone(repo):
-        return None
-
-    def git(*args: str) -> str:
-        proc = _git(repo, *args, timeout=_FRESH_GIT_TIMEOUT)
-        return proc.stdout.strip() if proc.returncode == 0 else ""
-
-    branch = git("symbolic-ref", "--short", "-q", "HEAD") or "(detached)"
-    head = git("symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD")
-    count = git("rev-list", "--count", f"HEAD..{head}") if head else ""
-    behind = int(count) if count.isdigit() else None
-    git_dir = git("rev-parse", "--git-dir")
-    fetch_head = (repo / git_dir / "FETCH_HEAD") if git_dir else None
-    age = None
-    if fetch_head is not None and fetch_head.is_file():
-        age = max((_dt.datetime.now().timestamp() - fetch_head.stat().st_mtime) / 3600, 0.0)
-    labelled = 0
-    if behind:
-        upstream: dict[str, set[tuple[str, str, str]] | None] = {}
-        for f in findings:
-            if not f.locations:
-                continue
-            gone = True
-            for loc in f.locations:
-                if loc not in upstream:
-                    upstream[loc] = _deps_at(repo, head, (root / loc).relative_to(repo).as_posix())
-                deps = upstream[loc]
-                if deps is None or (f.ecosystem, f.name.lower(), f.version) in deps:
-                    gone = False
-                    break
-            if gone:
-                f.fixed_upstream = True
-                labelled += 1
-    return {"branch": branch, "behind": behind, "fetch_age_h": age, "fixed_upstream": labelled}
-
-
-def _deps_at(repo: Path, ref: str, rel: str) -> set[tuple[str, str, str]] | None:
-    """Return the ``(ecosystem, name, version)`` the file ``rel`` pins at ``ref`` (``git show``), or None when absent."""
-    proc = _git(repo, "show", f"{ref}:{rel}", timeout=_FRESH_GIT_TIMEOUT)
-    if proc.returncode:
-        return None
-    with tempfile.TemporaryDirectory(prefix="vulnscan-upstream-") as tmp:
-        path = Path(tmp) / Path(rel).name   # the same file name: parse picks the format by it
-        path.write_text(proc.stdout, encoding="utf-8")
-        m = parse(path)
-    if m.unscannable:
-        return None
-    return {(d.ecosystem, d.name.lower(), d.version) for d in m.deps}
-
-
-def _freshness_section(fresh: list[dict[str, Any]]) -> str:
-    """Return the summary's ``## Checkout freshness`` section (after the per-repository sections), or ""."""
-    if not fresh:
-        return ""
-    lines = ["## Checkout freshness (read-only: as of each repository's last fetch)", "",
-             "| Repository | Branch | Behind origin/HEAD | Last fetch | Findings already fixed upstream |",
-             "|---|---|---|---|---|"]
-    for r in fresh:
-        behind = "no origin/HEAD" if r["behind"] is None else str(r["behind"])
-        age = "never" if r["fetch_age_h"] is None else f"{r['fetch_age_h']:.0f}h ago"
-        lines.append(f"| `{r['repo']}` | `{r['branch']}` | {behind} | {age} | {r['fixed_upstream']} |")
-    lines += ["", "A finding noted *fixed upstream (checkout behind)* is gone from that file at `origin/HEAD`: "
-              "pull the checkout. It stays in the findings and is not counted as fixed.", ""]
-    from agentteams.vulnscan import publish   # lazy, as in effectiveness: publish imports the executor
-
-    return publish.rewrite_paths("\n".join(lines))
 
 
 def _operator_excluded(cfg: dict, path: Path) -> bool:
@@ -1160,34 +889,6 @@ def _handoff_section(cfg: dict) -> str:
         return "\n" + handoff.markdown(handoff.status(cfg, handoff.repos_with_staged_fixes()))
     except (OSError, ValueError) as exc:
         return f"\n## Handoffs to repository orchestrators\n\n- could not read the handoff state: {exc}\n"
-
-
-def _archive_summary(run_dir: Path) -> list[Path]:
-    """Copy an existing ``summary.json`` / ``.md`` to ``summary.<HHMMSS>.{json,md}`` before a re-run rewrites them.
-
-    ``HHMMSS`` is the local time the earlier summary was written (``-1``, ``-2`` ... on a clash). Readers keep
-    reading ``summary.json`` only (:func:`_previous_summary`, :func:`paths.run_dirs`).
-
-    Returns:
-        The copies written.
-
-    Raises:
-        OSError: A copy failed (the caller then writes nothing: the earlier summary stays in place).
-    """
-    old = [p for p in (run_dir / "summary.json", run_dir / "summary.md") if p.is_file()]
-    if not old:
-        return []
-    stamp = _dt.datetime.fromtimestamp(old[0].stat().st_mtime).strftime("%H%M%S")
-    base, n = stamp, 0
-    while any((run_dir / f"summary.{base}{p.suffix}").exists() for p in old):
-        n += 1
-        base = f"{stamp}-{n}"
-    out = []
-    for p in old:
-        dest = run_dir / f"summary.{base}{p.suffix}"
-        shutil.copy2(p, dest)
-        out.append(dest)
-    return out
 
 
 def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
