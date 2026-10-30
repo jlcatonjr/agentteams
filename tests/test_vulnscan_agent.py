@@ -453,6 +453,12 @@ def test_meter_counts_and_caps_unmetered_replies(tmp_path: Path) -> None:
         gateway.main(["--model", "m", "--key-file", str(key), "--max-unmetered-calls", "0"])
 
 
+def _docker_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import docker_readiness
+
+    monkeypatch.setattr(docker_readiness, "ensure", lambda cfg, *, start, runner=None: docker_readiness.Readiness())
+
+
 def test_daily_runs_the_agent_after_the_scan_and_records_it(dirs: dict[str, Path], monkeypatch: pytest.MonkeyPatch) -> None:
     calls = []
 
@@ -461,6 +467,7 @@ def test_daily_runs_the_agent_after_the_scan_and_records_it(dirs: dict[str, Path
         return {"state": "not-run", "reason": "no isolation self-test has run"}
 
     monkeypatch.setattr(agent_run, "run_agent", fake_run)
+    _docker_ready(monkeypatch)   # run_agent is faked: so is the run's Docker check
     cfg = {**daily.DEFAULT_CONFIG, "local_runtimes": False, "notify": "none",
            "agent": {"enabled": True, "team_dir": "x", "key_file": "y"}}
     _, _, run_dir = daily.run_daily(cfg, today="2026-10-23")
@@ -599,6 +606,7 @@ def test_daily_notifications_are_fixed_text(dirs: dict[str, Path], monkeypatch: 
     calls: list[list[str]] = []
     monkeypatch.setattr(notify.subprocess, "run", lambda cmd, **kw: calls.append(cmd))
     monkeypatch.setattr(agent_run, "run_agent", lambda cfg, run_dir: {"state": "timed-out", "run_id": "r1"})
+    _docker_ready(monkeypatch)   # run_agent is faked: so is the run's Docker check
     monkeypatch.setattr(daily, "publish_run", lambda cfg, run_dir, run_id: None)
     monkeypatch.setattr(daily, "new_finding_keys", lambda total, prev: {"k"})
     cfg = {**daily.DEFAULT_CONFIG, "local_runtimes": False, "notify": "command:/bin/echo",
@@ -978,7 +986,7 @@ def test_agent_selftest_without_docker_reports_why_and_exits_1(dirs: dict[str, P
     monkeypatch.setattr(agent_run.subprocess, "run", _no_docker(kind))
     assert cli.main(["agent-selftest"]) == 1
     err = capsys.readouterr().err
-    assert "agent-selftest: docker is not reachable or the agent image img:t is not built" in err
+    assert "agent-selftest: docker is not reachable (the daemon does not answer" in err
     assert not (dirs["tmp"] / "state" / "agent-selftest.json").exists()
 
 

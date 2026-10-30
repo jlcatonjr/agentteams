@@ -16,7 +16,8 @@ overflow handling), it adds the batch preflight, the ``repo-held`` notice for a 
 self-test, when confinement is on) and a valid grant with uses left that allows the op. When it cannot,
 the remaining requests of that op are not attempted this pass: each gets a ``refused`` result
 ("not attempted: ...") and one ledger row records how many. A pass no longer fans the same systemic
-refusal across every repository.
+refusal across every repository. A tools-container refusal carries its :mod:`.docker_readiness` reason code:
+the result's ``reason_code`` and the ledger row's (the detail keeps its ``tools container unavailable:`` prefix).
 """
 
 from __future__ import annotations
@@ -69,14 +70,16 @@ def batch_block(cfg: dict[str, Any], op: str) -> str:
         op: A requested operation. Internal and unknown ops return "" (``act`` handles them).
 
     Returns:
-        The reason, or "".
+        The reason, or "". A tools-container reason is a ``docker_readiness.Reason`` (its ``.code`` is the reason code).
     """
+    from agentteams.vulnscan import docker_readiness
+
     if op not in grant.OPS_V1:
         return ""
     if subproc_confine.enabled(cfg):
         why = subproc_confine.unavailable_reason(subproc_confine.image_tag(subproc_confine.settings(cfg)))
         if why:
-            return f"tools container unavailable: {why}"
+            return docker_readiness.Reason(f"tools container unavailable: {why}", getattr(why, "code", ""))
     grants, problems = grant.load_active()
     try:
         rows = ledger.read()
@@ -225,7 +228,7 @@ def serve_requests(cfg: dict[str, Any], *, run_dir: Path | None = None, run_id: 
             blocked[op] = batch_block(cfg, op)
         if blocked[op]:
             res = {"id": req["id"], "op": op, "target": req["target"], "status": "refused",
-                   "detail": NOT_ATTEMPTED + blocked[op]}
+                   "detail": NOT_ATTEMPTED + blocked[op], **_code(blocked[op])}
             skipped[op] = skipped.get(op, 0) + 1
             name = f"blocked-{path.name}"
         else:
@@ -246,5 +249,11 @@ def serve_requests(cfg: dict[str, Any], *, run_dir: Path | None = None, run_id: 
         with ledger.locked():
             for op, n in skipped.items():
                 ledger.append("refused", op=op, target=f"{n} requests", request_id="",
-                              detail=(NOT_ATTEMPTED + blocked[op])[:1000])
+                              detail=(NOT_ATTEMPTED + blocked[op])[:1000], **_code(blocked[op]))
     return out
+
+
+def _code(why: object) -> dict[str, str]:
+    """Return ``{"reason_code": ...}`` for a reason that carries one (an infrastructure refusal), else {}."""
+    code = getattr(why, "code", "")
+    return {"reason_code": code} if code else {}

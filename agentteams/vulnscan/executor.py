@@ -529,7 +529,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         if not changed:   # an npm that failed to run must not read as "nothing fixable"
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
-                            "nothing fixable without a major jump")
+                            retry_guard.zero_change_detail(wt, head, refused=bool(res.refused)))
         _refuse_filtered(wt, changed)   # C2: a filtered file's commit would not hold what validate_diff checked
         if res.resolved == 0:   # npm moved packages within their ranges to releases that are still affected
             raise ExecError(f"{retry_guard.FUTILE_DETAIL}: the change resolves no advisory")
@@ -907,8 +907,9 @@ def _granted(op: str, target: str, cfg: dict[str, Any], *, rationale: str, reque
     try:
         confined = subproc_confine.scope(cfg, scratch=[_worktrees_dir()])
     except subproc_confine.Unavailable as exc:   # nothing runs on the host instead
-        ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
-        return {"status": "refused", "detail": str(exc)}
+        code = {"reason_code": exc.code} if exc.code else {}   # docker_readiness: infra.* (T2-A)
+        ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000], **code)
+        return {"status": "refused", "detail": str(exc), **code}
     with confined:
         return _granted_op(op, target, cfg, rationale=rationale, request_id=request_id)
 

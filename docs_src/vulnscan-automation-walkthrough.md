@@ -67,6 +67,8 @@ component table.
     - `scripts/vulnscan-agent-image.sh`: [Step 7](#step-7-build-the-agent-image-and-prove-its-isolation).
     - `scripts/vulnscan-tools-image.sh`: [Step 7b](#step-7b-build-the-tools-image-the-executor-runs-in).
     - `scripts/vulnscan-acceptance.sh`: the read-only checks of [Part D](#part-d-acceptance-checks-on-your-machine).
+    - `scripts/vulnscan-remediation/`: the [unattended remediation runner](#unattended-remediation-runner)
+      (macOS launchd jobs).
 
 Install `agentteams` somewhere an agent cannot edit: `pipx install` from a release you verified.
 This works on Homebrew's Python too. Signing refuses to run when the `agentteams` package or a
@@ -855,6 +857,80 @@ prints the result (`publish.publish`) and exits 0 only on `done`:*
 {"status": "failed", "detail": "<why>", "local_commit": "<sha>"}
 {"status": "refused", "detail": "<why>"}
 ```
+
+### Unattended remediation runner
+
+On macOS, `scripts/vulnscan-remediation/` runs the remediation loop after each daily scan without you.
+`vulnscan-remediate-auto.sh --install` copies the scripts to `~/.config/agentteams/vulnscan-remediation/`
+and loads a launchd job that runs every 30 minutes. Installing it is your standing authorization for auto
+mode, and it is recorded in `operator-clearances.log`.
+
+| Script | What it does |
+|---|---|
+| `vulnscan-remediate-auto.sh` | Once per scan: preflight (goose, route proxy, grants, `halts`, Docker), then target setup and the handoff steps, then `remediation.md` and a notification |
+| `vulnscan-ensure-docker.sh` | Starts Docker Desktop if needed and checks the tools and agent images and their self-test records. It prints `READY …` or a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). `--no-start` only checks |
+| `vulnscan-daily-wrapped.sh` | What the daily and catch-up jobs run: Docker first, then `daily`. A run that was partial only because the tools container was down is re-run, at most twice per date |
+| `vulnscan-target-agents.sh` | Gives each repository with fixable findings a goose orchestrator and puts the manager team on its roster. Both are operator-only: in auto mode it only reports what is missing, because a roster is a trust root and the brief is drafted from README text |
+| `vulnscan-handoff-lib.sh` | Shared helpers (sourced) |
+| `vulnscan-deploy.sh` | Reinstalls the package from a commit; see [Deploying a new version](#deploying-a-new-version) |
+
+The handoff steps themselves come from a site-local `vulnscan-operator-actions.sh` in the install folder
+(or `VULNSCAN_OPERATOR_ACTIONS`). It is not in the repository, because its steps name your own servers.
+Site settings go in `~/.config/agentteams/vulnscan-remediation.conf`, as `KEY=VALUE` lines that are read,
+never sourced. An environment variable of the same name wins:
+
+```ini
+VULNSCAN_REPOS_ROOT=~/code          # the checkouts remediation may touch
+VULNSCAN_GITHUB_ORG=your-org        # unset: no repository is handed off
+MANAGER_TEAM=ops-team
+```
+
+**When an attempt starts.** `summary.md` is written before the daily run's agent phase, so a tick
+that sees only the dated folder could act, and mark the day done, before the agent ran. The job therefore
+waits while the daily run still holds its lock (`daily.run_in_progress()`), and, with the agent on, until
+`<run>/agent/status.json` records `finished`. An agent run that never records it stops being waited for
+at `GIVE_UP_HOUR`.
+
+**When an attempt counts as done.** `python -m agentteams.vulnscan remediation-report LEDGER SINCE`
+reads the executor's ledger rows since the attempt started, not the log text. It writes
+`<run>/remediation.md` and prints the counts as JSON. Every `refused` or `failed` row is listed under
+*Needs you*. A row counts as infrastructure, and is retried, only when its detail **starts with**
+`tools container unavailable:` or its `reason_code` starts with `infra.`. Text that merely contains
+those words stays a policy refusal, because a detail can echo repository text. A ledger that cannot be
+read counts as an infrastructure refusal, so the attempt is retried. With `--agent-since` and `--agent-until`
+(the runner passes the agent run's `started` and `finished`), the agent's own executor rows get their own section and their
+refusals are listed under *Needs you*; they never count as infrastructure, since a retry would not redo them.
+With no infrastructure refusal the
+run gets `remediation.done`. Otherwise it gets `remediation.blocked` and the next tick retries, up to
+`MAX_ATTEMPTS` (8) or `GIVE_UP_HOUR` (17:00 local), and then gives up with a notification.
+
+**One run at a time.** The job holds `remediate.flock` in the state folder through a small holder
+process, for exactly as long as the script's process lives. A killed run frees the lock at once, and
+no child process inherits it. A `remediate.lock` directory left by an earlier version is honoured while
+its recorded pid runs and removed once that owner is gone.
+
+Never done unattended: grant signing, destructive deletes, server `--apply`, merging, and pushing a
+team's own branch.
+
+### Deploying a new version
+
+`scripts/vulnscan-remediation/vulnscan-deploy.sh [REF]` (default `origin/main`) reinstalls the package
+the daily job runs, from a `git archive` of that commit extracted outside any work tree. It does not
+sign, merge or push.
+
+1. **Locks.** It waits for a running remediation attempt (`remediate.flock`) and then for a daily scan
+   (`daily.lock`), up to 30 minutes each (`--no-wait`: refuse at once). It holds both while
+   `pipx install --force` replaces the venv, so neither job starts on a venv being replaced.
+2. **Images.** It rebuilds the tools image and, when agent mode is on, the agent image and their
+   self-tests (`--skip-images` skips this).
+3. **Readiness.** The image tags follow the package version, so a version bump leaves the old images
+   behind. The script prints each tag the installed version needs and whether `docker image inspect`
+   finds it. Then it runs the `ready` command (JSON output) when the installed version has
+   that command, else `vulnscan-ensure-docker.sh --no-start`, followed by `halts`, `handoff status` and
+   `schedule status`.
+
+`--with-scripts` also re-runs `vulnscan-remediate-auto.sh --install` from the same commit, so the
+installed scripts match the package. Deploy outside the daily job's window.
 
 ### Your routine
 

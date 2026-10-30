@@ -1,0 +1,8 @@
+{
+  "patch_id": "23e90905f1d8e00454d2c45b896fc5d206a336ff",
+  "commit": "8c48bc7ad6a2ce57ec8248b311ccb0bcdd14f92d",
+  "subject": "vulnscan(T2-B): track the remediation runner; outcome from the ledger",
+  "impact": "1 modules added, 12 symbols added, 5 cli added, 5 structural added",
+  "note": "L4 rebased onto K (588d1d75). Reviewed: remediation-report CLI and remediation_report.outcome/outcome_from_rows/report/render_markdown gain optional until/agent_since/agent_until/agent params (backward compatible; defaults keep prior behaviour); new --agent-since/--agent-until flags; runner script and deploy script are tracked operator tooling. Cleared by @security (CLEAR) and @code-hygiene (PASS-with-fixes, fixes applied), 2026-10-30.",
+  "recorded_at": "2026-10-30T16:54:05Z"
+}

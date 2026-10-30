@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 
 from agentteams.vulnscan import REPORT_SCHEMA_VERSION
 from agentteams.vulnscan.osv import SEVERITY_NAME, SEVERITY_RANK, UNSCORED_AS
+from agentteams.vulnscan.versions import is_prerelease
 
 EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
 
@@ -44,6 +45,7 @@ class Finding:
     unscored: int = 0               # advisories with neither a CVSS vector nor a severity label
     malformed: int = 0              # advisories whose record had malformed parts, skipped (osv.quirks; R8)
     fix_hidden: int = 0             # advisories whose fix version has an unusual format (not shown, counted unfixed)
+    fixed_upstream: bool = False    # name==version is gone from the same file at origin/HEAD (the checkout is behind)
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -260,7 +262,9 @@ class Report:
                     notes.append(f.detail)
                 if f.locations:
                     notes.append("at " + ", ".join(f"`{loc}`" for loc in f.locations[:2]))
-                out.append(f"| {mark} | {sev} | {f.kind} | {item} | {f.version} | {f.fix or '—'} | {'; '.join(notes)} |")
+                if f.fixed_upstream:   # last, so the existing notes keep their place
+                    notes.append("fixed upstream (checkout behind)")
+                out.append(f"| {mark} | {sev} | {f.kind} | {item} | {f.version} | {_fix_cell(f.fix)} | {'; '.join(notes)} |")
             out.append("")
         if unscored:
             out += ["## Unscored advisories (no CVSS vector or severity label)", "",
@@ -294,3 +298,12 @@ def new_finding_keys(current: Report, previous: Report | None) -> set[str]:
     """
     before = {f.key() for f in previous.findings} if previous else set()
     return {f.key() for f in current.findings} - before
+
+
+def _fix_cell(fix: str | None) -> str:
+    """Render the "Upgrade to" cell, marking a pre-release target (e.g. an advisory whose fixed event is an rc)."""
+    if not fix:
+        return "—"
+    if is_prerelease(fix):
+        return f"{fix} (pre-release; the advisory names no stable fix)"
+    return fix

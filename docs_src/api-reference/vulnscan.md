@@ -75,7 +75,11 @@ and only within what you signed.
 ### One daily run
 
 `daily.run_daily` takes the daily run lock (`<state>/daily.lock`) first. While another daily run
-holds it, the second run writes nothing, prints why on stderr and exits 3. Then it runs these steps:
+holds it, the second run writes nothing, prints why on stderr and exits 3. Then it checks Docker once
+(`docker_readiness.ensure(cfg, start=True)`: it starts Docker only when `docker.autostart` is true, and re-runs a
+self-test only when its record is for another image); the server audits, the staging, the remediation readiness
+section and the agent phase use that record instead of probing again, and `summary.json` records it as
+`remediation.docker`. Then it runs these steps:
 
 1. **Scan** every `repo_roots` entry, this machine's runtimes and every `servers` host
    (`daily._collect`). Server audits run the **packaged** server-kit scripts with your
@@ -88,8 +92,9 @@ holds it, the second run writes nothing, prints why on stderr and exits 3. Then 
    (`effectiveness.section`, counts only, since the summary is published): findings fixed and new since
    the previous run, the remediation PRs the executor opened (open, the oldest one's age, open longer
    than 3 days, failing CI, no CI checks, merged in the last 7 days), fixes staged with no PR yet, PRs ready
-   to merge (open, mergeable, every check passed), and
-   repositories held by the futile-retry guard. PR state comes from read-only `gh pr view` calls on the
+   to merge (open, mergeable, every check passed),
+   repositories held by the futile-retry guard, and, on a row of its own, findings already fixed upstream
+   (`fixed_upstream`, never counted as fixed). PR state comes from read-only `gh pr view` calls on the
    PR URLs in the ledger (the newest 50); a failed lookup is counted as unknown. Then `stale-prs` is sent
    when any open remediation PR is older than 3 days or fails CI. These counts are taken before the
    agent phase, so the next run reflects what the agent did. The same lookups write the run's
@@ -174,7 +179,7 @@ field is passed to `ssh`, so an option such as `-oProxyCommand=…` runs a local
 | Server fix plans | `<state>/server-plans/<YYYY-MM-DD>/server-fixplan-<host>.md` | outside the run directory the agent container mounts ([server_fixplan](#agentteamsvulnscanserver_fixplan)) |
 | Heartbeat | `<state>/heartbeat.json` | read by the stale-run warning; written atomically. Also records `agentteams_version` and `remediation_blocked` (the number of [readiness](#agentteamsvulnscanremediation_status) blockers) |
 | Daily run lock | `<state>/daily.lock` | held for a whole daily run; a second run exits 3 |
-| Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json`, `fixplan-*.md`, `agent/` (earlier agent runs of the day under `agent/runs/<run id>/`), `agent-report/`, `gateway/` |
+| Run directory | `<state>/<YYYY-MM-DD>/` | `summary.md`, `summary.json` (a same-day re-run first copies them to `summary.<HHMMSS>.{json,md}`, the time the earlier one was written; only `summary.json` is read back), `infra-retry.count` (catch-up retries), `fixplan-*.md`, `agent/` (earlier agent runs of the day under `agent/runs/<run id>/`), `agent-report/`, `gateway/` |
 | Request spool | `<state>/spool/requests/`, `results/`, `processed/` | the only path the agents write besides their sessions |
 | Staged fixes | `<state>/worktrees/<repo>-<8 hex>-<YYYYmmddHHMMSS>-<6 hex>/` (repository name, a hash of its path, the UTC time, a random suffix) | executor-owned worktrees; removed once `open-pr` has a pull request (the branch is kept) |
 | Run lock | `<state>/agent.lock` | held for a whole agent run or debrief |
@@ -247,6 +252,8 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `handoff_required` | `false` | `true` puts every repository under handoff delivery: `open-pr` waits for the repository orchestrator's `approve-staged` verdict ([handoff](#agentteamsvulnscanhandoff)). A project's brief can ask for it alone with `vulnerability_scanning.delivery: handoff` |
 | `agent` | see below | Agent mode |
 | `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
+| `catch_up` | `{"max_retries_per_day": 2}` | `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (an `infra.*` code in `summary.json["infra_codes"]` or `remediation.docker`) and Docker is ready now, at most `max_retries_per_day` times per date (0–10; counted in the run directory's `infra-retry.count`) ([`catch_up_due`](#dailycatch_up_duecfg-dailycatch_upcfg)) |
+| `docker` | `{"autostart": false, "start_timeout_s": 240, "auto_selftest": "on-change"}` | Docker readiness, checked once before each scan ([`docker_readiness`](#agentteamsvulnscandocker_readiness)); a partial block is merged over these defaults (table below) |
 
 The `agent` block (merged over these defaults by `agent_run.agent_cfg`):
 
@@ -297,6 +304,14 @@ The `confine` block (`subproc_confine.settings`; any other key, or a wrong type,
 | `subprocesses` | `true` (unset) | Run git, npm and the server kit in the tools container, failing closed. `false` is the operator's opt-out: they run on the host as before, with a warning on stderr and at the top of every `review` |
 | `image` | `""` | Tools image tag; default `agentteams-vulnscan-tools:<agentteams version>` |
 | `ssh_identity` | `""` | Private key a confined server-kit run uses; empty: the `IdentityFile` entries `ssh -G` reports for the target |
+
+The `docker` block (`docker_readiness.settings`; any other key, or a wrong type, is refused at load):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `autostart` | `false` | `true` lets the daily run (and `ready --ensure`) start Docker when its daemon does not answer: `open -g -a Docker` on macOS (only in a GUI login session), `systemctl --user start docker-desktop` (else `docker`, rootless) on Linux; never sudo. Off by default, so a generated team never launches an app unless its operator opts in |
+| `start_timeout_s` | `240` | How long to wait for a started daemon to answer (1–1800 seconds, polled every 5 s) |
+| `auto_selftest` | `"on-change"` | `on-change` re-runs `tools-selftest` / `agent-selftest` when the recorded result is for another image (or, for the tools container, other container flags): once per image change, never again for an image whose self-test already failed. `off` only reports the stale record (`infra.selftest`) |
 
 ---
 
@@ -364,8 +379,8 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 
 `__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
 them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
-`agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`)
-and `handoff` (`handoff status`).
+`agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`),
+`handoff` (`handoff status`), `remediation_report` (`remediation-report`) and `docker_readiness` (`ready`).
 
 | Command | Purpose |
 |---|---|
@@ -393,6 +408,8 @@ and `handoff` (`handoff status`).
 | `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
 | `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)) |
+| `remediation-report LEDGER SINCE [--log FILE] [--run NAME] [--attempt N] [--out FILE] [--agent-since TS] [--agent-until TS]` | One unattended remediation attempt's outcome from the executor's ledger rows at or after `SINCE` (ISO, UTC or with an offset): one JSON object (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) on stdout, and `remediation.md` written to `--out`. `--agent-since`/`--agent-until` (the agent run's `started`/`finished`) add its executor rows, never past `SINCE`, in their own section; a bad or out-of-range time is a Needs-you note, never a usage error (listed under Needs you, never counted as infra). Run by `scripts/vulnscan-remediation/vulnscan-remediate-auto.sh` ([remediation_report](#agentteamsvulnscanremediation_report)) |
+| `ready [--ensure] [--json]` | Docker readiness, layer by layer (`cli`, `daemon`, `tools_image`, `agent_image`, `tools_selftest`, `agent_selftest`), each with its state and, when it fails, a reason code (`infra.docker_daemon`, `infra.tools_image`, `infra.selftest`, `infra.no_gui_session`). Read-only without `--ensure`; `--ensure` makes the repairs the `docker` config allows (start Docker, re-run a stale self-test) under the daily run lock, and only checks while a daily run holds it. `--json` prints `{layer: {state, code, message}}`. Never builds an image ([`docker_readiness`](#agentteamsvulnscandocker_readiness)) |
 | `resolve ID --evidence TEXT [--key-id ID]` | Resolve an escalation ([Escalations](#escalations)) |
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
 | `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
@@ -424,6 +441,19 @@ nothing. `--hour` must be 0–23 and `--minute` 0–59, or nothing is written. A
 `%` is escaped in the crontab line and the systemd unit. Under systemd, `schedule remove` reports a
 failed `systemctl disable` only when the units were installed.
 
+### Checkout freshness
+
+After scanning each root, `daily._freshness` (in `checkout_freshness`, re-exported by `daily`) checks every repository with package findings, read-only and
+offline: no fetch, and the hardened git (`daily._git`: no hooks, no stored credentials; `git show` for file content)
+on the local remote-tracking refs as of the last fetch. `summary.md` gets a `## Checkout freshness` section after
+the per-repository sections: each repository's checked-out branch, the commits `HEAD` lacks from `origin/HEAD` (`no
+origin/HEAD` when it is not set), the age of `FETCH_HEAD`, and how many findings are already fixed upstream. A
+package finding is labelled `fixed_upstream` when the checkout is behind and every file it was found in still
+exists at `origin/HEAD` but no longer pins that `name==version` (a file removed upstream proves nothing); its Notes
+cell ends with `fixed upstream (checkout behind)`. Repositories nested in another inside the scan root, and
+third-party clones (`daily.foreign_clone`), are skipped; a git query that fails leaves the repository unlabelled.
+What is scanned, the fix plans, grants and handoffs are unchanged: the working tree is still what is scanned.
+
 ### Exit codes
 
 | Command | 0 | 1 | 2 | 3 | Other |
@@ -448,6 +478,8 @@ failed `systemctl disable` only when the units were installed.
 | `status` | printed | — | no such directory, or an unusable config | — | — |
 | `tools-image build`, `tools-selftest` | built / passed | failed | a setup error (an unusable config) | — | — |
 | `handoff status` | printed | — | an unusable config | — | — |
+| `remediation-report` | reported (an unreadable ledger is reported, as `error`) | — | a bad `SINCE`, or `--out` not writable | — | — |
+| `ready` | ready (no layer failed) | — | an unusable config | degraded (a layer failed; the first line names its reason code) | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong
@@ -498,6 +530,7 @@ A Finding (`report.Finding`):
 | `unfixed` | integer | advisories with no fixed version that may be shown (includes `fix_hidden`) |
 | `malformed` | integer | advisories whose OSV record had malformed parts, which were skipped (0 in a report written before rc.4) |
 | `fix_hidden` | integer | advisories whose fix version has an unusual format (outside `[A-Za-z0-9.+~:_-]{1,64}`): not shown and not offered; also counted in `unfixed` |
+| `fixed_upstream` | boolean | daily runs only: the checkout is behind `origin/HEAD`, and every file the finding was found in still exists there but no longer pins this `name==version` (read-only, as of the last fetch; see [Checkout freshness](#checkout-freshness)). The finding stays in the list and is not counted as fixed |
 | `ids` | array of strings | advisory ids (GHSA, PYSEC, CVE, `MAL-*`, …) |
 | `locations` | array of strings | manifest paths or install locations |
 | `malicious` | boolean | an OSV `MAL-*` record matches (exit 4) |
@@ -855,7 +888,7 @@ previous row's MAC) and `mac` (HMAC-SHA256 under the ledger key).
 | `done` (granted op) | an action completes | `grant_id`, `op`, `target`, `request_id`, `detail`, `rationale` |
 | `done` (`report`, `escalate`) | an internal op is recorded | `op`, `target`, `request_id`, `detail` |
 | `failed` | an action fails | `grant_id`, `op`, `target`, `request_id`, `detail` |
-| `refused` | a request is refused (no grant, HALT, escalation, malformed, replayed, stale, overflow) | `op`, `target`, `request_id`, `detail` |
+| `refused` | a request is refused (no grant, HALT, escalation, malformed, replayed, stale, overflow) | `op`, `target`, `request_id`, `detail`; a tools-container refusal (detail `tools container unavailable: ...`, or `not attempted: tools container unavailable: ...` for a batch) adds `reason_code` (`infra.docker_daemon`, `infra.tools_image` or `infra.selftest`; [`docker_readiness`](#agentteamsvulnscandocker_readiness)) |
 | `refused` (`op: publish`) | a publish is refused before a use is reserved | `op`, `grant_id`, `target`, `run_id`, `detail` |
 | `escalation` | an escalation opens | `esc_id`, `esc_kind`, `scope`, `evidence`, `request_id`, `run_id` |
 | `resolved` | an escalation is resolved | `esc_id`, `esc_kind`, `scope`, `evidence`, `method` (`operator-mac` or `operator-ed25519`); signed ones add `issued`, `key_id`, `signature` |
@@ -1296,10 +1329,15 @@ daily summary's remediation readiness section repeats it.
 #### `daily.catch_up_due(cfg)` / `daily.catch_up(cfg)`
 
 `catch_up_due` gives `(due, hours since the last completed run)`: due when the heartbeat is missing,
-unreadable (hours `None`) or older than `stale_after_hours`. `catch_up` first checks the daily run lock
+unreadable (hours `None`) or older than `stale_after_hours`, or when `daily.infra_retry_due(cfg)` (in `infra_retry`) names today's run
+directory: the last run exited 3, its `summary.json` names Docker as a cause (an `infra.*` code in `infra_codes`, the
+run's Docker reason codes, or in `remediation.docker`; feed error text is never matched), fewer than `catch_up.max_retries_per_day` retries have run for
+that date, and `docker_readiness.ensure(cfg, start=False)` is ready now. `catch_up` first checks the daily run lock
 (`daily.run_in_progress()`): while another daily run holds it, it prints one line on stderr and returns `None`
-without notifying. Otherwise it sends `run-missing` or `run-stale` and runs `run_daily` when due, else returns
-`None` and does nothing.
+without notifying. When the last run is stale it sends `run-missing` or `run-stale` and runs `run_daily`; when an
+infrastructure retry is due it counts the retry in `infra-retry.count`, prints one line on stderr and runs
+`run_daily` without a notification; otherwise it returns `None` and does nothing. Before a re-run writes its
+summary, `daily._finish` copies the earlier `summary.json` and `summary.md` to `summary.<HHMMSS>.{json,md}`.
 
 #### `schedule.job_environment()`
 
@@ -1593,7 +1631,8 @@ resolved. Refuses a target an open escalation blocks, a repo operation on a
 publish grant's ops repository, a protected repository (common directory or origin) or a repository
 enrolled below `remediate` (`executor_guard`), a `stage-fix` the futile-retry guard holds
 (`retry_guard.futile_reason`: the repository's last `stage-fix` outcome was "nothing fixable without a
-major jump" and its newest dry-run fix plan is byte-identical to the plan of that day; a changed plan,
+major jump", or "already fixed on the default branch" when a scan of the default branch finds nothing
+vulnerable (the scanned local checkout is behind), and its newest dry-run fix plan is byte-identical to the plan of that day; a changed plan,
 a later success or a missing plan lifts the hold), a target no grant covers, exhausted uses, a missing
 decision log or an open HALT; otherwise appends the `begun` row and returns the grant. Raises `ExecError`.
 
@@ -2454,7 +2493,7 @@ The tools-container runner ([Subprocess confinement](#subprocess-confinement-too
 Context in which `run_git`, `run_npm` and `subproc_confine_ssh.run_kit` run confined. Raises
 `Unavailable` at once when confinement is on and Docker, the image or its passing self-test is
 missing; opted out (`confine.subprocesses: false`) it prints `OPT_OUT_WARNING` and runs them on the
-host. `executor._granted` and `daily.stage_worktree_fixes` / the `servers` loop open one.
+host. `executor._granted` and `daily.stage_worktree_fixes` (in `worktree_fixes`) / the `servers` loop open one.
 
 #### `run_git(repo, args, *, hardening, env, push=False, timeout=600, text=True, readonly=False)`
 
@@ -2519,6 +2558,48 @@ Add `tools-image build` and `tools-selftest` to the vulnscan parser, and run one
 failed, 2 a setup error. `handoff.register` / `handoff.dispatch` do the same for `handoff status` (0
 printed, 2 an unusable config).
 
+### `agentteams.vulnscan.docker_readiness`
+
+The one Docker probe (T2-A). `subproc_confine.unavailable_reason`, `agent_run.docker_unreachable`, the
+`tools_container` entry of `remediation_status.collect` and the executor's `batch_block` all delegate to it, so a
+daemon that does not answer, an image that is not built and a stale self-test give different messages and codes.
+
+| Layer | Checked | Failure code |
+|---|---|---|
+| `cli` | the `docker` CLI is on PATH | `infra.docker_daemon` |
+| `daemon` | `docker version` answers (15 s timeout), after starting Docker when allowed | `infra.docker_daemon`; `infra.no_gui_session` when Docker Desktop cannot start (no GUI login session) |
+| `tools_image` | the tools image is built (confinement on, and servers, `apply-worktree`, agent mode or a grant use it) | `infra.tools_image` |
+| `agent_image` | the agent image is built (agent mode on) | `infra.tools_image` |
+| `tools_selftest` | a passing `tools-selftest` record for that image and the current container flags | `infra.selftest` |
+| `agent_selftest` | `agent_run.selftest_ok` | `infra.selftest` |
+
+A layer the config does not use is `off`; one an earlier failure hides is `skipped`.
+
+#### `ensure(cfg, *, start, runner=None)`
+
+Check every layer and return a frozen `Readiness` (`ok`, `problem(*layers)`, `tools()`, `agent()`, `to_dict()`).
+Never raises. `start=False` only reads. `start=True` may start Docker (when `docker.autostart`) and re-run a
+self-test whose record is for another image (when `docker.auto_selftest` is `on-change`); the caller holds the
+daily run lock. It never builds an image and never changes a grant. `runner(argv, timeout)` runs each command
+(default `subprocess.run`; tests pass a fake).
+
+#### `tools_problem(tag, *, runner=None)` / `docker_problem(tag=None, *, runner=None)`
+
+Read-only: why the tools container `tag` (cli, daemon, image, self-test record) or Docker and the image `tag`
+cannot be used, as a `Reason` (a `str` with a `.code`), or an empty one. Inside `using(rec)` (the daily run) the
+record answers for its own tags and nothing is probed. `subproc_confine.Unavailable` carries the same `.code`, and
+the executor writes it to a refused ledger row as `reason_code` (the detail keeps its `tools container
+unavailable:` prefix).
+
+#### `settings(cfg)` / `config_problem(cfg)` / `needs(cfg)`
+
+The `docker` block over `DEFAULTS`; why it is malformed (`daily.load_config` refuses it); and whether the tools and
+the agent container are used by the config.
+
+#### `docker_readiness.register(sub)` / `docker_readiness.dispatch(args, load_cfg)`
+
+Add and run `ready [--ensure] [--json]`: 0 ready, 3 degraded, 2 an unusable config.
+
 ### `agentteams.vulnscan.daily`
 
 #### `run_daily(cfg, *, today)`
@@ -2538,6 +2619,12 @@ Write a starter config (the defaults, with the given `repo_roots` and `servers`)
 #### `daily.run_lock_path()`
 
 `<state>/daily.lock`, held for a whole daily run.
+
+#### Split modules
+
+`checkout_freshness` (the checkout-freshness rows and section), `infra_retry` (`infra_retry_due`,
+`INFRA_RETRY_FILE`, the archived summaries) and `worktree_fixes` (`stage_worktree_fixes`) hold code split from
+`daily`; `daily` re-exports those names, so `daily.<name>` keeps working.
 
 #### `load_config(path)`
 
@@ -2607,7 +2694,9 @@ container), `effectiveness` and `executor_supersede`.
 
 #### `futile_reason(op, target, rows)`
 
-Why a `stage-fix` of `target` would only repeat "nothing fixable without a major jump", or `""`. Held
+Why a `stage-fix` of `target` would only repeat "nothing fixable without a major jump" or "already fixed on
+the default branch" (`retry_guard.UPSTREAM_DETAIL`; the held reason then says to update the local checkout),
+or `""`. Held
 while the repository's newest `fixplan-<slug>.md` equals the plan of the day that result was recorded;
 a changed plan, a later successful `stage-fix`, or a missing plan lifts it. Reads the ledger and run
 directories only. Called by `executor.authorize`.
@@ -2743,7 +2832,9 @@ What would stop the executor from acting on a run's findings, checked on the hos
 to `summary.md` (`## Remediation readiness`) and `summary.json` (`remediation`).
 
 - `collect(cfg, *, now=None)` never raises. It returns `agentteams_version`, `schedule_drift`, `tools_container`
-  (the tools container's `unavailable_reason` when subprocess confinement is on), `open_escalations`, `grants`
+  (the tools container's `unavailable_reason` when subprocess confinement is on) and `tools_container_code` (its
+  reason code), `docker` (inside a daily run, that run's `docker_readiness` record as `{layer: {state, code,
+  message}}`; `{}` otherwise), `open_escalations`, `grants`
   (`grant_id`, `ops`, `expires`, `days_left`), `grants_expiring` (fewer than `EXPIRY_WARN_DAYS`, 7, left),
   `grant_problems`, `servers_uncovered` (configured `servers` that no active grant names for `server-audit` or
   `server-dryrun`), `configured` and `blocked`.
@@ -2754,6 +2845,24 @@ to `summary.md` (`## Remediation readiness`) and `summary.json` (`remediation`).
 - `version()` is the installed agentteams version, or `unknown` when it is not installed as a distribution.
 - `markdown(st)` renders the section, and `notify(cfg, st)` sends `remediation-blocked` (when `blocked` is
   non-empty) and one `grant-expiring` per expiring grant.
+
+### `agentteams.vulnscan.remediation_report`
+
+One unattended remediation attempt's outcome, from the executor's ledger rather than log text, and the
+`remediation.md` the remediation runner writes ([walkthrough](../vulnscan-automation-walkthrough.md#unattended-remediation-runner)).
+
+- `classify(row)`: `done`, `infra`, `policy` or `None` (every other kind). A `refused` or `failed` row is `infra`
+  only when its `detail` **starts with** `INFRA_DETAIL_PREFIX` (`tools container unavailable:`, the executor's
+  `subproc_confine.Unavailable` text) or its `reason_code` starts with `INFRA_REASON_PREFIX` (`infra.`); a missing
+  or non-string `reason_code` counts as absent. Anchored, never a substring: a detail can echo repository text.
+- `outcome(ledger, since)` returns an `Outcome` (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) for the rows
+  whose `ts` is at or after `since`. Lines that are not a JSON object with a parseable `ts` are counted in `skipped`
+and named under *Needs you*, not classified. An unreadable ledger sets `error`
+  and counts as one infra refusal (fail closed). A bad `since` raises `ValueError`. `outcome_from_rows(rows,
+  since)` does the same for parsed rows.
+- `needs_line(row)` is one *Needs you* line, with control characters replaced and the detail cut to
+  `DETAIL_CHARS` (200). `render_markdown(outcome, run_name=, attempt=, log_text=)` and `report(...)` build
+  `remediation.md`: PR links and the last per-repository line from the attempt's log, then *Needs you*.
 
 ### `agentteams.vulnscan.notify`
 

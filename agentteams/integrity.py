@@ -212,6 +212,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
     "agentteams/vulnscan/remediation_status.py",  # what blocks the executor (summary + notifications)
+    "agentteams/vulnscan/remediation_report.py",  # infra (retried) vs policy (final): the anchored classification
     "agentteams/vulnscan/server_fixplan.py",   # per-host server fix plans (read-only)
     "agentteams/vulnscan/agent_drivers.py",    # per-framework agent runtime (image pin, env, command, lockdown)
     "agentteams/vulnscan/team_dir.py",         # the remediation team directory check
@@ -234,6 +235,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/notify.py",
     "agentteams/vulnscan/review.py",
     "agentteams/vulnscan/daily.py",
+    "agentteams/vulnscan/checkout_freshness.py",   # split from daily.py: labels findings fixed upstream
+    "agentteams/vulnscan/infra_retry.py",          # split from daily.py: when a partial run is re-run
+    "agentteams/vulnscan/worktree_fixes.py",       # split from daily.py: apply-worktree staging
     "agentteams/vulnscan/debrief.py",
     # G1 T2 condition: __main__.py wires grant signing and the operator commands; manifests.py's REQ_PIN decides
     # what validate_diff lets stage-fix change.
@@ -271,6 +275,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/subproc_confine.py",
     "agentteams/vulnscan/subproc_confine_ssh.py",
     "agentteams/vulnscan/tools_image.py",
+    "agentteams/vulnscan/docker_readiness.py",   # T2-A: the probe behind the tools container's fail-closed check
     "agentteams/data/vulnscan_tools/Dockerfile",
     "agentteams/data/vulnscan_tools/egress_proxy.py",
     "agentteams/data/vulnscan_tools/selftest.py",

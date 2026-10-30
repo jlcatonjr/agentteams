@@ -4,7 +4,8 @@ The daily summary gains a **Remediation effectiveness** section (:func:`section`
 alerted when remediation stalls (:func:`alerts`, :func:`agent_streak`). The section answers the questions
 the scan alone cannot:
 
-- findings fixed and new since the previous run (the net change);
+- findings fixed and new since the previous run (the net change), and, separately, findings already fixed on
+  ``origin/HEAD`` that the checkout has not pulled (``Finding.fixed_upstream``; never counted as fixed);
 - remediation PRs the executor opened: how many are open, the oldest one's age, how many fail CI or run no
   checks, and how many merged in the last 7 days;
 - fixes staged in the spool with no PR yet, and repositories held by :mod:`.retry_guard`.
@@ -175,6 +176,8 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| Findings fixed since the previous run | {fixed if previous else 'n/a (no previous run)'} |",
         f"| Findings new since the previous run | {new} |",
         f"| Net change in findings | {new - fixed:+d} |" if previous else "| Net change in findings | n/a |",
+        "| Findings already fixed upstream (checkout behind; not counted as fixed) | "
+        f"{sum(1 for f in total.findings if f.fixed_upstream)} |",
         f"| Remediation PRs open | {stats.open} (oldest {oldest}) |",
         f"| … open longer than {STALE_DAYS} days | {stats.stale} |",
         f"| … failing CI | {stats.failing} |",
@@ -182,7 +185,7 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| Remediation PRs merged in the last {MERGED_WINDOW_DAYS} days | {stats.merged_recent} |",
         f"| Fixes staged with no PR yet | {staged_without_pr()} |",
         f"| PRs ready to merge (open, mergeable, every check passed) | {len(stats.green)} |",
-        f"| Repositories held (nothing fixable without a major upgrade) | {retry_guard.held_count()} |",
+        f"| Repositories held at scan time (nothing stageable; see the held reasons) | {retry_guard.held_count()} |",
     ]
     if stats.unknown:
         lines.append(f"| PR lookups that failed (state unknown) | {stats.unknown} |")
