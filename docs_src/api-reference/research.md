@@ -476,6 +476,24 @@ specifically to avoid an import cycle (`search` → `news` → `reputable` → `
 
 ---
 
+## `screen` — read-content screening for fetched pages and retrieved passages
+
+> *Source: `agentteams/research/screen.py`*
+
+`scan_read_content(content, source='<read-content>', *, extra_patterns=())` screens C-4 read content
+(Tier-6 data) before a model reads it, or after a model has summarised it. It is built on
+`agentteams.scan.scan_content`, so the S-5 instruction- and identity-override patterns and the C-1
+tier claims are the same, with the same Unicode normalisation and line-break handling, but with no
+exemptions: read content can never open a YAML front-matter block, and gets no code-span
+exemption. It adds `READ_CONTENT_PATTERNS`, model-directed phrases such as "system prompt" and
+"tell the user" that agent files may legitimately contain (so `scan_content` never runs them), plus
+any caller `extra_patterns`. It returns `category="injection"`, `severity="high"` findings, at most one
+per line. Credential and path findings are not returned. `is_inert_read_content(content, *,
+extra_patterns=())` is the boolean form. `scan.py` itself is unchanged: it is a pinned enforcement
+module.
+
+---
+
 ## `verify` — claim extraction and dual-lens fact verification
 
 > *Source: `agentteams/research/verify.py`*

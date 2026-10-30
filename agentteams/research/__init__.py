@@ -38,6 +38,11 @@ from agentteams.research.scholarly import (
     search_crossref,
     search_openalex,
 )
+from agentteams.research.screen import (
+    READ_CONTENT_PATTERNS,
+    is_inert_read_content,
+    scan_read_content,
+)
 from agentteams.research.search import (
     SearchProvenance,
     Source,
@@ -60,6 +65,7 @@ from agentteams.research.verify import (
 __all__ = [
     "DATA_CONFIG",
     "DEFAULT_CONFIG",
+    "READ_CONTENT_PATTERNS",
     "RESEARCH_CONFIG",
     "SOFTWARE_CONFIG",
     "AllowlistConfig",
@@ -81,9 +87,11 @@ __all__ = [
     "fetch_text",
     "fetch_text_and_date",
     "format_citation",
+    "is_inert_read_content",
     "is_news_source",
     "perspective_attribution",
     "revise",
+    "scan_read_content",
     "scholarly_search",
     "search_arxiv",
     "search_crossref",

@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (research: a read-content screen for fetched pages and retrieved passages)
+
+- **`agentteams.research.screen.scan_read_content` and `is_inert_read_content`** screen C-4 read content before a
+  model reads it, or after a model has summarised it. They are built on `agentteams.scan.scan_content`, so the S-5
+  and C-1 patterns and their normalisation are shared, but with no front-matter or code-span exemptions. They add
+  model-directed phrases ("system prompt", "tell the user" ...) that agent files may legitimately contain, plus
+  caller `extra_patterns`. `scan.py` (a pinned enforcement module) is unchanged. From masterTeacher's briefing
+  tool (nx1f N21, @security condition 2).
+
 ### fixed (research: the SSRF guard checks every address a host resolves to)
 
 - **`agentteams.research.search.is_public_https`** now resolves with `socket.getaddrinfo` over IPv4 and IPv6 and
