@@ -23,9 +23,11 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -93,7 +95,10 @@ def test_the_ssrf_guard_rejects_a_private_address():
     assert not is_public_https("http://169.254.169.254/latest/meta-data/")
     assert not is_public_https("https://10.0.0.1/internal")
     assert not is_public_https("ftp://example.com/x")
-    assert is_public_https("https://example.com/page")
+    # Offline: a stubbed public answer, so the positive half needs no DNS (finding #15).
+    public = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", 443))]
+    with patch("agentteams.research.search.socket.getaddrinfo", return_value=public):
+        assert is_public_https("https://example.com/page")
 
 
 # ---------------------------------------------------------------------------
