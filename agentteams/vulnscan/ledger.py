@@ -75,18 +75,34 @@ def ledger_path() -> Path:
 def _key() -> bytes:
     kdir = paths.config_dir() / "keys"
     kfile = kdir / "vulnscan-ledger.key"
-    if not kfile.exists():
-        kdir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd = os.open(kfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, "w") as fh:
-            fh.write(secrets.token_hex(32))
-            fh.flush()
-            os.fsync(fh.fileno())
-        _fsync_dir(kdir)            # a lost key after a power loss would fail every row
-    st = kfile.stat()
+    try:
+        try:
+            kfile.stat()
+        except FileNotFoundError:   # only a key that is really absent is created, never one that cannot be reached
+            kdir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            try:
+                fd = os.open(kfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            except FileExistsError:     # another process created it first: use that one (checked below)
+                fd = -1
+            if fd >= 0:
+                with os.fdopen(fd, "w") as fh:
+                    fh.write(secrets.token_hex(32))
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                _fsync_dir(kdir)        # a lost key after a power loss would fail every row
+        st = kfile.stat()
+        text = kfile.read_text(encoding="utf-8")
+    except OSError as exc:              # a sandbox, a permission, a dangling link
+        raise LedgerKeyError(f"{kfile} cannot be read or created ({exc.strerror or exc})") from exc
     if st.st_uid != os.getuid() or st.st_mode & 0o077:
         raise LedgerKeyError(f"{kfile} must be owned by you with mode 600")
-    return bytes.fromhex(kfile.read_text().strip())
+    try:
+        key = bytes.fromhex(text.strip())
+    except ValueError:
+        key = b""
+    if len(key) != 32:                  # empty (a create interrupted before the write) or damaged: never MAC with it
+        raise LedgerKeyError(f"{kfile} is not a 64-hex-digit key (empty or damaged)")
+    return key
 
 
 def hwm_path() -> Path:

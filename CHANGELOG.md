@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (vulnscan: an unreadable ledger key is a clear refusal, not a crash)
+
+- **`vulnscan.ledger`:** when the ledger key exists but cannot be read (a sandbox, a permission), `vulnscan
+  review`, `halts` and every ledger read failed with a `FileExistsError` traceback: `Path.exists()` reads an
+  unreachable file as missing, and the key was then created with `O_EXCL`. It now raises `LedgerKeyError`
+  ("… cannot be read (…)"), which the executor already refuses on as a ledger integrity failure, and it never
+  creates a second key over one it cannot see. A key another process creates between the check and the create is
+  used instead of failing, and a key that is not exactly 32 bytes (empty after an interrupted create, or damaged) is
+  refused instead of being used as an empty HMAC key. Integrity manifest re-recorded.
+- **Filing conventions:** `references/agentteams-remediation-log.csv` is labelled *ignored here (local operational
+  log)*, matching `.gitignore`, which deliberately keeps it out of the public release; it had been labelled
+  *tracked*.
+
 ### added (API Impact Review: a pre-commit hook plus review, audit and revision of what a change touches)
 
 - **`agentteams.api_impact`** detects API impact from git alone: Python modules and public symbols (functions,
