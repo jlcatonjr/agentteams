@@ -212,6 +212,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
     "agentteams/vulnscan/remediation_status.py",  # what blocks the executor (summary + notifications)
+    "agentteams/vulnscan/remediation_report.py",  # infra (retried) vs policy (final): the anchored classification
     "agentteams/vulnscan/server_fixplan.py",   # per-host server fix plans (read-only)
     "agentteams/vulnscan/agent_drivers.py",    # per-framework agent runtime (image pin, env, command, lockdown)
     "agentteams/vulnscan/team_dir.py",         # the remediation team directory check

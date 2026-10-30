@@ -196,7 +196,7 @@ print(report.exit_code("high", include_dev=False))   # the CLI's exit code for t
 | CLI | `__main__` (commands), `operator_cli` (grants, review, notes, resolve, publish), `project_cli` (`enroll`, `roots`, `status`), `selftest_cli` |
 | Scanning | `engine` (scan orchestration), `manifests` (discovery and parsing, edit checks), `osv` (advisories, fixes), `cvss` (v3/v4 scoring), `versions` (ordering), `runtimes`, `report` (`Report`, `Finding`) |
 | Fixing | `fix` (plans and `--apply`), `server_fixplan` |
-| Daily run | `daily`, `schedule`, `notify`, `effectiveness`, `merge_digest`, `remediation_status`, `report_store`, `run_records`, `paths` |
+| Daily run | `daily`, `schedule`, `notify`, `effectiveness`, `merge_digest`, `remediation_status`, `remediation_report`, `report_store`, `run_records`, `paths` |
 | Projects | `registry`, `project_policy` (the brief's `vulnerability_scanning` block), `coverage`, `repo_alias`, `team_dir` |
 | Agent runtime | `agent_run`, `agent_settings`, `agent_drivers` (+ `_codex`, `_copilot`, `agent_driver_base`), `agent_upstreams`, `agent_recipe`, `docker_mode`, `debrief`, `mcp` (the agents' tools), `selftest_canary`, `selftest_probe` |
 | Egress gateway | `gateway`, `gateway_dialects`, `gateway_dlp`, `gateway_peer`, `gateway_context` |

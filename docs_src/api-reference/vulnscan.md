@@ -364,8 +364,8 @@ scanned, or found compromise indicators (`daily.stale_warning`).
 
 `__main__` defines most commands. The rest come from modules that add their own (`register(sub)`) and run
 them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `publish-grant`, `publish`,
-`agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`)
-and `handoff` (`handoff status`).
+`agent-chat`), `project_cli` (`enroll`, `roots`, `status`), `tools_image` (`tools-image`, `tools-selftest`),
+`handoff` (`handoff status`) and `remediation_report` (`remediation-report`).
 
 | Command | Purpose |
 |---|---|
@@ -393,6 +393,7 @@ and `handoff` (`handoff status`).
 | `status [--project DIR] [--json]` | One project's status, read-only and without the network: identity, enrolment level, fix checkout, whether the daily run scans it, last scan time, its open package findings by severity in the latest run, the `stage-fix` / `open-pr` actions the ledger recorded for it (branch and PR URL, not checked online), and whether a valid grant covers its fix checkout |
 | `halts` | Open escalations and decision-log HALTs, with how to clear each |
 | `handoff status [--repo PATH ...] [--json]` | For each repository with a staged fix (or each `--repo`): its delivery (handoff or direct), the staged branch, the newest verdict of the repository's own orchestrator for that fix (`approved` means `open-pr` may push it), and the handoff packets no verdict answers yet. Exit 0, or 2 for an unusable config ([handoff](#agentteamsvulnscanhandoff)) |
+| `remediation-report LEDGER SINCE [--log FILE] [--run NAME] [--attempt N] [--out FILE] [--agent-since TS] [--agent-until TS]` | One unattended remediation attempt's outcome from the executor's ledger rows at or after `SINCE` (ISO, UTC or with an offset): one JSON object (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) on stdout, and `remediation.md` written to `--out`. `--agent-since`/`--agent-until` (the agent run's `started`/`finished`) add its executor rows, never past `SINCE`, in their own section; a bad or out-of-range time is a Needs-you note, never a usage error (listed under Needs you, never counted as infra). Run by `scripts/vulnscan-remediation/vulnscan-remediate-auto.sh` ([remediation_report](#agentteamsvulnscanremediation_report)) |
 | `resolve ID --evidence TEXT [--key-id ID]` | Resolve an escalation ([Escalations](#escalations)) |
 | `say TEXT [--target T] [--days N]` · `say --from-gh REF [--repo O/R]` · `say --list` · `say --remove ID` | Operator notes for the next run |
 | `publish-grant sign\|list\|revoke` | The grant that lets the executor push reports. `sign` checks `--node-id` and `--owner-id` first (exit 2): `refused: --node-id is empty — run the gh lookup first; it must be the ops repository's node id (gh repo view <owner/repo> --json id)`, `refused: --owner-id is empty — run the gh lookup first; it must be your numeric GitHub user id`, `is required` in place of `is empty` when the flag is omitted, and `refused: --owner-id must be your numeric GitHub user id (got '…')` |
@@ -448,6 +449,7 @@ failed `systemctl disable` only when the units were installed.
 | `status` | printed | — | no such directory, or an unusable config | — | — |
 | `tools-image build`, `tools-selftest` | built / passed | failed | a setup error (an unusable config) | — | — |
 | `handoff status` | printed | — | an unusable config | — | — |
+| `remediation-report` | reported (an unreadable ledger is reported, as `error`) | — | a bad `SINCE`, or `--out` not writable | — | — |
 | `agent-chat` | the session's exit code | | refused | | 75: run lock held · 124: time cap · 143: SIGTERM (both containers removed) |
 
 "No config" includes a config that cannot be used (invalid JSON, not an object, a key with a wrong
@@ -2754,6 +2756,24 @@ to `summary.md` (`## Remediation readiness`) and `summary.json` (`remediation`).
 - `version()` is the installed agentteams version, or `unknown` when it is not installed as a distribution.
 - `markdown(st)` renders the section, and `notify(cfg, st)` sends `remediation-blocked` (when `blocked` is
   non-empty) and one `grant-expiring` per expiring grant.
+
+### `agentteams.vulnscan.remediation_report`
+
+One unattended remediation attempt's outcome, from the executor's ledger rather than log text, and the
+`remediation.md` the remediation runner writes ([walkthrough](../vulnscan-automation-walkthrough.md#unattended-remediation-runner)).
+
+- `classify(row)`: `done`, `infra`, `policy` or `None` (every other kind). A `refused` or `failed` row is `infra`
+  only when its `detail` **starts with** `INFRA_DETAIL_PREFIX` (`tools container unavailable:`, the executor's
+  `subproc_confine.Unavailable` text) or its `reason_code` starts with `INFRA_REASON_PREFIX` (`infra.`); a missing
+  or non-string `reason_code` counts as absent. Anchored, never a substring: a detail can echo repository text.
+- `outcome(ledger, since)` returns an `Outcome` (`done`, `infra`, `policy`, `error`, `skipped`, `infra_count`) for the rows
+  whose `ts` is at or after `since`. Lines that are not a JSON object with a parseable `ts` are counted in `skipped`
+and named under *Needs you*, not classified. An unreadable ledger sets `error`
+  and counts as one infra refusal (fail closed). A bad `since` raises `ValueError`. `outcome_from_rows(rows,
+  since)` does the same for parsed rows.
+- `needs_line(row)` is one *Needs you* line, with control characters replaced and the detail cut to
+  `DETAIL_CHARS` (200). `render_markdown(outcome, run_name=, attempt=, log_text=)` and `report(...)` build
+  `remediation.md`: PR links and the last per-repository line from the attempt's log, then *Needs you*.
 
 ### `agentteams.vulnscan.notify`
 
