@@ -187,11 +187,11 @@ def test_stage_fix_with_only_major_fixes_still_reports_a_major_jump(env: dict, m
 
 def test_a_scan_that_checks_nothing_is_not_nothing_vulnerable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _osv(monkeypatch)
-    assert not executor._nothing_vulnerable(tmp_path)             # no manifest: unknown, never "fixed upstream"
+    assert not retry_guard.nothing_vulnerable(tmp_path)             # no manifest: unknown, never "fixed upstream"
     def down(items: object) -> dict:
         raise _http.FeedError("OSV unreachable")
     monkeypatch.setattr(osv, "vulnerable_ids", down)
-    assert not executor._nothing_vulnerable(_tree(tmp_path, _lock(qs="6.16.1")))   # feed down: unknown
+    assert not retry_guard.nothing_vulnerable(_tree(tmp_path, _lock(qs="6.16.1")))   # feed down: unknown
 
 
 def test_the_held_reason_names_the_upstream_fix(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -528,13 +528,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
         changed = validate_diff(wt, base)
         if not changed:   # an npm that failed to run must not read as "nothing fixable"
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
-            if npm_err:
-                raise ExecError(f"npm failed: {npm_err[:200]}")
-            if not res.refused and _nothing_vulnerable(wt):
-                # the fix is upstream and the scanned local checkout is behind (its scan wrote the fix plan)
-                raise ExecError(f"{retry_guard.UPSTREAM_DETAIL} ({head}): nothing vulnerable there; "
-                                "update the local checkout")
-            raise ExecError(retry_guard.FUTILE_DETAIL)
+            raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
+                            retry_guard.zero_change_detail(wt, head, refused=bool(res.refused)))
         _refuse_filtered(wt, changed)   # C2: a filtered file's commit would not hold what validate_diff checked
         if res.resolved == 0:   # npm moved packages within their ranges to releases that are still affected
             raise ExecError(f"{retry_guard.FUTILE_DETAIL}: the change resolves no advisory")
@@ -559,25 +554,6 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
               "changed": changed, "resolved": res.resolved, "plan": res.markdown()}
     _write_json(staged_file(repo), result)
     return result
-
-
-def _nothing_vulnerable(wt: Path) -> bool:
-    """Return whether a scan of the staging worktree (the default branch) finds no vulnerable package at all.
-
-    ``fix_path`` cannot tell this apart from "only major fixes": an applied npm run and every ``composer.lock``
-    are recorded whether or not anything there is vulnerable. A scan that could not complete is never "nothing".
-
-    Args:
-        wt: The executor's worktree at the base commit.
-
-    Returns:
-        True only when the scan completed, checked at least one dependency and found no package finding.
-    """
-    try:
-        rep = engine.scan_path(wt)
-    except (OSError, ValueError):
-        return False
-    return rep.checked > 0 and not rep.feed_errors and not any(f.kind == "package" for f in rep.findings)
 
 
 def _sanitize(text: str, limit: int = 2000) -> str:

@@ -47,7 +47,7 @@ def _freshness(root: Path, rep: Report) -> list[dict[str, Any]]:
         try:
             row = _repo_freshness(repo, [f for f in rep.findings if f.kind == "package" and f.target == rel], root)
         except daily._ITEM_ERRORS:   # a hung or broken git: no label, no error
-            continue
+            row = None
         if row is not None:
             rows.append({"repo": rel, **row})
     return rows

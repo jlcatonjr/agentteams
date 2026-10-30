@@ -129,3 +129,41 @@ def mark_held(target: str) -> bool:
 def held_count() -> int:
     """Return how many recorded repositories are still held (their newest plan is the one they were held at)."""
     return sum(1 for repo, digest in _read_held().items() if plan_digest(repo) == digest)
+
+
+def nothing_vulnerable(wt: Path) -> bool:
+    """Return whether a scan of the staging worktree (the default branch) finds no vulnerable package at all.
+
+    ``fix_path`` cannot tell this apart from "only major fixes": an applied npm run and every ``composer.lock``
+    are recorded whether or not anything there is vulnerable. A scan that could not complete is never "nothing".
+
+    Args:
+        wt: The executor's worktree at the base commit.
+
+    Returns:
+        True only when the scan completed, checked at least one dependency and found no package finding.
+    """
+    from agentteams.vulnscan import engine   # lazy: engine is heavy and the executor imports this module
+
+    try:
+        rep = engine.scan_path(wt)
+    except (OSError, ValueError):
+        return False
+    return rep.checked > 0 and not rep.feed_errors and not any(f.kind == "package" for f in rep.findings)
+
+
+def zero_change_detail(wt: Path, head: str, *, refused: bool) -> str:
+    """Return the stage-fix refusal for a fix that changed nothing (npm ran cleanly).
+
+    Args:
+        wt: The executor's worktree at the base commit.
+        head: The base ref, named in the refusal.
+        refused: Whether ``fix_path`` refused some edit (then nothing is ever called "fixed upstream").
+
+    Returns:
+        :data:`UPSTREAM_DETAIL` when the base has nothing vulnerable (the scanned local checkout is behind),
+        else :data:`FUTILE_DETAIL`; both are held by :func:`futile_reason` until the fix plan changes.
+    """
+    if not refused and nothing_vulnerable(wt):
+        return f"{UPSTREAM_DETAIL} ({head}): nothing vulnerable there; update the local checkout"
+    return FUTILE_DETAIL

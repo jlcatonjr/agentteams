@@ -132,6 +132,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The effectiveness row now reads "Repositories held at scan time (nothing stageable; see the held reasons)": the
   summary is written before the remediation runner holds more repositories, so `held-repos.json` can list more later
   the same day, and a hold can now also mean "already fixed on the default branch".
+- The stage-fix zero-change decision moved to `retry_guard.zero_change_detail()` / `nothing_vulnerable()` (CH-07:
+  `executor.py` stays under the module ceiling); the checkout-freshness loop no longer has a swallow-only handler (CH-24).
 - New `versions.is_prerelease()`; the `vuln-remediation` agent template says a `held:` refusal can also mean the
   default branch already has the fix and the local checkout is behind.
 - Internal, behaviour unchanged: `vulnscan/daily.py` (1243 lines, over the 1000-line module ceiling) is split into
