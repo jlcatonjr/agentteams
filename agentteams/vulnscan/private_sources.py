@@ -219,6 +219,8 @@ def _config_dirs(repo: Path, root: Path) -> list[Path]:
 def repo_sources(repo: Path, root: Path) -> RepoSources:
     """Return what ``repo``'s ``nuget.config`` and ``.npmrc`` files (it and its parents within ``root``) mark private.
 
+    A directory that cannot be listed marks every NuGet and pnpm/Bun name private (it may hold either file).
+
     Args:
         repo: The repository directory.
         root: The scan root.
@@ -230,8 +232,9 @@ def repo_sources(repo: Path, root: Path) -> RepoSources:
     for d in _config_dirs(repo, root):
         try:
             names = {p.name.lower(): p for p in d.iterdir() if p.is_file()}
-        except OSError:
-            continue
+        except OSError:   # a directory that cannot be listed may hold a config: fail closed, withhold both
+            rs.nuget_private = rs.npm_all = True
+            break
         if "nuget.config" in names and nuget_names_private_source(names["nuget.config"]):
             rs.nuget_private = True
         if ".npmrc" in names:

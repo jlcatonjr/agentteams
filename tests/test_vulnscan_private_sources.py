@@ -193,3 +193,18 @@ def test_gradle_lockfile_is_not_read_by_default(tmp_path: Path, sent: list[tuple
     assert res.refused == [("app/gradle.lockfile", private_sources.GRADLE_OPT_IN)] and sent == []
     rep = engine.scan_path(tmp_path, gradle_lockfiles=True)
     assert ("Maven", "com.google.guava:guava") in sent and not rep.unscannable
+
+
+def test_an_unlistable_directory_withholds_nuget_and_npm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "app"
+    repo.mkdir()
+    real = Path.iterdir
+
+    def iterdir(self: Path):  # type: ignore[no-untyped-def]
+        if self == repo:
+            raise PermissionError("denied")
+        return real(self)
+
+    monkeypatch.setattr(Path, "iterdir", iterdir)
+    rs = private_sources.repo_sources(repo, tmp_path)
+    assert rs.nuget_private and rs.npm_all
