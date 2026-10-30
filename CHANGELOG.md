@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fleet-wide effect:** the next `daily` run adds base-image findings for every enrolled repository with a
   Dockerfile or compose file (for example `python:3.9-slim` is HIGH), and an unreachable endoflife.date now also
   makes those repositories' scans partial (exit 3).
+- **An endoflife.date outage is paid once per slug.** A slug whose v1 and v0 reads both fail is remembered as
+  failed for the rest of the run (`runtimes._eol_cycles`), so later image references and runtimes on it are
+  reported unchecked at once instead of each waiting out both timeouts (security review I-s1).
 
 ### added (vulnscan: Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles are scanned)
 

@@ -258,6 +258,26 @@ def test_only_slugs_reach_endoflife_date(tmp_path: Path, monkeypatch: pytest.Mon
     assert len(rep.feed_errors) == 2 and rep.findings == []   # unreachable: partial, never fine
 
 
+def test_a_failed_slug_is_not_refetched_for_the_rest_of_the_run(tmp_path: Path,
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    """Security review I-s1: an outage costs one v1 + v0 attempt per slug, not one per image reference."""
+    urls: list[str] = []
+
+    def fetch(url: str, *a: object, **kw: object) -> object:
+        urls.append(url)
+        raise _http.FeedError("offline")
+
+    runtimes._CACHE.clear()
+    monkeypatch.setattr(_http, "fetch_json", fetch)
+    rep = _scan(tmp_path, "FROM python:3.9-slim\nFROM python:3.10-slim\nFROM python:3.11.4\n")
+    assert urls == ["https://endoflife.date/api/v1/products/python", "https://endoflife.date/api/python.json"]
+    assert len(rep.feed_errors) == 3 and rep.findings == []   # each reference still reported unchecked
+    assert "cached failure" in rep.feed_errors[-1]
+    rep = _scan(tmp_path, "FROM node:20.1.0\n")           # another slug is still tried
+    assert urls[2:] == ["https://endoflife.date/api/v1/products/nodejs", "https://endoflife.date/api/nodejs.json"]
+    runtimes._CACHE.clear()                                  # a new run tries again
+
+
 def test_unknown_release_line_is_unscannable(tmp_path: Path, eol: list[str]) -> None:
     rep = _scan(tmp_path, "FROM python:3.99\n")
     assert rep.findings == [] and "unknown to endoflife.date" in rep.unscannable[1][1]
