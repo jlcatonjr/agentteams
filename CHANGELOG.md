@@ -124,6 +124,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
   `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
 
+### vulnscan (stage-fix: a fix already on the default branch is not reported as a major jump)
+
+- When `stage-fix` changes nothing and a scan of the default branch (the executor's worktree) finds nothing
+  vulnerable, the refusal is now `already fixed on the default branch (<ref>): nothing vulnerable there; update
+  the local checkout` instead of `nothing fixable without a major jump`. Today 7 repositories were held with the
+  wrong reason: their default branches have the fix and their local checkouts are behind. The futile-retry
+  guard holds the new result the same way, with a held reason that says to update the checkout. A scan that
+  checks nothing or hits a feed error never counts as "nothing vulnerable".
+
 ### vulnscan (findings already fixed upstream are labelled, not counted as fixed)
 
 - `summary.md` gets a **Checkout freshness** section after the per-repository sections: each scanned repository's

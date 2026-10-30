@@ -1631,7 +1631,8 @@ resolved. Refuses a target an open escalation blocks, a repo operation on a
 publish grant's ops repository, a protected repository (common directory or origin) or a repository
 enrolled below `remediate` (`executor_guard`), a `stage-fix` the futile-retry guard holds
 (`retry_guard.futile_reason`: the repository's last `stage-fix` outcome was "nothing fixable without a
-major jump" and its newest dry-run fix plan is byte-identical to the plan of that day; a changed plan,
+major jump", or "already fixed on the default branch" when a scan of the default branch finds nothing
+vulnerable (the scanned local checkout is behind), and its newest dry-run fix plan is byte-identical to the plan of that day; a changed plan,
 a later success or a missing plan lifts the hold), a target no grant covers, exhausted uses, a missing
 decision log or an open HALT; otherwise appends the `begun` row and returns the grant. Raises `ExecError`.
 
@@ -2687,7 +2688,9 @@ container), `effectiveness` and `executor_supersede`.
 
 #### `futile_reason(op, target, rows)`
 
-Why a `stage-fix` of `target` would only repeat "nothing fixable without a major jump", or `""`. Held
+Why a `stage-fix` of `target` would only repeat "nothing fixable without a major jump" or "already fixed on
+the default branch" (`retry_guard.UPSTREAM_DETAIL`; the held reason then says to update the local checkout),
+or `""`. Held
 while the repository's newest `fixplan-<slug>.md` equals the plan of the day that result was recorded;
 a changed plan, a later successful `stage-fix`, or a missing plan lifts it. Reads the ledger and run
 directories only. Called by `executor.authorize`.

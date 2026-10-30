@@ -1,8 +1,9 @@
 """Futile-retry guard: stop re-staging a repository whose fix plan has not changed since nothing was fixable.
 
 ``stage-fix`` never takes a semver-major jump, so a repository whose only fixes are major upgrades fails
-with "nothing fixable without a major jump", and the agent used to request it again every day, often several
-times a day. This guard refuses the retry while the repository's dry-run fix plan (``fixplan-<slug>.md``,
+with "nothing fixable without a major jump" (or, when the default branch already has the fix and the local
+checkout is behind, "already fixed on the default branch"), and the agent used to request it again every day,
+often several times a day. This guard refuses the retry while the repository's dry-run fix plan (``fixplan-<slug>.md``,
 written by every daily run) is byte-identical to the plan of the run in which that result was recorded. A new
 advisory, a new release or a change on the default branch changes the plan and lifts the hold by itself.
 
@@ -23,6 +24,9 @@ from typing import Any
 from agentteams.vulnscan import paths
 
 FUTILE_DETAIL = "nothing fixable without a major jump"
+#: Recorded instead of :data:`FUTILE_DETAIL` when the default branch has nothing vulnerable: the fix is already
+#: upstream and the local checkout (whose scan wrote the fix plan) is behind. Held the same way.
+UPSTREAM_DETAIL = "already fixed on the default branch"
 HELD_PREFIX = "held: "
 _RUN_DIR = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
@@ -56,18 +60,26 @@ def plan_digest(repo: str, day: str | None = None) -> str:
     return ""
 
 
-def _last_futile_day(target: str, rows: list[dict[str, Any]]) -> str | None:
-    """Return the local date of ``target``'s last stage-fix outcome when it was "nothing fixable", else None."""
+def _last_futile(target: str, rows: list[dict[str, Any]]) -> tuple[str, str] | None:
+    """Return (local date, detail prefix) of ``target``'s last stage-fix outcome when it was futile, else None."""
     last: dict[str, Any] | None = None
     for r in rows:
         if r.get("op") == "stage-fix" and r.get("target") == target and r.get("kind") in ("done", "failed"):
             last = r
-    if last is None or last.get("kind") != "failed" or not str(last.get("detail", "")).startswith(FUTILE_DETAIL):
+    detail = str(last.get("detail", "")) if last is not None else ""
+    prefix = next((p for p in (FUTILE_DETAIL, UPSTREAM_DETAIL) if detail.startswith(p)), "")
+    if last is None or last.get("kind") != "failed" or not prefix:
         return None
     try:
-        return datetime.fromisoformat(str(last["ts"])).astimezone().date().isoformat()
+        return datetime.fromisoformat(str(last["ts"])).astimezone().date().isoformat(), prefix
     except (KeyError, ValueError):
         return None
+
+
+def _last_futile_day(target: str, rows: list[dict[str, Any]]) -> str | None:
+    """Return the local date of ``target``'s last futile stage-fix outcome, else None."""
+    found = _last_futile(target, rows)
+    return found[0] if found else None
 
 
 def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
@@ -84,12 +96,16 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     """
     if op != "stage-fix":
         return ""
-    day = _last_futile_day(target, rows)
-    if day is None:
+    found = _last_futile(target, rows)
+    if found is None:
         return ""
+    day, prefix = found
     then, now = plan_digest(target, day), plan_digest(target)
     if not then or then != now:
         return ""
+    if prefix == UPSTREAM_DETAIL:
+        return (f"{HELD_PREFIX}stage-fix found the fix {UPSTREAM_DETAIL} on {day} and this repository's fix plan "
+                "has not changed since; it is not staged again until the plan changes (update the local checkout)")
     return (f"{HELD_PREFIX}stage-fix found {FUTILE_DETAIL} on {day} and this repository's fix plan has not "
             "changed since; it is not staged again until the plan changes (a major upgrade is a manual change)")
 

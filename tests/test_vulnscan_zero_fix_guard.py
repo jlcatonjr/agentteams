@@ -153,3 +153,51 @@ def test_stage_fix_stages_a_change_that_resolves_an_advisory(env: dict, monkeypa
     assert res["status"] == "done" and res["changed"] == ["package-lock.json"]
     staged = json.loads(executor.staged_file(repo.resolve()).read_text())
     assert staged["resolved"] == len(QS_IDS)
+
+
+# ---------------------------------------------------------------- already fixed upstream (2026-10-30)
+# sc_collectors: its default branch already pins the fixed release while the scanned local checkout is behind,
+# so stage-fix (which works on the default branch) has nothing to change. That is not "only major fixes".
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_stage_fix_reports_a_fix_already_on_the_default_branch(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo_with_remote(env["tmp"], {"package.json": '{"name": "app", "dependencies": {"express": "^4"}}\n',
+                                          "package-lock.json": _lock(qs="6.16.1")})
+    _install(env, ops=["stage-fix"], hosts=[])
+    _osv(monkeypatch)
+    _npm_writes(monkeypatch, _lock(qs="6.16.1"))   # npm changes nothing: nothing is vulnerable
+    res = executor.act("stage-fix", str(repo), env["cfg"], request_id="2" * 32)
+    assert res["status"] == "failed"
+    assert res["detail"].startswith(retry_guard.UPSTREAM_DETAIL) and "update the local checkout" in res["detail"]
+    assert retry_guard.FUTILE_DETAIL not in res["detail"]
+    _assert_refused_cleanly(repo, "2" * 32)
+    assert retry_guard._last_futile_day(str(repo.resolve()), ledger.read())   # held like a futile result
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_stage_fix_with_only_major_fixes_still_reports_a_major_jump(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _npm_repo(env["tmp"])   # qs 6.14.2 is vulnerable at the base
+    _install(env, ops=["stage-fix"], hosts=[])
+    _osv(monkeypatch)
+    _npm_writes(monkeypatch, _lock(qs="6.14.2"))   # npm cannot move it (a major jump)
+    res = executor.act("stage-fix", str(repo), env["cfg"], request_id="3" * 32)
+    assert res["status"] == "failed" and res["detail"] == retry_guard.FUTILE_DETAIL
+
+
+def test_a_scan_that_checks_nothing_is_not_nothing_vulnerable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _osv(monkeypatch)
+    assert not executor._nothing_vulnerable(tmp_path)             # no manifest: unknown, never "fixed upstream"
+    def down(items: object) -> dict:
+        raise _http.FeedError("OSV unreachable")
+    monkeypatch.setattr(osv, "vulnerable_ids", down)
+    assert not executor._nothing_vulnerable(_tree(tmp_path, _lock(qs="6.16.1")))   # feed down: unknown
+
+
+def test_the_held_reason_names_the_upstream_fix(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [{"op": "stage-fix", "target": "/r", "kind": "failed", "ts": "2026-10-30T09:30:00+00:00",
+             "detail": f"{retry_guard.UPSTREAM_DETAIL} (origin/main): nothing vulnerable there; update the local checkout"}]
+    monkeypatch.setattr(retry_guard, "plan_digest", lambda repo, day=None: "same")
+    why = retry_guard.futile_reason("stage-fix", "/r", rows)
+    assert why.startswith(retry_guard.HELD_PREFIX) and retry_guard.UPSTREAM_DETAIL in why
+    assert "update the local checkout" in why and "major" not in why

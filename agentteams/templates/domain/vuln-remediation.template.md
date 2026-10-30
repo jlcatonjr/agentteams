@@ -142,8 +142,8 @@ with a stop condition, escalate anyway and mention the note in the evidence.
    reads their results and requests `open-pr` for fixes staged meanwhile. Do not re-request something
    that was refused for lack of a grant. A refusal starting `not attempted:`
    means the executor stopped that operation for the whole pass (the tools container or the grant);
-   a refusal starting `held:` means the repository has nothing fixable without a major upgrade and its
-   fix plan has not changed. Re-request neither this run; list them for the operator.
+   a refusal starting `held:` means the repository has nothing fixable without a major upgrade (or its
+   default branch already has the fix and the local checkout is behind) and its fix plan has not changed. Re-request neither this run; list them for the operator.
 6. **Report** in the format below and submit it with `submit_report`. It is the record of this
    unattended run that the operator's after-action review collects. Submit once, at the end; a
    later submission replaces an earlier one.
