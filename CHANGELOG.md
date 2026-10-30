@@ -25,7 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Egress:** it sends unpinned direct requirement names to OSV when `unpinned_ranges` is on; never to PyPI.
   `private_packages` names, and whole files that name a package index (`--index-url` / `-i` /
   `--extra-index-url`, also through `-r` / `-c` includes; poetry, uv and pdm sources in `pyproject.toml`), are
-  withheld (`"<repo>: <file> (private index)"`).
+  withheld (`"<repo>: <file> (private index)"`). When any requirements file or `pyproject.toml` of a repository
+  names an index (or cannot be read or parsed), every unpinned-range file of that repository is withheld too
+  (security review P-s1). Requirements files and `pyproject.toml` over 64 MiB are not read.
 - **Exit code:** range findings count toward `--fail-on`. With the feature on, a whole-range HIGH finding makes
   `scan` (and, once wired, the daily run) exit 1 where it exited 0 before; partial-range findings stay at most
   MODERATE, below the default `high`.

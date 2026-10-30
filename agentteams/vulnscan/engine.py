@@ -353,6 +353,7 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     dev_policy: dict[str, bool] = {}
     ranges: list[RangeItem] = []
     range_files: dict[str, list[int]] = {}   # location -> [unscannable index, requirements kept, unchecked, unread]
+    index_files: dict[str, list[tuple[Path, Path]]] = defaultdict(list)   # target -> (file, repo): P-s1
     excl = [Path(os.path.realpath(Path(x).expanduser())) for x in exclude]
     off = {Path(os.path.realpath(Path(x).expanduser())) for x in opted_out}
     sources = private_sources.PrivateSources(root)
@@ -371,6 +372,8 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
         if pol.level == "off" and target not in report.brief_off:
             report.brief_off.append(target)   # a brief cannot switch off what the operator scans
         in_repo = path.relative_to(repo).as_posix()
+        if unpinned_ranges and (REQ_SCAN_NAME.match(path.name) or path.name == "pyproject.toml"):
+            index_files[target].append((path, repo))   # brief-excluded too: it still names the repository's index
         if pol.exclude_paths and project_policy.is_excluded(in_repo, pol.exclude_paths):
             report.excluded.append(f"{target}: {in_repo}")
             continue
@@ -396,6 +399,7 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
             else:
                 deps.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel)))
     analyze(deps, report, dev_policy=dev_policy)
+    ranges = _withhold_index_repos(root, index_files, ranges, range_files, report)
     if ranges:
         notes = analyze_ranges(ranges, report, dev_policy=dev_policy)
         _note_ranges(report, range_files, notes)
@@ -428,6 +432,36 @@ def _collect_ranges(path: Path, m: Manifest, repo: Path, rel: str, label: str, t
         ranges.append(RangeItem(target, rel, req))
         kept += 1
     range_files[rel] = [len(report.unscannable) - 1, kept, rf.unchecked, rf.unreadable]
+
+
+#: Coverage note of an unpinned-range file withheld because another file of its repository names an index.
+REPO_INDEX_NOTE = ("ranges not checked: a requirements file or pyproject.toml in this repository names a package "
+                   "index, so its names stay local")
+
+
+def _withhold_index_repos(root: Path, index_files: dict[str, list[tuple[Path, Path]]], ranges: list[RangeItem],
+                          range_files: dict[str, list[int]], report: Report) -> list[RangeItem]:
+    """Withhold every unpinned-range file of a repository where any requirements file or pyproject names an index.
+
+    Security review P-s1: a file's own ``-i`` line (and its includes) is not the only signal; a sibling that names
+    the private index means the repository's other unpinned names are private too.
+
+    Returns:
+        The range items still to check.
+    """
+    checked = {repo_of(root / r, root) for r in range_files}   # only repositories with ranges still to send
+    private = {t for t, files in index_files.items()
+               if t in checked and any(specifiers.names_index(p, repo) for p, repo in files)}
+    if not private:
+        return ranges
+    for rel in [r for r in range_files if repo_of(root / r, root) in private]:
+        path = root / rel
+        index = range_files.pop(rel)[0]
+        report.unscannable[index] = (rel, f"{report.unscannable[index][1]}; {REPO_INDEX_NOTE}")
+        label = f"{repo_of(path, root)}: {path.relative_to(project_policy.repo_dir(path, root)).as_posix()} (private index)"
+        if label not in report.withheld:
+            report.withheld.append(label)
+    return [it for it in ranges if it.target not in private]
 
 
 def _note_ranges(report: Report, range_files: dict[str, list[int]], notes: dict[str, list[str]]) -> None:

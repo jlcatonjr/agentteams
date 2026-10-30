@@ -21,7 +21,8 @@ Reading a file also decides whether its names may leave the machine (:attr:`Rang
 requirements file with an ``--index-url`` / ``-i`` / ``--extra-index-url`` line, itself or in a file it
 includes with ``-r`` / ``-c``, and a ``pyproject.toml`` naming a package source or index
 (``[[tool.poetry.source]]``, ``[[tool.uv.index]]``, ``[tool.uv.sources]`` with an ``index``,
-``[[tool.pdm.source]]``) are withheld whole. A file over :data:`MAX_BYTES` (64 MiB) is not read.
+``[[tool.pdm.source]]``) are withheld whole, and when any such file is in a repository, every unpinned-range
+file of that repository is withheld too (:func:`names_index`). A file over :data:`MAX_BYTES` (64 MiB) is not read.
 
 Nothing here touches the network.
 """
@@ -438,6 +439,28 @@ def _names_index(path: Path, repo: Path, seen: set[str], depth: int = 0) -> bool
             if _names_index(target, repo, seen, depth + 1):
                 return True
     return False
+
+
+def names_index(path: Path, repo: Path) -> bool:
+    """Return whether a requirements file (or a file it includes) or a ``pyproject.toml`` names a package index.
+
+    The repository-wide check of :func:`engine.scan_path` (security review P-s1): when any one file of a repository
+    names an index, none of its unpinned-range files is sent. A file that cannot be read or parsed counts as
+    naming one.
+
+    Args:
+        path: A requirements file or a ``pyproject.toml``.
+        repo: Its repository (includes are followed only inside it).
+
+    Returns:
+        True when it names an index or a private source, or cannot be checked.
+    """
+    if path.name != "pyproject.toml":
+        return _names_index(path, repo, set())
+    try:
+        return _pyproject_names_index(tomllib.loads(_read_text(path, errors="strict")))
+    except (OSError, ValueError):   # TOMLDecodeError and UnicodeDecodeError are ValueErrors: cannot be checked
+        return True
 
 
 def read_requirements(path: Path, repo: Path) -> RangeFile:

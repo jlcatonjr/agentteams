@@ -435,7 +435,10 @@ requirements' ranges against every advisory OSV holds for the name (`engine.anal
   a package index (`withheld`, `"<repo>: <path in repo> (private index)"`): a requirements file with an
   `--index-url` / `-i` / `--extra-index-url` line, itself or in a file it includes with `-r` / `-c` (an
   include that leaves the repository counts as one), and a `pyproject.toml` with `[[tool.poetry.source]]`,
-  `[[tool.uv.index]]`, `[tool.uv.sources]` with an `index`, or `[[tool.pdm.source]]`. `level: off` behaves
+  `[[tool.uv.index]]`, `[tool.uv.sources]` with an `index`, or `[[tool.pdm.source]]`. When any one
+  requirements file or `pyproject.toml` of a repository names an index (or cannot be read or parsed), every
+  unpinned-range file of that repository is withheld too, with `engine.REPO_INDEX_NOTE` in its reason
+  (`specifiers.names_index`). Files over 64 MiB (`specifiers.MAX_BYTES`) are not read. `level: off` behaves
   as for pinned packages (scanned, listed under `brief_off`).
 - **Judgement.** Each advisory's affected ranges (`osv.affected_intervals`) are intersected with the
   specifier set. Findings have kind `range` (shown as "requirement range"), an empty `version` and the

@@ -427,3 +427,41 @@ def test_huge_requirements_file_is_not_read(tmp_path: Path, feed: NameFeed, monk
     reasons = dict(rep.unscannable)
     assert reasons["requirements.txt"].endswith("ranges not read: ValueError")
     assert not {q["package"]["name"] for q in feed.queries} & {"demo", "x"}
+
+
+# ---------------------------------------------------------------- repository-wide index (security review P-s1)
+
+def test_a_parent_naming_the_index_withholds_its_base_file(tmp_path: Path, feed: NameFeed) -> None:
+    """requirements.txt names the private index and includes requirements-base.txt, which names none itself."""
+    repo = _repo(tmp_path, {"requirements.txt": "--index-url https://pkgs.example.invalid/simple\n"
+                                                "-r requirements-base.txt\n",
+                            "requirements-base.txt": "inhouse-lib>=1\n",
+                            "tools/requirements-dev.txt": "devtool>=2\n",
+                            "pinned/requirements.txt": "-i https://pkgs.example.invalid/simple\nflask==2.0.0\n"})
+    rep = engine.scan_path(repo, unpinned_ranges=True)
+    assert not {q["package"]["name"] for q in feed.queries} & {"inhouse-lib", "devtool"}
+    for rel in ("requirements-base.txt", "tools/requirements-dev.txt"):   # the parent itself lists no names
+        assert f".: {rel} (private index)" in rep.withheld, rel
+    reasons = dict(rep.unscannable)
+    assert reasons["requirements-base.txt"].endswith(engine.REPO_INDEX_NOTE)
+    assert reasons["tools/requirements-dev.txt"].endswith(engine.REPO_INDEX_NOTE)
+
+
+def test_a_pyproject_private_source_withholds_the_repositorys_requirement_ranges(tmp_path: Path,
+                                                                                 feed: NameFeed) -> None:
+    root = tmp_path / "ws"
+    repo = _repo(root, {"pyproject.toml": '[project]\nname = "x"\n[[tool.poetry.source]]\nname = "corp"\n',
+                        "requirements.txt": "inhouse>=1\n"})
+    other = root / "other"
+    (other / ".git").mkdir(parents=True)
+    (other / "requirements.txt").write_text("demo>=1\n")
+    rep = engine.scan_path(root, unpinned_ranges=True)
+    sent = {q["package"]["name"] for q in feed.queries}
+    assert "inhouse" not in sent and "demo" in sent            # another repository is unaffected
+    assert "app: requirements.txt (private index)" in rep.withheld and repo.is_dir()
+
+
+def test_an_unparsable_pyproject_counts_as_naming_an_index(tmp_path: Path, feed: NameFeed) -> None:
+    repo = _repo(tmp_path, {"pyproject.toml": "[tool\n", "requirements.txt": "demo>=1\n"})
+    rep = engine.scan_path(repo, unpinned_ranges=True)
+    assert feed.queries == [] and ".: requirements.txt (private index)" in rep.withheld
