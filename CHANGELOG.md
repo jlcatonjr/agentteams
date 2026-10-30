@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compose service's `image:` (build services skipped), and judges the base image: official `python`, `node`, `php`,
   `ruby`, `golang`, `eclipse-temurin`, `openjdk` (deprecated, LOW), `amazoncorretto` (`java-corretto`), .NET on
   `mcr.microsoft.com`, `nginx`, `postgres`, `mysql`, `mariadb`, `redis`, and `ubuntu` / `debian` / `alpine` /
-  `amazonlinux`. An end-of-life release line is HIGH; a full-patch tag behind its line is MODERATE; `latest` or no
-  tag is LOW; floating tags (`python:3`, `lts`) are listed as not judged, never fine. The OS in a tag (`-bookworm`,
+  `amazonlinux`. An end-of-life release line is HIGH; a full-patch tag missing a security release of its line is
+  HIGH (a full-patch tag is never rebuilt, so the image keeps the vulnerable version); a full-patch tag otherwise
+  behind its line is MODERATE; `latest` or no tag is LOW; floating tags (`python:3`, `lts`) are listed as not judged, never fine. The OS in a tag (`-bookworm`,
   `-jammy`, `-alpine3.18`) is judged for any public image, so `mcr.microsoft.com/playwright/python:v1.57.0-jammy`
   gets Ubuntu 22.04 judged. Private-registry and local images are not judged and never named; only endoflife.date
   slugs leave the machine.
