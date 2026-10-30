@@ -30,10 +30,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.vulnscan.report import SEVERITY_NAME, Finding, Report
+from agentteams.vulnscan.report import OS_RELEASE, SEVERITY_NAME, Finding, Report
 
-#: ``Finding.name`` of the engine's OS release check (``engine.OS_RELEASE``; not imported, to keep this module light).
-OS_RELEASE = "os-release"
 #: The plan line of an OS release finding: no kit level upgrades an OS release.
 OS_UPGRADE = "plan an OS release upgrade; no kit lever applies"
 #: Suffix of a non-Node runtime line: L3 updates Node.js only.

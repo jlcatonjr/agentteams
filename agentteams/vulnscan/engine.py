@@ -40,7 +40,7 @@ from pathlib import Path
 
 from agentteams.vulnscan import _http, osv, project_policy, runtimes
 from agentteams.vulnscan.manifests import Dep, discover, parse
-from agentteams.vulnscan.report import Finding, Report
+from agentteams.vulnscan.report import OS_RELEASE, Finding, Report
 
 #: Python package locations owned by the OS package manager (dpkg / rpm).
 DISTRO_LOCATION = re.compile(r"^/usr/lib(64)?/python3[^/]*/(dist|site)-packages/?$|^/usr/lib/python3/dist-packages/?$")
@@ -222,8 +222,6 @@ def _runtime_findings(target: str, items: list[tuple[str, str, str, str]], repor
 
 #: ``ESM`` line values (anything else reads as ``unknown``).
 ESM_STATES = ("enabled", "disabled", "unknown")
-#: Finding ``name`` of the OS release check (``kind="host"``); :mod:`.server_fixplan` gives it its own line.
-OS_RELEASE = "os-release"
 
 
 def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str, str] | None,
