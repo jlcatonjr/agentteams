@@ -154,3 +154,14 @@ def test_contested_news_claim_is_labelled_single_source_contested_without_search
     assert contested.attribution == ("reuters.com reported (2026-10-28); contested characterization, "
                                      "single source: no second outlet found")
     assert reported.kind == "reported" and reported.attribution == "reuters.com reported (2026-10-28)"
+
+
+def test_long_contested_label_keeps_the_single_source_warning() -> None:
+    from agentteams.research.briefing import ATTRIBUTION_MAX_CHARS, _attribution
+    domain = "a-very-long-regional-newspaper-domain-name.example"
+    src = ReputableSource(title="t", url=f"https://{domain}/a", snippet="", domain=domain,
+                          tier="authoritative", type="news")
+    cand = Candidate(url=src.url, domain=domain, news=True, rated=True, source=src)
+    label = _attribution(cand, "2026-10-28T09:15:00.000000+00:00", "contested", CLAIM)
+    assert len(label) <= ATTRIBUTION_MAX_CHARS
+    assert label.endswith("contested characterization, single source")

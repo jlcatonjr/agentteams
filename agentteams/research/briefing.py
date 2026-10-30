@@ -159,7 +159,12 @@ def _attribution(c: Candidate, published_at: str | None, kind: str = "reported",
     if c.news and c.source is not None:
         if kind == "contested":
             ps = PerspectiveSet(claim=claim, kind="contested", outlets=((c.source.domain, published_at),))
-            return perspective_summary(ps)[:ATTRIBUTION_MAX_CHARS]
+            label = perspective_summary(ps)
+            if len(label) > ATTRIBUTION_MAX_CHARS:
+                # A long domain or date would clip the single-source warning off the end; keep the
+                # warning and drop the date instead.
+                label = f"{c.source.domain}: contested characterization, single source"
+            return label[:ATTRIBUTION_MAX_CHARS]
         return perspective_attribution(c.source, published_at)[:ATTRIBUTION_MAX_CHARS]
     return f"{c.domain} ({'rated source' if c.rated else 'web page, not rated'})"[:ATTRIBUTION_MAX_CHARS]
 

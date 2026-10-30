@@ -65,7 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   naming the interpreter, instead of a `FAIL` per row.
 - **`briefing` labels contested news claims.** A claim the digest marks `contested` from a news source gets
   `perspective_summary`'s single-source wording ("contested characterization, single source: no second outlet
-  found"), capped at 120 characters; no second outlet is searched for.
+  found"), capped at 120 characters (a label that would clip drops the date and keeps "contested
+  characterization, single source"); no second outlet is searched for.
 - **The test suite tests the tree it is run from.** `tests/conftest.py` puts its own tree first on `sys.path`
   and `PYTHONPATH` (so subprocess tests import it too); if another copy of `agentteams` was already imported,
   the run stops with exit code 4. Running from a git worktree no longer silently tests the main checkout.

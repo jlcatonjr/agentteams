@@ -618,7 +618,7 @@ page_chars=4000, claims_per_source=3, extra_patterns=())` is an async function t
 that a claim the digest marks `contested` gets `perspective_summary`'s single-source wording
 ("`<domain>` reported (`<date>`); contested characterization, single source: no second outlet
 found"). No second outlet is searched for, since a briefing sends only the topic. Every
-attribution is capped at 120 characters. `default_candidates(topic, allowlist=None, k_rated=4, k_web=8)` is the default
+attribution is capped at 120 characters; a contested label that would clip drops the date and keeps "single source". `default_candidates(topic, allowlist=None, k_rated=4, k_web=8)` is the default
 source finder (rated outlets, then web hits, deduplicated by URL). `BriefingStats` holds counts only: `candidates`, `fetched`, `unsafe_url`,
 `injection`, `digest_rejected` and `refuted`. `Retriever` injects the network side for tests.
 `max_pages`, `page_chars` and `claims_per_source` must be positive ints (`ValueError`). Exceptions
