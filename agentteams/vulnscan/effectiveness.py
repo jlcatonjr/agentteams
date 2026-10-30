@@ -163,8 +163,11 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         except ValueError:   # an untrusted ledger is reported by the review; count nothing from it
             rows = []
         stats = pr_stats(pr_urls(rows))
-    now_keys = {f.key() for f in total.findings}
-    before = {f.key() for f in previous.findings} if previous else set()
+    # Range findings (unpinned requirements) are not counted: switching ``unpinned_ranges`` off, or a cap, would
+    # "fix" them without any change to a repository. They have a line of their own.
+    now_keys = {f.key() for f in total.findings if f.kind != "range"}
+    before = {f.key() for f in previous.findings if f.kind != "range"} if previous else set()
+    ranges = sum(1 for f in total.findings if f.kind == "range")
     fixed = len(before - now_keys) if previous else 0
     new = len(now_keys - before) if previous else len(now_keys)
     oldest = f"{stats.oldest_days} day(s)" if stats.oldest_days is not None else "n/a"
@@ -178,6 +181,7 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| Net change in findings | {new - fixed:+d} |" if previous else "| Net change in findings | n/a |",
         "| Findings already fixed upstream (checkout behind; not counted as fixed) | "
         f"{sum(1 for f in total.findings if f.fixed_upstream)} |",
+        f"| Requirement-range findings (not counted above: no installed version is known) | {ranges} |",
         f"| Remediation PRs open | {stats.open} (oldest {oldest}) |",
         f"| … open longer than {STALE_DAYS} days | {stats.stale} |",
         f"| … failing CI | {stats.failing} |",

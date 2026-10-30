@@ -9,14 +9,20 @@ version of the affected range that contains the installed version; it skips malf
 never returns a fix version of unusual format (``quirks`` counts both for the report).
 ``minimal_fix`` takes the highest of those across all advisories, which is the smallest
 upgrade that clears every one of them.
+
+For unpinned requirement ranges (:mod:`.specifiers`), ``package_ids`` asks for a package's advisories by
+name alone (the query has no ``version`` key) and ``affected_intervals`` reads an advisory's affected
+versions as intervals, or says it cannot be judged.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 from agentteams.vulnscan import _http, cvss
+from agentteams.vulnscan.specifiers import Interval
 from agentteams.vulnscan.versions import version_key
 
 OSV_API = "https://api.osv.dev/v1"
@@ -63,8 +69,36 @@ def vulnerable_ids(items: Iterable[Key]) -> dict[Key, list[str]]:
         FeedError: OSV could not be queried, answered fewer or malformed results, or
             paginated without end; nothing can be concluded about the items.
     """
-    todo = sorted(set(items))
-    found: dict[Key, list[str]] = {}
+    return _query_batches(sorted(set(items)),
+                          lambda k: {"package": {"ecosystem": k[0], "name": k[1]}, "version": k[2]})
+
+
+def package_ids(items: Iterable[tuple[str, str]]) -> dict[tuple[str, str], list[str]]:
+    """Return every advisory ID OSV holds for each (ecosystem, name), whatever the version.
+
+    The query names the package only: it **omits** the ``version`` key (never sends ``""``), so OSV answers
+    with every advisory for the package. Unpinned requirement ranges use it (:mod:`.specifiers`); pagination
+    is bounded as in :func:`vulnerable_ids`.
+
+    Args:
+        items: (ecosystem, name) pairs; duplicates are queried once.
+
+    Returns:
+        Mapping of packages with advisories to their IDs (packages without any are absent).
+
+    Raises:
+        FeedError: OSV could not be queried, answered fewer or malformed results, or paginated without end.
+    """
+    return _query_batches(sorted(set(items)), lambda k: {"package": {"ecosystem": k[0], "name": k[1]}})
+
+
+def _query_batches(todo: list, query: Callable[[Any], dict]) -> dict:
+    """Run ``querybatch`` over ``todo`` (one query each, built by ``query``) and collect advisory IDs per item.
+
+    Raises:
+        FeedError: As :func:`vulnerable_ids`.
+    """
+    found: dict = {}
     for start in range(0, len(todo), BATCH):
         chunk = todo[start:start + BATCH]
         pending: dict[int, str | None] = {i: None for i in range(len(chunk))}   # index -> page token
@@ -73,8 +107,7 @@ def vulnerable_ids(items: Iterable[Key]) -> dict[Key, list[str]]:
         while pending:
             queries = []
             for i, token in pending.items():
-                eco, name, ver = chunk[i]
-                q: dict = {"package": {"ecosystem": eco, "name": name}, "version": ver}
+                q = query(chunk[i])
                 if token:
                     q["page_token"] = token
                 queries.append(q)
@@ -222,6 +255,80 @@ def _walk_fix(record: object, ecosystem: str, name: str, version: str) -> tuple[
                         return (None if hidden else ev["fixed"]), malformed, hidden
                     intro = None
     return None, malformed, False
+
+
+#: Range event kinds :func:`affected_intervals` reads; any other makes the advisory "not judged".
+RANGE_EVENTS = ("introduced", "fixed", "last_affected", "limit")
+
+
+def affected_intervals(record: object, ecosystem: str, name: str) -> list[Interval] | None:
+    """Return the versions an advisory affects for one package, as intervals (unpinned ranges, :mod:`.specifiers`).
+
+    Each ``ECOSYSTEM`` / ``SEMVER`` range's events are read in order: ``introduced`` opens an interval
+    (``"0"``: unbounded below), ``fixed`` closes it before that version (and marks the interval ``fixed``: a
+    version to raise a lower bound to), ``last_affected`` closes it at that version, ``limit`` closes it before
+    that version; an ``introduced`` that nothing closes is open-ended. Each entry of an explicit ``versions[]``
+    list is one single-version interval. :func:`_walk_fix` (pinned versions) is separate and unchanged.
+
+    The record is untrusted. The advisory is **not judged** (None, a coverage note, never clean) when the
+    record is malformed; when an affected entry of this package has only ``GIT`` ranges (commit hashes, no
+    release versions) or a range of another unknown type; when an event is not exactly one known kind
+    (:data:`RANGE_EVENTS`) with a string version; or when no affected entry of this package yields an
+    interval. A ``GIT`` range next to an ``ECOSYSTEM`` range or a ``versions[]`` list in the same entry (common
+    in ``PYSEC-*`` records) is skipped, as :func:`_walk_fix` skips it: the release ranges describe the same
+    vulnerability.
+
+    Args:
+        record: OSV advisory.
+        ecosystem: Package ecosystem.
+        name: Package name (matched after :func:`normalize_name`).
+
+    Returns:
+        The intervals, or None when the advisory cannot be judged.
+    """
+    affected = record.get("affected") if isinstance(record, dict) else None
+    if not isinstance(affected, list):
+        return None
+    want, out = normalize_name(ecosystem, name), []
+    for aff in affected:
+        pkg = aff.get("package") if isinstance(aff, dict) else None
+        if not isinstance(pkg, dict) or not isinstance(pkg.get("name", ""), str):
+            return None
+        if pkg.get("ecosystem") != ecosystem or normalize_name(ecosystem, pkg.get("name", "")) != want:
+            continue
+        ranges, versions = aff.get("ranges", []), aff.get("versions", [])
+        if not isinstance(ranges, list) or not isinstance(versions, list):
+            return None
+        for v in versions:
+            if not isinstance(v, str) or not v.strip():
+                return None
+            out.append(Interval(v, True, v, True))
+        if any(not isinstance(r, dict) or r.get("type") not in ("ECOSYSTEM", "SEMVER", "GIT") for r in ranges):
+            return None   # a range of a type no version interval can be read from
+        versioned = [r for r in ranges if r.get("type") != "GIT"]
+        if not versioned and not versions and ranges:
+            return None   # GIT ranges only (commit hashes): nothing says which releases are affected
+        for rng in versioned:
+            events = rng.get("events")
+            if not isinstance(events, list):
+                return None
+            start: str | None = None
+            is_open = False
+            for ev in events:
+                if not isinstance(ev, dict) or len(ev) != 1:
+                    return None
+                (kind, value), = ev.items()
+                if kind not in RANGE_EVENTS or not isinstance(value, str) or not value.strip():
+                    return None
+                if kind == "introduced":
+                    if not is_open:
+                        start, is_open = (None if value == "0" else value), True
+                elif is_open:
+                    out.append(Interval(start, True, value, kind == "last_affected", kind == "fixed"))
+                    is_open = False
+            if is_open:
+                out.append(Interval(start, True, None, False))
+    return out or None
 
 
 def fix_for(record: dict, ecosystem: str, name: str, version: str) -> str | None:

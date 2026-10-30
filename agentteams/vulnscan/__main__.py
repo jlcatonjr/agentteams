@@ -149,6 +149,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--gradle-lockfiles", action="store_true",
                     help="also read gradle.lockfile (off by default: its names would go to OSV, and a private "
                          "Maven repository cannot be told apart)")
+    sp.add_argument("--unpinned-ranges", action="store_true",
+                    help="also check unpinned Python requirement ranges (sends their names to OSV)")
     common(sp)
     sp = sub.add_parser("inventory", help="analyze a server-kit audit log")
     sp.add_argument("log", type=Path)
@@ -242,7 +244,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.cmd == "scan":
         return _emit(engine.scan_path(args.path, include_worktrees=args.include_worktrees,
-                                      gradle_lockfiles=args.gradle_lockfiles), args)
+                                      gradle_lockfiles=args.gradle_lockfiles,
+                                      unpinned_ranges=args.unpinned_ranges), args)
     if args.cmd == "inventory":
         try:
             text = args.log.read_text(encoding="utf-8", errors="replace")
