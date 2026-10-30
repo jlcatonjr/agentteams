@@ -777,7 +777,9 @@ case "$(basename "$2")" in
 esac
 """
 FAKE_APT_CACHE = r"""#!/bin/bash
-[ "$1" = policy ] || exit 1
+# security R-s2: L1 must turn apt's binary caches off (it may run as root), or this fake answers nothing
+[ "$*" = "-o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy $6" ] || exit 1
+shift 4
 echo "$2:"; echo "  Installed: 1.0"; echo "  Candidate: 1.0"; echo "  Version table:"
 case "$2" in
   nginx) printf ' *** 1.26.1-1~jammy 500\n        500 http://nginx.org/packages/ubuntu jammy/nginx amd64 Packages\n        100 /var/lib/dpkg/status\n     1.18.0-6ubuntu14 500\n        500 http://us-east-1.ec2.archive.ubuntu.com/ubuntu jammy/main amd64 Packages\n';;
@@ -925,6 +927,9 @@ def test_n5_l1_stays_read_only() -> None:
     text = "\n".join(code)
     assert "timeout 10" in text and "DOCKER_HOST=unix:///var/run/docker.sock" in text and "GOTOOLCHAIN=local" in text
     assert "/var/lib/ubuntu-advantage/status.json" in text and ". /etc/os-release" not in text
+    assert "apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy" in text   # R-s2: no cache write
+    header = (KIT_SRC / "L1-audit.sh").read_text().split("\n\n", 1)[0]
+    assert "dnf's own log" in header   # R-s2: the one write a root run may still make is stated
 
 
 def test_n5_forbidden_patterns_catch_write_verbs() -> None:
@@ -934,5 +939,6 @@ def test_n5_forbidden_patterns_catch_write_verbs() -> None:
                 "echo x > /etc/hosts", "docker pull nginx", "nginx -s reload", "curl https://x", "sed -i s/a/b/ f"):
         assert any(re.search(p, ln) for ln in _code_lines(bad) for p in FORBIDDEN), bad
     for fine in ("apt-get -s -o Debug::NoLocking=1 upgrade", "systemctl is-enabled apt-daily-upgrade.timer",
-                 "tmo apt-cache policy \"$1\"", "nginx -T 2>/dev/null"):
+                 "tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy \"$1\"",
+                 "nginx -T 2>/dev/null"):
         assert not any(re.search(p, fine) for p in FORBIDDEN), fine

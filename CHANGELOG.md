@@ -57,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the vendor (no kit lever)". The kit's `--apply` paths are unchanged.
 - **Fleet-wide effect:** after the kit is re-staged, the next audit of each host can add OS release findings and
   judge third-party-repository installs (nginx.org, PGDG, NodeSource, docker-ce, PPAs) that were `distro` before.
+- Workstation version probes run from `/` with `GOTOOLCHAIN=local`, an empty `GOFLAGS`, `DOCKER_HOST` pinned to the
+  local socket and `DOCKER_CONTEXT` dropped, as `L1-audit.sh` does on a host (security review R-s1).
+- `L1-audit.sh` runs `apt-cache policy` with its binary caches off, and its header states the one write a root run
+  may still make: `dnf -C repoquery` may append to dnf's own log (security review R-s2).
 - An Ubuntu release past standard support whose extended-support (ESM) data is unknown is HIGH, "ESM state
   unknown", whatever its `ESM` line says: unknown never grades as covered (code-hygiene R3).
 - Tests: fake-binary L1 harness for the new probes, origins, `OSREL`/`ESM`; a read-only grep over `L1-audit.sh`

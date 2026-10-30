@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# L1 — READ-ONLY vulnerability inventory of one Linux host. Changes nothing.
+# L1 — READ-ONLY vulnerability inventory of one Linux host. Changes nothing it manages.
+# Run as root, the package tools it queries may still touch their own state: `apt-cache policy` runs with its
+# binary caches off (Dir::Cache::pkgcache= and srcpkgcache=), so it writes no cache file; `dnf -C repoquery`
+# reads the cache only (-C) but may append a line to dnf's own log (/var/log/dnf*.log). Nothing else is written.
 # Ubuntu/Debian (apt) and Amazon Linux / RHEL / Fedora (dnf/yum).
 #
 #   ./remote.sh <host> L1-audit.sh                    # from your workstation (streamed, not copied)
@@ -17,7 +20,7 @@
 #   IOC        message                                compromise indicator (from ioc-*.txt data)
 # RUNTIME kinds: php node python ruby go java java-corretto dotnet nginx openssl libressl postgresql mysql
 # mariadb redis docker (libressl is reported, not judged). Each probe only prints a version: no service is
-# started, stopped or reloaded, nothing is written, nothing leaves the host, and each runs under `timeout 10`
+# started, stopped or reloaded, nothing is written (but see above), nothing leaves the host, and each runs under `timeout 10`
 # when `timeout` exists. docker reads the local socket only (DOCKER_HOST is pinned to it).
 # RUNTIME manager: nvm / volta / fnm / conda / pyenv / tarball, or for a dpkg/rpm-owned binary
 #   pkg:<package>[:universe]   the installed version comes from an allowlisted distro archive (distro_host);
@@ -79,7 +82,7 @@ distro_host(){
   return 1
 }
 apt_sources(){  # "host component" per archive serving the installed version: the `***` block of apt-cache policy
-  tmo apt-cache policy "$1" 2>/dev/null | awk '
+  tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy "$1" 2>/dev/null | awk '
     /^ \*\*\* /{inb=1; next}
     inb && $1 ~ /^-?[0-9]+$/ && ($2 ~ /^\// || $2 ~ /:/) {   # a source line, not the next version
       if ($2 ~ /^\//) next                                   # /var/lib/dpkg/status: installed, origin unknown
