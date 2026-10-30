@@ -39,7 +39,8 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 #: Authority label for every memory- and code-index hit, shared by the CLI and the recall MCP server.
 #: Indexed text includes agent-written plans and summaries that may quote read content, so a hit is
@@ -92,7 +93,11 @@ def apply_memory_index_exclude(
     return kept
 
 MEMORY_INDEX_SCHEMA_VERSION = "1.3"
-INDEX_FORMAT_VERSION = "json-bm25-postings-v2"
+#: v3: JSON Lines sources index one passage per record (not raw JSON) and texts-built
+#: documents carry ``"origin": "text"``. :func:`is_index_stale` treats any other value as stale.
+INDEX_FORMAT_VERSION = "json-bm25-postings-v3"
+#: ``origin`` value marking a document built from in-memory text, not a file.
+_TEXT_ORIGIN = "text"
 INDEX_WRITE_OWNER = "agentteams.build_team"
 VECTOR_RUNTIME_MODE = "sparse-tfidf-cosine"
 FALLBACK_POLICY = "non-blocking-file-read-then-search"
@@ -149,10 +154,6 @@ def _tokenize(text: str) -> list[str]:
         for t in _TOKEN_RE.findall(text)
         if t.lower() not in _STOPWORDS
     ]
-
-
-def _title_for(path: Path, text: str) -> str:
-    return _title_from(text, path.name)
 
 
 def _title_from(text: str, fallback: str) -> str:
@@ -481,9 +482,9 @@ def build_memory_index_from_texts(
     The output has the same schema as :func:`build_memory_index` and answers
     :func:`query_index` the same way. Each key is stored verbatim as the document's
     ``path`` — an opaque id, not relativized or redacted — and the title is the text's
-    first ``# `` heading or else the id. ``source_mtime`` is ``0.0`` and ``source_hash``
-    is the text's SHA-256. :func:`is_index_stale` skips such documents when no file
-    exists at their id, so a texts-built index is never stale on their account.
+    first ``# `` heading or else the id. ``source_mtime`` is ``0.0``, ``source_hash``
+    is the text's SHA-256, and ``origin`` is ``"text"``. :func:`is_index_stale` skips
+    documents so marked, so a texts-built index is never stale on their account.
 
     Args:
         texts: Document id → document text, indexed in mapping order. A text with no
@@ -512,6 +513,7 @@ def build_memory_index_from_texts(
             len(documents), doc_key, doc_key, text, jsonl=as_jsonl, source_mtime=0.0
         )
         if built is not None:
+            built[0]["origin"] = _TEXT_ORIGIN
             _add_document(documents, postings, *built)
     return _finish_index(
         documents, postings, source_count=len(texts),
@@ -629,10 +631,12 @@ def is_index_stale(
 ) -> bool:
     """Return True when any source file is newer than the index build time.
 
-    Invalid/missing timestamp metadata is treated as stale for safety. A document
-    with ``source_mtime == 0.0`` whose ``path`` names no existing file was built from
-    in-memory text (:func:`build_memory_index_from_texts`) and is skipped, so an index
-    built only from texts is stale only when *sources* holds a file newer than it.
+    Invalid/missing timestamp metadata, or an ``index_format_version`` other than
+    :data:`INDEX_FORMAT_VERSION`, is treated as stale for safety. A document marked
+    ``"origin": "text"`` was built from in-memory text
+    (:func:`build_memory_index_from_texts`) and is skipped, so an index built only from
+    texts is stale only when *sources* holds a file newer than it. Every other document
+    is hash-checked against its file; a missing or unreadable file is stale.
 
     Args:
         index: A parsed index payload.
@@ -646,6 +650,8 @@ def is_index_stale(
     Returns:
         ``True`` when the index is stale and should be rebuilt.
     """
+    if index.get("index_format_version") != INDEX_FORMAT_VERSION:
+        return True
     built_at = index.get("built_at")
     if not isinstance(built_at, str) or not built_at:
         return True
@@ -662,12 +668,11 @@ def is_index_stale(
             continue
         path_str = doc.get("path")
         expected_hash = doc.get("source_hash")
+        if doc.get("origin") == _TEXT_ORIGIN:
+            # Built from in-memory text (build_memory_index_from_texts): no file to compare.
+            continue
         if isinstance(path_str, str) and isinstance(expected_hash, str) and expected_hash:
-            resolved = resolve_path(path_str, root)
-            if doc.get("source_mtime") == 0.0 and not resolved.exists():
-                # Built from in-memory text (build_memory_index_from_texts): no file to compare.
-                continue
-            actual_hash = _source_text_hash(resolved)
+            actual_hash = _source_text_hash(resolve_path(path_str, root))
             if not actual_hash or actual_hash != expected_hash:
                 return True
 

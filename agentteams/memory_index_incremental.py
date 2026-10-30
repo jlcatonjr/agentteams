@@ -16,7 +16,6 @@ import json
 import math
 import subprocess
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -27,25 +26,6 @@ from agentteams import memory_index as mi
 class IncrementalUpdateResult:
     applied: bool
     reason: str
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
-def _source_hash(path: Path) -> str:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return ""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _source_mtime(path: Path) -> float:
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return 0.0
 
 
 def _old_tf_for_doc(index: dict[str, Any], doc_id: int) -> dict[str, int]:
@@ -78,7 +58,7 @@ def _new_doc_and_tf(
         return None
     return mi._index_document(
         doc_id, mi.store_path(path, root), path.name, text,
-        jsonl=mi._is_jsonl(path.name), source_mtime=_source_mtime(path),
+        jsonl=mi._is_jsonl(path.name), source_mtime=mi._source_mtime(path),
     )
 
 
@@ -225,6 +205,10 @@ def try_incremental_sed_update(
     postings = index.get("postings", {})
     if not isinstance(docs, list) or not isinstance(postings, dict):
         return IncrementalUpdateResult(False, "invalid_index_shape")
+    # A patch keeps every other document as stored, so an index in an older format
+    # would come out half-migrated under the old version label; rebuild it fully.
+    if index.get("index_format_version") != mi.INDEX_FORMAT_VERSION:
+        return IncrementalUpdateResult(False, "index_format_version_mismatch")
 
     source_paths = [Path(p) for p in sources if Path(p).exists()]
     doc_by_path: dict[str, dict[str, Any]] = {}
@@ -250,7 +234,7 @@ def try_incremental_sed_update(
         if not old_doc:
             return IncrementalUpdateResult(False, "missing_doc_entry")
         expected_hash = old_doc.get("source_hash")
-        actual_hash = _source_hash(path)
+        actual_hash = mi._source_text_hash(path)
         if not isinstance(expected_hash, str) or not actual_hash or expected_hash != actual_hash:
             changed.append(path)
 
@@ -311,7 +295,7 @@ def try_incremental_sed_update(
     if n_docs > 0:
         updated["avgdl"] = (avgdl * n_docs - old_len + new_len) / n_docs
 
-    built_at = _now_iso()
+    built_at = mi._utc_now_iso()
     source_fingerprint = mi._documents_fingerprint(updated["documents"])
     index_build_id = hashlib.sha256(
         f"{source_fingerprint}|{built_at}|{len(source_paths)}".encode("utf-8")

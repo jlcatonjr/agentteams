@@ -73,7 +73,8 @@ def test_texts_index_matches_file_index_for_same_content(tmp_path):
         assert from_files[key] == from_texts[key]
     for fd, td in zip(from_files["documents"], from_texts["documents"]):
         assert {k: v for k, v in fd.items() if k != "source_mtime"} == \
-            {k: v for k, v in td.items() if k != "source_mtime"}
+            {k: v for k, v in td.items() if k not in ("source_mtime", "origin")}
+        assert "origin" not in fd and td["origin"] == "text"
 
 
 def test_texts_index_rejects_non_str():
@@ -164,5 +165,61 @@ def test_build_memory_index_output_unchanged_by_refactor(tmp_path, monkeypatch):
     for doc in idx["documents"]:
         doc["source_mtime"] = 0.0
         doc["vector_norm_sq"] = round(doc["vector_norm_sq"], 9)
+    # Golden captured at v2; the v3 bump changed JSONL and texts-built documents only.
+    idx["index_format_version"] = "json-bm25-postings-v2"
     digest = hashlib.sha256(json.dumps(idx).encode()).hexdigest()
     assert digest == "052b25c9691d5347b7b20584ff27e99550a8deae449051fb47119b5d4d80d6ec"
+
+
+def test_file_doc_with_failed_stat_still_stale_when_deleted(tmp_path):
+    """A file-built doc whose stat failed (mtime 0.0) is not mistaken for a text doc."""
+    src = tmp_path / "a.md"
+    src.write_text(_PROSE_A, encoding="utf-8")
+    idx = build_memory_index([src])
+    idx["documents"][0]["source_mtime"] = 0.0
+    assert is_index_stale(idx, []) is False
+    src.unlink()
+    assert is_index_stale(idx, []) is True
+
+
+def test_text_doc_naming_a_real_file_is_not_stale(tmp_path):
+    """A text id that happens to name an existing, different file is still skipped."""
+    real = tmp_path / "a.md"
+    real.write_text(_PROSE_B, encoding="utf-8")
+    os.utime(real, (1_000_000_000, 1_000_000_000))
+    idx = build_memory_index_from_texts({str(real): _PROSE_A})
+    assert idx["documents"][0]["origin"] == "text"
+    assert is_index_stale(idx, []) is False
+    assert is_index_stale(idx, [], root=tmp_path) is False
+
+
+def test_format_version_mismatch_is_stale(tmp_path):
+    src = tmp_path / "a.md"
+    src.write_text(_PROSE_A, encoding="utf-8")
+    idx = build_memory_index([src])
+    assert is_index_stale(idx, [src]) is False
+    for old in ("json-bm25-postings-v2", None):
+        if old is None:
+            idx.pop("index_format_version")
+        else:
+            idx["index_format_version"] = old
+        assert is_index_stale(idx, [src]) is True
+
+
+def test_incremental_refuses_format_version_mismatch(tmp_path):
+    a = tmp_path / "a.md"
+    b = tmp_path / "b.md"
+    a.write_text("# A\n\nalpha beta gamma delta epsilon\n", encoding="utf-8")
+    b.write_text("# B\n\nbeta gamma error handling retries\n", encoding="utf-8")
+    idx = build_memory_index([a, b], root=tmp_path)
+    idx["index_format_version"] = "json-bm25-postings-v2"
+    idx_path = tmp_path / "memory-index.json"
+    idx_path.write_text(json.dumps(idx, indent=2) + "\n", encoding="utf-8")
+    a.write_text("# A\n\nalpha alpha beta gamma delta epsilon\n", encoding="utf-8")
+    before = idx_path.read_text(encoding="utf-8")
+    res = mii.try_incremental_sed_update(
+        index_path=idx_path, index=idx, sources=[a, b], project_name="", framework="",
+        validate_index=lambda _idx: None, root=tmp_path,
+    )
+    assert (res.applied, res.reason) == (False, "index_format_version_mismatch")
+    assert idx_path.read_text(encoding="utf-8") == before
