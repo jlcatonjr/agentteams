@@ -11,7 +11,11 @@ Every test pins the cache to a tmp_path — nothing here touches the real cache 
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import time
+import warnings
+from pathlib import Path
 
 import pytest
 
@@ -135,3 +139,176 @@ def test_purge_expired_removes_stale_and_corrupt_but_keeps_fresh(_isolated_cache
 def test_purge_on_absent_directory_is_zero_not_an_error(monkeypatch, tmp_path):
     monkeypatch.setenv(cache.CACHE_DIR_ENV, str(tmp_path / "does-not-exist"))
     assert cache.purge_expired() == 0
+
+
+# --- default location: never a committable path -------------------------------------------
+
+_GIT = shutil.which("git")
+needs_git = pytest.mark.skipif(_GIT is None, reason="git not installed")
+
+
+@pytest.fixture
+def default_location(tmp_path, monkeypatch):
+    """Drop the env override, reset the per-process memo and warn-once flag, pin XDG_CACHE_HOME."""
+    monkeypatch.delenv(cache.CACHE_DIR_ENV, raising=False)
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(cache, "_warned_fallback", False)
+    cache._default_cache_dir.cache_clear()
+    xdg = tmp_path / "xdg"
+    monkeypatch.setenv("XDG_CACHE_HOME", str(xdg))
+    yield xdg / "agentteams" / "research"
+    cache._default_cache_dir.cache_clear()
+
+
+def _git_init(path):
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run([_GIT, "init", "-q", str(path)], check=True, capture_output=True)
+    return path
+
+
+def test_env_override_wins_over_every_default(tmp_path, monkeypatch, default_location):
+    repo = _git_init(tmp_path / "repo") if _GIT else tmp_path
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv(cache.CACHE_DIR_ENV, str(tmp_path / "chosen"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert cache.cache_dir() == tmp_path / "chosen"
+
+
+def test_outside_git_keeps_in_repo_default(tmp_path, monkeypatch, default_location):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    monkeypatch.chdir(plain)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert cache.cache_dir() == Path.cwd() / "references" / "research-cache"
+
+
+@needs_git
+def test_git_repo_that_ignores_the_path_keeps_in_repo_default(tmp_path, monkeypatch, default_location):
+    repo = _git_init(tmp_path / "repo")
+    (repo / ".gitignore").write_text("references/research-cache/\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert cache.cache_dir() == Path.cwd() / "references" / "research-cache"
+
+
+@needs_git
+def test_git_repo_without_ignore_rule_uses_user_cache_and_warns_once(
+    tmp_path, monkeypatch, default_location
+):
+    repo = _git_init(tmp_path / "repo")
+    monkeypatch.chdir(repo)
+    with pytest.warns(UserWarning, match="not gitignored"):
+        assert cache.cache_dir() == default_location
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # second call: no second warning
+        assert cache.cache_dir() == default_location
+
+
+@needs_git
+def test_store_in_unignored_repo_writes_nothing_under_the_repo(tmp_path, monkeypatch, default_location):
+    repo = _git_init(tmp_path / "repo")
+    monkeypatch.chdir(repo)
+    with pytest.warns(UserWarning):
+        assert cache.store(cache.make_key("search", "q"), "v") is True
+    assert not (repo / "references").exists()
+    assert len(list(default_location.glob("*.json"))) == 1
+
+
+@needs_git
+def test_subdirectory_of_unignored_repo_uses_user_cache(tmp_path, monkeypatch, default_location):
+    repo = _git_init(tmp_path / "repo")
+    sub = repo / "a" / "b"
+    sub.mkdir(parents=True)
+    monkeypatch.chdir(sub)
+    with pytest.warns(UserWarning):
+        assert cache.cache_dir() == default_location
+
+
+@needs_git
+def test_hook_git_env_does_not_redirect_the_probe(tmp_path, monkeypatch, default_location):
+    """A hook's GIT_DIR pointing at a repo that ignores the path must not make ours look ignored."""
+    other = _git_init(tmp_path / "other")
+    (other / ".gitignore").write_text("references/\n", encoding="utf-8")
+    repo = _git_init(tmp_path / "repo")
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+    monkeypatch.chdir(repo)
+    with pytest.warns(UserWarning):
+        assert cache.cache_dir() == default_location
+
+
+def test_git_missing_fails_toward_user_cache(tmp_path, monkeypatch, default_location):
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)  # looks like a work tree; git itself is unavailable
+
+    def _no_git(*_a, **_kw):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(cache.subprocess, "run", _no_git)
+    monkeypatch.chdir(repo)
+    with pytest.warns(UserWarning, match="FileNotFoundError"):
+        assert cache.cache_dir() == default_location
+
+
+def test_git_timeout_fails_toward_user_cache(tmp_path, monkeypatch, default_location):
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+
+    def _hang(*_a, **_kw):
+        raise subprocess.TimeoutExpired(cmd="git", timeout=5)
+
+    monkeypatch.setattr(cache.subprocess, "run", _hang)
+    monkeypatch.chdir(repo)
+    with pytest.warns(UserWarning, match="TimeoutExpired"):
+        assert cache.cache_dir() == default_location
+
+
+def test_git_error_exit_fails_toward_user_cache(tmp_path, monkeypatch, default_location):
+    """Exit 128 (e.g. "dubious ownership") is an error, not "ignored"."""
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    fake = subprocess.CompletedProcess(args=["git"], returncode=128, stdout="",
+                                       stderr="fatal: detected dubious ownership\n")
+    monkeypatch.setattr(cache.subprocess, "run", lambda *_a, **_kw: fake)
+    monkeypatch.chdir(repo)
+    with pytest.warns(UserWarning, match="dubious ownership"):
+        assert cache.cache_dir() == default_location
+
+
+def test_probe_runs_once_per_cwd(tmp_path, monkeypatch, default_location):
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    calls = []
+
+    def _ignored(argv, **_kw):
+        calls.append(argv)
+        return subprocess.CompletedProcess(args=argv, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(cache.subprocess, "run", _ignored)
+    monkeypatch.chdir(repo)
+    for _ in range(3):
+        assert cache.cache_dir() == Path.cwd() / "references" / "research-cache"
+    assert len(calls) == 1
+    assert calls[0][:2] == ["git", "-C"]  # argument list, no shell
+
+
+@pytest.mark.parametrize(
+    ("platform", "xdg", "expected_parts"),
+    [
+        ("linux", None, (".cache", "agentteams", "research")),
+        ("darwin", None, ("Library", "Caches", "agentteams", "research")),
+        ("linux", "relative/ignored", (".cache", "agentteams", "research")),
+    ],
+)
+def test_user_cache_dir_platform_defaults(tmp_path, monkeypatch, platform, xdg, expected_parts):
+    monkeypatch.setattr(cache.sys, "platform", platform)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    if xdg is None:
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    else:
+        monkeypatch.setenv("XDG_CACHE_HOME", xdg)
+    assert cache.user_cache_dir() == tmp_path.joinpath(*expected_parts)
