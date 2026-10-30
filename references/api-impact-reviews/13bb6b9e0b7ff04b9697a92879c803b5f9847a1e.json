@@ -1,0 +1,8 @@
+{
+  "patch_id": "13bb6b9e0b7ff04b9697a92879c803b5f9847a1e",
+  "commit": "8511acaea21a8172c478aefe3d17c8fda4aa4e80",
+  "subject": "feat(research): screen.scan_read_content screens fetched pages and retrieved passages (C-4)",
+  "impact": "1 modules added, 2 symbols added, 1 symbols changed",
+  "note": "Reviewed nx1f N22: SSRF guard, research.screen, research.briefing",
+  "recorded_at": "2026-10-30T17:06:35Z"
+}

@@ -63,6 +63,10 @@
             "pattern": "^[a-f0-9]{64}$"
           },
           "source_mtime": { "type": "number", "minimum": 0 },
+          "origin": {
+            "enum": ["text", "file"],
+            "description": "Where the document came from. \"text\" marks one built from in-memory text (build_memory_index_from_texts), which freshness checks skip; absent or \"file\" means a source file that freshness checks hash. Added in index_format_version json-bm25-postings-v3."
+          },
           "vector_norm_sq": {
             "type": "number",
             "minimum": 0,

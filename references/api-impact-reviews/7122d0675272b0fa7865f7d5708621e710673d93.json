@@ -1,0 +1,8 @@
+{
+  "patch_id": "7122d0675272b0fa7865f7d5708621e710673d93",
+  "commit": "983a7d4f85892ccd6157c5fabdcf54db4d0a2255",
+  "subject": "fix(memory-index): format v3, explicit origin marker for text-built docs, reuse shared helpers",
+  "impact": "1 schemas changed",
+  "note": "API Impact Review (research-hardening metaplan, 2026-10-30): additive public API (scan.match_injection, verify.audit_claim_pairs, cache.user_cache_dir, memory_index.build_memory_index_from_texts, news PerspectiveSet/Coverage/gather_perspectives/perspective_summary, ReputableSourceAllowlist.classify) plus memory-index format v3 (origin field in schema). Docs updated (research.md, scan.md, memory-index*.md, known-limitations, CHANGELOG); test_api_doc_signatures/parity pass. Audited by @conflict-auditor, @adversarial (CLEARED after fix round), @code-hygiene, @technical-validator; @security PASS on SSRF pin/cache/scan. Merge-commit resolutions reviewed by hand (no conflicts). Self-attested by agentteams-11.",
+  "recorded_at": "2026-10-30T18:20:35Z"
+}
