@@ -4,22 +4,20 @@ Read content (a fetched page, a search snippet, a retrieved passage) is Tier-6 d
 that tries to direct its reader is a finding to report, never an instruction to follow. This module
 screens such text before a model reads it, or after a model has summarised it.
 
-It is built on :func:`agentteams.scan.scan_content`, the scanner every agent file already passes,
-so the S-5 instruction- and identity-override patterns and the C-1 tier claims are the same ones,
-with the same Unicode normalisation and line-break handling. It never modifies ``scan.py``, which is
-a pinned enforcement module (``references/enforcement-integrity.json``). Two differences from
-scanning an agent file:
+It is built on :func:`agentteams.scan.match_injection`, the per-line matcher behind the scanner
+every agent file already passes, so the S-5 instruction- and identity-override patterns and the C-1
+tier claims are the same ones, with the same Unicode normalisation and line-break handling. Two
+differences from scanning an agent file:
 
-- **No exemptions.** A leading blank line is prepended before scanning, so read content can never
-  open a YAML front-matter block and suppress the identity patterns inside it, and the source label
-  is not a module-owned path, so no code-span exemption applies.
+- **No exemptions.** ``match_injection`` applies neither the YAML front-matter exemption for
+  identity phrasing nor the code-span exemption for module-owned files.
 - **Model-directed phrasing.** :data:`READ_CONTENT_PATTERNS` ("system prompt", "tell the user" ...)
   are flagged here only: agent files legitimately talk about the assistant and its system prompt,
   so ``scan_content`` does not run them.
 
-Credential and path findings from ``scan_content`` are not returned: read content leaking a secret is
-not an instruction, and callers decide separately whether to keep it. The pattern lists are
-literal and few; novel wording will not match (the accepted trade, as in ``scan``).
+Credential and path checks are not run: read content leaking a secret is not an instruction, and
+callers decide separately whether to keep it. The pattern lists are literal and few; novel wording
+will not match (the accepted trade, as in ``scan``).
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Iterable
 
-from agentteams.scan import ScanFinding, scan_content
+from agentteams.scan import ScanFinding, match_injection
 
 #: Model-directed phrasing read content has no business addressing to whoever reads it.
 READ_CONTENT_PATTERNS: tuple[str, ...] = (
@@ -72,26 +70,24 @@ def scan_read_content(
         line numbers into ``content``. A finding means the text tried to direct its reader: drop or
         quarantine it, never follow it.
     """
-    findings: dict[int, ScanFinding] = {}
-    for f in scan_content("\n" + content, _SOURCE_LABEL):
-        if f.category == "injection" and f.line > 1:
-            findings.setdefault(f.line - 1, ScanFinding(file=source, line=f.line - 1, category=f.category,
-                                                        severity=f.severity, message=f.message, snippet=f.snippet))
+    findings: list[ScanFinding] = []
     patterns = READ_CONTENT_PATTERNS + tuple(p.lower() for p in extra_patterns if p)
+    previous_raw = ""
     previous = ""
     for line_num, line in enumerate(content.splitlines(), start=1):
         norm = _normalize(line)
-        joined = " ".join(f"{previous} {norm}".split())
-        if line_num not in findings:
+        message = match_injection(line, previous_raw)
+        if message is None:
+            joined = " ".join(f"{previous} {norm}".split())
             for pattern in patterns:
                 if pattern in norm or (previous and pattern in joined and pattern not in previous):
-                    findings[line_num] = ScanFinding(
-                        file=source, line=line_num, category="injection", severity="high",
-                        message=f"read content addresses its reader ({pattern!r}): data, never instruction",
-                        snippet=line.strip()[:120])
+                    message = f"read content addresses its reader ({pattern!r}): data, never instruction"
                     break
-        previous = norm
-    return [findings[n] for n in sorted(findings)]
+        if message is not None:
+            findings.append(ScanFinding(file=source, line=line_num, category="injection", severity="high",
+                                        message=message, snippet=line.strip()[:120]))
+        previous_raw, previous = line, norm
+    return findings
 
 
 def is_inert_read_content(content: str, *, extra_patterns: Iterable[str] = ()) -> bool:
