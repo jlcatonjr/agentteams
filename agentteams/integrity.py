@@ -202,6 +202,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/coverage.py",         # effective scan roots and coverage states
     "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
     "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
+    "agentteams/vulnscan/private_sources.py",  # GOPRIVATE, nuget.config and .npmrc sources: names kept local
     "agentteams/vulnscan/executor_guard.py",   # grants-first; protected repos by origin; scan-only refusal
     "agentteams/vulnscan/repo_alias.py",       # the agent's repository aliases (mapped back by mcp.py)
     "agentteams/vulnscan/executor_serve.py",   # spool request schema checks, batch preflight (split from executor.py)

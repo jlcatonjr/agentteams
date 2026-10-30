@@ -146,6 +146,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("scan", help="scan manifests under a repo or a folder of repos")
     sp.add_argument("path", type=Path)
     sp.add_argument("--include-worktrees", action="store_true")
+    sp.add_argument("--gradle-lockfiles", action="store_true",
+                    help="also read gradle.lockfile (off by default: its names would go to OSV, and a private "
+                         "Maven repository cannot be told apart)")
     common(sp)
     sp = sub.add_parser("inventory", help="analyze a server-kit audit log")
     sp.add_argument("log", type=Path)
@@ -238,7 +241,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"no such path: {args.path}", file=sys.stderr)
         return 2
     if args.cmd == "scan":
-        return _emit(engine.scan_path(args.path, include_worktrees=args.include_worktrees), args)
+        return _emit(engine.scan_path(args.path, include_worktrees=args.include_worktrees,
+                                      gradle_lockfiles=args.gradle_lockfiles), args)
     if args.cmd == "inventory":
         try:
             text = args.log.read_text(encoding="utf-8", errors="replace")

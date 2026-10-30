@@ -39,7 +39,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 
-from agentteams.vulnscan import _http, osv, project_policy, runtimes
+from agentteams.vulnscan import _http, osv, private_sources, project_policy, runtimes
 from agentteams.vulnscan.manifests import Dep, discover, parse
 from agentteams.vulnscan.report import OS_RELEASE, Finding, Report
 
@@ -140,8 +140,12 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
 
 
+#: Unscannable reason of a ``gradle.lockfile`` read without the opt-in (re-exported).
+GRADLE_OPT_IN = private_sources.GRADLE_OPT_IN
+
+
 def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[str | Path] = (),
-              opted_out: Iterable[str | Path] = ()) -> Report:
+              opted_out: Iterable[str | Path] = (), gradle_lockfiles: bool = False) -> Report:
     """Scan every manifest under ``root``: the operator decides what is checked, each brief narrows what is sent.
 
     The operator's choices come first and apply before any manifest is read: a manifest inside an
@@ -155,11 +159,17 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     sent to OSV (``withheld``, ``"<repo>: <name> (<ecosystem>)"``); ``include_dev`` decides whether the
     repository's dev-only findings count.
 
+    The repository's own tooling withholds names too (:mod:`.private_sources`): Go modules matching
+    ``GOPRIVATE`` / ``GONOPROXY`` / ``GONOSUMDB``, every NuGet package of a repository whose ``nuget.config`` names
+    a non-nuget.org source, and pnpm/Bun names in an ``.npmrc`` scope with a non-npmjs registry. A
+    ``gradle.lockfile`` is read only with ``gradle_lockfiles`` (otherwise unscannable, :data:`GRADLE_OPT_IN`).
+
     Args:
         root: Repository or parent directory.
         include_worktrees: Also scan linked worktrees (normally duplicates).
         exclude: The operator's ``exclude`` paths (``~`` allowed); symlinks are resolved on both sides.
         opted_out: Repository paths the operator enrolled at ``off``.
+        gradle_lockfiles: Read ``gradle.lockfile`` files (off by default).
 
     Returns:
         The report; targets are repositories relative to ``root``.
@@ -171,6 +181,7 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     dev_policy: dict[str, bool] = {}
     excl = [Path(os.path.realpath(Path(x).expanduser())) for x in exclude]
     off = {Path(os.path.realpath(Path(x).expanduser())) for x in opted_out}
+    sources = private_sources.PrivateSources(root)
     for path in discover(root, include_worktrees=include_worktrees):
         real = Path(os.path.realpath(path))
         if any(x == real or x in real.parents for x in excl):
@@ -189,13 +200,17 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
         if pol.exclude_paths and project_policy.is_excluded(in_repo, pol.exclude_paths):
             report.excluded.append(f"{target}: {in_repo}")
             continue
+        if path.name == "gradle.lockfile" and not gradle_lockfiles:
+            report.unscannable.append((rel, GRADLE_OPT_IN))
+            continue
         m = parse(path)
         if m.unscannable:
             report.unscannable.append((rel, m.unscannable))
         if pol.include_dev is not None:
             dev_policy[target] = pol.include_dev
         for d in m.deps:
-            if pol.private_packages and project_policy.is_private(d.name, pol.private_packages, d.ecosystem):
+            if (pol.private_packages and project_policy.is_private(d.name, pol.private_packages, d.ecosystem)) \
+                    or sources.is_private(repo, path.name, d.ecosystem, d.name):
                 label = f"{target}: {d.name} ({d.ecosystem})"
                 if label not in report.withheld:
                     report.withheld.append(label)

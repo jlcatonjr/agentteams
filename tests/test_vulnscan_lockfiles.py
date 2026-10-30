@@ -417,7 +417,7 @@ def test_fix_plan_is_plan_only_and_never_edits_the_lockfile(tmp_path: Path, feed
     feed.records["GHSA-test-0001"] = _adv("GHSA-test-0001", eco, pkg, "0", new)
     before = lock.read_bytes()
     for apply in (False, True):
-        res = fix.fix_path(tmp_path, apply=apply, npm=False, allow_dirty=True)
+        res = fix.fix_path(tmp_path, apply=apply, npm=False, allow_dirty=True, gradle_lockfiles=True)
         assert lock.read_bytes() == before and res.changes == [] and res.feed_errors == []
         assert [(c.name, c.old, c.new, c.action) for c in res.lock_plan] == [(pkg, old, new, "plan-only")]
         assert res.exit_code() == 1

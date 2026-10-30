@@ -331,8 +331,16 @@ The `docker` block (`docker_readiness.settings`; any other key, or a wrong type,
 | npm | `bun.lock` (text, JSONC) | `packages[k][0]` = `"name@version"`; workspace/git/file entries skipped; every package `runtime`. `bun.lockb` (binary) stays unsupported and does not cover a `package.json`. Fixes are plan-only (`bun update <name>@<ver>`) |
 | Go | `go.mod` | `require` lines (single-line and block, `// indirect` too), `replace` applied (a module replace substitutes name and version; a local-path replace drops the module and is named in a note); versions go to OSV without the `v`, pseudo-versions as they are. Every Go manifest is reported partial with "Go standard library / toolchain vulnerabilities not judged", plus "go < 1.17: indirect modules may be missing" (a `go` directive below 1.17, or none) and "go.work present: workspace replaces/uses not applied". `go.sum` is not read: beside a `go.mod` it is not listed; alone it is unsupported (`Go (go.sum without go.mod)`). Fixes are plan-only (`go get <mod>@v<ver>`) |
 | RubyGems | `Gemfile.lock` | four-space `name (version[-platform])` entries under `GEM` / `specs:` whose remote is rubygems.org (a known platform suffix dropped); `GIT` / `PATH` skipped; gems of other sources counted in a note, never looked up. Every gem `runtime`. Fixes are plan-only (`bundle update --conservative <name>`) |
-| Maven | `gradle.lockfile` | `group:artifact:version=configurations`, named `group:artifact`; `dev` when every configuration is a test one. Fixes are plan-only (the build script, then `./gradlew dependencies --write-locks`) |
+| Maven | `gradle.lockfile` | **Opt-in** (`scan --gradle-lockfiles`, `scan_path(gradle_lockfiles=True)`, `fix_path(gradle_lockfiles=True)`): otherwise unscannable, "gradle.lockfile not read (opt-in: …)", since no signal tells a private Maven repository from Maven Central. `group:artifact:version=configurations`, named `group:artifact`; `dev` when every configuration is a test one. Fixes are plan-only (the build script, then `./gradlew dependencies --write-locks`) |
 | NuGet | `packages.lock.json` | `dependencies[tfm][name].resolved` over every target framework; `type: Project` skipped; every package `runtime`. Fixes are plan-only (`dotnet add package <name> --version <ver>`) |
+
+Private sources a repository's own tooling declares are withheld like a brief's `private_packages`
+(`withheld`, never sent to OSV, also by `fix`'s lockfile plans; `private_sources.PrivateSources`): Go modules
+matching `GOPRIVATE`, `GONOPROXY` or `GONOSUMDB` (the environment, then `go env` run from `/` with
+`GOTOOLCHAIN=local` and an empty `GOFLAGS`; Go's prefix-glob rule, `go_private_match`); every NuGet package of
+a repository whose `nuget.config` (in it, or a parent within the scan root) names a package source other than
+nuget.org, or cannot be read; and `pnpm-lock.yaml` / `bun.lock` names in an `.npmrc` scope (same places) whose
+`@scope:registry=` is not registry.npmjs.org (a non-npmjs `registry=` withholds them all).
 | Packagist | `composer.lock` | |
 | crates.io | `Cargo.lock` (v1–v4; `CRATE_LOCKS`) | only `[[package]]` entries whose `source` is the crates.io index (an entry with a name or version outside
 `CRATE_NAME` / `CRATE_VERSION` makes the whole lock unscannable: "a crates.io entry with an unusual name or version:
@@ -399,7 +407,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 
 | Command | Purpose |
 |---|---|
-| `scan PATH [--include-worktrees]` | Scan manifests under a repo or a folder of repos |
+| `scan PATH [--include-worktrees] [--gradle-lockfiles]` | Scan manifests under a repo or a folder of repos (`--gradle-lockfiles`: also read `gradle.lockfile`, off by default) |
 | `inventory LOG [--host H]` | Analyse a server-kit audit log (the host label defaults to the log file's name without its extension) |
 | `runtimes` | The runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix PATH [--apply] [--allow-major] [--allow-dirty] [--include-worktrees] [--no-npm]` | Plan, or make, dependency fixes in a working tree you control (`--cooldown-days` is ignored, since its fixes fall under Rule S-10's remediation carve-out; it prints a note). git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
@@ -1405,6 +1413,19 @@ pattern (C-4: the text never reaches a fix-plan command). `FORMATS` maps each fi
 (ecosystem, plan label, name/version patterns, reader, command, follow-up). `GO_STDLIB_NOTE`, `GO_OLD_NOTE`,
 `GO_WORK_NOTE`, `GO_FULL_LIST` hold the Go notes and threshold. `manifests.PLAN_ONLY_LOCKS` is `CRATE_LOCKS` plus
 these; `manifests.NPM_SIDE_LOCKS` (`pnpm-lock.yaml`, `bun.lock`) cover a `package.json` beside them.
+
+### `agentteams.vulnscan.private_sources`
+
+What a repository's own tooling marks private, so `engine.scan_path` and `fix.fix_path` withhold it
+(`withheld`) without a brief. `PrivateSources(root, go_patterns=None)` decides per dependency
+(`is_private(repo, manifest, ecosystem, name)`), reading each repository's configuration once:
+`go_private_patterns(environ=None)` (the environment's `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB`, then `go env` from `/`
+with `GOTOOLCHAIN=local`, an empty `GOFLAGS`, `GO_ENV_TIMEOUT` seconds; read on the first Go module only) and
+`go_private_match(globs, module)` (Go's prefix-glob rule; a malformed pattern matches); `repo_sources(repo, root)`
+over the repository and its parents within `root`: `nuget_names_private_source(path)` (a `nuget.config` source
+outside `NUGET_PUBLIC`, or a file unreadable, over `MAX_BYTES`, malformed or with a DTD) and `npmrc_private(path)`
+(a non-`NPM_PUBLIC` `registry=` or `@scope:registry=`; applied to `NPMRC_LOCKS`). `GRADLE_OPT_IN` is the
+unscannable/refused reason of a `gradle.lockfile` read without the opt-in.
 
 ### `agentteams.vulnscan.ledger`
 

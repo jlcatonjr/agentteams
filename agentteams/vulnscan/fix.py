@@ -43,10 +43,11 @@ import shutil
 import subprocess
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, lockfiles, osv, project_policy, subproc_confine
+from agentteams.vulnscan import _http, lockfiles, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -554,7 +555,8 @@ def _cell(text: str, pattern: re.Pattern[str]) -> str:
     return text if not text or pattern.fullmatch(text) else "(unusual)"
 
 
-def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = ()) -> list[PinChange]:
+def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
+                  hidden: Callable[[str, str], bool] | None = None) -> list[PinChange]:
     """List each vulnerable package of one :data:`lockfiles.FORMATS` lockfile with its command (plan only).
 
     The rows follow :func:`plan_cargo_lock`: ``plan-only`` with ``new`` the smallest version the advisories call
@@ -569,6 +571,8 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = ())
         path: The lockfile (``go.mod`` for Go).
         label: Path shown in the plan (defaults to ``path``).
         private: The project's ``private_packages`` patterns: those packages are never looked up.
+        hidden: ``(ecosystem, name) -> bool``: also never looked up when true (the repository's own private
+            sources, :mod:`.private_sources`).
 
     Returns:
         One :class:`PinChange` per vulnerable package version (none when the file yields no versions).
@@ -580,7 +584,8 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = ())
     fmt = lockfiles.FORMATS[path.name]
     m = parse(path)
     pkgs = sorted({(d.name, d.version) for d in m.deps
-                   if not project_policy.is_private(d.name, private, d.ecosystem)})
+                   if not project_policy.is_private(d.name, private, d.ecosystem)
+                   and not (hidden and hidden(d.ecosystem, d.name))})
     hits = osv.vulnerable_ids((fmt.ecosystem, n, v) for n, v in pkgs)
     changes: list[PinChange] = []
     for name, ver in pkgs:
@@ -705,7 +710,7 @@ def _add_resolved(res: FixResult, path: Path, old: bytes, rel: str, private: tup
 
 def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 0,
              include_worktrees: bool = False, allow_dirty: bool = False, npm: bool = True,
-             manifests: list[Path] | None = None) -> FixResult:
+             manifests: list[Path] | None = None, gradle_lockfiles: bool = False) -> FixResult:
     """Plan (and with ``apply``, make) dependency fixes for every manifest under ``root``.
 
     Args:
@@ -719,6 +724,8 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             packages (:func:`plan_npm_lock`) either way.
         manifests: Plan only these manifest files under ``root`` (``daily`` passes one repository's,
             without nested repositories); default: everything :func:`discover` finds.
+        gradle_lockfiles: Plan ``gradle.lockfile`` files too (off by default: refused with
+            :data:`private_sources.GRADLE_OPT_IN`).
 
     Returns:
         A :class:`FixResult`. Feed failures are recorded under ``feed_errors``; a symlinked
@@ -729,6 +736,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
     res = FixResult(applied=apply, resolved=0 if apply else None)
     found = discover(root, include_worktrees=include_worktrees) if manifests is None else sorted(manifests)
     policies = project_policy.PolicyCache()
+    sources = private_sources.PrivateSources(root)
     for path in found:
         rel = str(path.relative_to(root))
         repo = project_policy.repo_dir(path, root)
@@ -793,9 +801,12 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
                 res.cargo_plan += plan_cargo_lock(path, label=rel, private=private)
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
+        elif path.name == "gradle.lockfile" and not gradle_lockfiles:   # no private-repository signal
+            res.refused.append((rel, private_sources.GRADLE_OPT_IN))
         elif path.name in lockfiles.FORMATS:   # plan only, with or without apply, like a Cargo.lock
             try:
-                res.lock_plan += plan_lockfile(path, label=rel, private=private)
+                res.lock_plan += plan_lockfile(path, label=rel, private=private,
+                                               hidden=lambda eco, n, r=repo, f=path.name: sources.is_private(r, f, eco, n))
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
     return res

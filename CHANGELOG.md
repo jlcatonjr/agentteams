@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without go.mod)`); `bun.lock` now covers a `package.json` like `pnpm-lock.yaml`; `bun.lockb` stays unsupported.
 - `versions.version_key` orders Go pseudo-versions, RubyGems `.pre`, Maven qualifiers (`M`, `SNAPSHOT`, `RELEASE`,
   `FINAL`, `GA`, `SP`) and NuGet four-part versions. `project_policy.is_private` stays case-insensitive for them.
+- Private names stay local without a brief (new `agentteams.vulnscan.private_sources`, security review): Go modules
+  matching `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB` (environment, then `go env` from `/` with `GOTOOLCHAIN=local`; Go's
+  prefix-glob rule), every NuGet package of a repository whose `nuget.config` (in it or a parent within the scan
+  root) names a non-nuget.org source, and pnpm/Bun names in an `.npmrc` scope with a non-npmjs registry are
+  `withheld` by `scan_path` and `fix_path` and never sent to OSV.
+- **`gradle.lockfile` is opt-in** (`scan --gradle-lockfiles`, `scan_path(gradle_lockfiles=True)`,
+  `fix_path(gradle_lockfiles=True)`): nothing tells a private Maven repository from Maven Central, so by default it
+  is unscannable, "gradle.lockfile not read (opt-in: …)". The daily run has no config key for it yet, so it never
+  reads one.
 
 ### added (vulnscan: every common lockfile is detected)
 
