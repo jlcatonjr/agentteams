@@ -885,6 +885,12 @@ VULNSCAN_GITHUB_ORG=your-org        # unset: no repository is handed off
 MANAGER_TEAM=ops-team
 ```
 
+**When an attempt starts.** `summary.md` is written before the daily run's agent phase, so a tick
+that sees only the dated folder could act, and mark the day done, before the agent ran. The job therefore
+waits while the daily run still holds its lock (`daily.run_in_progress()`), and, with the agent on, until
+`<run>/agent/status.json` records `finished`. An agent run that never records it stops being waited for
+at `GIVE_UP_HOUR`.
+
 **When an attempt counts as done.** `python -m agentteams.vulnscan remediation-report LEDGER SINCE`
 reads the executor's ledger rows since the attempt started, not the log text. It writes
 `<run>/remediation.md` and prints the counts as JSON. Every `refused` or `failed` row is listed under

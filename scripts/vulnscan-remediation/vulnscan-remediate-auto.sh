@@ -6,7 +6,7 @@
 #   bash scripts/vulnscan-remediation/vulnscan-remediate-auto.sh             # run now (does nothing if done today)
 #   bash scripts/vulnscan-remediation/vulnscan-remediate-auto.sh --uninstall
 #
-# Each run, once today's scan has a summary and remediation has not run for it yet:
+# Each run, once today's daily run has finished (scan and, when on, agent phase) and remediation has not run for it yet:
 #   1. preflight: goose + route proxy up, grants valid (warns 7 days before a grant expires: renewing needs your
 #      key, the one recurring manual step), no open escalation or HALT (vulnscan halts), and
 #      vulnscan-ensure-docker.sh READY (it starts Docker Desktop if needed); when Docker, goose or the route proxy
@@ -167,6 +167,27 @@ if [[ "$(basename "${latest:-none}")" != "$today" ]]; then
   echo "$(date -u +%FT%TZ) today's scan has not completed yet (latest: $(basename "${latest:-none}"))"; exit 0
 fi
 [[ -f "$latest/remediation.done" ]] && exit 0
+# summary.md exists before the daily run's agent phase starts, so a tick between the two would mark the day done
+# before the agent ran. Wait while the daily run holds its lock, and (agent on) until agent/status.json records
+# "finished"; a crashed agent that never records it stops being waited for at GIVE_UP_HOUR.
+if "$PY" -P -c 'import sys; from agentteams.vulnscan import daily; sys.exit(0 if daily.run_in_progress() else 1)' 2>/dev/null; then
+  echo "$(date -u +%FT%TZ) today's daily run (scan or agent phase) is still in progress"; exit 0
+fi
+if ! "$PY" -P - "$latest/agent/status.json" <<'EOF' 2>/dev/null; then
+import json, sys
+from agentteams.vulnscan import daily
+if not (daily.load_config().get("agent") or {}).get("enabled"):
+    sys.exit(0)
+try:
+    sys.exit(0 if json.load(open(sys.argv[1], encoding="utf-8")).get("finished") else 1)
+except (OSError, ValueError):
+    sys.exit(1)
+EOF
+  if (( 10#$(date +%H) < GIVE_UP_HOUR )); then
+    echo "$(date -u +%FT%TZ) today's agent run has not finished (no \"finished\" in agent/status.json)"; exit 0
+  fi
+  echo "$(date -u +%FT%TZ) today's agent run never recorded \"finished\"; remediating anyway (past ${GIVE_UP_HOUR}:00)"
+fi
 prev="$(sed -n 's/^attempt=//p' "$latest/remediation.blocked" 2>/dev/null || true)"; [[ "$prev" =~ ^[0-9]+$ ]] || prev=0
 ATTEMPT=$(( prev + 1 ))
 ATTEMPT_START="$(date -u +%FT%TZ)"   # ledger rows at or after this are this attempt's

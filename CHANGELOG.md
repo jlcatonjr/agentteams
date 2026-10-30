@@ -74,6 +74,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sandbox-handoff reference (fence v2) and the orchestrator's handoff step also say a script holds **only** the
   operations the sandbox refused; everything the agent can do itself stays with the agent.
 
+### vulnscan (remediation runner: wait for the day's agent run)
+
+- `vulnscan-remediate-auto.sh` no longer acts on a day as soon as its folder exists. `summary.md` is written
+  before the daily run's agent phase, so a tick in between ran remediation and set `remediation.done` before
+  the agent ran, and fixes approved later waited a day (2026-10-30: remediation 09:01, agent 09:03–09:05). The
+  job now waits while the daily run holds its lock and, with the agent on, until `agent/status.json` records
+  `finished` (no longer waited for after `GIVE_UP_HOUR`). Re-run `--install` so the installed copy matches.
+
 ### vulnscan (deploy safety: wait on both job locks, and say which images are missing)
 
 - **New `scripts/vulnscan-remediation/vulnscan-deploy.sh [REF]`** (default `origin/main`) reinstalls the package
