@@ -124,6 +124,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
   `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
 
+### vulnscan (report labels: pre-release fix targets, held count timing)
+
+- The report's "Upgrade to" cell marks a pre-release target: `26.10.0rc1 (pre-release; the advisory names no
+  stable fix)`. OSV's fixed event can be a release candidate (Twisted, 2026-10-30); `stage-fix` already skips
+  pre-releases, so only the label changes.
+- The effectiveness row now reads "Repositories held at scan time": the summary is written before the
+  remediation runner holds more repositories, so `held-repos.json` can list more later the same day.
+
 ### vulnscan (stage-fix: a fix already on the default branch is not reported as a major jump)
 
 - When `stage-fix` changes nothing and a scan of the default branch (the executor's worktree) finds nothing

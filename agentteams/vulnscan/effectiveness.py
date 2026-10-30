@@ -185,7 +185,7 @@ def section(total: Report, previous: Report | None, *, stats: PrStats | None = N
         f"| Remediation PRs merged in the last {MERGED_WINDOW_DAYS} days | {stats.merged_recent} |",
         f"| Fixes staged with no PR yet | {staged_without_pr()} |",
         f"| PRs ready to merge (open, mergeable, every check passed) | {len(stats.green)} |",
-        f"| Repositories held (nothing fixable without a major upgrade) | {retry_guard.held_count()} |",
+        f"| Repositories held at scan time (nothing fixable without a major upgrade) | {retry_guard.held_count()} |",
     ]
     if stats.unknown:
         lines.append(f"| PR lookups that failed (state unknown) | {stats.unknown} |")
