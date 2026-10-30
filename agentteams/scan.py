@@ -651,6 +651,29 @@ def _check_injection(line: str, line_num: int, filepath: str,
             return
 
 
+def match_injection(line: str, previous_line: str = "") -> str | None:
+    """Match one line of non-agent text against the S-5 and C-1 patterns, with no exemptions.
+
+    For callers screening read content (fetched pages, retrieved passages): the same patterns,
+    normalisation and two-line window as :func:`scan_content`, but neither the front-matter nor
+    the module-owned code-span exemption applies.
+
+    Args:
+        line: The raw line to check.
+        previous_line: The raw preceding line, for a phrase split across a line break.
+
+    Returns:
+        The finding message for the first match, or ``None`` when the line is clean.
+
+    Raises:
+        Nothing.
+    """
+    findings: list[ScanFinding] = []
+    _check_injection(_normalize_for_matching(line), 0, "", findings, in_front_matter=False,
+                     previous_line=_normalize_for_matching(previous_line), raw_line=line)
+    return findings[0].message if findings else None
+
+
 def _check_line(
     line: str,
     line_num: int,
