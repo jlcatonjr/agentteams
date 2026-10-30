@@ -236,6 +236,70 @@ def test_a_bad_ledger_key_is_a_ledger_integrity_failure_for_the_executor(env: di
     assert out["status"] == "refused" and "ledger integrity failure" in out["detail"]
 
 
+def test_an_unreadable_ledger_key_is_a_clear_refusal_not_a_crash(env: dict[str, Path],
+                                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    _append(1)
+    key = paths.config_dir() / "keys" / "vulnscan-ledger.key"
+    before = key.read_bytes()
+    real_stat = Path.stat
+
+    def denied(self: Path, *a: Any, **kw: Any) -> os.stat_result:
+        if self == key:
+            raise PermissionError(1, "Operation not permitted", str(self))
+        return real_stat(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "stat", denied)
+    with pytest.raises(ledger.LedgerKeyError, match="cannot be read or created"):
+        ledger.read()
+    out = executor.act("server-audit", "web1", {}, request_id="r-3")
+    assert out["status"] == "refused" and "ledger integrity failure" in out["detail"]
+    monkeypatch.undo()
+    assert key.read_bytes() == before       # no second key was created over it
+
+
+def test_a_ledger_key_created_by_another_process_first_is_used(env: dict[str, Path],
+                                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    key = paths.config_dir() / "keys" / "vulnscan-ledger.key"
+    real_open = os.open
+
+    def racing(path: Any, flags: int, *a: Any) -> int:
+        if Path(path) == key and flags & os.O_EXCL:     # the other process wins between stat and create
+            key.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            key.write_text("ab" * 32)
+            key.chmod(0o600)
+        return real_open(path, flags, *a)
+
+    monkeypatch.setattr(os, "open", racing)
+    assert ledger._key() == bytes.fromhex("ab" * 32)
+
+
+@pytest.mark.parametrize("content", ["", "ab" * 31, "not hex at all"])
+def test_an_empty_or_damaged_ledger_key_is_refused(env: dict[str, Path], content: str) -> None:
+    key = paths.config_dir() / "keys" / "vulnscan-ledger.key"
+    key.parent.mkdir(parents=True, mode=0o700)
+    key.write_text(content)
+    key.chmod(0o600)
+    with pytest.raises(ledger.LedgerKeyError, match="64-hex-digit"):
+        ledger._key()
+    assert key.read_text() == content       # refused, never replaced
+
+
+def test_a_racing_creators_key_still_empty_is_refused(env: dict[str, Path],
+                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    key = paths.config_dir() / "keys" / "vulnscan-ledger.key"
+    real_open = os.open
+
+    def racing(path: Any, flags: int, *a: Any) -> int:
+        if Path(path) == key and flags & os.O_EXCL:     # created by the other process, not yet written
+            key.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            key.touch(mode=0o600)
+        return real_open(path, flags, *a)
+
+    monkeypatch.setattr(os, "open", racing)
+    with pytest.raises(ledger.LedgerKeyError, match="empty or damaged"):
+        ledger._key()
+
+
 def test_a_new_ledger_key_is_created_mode_600(env: dict[str, Path]) -> None:
     _append(1)
     key = paths.config_dir() / "keys" / "vulnscan-ledger.key"
