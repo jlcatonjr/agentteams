@@ -1,0 +1,8 @@
+{
+  "patch_id": "5d926b7c72c42121afe138b2ca2cd10b192bd490",
+  "commit": "ccfa8caad4ee99d3fb2759aa54b7fec1b5cd0451",
+  "subject": "feat(vulnscan): scan Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles (vlc N7)",
+  "impact": "1 modules added, 11 symbols added",
+  "note": "feat/vulnscan-coverage-manifests rebased onto feat/vulnscan-runtime-table; API-visible: new lockfiles and private_sources modules, scan_path(gradle_lockfiles=), fix_path(gradle_lockfiles=), plan_lockfile(hidden=), scan --gradle-lockfiles (all additive, defaults keep prior behaviour except gradle.lockfile now opt-in)",
+  "recorded_at": "2026-10-30T19:01:57Z"
+}
