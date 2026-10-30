@@ -1,0 +1,8 @@
+{
+  "patch_id": "733b75b8fd5af4def7f2e72f1acb991299ef210f",
+  "commit": "fc4371048f34d0920ae55140653819751580ffdf",
+  "subject": "vulnscan(T2-E): deploy script waits on both job locks and checks images",
+  "impact": "1 structural added",
+  "note": "L4 rebased onto K (588d1d75). Reviewed: remediation-report CLI and remediation_report.outcome/outcome_from_rows/report/render_markdown gain optional until/agent_since/agent_until/agent params (backward compatible; defaults keep prior behaviour); new --agent-since/--agent-until flags; runner script and deploy script are tracked operator tooling. Cleared by @security (CLEAR) and @code-hygiene (PASS-with-fixes, fixes applied), 2026-10-30.",
+  "recorded_at": "2026-10-30T16:54:05Z"
+}
