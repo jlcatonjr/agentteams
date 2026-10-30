@@ -1,0 +1,8 @@
+{
+  "patch_id": "7a385860755ba0de1483ec6d6a56625964d250b7",
+  "commit": "2602223bc65afb82b094b8411a273a96ed5125b3",
+  "subject": "vulnscan(T2-A): one Docker readiness check with reason codes; `vulnscan ready`",
+  "impact": "1 modules added, 20 symbols added, 3 cli added",
+  "note": "T2-A: docker_readiness public API (ensure, markdown, needs, register, settings, tools_problem, using), subproc_confine.Unavailable(code=...), and the 'vulnscan ready [--ensure] [--json]' CLI are documented in docs_src/api-reference/vulnscan.md (Docker readiness section) and the CHANGELOG; walkthrough updated. T2-C: daily.infra_retry_due is documented in the API reference (catch-up retry, infra reason codes from summary.json infra_codes). Audit: no removed or re-signed names; @security CONDITIONAL PASS with conditions verified (security-decisions log, 2026-10-29).",
+  "recorded_at": "2026-10-30T14:31:49Z"
+}
