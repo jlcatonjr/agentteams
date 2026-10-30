@@ -6,6 +6,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0-rc.12] - 2026-10-30
+
+### release notes
+
+agentteams 1.1.0-rc.12 is the twelfth release candidate of the 1.1 line. It adds topic briefings to
+`agentteams.research` (#336) and the hardening that followed masterTeacher's review of that package. The 1.0 line has
+no `research.briefing` and is unaffected.
+
+- **Topic briefings.** `research.briefing.build_briefing` composes search, fetch, read-content screening, a digest and
+  a per-claim audit into a briefing. `research.screen.scan_read_content` screens fetched pages and retrieved passages.
+- **The SSRF guard checks every resolved address,** and `fetch_text` connects to the vetted address (the hostname is
+  kept for TLS), closing the DNS-rebinding window. Through an environment HTTP(S) proxy, fetches now fail closed.
+- **`pypdf>=6.21.2`** in the `research` extra (CVE-2026-115572, CVE-2026-115580 and two more).
+- **The research cache never defaults to a git-tracked path.**
+- **New public API:** `scan.match_injection`, `verify.audit_claim_pairs`, `cache.user_cache_dir`,
+  `memory_index.build_memory_index_from_texts`, the `news` perspective-coverage helpers and
+  `ReputableSourceAllowlist.classify`.
+- **After upgrading:** memory indexes rebuild once (format v3); `.jsonl` sources index one passage per record. Reinstall
+  with the `research` extra to pick up the pypdf floor.
+- **Install:** from a verified, detached checkout of the signed `v1.1.0-rc.12` tag (release key `SHA256:IPdnLwlF…`,
+  as in `SECURITY.md`).
+
+The full list of changes is in `CHANGELOG.md` under `[1.1.0-rc.12]`.
+
+### Changes since 1.1.0-rc.11
+
 ### security (research hardening, follow-up to the briefing PR)
 
 - **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every
