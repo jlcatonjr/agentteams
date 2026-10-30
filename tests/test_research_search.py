@@ -231,7 +231,9 @@ def test_blank_query_short_circuits_without_network():
 
 
 def test_is_public_https_accepts_ordinary_public_url() -> None:
-    assert is_public_https("https://example.com/page") is True
+    # Stubbed DNS (research-hardening #15): this asserts the guard's verdict, not the network.
+    with _resolves_to("93.184.216.34"):
+        assert is_public_https("https://example.com/page") is True
 
 
 def test_is_public_https_rejects_non_https_scheme() -> None:
