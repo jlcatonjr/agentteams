@@ -1059,6 +1059,7 @@ allowlisted distribution archive: `*archive.ubuntu.com`, `security.ubuntu.com`, 
 | Ubuntu past standard support (its ESM has not ended), esm-infra not `enabled` or no `ESM` line | HIGH | `standard-support-ended: … standard support ended; ESM/Pro required for security updates (esm-infra <state>)` |
 | as above, esm-infra `enabled` | LOW | `… on ESM (main only); universe packages need esm-apps` (`on ESM (esm-infra and esm-apps enabled)` when both are) |
 | as above, esm-infra `enabled`, a `pkg:<name>:universe` runtime present, esm-apps not `enabled` | MODERATE | the LOW detail plus the universe packages |
+| Ubuntu past standard support, whether its ESM still runs unknown (no extended-support data), any `ESM` line | HIGH | `standard-support-ended: … standard support ended; ESM state unknown (extended-support data unavailable)` |
 | `ID` not in `runtimes.OS_PRODUCTS` | unscannable | `OS <ID> not judged by this vulnscan version` |
 | no `VERSION_ID`, or a release line endoflife.date does not list | unscannable | |
 | feed failure | feed error | |

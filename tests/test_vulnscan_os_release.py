@@ -25,7 +25,8 @@ def _c(cycle: str, latest: str, *, eol: str | bool = False, eoes: str | bool | N
 
 CYCLES: dict[str, list[dict]] = {
     "ubuntu": [_c("24.04", "24.04.1", eoes=FUTURE), _c("22.04", "22.04.5", eoes=FUTURE),
-               _c("20.04", "20.04.6", eol=PAST, eoes=FUTURE), _c("16.04", "16.04.7", eol=PAST, eoes=PAST)],
+               _c("20.04", "20.04.6", eol=PAST, eoes=FUTURE), _c("18.04", "18.04.6", eol=PAST),
+               _c("16.04", "16.04.7", eol=PAST, eoes=PAST)],
     "debian": [_c("12", "12.7"), _c("10", "10.13", eol=PAST)],
     "amazon-linux": [_c("2023", "2023.6.20241010"), _c("2", "2.0.20241001.0")],
     "rhel": [_c("9", "9.4")],
@@ -149,6 +150,16 @@ def test_ubuntu_past_standard_support_follows_the_esm_table(eol: list[str], esm:
 def test_ubuntu_whose_esm_has_ended_too_is_plain_end_of_life(eol: list[str]) -> None:
     (f,) = _os_findings(_inv(_osrel("ubuntu", "16.04", "Ubuntu 16.04.7 LTS"), "ESM\tenabled\tenabled"))
     assert f.severity == 3 and f.detail.startswith("eol: OS release Ubuntu 16.04.7 LTS is end-of-life")
+
+
+@pytest.mark.parametrize("esm", [None, "ESM\tenabled\tenabled", "ESM\tenabled\tdisabled"])
+def test_ubuntu_with_unknown_extended_support_is_high_never_low(eol: list[str], esm: str | None) -> None:
+    """Code-hygiene R3: unknown ESM data is fail-closed; an esm-infra-enabled host is not graded LOW on it."""
+    assert runtimes.os_extended_support("ubuntu", "18.04") is None
+    (f,) = _os_findings(_inv(_osrel("ubuntu", "18.04", "Ubuntu 18.04.6 LTS"), *([esm] if esm else [])))
+    assert f.severity == 3
+    assert f.detail == ("standard-support-ended: OS release Ubuntu 18.04.6 LTS: standard support ended; "
+                        "ESM state unknown (extended-support data unavailable)")
 
 
 def test_esm_line_is_ignored_off_ubuntu(eol: list[str]) -> None:

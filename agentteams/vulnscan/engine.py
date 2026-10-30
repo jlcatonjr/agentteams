@@ -24,7 +24,8 @@ judged against upstream versions (:func:`runtimes.evaluate`).
 An end-of-life OS release is a HIGH ``host`` finding named ``os-release``. Ubuntu's endoflife.date ``eol``
 is the end of *standard* support, so an Ubuntu release past it whose ESM has not ended is judged on the
 ``ESM`` line: esm-infra not enabled (or no line) is HIGH; esm-infra enabled is LOW, or MODERATE when a
-universe package (``pkg:<name>:universe``) runtime is present without esm-apps.
+universe package (``pkg:<name>:universe``) runtime is present without esm-apps. When whether its ESM still runs is
+unknown (no extended-support data), it is HIGH, "ESM state unknown", whatever the ``ESM`` line says.
 """
 
 from __future__ import annotations
@@ -248,7 +249,11 @@ def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str
     if v.verdict != "eol":
         return
     label = pretty or f"{os_id} {version_id}"
-    if key == "ubuntu" and runtimes.os_extended_support(key, version_id) is not False:
+    extended = runtimes.os_extended_support(key, version_id) if key == "ubuntu" else False
+    if extended is None:   # whether ESM still runs is unknown: never graded as covered (fail closed)
+        sev, verdict = 3, "standard-support-ended"
+        detail = f"OS release {label}: standard support ended; ESM state unknown (extended-support data unavailable)"
+    elif extended:
         infra, apps = esm or ("unknown", "unknown")
         verdict = "standard-support-ended"
         if infra != "enabled":
