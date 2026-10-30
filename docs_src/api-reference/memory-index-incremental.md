@@ -40,6 +40,10 @@ Attempt the patch; return a non-applied result on any risk.
 
 **Returns:** `IncrementalUpdateResult` — `.applied` and `.reason`.
 
+The changed document is rebuilt through the same per-document routine as the full builders, so
+a patched document matches what a full rebuild would store, including `.jsonl` sources (one
+passage per record, record text rather than raw JSON).
+
 ## Decline reasons
 
 | `reason` | Meaning |

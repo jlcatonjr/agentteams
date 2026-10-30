@@ -319,11 +319,17 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ## Research tools
 
-### The research cache still writes under `references/research-cache`
+### The read-only research grant still writes a cache
 
 - **What:** 1.0 removes `--screenshot` from `python -m agentteams.research browser` (378), but the read-only
-  retrieval grant (`Bash(python -m agentteams.research:*)`) still writes its cache under
-  `references/research-cache`.
+  retrieval grant (`Bash(python -m agentteams.research:*)`) still writes a cache. Since the research-hardening
+  follow-up the default location is one git cannot commit: `references/research-cache` only outside a git work
+  tree or when git confirms that path is ignored, otherwise the per-user cache directory
+  (`$XDG_CACHE_HOME/agentteams/research`, `~/Library/Caches/agentteams/research` on macOS, else
+  `~/.cache/agentteams/research`), with one warning. An explicit `AGENTTEAMS_RESEARCH_CACHE_DIR` is used as given;
+  pointing it inside a repository is the caller's responsibility.
 - **Who:** teams whose agents hold the retrieval grant.
-- **Mitigation:** treat `references/research-cache` as agent-writable. Do not keep anything authoritative there.
-- **Tracking:** CHANGELOG `[1.0.0-rc.10]`, "1.0 must-fix set", "Known residual".
+- **Mitigation:** treat the cache directory as agent-writable. Do not keep anything authoritative there, and do not
+  set `AGENTTEAMS_RESEARCH_CACHE_DIR` to a tracked path.
+- **Tracking:** CHANGELOG `[1.0.0-rc.10]`, "1.0 must-fix set", "Known residual"; CHANGELOG `[Unreleased]`, research
+  hardening.

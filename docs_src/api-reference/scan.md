@@ -139,6 +139,27 @@ Scan a string of content for security issues.
 
 ---
 
+### `match_injection(line, previous_line='')`
+
+> *Source: `agentteams/scan.py`*
+
+Check one raw line of non-agent text (a fetched page, a retrieved passage) against the S-5
+instruction- and identity-override patterns and the C-1 tier claims. It uses the same Unicode
+normalisation and two-line window as `scan_content`, but applies no exemptions: neither the YAML
+front-matter exemption for identity phrasing nor the code-span exemption for module-owned files.
+Used by `agentteams.research.screen.scan_read_content`.
+
+**Args:**
+
+- `line` (`str`) — The raw line to check.
+- `previous_line` (`str`) — The raw preceding line, so a phrase split across a line break is still
+  caught. Default: `''`.
+
+**Returns:** `str | None` — The message of the first finding, or `None` when the line is clean.
+Never raises.
+
+---
+
 ### `print_scan_report(report)`
 
 > *Source: `agentteams/scan.py`*
