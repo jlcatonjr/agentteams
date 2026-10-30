@@ -138,7 +138,7 @@
     "agentteams/vulnscan/ops.py": "efae8c0dd99525381f60645e4b86266391ea02a6141866bd318ff114147cfd43",
     "agentteams/vulnscan/osv.py": "c5bbb73a1d70165f9f82546a1bda3c70ac0fe36dd79f5895ac4d06af00f8e8fd",
     "agentteams/vulnscan/paths.py": "be5f8790c25566db909647ed84b622b1010ffd206eb43d0dc2828f00aec06589",
-    "agentteams/vulnscan/private_sources.py": "060ec7b253947b19143b598c41160caf2d2e0e1c0139d04b6a8031078703dd8d",
+    "agentteams/vulnscan/private_sources.py": "9f23e86fb4edb394857954fa13eefab65c1cd2376bdb7733db88177ad9ef9de0",
     "agentteams/vulnscan/project_cli.py": "21e73b56f731bb03fe4a44fc903c18fd1f52cd06c12671d5a06c3615abc6d157",
     "agentteams/vulnscan/project_policy.py": "302661da886e11f9a46e14354a6ea26ba1e382bebf24501cc052974a64267b42",
     "agentteams/vulnscan/publish.py": "980b9c0ade6f444b0bbec8845aaad9421f9c54d05707573bca90ac8c689c3fdb",
