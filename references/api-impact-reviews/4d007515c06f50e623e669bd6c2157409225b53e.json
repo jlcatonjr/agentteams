@@ -1,0 +1,8 @@
+{
+  "patch_id": "4d007515c06f50e623e669bd6c2157409225b53e",
+  "commit": "81d9ff51779487fc8323f1b12494df48fbb54503",
+  "subject": "fix(vulnscan): withhold a repository's unpinned ranges when any of its files names an index (security P-s1)",
+  "impact": "1 symbols added",
+  "note": "feat/vulnscan-unpinned-python rebased onto feat/vulnscan-image-eol; API-visible: new specifiers module (incl. names_index, MAX_BYTES), osv.package_ids/affected_intervals, scan_path(unpinned_ranges=), Finding.spec/partial, kind 'range', vulnscan.json key unpinned_ranges (default off)",
+  "recorded_at": "2026-10-30T19:39:16Z"
+}
