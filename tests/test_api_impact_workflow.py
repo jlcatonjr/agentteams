@@ -29,7 +29,7 @@ def test_sub_protocol_runs_review_update_audit_revise_record_in_order():
 
 def test_reference_is_fenced_emitted_and_states_its_limits():
     from agentteams import output_plan
-    assert "<!-- AGENTTEAMS:BEGIN api_impact v=1 -->" in REF and "<!-- AGENTTEAMS:END api_impact -->" in REF
+    assert "<!-- AGENTTEAMS:BEGIN api_impact v=2 -->" in REF and "<!-- AGENTTEAMS:END api_impact -->" in REF
     assert "self-attestation" in REF and "Python only" in REF.replace("Python\nonly", "Python only")
     assert "squash merge" in REF
     assert "references/api-impact.reference.md" in Path(output_plan.__file__).read_text(encoding="utf-8")

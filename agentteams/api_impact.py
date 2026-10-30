@@ -16,16 +16,21 @@ reviewed. This module answers that from git alone:
   survives rebase and cherry-pick.
 * :func:`record` writes one ledger file per reviewed commit, with the reviewer's note. It is a
   **self-attestation**, not a control: the ledger is committed, so the record shows in the pull request.
-* :func:`pre_commit` is what the installed ``pre-commit`` hook runs. It prints a one-line summary of the staged
-  impact and, in the agentteams repository with ``git config agentteams.regenerateMan true``, regenerates and
-  stages the CLI man page ``agentteams.1`` when the parser changed. It never fails a commit.
+* :func:`doc_status` maps each impactful module to its API documentation pages (:func:`doc_pages`: tracked
+  Markdown pages named after the module) and reports whether a page changed with it, which added names no page
+  mentions, and which removed names a page still mentions. ``status`` and the hook both print it.
+* :func:`pre_commit_check` is what the installed ``pre-commit`` hook runs. It prints a one-line summary of the
+  staged impact and a line per module whose API page fell behind and, in the agentteams repository with
+  ``git config agentteams.regenerateMan true``, regenerates and stages the CLI man page ``agentteams.1`` when the
+  parser changed. It fails the commit only when the operator opted in with
+  ``git config agentteams.apiDocsStrict true`` and a module's page was not updated (strict mode).
 
 Nothing here reads a brief or configuration file: what runs at commit time cannot be changed by editing
 project content. Stdlib only.
 
 CLI::
 
-    python -m agentteams.api_impact --pre-commit [--repo DIR]
+    python -m agentteams.api_impact --pre-commit [--strict-capable] [--repo DIR]   # exit 3: strict block
     python -m agentteams.api_impact detect (--staged | --commit SHA) [--json]
     python -m agentteams.api_impact status [--range BASE..HEAD] [--json]   # exit 0 reviewed, 1 pending, 2 no base
     python -m agentteams.api_impact record [--range BASE..HEAD] --note TEXT
@@ -36,8 +41,10 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -115,6 +122,7 @@ class CommitStatus:
         impact: What the commit changed.
         reviewed: True when the ledger holds a file for ``patch_id``.
         checklist: Changed name → tracked files that mention it (capped at :data:`CHECKLIST_CAP`).
+        docs: API documentation state per impactful module (:func:`doc_status`); empty once reviewed.
     """
 
     commit: str
@@ -123,6 +131,7 @@ class CommitStatus:
     impact: Impact
     reviewed: bool
     checklist: dict[str, list[str]] = field(default_factory=dict)
+    docs: list["DocStatus"] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +175,19 @@ def _in_head(repo: Path, rel: str) -> bool:
 
 def _has_head(repo: Path) -> bool:
     return bool(_git(repo, "rev-parse", "--verify", "-q", "HEAD", check=False))
+
+
+def _parent(repo: Path, commit: str) -> str | None:
+    """The commit's first parent, or ``None`` for a root commit."""
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).decode().split()
+    return parents[1] if len(parents) > 1 else None
+
+
+def _changed_paths(repo: Path, commit: str) -> list[str]:
+    """Paths one commit changed, deletions and both sides of renames included."""
+    root = [] if _parent(repo, commit) else ["--root"]
+    raw = _git(repo, "diff-tree", "--no-commit-id", "-r", "--name-only", "-z", *root, commit)
+    return [p for p in raw.decode("utf-8", errors="replace").split("\0") if p]
 
 
 # ---------------------------------------------------------------------------
@@ -259,8 +281,7 @@ def detect(repo: Path, *, commit: str | None = None) -> Impact:
         old_ref = "HEAD" if _has_head(repo) else None
         new_ref = ""  # the index: ":path"
     else:
-        parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).decode().split()
-        old_ref = parents[1] if len(parents) > 1 else None
+        old_ref = _parent(repo, commit)
         args = ["diff-tree", "--no-commit-id", "-r", "-M", "--name-status", "-z"]
         raw = _git(repo, *args, *(["--root"] if old_ref is None else []), commit)
         new_ref = commit
@@ -384,8 +405,8 @@ def patch_id(repo: Path, commit: str) -> str:
     repo = Path(repo)
     ledger_rel = ledger_dir(repo).relative_to(repo.resolve()).as_posix()
     # Plumbing, not porcelain, so diff.algorithm / textconv / prefix settings cannot change the id.
-    parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).decode().split()
-    base = parents[1:2] or ["--root"]
+    parent = _parent(repo, commit)
+    base = [parent] if parent else ["--root"]
     diff = _git(repo, "diff-tree", "-p", "--no-ext-diff", "--no-textconv", "--no-color", *base, commit,
                 "--", ".", f":(exclude){ledger_rel}")
     out = _git(repo, "patch-id", "--stable", stdin=diff).decode().split()
@@ -429,8 +450,15 @@ def status(repo: Path, rev_range: str | None = None) -> tuple[str | None, list[C
         rev_range = f"{base}..HEAD"
     shas = _git(repo, "rev-list", "--no-merges", "--reverse", rev_range).decode().split()
     ledger = ledger_dir(repo)
+    # A page counts as updated for a commit when that commit or a later one in the range changed it.
+    later: list[set[str]] = []
+    acc: set[str] = set()
+    for sha in reversed(shas):
+        acc = acc | set(_changed_paths(repo, sha))
+        later.append(acc)
+    later.reverse()
     out: list[CommitStatus] = []
-    for sha in shas:
+    for i, sha in enumerate(shas):
         imp = detect(repo, commit=sha)
         if not imp.impactful:
             continue
@@ -439,7 +467,8 @@ def status(repo: Path, rev_range: str | None = None) -> tuple[str | None, list[C
         rel = (ledger / f"{pid}.json").relative_to(repo.resolve()).as_posix()
         # Reviewed only when the ledger file is committed: an uncommitted record does not count.
         reviewed = bool(pid) and _in_head(repo, rel)
-        out.append(CommitStatus(sha, subject, pid, imp, reviewed, {} if reviewed else _checklist(repo, imp)))
+        out.append(CommitStatus(sha, subject, pid, imp, reviewed, {} if reviewed else _checklist(repo, imp),
+                                [] if reviewed else doc_status(repo, imp, later[i], ref="HEAD")))
     return rev_range, out
 
 
@@ -479,6 +508,201 @@ def record(repo: Path, note: str, rev_range: str | None = None) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
+# API documentation pages
+# ---------------------------------------------------------------------------
+
+@dataclass
+class DocStatus:
+    """Whether one impactful module's API documentation page kept up with the change.
+
+    Attributes:
+        module: Repo-relative module path (the new path for renames).
+        pages: Tracked Markdown pages that document it (:func:`doc_pages`), sorted.
+        state: ``"updated"`` (a page is among the touched paths), ``"not-updated"`` or ``"no-page"``.
+        added_module: True when the diff added the module (or renamed it in).
+        undocumented: Added public names that no page mentions (only checked when the module has pages).
+        stale: Removed public names that a page still mentions; for a removed or renamed-away module, its key.
+        public_api: True when the module is public (no leading ``_``) and the diff added public names to it.
+    """
+
+    module: str
+    pages: list[str]
+    state: str
+    added_module: bool
+    undocumented: list[str] = field(default_factory=list)
+    stale: list[str] = field(default_factory=list)
+    public_api: bool = False
+
+    @property
+    def blocking(self) -> bool:
+        """Whether strict mode fails the commit for this module.
+
+        Returns:
+            True when its pages were not updated, or it is a new public module with public names and no page.
+        """
+        return self.state == "not-updated" or (self.state == "no-page" and self.added_module and self.public_api)
+
+    @property
+    def reportable(self) -> bool:
+        """Whether the module gets a line in the hook's or ``status``'s output.
+
+        Returns:
+            True when it is :attr:`blocking`, or has ``undocumented`` or ``stale`` names.
+        """
+        return self.blocking or bool(self.undocumented or self.stale)
+
+
+#: Page stems that never document a single module.
+_GENERIC_PAGE_STEMS = frozenset({"index", "readme", "changelog"})
+
+#: Path prefixes whose Markdown files are never API pages (agent files and references among them).
+_PAGE_EXCLUDES: tuple[str, ...] = ("tmp/", "tests/", "test/", "workSummaries/", "references/", "agents/")
+
+
+def _module_key(path: str) -> str | None:
+    p = PurePosixPath(path)
+    if p.suffix != ".py" or _is_test(path) or p.name == "__main__.py":
+        return None
+    if p.name == "__init__.py":
+        return p.parent.name or None
+    return p.stem
+
+
+def _tracked_pages(repo: Path, ref: str) -> list[str]:
+    """Candidate pages at ``ref``; for the index (``""``), those in ``HEAD`` too, so a page staged for deletion
+    still maps to its module (and counts as touched)."""
+    raws = ([_git(repo, "ls-files", "-s", "-z", check=False)]
+            + ([_git(repo, "ls-tree", "-r", "-z", "HEAD", check=False)] if _has_head(repo) else [])
+            if ref == "" else [_git(repo, "ls-tree", "-r", "-z", ref, check=False)])
+    pages: set[str] = set()
+    for raw in raws:
+        for record in raw.decode("utf-8", errors="replace").split("\0"):
+            meta, _, path = record.partition("\t")
+            # A symlink's blob is its target path, not the page's text.
+            if meta and not meta.startswith("120000"):
+                pages.add(path)
+    out: set[str] = set()
+    for path in pages:
+        p = PurePosixPath(path)
+        if (not path or p.suffix.lower() != ".md" or any(part.startswith(".") for part in p.parts)
+                or path.startswith(_PAGE_EXCLUDES) or "/expected/" in f"/{path}"
+                or p.stem.lower() in _GENERIC_PAGE_STEMS):
+            continue
+        out.add(path)
+    return sorted(out)
+
+
+def _pages_for(pages: list[str], key: str | None) -> list[str]:
+    if not key:
+        return []
+    return [p for p in pages if PurePosixPath(p).stem.lower().replace("-", "_") == key.lower()]
+
+
+def doc_pages(repo: Path, module: str, *, ref: str = "HEAD") -> list[str]:
+    """Return the tracked Markdown pages that document one module.
+
+    A page matches when its stem, with ``-`` read as ``_`` and case ignored, equals the module's key: the file
+    stem, or the package name for ``__init__.py``. Pages under dot-directories, ``tmp/``, ``tests/``, ``test/``,
+    ``workSummaries/``, ``references/``, ``agents/`` or an ``expected/`` tree, and ``index``/``readme``/
+    ``changelog`` pages, never match. Test files and ``__main__.py`` have no pages.
+
+    Args:
+        repo: Repository root.
+        module: Repo-relative module path.
+        ref: Tree to read: a commit-ish, or ``""`` for the index.
+
+    Returns:
+        Matching page paths, sorted.
+    """
+    return _pages_for(_tracked_pages(Path(repo), ref), _module_key(module))
+
+
+def _page_text(repo: Path, page: str, ref: str) -> str:
+    return _blob(repo, f"{ref}:{page}") or ""
+
+
+def _mentions(text: str, name: str) -> bool:
+    return re.search(r"\b" + re.escape(name) + r"\b", text) is not None
+
+
+def _checked_name(entry: str) -> str | None:
+    """The word a page must mention for ``module::name``; ``None`` for dunders, which are never checked."""
+    last = entry.split("::", 1)[1].split(".")[-1]
+    return None if last.startswith("__") and last.endswith("__") else last
+
+
+def doc_status(repo: Path, imp: Impact, touched: Iterable[str], *, ref: str = "HEAD") -> list[DocStatus]:
+    """Report, for each module with API impact, its documentation pages and whether they kept up.
+
+    Args:
+        repo: Repository root.
+        imp: The impact to map.
+        touched: Paths changed alongside the impact (staged paths, or the commit and later commits of a range).
+        ref: Tree to read pages from: a commit-ish, or ``""`` for the index.
+
+    Returns:
+        One :class:`DocStatus` per module, sorted by module.
+    """
+    repo = Path(repo)
+    pages = _tracked_pages(repo, ref)
+    touched = set(touched)
+    texts: dict[str, str] = {}
+
+    def text(page: str) -> str:
+        if page not in texts:
+            texts[page] = _page_text(repo, page, ref)
+        return texts[page]
+
+    modules: dict[str, DocStatus] = {}
+
+    def entry(module: str, *, added: bool = False) -> DocStatus:
+        if module not in modules:
+            modules[module] = DocStatus(module, _pages_for(pages, _module_key(module)), "", added)
+        modules[module].added_module |= added
+        return modules[module]
+
+    for module in imp.modules_added:
+        entry(module, added=True)
+    for old, new in imp.modules_renamed:
+        ds = entry(new, added=True)
+        old_pages = [p for p in _pages_for(pages, _module_key(old)) if p not in ds.pages]
+        if old_pages:
+            ds.pages = sorted({*ds.pages, *old_pages})
+            ds.stale.append(str(_module_key(old)))
+    for module in imp.modules_removed:
+        ds = entry(module)
+        if ds.pages:
+            ds.stale.append(str(_module_key(module)))
+    for names, added in ((imp.symbols_added, True), (imp.symbols_removed, False), (imp.symbols_changed, None)):
+        for name in names:
+            module = name.split("::", 1)[0]
+            ds = entry(module)
+            key = _module_key(module)
+            if added and key and not key.startswith("_"):
+                ds.public_api = True
+            word = _checked_name(name)
+            # With no page there is nothing to check: the module is reported only as a new public module.
+            if added is None or word is None or not ds.pages:
+                continue
+            mentioned = any(_mentions(text(p), word) for p in ds.pages)
+            if added and not mentioned:
+                ds.undocumented.append(name.split("::", 1)[1])
+            elif not added and mentioned:
+                ds.stale.append(name.split("::", 1)[1])
+    out: list[DocStatus] = []
+    for module in sorted(modules):
+        ds = modules[module]
+        if _module_key(module) is None:
+            continue
+        ds.state = ("no-page" if not ds.pages
+                    else "updated" if any(p in touched for p in ds.pages) else "not-updated")
+        ds.undocumented.sort()
+        ds.stale.sort()
+        out.append(ds)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Pre-commit
 # ---------------------------------------------------------------------------
 
@@ -511,28 +735,89 @@ def _regenerate_man_page(repo: Path, staged: list[str]) -> str | None:
     return "regenerated"
 
 
+#: Most per-module API-docs lines the hook prints before it reports only the remainder.
+DOC_LINES_CAP = 10
+
+
+def _strict(repo: Path) -> bool:
+    # Git config, outside the working tree: files in the tree alone never turn blocking on.
+    return _git(repo, "config", "--bool", "agentteams.apiDocsStrict", check=False).strip() == b"true"
+
+
+def _doc_names(d: DocStatus) -> list[str]:
+    """``undocumented: …`` and ``stale: …`` labels, for the non-empty lists only."""
+    return [f"{label}: {', '.join(names)}" for label, names in (("undocumented", d.undocumented),
+                                                                ("stale", d.stale)) if names]
+
+
+def _doc_line(d: DocStatus) -> str:
+    detail = ("new module with no API page" if d.state == "no-page"
+              else f"{', '.join(d.pages)} {'updated' if d.state == 'updated' else 'not updated'}")
+    parts = _doc_names(d)
+    extras = f" ({'; '.join(parts)})" if parts else ""
+    return f"agentteams: API docs — {d.module}: {detail}{extras}"
+
+
+def pre_commit_check(repo: Path, *, strict_capable: bool = False) -> tuple[str, bool]:
+    """Run the pre-commit step: report the staged impact and its API pages, regenerate derived artifacts, and
+    decide whether strict mode blocks the commit.
+
+    Args:
+        repo: Repository root.
+        strict_capable: True when the calling hook fails the commit on exit 3. An older hook ignores the exit
+            code, so without this flag strict mode prints a re-install notice instead of claiming a block.
+
+    Returns:
+        ``(message, blocked)``: the lines the hook prints (empty when there is nothing to say), and True only
+        when ``git config agentteams.apiDocsStrict`` is true, ``strict_capable`` is set and a module is
+        :attr:`DocStatus.blocking`.
+
+    Raises:
+        RuntimeError: When git fails (not a repository).
+    """
+    repo = Path(repo)
+    entries = _name_status(_git(repo, "diff", "--cached", "--name-status", "-M", "-z"))
+    staged = [new for _, _, new in entries]
+    man = _regenerate_man_page(repo, staged)
+    imp = detect(repo)
+    if man == "regenerated":
+        imp.regenerated.append("agentteams.1")
+    lines: list[str] = []
+    if imp.impactful:
+        lines.append(f"agentteams: API impact — {imp.summary()}. Run the API Impact Review before closing the "
+                     "session (python -m agentteams.api_impact status).")
+    if man and man != "regenerated":
+        lines.append(f"agentteams: {man}")
+    docs = doc_status(repo, imp, {p for _, old, new in entries for p in (old, new)}, ref="") if imp.impactful else []
+    reportable = [d for d in docs if d.reportable]
+    lines += [_doc_line(d) for d in reportable[:DOC_LINES_CAP]]
+    if len(reportable) > DOC_LINES_CAP:
+        lines.append(f"agentteams: API docs — ... {len(reportable) - DOC_LINES_CAP} more")
+    blocked = False
+    if any(d.blocking for d in docs) and _strict(repo):
+        if strict_capable:
+            blocked = True
+            lines.append("agentteams: commit blocked (agentteams.apiDocsStrict) — stage the page(s) above, or "
+                         "bypass once with git commit --no-verify, or git config agentteams.apiDocsStrict false")
+        else:
+            lines.append("agentteams: agentteams.apiDocsStrict is set, but this pre-commit hook predates strict "
+                         "mode — re-install it (agentteams --update) so it can block")
+    return "\n".join(lines), blocked
+
+
 def pre_commit(repo: Path) -> str:
-    """Run the pre-commit step: detect the staged impact and regenerate built-in derived artifacts.
+    """Run the pre-commit step as an advisory hook (:func:`pre_commit_check` without ``strict_capable``).
 
     Args:
         repo: Repository root.
 
     Returns:
-        The one-line message the hook prints (empty when there is no impact).
+        The message the hook prints (empty when there is nothing to say).
+
+    Raises:
+        RuntimeError: When git fails (not a repository).
     """
-    repo = Path(repo)
-    staged = [new for _, _, new in _name_status(_git(repo, "diff", "--cached", "--name-status", "-M", "-z"))]
-    man = _regenerate_man_page(repo, staged)
-    imp = detect(repo)
-    if man == "regenerated":
-        imp.regenerated.append("agentteams.1")
-    message = ""
-    if imp.impactful:
-        message = (f"agentteams: API impact — {imp.summary()}. Run the API Impact Review before closing the "
-                   "session (python -m agentteams.api_impact status).")
-    if man and man != "regenerated":
-        message = f"{message}\nagentteams: {man}".strip()
-    return message
+    return pre_commit_check(repo)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +840,12 @@ def _print_status(used: str | None, commits: list[CommitStatus]) -> None:
             print("  audit checklist (files that mention each changed name):")
             for term, files in c.checklist.items():
                 print(f"    {term}: {', '.join(files) if files else '(no other mentions)'}")
+        reportable = [d for d in c.docs if d.reportable]
+        if reportable:
+            print("  API docs:")
+            for d in reportable:
+                pages = f" — {', '.join(d.pages)}" if d.pages else ""
+                print(f"    {d.module}: {d.state}{pages}{''.join(f'; {n}' for n in _doc_names(d))}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -564,14 +855,18 @@ def main(argv: list[str] | None = None) -> int:
         argv: Arguments (defaults to ``sys.argv[1:]``).
 
     Returns:
-        Exit code: ``--pre-commit`` always 0; ``status`` 0 when everything is reviewed, 1 when a commit is
+        Exit code: ``--pre-commit`` 3 when strict mode blocks the commit (``--strict-capable`` only), else 0;
+        ``status`` 0 when everything is reviewed, 1 when a commit is
         pending, 2 when no base could be resolved; ``record`` 0, or 2 on a refused note or missing base.
     """
     import argparse
 
     parser = argparse.ArgumentParser(prog="python -m agentteams.api_impact",
                                      description="Detect API-affecting changes and track their review.")
-    parser.add_argument("--pre-commit", action="store_true", help="Run the pre-commit step (never fails).")
+    parser.add_argument("--pre-commit", action="store_true",
+                        help="Run the pre-commit step (exit 3 only when strict mode blocks the commit).")
+    parser.add_argument("--strict-capable", action="store_true",
+                        help="With --pre-commit: the calling hook fails the commit on exit 3.")
     parser.add_argument("--repo", default=".", help="Repository root (default: current directory).")
     sub = parser.add_subparsers(dest="cmd")
     d = sub.add_parser("detect", help="Report one diff's impact.")
@@ -587,16 +882,21 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--note", required=True)
     args = parser.parse_args(argv)
     repo = Path(args.repo).resolve()
+    # Pages are listed relative to the top level, so a subdirectory --repo must not shift them.
+    top = _git(repo, "rev-parse", "--show-toplevel", check=False).decode().strip()
+    if top:
+        repo = Path(top)
 
     if args.pre_commit:
+        blocked = False
         try:
-            msg = pre_commit(repo)
-        # Expected failures only; anything else still cannot fail the commit (the hook adds `|| true`).
+            msg, blocked = pre_commit_check(repo, strict_capable=args.strict_capable)
+        # Expected failures only; anything else exits 1, which the hook also ignores (it acts on 3 alone).
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             msg = f"agentteams: api-impact check failed ({type(exc).__name__}: {exc}); commit unaffected"
         if msg:
             print(msg, file=sys.stderr)
-        return 0
+        return 3 if blocked else 0
     if args.cmd == "detect":
         imp = detect(repo, commit=None if args.staged else args.commit)
         print(json.dumps(asdict(imp), indent=2) if args.json else imp.summary())

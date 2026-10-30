@@ -308,7 +308,14 @@ def test_hook_block_has_sentinels_and_baked_path():
     assert gh._HOOK_BEGIN in block and gh._HOOK_END in block
     assert 'PYTHONPATH="/opt/agentteams' in block
     assert "python3 -m agentteams.git_hooks --refresh" in block
-    assert "|| true" in block  # non-blocking
+    # The refresh clauses are non-blocking: each refresh runs as an `if` condition (a failure takes the
+    # warning branch), and each staging step swallows its own failure.
+    lines = block.splitlines()
+    for flag in ("--refresh --repo", "--refresh-architecture --repo"):
+        (line,) = [ln for ln in lines if flag in ln and "agentteams.git_hooks" in ln]
+        assert line.strip().startswith("if ") and line.rstrip().endswith("; then"), line
+    adds = [ln for ln in lines if 'git -C "$_at_root" add' in ln]
+    assert len(adds) == 2 and all(ln.rstrip().endswith("|| true") for ln in adds), adds
 
 
 def test_hook_block_fires_only_on_staged_agent_files():
