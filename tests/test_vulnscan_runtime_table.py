@@ -212,3 +212,31 @@ def test_probe_timeout_is_unreadable_not_a_hang(tmp_path: Path, monkeypatch: pyt
     slow = _bin(tmp_path / "node", stdout="v24.22.1", sleep=5)
     assert engine._run_probe(str(slow), runtimes.PRODUCTS["node"].probes[0]) == ([], "")
     assert engine._run_probe(str(tmp_path / "missing"), runtimes.PRODUCTS["node"].probes[0]) == ([], "")
+
+
+def test_probe_runs_from_root_with_a_pinned_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Security review R-s1: a probe never reads the scan's cwd, GOFLAGS, GOTOOLCHAIN or a docker context."""
+    probe = tmp_path / "node"
+    probe.write_text('#!/bin/sh\nprintf "v24.1.0 cwd=%s tc=%s gf=[%s] dh=%s ctx=[%s] path=%s\\n" "$(pwd)" '
+                     '"$GOTOOLCHAIN" "$GOFLAGS" "$DOCKER_HOST" "$DOCKER_CONTEXT" "$PATH"\n')
+    probe.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", f"{tmp_path}:/usr/bin:/bin")
+    monkeypatch.setenv("GOTOOLCHAIN", "auto")
+    monkeypatch.setenv("GOFLAGS", "-modfile=evil.mod")
+    monkeypatch.setenv("DOCKER_HOST", "tcp://203.0.113.9:2375")
+    monkeypatch.setenv("DOCKER_CONTEXT", "remote")
+    seen: list[str] = []
+    real = engine.subprocess.run
+
+    def spy(*a: object, **kw: object) -> object:
+        res = real(*a, **kw)
+        seen.append(res.stdout)
+        return res
+
+    monkeypatch.setattr(engine.subprocess, "run", spy)
+    assert engine._run_probe(str(probe), runtimes.PRODUCTS["node"].probes[0])[0] == ["24.1.0"]
+    assert seen == [f"v24.1.0 cwd=/ tc=local gf=[] dh=unix:///var/run/docker.sock ctx=[] path={tmp_path}:/usr/bin:/bin\n"]
+    seen.clear()
+    engine._version_of(str(probe), [])
+    assert seen and seen[0].startswith("v24.1.0 cwd=/ tc=local gf=[] dh=unix:///var/run/docker.sock ctx=[]")

@@ -314,9 +314,24 @@ def scan_inventory(text: str, target: str) -> Report:
     return report
 
 
+#: Environment pinned for every local version probe (security review R-s1, as ``L1-audit.sh`` does on a host):
+#: ``go`` never fetches a toolchain or reads the scan's ``GOFLAGS``; ``docker`` reads the local socket only.
+PROBE_ENV_PIN = {"GOTOOLCHAIN": "local", "GOFLAGS": "", "DOCKER_HOST": "unix:///var/run/docker.sock"}
+#: Dropped from the probe environment: it would point ``docker`` at another (possibly remote) daemon.
+PROBE_ENV_DROP = ("DOCKER_CONTEXT",)
+
+
+def _probe_env() -> dict[str, str]:
+    """Return the probe environment: this one (PATH kept), :data:`PROBE_ENV_PIN` set, :data:`PROBE_ENV_DROP` gone."""
+    env = {k: v for k, v in os.environ.items() if k not in PROBE_ENV_DROP}
+    env.update(PROBE_ENV_PIN)
+    return env
+
+
 def _version_of(binary: str, args: list[str]) -> str:
     try:
-        out = subprocess.run([binary, *args], capture_output=True, text=True, timeout=20, check=False).stdout
+        out = subprocess.run([binary, *args], capture_output=True, text=True, timeout=20, check=False,
+                             cwd="/", env=_probe_env()).stdout
     except (OSError, subprocess.TimeoutExpired):
         return ""
     m = re.search(r"\d+\.\d+\.\d+", out)
@@ -341,8 +356,8 @@ def _run_probe(path: str, probe: runtimes.Probe) -> tuple[list[str], str]:
         :data:`_OTHER_PRODUCT`, or why the version could not be judged (versions then empty).
     """
     try:
-        res = subprocess.run([path, *probe.argv[1:]], capture_output=True, text=True,
-                             timeout=PROBE_TIMEOUT, check=False)
+        res = subprocess.run([path, *probe.argv[1:]], capture_output=True, text=True,   # from /: no repo config
+                             timeout=PROBE_TIMEOUT, check=False, cwd="/", env=_probe_env())
     except (OSError, subprocess.TimeoutExpired):
         return [], ""
     out = {"stdout": res.stdout, "stderr": res.stderr}.get(probe.stream, f"{res.stdout}\n{res.stderr}")
