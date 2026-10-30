@@ -12,6 +12,7 @@ tmp/by-week/2026-W30/web-browsing-playwright-cli.plan.md's Non-goals.
 
 from __future__ import annotations
 
+import socket
 from contextlib import contextmanager
 from unittest.mock import patch
 
@@ -47,9 +48,24 @@ class _FakeRoute:
         self.aborted = True
 
 
+def _resolves_to_public():
+    """A fake ``socket.getaddrinfo`` answering with one public IPv4 address, so no DNS is used."""
+    def fake(host, port, *args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))]
+    return patch("agentteams.research.search.socket.getaddrinfo", side_effect=fake)
+
+
+@pytest.fixture
+def public_dns():
+    """Stub DNS for ``example.com`` so the pre-navigation guard passes offline (research-hardening #15)."""
+    with _resolves_to_public():
+        yield
+
+
 def test_route_guard_allows_public_https() -> None:
     route = _FakeRoute("https://example.com/page")
-    _route_guard(route)
+    with _resolves_to_public():  # stubbed DNS (research-hardening #15)
+        _route_guard(route)
     assert route.continued
     assert not route.aborted
 
@@ -162,7 +178,7 @@ def _fake_rendered_page(page: _FakePage, calls: list[dict]):
     return _cm
 
 
-def test_browser_fetch_threads_kwargs_and_extracts_text() -> None:
+def test_browser_fetch_threads_kwargs_and_extracts_text(public_dns) -> None:
     calls: list[dict] = []
     page = _FakePage("<html><body><p>Rendered content</p></body></html>")
     with patch(
@@ -177,7 +193,7 @@ def test_browser_fetch_threads_kwargs_and_extracts_text() -> None:
     ]
 
 
-def test_browser_fetch_defaults_headless_and_networkidle() -> None:
+def test_browser_fetch_defaults_headless_and_networkidle(public_dns) -> None:
     calls: list[dict] = []
     page = _FakePage("<p>x</p>")
     with patch(
@@ -188,7 +204,7 @@ def test_browser_fetch_defaults_headless_and_networkidle() -> None:
     assert calls[0]["wait_until"] == "networkidle"
 
 
-def test_browser_fetch_returns_empty_on_any_exception_from_rendered_page() -> None:
+def test_browser_fetch_returns_empty_on_any_exception_from_rendered_page(public_dns) -> None:
     """Navigation timeout, missing browser binaries, a Playwright protocol error -- all funnel
     through the same broad except in browser_fetch and degrade to "", never raise."""
     with patch(
@@ -198,7 +214,7 @@ def test_browser_fetch_returns_empty_on_any_exception_from_rendered_page() -> No
         assert browser_fetch("https://example.com/spa") == ""
 
 
-def test_browser_screenshot_saves_and_returns_true_on_success() -> None:
+def test_browser_screenshot_saves_and_returns_true_on_success(public_dns) -> None:
     calls: list[dict] = []
     page = _FakePage("<p>unused for screenshot</p>")
     with patch(
@@ -209,7 +225,7 @@ def test_browser_screenshot_saves_and_returns_true_on_success() -> None:
     assert page.screenshot_calls == [{"path": "/tmp/out.png", "full_page": True}]
 
 
-def test_browser_screenshot_returns_false_on_any_exception() -> None:
+def test_browser_screenshot_returns_false_on_any_exception(public_dns) -> None:
     with patch(
         "agentteams.research.browser._rendered_page", side_effect=RuntimeError("navigation timeout")
     ):

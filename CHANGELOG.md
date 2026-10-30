@@ -6,6 +6,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (research hardening, follow-up to the briefing PR)
+
+- **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every
+  answer must be public, and the request goes to one of those vetted addresses (up to 3, tried in order only on a
+  connection failure or connect timeout) while the `Host` header, TLS SNI and certificate verification stay on
+  the hostname. httpx no longer resolves the name a second time, and redirects are still not followed. Through an
+  HTTP(S) proxy set in the environment the fetch now fails closed rather than resolving the name again (verified
+  against httpcore 1.0.x, whose tunnel ignores the SNI hostname, so the certificate is checked against the IP; an
+  `https://` proxy fails the same way, since the SNI hostname is spent on the handshake with the proxy).
+  `NO_PROXY` is matched against the IP. One `UserWarning` per process says so when such a proxy applies; SOCKS
+  proxies keep the hostname and are not warned about.
+  `browser_fetch` keeps the residual: Chromium does its own DNS lookup after `is_public_https`.
+- **The research-cache `git check-ignore` probe runs hardened** through `git_exec.run_git` (no `core.fsmonitor`,
+  no hooks), with `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_COMMON_DIR` and the `GIT_CONFIG_*` injection
+  variables stripped, so it cannot be pointed at another repository or handed extra config.
+- **The audit prompt fences evidence as data.** `research.verify` puts each claim's evidence under
+  `RETRIEVAL_CONTENT_AUTHORITY` inside explicit fences, the way `briefing` fences a page for its digest.
+- **The `research` extra now requires `pypdf>=6.21.2`** (was `>=4.0`). Earlier releases are affected by
+  CVE-2026-115572, CVE-2026-115580 and CVE-2026-115585 (denial of service when parsing a malicious PDF) and
+  CVE-2026-113786. Adopted under the S-10 scan-remediation carve-out: 6.21.2 is inside the 14-day cooldown, and
+  the vulnerability scan confirmed the finding.
+
+### added (research hardening, follow-up to the briefing PR)
+
+- **`research.verify.audit_claim_pairs(pairs, chat_fn, lens="adversarial")`** audits each `(Claim, evidence)`
+  pair against its own evidence, so identical claim texts from different sources are no longer audited against
+  each other's pages. Each `Verdict` holds the pair's own `Claim` object (map back by identity). `audit_claims`
+  now delegates to it, and `build_briefing` audits all claims in one `audit_claim_pairs` call (one critic request
+  per claim).
+- **Perspective coverage in `research.news`:** `PerspectiveSet`, `Coverage`, `gather_perspectives` and
+  `perspective_summary` record whether a contested news claim has a second allowlisted news outlet behind it, and
+  say "single source" when it does not. Other outlets are named "also covered by", never "reported by". Search
+  is injected (`search_fn`); an `httpx.HTTPError` or `OSError` from it degrades to single-source.
+  `gather_perspectives` raises `ValueError` on an unknown `kind` or a `k` that is not a non-negative int, and is
+  the one `news` function that sees claim text: it sends that text to the caller's `search_fn` (a third-party
+  search engine with `web_search`), so sensitive claims must not be passed. Adds
+  **`ReputableSourceAllowlist.classify(hit)`**, the public per-hit allowlist filter (domain and path scope).
+- **`agentteams.scan.match_injection(line, previous_line="")`**, a public per-line S-5 / C-1 matcher for
+  non-agent text with no front-matter or code-span exemption. `research.screen.scan_read_content` uses it
+  instead of its leading-newline `scan_content` workaround. `scan.py` is re-pinned in
+  `references/enforcement-integrity.json`.
+- **`memory_index.build_memory_index_from_texts(texts, *, project_name="", framework="", jsonl=None)`** builds a
+  schema-identical index from in-memory id→text mappings (ids stored verbatim as `path`; `source_mtime` 0.0;
+  each document marked `"origin": "text"`).
+- **`research.cache.user_cache_dir()`**, the base per-user research cache directory shared by every project;
+  `cache_dir()` falls back to a per-project subdirectory of it, never the base itself (see *changed*).
+
+### fixed (research hardening, follow-up to the briefing PR)
+
+- **The anti-fabrication backstop no longer downgrades a real refutation over an inflection** ("models" against
+  "model"). Words are compared after conservative folding of ASCII alphabetic, non-acronym tokens; digits and
+  acronyms never fold, and a word absent from the evidence in every form is still rejected. `-ed` and `-ing` fold
+  to separate keys (`stem~ed`, `stem~ing`), distinct from each other and from the bare stem, so a correction that
+  only changes tense or aspect is still downgraded to `"survived"`.
+- **`feature_audit.run_proof` runs proofs with `sys.executable`**, not the `python` on `PATH`, which could belong
+  to another project's venv. When that interpreter lacks pytest, the proof is reported as `HARNESS-BROKEN`
+  naming the interpreter, instead of a `FAIL` per row.
+- **`briefing` labels contested news claims.** A claim the digest marks `contested` from a news source gets
+  `perspective_summary`'s single-source wording ("contested characterization, single source: no second outlet
+  found"), capped at 120 characters (a label that would clip drops the date and keeps "contested
+  characterization, single source"); no second outlet is searched for.
+- **The test suite tests the tree it is run from.** `tests/conftest.py` puts its own tree first on `sys.path`
+  and `PYTHONPATH` (so subprocess tests import it too); if another copy of `agentteams` was already imported,
+  the run stops with exit code 4. Running from a git worktree no longer silently tests the main checkout.
+- SSRF-guard tests in `test_research_search.py`, `test_research_browser.py` and `test_live_probes.py` stub
+  `socket.getaddrinfo`, so they pass offline.
+
+### changed (research hardening, follow-up to the briefing PR)
+
+- **The research cache no longer defaults to a path git could commit.** Without `AGENTTEAMS_RESEARCH_CACHE_DIR`
+  it uses `references/research-cache/` only outside a git work tree or when `git check-ignore` confirms the path
+  is ignored; otherwise a per-project subdirectory of the per-user cache directory
+  (`$XDG_CACHE_HOME/agentteams/research`, `~/Library/Caches/agentteams/research` on macOS, else
+  `~/.cache/agentteams/research`), named by the first 16 hex digits of the SHA-256 of the resolved repository
+  root (or the working directory), with one warning per process. One project's entries are never served to
+  another. Any git error counts as "not ignored".
+- **Memory index format v3 (`INDEX_FORMAT_VERSION = "json-bm25-postings-v3"`): `.jsonl` sources index one
+  passage per record** (max 20), and a JSON-object record contributes its string values (`text`, `content`,
+  `message` first) rather than its raw JSON. Their passages, tokens and lengths differ from before (JSON keys are
+  no longer indexed); other sources are unchanged. `is_index_stale` skips documents marked `"origin": "text"`
+  (built by `build_memory_index_from_texts`) and treats an `index_format_version` mismatch as stale, so a v2
+  index is rebuilt once. The incremental updater declines a version mismatch
+  (`index_format_version_mismatch`), which falls back to a full rebuild.
+- Tests honour `AGENTTEAMS_TEST_INSTALLED=1` to test an installed package: `tests/conftest.py` then skips the
+  source-tree path insertion and the import-location guard.
+- `.github/CONTRIBUTING.md` documents running tests from a worktree, the DNS-stub convention, and building
+  prompt-injection test payloads at runtime.
+
+### added (research: topic briefings)
+
+- **`agentteams.research.briefing.build_briefing`** (async) composes the package into a topic briefing: rated
+  outlets, web and scholarly sources found from the topic alone (no link-following); `is_public_https` before
+  each fetch; `scan_read_content` on every page and every digested claim; a caller `chat_fn` digest into a fixed
+  claim shape under `RETRIEVAL_CONTENT_AUTHORITY`; an audit of each claim against its own page with a caller
+  `critic_fn` (one `audit_claim_pairs` call, one critic request per claim, since the research hardening
+  follow-up above); and cross-domain corroboration (`single_source`). It returns `Briefing` / `BriefingClaim` /
+  `BriefingStats` in memory; storage and expiry are the caller's. `Retriever` injects the network for tests.
+  Ported from masterTeacher's briefing tool (nx1f N21), after LingoFriend's dossier pattern.
+
+### added (research: a read-content screen for fetched pages and retrieved passages)
+
+- **`agentteams.research.screen.scan_read_content` and `is_inert_read_content`** screen C-4 read content before a
+  model reads it, or after a model has summarised it. They are built on `agentteams.scan.match_injection` (the
+  per-line matcher behind `scan_content`), so the S-5 and C-1 patterns and their normalisation are shared, but
+  with no front-matter or code-span exemptions. `is_inert_read_content` returning `True` means no pattern
+  matched, not that the content is safe; read content stays inert data (C-4). They add
+  model-directed phrases ("system prompt", "tell the user" ...) that agent files may legitimately contain, plus
+  caller `extra_patterns`. `scan.py` (a pinned enforcement module) was unchanged by this entry; the research
+  hardening follow-up above adds the public per-line matcher `scan.match_injection` that the screen now uses,
+  and re-pins `scan.py`. From masterTeacher's briefing tool (nx1f N21, @security condition 2).
+
+### fixed (research: the SSRF guard checks every address a host resolves to)
+
+- **`agentteams.research.search.is_public_https`** now resolves with `socket.getaddrinfo` over IPv4 and IPv6 and
+  refuses a URL if ANY answer is not globally routable unicast. Before, it checked only the first IPv4 answer
+  (`gethostbyname`), so a host with a private AAAA record or a second private A record passed, as did shared
+  CGNAT space (100.64.0.0/10) and multicast. IPv4-mapped IPv6 answers, NAT64 (`64:ff9b::/96`), 6to4 and Teredo addresses are judged by the IPv4 address they carry, and an explicit denylist stands beside `is_global` so the guard does not depend on one Python release's special-range table. The
+  browser's per-request route guard inherits the fix. The DNS-rebinding window between the check and the fetch
+  is closed for `fetch_text` by the research hardening follow-up above (the browser keeps it, documented). Reported from masterTeacher's briefing tool (nx1f N21, @security condition 5).
+
 ## [1.1.0-rc.11] - 2026-10-28
 
 ### release notes

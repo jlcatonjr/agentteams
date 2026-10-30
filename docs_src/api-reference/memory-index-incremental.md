@@ -40,12 +40,17 @@ Attempt the patch; return a non-applied result on any risk.
 
 **Returns:** `IncrementalUpdateResult` — `.applied` and `.reason`.
 
+The changed document is rebuilt through the same per-document routine as the full builders, so
+a patched document matches what a full rebuild would store, including `.jsonl` sources (one
+passage per record, record text rather than raw JSON).
+
 ## Decline reasons
 
 | `reason` | Meaning |
 |---|---|
 | `missing_index_file` | Nothing to patch |
 | `invalid_index_shape` | `documents`/`postings` are not the expected types |
+| `index_format_version_mismatch` | The index's `index_format_version` is not the current `INDEX_FORMAT_VERSION` (`json-bm25-postings-v3`); a patch would leave the other documents in the old format under the old label, so the caller falls back to a full rebuild |
 | `source_set_changed` | The set of indexed paths differs from the current sources |
 | `missing_doc_entry` | A source has no matching document |
 | `eligible_only_single_changed_doc` | Zero or more than one document changed |

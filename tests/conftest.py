@@ -12,9 +12,49 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
+
+# --- import THIS tree's agentteams (research-hardening #13, 2026-10-30) -------
+#
+# The CI venv carries an editable install of the main checkout, so a suite run from a git worktree
+# silently imported ``~/githubrepositories/agentteams/agentteams`` and tested code it was not
+# looking at. Put this tree first on ``sys.path`` before anything imports ``agentteams``, and first
+# on ``PYTHONPATH`` so subprocess tests (``sys.executable -m agentteams...``, ``build_team.py``)
+# import the same tree. ``pytest_sessionstart`` refuses the run if a plugin imported another copy
+# before this file loaded.
+#
+# Opt-out: ``AGENTTEAMS_TEST_INSTALLED=1`` skips both the path insertion and the guard, so a run that
+# deliberately tests an installed wheel (tox, nox, a release smoke test) is not silently redirected
+# to the source tree.
+_ROOT = Path(__file__).resolve().parents[1]
+_TEST_INSTALLED = os.environ.get("AGENTTEAMS_TEST_INSTALLED", "") == "1"
+if not _TEST_INSTALLED and (_ROOT / "agentteams").is_dir():
+    _root_str = str(_ROOT)
+    if not sys.path or sys.path[0] != _root_str:
+        sys.path.insert(0, _root_str)
+    _pythonpath = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]
+    if not _pythonpath or _pythonpath[0] != _root_str:
+        os.environ["PYTHONPATH"] = os.pathsep.join([_root_str, *_pythonpath])
+
+
+def _assert_agentteams_from_this_tree() -> None:
+    """Exit the session if ``agentteams`` was imported from a different checkout.
+
+    Raises:
+        pytest.exit.Exception: ``agentteams.__file__`` lies outside this tree (exit code 4).
+    """
+    import agentteams
+
+    location = Path(agentteams.__file__).resolve()
+    if not location.is_relative_to(_ROOT):
+        pytest.exit(
+            f"agentteams was imported from {location.parent}, not this tree ({_ROOT}); "
+            f"run with PYTHONPATH={_ROOT} so the suite tests the code in front of you.",
+            returncode=4,
+        )
 
 
 def resolve_openrouter_key() -> str:
@@ -199,6 +239,13 @@ def _report_stale_integrity_manifest(session: pytest.Session) -> None:
 
 
 def pytest_sessionstart(session):  # noqa: D103
+    if not _TEST_INSTALLED:
+        _assert_agentteams_from_this_tree()
+    else:
+        # Opt-out active: say which copy is under test, so a stray export is visible.
+        import agentteams
+        print(f"AGENTTEAMS_TEST_INSTALLED=1: testing agentteams from {agentteams.__file__}",
+              file=sys.stderr, flush=True)
     _tree_watch["prev"] = _snapshot_watched_tree()
     _report_stale_integrity_manifest(session)
 

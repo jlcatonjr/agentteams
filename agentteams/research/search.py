@@ -16,11 +16,14 @@ content-type fix) — the origin of the ``max_pdf_bytes``/``pdf_timeout_s`` spli
 
 from __future__ import annotations
 
+import enum
 import html as _html
 import ipaddress
 import re
 import socket
 import time
+import urllib.request
+import warnings
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -322,8 +325,83 @@ def web_search_with_provenance(
     )
 
 
+#: Shared address space (RFC 6598, carrier-grade NAT). Listed explicitly because ``is_global``'s
+#: treatment of special ranges has changed across Python releases (CVE-2024-4032, fixed in 3.11.10)
+#: and this package supports every 3.11.
+_SHARED_V4 = ipaddress.ip_network("100.64.0.0/10")
+
+#: The NAT64 well-known prefix (RFC 6052): the last 32 bits are an IPv4 address the translator reaches.
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _embedded_ipv4(addr: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """The IPv4 address an IPv6 address carries through to a v4 network, if any: IPv4-mapped
+    (``::ffff:a.b.c.d``), 6to4 (``2002::/16``), Teredo (``2001::/32``, the client address) or NAT64
+    (``64:ff9b::/96``). Python reports several of these ranges as global, so the carried address
+    must be judged on its own."""
+    if addr.ipv4_mapped is not None:
+        return addr.ipv4_mapped
+    if addr.sixtofour is not None:
+        return addr.sixtofour
+    if addr.teredo is not None:
+        return addr.teredo[1]
+    if addr in _NAT64:
+        return ipaddress.IPv4Address(int(addr) & 0xFFFFFFFF)
+    return None
+
+
+def _is_public_address(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Whether one resolved address is globally routable unicast.
+
+    Refused: private, loopback, link-local, reserved, multicast, unspecified, shared (CGNAT,
+    100.64.0.0/10), anything ``is_global`` rejects, and any IPv6 address whose embedded IPv4
+    address (:func:`_embedded_ipv4`) is itself refused. The explicit checks stand beside
+    ``is_global`` so the guard does not depend on one Python release's special-range table.
+    """
+    if isinstance(addr, ipaddress.IPv6Address):
+        embedded = _embedded_ipv4(addr)
+        if embedded is not None and not _is_public_address(embedded):
+            return False
+    if (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+            or addr.is_multicast or addr.is_unspecified
+            or (isinstance(addr, ipaddress.IPv4Address) and addr in _SHARED_V4)):
+        return False
+    return addr.is_global
+
+
+def _vetted_addresses(url: str) -> list[str] | None:
+    """Resolve ``url``'s host once and return its addresses, only if EVERY one is public.
+
+    The single resolution behind both :func:`is_public_https` (which only needs the verdict) and
+    :func:`_fetch_raw` (which connects to one of the returned addresses instead of resolving the
+    name a second time — see :func:`_fetch_raw` on DNS rebinding).
+
+    Args:
+        url: The URL to vet.
+
+    Returns:
+        The distinct resolved addresses in ``getaddrinfo`` order, as bare IP strings (an IPv6
+        zone id is dropped), or ``None`` when the URL is not https, has no host, cannot be
+        resolved, resolves to nothing, or ANY answer is non-public (:func:`_is_public_address`).
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            return None
+        infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        addrs = [ipaddress.ip_address(info[4][0].split("%", 1)[0]) for info in infos]
+    except (socket.gaierror, ValueError, UnicodeError):
+        # CH-24: named types — DNS resolution failure, malformed IP-literal or port parsing, or a
+        # non-ASCII hostname encoding failure. A fail-closed SSRF guard: any of these means the
+        # URL cannot be confirmed safe, so treat it as not public/https.
+        return None
+    if not addrs or not all(_is_public_address(addr) for addr in addrs):
+        return None
+    return list(dict.fromkeys(str(addr) for addr in addrs))
+
+
 def is_public_https(url: str) -> bool:
-    """SSRF guard: https only, and the host must not resolve to a private/loopback IP.
+    """SSRF guard: https only, and EVERY address the host resolves to must be public.
 
     Public (not underscore-prefixed) because ``agentteams.research.browser`` reuses this exact
     check as its own pre-navigation gate before launching a browser — deliberately the one
@@ -333,18 +411,26 @@ def is_public_https(url: str) -> bool:
     needs a *second*, per-request guard of its own (redirects and page-initiated JS requests never
     pass back through this function) — see ``browser.py``'s ``page.route`` handler; this function
     is necessary but not sufficient there.
+
+    Resolution is ``socket.getaddrinfo`` over IPv4 and IPv6, and the URL is refused if ANY result
+    is non-public (:func:`_is_public_address`). Checking only the first IPv4 answer
+    (``gethostbyname``, before 2026-10-30) let a host with a private AAAA record, or a second
+    private A record, through; it also passed shared CGNAT space (100.64.0.0/10) and multicast.
+
+    DNS rebinding: a yes from this function says nothing about what the name resolves to a moment
+    later. :func:`fetch_text` / :func:`fetch_text_and_date` therefore do not call it and then
+    re-resolve; they connect to an address this same check vetted (:func:`_fetch_raw`). A caller
+    that uses this verdict and then resolves the name itself — ``browser.py``'s Chromium, which
+    does its own DNS — keeps the window between the check and its own resolution (residual).
+
+    Args:
+        url: The URL to check.
+
+    Returns:
+        ``True`` only when ``url`` is https with a host whose every resolved address is public.
+        Never raises: a URL that cannot be parsed or resolved is ``False``.
     """
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme != "https" or not parsed.hostname:
-            return False
-        addr = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
-        return not (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved)
-    except (socket.gaierror, ValueError, UnicodeError):
-        # CH-24: named types — DNS resolution failure, malformed IP-literal parsing, or a
-        # non-ASCII hostname encoding failure. A fail-closed SSRF guard: any of these means the
-        # URL cannot be confirmed safe, so treat it as not public/https.
-        return False
+    return _vetted_addresses(url) is not None
 
 
 def _extract_pdf_text(body: bytes) -> str:
@@ -409,19 +495,75 @@ def extract_published_date(html: str) -> str | None:
 _DEFAULT_MAX_BYTES = 400_000
 
 
-def _fetch_raw(
-    url: str, max_bytes: int, timeout_s: float, max_pdf_bytes: int, pdf_timeout_s: float
-) -> tuple[bytes, str, str] | None:
-    """Shared fetch core for ``fetch_text``/``fetch_text_and_date`` — one network round-trip,
-    two possible post-processing paths. Returns ``(body, content_type, encoding)``, or ``None`` on
-    any guard/failure/non-200 (both callers convert that into their own empty-result shape).
+#: How many vetted addresses ``_fetch_raw`` tries before giving up. Each attempt may spend a full
+#: connect timeout, so the cap bounds the worst case for a host with many unreachable records.
+_MAX_PINNED_ADDRESSES = 3
+
+class _NextAddress(enum.Enum):
+    """Single-member sentinel type ``_stream_pinned`` returns when the connection to one address
+    failed (refused, unreachable, timed out, or TLS rejected), so the caller tries the next vetted
+    address rather than giving up."""
+
+    TOKEN = "next-address"
+
+
+_NEXT_ADDRESS = _NextAddress.TOKEN
+
+#: What one pinned attempt yields: the response, a plain failure, or "try the next address".
+_StreamOutcome = tuple[bytes, str, str] | _NextAddress | None
+
+#: Whether the "pinned fetch through an HTTP(S) proxy fails closed" warning has been emitted.
+_warned_proxy = False
+
+
+def _warn_if_env_proxy_applies(pinned_host: str) -> None:
+    """Warn once per process when an environment-configured HTTP(S) proxy would carry a pinned fetch.
+
+    Uses the same environment resolution httpx's ``trust_env`` path uses
+    (``urllib.request.getproxies``) and ``urllib.request.proxy_bypass`` for ``NO_PROXY``. The
+    bypass check runs against ``pinned_host`` — the vetted IP — because that is the host httpx
+    sees in the pinned URL and matches ``NO_PROXY`` against; a ``NO_PROXY`` entry naming only the
+    hostname does not keep a pinned fetch off the proxy. SOCKS proxies are not warned about: they
+    honour ``sni_hostname``.
+
+    Args:
+        pinned_host: The vetted address the request will be sent to.
     """
-    if not is_public_https(url):
-        return None
+    global _warned_proxy
+    if _warned_proxy:
+        return
+    proxies = urllib.request.getproxies()
+    proxy = proxies.get("https") or proxies.get("all")
+    if not proxy or proxy.lower().startswith("socks") or urllib.request.proxy_bypass(pinned_host):
+        return
+    _warned_proxy = True
+    warnings.warn(
+        "research fetch: an HTTP(S) proxy is configured in the environment; DNS-pinned fetches "
+        "through it fail closed (httpcore 1.0.x verifies the tunnelled certificate against the "
+        "pinned IP), so fetch_text returns empty. Unset the proxy or use a SOCKS proxy.",
+        UserWarning,
+        stacklevel=4,
+    )
+
+
+def _stream_pinned(
+    pinned: httpx.URL, host_header: str, sni_hostname: str,
+    max_bytes: int, timeout_s: float, max_pdf_bytes: int, pdf_timeout_s: float,
+) -> _StreamOutcome:
+    """One GET of ``pinned`` (the vetted IP in place of the host), size- and time-capped.
+
+    Returns ``(body, content_type, encoding)``; ``None`` on a non-200 or any other HTTP failure;
+    or ``_NEXT_ADDRESS`` when the connection itself failed (``httpx.ConnectError`` — refused,
+    unreachable, or a certificate that does not match ``sni_hostname`` — or
+    ``httpx.ConnectTimeout``).
+    """
     try:
         deadline = time.monotonic() + timeout_s
-        with httpx.stream(
-            "GET", url, headers={"User-Agent": _UA}, timeout=timeout_s, follow_redirects=False
+        # A Client, not the module-level httpx.stream(): only Client.stream() takes `extensions`.
+        with httpx.Client(timeout=timeout_s, follow_redirects=False) as client, client.stream(
+            "GET", pinned,
+            headers={"User-Agent": _UA, "Host": host_header},
+            extensions={"sni_hostname": sni_hostname},
         ) as resp:
             if resp.status_code != 200:
                 return None
@@ -441,11 +583,73 @@ def _fetch_raw(
                     break
             body = b"".join(chunks)
             encoding = resp.encoding or "utf-8"
+    except (httpx.ConnectError, httpx.ConnectTimeout):
+        # CH-24: named types — this one address refused, was unreachable, did not answer within
+        # the connect timeout, or failed TLS verification against the hostname; the caller moves
+        # to the next vetted address.
+        return _NEXT_ADDRESS
     except httpx.HTTPError:
         # CH-24: named type — see web_search()'s identical rationale; this streams the same
-        # httpx request/response boundary (connect/timeout/transport failures mid-stream).
+        # httpx request/response boundary (timeout/transport failures mid-stream).
         return None
     return body, content_type, encoding
+
+
+def _fetch_raw(
+    url: str, max_bytes: int, timeout_s: float, max_pdf_bytes: int, pdf_timeout_s: float
+) -> tuple[bytes, str, str] | None:
+    """Shared fetch core for ``fetch_text``/``fetch_text_and_date`` — one network round-trip,
+    two possible post-processing paths. Returns ``(body, content_type, encoding)``, or ``None`` on
+    any guard/failure/non-200 (both callers convert that into their own empty-result shape).
+
+    **Pinned to the vetted address (DNS rebinding).** The host is resolved exactly once, by
+    :func:`_vetted_addresses`, and the request is sent to one of THOSE addresses: the URL's host is
+    replaced by the IP, the ``Host`` header carries the original host (and non-default port), and
+    httpcore's ``sni_hostname`` request extension carries the hostname, which httpcore passes to
+    ``ssl.SSLContext.wrap_socket`` as ``server_hostname`` — so SNI and certificate verification
+    are still against the name, never the IP. httpx never resolves the name, so a DNS server that
+    answers public for the check and private for the fetch gains nothing. Vetted addresses are
+    tried in order (at most ``_MAX_PINNED_ADDRESSES``) only on a connection failure or connect
+    timeout. Redirects are
+    not followed, so the pin covers the whole exchange. The URL is refused when httpx and
+    ``urlparse`` disagree on its host or port, so the name verified is the name resolved.
+
+    **Residual — HTTP(S) proxies from the environment (httpcore 1.0.x).** ``trust_env`` is left
+    at httpx's default. Through an ``http://`` or ``https://`` proxy the CONNECT target is the
+    vetted IP (the proxy does not resolve the name, so the pin holds), but httpcore 1.0.x's tunnel
+    path ignores the request's ``sni_hostname`` and verifies the target certificate against the
+    IP, which an ordinary certificate does not cover. An ``https://`` proxy fails the same way: the
+    ``sni_hostname`` extension is consumed by the TLS handshake with the proxy itself, not the
+    tunnelled one. Either way the fetch fails closed (``None``); it is not redirected anywhere.
+    ``NO_PROXY`` entries are matched against the IP, not the name. One ``UserWarning`` per process
+    says so when such a proxy applies. SOCKS proxies honour ``sni_hostname``. Later httpcore
+    versions may change the tunnel path; this is verified against 1.0.x only.
+    """
+    addrs = _vetted_addresses(url)
+    if addrs is None:
+        return None
+    try:
+        target = httpx.URL(url)
+        parsed = urlparse(url)
+        same_port = (target.port or 443) == (parsed.port or 443)
+    except (httpx.InvalidURL, ValueError):
+        # CH-24: named types — httpx rejects a URL urlparse accepted, or an invalid port.
+        # Fail closed: the URL's host cannot be confirmed to be the name that was vetted.
+        return None
+    if target.host.lower() != (parsed.hostname or "").lower() or not same_port:
+        return None
+    host_header = target.netloc.decode("ascii")
+    sni_hostname = target.raw_host.decode("ascii")
+    _warn_if_env_proxy_applies(addrs[0])
+    for addr in addrs[:_MAX_PINNED_ADDRESSES]:
+        outcome = _stream_pinned(
+            target.copy_with(host=addr), host_header, sni_hostname,
+            max_bytes, timeout_s, max_pdf_bytes, pdf_timeout_s,
+        )
+        if isinstance(outcome, _NextAddress):
+            continue
+        return outcome
+    return None
 
 
 def strip_html_to_text(html: str, max_chars: int) -> str:

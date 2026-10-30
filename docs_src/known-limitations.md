@@ -319,11 +319,30 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 
 ## Research tools
 
-### The research cache still writes under `references/research-cache`
+### The read-only research grant still writes a cache
 
 - **What:** 1.0 removes `--screenshot` from `python -m agentteams.research browser` (378), but the read-only
-  retrieval grant (`Bash(python -m agentteams.research:*)`) still writes its cache under
-  `references/research-cache`.
+  retrieval grant (`Bash(python -m agentteams.research:*)`) still writes a cache. Since the research-hardening
+  follow-up the default location is one git cannot commit: `references/research-cache` only outside a git work
+  tree or when git confirms that path is ignored, otherwise a per-project subdirectory (named from a digest of
+  the repository root) of the per-user cache directory (`$XDG_CACHE_HOME/agentteams/research`,
+  `~/Library/Caches/agentteams/research` on macOS, else `~/.cache/agentteams/research`), with one warning. The
+  per-project subdirectory keeps one project's entries from being served to another, but every project run by
+  the same user can still write under that base directory. An explicit `AGENTTEAMS_RESEARCH_CACHE_DIR` is used as given;
+  pointing it inside a repository is the caller's responsibility.
 - **Who:** teams whose agents hold the retrieval grant.
-- **Mitigation:** treat `references/research-cache` as agent-writable. Do not keep anything authoritative there.
-- **Tracking:** CHANGELOG `[1.0.0-rc.10]`, "1.0 must-fix set", "Known residual".
+- **Mitigation:** treat the cache directory as agent-writable. Do not keep anything authoritative there, and do not
+  set `AGENTTEAMS_RESEARCH_CACHE_DIR` to a tracked path.
+- **Tracking:** CHANGELOG `[1.0.0-rc.10]`, "1.0 must-fix set", "Known residual"; CHANGELOG `[Unreleased]`, research
+  hardening.
+
+### Page fetches through an environment HTTP(S) proxy return nothing
+
+- **What:** `fetch_text` and `fetch_text_and_date` connect to the address the SSRF guard vetted, with the hostname
+  kept for TLS. httpcore 1.0.x's proxy tunnel does not pass that hostname on, so through an `HTTP_PROXY` /
+  `HTTPS_PROXY` / `ALL_PROXY` HTTP(S) proxy the certificate is checked against the IP and the fetch fails closed
+  (empty text). One `UserWarning` per process says so; the warning is a heuristic and can be absent.
+- **Who:** users whose only route to the web is an HTTP(S) proxy. SOCKS proxies are unaffected.
+- **Mitigation:** use a SOCKS proxy, or exempt the destination with `NO_PROXY` (matched against the IP). The browser
+  path (`browser_fetch`) is unaffected and keeps its own residual DNS-rebinding window.
+- **Tracking:** CHANGELOG `[Unreleased]`, research hardening (DNS-rebinding fix).
