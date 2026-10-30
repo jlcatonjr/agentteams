@@ -38,6 +38,7 @@ import os
 import re
 import shutil
 import subprocess
+import tomllib
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -407,7 +408,7 @@ def _collect_ranges(path: Path, m: Manifest, repo: Path, rel: str, label: str, t
     """Read one unscannable manifest's unpinned requirements into ``ranges``, withholding what must stay local."""
     try:
         rf = _range_file(path, m, repo)
-    except (OSError, UnicodeDecodeError, ValueError, TypeError, AttributeError) as exc:   # TOMLDecodeError too
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, ValueError) as exc:
         report.unscannable[-1] = (rel, f"{m.unscannable}; ranges not read: {type(exc).__name__}")
         return
     if rf is None:

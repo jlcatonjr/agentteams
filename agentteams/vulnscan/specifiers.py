@@ -496,10 +496,12 @@ def read_pyproject(path: Path, skip: Iterable[str] = ()) -> RangeFile:
         return rf
     done = {re.sub(r"[-_.]+", "-", n).lower() for n in skip}
     project = data.get("project") if isinstance(data.get("project"), dict) else {}
-    specs = [(s, "runtime") for s in project.get("dependencies") or []]
+    deps = project.get("dependencies") or []
+    specs = [(s, "runtime") for s in deps] if isinstance(deps, list) else [(deps, "runtime")]
     groups = project.get("optional-dependencies")
     for group, items in (groups.items() if isinstance(groups, dict) else []):
-        specs += [(s, "dev" if _DEV_GROUP.search(str(group)) else "runtime") for s in items or []]
+        scope = "dev" if _DEV_GROUP.search(str(group)) else "runtime"
+        specs += [(s, scope) for s in items] if isinstance(items, list) else [(items, scope)] if items else []
     for spec, scope in specs:
         got = parse_requirement(spec, scope) if isinstance(spec, str) else "unreadable"
         if isinstance(got, Requirement):
