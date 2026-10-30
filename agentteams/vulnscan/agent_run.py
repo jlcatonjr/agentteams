@@ -429,15 +429,11 @@ def docker_unreachable(tag: str | None = None) -> str:
         tag: The agent image that must exist; None checks only that the daemon answers.
 
     Returns:
-        A one-line reason, or "".
+        A one-line reason (a daemon that does not answer and an image that is not built differ), or "".
     """
-    if tag is not None:
-        return "" if _image_id(tag) else _unreachable(tag)
-    try:
-        ok = not _docker(["docker", "version", "--format", "{{.Server.Version}}"], check=False, timeout=60).returncode
-    except (OSError, subprocess.SubprocessError):   # not installed, or the client hung
-        ok = False
-    return "" if ok else _unreachable(None)
+    from agentteams.vulnscan import docker_readiness   # the one probe (T2-A)
+
+    return docker_readiness.docker_problem(tag, runner=lambda argv, t: _docker(argv, check=False, timeout=t))
 
 
 def _ensure_network() -> None:

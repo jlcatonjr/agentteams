@@ -22,12 +22,14 @@
 | ``halts`` / ``resolve`` / ``say`` / ``publish-grant`` / ``publish`` / ``agent-chat`` | Operator loop (:mod:`.operator_cli`) |
 | ``handoff status`` | Staged fixes, the repository orchestrators' verdicts and pending packets (:mod:`.handoff`) |
 | ``remediation-report LEDGER SINCE`` | One unattended remediation attempt's outcome (JSON) and ``remediation.md`` (:mod:`.remediation_report`) |
+| ``ready [--ensure] [--json]`` | Docker, the images and their self-tests, layer by layer with reason codes (:mod:`.docker_readiness`) |
 
 Exit codes for ``scan``, ``inventory``, ``runtimes``, ``fix`` and ``daily``: 0 clean, 1 findings at
 or above ``--fail-on`` (``fix``: something held back or refused), 3 partially unscanned (a feed or host
 failed), 4 malicious package or compromise indicator. Every command uses 2 for usage or setup
 errors (no config, refused signing). ``act`` gives 0 done, 1 refused, 3 failed. ``agent-run`` gives 0
-completed, 3 not run or agent error. ``agent-selftest`` and ``tools-selftest`` give 0 pass, 1 fail.
+completed, 3 not run or agent error. ``agent-selftest`` and ``tools-selftest`` give 0 pass, 1 fail. ``ready``
+gives 0 ready, 3 degraded.
 
 Kept separate from the ``agentteams`` console script, like ``python -m agentteams.research``.
 """
@@ -44,6 +46,7 @@ from pathlib import Path
 from agentteams.vulnscan import (
     agent_run,
     daily,
+    docker_readiness,
     engine,
     executor,
     fix,
@@ -212,6 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
     tools_image.register(sub)
     handoff.register(sub)
     remediation_report.register(sub)
+    docker_readiness.register(sub)
     return p
 
 
@@ -404,6 +408,8 @@ def main(argv: list[str] | None = None) -> int:
         return handoff.dispatch(args, daily.load_config)
     if args.cmd in remediation_report.COMMANDS:
         return remediation_report.dispatch(args)
+    if args.cmd in docker_readiness.COMMANDS:
+        return docker_readiness.dispatch(args, daily.load_config)
     if args.cmd == "server-kit":
         dest = args.dest or paths.server_kit_dir()
         names = export_server_kit(dest)

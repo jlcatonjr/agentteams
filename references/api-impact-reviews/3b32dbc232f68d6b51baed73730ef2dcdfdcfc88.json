@@ -1,0 +1,8 @@
+{
+  "patch_id": "3b32dbc232f68d6b51baed73730ef2dcdfdcfc88",
+  "commit": "c49cf7e0755f3b346f8c0838c03cf6578f28a8a8",
+  "subject": "vulnscan(daily): split daily.py under the module ceiling, behaviour unchanged",
+  "impact": "3 modules added, 2 symbols added, 2 symbols removed",
+  "note": "daily.py split into checkout_freshness, infra_retry and worktree_fixes; every public name re-exported from daily; behaviour unchanged (re-recorded after the rebase onto L4 ed4c2082).",
+  "recorded_at": "2026-10-30T17:19:31Z"
+}

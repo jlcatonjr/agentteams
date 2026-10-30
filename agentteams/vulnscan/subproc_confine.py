@@ -46,7 +46,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -85,7 +84,14 @@ _SSH = re.compile(r"ssh://git@([A-Za-z0-9.-]+)/")
 
 
 class Unavailable(subprocess.SubprocessError):
-    """The tools container cannot run the operation. Nothing ran on the host instead (fail closed)."""
+    """The tools container cannot run the operation. Nothing ran on the host instead (fail closed).
+
+    ``code`` is the :mod:`.docker_readiness` reason code when Docker, the image or its self-test is the cause, else "".
+    """
+
+    def __init__(self, *args: object, code: str = "") -> None:
+        super().__init__(*args)
+        self.code = code
 
 
 # ---------------------------------------------------------------- configuration and scope
@@ -172,7 +178,7 @@ def scope(cfg: dict[str, Any], *, scratch: Sequence[Path] = ()) -> contextlib.Ab
     tag = image_tag(s)
     why = unavailable_reason(tag)
     if why:
-        raise Unavailable(f"tools container unavailable: {why}")
+        raise Unavailable(f"tools container unavailable: {why}", code=getattr(why, "code", ""))
     roots = tuple(dict.fromkeys(Path(p).resolve() for p in (paths.state_dir() / "worktrees", *scratch)))
     return _activate(Confined(image=tag, scratch=roots, ssh_identity=str(s["ssh_identity"])))
 
@@ -194,24 +200,17 @@ def selftest_record_path() -> Path:
 
 
 def unavailable_reason(tag: str) -> str:
-    """Return why the tools container cannot be used (Docker, the image, its self-test), or ""."""
+    """Return why the tools container cannot be used (Docker, the image, its self-test), or "".
+
+    The probe is :func:`.docker_readiness.tools_problem` (inside a daily run: that run's one check). The result is a
+    ``docker_readiness.Reason``: a string that also carries its reason code (``.code``).
+    """
+    from agentteams.vulnscan import docker_readiness
+
     if os.getuid() == 0:
         return "the executor runs as root; the tools container never runs as root"
-    if not shutil.which("docker"):
-        return "docker is not installed"
-    image_id = image_id_of(tag)
-    if not image_id:
-        return (f"docker is not reachable or the tools image {tag} is not built — run "
-                "`python -m agentteams.vulnscan tools-image build`")
-    try:
-        rec = json.loads(selftest_record_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        rec = {}
-    if not (isinstance(rec, dict) and rec.get("passed") is True and rec.get("image_id") == image_id
-            and rec.get("flags_sha256") == flags_sha256(image_id)):
-        return (f"no passing tools-selftest for {tag} and the current container flags — run "
-                "`python -m agentteams.vulnscan tools-selftest`")
-    return ""
+    return docker_readiness.tools_problem(
+        tag, runner=lambda argv, timeout: _docker(argv, check=False, timeout=timeout))
 
 
 # ---------------------------------------------------------------- docker

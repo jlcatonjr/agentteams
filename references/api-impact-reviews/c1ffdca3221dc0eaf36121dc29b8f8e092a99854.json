@@ -1,0 +1,8 @@
+{
+  "patch_id": "c1ffdca3221dc0eaf36121dc29b8f8e092a99854",
+  "commit": "c3fa96ceccb0141d60f81becce0023aeea81e308",
+  "subject": "vulnscan(T2-C): catch-up retries a run Docker left partial; re-runs archive the summary",
+  "impact": "1 symbols added",
+  "note": "T2-A: docker_readiness public API (ensure, markdown, needs, register, settings, tools_problem, using), subproc_confine.Unavailable(code=...), and the 'vulnscan ready [--ensure] [--json]' CLI are documented in docs_src/api-reference/vulnscan.md (Docker readiness section) and the CHANGELOG; walkthrough updated. T2-C: daily.infra_retry_due is documented in the API reference (catch-up retry, infra reason codes from summary.json infra_codes). Audit: no removed or re-signed names; @security CONDITIONAL PASS with conditions verified (security-decisions log, 2026-10-29).",
+  "recorded_at": "2026-10-30T14:31:49Z"
+}

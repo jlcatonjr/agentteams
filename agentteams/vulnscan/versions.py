@@ -65,6 +65,21 @@ def version_key(version: str) -> tuple:
     return (epoch, nums, 0, _tokens(rest))
 
 
+def is_prerelease(version: str) -> bool:
+    """Return True when ``version`` is a numeric release with a pre-release tag (``rc1``, ``b2``, ``-alpha.1``, ``.dev3``).
+
+    A post-release (``1.2.post1``), a distro revision (``2.3-4ubuntu1``) or a plain release is not one.
+
+    Args:
+        version: Version string.
+
+    Returns:
+        Whether the version is a pre-release.
+    """
+    _epoch, nums, phase, tokens = version_key(version)
+    return bool(nums) and phase == 0 and bool(tokens) and tokens[0][0] == 1
+
+
 def is_final(version: str) -> bool:
     """Return True for plain numeric releases (no pre-release, dev or local tag).
 

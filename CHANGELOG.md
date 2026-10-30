@@ -124,6 +124,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   script's pid lives. A killed run frees it at once, and child processes do not inherit it. A legacy
   `remediate.lock` directory is honoured while its pid runs and removed when that owner is gone.
 
+### vulnscan (report labels: pre-release fix targets, held count timing)
+
+- The report's "Upgrade to" cell marks a pre-release target: `26.10.0rc1 (pre-release; the advisory names no
+  stable fix)`. OSV's fixed event can be a release candidate (Twisted, 2026-10-30); `stage-fix` already skips
+  pre-releases, so only the label changes.
+- The effectiveness row now reads "Repositories held at scan time (nothing stageable; see the held reasons)": the
+  summary is written before the remediation runner holds more repositories, so `held-repos.json` can list more later
+  the same day, and a hold can now also mean "already fixed on the default branch".
+- The stage-fix zero-change decision moved to `retry_guard.zero_change_detail()` / `nothing_vulnerable()` (CH-07:
+  `executor.py` stays under the module ceiling); a checkout whose git query fails now shows in the Checkout freshness table as "git query failed" (unlabelled)
+  instead of being dropped silently (CH-24).
+- New `versions.is_prerelease()`; the `vuln-remediation` agent template says a `held:` refusal can also mean the
+  default branch already has the fix and the local checkout is behind.
+- Internal, behaviour unchanged: `vulnscan/daily.py` (1243 lines, over the 1000-line module ceiling) is split into
+  `checkout_freshness.py`, `infra_retry.py` and `worktree_fixes.py`. `daily` re-exports the names scripts and tests use
+  (`daily.infra_retry_due`, `daily.stage_worktree_fixes`, ...), and the moved code still runs git through
+  `daily._git`. The three modules are pinned in the integrity manifest.
+
+### vulnscan (stage-fix: a fix already on the default branch is not reported as a major jump)
+
+- When `stage-fix` changes nothing and a scan of the default branch (the executor's worktree) finds nothing
+  vulnerable, the refusal is now `already fixed on the default branch (<ref>): nothing vulnerable there; update
+  the local checkout` instead of `nothing fixable without a major jump`. Today 7 repositories were held with the
+  wrong reason: their default branches have the fix and their local checkouts are behind. The futile-retry
+  guard holds the new result the same way, with a held reason that says to update the checkout. A scan that
+  checks nothing or hits a feed error never counts as "nothing vulnerable".
+
+### vulnscan (findings already fixed upstream are labelled, not counted as fixed)
+
+- `summary.md` gets a **Checkout freshness** section after the per-repository sections: each scanned repository's
+  branch, commits behind `origin/HEAD` and the age of `FETCH_HEAD`, read from the local refs (no fetch, no
+  credentials).
+- A package finding whose `name==version` is gone from the same file at `origin/HEAD` gets `fixed_upstream: true`
+  in `summary.json`, and its Notes cell ends with `fixed upstream (checkout behind)`. It stays in the findings.
+  Nested repositories and third-party clones are skipped.
+- *Remediation effectiveness* has a new row for these findings, which are not counted as fixed; the other rows are
+  unchanged. Scanning `origin/HEAD` instead of the working tree stays out of scope.
+
+### vulnscan (catch-up retries a run Docker left partial; a re-run keeps the earlier summary)
+
+- `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (an `infra.*` reason code in the
+  new `summary.json["infra_codes"]` or in `remediation.docker`; feed error text is never matched, because the
+  `tools container unavailable` prefix also covers ssh, mount and allowlist refusals) and Docker is ready now. New config key
+  `catch_up.max_retries_per_day` (default 2) bounds it; the count is kept in the run directory's
+  `infra-retry.count`. A retry sends no `run-stale` notification. Until now a recent partial run was never retried.
+- A same-day re-run first copies the earlier `summary.json` / `summary.md` to `summary.<HHMMSS>.{json,md}` (the
+  time the earlier one was written), so it no longer overwrites a full run's summary. Readers still read only
+  `summary.json`.
+
+### vulnscan (one Docker readiness check, with reason codes)
+
+- **New `docker_readiness` module and `vulnscan ready [--ensure] [--json]`** (exit 0 ready, 3 degraded, 2 an
+  unusable config). It checks the docker CLI, the daemon, the tools and agent images and their self-test records,
+  and gives each failure a stable reason code: `infra.docker_daemon`, `infra.tools_image`, `infra.selftest` or
+  `infra.no_gui_session`. A stopped daemon, an image that is not built and a stale self-test no longer share one
+  message.
+- The four Docker probes now delegate to it, with unchanged signatures: `subproc_confine.unavailable_reason`,
+  `agent_run.docker_unreachable`, the `tools_container` entry of `remediation_status.collect`, and the executor's
+  batch check. A refused ledger row for an unavailable tools container gains `reason_code`; its detail keeps the
+  `tools container unavailable:` prefix.
+- **The daily run checks Docker once, before it scans.** The servers, the staging, the remediation readiness
+  section and the agent phase use that record instead of probing again. `summary.json` records it as
+  `remediation.docker`, `{layer: {state, code, message}}`.
+- New `docker` config block: `autostart` (default **false**: only an operator's opt-in lets the run start Docker,
+  with `open -g -a Docker` or `systemctl --user start`, never sudo), `start_timeout_s` (240) and `auto_selftest`
+  (`on-change`: a self-test whose record is for another image is re-run, once per image change). It never builds
+  an image.
+
 ### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
 
 - **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the

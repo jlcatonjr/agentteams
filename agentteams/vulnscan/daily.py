@@ -31,6 +31,7 @@ reported as clean.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import copy
 import datetime as _dt
@@ -42,16 +43,22 @@ import re
 import subprocess
 import sys
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from agentteams.vulnscan import coverage, effectiveness, engine, executor, fix, merge_digest, notify, osv, paths
-from agentteams.vulnscan import registry, remediation_status, repo_alias, subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan import coverage, docker_readiness, effectiveness, engine, executor, fix, merge_digest, notify
+from agentteams.vulnscan import osv, paths, registry, remediation_status, repo_alias
+from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
+# Split from this module and the names scripts and tests use are re-exported, so ``daily.<name>`` keeps working for them:
+from agentteams.vulnscan.checkout_freshness import _freshness, _freshness_section
+from agentteams.vulnscan.infra_retry import (INFRA_RETRY_FILE, _archive_summary, _max_retries,
+                                             _retries, _stale, infra_retry_due)
 from agentteams.vulnscan.manifests import discover
 from agentteams.vulnscan.report import (EXIT_COMPROMISE, EXIT_FINDINGS, EXIT_UNSCANNED, Report,
                                         new_finding_keys)
+from agentteams.vulnscan.worktree_fixes import stage_worktree_fixes   # re-exported, as above
 
 #: The audit's final verdict line; its presence proves the script ran to completion.
 _AUDIT_DONE = re.compile(r"^RESULT (clean|action-needed|COMPROMISE)", re.M)
@@ -61,7 +68,6 @@ RUN_LABELS: dict[int, str] = {EXIT_COMPROMISE: "COMPROMISE INDICATORS", EXIT_UNS
                               EXIT_FINDINGS: "action needed"}
 NEW_FINDINGS_LABEL = "new findings"
 
-_FETCH_TIMEOUT = 300          # seconds for ``git fetch`` (an unreachable remote must not hang the daily run)
 _GIT_TIMEOUT = 600            # seconds for any other git step
 
 _FAIL_ON = ("critical", "high", "moderate", "low", "any", "none")
@@ -95,7 +101,26 @@ DEFAULT_CONFIG: dict = {
     # Tools container for git, npm and the server kit in executor ops and apply-worktree staging (subproc_confine):
     # {} = the defaults (subprocesses on, fail closed); "subprocesses": false is the operator's opt-out.
     "confine": {},
+    # Docker readiness (docker_readiness.ensure, before each scan): starting Docker is the operator's opt-in
+    # (autostart); a self-test whose record is for another image is re-run once (auto_selftest "on-change" | "off").
+    "docker": dict(docker_readiness.DEFAULTS),
+    # daily --catch-up also re-runs a same-day run left partial by Docker, once Docker is ready: at most this often
+    "catch_up": {"max_retries_per_day": 2},
 }
+
+MAX_RETRIES_PER_DAY = 10
+#: The run's Docker reason codes (``infra.*``, from :class:`subproc_confine.Unavailable` ``code``), from
+#: _collect to _finish; written to ``summary.json["infra_codes"]`` (None outside a run). Only these mark a run
+#: Docker left partial: the ``tools container unavailable`` text also covers ssh, mount and allowlist refusals,
+#: which a retry cannot fix.
+_INFRA: contextvars.ContextVar[set[str] | None] = contextvars.ContextVar("vulnscan_infra", default=None)
+
+
+def _note_infra(exc: subproc_confine.Unavailable) -> None:
+    """Record ``exc``'s Docker reason code (if any) for this run's ``summary.json["infra_codes"]``."""
+    code = getattr(exc, "code", "")
+    if (codes := _INFRA.get()) is not None and code in docker_readiness.CODES:
+        codes.add(code)
 
 
 def _is_int(value: Any) -> bool:
@@ -153,6 +178,14 @@ def _config_problem(cfg: dict[str, Any]) -> str:
             return str(exc)
     if problem := subproc_confine.config_problem(cfg):
         return problem
+    if problem := docker_readiness.config_problem(cfg):
+        return problem
+    catch = cfg.get("catch_up", {})
+    if not isinstance(catch, dict) or set(catch) - {"max_retries_per_day"}:
+        return f"catch_up must be an object with only max_retries_per_day{got(catch)}"
+    retries = catch.get("max_retries_per_day", 2)
+    if not _is_int(retries) or not 0 <= retries <= MAX_RETRIES_PER_DAY:
+        return f"catch_up.max_retries_per_day must be a whole number 0-{MAX_RETRIES_PER_DAY}{got(retries)}"
     when = cfg["schedule"]
     if not isinstance(when, dict):
         return f"schedule must be an object with hour and minute{got(when)}"
@@ -307,22 +340,17 @@ def stale_warning(max_hours: float | None = None) -> str:
 
 
 def catch_up_due(cfg: dict) -> tuple[bool, int | None]:
-    """Return whether a catch-up run is due: no completed run within ``stale_after_hours``.
+    """Return whether a catch-up run is due: no completed run within ``stale_after_hours``, or an infra retry.
 
     Args:
         cfg: Daily config.
 
     Returns:
         ``(due, hours since the last completed run)``; the hours are None when there is no usable heartbeat
-        (none yet, or unreadable: due as well).
+        (none yet, or unreadable: due as well). A recent run is due again when :func:`infra_retry_due` says so.
     """
-    if not heartbeat_path().exists():
-        return True, None
-    beat = _read_heartbeat()
-    if isinstance(beat, str):
-        return True, None
-    age = (_dt.datetime.now(_dt.UTC) - beat[0]).total_seconds() / 3600
-    return age > float(cfg.get("stale_after_hours", DEFAULT_CONFIG["stale_after_hours"])), max(int(age), 0)
+    stale, hours = _stale(cfg)
+    return stale or infra_retry_due(cfg) is not None, hours
 
 
 def run_in_progress() -> bool:
@@ -344,16 +372,28 @@ def catch_up(cfg: dict) -> tuple[Report, int, Path] | None:
     Args:
         cfg: Daily config.
 
+    A recent run is re-run without a notification when Docker left it partial and is ready now
+    (:func:`infra_retry_due`); the retry is counted in the run directory before it starts, and the summary it
+    replaces is kept (:func:`_archive_summary`).
+
     Returns:
-        :func:`run_daily`'s result, or None when the last run is recent or a daily run is in progress (nothing
-        done, nothing sent: the lock is checked first, so no "running now" message precedes a refused run).
+        :func:`run_daily`'s result, or None when the last run is recent (and no infra retry is due) or a daily run
+        is in progress (nothing done, nothing sent: the lock is checked first, so no "running now" message
+        precedes a refused run).
     """
     if run_in_progress():
         print("vulnscan daily --catch-up: a daily run is in progress; not starting another", file=sys.stderr)
         return None
-    due, hours = catch_up_due(cfg)
-    if not due:
-        return None
+    stale, hours = _stale(cfg)
+    if not stale:
+        retry = infra_retry_due(cfg)
+        if retry is None:
+            return None
+        n = _retries(retry) + 1
+        _write_atomic(retry / INFRA_RETRY_FILE, f"{n}\n")
+        print(f"vulnscan daily --catch-up: re-running {retry.name}, left partial by Docker (retry {n} of "
+              f"{_max_retries(cfg)})", file=sys.stderr)
+        return run_daily(cfg)
     if hours is None:
         notify.send(cfg, "run-missing")
     else:
@@ -398,111 +438,6 @@ def _git(repo: Path, *args: str, timeout: int = _GIT_TIMEOUT, push: bool = False
     return executor.git_proc(repo, *args, timeout=timeout, push=push)
 
 
-def _reuse_problem(repo: Path, wt: Path, branch: str, head: str) -> tuple[str, str]:
-    """Check an existing same-day worktree before staging into it again.
-
-    It must be a registered worktree of ``repo`` on ``branch``, with no commits that are not on
-    ``head`` and no change :func:`executor.validate_diff` refuses.
-
-    Returns:
-        (problem or "", the worktree's HEAD commit to validate against).
-    """
-    if wt.is_symlink():
-        return "it is a symbolic link", ""
-    entry: dict[str, str] = {}
-    for block in _git(repo, "worktree", "list", "--porcelain").stdout.split("\n\n"):
-        fields = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
-        if fields.get("worktree") and Path(fields["worktree"]).resolve() == wt.resolve():
-            entry = fields
-    if not entry:
-        return "it is not a worktree of this repository", ""
-    if entry.get("branch") != f"refs/heads/{branch}":
-        return f"it is not on {branch}", ""
-    base = entry.get("HEAD", "")
-    if not base or _git(repo, "merge-base", "--is-ancestor", base, head).returncode:
-        return f"it has commits that are not on {head}", ""
-    try:
-        executor.validate_diff(wt, base)
-    except executor.ExecError as exc:
-        return f"it has changes the daily run did not make ({exc})", ""
-    return "", base
-
-
-def _discard_worktree(repo: Path, wt: Path, branch: str) -> None:
-    """Remove a staged worktree and its branch (a refused change is never left for review)."""
-    _git(repo, "worktree", "remove", "--force", str(wt))
-    _git(repo, "branch", "-D", branch)
-
-
-def stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
-    """Stage fixes for ``repo`` (:func:`_stage_worktree_fixes`) with git and npm in the tools container.
-
-    Fail closed: when confinement is on and the tools container is unavailable, nothing is staged and the
-    reason is returned (``confine.subprocesses: false`` runs them on the host, as before).
-    """
-    try:
-        with subproc_confine.scope(cfg, scratch=[repo.parent / f"{repo.name}.worktrees"]):
-            return _stage_worktree_fixes(repo, cfg, date)
-    except subproc_confine.Unavailable as exc:
-        return "", f"{repo}: nothing staged: {exc}"
-
-
-def _stage_worktree_fixes(repo: Path, cfg: dict, date: str) -> tuple[str, str]:
-    """Create ``<repo>.worktrees/vulnscan-<date>`` off ``origin/HEAD`` and apply fixes there.
-
-    Fix releases are not age-gated (:data:`executor.REMEDIATION_COOLDOWN_DAYS`: Rule S-10's remediation carve-out)
-    and the result must pass
-    :func:`executor.validate_diff` (only dependency pins and lockfiles change); a refused result is
-    removed. A same-day rerun reuses the worktree only after :func:`_reuse_problem` finds nothing.
-    Without ``origin/HEAD`` the default branch is unknown and nothing is staged.
-
-    Args:
-        repo: Repository root.
-        cfg: Daily config.
-        date: Run date (YYYY-MM-DD).
-
-    Returns:
-        (worktree path or "", markdown fix result or the reason nothing was staged).
-    """
-    if not (repo / ".git").exists():
-        return "", f"{repo}: not a git repository"
-    notes: list[str] = []
-    try:
-        fetched = _git(repo, "fetch", "-q", "origin", timeout=_FETCH_TIMEOUT, push=True)
-    except subprocess.TimeoutExpired:
-        notes.append(f"`git fetch` timed out after {_FETCH_TIMEOUT}s; staged on the last fetched origin/HEAD")
-    else:
-        if fetched.returncode:
-            notes.append(f"`git fetch` failed ({fetched.stderr.strip()[:200]}); staged on the last fetched origin/HEAD")
-    head = _git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").stdout.strip()
-    if not head:
-        return "", (f"{repo}: origin/HEAD is not set, so the default branch is unknown; nothing staged "
-                    "(run `git remote set-head origin --auto`)")
-    base = _git(repo, "rev-parse", "--verify", "--quiet", f"{head}^{{commit}}").stdout.strip()
-    if not base:
-        return "", f"{repo}: {head} does not resolve to a commit; nothing staged"
-    wt = repo.parent / f"{repo.name}.worktrees" / f"vulnscan-{date}"
-    branch = f"vulnscan/{date}"
-    if wt.exists() or wt.is_symlink():
-        problem, base = _reuse_problem(repo, wt, branch, head)
-        if problem:
-            return "", f"{repo}: not reusing {wt}: {problem}"
-    else:
-        made = _git(repo, "worktree", "add", "-q", "-b", branch, str(wt), base)
-        if made.returncode:
-            return "", f"{repo}: worktree add failed: {made.stderr.strip()}"
-    cooldown = executor.REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
-    found = [m for m in discover(wt) if not _operator_excluded(cfg, repo / m.relative_to(wt))]
-    res = fix.fix_path(wt, apply=True, allow_major=False,   # unattended: never a major jump
-                       cooldown_days=cooldown, manifests=found)
-    try:
-        executor.validate_diff(wt, base)
-    except executor.ExecError as exc:
-        _discard_worktree(repo, wt, branch)
-        return "", f"{repo}: staged change refused, worktree removed: {exc}\n\n{res.markdown()}"
-    return str(wt), res.markdown() + "".join(f"\n- {n}" for n in notes) + ("\n" if notes else "")
-
-
 def _scan_server(host: str, kit: Path, out_dir: Path) -> Report:
     """Run the *packaged* kit's read-only L1 audit on one host and analyze its inventory (P12).
 
@@ -538,6 +473,7 @@ def _scan_server(host: str, kit: Path, out_dir: Path) -> Report:
         rep.feed_errors.append(f"{host}: audit timed out")
         return rep
     except subproc_confine.Unavailable as exc:   # fail closed: unscanned, never run on the host instead
+        _note_infra(exc)
         rep = Report(target=host)
         rep.feed_errors.append(f"{host}: not scanned: {exc}")
         return rep
@@ -579,20 +515,26 @@ def run_daily(cfg: dict, *, today: str | None = None) -> tuple[Report, int, Path
 
 
 def _run_locked(cfg: dict, today: str, state: Path, run_dir: Path) -> tuple[Report, int, Path]:
-    """The body of :func:`run_daily`, under the daily run lock."""
+    """The body of :func:`run_daily`, under the daily run lock.
+
+    Docker readiness is ensured once, first (:func:`docker_readiness.ensure`: it may start Docker or re-run a
+    stale self-test only as the ``docker`` config allows); the servers, the staging, the summary's remediation
+    readiness and the agent phase all use that record instead of probing again.
+    """
     run_dir.mkdir(parents=True, exist_ok=True)
     total = Report(target="daily")
     staged: list[str] = []
-    try:
-        _collect(cfg, today, run_dir, total, staged)
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
-        # Deliberately wide (named, not broad): whatever stops collection, the run must still write its
-        # summary and heartbeat and exit 3 (unscanned), visibly naming the error, rather than die silently.
-        total.feed_errors.append(f"daily run stopped early: {type(exc).__name__}: {exc}")
-    report, code, written = _finish(cfg, state, today, run_dir, total, staged)
-    agent = cfg.get("agent") or {}
-    if written and agent.get("enabled"):
-        _agent_phase(cfg, run_dir)
+    with docker_readiness.using(docker_readiness.ensure(cfg, start=True)), _fresh_rows():
+        try:
+            _collect(cfg, today, run_dir, total, staged)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+            # Deliberately wide (named, not broad): whatever stops collection, the run must still write its
+            # summary and heartbeat and exit 3 (unscanned), visibly naming the error, rather than die silently.
+            total.feed_errors.append(f"daily run stopped early: {type(exc).__name__}: {exc}")
+        report, code, written = _finish(cfg, state, today, run_dir, total, staged)
+        agent = cfg.get("agent") or {}
+        if written and agent.get("enabled"):
+            _agent_phase(cfg, run_dir)
     return report, code, run_dir
 
 
@@ -600,8 +542,14 @@ def _agent_phase(cfg: dict, run_dir: Path) -> None:
     """Run the agent on this scan, record it in the summary and heartbeat, publish, and notify."""
     from agentteams.vulnscan import agent_run
 
+    rec = docker_readiness.current()
+    blocked = rec.agent() if rec is not None else ""
     try:
-        status = agent_run.run_agent(cfg, run_dir)
+        if blocked:   # the run's Docker check already says the container cannot start: no second probe
+            status = {"state": "not-run", "run_state": "not-run", "status_written": False,
+                      "reason": f"{getattr(blocked, 'code', '')}: {blocked}"}
+        else:
+            status = agent_run.run_agent(cfg, run_dir)
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:   # docker / launcher failure
         status = {"state": "agent-error", "run_state": "agent-error",
                   "reason": f"launcher failed: {type(exc).__name__}: {exc}"[:300]}
@@ -670,7 +618,7 @@ def publish_run(cfg: dict, run_dir: Path, run_id: str) -> dict | None:
 
 
 def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[str]) -> None:
-    """Scan repos, local runtimes and servers into ``total``.
+    """Scan repos, local runtimes and servers into ``total`` (each repository's checkout freshness into the run's rows).
 
     Plans an earlier run of the same day wrote are removed first: the agent reads every ``fixplan-*.md``
     in the run directory, and a stale one would name a fix (or a target) this scan no longer has.
@@ -703,6 +651,10 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             total.feed_errors.append(f"scan of {root_s} stopped: {type(rep).__name__}: {rep}"[:400])
             continue
         _drop_excluded(cfg, root, rep)   # defence in depth only
+        for row in _freshness(root, rep):   # read-only, no fetch; labels fixed_upstream (T2-D)
+            row["repo"] = _under(root_s, row["repo"])
+            if (rows := _FRESH.get()) is not None:
+                rows.append(row)
         slug = (root.name or "root") if root_spec.source == "repo_roots" else plan_slug(root.resolve())
         (run_dir / f"repos-{slug}.json").write_text(json.dumps(rep.to_dict(), indent=2), encoding="utf-8")
         _prefix_policy_labels(rep, root_s)
@@ -729,7 +681,24 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             with subproc_confine.scope(cfg):
                 total.merge(_scan_server(host, kit, run_dir))
         except subproc_confine.Unavailable as exc:   # fail closed: the host is reported unscanned
+            _note_infra(exc)
             total.feed_errors.append(f"{host}: not scanned: {exc}")
+
+
+#: The run's checkout-freshness rows (:func:`_freshness`), from _collect to _finish (None outside a run).
+_FRESH: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar("vulnscan_fresh", default=None)
+
+
+@contextlib.contextmanager
+def _fresh_rows() -> Iterator[list[dict[str, Any]]]:
+    """Collect the run's checkout-freshness rows (:data:`_FRESH`) for the duration of the block."""
+    rows: list[dict[str, Any]] = []
+    token, infra = _FRESH.set(rows), _INFRA.set(set())   # and the run's Docker reason codes (_note_infra)
+    try:
+        yield rows
+    finally:
+        _FRESH.reset(token)
+        _INFRA.reset(infra)
 
 
 def _operator_excluded(cfg: dict, path: Path) -> bool:
@@ -935,6 +904,7 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
     total.apply_unscored(str(cfg.get("unscored_as", "high")))
     code = total.exit_code(cfg.get("fail_on", "high"), bool(cfg.get("include_dev")))
     md = total.markdown(new_keys=new)
+    md += _freshness_section(_FRESH.get() or [])   # a new section after the per-repository ones
     if notes:
         md += "\n## Notes\n\n" + "".join(f"- {n}\n" for n in notes)
     md += "\n" + coverage.section(cfg, report=total)
@@ -949,10 +919,12 @@ def _finish(cfg: dict, state: Path, today: str, run_dir: Path, total: Report,
         md += "\n## Fixes staged in worktrees (review, test, commit, open a PR)\n\n" + "\n".join(staged) + "\n"
     written = True
     try:
+        _archive_summary(run_dir)   # a same-day re-run never loses the earlier summary (R5)
         (run_dir / "summary.md").write_text(md, encoding="utf-8")
         # private package names stay in the machine-local repos-*.json; the MCP server reads summary.json
         (run_dir / "summary.json").write_text(json.dumps({**total.to_dict(private_names=False),
-                                                          "remediation": readiness}, indent=2), encoding="utf-8")
+                                                          "remediation": readiness,
+                                                          "infra_codes": sorted(_INFRA.get() or ())}, indent=2), encoding="utf-8")
         _write_atomic(heartbeat_path(), json.dumps({
             "last_run": _dt.datetime.now(_dt.UTC).isoformat(), "exit": code, "findings": len(total.findings),
             "new": len(new), "unscanned": len(total.feed_errors), "summary": str(run_dir / "summary.md"),
