@@ -4,14 +4,14 @@ The engine has three entry points over one analysis path:
 
 - :func:`scan_path`: manifests under a directory (repositories);
 - :func:`scan_inventory`: the tab-separated lines a server-kit audit prints;
-- :func:`local_runtimes`: Node/PHP/Python found on the machine running the scan.
+- :func:`local_runtimes`: the :data:`runtimes.PRODUCTS` found on the machine running the scan.
 
 Server inventory line formats (one per line; anything else is ignored):
 
 | Prefix | Fields (tab-separated) |
 |---|---|
 | ``INV`` | ecosystem, name, version, location |
-| ``RUNTIME`` | kind, version, path, manager |
+| ``RUNTIME`` | kind (a ``runtimes.PRODUCTS`` key; any other is unscannable), version, path, manager |
 | ``HOSTCHECK`` | severity, message |
 | ``IOC`` | message |
 """
@@ -195,7 +195,9 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
 
 def _runtime_findings(target: str, items: list[tuple[str, str, str, str]], report: Report) -> None:
     for kind, version, path, manager in items:
-        if kind not in runtimes.EOL_PRODUCT:
+        if kind not in runtimes.PRODUCTS:
+            # Reported, never dropped: a kind the server kit emits but this version cannot judge (Rule 12).
+            report.unscannable.append((path, f"runtime kind {kind} not judged by this vulnscan version"))
             continue
         v = runtimes.evaluate(kind, version, path, manager)
         report.checked += 1
@@ -248,6 +250,39 @@ def _version_of(binary: str, args: list[str]) -> str:
     return m.group(0) if m else ""
 
 
+#: Seconds one version probe may run (``docker version`` waits on the daemon socket).
+PROBE_TIMEOUT = 20
+#: :func:`_run_probe` problem meaning "this binary belongs to another product's probe": skip it silently.
+_OTHER_PRODUCT = "other product"
+
+
+def _run_probe(path: str, probe: runtimes.Probe) -> tuple[list[str], str]:
+    """Run one :class:`runtimes.Probe` with ``path`` as its binary.
+
+    Args:
+        path: The binary found on PATH for ``probe.argv[0]``.
+        probe: The probe: arguments, stream to read and version regex.
+
+    Returns:
+        (versions, problem): the versions read (several only for an ``each`` probe), and ``""``, or
+        :data:`_OTHER_PRODUCT`, or why the version could not be judged (versions then empty).
+    """
+    try:
+        res = subprocess.run([path, *probe.argv[1:]], capture_output=True, text=True,
+                             timeout=PROBE_TIMEOUT, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return [], ""
+    out = {"stdout": res.stdout, "stderr": res.stderr}.get(probe.stream, f"{res.stdout}\n{res.stderr}")
+    if (probe.reject and probe.reject in out) or (probe.only_if and probe.only_if not in out):
+        return [], _OTHER_PRODUCT
+    if probe.require and probe.require not in out:
+        first = out.strip().splitlines()[0][:80] if out.strip() else "no output"
+        return [], f"not {probe.require} ({first}): not judged by this vulnscan version"
+    found = [m.group(1) for m in re.finditer(probe.regex, out, re.M)]
+    versions = list(dict.fromkeys(found if probe.each else found[:1]))
+    return versions, ""
+
+
 def _manager_of(path: str) -> str:
     real = os.path.realpath(path)
     if "/.nvm/" in real:
@@ -274,7 +309,11 @@ LOCAL_TARGET = "this-machine"
 
 
 def local_runtimes(target: str = LOCAL_TARGET) -> Report:
-    """Evaluate Node.js, PHP and Python found on PATH of the machine running this.
+    """Evaluate every :data:`runtimes.PRODUCTS` probe's binary found on PATH of the machine running this.
+
+    A binary that is not on PATH is skipped; one found but whose version cannot be read (or that is not
+    the product, such as LibreSSL's ``openssl``) is unscannable. Each probe runs for at most
+    :data:`PROBE_TIMEOUT` seconds; the same binary is probed once per product.
 
     Args:
         target: Label for the report.
@@ -284,18 +323,20 @@ def local_runtimes(target: str = LOCAL_TARGET) -> Report:
     """
     report = Report(target=target)
     items: list[tuple[str, str, str, str]] = []
-    seen: set[str] = set()
-    for kind, names, args in (("node", ("node",), ["-v"]), ("php", ("php",), ["-v"]),
-                              ("python", ("python3",), ["--version"])):
-        for name in names:
-            path = shutil.which(name)
-            if not path or os.path.realpath(path) in seen:
+    seen: set[tuple[str, str]] = set()
+    for kind, product in runtimes.PRODUCTS.items():
+        for probe in product.probes:
+            path = shutil.which(probe.argv[0])
+            if not path or (kind, os.path.realpath(path)) in seen:
                 continue
-            seen.add(os.path.realpath(path))
-            ver = _version_of(path, args)
-            if ver:
-                items.append((kind, ver, path, _manager_of(path)))
-            else:
-                report.unscannable.append((path, f"could not read the {kind} version"))
+            seen.add((kind, os.path.realpath(path)))
+            versions, problem = _run_probe(path, probe)
+            if problem == _OTHER_PRODUCT:
+                continue
+            if not versions:
+                report.unscannable.append((path, problem or f"could not read the {kind} version"))
+                continue
+            manager = _manager_of(path)
+            items += [(kind, ver, path, manager) for ver in versions]
     _runtime_findings(target, items, report)
     return report

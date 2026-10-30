@@ -241,7 +241,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
 | `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
-| `local_runtimes` | `true` | Check Node.js, PHP and Python on this machine |
+| `local_runtimes` | `true` | Check the runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
 | `scan_workers` | `4` | How many scan roots, and then how many fix plans, are looked up at once (1–8; `1` = one after another; each scan already sends up to 8 OSV requests at once). The lookups are network-bound (OSV, the package registries); results are merged in root order, so the report and the fix plans do not depend on it. Each worker runs in a copy of the caller's context, so a confinement scope applies as it would serially. `apply-worktree` staging, servers and local runtimes stay serial |
@@ -386,7 +386,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 |---|---|
 | `scan PATH [--include-worktrees]` | Scan manifests under a repo or a folder of repos |
 | `inventory LOG [--host H]` | Analyse a server-kit audit log (the host label defaults to the log file's name without its extension) |
-| `runtimes` | Node.js, PHP and Python on this machine |
+| `runtimes` | The runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix PATH [--apply] [--allow-major] [--allow-dirty] [--include-worktrees] [--no-npm]` | Plan, or make, dependency fixes in a working tree you control (`--cooldown-days` is ignored, since its fixes fall under Rule S-10's remediation carve-out; it prints a note). git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
 | `scan`, `inventory`, `runtimes`: `--format md\|json`, `--out FILE`, `--fail-on critical\|high\|moderate\|low\|any\|none`, `--include-dev` | Report format (default `md`) and file (default stdout); the lowest severity that exits 1 (default `high`); dev-only dependencies count toward it |
 | `init [--repo-root DIR]… [--server NAME]…` | Write a starter config (never overwrites) |
@@ -1031,14 +1031,60 @@ ignored). Returns a `Report` for host `target`.
 
 #### `engine.local_runtimes(target=LOCAL_TARGET)`
 
-A `Report` for the Node.js (`node`), PHP (`php`) and Python (`python3`) found on this machine's `PATH`, labelled
-`target`: runtime findings, and a runtime whose version cannot be read as unscannable. The `runtimes`
-command and `daily` (with `local_runtimes: true`) call it.
+A `Report` for every `runtimes.PRODUCTS` probe whose binary is on this machine's `PATH`, labelled `target`.
+Each probe runs once per product and binary, for at most `PROBE_TIMEOUT` (20) seconds, and reads its version
+from stdout, stderr or both. A binary that is not found is skipped; one whose version cannot be read, or that
+is not the product (LibreSSL's `openssl`: "not OpenSSL (…): not judged by this vulnscan version"), is
+unscannable. `mysqld` is judged as MariaDB when its output says so and as MySQL otherwise; `dotnet
+--list-runtimes` gives one item per runtime version; `docker` reads the server version only and never starts a
+daemon. The `runtimes` command and `daily` (with `local_runtimes: true`) call it.
+
+In `scan_inventory` and `local_runtimes`, a `RUNTIME` kind that is not a `runtimes.PRODUCTS` key is reported
+under `unscannable` as "runtime kind <kind> not judged by this vulnscan version", never dropped.
 
 ### `agentteams.vulnscan.runtimes`
 
-Judges an installed Node.js, PHP or Python against live release data (endoflife.date, nodejs.org,
-www.php.net).
+Judges installed runtimes and OS releases against live release data (endoflife.date, nodejs.org,
+www.php.net). `PRODUCTS` maps each runtime kind to a frozen `Product(eol, cycle, security_feed, probes, label,
+cycle_fn, norm)`: the endoflife.date slug, the version parts that name a release line (or a `cycle_fn`
+override), the security-release feed, and the local `Probe(argv, stream, regex, each, require, only_if,
+reject)` list.
+
+| Kind | endoflife.date slug | Release line | Security feed | Probe |
+|---|---|---|---|---|
+| `node` | `nodejs` | major (`24`) | nodejs.org | `node -v` |
+| `php` | `php` | two parts (`8.3`) | www.php.net | `php -v` |
+| `python` | `python` | two parts | — | `python3 --version` |
+| `ruby` | `ruby` | two parts | — | `ruby -v` |
+| `go` | `go` | two parts (`1.22`) | — | `go version` |
+| `java` | `eclipse-temurin` | major; `1.8.0_x` is `8` | — | `java -version` (stderr) |
+| `java-corretto` | `amazon-corretto` | as `java` | — | none (chosen by image name) |
+| `dotnet` | `dotnet` | two parts (`8.0`) | — | `dotnet --list-runtimes` |
+| `nginx` | `nginx` | two parts | — | `nginx -v` (stderr) |
+| `openssl` | `openssl` | two parts (`3.0`); before 3, three (`1.1.1`) | — | `openssl version` |
+| `postgresql` | `postgresql` | major from 10 (`16`); `9.6` before | — | `postgres --version`, `psql --version` |
+| `mysql` | `mysql` | two parts | — | `mysqld --version` (not MariaDB) |
+| `mariadb` | `mariadb` | two parts (`10.11`) | — | `mariadbd --version`, `mysqld --version` (MariaDB) |
+| `redis` | `redis` | two parts | — | `redis-server --version` |
+| `docker` | `docker-engine` | two parts | — | `docker version --format '{{.Server.Version}}'` |
+
+Java on a host is judged on Eclipse Temurin's support dates and its findings say so. `EOL_PRODUCT` is the
+derived `{kind: slug}` dict. `OS_PRODUCTS` maps an os-release `ID` or image name to its slug (`ubuntu`,
+`debian`, `alpine`, `amzn` and `amazonlinux` → `amazon-linux`, `rhel`, `rocky` → `rocky-linux`, `almalinux`,
+`fedora`, `centos`), and `OS_CODENAMES` maps Debian and Ubuntu codenames (`bookworm` → `12`, `jammy` →
+`22.04`, …) to versions.
+
+#### `runtimes.cycle_of(kind, version)`
+
+The endoflife.date release-line name of `version` for a `PRODUCTS` or `OS_PRODUCTS` key (`KeyError` for
+neither): `"24"`, `"8.3"`, `"8"` for `1.8.0_412`, `"1.1.1"`, `"22.04"`.
+
+#### `runtimes.evaluate_os(os_id, version_id, today=None)`
+
+A `RuntimeFinding` for an OS release, judged on its release line alone (`behind-patch` does not apply):
+`eol` (HIGH: "<OS> <line> is end-of-life — distro security updates have stopped", `upgrade_to` the newest
+supported release), `ok`, or `unchecked` (an OS not in `OS_PRODUCTS`, a release line endoflife.date does not
+list, or a feed failure). `version_id` may be a codename in `OS_CODENAMES`.
 
 #### `runtimes.evaluate(kind, version, path="", manager="", today=None)`
 
@@ -1046,8 +1092,12 @@ A frozen `RuntimeFinding(kind, version, path, manager, severity, verdict, detail
 `eol` (the release line gets no more security fixes; HIGH), `security-release-missing` (a newer release on the
 same line is a security release; HIGH), `behind-patch` (newer, non-security patches; MODERATE), `ok`,
 `distro` (`manager` is `pkg:<name>`: an OS-packaged runtime is left to OS security updates, since
-distributions backport fixes without changing the version) or `unchecked` (a feed could not be reached;
-never reported as fine). `EOL_PRODUCT` maps each kind to its endoflife.date product.
+distributions backport fixes without changing the version) or `unchecked` (a feed could not be reached, the
+release line is unknown to endoflife.date, or `kind` is not in `PRODUCTS`; never reported as fine). Only a
+product with a security feed can be `security-release-missing`, and only such a product's `behind-patch` is
+raised to HIGH when its security data is unavailable. The others are judged on end of life and latest patch
+only, and their detail says "no upstream security-release feed; judged on end-of-life and latest patch
+only".
 
 ### `agentteams.vulnscan.project_policy`
 

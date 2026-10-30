@@ -6,6 +6,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (a runtime product table: more runtimes, OS releases, unknown kinds reported)
+
+- **`runtimes.PRODUCTS`** replaces the hard-coded Node.js/PHP/Python list. Each row is a frozen `Product`: the
+  endoflife.date slug, the release-line rule (a part count, or a `cycle_fn` override), the security-release feed
+  and the local `Probe`s. New kinds: `ruby`, `go`, `java` (judged on Eclipse Temurin's support dates and labelled
+  so; `1.8.0_x` is line `8`), `java-corretto` (`amazon-corretto`, chosen by image name), `dotnet` (one item per
+  installed runtime), `nginx`, `openssl` (`1.1.1` is its own line), `postgresql`, `mysql`, `mariadb`, `redis` and
+  `docker` (`docker-engine`, server version only). Products without a security feed get `eol` and MODERATE
+  `behind-patch` only, and their detail says "no upstream security-release feed; judged on end-of-life and latest
+  patch only". `EOL_PRODUCT` stays as a derived dict; new public `cycle_of(kind, version)`.
+- **`runtimes.OS_PRODUCTS`, `OS_CODENAMES` and `evaluate_os(os_id, version_id, today=None)`** judge an OS release
+  (os-release `ID` or image name; Debian and Ubuntu codenames) on its release line alone.
+- **`engine.local_runtimes`** runs every `PRODUCTS` probe found on `PATH` (stdout, stderr or both; 20 s timeout,
+  `engine.PROBE_TIMEOUT`). `_version_of` is unchanged for its callers. A binary that is not the product
+  (LibreSSL's `openssl`) or whose version cannot be read is unscannable; `mysqld` is judged as MariaDB or MySQL
+  from its output.
+- **An unknown `RUNTIME` kind is reported** under `unscannable` ("runtime kind <kind> not judged by this vulnscan
+  version") instead of being dropped silently. An unknown release line or slug stays `unchecked`, never `ok`.
+- **Fleet-wide effect:** the next `daily` and `runtimes` run judge every new product found on this machine, so new
+  runtime findings can appear. A slug or release-line format endoflife.date does not use leaves that product
+  `unchecked` (a feed error, exit 3) until the table row is corrected; the operator's verification script checks
+  every slug before merge.
+- Docs: `api-reference/vulnscan.md` (`runtimes` section with the product table, `local_runtimes`, the config and
+  command tables).
+
 ### security (research hardening, follow-up to the briefing PR)
 
 - **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every
