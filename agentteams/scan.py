@@ -666,7 +666,7 @@ def match_injection(line: str, previous_line: str = "") -> str | None:
         The finding message for the first match, or ``None`` when the line is clean.
 
     Raises:
-        Nothing.
+        TypeError: ``line`` or ``previous_line`` is not a ``str`` (raised by Unicode normalisation).
     """
     findings: list[ScanFinding] = []
     _check_injection(_normalize_for_matching(line), 0, "", findings, in_front_matter=False,
