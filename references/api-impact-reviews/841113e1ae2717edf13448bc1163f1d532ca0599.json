@@ -1,0 +1,8 @@
+{
+  "patch_id": "841113e1ae2717edf13448bc1163f1d532ca0599",
+  "commit": "669f3d418fa0943519e72b3d4c91053b563457a7",
+  "subject": "vulnscan: review fixes for the upstream wording and report labels",
+  "impact": "1 symbols added",
+  "note": "L3 rebased onto L4 (37e71b77); conflicts in __main__.py and the API reference were additive (ready + remediation-report both registered). Reviewed: new vulnscan ready CLI and docker_readiness module, daily catch-up/infra retry, checkout freshness label, stage-fix upstream refusal wording, public versions.is_prerelease, report/effectiveness labels. Cleared by @security (CLEAR) and @code-hygiene (fixes applied), 2026-10-30.",
+  "recorded_at": "2026-10-30T16:59:10Z"
+}
