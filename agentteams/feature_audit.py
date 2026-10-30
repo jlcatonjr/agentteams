@@ -40,6 +40,7 @@ per CH-24.
 from __future__ import annotations
 
 import csv
+import importlib.util
 import os
 import subprocess
 import sys
@@ -323,6 +324,16 @@ def run_proof(row: FeatureRow, repo_root: Path, timeout: int = 300) -> ProofResu
     """
     # sys.executable, not "python": the interpreter on PATH may belong to another project's
     # venv, which then runs the proof against the wrong agentteams (or none) — research-hardening #14.
+    # Under a pipx / uv-tool install that interpreter may lack pytest. `python -m pytest` would then
+    # print "No module named pytest", which no other branch reads as a broken harness, so say so here
+    # and name the interpreter rather than suggesting the research extra.
+    if importlib.util.find_spec("pytest") is None:
+        return ProofResult(
+            row.feature_id, HARNESS_BROKEN_OUTCOME,
+            f"proof could not run — pytest is not installed for {sys.executable} "
+            f"(install it into that environment, e.g. `{sys.executable} -m pip install pytest`)",
+            row.tier,
+        )
     cmd = [sys.executable, "-m", "pytest", row.proof_test, "-q", "--no-header", "-p", "no:randomly"]
     try:
         proc = subprocess.run(

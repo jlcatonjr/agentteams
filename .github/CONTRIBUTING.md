@@ -20,6 +20,9 @@ taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
   editable install of another checkout would otherwise supply that checkout's `agentteams`.
   `tests/conftest.py` puts its own tree first on `sys.path` and `PYTHONPATH`, and stops the run with exit
   code 4 if a plugin imported a different copy first.
+- **Testing an installed wheel** (tox, nox, a release smoke test): set `AGENTTEAMS_TEST_INSTALLED=1`.
+  `tests/conftest.py` then leaves `sys.path` and `PYTHONPATH` alone and skips the import-location check,
+  so the suite imports the installed `agentteams` instead of the source tree.
 - **Tests do not use live DNS.** The SSRF guard resolves hostnames, so a test that passes a hostname to it
   stubs `socket.getaddrinfo` (see `_resolves_to` in `tests/test_research_search.py`). The suite then
   gives the same result offline and in a sandbox.

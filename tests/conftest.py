@@ -25,8 +25,13 @@ import pytest
 # on ``PYTHONPATH`` so subprocess tests (``sys.executable -m agentteams...``, ``build_team.py``)
 # import the same tree. ``pytest_sessionstart`` refuses the run if a plugin imported another copy
 # before this file loaded.
+#
+# Opt-out: ``AGENTTEAMS_TEST_INSTALLED=1`` skips both the path insertion and the guard, so a run that
+# deliberately tests an installed wheel (tox, nox, a release smoke test) is not silently redirected
+# to the source tree.
 _ROOT = Path(__file__).resolve().parents[1]
-if (_ROOT / "agentteams").is_dir():
+_TEST_INSTALLED = os.environ.get("AGENTTEAMS_TEST_INSTALLED", "") == "1"
+if not _TEST_INSTALLED and (_ROOT / "agentteams").is_dir():
     _root_str = str(_ROOT)
     if not sys.path or sys.path[0] != _root_str:
         sys.path.insert(0, _root_str)
@@ -234,7 +239,8 @@ def _report_stale_integrity_manifest(session: pytest.Session) -> None:
 
 
 def pytest_sessionstart(session):  # noqa: D103
-    _assert_agentteams_from_this_tree()
+    if not _TEST_INSTALLED:
+        _assert_agentteams_from_this_tree()
     _tree_watch["prev"] = _snapshot_watched_tree()
     _report_stale_integrity_manifest(session)
 
