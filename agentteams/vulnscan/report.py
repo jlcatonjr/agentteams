@@ -290,7 +290,7 @@ class Report:
         raises = [f for f in self.findings if f.kind == "range" and f.fix and f.locations]
         if raises:
             out += ["## Requirement ranges — plan-only (no staged edit)", "", RANGE_PLAN_NOTE, ""]
-            out += [f"- `{f.target}`: raise the lower bound in {_code(f.locations[0])}: "
+            out += [f"- {_code(f.target)}: raise the lower bound in {_code(f.locations[0])}: "
                     f"`{f.name}{f.spec}` → `{f.name}>={f.fix}`" for f in raises] + [""]
         if unscored:
             out += ["## Unscored advisories (no CVSS vector or severity label)", "",
