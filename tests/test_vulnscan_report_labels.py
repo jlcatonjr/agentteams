@@ -37,4 +37,4 @@ def test_held_count_is_labelled_at_scan_time(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(effectiveness, "staged_without_pr", lambda: 0)
     monkeypatch.setattr(effectiveness.retry_guard, "held_count", lambda: 6)
     md, _ = effectiveness.section(Report(target="r"), None, stats=effectiveness.PrStats())
-    assert "| Repositories held at scan time (nothing fixable without a major upgrade) | 6 |" in md
+    assert "| Repositories held at scan time (nothing stageable; see the held reasons) | 6 |" in md

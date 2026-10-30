@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field
 
 from agentteams.vulnscan import REPORT_SCHEMA_VERSION
 from agentteams.vulnscan.osv import SEVERITY_NAME, SEVERITY_RANK, UNSCORED_AS
-from agentteams.vulnscan.versions import version_key
+from agentteams.vulnscan.versions import is_prerelease
 
 EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
 
@@ -304,7 +304,6 @@ def _fix_cell(fix: str | None) -> str:
     """Render the "Upgrade to" cell, marking a pre-release target (e.g. an advisory whose fixed event is an rc)."""
     if not fix:
         return "—"
-    key = version_key(fix)
-    if key[1] and key[2] == 0 and key[3][:1] and key[3][0][0] == 1:
+    if is_prerelease(fix):
         return f"{fix} (pre-release; the advisory names no stable fix)"
     return fix

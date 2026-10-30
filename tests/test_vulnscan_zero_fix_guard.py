@@ -140,7 +140,7 @@ def test_stage_fix_refuses_a_change_that_resolves_nothing(env: dict, monkeypatch
     assert res["status"] == "failed"
     assert res["detail"].startswith(retry_guard.FUTILE_DETAIL) and "resolves no advisory" in res["detail"]
     _assert_refused_cleanly(repo, "1" * 32)
-    assert retry_guard._last_futile_day(str(repo.resolve()), ledger.read())   # held until the plan changes
+    assert retry_guard._last_futile(str(repo.resolve()), ledger.read()) is not None   # held until the plan changes
 
 
 @pytest.mark.skipif(not GIT, reason="git not available")
@@ -172,7 +172,7 @@ def test_stage_fix_reports_a_fix_already_on_the_default_branch(env: dict, monkey
     assert res["detail"].startswith(retry_guard.UPSTREAM_DETAIL) and "update the local checkout" in res["detail"]
     assert retry_guard.FUTILE_DETAIL not in res["detail"]
     _assert_refused_cleanly(repo, "2" * 32)
-    assert retry_guard._last_futile_day(str(repo.resolve()), ledger.read())   # held like a futile result
+    assert retry_guard._last_futile(str(repo.resolve()), ledger.read()) is not None   # held like a futile result
 
 
 @pytest.mark.skipif(not GIT, reason="git not available")

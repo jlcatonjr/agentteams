@@ -129,8 +129,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The report's "Upgrade to" cell marks a pre-release target: `26.10.0rc1 (pre-release; the advisory names no
   stable fix)`. OSV's fixed event can be a release candidate (Twisted, 2026-10-30); `stage-fix` already skips
   pre-releases, so only the label changes.
-- The effectiveness row now reads "Repositories held at scan time": the summary is written before the
-  remediation runner holds more repositories, so `held-repos.json` can list more later the same day.
+- The effectiveness row now reads "Repositories held at scan time (nothing stageable; see the held reasons)": the
+  summary is written before the remediation runner holds more repositories, so `held-repos.json` can list more later
+  the same day, and a hold can now also mean "already fixed on the default branch".
+- New `versions.is_prerelease()`; the `vuln-remediation` agent template says a `held:` refusal can also mean the
+  default branch already has the fix and the local checkout is behind.
 
 ### vulnscan (stage-fix: a fix already on the default branch is not reported as a major jump)
 

@@ -76,12 +76,6 @@ def _last_futile(target: str, rows: list[dict[str, Any]]) -> tuple[str, str] | N
         return None
 
 
-def _last_futile_day(target: str, rows: list[dict[str, Any]]) -> str | None:
-    """Return the local date of ``target``'s last futile stage-fix outcome, else None."""
-    found = _last_futile(target, rows)
-    return found[0] if found else None
-
-
 def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     """Return why a ``stage-fix`` of ``target`` would only repeat a "nothing fixable" result, or "".
 
