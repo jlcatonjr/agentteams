@@ -24,9 +24,13 @@ from agentteams.research.briefing import (
     build_briefing,
 )
 from agentteams.research.news import (
+    Coverage,
     PerspectiveKind,
+    PerspectiveSet,
+    gather_perspectives,
     is_news_source,
     perspective_attribution,
+    perspective_summary,
 )
 from agentteams.research.reputable import (
     DATA_CONFIG,
@@ -85,7 +89,9 @@ __all__ = [
     "Candidate",
     "ChatFn",
     "Claim",
+    "Coverage",
     "PerspectiveKind",
+    "PerspectiveSet",
     "ReputableSource",
     "ReputableSourceAllowlist",
     "Retriever",
@@ -105,9 +111,11 @@ __all__ = [
     "fetch_text",
     "fetch_text_and_date",
     "format_citation",
+    "gather_perspectives",
     "is_inert_read_content",
     "is_news_source",
     "perspective_attribution",
+    "perspective_summary",
     "revise",
     "scan_read_content",
     "scholarly_search",
