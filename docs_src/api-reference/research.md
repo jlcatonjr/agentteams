@@ -177,7 +177,11 @@ caller used.
 ### `is_public_https(url) -> bool`
 
 The SSRF guard `fetch_text`/`fetch_text_and_date` apply before every request: `https` scheme only,
-and the hostname must not resolve to a private, loopback, link-local, or reserved IP address.
+and **every** address the hostname resolves to (`getaddrinfo`, IPv4 and IPv6) must be globally
+routable unicast: no private, loopback, link-local, reserved, multicast, unspecified or shared
+(CGNAT, `100.64.0.0/10`) address. An IPv6 answer that carries an IPv4 address (IPv4-mapped, NAT64, 6to4, Teredo) is also judged by that IPv4 address. One non-public
+answer refuses the URL. A DNS-rebinding window between this check and the fetch remains (httpx
+resolves again); it is documented, not closed.
 Public (not module-private) specifically so `agentteams.research.browser` can reuse this exact
 check as its own pre-navigation gate — the one deliberate cross-submodule import of a
 security-relevant helper in this package. A browser context needs a **second**, per-request

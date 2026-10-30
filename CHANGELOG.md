@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (research: the SSRF guard checks every address a host resolves to)
+
+- **`agentteams.research.search.is_public_https`** now resolves with `socket.getaddrinfo` over IPv4 and IPv6 and
+  refuses a URL if ANY answer is not globally routable unicast. Before, it checked only the first IPv4 answer
+  (`gethostbyname`), so a host with a private AAAA record or a second private A record passed, as did shared
+  CGNAT space (100.64.0.0/10) and multicast. IPv4-mapped IPv6 answers, NAT64 (`64:ff9b::/96`), 6to4 and Teredo addresses are judged by the IPv4 address they carry, and an explicit denylist stands beside `is_global` so the guard does not depend on one Python release's special-range table. The
+  browser's per-request route guard inherits the fix. A DNS-rebinding window between the check and the fetch
+  remains and is documented. Reported from masterTeacher's briefing tool (nx1f N21, @security condition 5).
+
 ### added (API Impact Review: a pre-commit hook plus review, audit and revision of what a change touches)
 
 - **`agentteams.api_impact`** detects API impact from git alone: Python modules and public symbols (functions,

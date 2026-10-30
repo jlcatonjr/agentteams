@@ -322,8 +322,52 @@ def web_search_with_provenance(
     )
 
 
+#: Shared address space (RFC 6598, carrier-grade NAT). Listed explicitly because ``is_global``'s
+#: treatment of special ranges has changed across Python releases (CVE-2024-4032, fixed in 3.11.10)
+#: and this package supports every 3.11.
+_SHARED_V4 = ipaddress.ip_network("100.64.0.0/10")
+
+#: The NAT64 well-known prefix (RFC 6052): the last 32 bits are an IPv4 address the translator reaches.
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _embedded_ipv4(addr: ipaddress.IPv6Address) -> ipaddress.IPv4Address | None:
+    """The IPv4 address an IPv6 address carries through to a v4 network, if any: IPv4-mapped
+    (``::ffff:a.b.c.d``), 6to4 (``2002::/16``), Teredo (``2001::/32``, the client address) or NAT64
+    (``64:ff9b::/96``). Python reports several of these ranges as global, so the carried address
+    must be judged on its own."""
+    if addr.ipv4_mapped is not None:
+        return addr.ipv4_mapped
+    if addr.sixtofour is not None:
+        return addr.sixtofour
+    if addr.teredo is not None:
+        return addr.teredo[1]
+    if addr in _NAT64:
+        return ipaddress.IPv4Address(int(addr) & 0xFFFFFFFF)
+    return None
+
+
+def _is_public_address(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Whether one resolved address is globally routable unicast.
+
+    Refused: private, loopback, link-local, reserved, multicast, unspecified, shared (CGNAT,
+    100.64.0.0/10), anything ``is_global`` rejects, and any IPv6 address whose embedded IPv4
+    address (:func:`_embedded_ipv4`) is itself refused. The explicit checks stand beside
+    ``is_global`` so the guard does not depend on one Python release's special-range table.
+    """
+    if isinstance(addr, ipaddress.IPv6Address):
+        embedded = _embedded_ipv4(addr)
+        if embedded is not None and not _is_public_address(embedded):
+            return False
+    if (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+            or addr.is_multicast or addr.is_unspecified
+            or (isinstance(addr, ipaddress.IPv4Address) and addr in _SHARED_V4)):
+        return False
+    return addr.is_global
+
+
 def is_public_https(url: str) -> bool:
-    """SSRF guard: https only, and the host must not resolve to a private/loopback IP.
+    """SSRF guard: https only, and EVERY address the host resolves to must be public.
 
     Public (not underscore-prefixed) because ``agentteams.research.browser`` reuses this exact
     check as its own pre-navigation gate before launching a browser — deliberately the one
@@ -333,13 +377,22 @@ def is_public_https(url: str) -> bool:
     needs a *second*, per-request guard of its own (redirects and page-initiated JS requests never
     pass back through this function) — see ``browser.py``'s ``page.route`` handler; this function
     is necessary but not sufficient there.
+
+    Resolution is ``socket.getaddrinfo`` over IPv4 and IPv6, and the URL is refused if ANY result
+    is non-public (:func:`_is_public_address`). Checking only the first IPv4 answer
+    (``gethostbyname``, before 2026-10-30) let a host with a private AAAA record, or a second
+    private A record, through; it also passed shared CGNAT space (100.64.0.0/10) and multicast.
+    A DNS-rebinding window remains between this check and the fetch (httpx resolves again);
+    pinning the resolved address into the request is out of scope here and documented as residual.
     """
     try:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.hostname:
             return False
-        addr = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
-        return not (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved)
+        infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        if not infos:
+            return False
+        return all(_is_public_address(ipaddress.ip_address(info[4][0].split("%", 1)[0])) for info in infos)
     except (socket.gaierror, ValueError, UnicodeError):
         # CH-24: named types — DNS resolution failure, malformed IP-literal parsing, or a
         # non-ASCII hostname encoding failure. A fail-closed SSRF guard: any of these means the
