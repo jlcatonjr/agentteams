@@ -276,8 +276,7 @@ def test_launchd_catch_up_plist_runs_at_login_with_catch_up(xdg: Path, monkeypat
 
 # ---------------------------------------------------------------- R5: unsupported ecosystems
 
-UNSUPPORTED_FILES = {"go.sum": "Go", "pom.xml": "Maven", "gradle.lockfile": "Gradle", "Gemfile.lock": "RubyGems",
-                     "packages.lock.json": "NuGet", "pnpm-lock.yaml": "pnpm (npm packages; run `pnpm audit` here)",
+UNSUPPORTED_FILES = {"go.sum": "Go (go.sum without go.mod)", "pom.xml": "Maven",
                      "Dockerfile": "container images", "docker-compose.prod.yml": "container images",
                      "compose.yaml": "container images", "api.Dockerfile": "container images",
                      "Containerfile": "container images"}
@@ -299,7 +298,7 @@ def test_fallback_manifests_only_without_their_lockfile(tmp_path: Path) -> None:
         for f in files:
             (tmp_path / d / f).write_text("x\n")
     got = {p.relative_to(tmp_path).as_posix() for p in manifests.discover(tmp_path)}
-    assert got == {"go1/go.sum", "go2/go.mod", "gr1/gradle.lockfile", "gr2/build.gradle.kts",
+    assert got == {"go1/go.mod", "go2/go.mod", "gr1/gradle.lockfile", "gr2/build.gradle.kts",
                    "nu1/packages.lock.json", "nu2/App.csproj", "pn/pnpm-lock.yaml"}
     assert manifests.parse(tmp_path / "nu2" / "App.csproj").unscannable == "unsupported ecosystem: NuGet"
     assert manifests.unsupported_ecosystem("requirements.txt") == ""
@@ -321,7 +320,7 @@ def test_coverage_state_unsupported_ecosystem_and_mixed_workspaces(xdg: Path) ->
     assert {n: s for _o, s, n, _p in rows} == {"goapp": "unsupported ecosystem", "mixed": "scan-only",
                                                 "empty": "nothing to scan"}
     assert "unsupported ecosystem" in coverage.STATES
-    assert found == {"goapp": ["Dockerfile (container images)", "go.sum (Go)"],
+    assert found == {"goapp": ["Dockerfile (container images)", "go.sum (Go (go.sum without go.mod))"],
                      "mixed": ["deploy/Dockerfile (container images)"]}
     md = coverage.markdown(rows, unsupported=found)
     assert "- unsupported ecosystem (1): goapp" in md and "a coverage gap" in md

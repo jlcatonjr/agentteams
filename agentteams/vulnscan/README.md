@@ -39,12 +39,17 @@ tools container also need Docker; `open-pr` needs the GitHub CLI (`gh`); server 
   | npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` (classic and berry) |
   | Packagist | `composer.lock` |
   | crates.io | `Cargo.lock` (v1–v4; crates from the crates.io index only, every one counted as runtime; fixes are plan-only) |
+  | Go | `go.mod` (`require` with `replace` applied; the Go standard library is not judged; fixes are plan-only) |
+  | npm | `pnpm-lock.yaml` (v6, v9) and text `bun.lock` too (fixes are plan-only) |
+  | RubyGems, Maven, NuGet | `Gemfile.lock` (rubygems.org gems), `gradle.lockfile`, `packages.lock.json` (fixes are plan-only) |
 
   Vendored and generated trees (`node_modules`, virtualenvs, build output, Lean's `.lake` package cache) and
   linked git worktrees are skipped. Nothing is passed silently: a manifest with no exact versions, such as an unpinned
   `requirements.txt` or a `package.json` with no lockfile, is reported as *unscannable*. So are the
-  manifests of ecosystems vulnscan finds but does not read (Go, Maven, Gradle, RubyGems, NuGet, pnpm,
-  conda, Lean, container images), so a project holding only those shows up as a coverage gap rather than
+  manifests of ecosystems vulnscan finds but does not read (a `go.sum` without `go.mod`, Maven `pom.xml`, Gradle
+  and NuGet project files without their lockfile, `Gemfile` without `Gemfile.lock`, SwiftPM, CocoaPods, Pub, Hex,
+  `bun.lockb`, Deno, CRAN, Hackage, Julia, Conan, vcpkg, conda, Lean, container images), so a project holding only
+  those shows up as a coverage gap rather than
   as clean.
 - **This machine's runtimes.** `runtimes` checks the installed Node.js, PHP and Python against security
   releases and end-of-life dates.

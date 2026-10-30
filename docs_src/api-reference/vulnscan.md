@@ -326,7 +326,13 @@ The `docker` block (`docker_readiness.settings`; any other key, or a wrong type,
 | PyPI | `poetry.lock`, `uv.lock`, `Pipfile.lock` | |
 | PyPI | `pyproject.toml` next to requirements files (no lockfile) | PEP 621 `[project].dependencies` and `optional-dependencies` `==` pins (groups named like dev/test/lint/doc/type are dev). A pin a requirements file alongside already lists (PEP 503 name and version) is not counted twice; loose entries no requirements file pins make it unscannable for that part |
 | PyPI | `pyproject.toml` alone (no lockfile, no requirements) | unscannable: "pyproject.toml without a lockfile" |
-| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml`) |
+| npm | `package-lock.json`, `npm-shrinkwrap.json` (v1–v3), `yarn.lock` | `package.json` without a lockfile is unscannable (not listed next to a `pnpm-lock.yaml` or `bun.lock`) |
+| npm | `pnpm-lock.yaml` (lockfile v6 and v9) | a restricted line reader of `packages:` (no YAML library); peer suffixes `(..)` dropped; non-registry entries (file, link, git, tarball) skipped. Scope: v6 `dev: true`; v9 `dev` only when reachable solely from `importers.*.devDependencies` through `snapshots:`, else (or when that cannot be told) `runtime`. Another lockfile version is unscannable. Fixes are plan-only (`pnpm update <name>@<ver>`) |
+| npm | `bun.lock` (text, JSONC) | `packages[k][0]` = `"name@version"`; workspace/git/file entries skipped; every package `runtime`. `bun.lockb` (binary) stays unsupported and does not cover a `package.json`. Fixes are plan-only (`bun update <name>@<ver>`) |
+| Go | `go.mod` | `require` lines (single-line and block, `// indirect` too), `replace` applied (a module replace substitutes name and version; a local-path replace drops the module and is named in a note); versions go to OSV without the `v`, pseudo-versions as they are. Every Go manifest is reported partial with "Go standard library / toolchain vulnerabilities not judged", plus "go < 1.17: indirect modules may be missing" (a `go` directive below 1.17, or none) and "go.work present: workspace replaces/uses not applied". `go.sum` is not read: beside a `go.mod` it is not listed; alone it is unsupported (`Go (go.sum without go.mod)`). Fixes are plan-only (`go get <mod>@v<ver>`) |
+| RubyGems | `Gemfile.lock` | four-space `name (version[-platform])` entries under `GEM` / `specs:` whose remote is rubygems.org (a known platform suffix dropped); `GIT` / `PATH` skipped; gems of other sources counted in a note, never looked up. Every gem `runtime`. Fixes are plan-only (`bundle update --conservative <name>`) |
+| Maven | `gradle.lockfile` | `group:artifact:version=configurations`, named `group:artifact`; `dev` when every configuration is a test one. Fixes are plan-only (the build script, then `./gradlew dependencies --write-locks`) |
+| NuGet | `packages.lock.json` | `dependencies[tfm][name].resolved` over every target framework; `type: Project` skipped; every package `runtime`. Fixes are plan-only (`dotnet add package <name> --version <ver>`) |
 | Packagist | `composer.lock` | |
 | crates.io | `Cargo.lock` (v1–v4; `CRATE_LOCKS`) | only `[[package]]` entries whose `source` is the crates.io index (an entry with a name or version outside
 `CRATE_NAME` / `CRATE_VERSION` makes the whole lock unscannable: "a crates.io entry with an unusual name or version:
@@ -337,15 +343,13 @@ and reported unscannable with the reason `unsupported ecosystem: <name>`:
 
 | Ecosystem | Files |
 |---|---|
-| Go | `go.sum` (`go.mod` when there is no `go.sum`) |
+| Go | `go.sum` when there is no `go.mod` (`Go (go.sum without go.mod)`) |
 | Maven | `pom.xml` |
-| Gradle | `gradle.lockfile` (`build.gradle` / `build.gradle.kts` when there is no lockfile) |
-| RubyGems | `Gemfile.lock` |
-| NuGet | `packages.lock.json` (`*.csproj` when there is no lockfile) |
-| pnpm (npm packages) | `pnpm-lock.yaml` (run `pnpm audit` there) |
+| Gradle | `build.gradle` / `build.gradle.kts` when there is no `gradle.lockfile` |
+| NuGet | `*.csproj` when there is no `packages.lock.json` |
 | conda, Lean | `environment.yml` / `environment.yaml`, `lake-manifest.json` |
 | SwiftPM, CocoaPods, Pub, Hex | `Package.resolved`, `Podfile.lock`, `pubspec.lock`, `mix.lock` |
-| Bun, Deno (npm packages) | `bun.lock`, `bun.lockb` (binary), `deno.lock` |
+| Bun, Deno (npm packages) | `bun.lockb` (binary), `deno.lock` |
 | CRAN, Hackage | `renv.lock`, `stack.yaml.lock` / `cabal.project.freeze` |
 | Julia | `Manifest.toml`, only next to a `Project.toml` (the name alone is too generic) |
 | RubyGems | `Gemfile` when there is no `Gemfile.lock` |
@@ -1206,8 +1210,8 @@ Sorted manifest paths under `root`. Vendored and generated trees (`SKIP_DIRS`: `
 `include_worktrees` is set. `package.json` and `pyproject.toml` are listed only when their directory has no
 lockfile (a `pyproject.toml` next to requirements files is listed too, for its PEP 621 pins). Manifests of
 ecosystems the scanner does not read are listed so they can be reported as unscannable; `go.mod`,
-`build.gradle*`, `Gemfile`, `conanfile.*` and `*.csproj` only when their directory has no lockfile of the same
-ecosystem, `Manifest.toml` only next to a `Project.toml`. `composer.json` and `Cargo.toml` are listed only
+`go.sum`, `build.gradle*`, `Gemfile`, `conanfile.*` and `*.csproj` only when their directory has no lockfile (or
+`go.mod`) of the same ecosystem, `Manifest.toml` only next to a `Project.toml`. `composer.json` and `Cargo.toml` are listed only
 without their lockfile (for `Cargo.toml`, none in its directory or above it under `root`).
 
 #### `manifests.parse(path)`
@@ -1345,6 +1349,17 @@ hand"), `no-clean-release`, or `malicious`. Private crates (`project_policy.is_p
 never sent to OSV. `markdown()` renders them under `## crates.io: <lock> — plan-only (no staged edit)`; the agent is
 told never to request `stage-fix` for them, and `executor.validate_diff` refuses a `Cargo.lock` change anyway.
 
+#### `fix.plan_lockfile(path, *, label="", private=())` / `fix.lockfile_note(name)`
+
+Plan-only rows for one `lockfiles.FORMATS` file (`go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`,
+`gradle.lockfile`, `packages.lock.json`), from OSV, as `plan_cargo_lock` makes them: `plan-only` with `new` the
+minimal fixed version and the format's command in the note, `no-clean-release`, or `malicious`. A command is written
+only when the name, the installed and the fixed version all match the format's patterns, else "fix by hand".
+Private packages are never sent to OSV. `markdown()` renders them under
+`## <label>: <lock> — plan-only (no staged edit)` (labels `Go`, `npm (pnpm)`, `npm (Bun)`, `RubyGems`,
+`Maven (Gradle)`, `NuGet`), headed by `lockfile_note(name)`; `executor.validate_diff` refuses a change to any of
+these files, and `executor_guard.refuse_plan_only` refuses a `stage-fix` where they are all a repository has.
+
 #### `fix.plan_npm_lock(path, *, cooldown_days, label, private=())`
 
 `(rows, note)` for one `package-lock.json` / `npm-shrinkwrap.json`, from OSV; npm is not run. One
@@ -1362,7 +1377,8 @@ them too) and say `dev only` in the note. Raises `FeedError`.
 #### `FixResult`
 
 Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`), `cargo_plan`
-(`PinChange` list from `plan_cargo_lock`, counted by `exit_code()` like held rows),
+(`PinChange` list from `plan_cargo_lock`, counted by `exit_code()` like held rows), `lock_plan` (likewise, from
+`plan_lockfile`),
 `npm_notes` (lockfile → note), `npm` (`(directory, summary)` tuples), `composer`, `refused`
 (`(path, reason)` tuples), `feed_errors`, `applied`, `target` (the repository a daily plan is for)
 `target_problem` (why `stage-fix` cannot take it) and `resolved` (how many advisory occurrences the
@@ -1376,7 +1392,19 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 
 Dataclass for one requirements edit or npm plan row: `path`, `name`, `old`, `new`, `action` (`fix`,
 `major-held`, `no-clean-release`, `cooldown-held`, `hash-held`, `malicious`; npm rows also
-`workspace-held`, `npm-unavailable`; Cargo rows `plan-only`), `ids`, `note`.
+`workspace-held`, `npm-unavailable`; Cargo and `plan_lockfile` rows `plan-only`), `ids`, `note`.
+
+### `agentteams.vulnscan.lockfiles`
+
+The stdlib readers `manifests.parse` calls for those six formats: `read_go_mod`, `read_pnpm_lock`,
+`read_bun_lock`, `read_gemfile_lock`, `read_gradle_lockfile`, `read_nuget_lock`, each `(path) -> LockRead`
+(`deps`: `(ecosystem, name, version, scope)` rows; `notes`: what a partial read leaves out). A reader raises only
+`Unreadable` (a `ValueError`), whose message `parse` reports as the unscannable reason: a file over `MAX_BYTES`
+(64 MiB), not UTF-8, malformed, of another lockfile version, or holding a name or version outside the format's
+pattern (C-4: the text never reaches a fix-plan command). `FORMATS` maps each file name to its `Format`
+(ecosystem, plan label, name/version patterns, reader, command, follow-up). `GO_STDLIB_NOTE`, `GO_OLD_NOTE`,
+`GO_WORK_NOTE`, `GO_FULL_LIST` hold the Go notes and threshold. `manifests.PLAN_ONLY_LOCKS` is `CRATE_LOCKS` plus
+these; `manifests.NPM_SIDE_LOCKS` (`pnpm-lock.yaml`, `bun.lock`) cover a `package.json` beside them.
 
 ### `agentteams.vulnscan.ledger`
 
@@ -1843,7 +1871,7 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `target_origins(target)` | The target's origin identities: the config text's `origin` URL and the push URL git itself would use (hardened `remote get-url --push origin`); refuses an unreadable identity |
 | `refuse_scan_only(target)` | Refuses a target whose registry entry (by identity, or by a registered checkout containing it) is not at `remediate`, whose origin changed since enrolment, or that is an unregistered repository nested in a registered checkout; an unreadable registry or identity refuses |
 | `refuse_by_brief(op, target)` | Refuses when the brief's level is set and is not `remediate`, and `open-pr` when `delivery` is `plan` |
-| `refuse_plan_only(op, target, editable)` | Refuses `stage-fix` on a repository whose every scanned manifest (brief `exclude_paths` applied) is plan-only — today a crates.io `Cargo.lock` — and none matches `editable` (`executor.ALLOWED_CHANGED`): stage-fix could only fail there, so it is refused before a grant use is spent |
+| `refuse_plan_only(op, target, editable)` | Refuses `stage-fix` on a repository whose every scanned manifest (brief `exclude_paths` applied) is plan-only — a `manifests.PLAN_ONLY_LOCKS` file: `Cargo.lock`, `go.mod`, `pnpm-lock.yaml`, `bun.lock`, `Gemfile.lock`, `gradle.lockfile`, `packages.lock.json` — and none matches `editable` (`executor.ALLOWED_CHANGED`): stage-fix could only fail there, so it is refused before a grant use is spent |
 | `refuse_repo_op(op, target, editable)` | What `authorize` calls for a repository op: `refuse_scan_only`, `refuse_by_brief`, `refuse_plan_only`, in that order |
 | `brief_base_ref(repo)` | `origin/<base_branch>` when the brief sets one (refuses when origin lacks it), else `None` |
 | `require_remote_branch(wt, branch)` | Refuses `open-pr` unless origin has `branch` now (`ls-remote`) |

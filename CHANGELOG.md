@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (vulnscan: Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles are scanned)
+
+- New `agentteams.vulnscan.lockfiles` (stdlib only): `go.mod` (`require` with `replace` applied; Go stdlib not
+  judged, go < 1.17 and `go.work` noted), `pnpm-lock.yaml` v6/v9 (a restricted line reader, no YAML library;
+  conservative dev scope), text `bun.lock` (JSONC), `Gemfile.lock` (rubygems.org gems), `gradle.lockfile` (Maven
+  `group:artifact`) and NuGet `packages.lock.json`. A hostile or malformed file (an unusual name or version, an
+  unknown lockfile version, over 64 MiB) is unscannable and never raises.
+- Fixes for them are plan-only: `fix.plan_lockfile` writes each tool's command under
+  `## <label>: <lock> — plan-only (no staged edit)`; `executor.validate_diff` refuses a change to any of them and
+  `executor_guard.refuse_plan_only` refuses a `stage-fix` where they are all a repository has.
+- Discovery: `go.mod` is scanned and `go.sum` beside it is no longer listed (alone it stays unsupported, `Go (go.sum
+  without go.mod)`); `bun.lock` now covers a `package.json` like `pnpm-lock.yaml`; `bun.lockb` stays unsupported.
+- `versions.version_key` orders Go pseudo-versions, RubyGems `.pre`, Maven qualifiers (`M`, `SNAPSHOT`, `RELEASE`,
+  `FINAL`, `GA`, `SP`) and NuGet four-part versions. `project_policy.is_private` stays case-insensitive for them.
+
 ### added (vulnscan: every common lockfile is detected)
 
 - `manifests.discover` now lists `Package.resolved` (SwiftPM), `Podfile.lock` (CocoaPods), `pubspec.lock` (Pub),

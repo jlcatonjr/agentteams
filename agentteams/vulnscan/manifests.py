@@ -8,6 +8,11 @@ Supported formats:
 | npm | ``package-lock.json`` and ``npm-shrinkwrap.json`` (v1–v3), ``yarn.lock`` (classic and berry) |
 | Packagist | ``composer.lock`` |
 | crates.io | ``Cargo.lock`` (v1–v4; crates from the crates.io index only, every one ``runtime``) |
+| Go | ``go.mod`` (``require``, with ``replace`` applied; :mod:`~agentteams.vulnscan.lockfiles`) |
+| npm | ``pnpm-lock.yaml`` (v6, v9), ``bun.lock`` (text) |
+| RubyGems | ``Gemfile.lock`` (rubygems.org gems) |
+| Maven | ``gradle.lockfile`` (``group:artifact``) |
+| NuGet | ``packages.lock.json`` |
 
 A manifest that yields no exact versions is reported as *unscannable*, not skipped
 silently. Examples are an unpinned ``requirements.txt`` and a ``pyproject.toml`` with no
@@ -18,12 +23,10 @@ one with nothing to scan:
 
 | Ecosystem | Files |
 |---|---|
-| Go | ``go.sum`` (``go.mod`` when there is no ``go.sum``) |
+| Go | ``go.sum`` when there is no ``go.mod`` |
 | Maven | ``pom.xml`` |
-| Gradle | ``gradle.lockfile`` (``build.gradle`` / ``build.gradle.kts`` when there is no lockfile) |
-| RubyGems | ``Gemfile.lock`` |
-| NuGet | ``packages.lock.json`` (``*.csproj`` when there is no lockfile) |
-| pnpm (npm) | ``pnpm-lock.yaml`` |
+| Gradle | ``build.gradle`` / ``build.gradle.kts`` when there is no ``gradle.lockfile`` |
+| NuGet | ``*.csproj`` when there is no ``packages.lock.json`` |
 | conda, Lean | ``environment.yml`` / ``.yaml``, ``lake-manifest.json`` |
 | SwiftPM, CocoaPods, Pub, Hex | ``Package.resolved``, ``Podfile.lock``, ``pubspec.lock``, ``mix.lock`` |
 | Bun, Deno (npm packages) | ``bun.lock``, ``bun.lockb`` (binary), ``deno.lock`` |
@@ -57,6 +60,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams.vulnscan import lockfiles
 from agentteams.vulnscan.versions import is_final, version_key
 
 SKIP_DIRS: frozenset[str] = frozenset({
@@ -84,6 +88,12 @@ LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "composer.
 #: Lockfiles discovered apart from :data:`LOCKFILES`: they do not hide a sibling ``package.json`` or
 #: ``pyproject.toml`` (a wasm-pack or maturin directory holds both, and its npm/PyPI packages stay reported).
 CRATE_LOCKS = ("Cargo.lock",)
+#: Lockfiles whose fixes are plan-only (``stage-fix`` never edits them): ``Cargo.lock`` and every
+#: :data:`lockfiles.FORMATS` file. Like :data:`CRATE_LOCKS` they are not in :data:`LOCKFILES`.
+PLAN_ONLY_LOCKS: tuple[str, ...] = (*CRATE_LOCKS, *lockfiles.FORMATS)
+#: Lockfiles beside a ``package.json`` that pin its packages (besides :data:`LOCKFILES`); ``bun.lockb`` is binary and
+#: never read, so it does not count.
+NPM_SIDE_LOCKS = ("pnpm-lock.yaml", "bun.lock")
 #: ``source`` prefixes of crates.io packages in a ``Cargo.lock`` (git index, sparse index).
 CRATES_IO_SOURCES = ("registry+https://github.com/rust-lang/crates.io-index", "sparse+https://index.crates.io/")
 #: What a crates.io crate name and a Cargo.lock version may be (crates.io allows ASCII letters, digits, ``-`` and
@@ -95,12 +105,7 @@ UNSUPPORTED: dict[str, str] = {
     "environment.yml": "conda",
     "environment.yaml": "conda",
     "lake-manifest.json": "Lean",
-    "go.sum": "Go",
     "pom.xml": "Maven",
-    "gradle.lockfile": "Gradle",
-    "Gemfile.lock": "RubyGems",
-    "packages.lock.json": "NuGet",
-    "pnpm-lock.yaml": "pnpm (npm packages; run `pnpm audit` here)",
     "Containerfile": "container images",
     "compose.yml": "container images",
     "compose.yaml": "container images",
@@ -108,7 +113,6 @@ UNSUPPORTED: dict[str, str] = {
     "Podfile.lock": "CocoaPods",
     "pubspec.lock": "Pub",
     "mix.lock": "Hex",
-    "bun.lock": "Bun (npm packages)",
     "bun.lockb": "Bun binary lockfile (npm packages)",
     "deno.lock": "Deno (npm/JSR)",
     "renv.lock": "CRAN",
@@ -119,7 +123,7 @@ UNSUPPORTED: dict[str, str] = {
 }
 #: Listed only when the directory has no lockfile of the same ecosystem (it would report the same packages).
 _UNSUPPORTED_FALLBACK: dict[str, tuple[str, str]] = {
-    "go.mod": ("Go", "go.sum"),
+    "go.sum": ("Go (go.sum without go.mod)", "go.mod"),
     "build.gradle": ("Gradle", "gradle.lockfile"),
     "build.gradle.kts": ("Gradle", "gradle.lockfile"),
     "Gemfile": ("RubyGems", "Gemfile.lock"),
@@ -153,7 +157,7 @@ _LOCK_ROOT_KEYS = ("dependencies", "devDependencies", "optionalDependencies", "p
 class Dep:
     """One exact dependency version found in a manifest or on a host."""
 
-    ecosystem: str          # "PyPI" | "npm" | "Packagist" | "crates.io"
+    ecosystem: str          # "PyPI" | "npm" | "Packagist" | "crates.io" | "Go" | "RubyGems" | "Maven" | "NuGet"
     name: str
     version: str
     scope: str = "runtime"  # "runtime" | "dev"
@@ -221,10 +225,11 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
 
     Returns:
         Sorted manifest paths. ``package.json`` and ``pyproject.toml`` are listed only when
-        their directory has no npm, Composer or PyPI lockfile (a ``Cargo.lock`` does not count; a
+        their directory has no npm, Composer or PyPI lockfile (``pnpm-lock.yaml`` and ``bun.lock`` count for
+        ``package.json`` only; a ``Cargo.lock`` does not count; a
         ``pyproject.toml`` next to requirements files is listed too: :func:`parse` reads its PEP 621 pins). Manifests of unsupported ecosystems
-        (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable; ``go.mod``,
-        ``build.gradle*``, ``Gemfile``, ``conanfile.*`` and ``*.csproj`` only when their directory has no lockfile
+        (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable;
+        ``go.sum`` (without a ``go.mod``), ``build.gradle*``, ``Gemfile``, ``conanfile.*`` and ``*.csproj`` only when their directory has no lockfile
         of the same ecosystem, ``Manifest.toml`` only next to a ``Project.toml`` (Julia). ``composer.json`` and
         ``Cargo.toml`` (:data:`_NEEDS_LOCK`) are listed only without their lockfile (for ``Cargo.toml``, none in
         its directory or one above it under ``root``).
@@ -243,7 +248,7 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         dirnames[:] = sorted(keep)
         names = set(filenames)
         for name in sorted(names):
-            if name in LOCKFILES or name in CRATE_LOCKS or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) \
+            if name in LOCKFILES or name in PLAN_ONLY_LOCKS or name in UNSUPPORTED or REQ_SCAN_NAME.match(name) \
                     or _DOCKERFILE.match(name):
                 found.append(here / name)
             elif name in _UNSUPPORTED_FALLBACK and _UNSUPPORTED_FALLBACK[name][1] not in names:
@@ -263,7 +268,7 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         has_lock = bool(names & set(LOCKFILES))
         if "pyproject.toml" in names and not has_lock:
             found.append(here / "pyproject.toml")
-        if "package.json" in names and not has_lock and "pnpm-lock.yaml" not in names:
+        if "package.json" in names and not has_lock and not names & set(NPM_SIDE_LOCKS):
             found.append(here / "package.json")
     return sorted(set(found))
 
@@ -295,6 +300,10 @@ def parse(path: Path) -> Manifest:
             _pipfile_lock(path, m)
         elif name in CRATE_LOCKS:
             _cargo_lock(path, m)
+        elif name in lockfiles.FORMATS:
+            got = lockfiles.FORMATS[name].reader(path)
+            m.deps += [Dep(eco, n, v, scope, str(path)) for eco, n, v, scope in got.deps]
+            m.unscannable = "; ".join(got.notes)   # a partial read: the deps are scanned, the notes reported
         elif name == "pyproject.toml":
             _pyproject(path, m)
         elif name == "package.json":
@@ -303,6 +312,9 @@ def parse(path: Path) -> Manifest:
             m.unscannable = _NEEDS_LOCK[name][1]
         elif eco := unsupported_ecosystem(name):
             m.unscannable = f"{UNSUPPORTED_REASON}{eco}"
+    except lockfiles.Unreadable as exc:
+        m.deps.clear()
+        m.unscannable = str(exc)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, tomllib.TOMLDecodeError,
             KeyError, TypeError, AttributeError) as exc:
         m.deps.clear()

@@ -243,6 +243,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # what validate_diff lets stage-fix change.
     "agentteams/vulnscan/__main__.py",
     "agentteams/vulnscan/manifests.py",
+    "agentteams/vulnscan/lockfiles.py",       # the Go/pnpm/Bun/RubyGems/Gradle/NuGet lockfile readers
     # 2026-10-22 (vulnscan-test-campaign M1): the rest of the package. Every module runs in the unsandboxed daily
     # job: _http.py holds the feed allowlist, osv.py/engine.py/versions.py/runtimes.py decide what counts as
     # vulnerable (a silent edit could fail open), fix.py computes the change stage-fix commits, schedule.py writes

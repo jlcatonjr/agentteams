@@ -18,7 +18,6 @@ NEW_UNSUPPORTED = {
     "Podfile.lock": ((), "CocoaPods"),
     "pubspec.lock": ((), "Pub"),
     "mix.lock": ((), "Hex"),
-    "bun.lock": ((), "Bun (npm packages)"),
     "bun.lockb": ((), "Bun binary lockfile (npm packages)"),
     "deno.lock": ((), "Deno (npm/JSR)"),
     "renv.lock": ((), "CRAN"),
@@ -62,8 +61,7 @@ def test_a_fallback_next_to_its_lockfile_is_listed_once(tmp_path: Path, manifest
     assert [p.name for p in manifests.discover(tmp_path)] == [lock]
 
 
-@pytest.mark.parametrize(("lock", "eco"), [("bun.lockb", "Bun binary lockfile (npm packages)"),
-                                         ("bun.lock", "Bun (npm packages)")])
+@pytest.mark.parametrize(("lock", "eco"), [("bun.lockb", "Bun binary lockfile (npm packages)")])
 def test_a_bun_lock_does_not_hide_package_json(tmp_path: Path, lock: str, eco: str) -> None:
     (tmp_path / "package.json").write_text('{"name": "x"}')
     (tmp_path / lock).write_bytes(b"\x00bun-lockfile")
