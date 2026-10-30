@@ -277,7 +277,8 @@ def _agent_outcome(ledger: str | Path, since: str, agent_since: str, agent_until
         start, attempt = parse_ts(agent_since), parse_ts(since)
         end = min(parse_ts(agent_until), attempt) if agent_until else attempt
     except ValueError:
-        return Outcome(error=f"agent run time unreadable ({_one_line(agent_since)[:40]!r})")
+        shown = _one_line(agent_since)[:40].replace("`", "'")   # code-formatted: no markdown from the agent's file
+        return Outcome(error=f"agent run time unreadable (`{shown}`)")
     if start >= end:
         return Outcome(error="agent run start is not before this attempt (out of range)")
     return outcome(ledger, start.isoformat(), until=end.isoformat())

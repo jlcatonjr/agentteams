@@ -3,7 +3,7 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **337**
+- Modules mapped: **338**
 - Packages: **11**
 - Internal import edges: **1066**
 - Distinct external dependencies: **11**
