@@ -21,7 +21,7 @@ Reading a file also decides whether its names may leave the machine (:attr:`Rang
 requirements file with an ``--index-url`` / ``-i`` / ``--extra-index-url`` line, itself or in a file it
 includes with ``-r`` / ``-c``, and a ``pyproject.toml`` naming a package source or index
 (``[[tool.poetry.source]]``, ``[[tool.uv.index]]``, ``[tool.uv.sources]`` with an ``index``,
-``[[tool.pdm.source]]``) are withheld whole.
+``[[tool.pdm.source]]``) are withheld whole. A file over :data:`MAX_BYTES` (64 MiB) is not read.
 
 Nothing here touches the network.
 """
@@ -46,6 +46,8 @@ _INCLUDE_OPT = re.compile(r"^(-r|--requirement|-c|--constraint)(?:\s+|=)(\S+)")
 _EDITABLE_OPT = re.compile(r"^(-e|--editable)(\s|=)")
 _DEV_GROUP = re.compile(r"dev|test|lint|doc|type", re.I)
 MAX_INCLUDE_DEPTH = 10
+#: Largest requirements file or ``pyproject.toml`` read, as for the lockfile readers (``lockfiles.MAX_BYTES``).
+MAX_BYTES = 64 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -398,6 +400,18 @@ def _logical_lines(text: str) -> list[str]:
     return out
 
 
+def _read_text(path: Path, errors: str = "replace") -> str:
+    """Return a file's text, refusing one over :data:`MAX_BYTES` before reading it.
+
+    Raises:
+        OSError: It cannot be read.
+        ValueError: It is larger than :data:`MAX_BYTES`.
+    """
+    if path.stat().st_size > MAX_BYTES:
+        raise ValueError(f"larger than {MAX_BYTES} bytes: not read")
+    return path.read_text(encoding="utf-8", errors=errors)
+
+
 def _names_index(path: Path, repo: Path, seen: set[str], depth: int = 0) -> bool:
     """Return whether ``path``, or a file it includes with ``-r`` / ``-c``, has an index option line.
 
@@ -409,8 +423,8 @@ def _names_index(path: Path, repo: Path, seen: set[str], depth: int = 0) -> bool
         return False
     seen.add(real)
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+        text = _read_text(path)
+    except (OSError, ValueError):   # unreadable or too large: it cannot be checked, so it counts as naming one
         return True
     root = os.path.realpath(repo)
     for line in _logical_lines(text):
@@ -439,14 +453,16 @@ def read_requirements(path: Path, repo: Path) -> RangeFile:
 
     Raises:
         OSError: The file cannot be read.
+        ValueError: It is larger than :data:`MAX_BYTES`.
     """
     rf = RangeFile(path)
+    text = _read_text(path)
     if _names_index(path, repo, set()):
         rf.private_index = True
         return rf
     low = path.name.lower()
     scope = "dev" if "dev" in low or "test" in low else "runtime"
-    for line in _logical_lines(path.read_text(encoding="utf-8", errors="replace")):
+    for line in _logical_lines(text):
         got = parse_requirement(line, scope)
         if isinstance(got, Requirement):
             rf.reqs.append(got)
@@ -488,9 +504,10 @@ def read_pyproject(path: Path, skip: Iterable[str] = ()) -> RangeFile:
     Raises:
         OSError: The file cannot be read.
         tomllib.TOMLDecodeError: It is not TOML.
+        ValueError: It is larger than :data:`MAX_BYTES`.
     """
     rf = RangeFile(path)
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    data = tomllib.loads(_read_text(path, errors="strict"))
     if _pyproject_names_index(data):
         rf.private_index = True
         return rf

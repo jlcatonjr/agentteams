@@ -356,3 +356,74 @@ def test_effectiveness_excludes_range_findings() -> None:
     assert "| Findings fixed since the previous run | 0 |" in md
     assert "| Findings new since the previous run | 0 |" in md
     assert "| Requirement-range findings (not counted above: no installed version is known) | 1 |" in md
+
+
+# ---------------------------------------------------------------- hostile files (code-hygiene P3)
+
+def test_include_leaving_the_repository_is_refused_and_never_read(tmp_path: Path, feed: NameFeed,
+                                                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    outside = tmp_path / "outside.txt"
+    outside.write_text("leaked>=1\n")
+    repo = _repo(tmp_path, {"requirements.txt": "-r ../outside.txt\ndemo>=1\n",
+                            "c/requirements.txt": f"-c {outside}\nother>=1\n"})
+    read: list[str] = []
+    real = Path.read_text
+
+    def spy(self: Path, *a: object, **kw: object) -> str:
+        read.append(str(self.resolve()))
+        return real(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "read_text", spy)
+    rf = sp.read_requirements(repo / "requirements.txt", repo)
+    assert rf.private_index and rf.reqs == []
+    rep = engine.scan_path(repo, unpinned_ranges=True)
+    assert str(outside.resolve()) not in read
+    assert not {q["package"]["name"] for q in feed.queries} & {"leaked", "demo", "other"}
+    assert ".: requirements.txt (private index)" in rep.withheld
+    assert ".: c/requirements.txt (private index)" in rep.withheld
+
+
+def test_include_loop_terminates(tmp_path: Path, feed: NameFeed) -> None:
+    repo = _repo(tmp_path, {"requirements.txt": "-r requirements-b.txt\ndemo>=1\n",
+                            "requirements-b.txt": "-r requirements.txt\n-c requirements-b.txt\nlib>=1\n"})
+    rf = sp.read_requirements(repo / "requirements.txt", repo)
+    assert not rf.private_index and [r.name for r in rf.reqs] == ["demo"]
+    engine.scan_path(repo, unpinned_ranges=True)   # returns: no recursion error, no hang
+    assert {q["package"]["name"] for q in feed.queries} == {"demo", "lib"}
+
+
+def test_include_depth_cap_counts_as_naming_an_index(tmp_path: Path) -> None:
+    depth = sp.MAX_INCLUDE_DEPTH
+    files = {f"r{i}.txt": f"-r r{i + 1}.txt\n" for i in range(depth + 1)}
+    files[f"r{depth + 1}.txt"] = "lib>=1\n"
+    files["requirements.txt"] = "-r r0.txt\ndemo>=1\n"
+    repo = _repo(tmp_path, files)
+    assert sp.read_requirements(repo / "requirements.txt", repo).private_index   # too deep: cannot be checked
+    (repo / f"r{depth - 1}.txt").write_text("lib>=1\n")                            # within the cap: followed
+    rf = sp.read_requirements(repo / "requirements.txt", repo)
+    assert not rf.private_index and [r.name for r in rf.reqs] == ["demo"]
+
+
+@pytest.mark.parametrize("text", ['[project\ndependencies = ["demo>=1"]\n', '[project]\ndependencies = "demo>=1"\n',
+                                  '[project]\ndependencies = 7\n[project.optional-dependencies]\ntest = 3\n'])
+def test_malformed_pyproject_is_unscannable_never_raised(tmp_path: Path, feed: NameFeed, text: str) -> None:
+    repo = _repo(tmp_path, {"pyproject.toml": text})
+    rep = engine.scan_path(repo, unpinned_ranges=True)
+    assert [p for p, _r in rep.unscannable] == ["pyproject.toml"]
+    if text.startswith("[project\n"):
+        with pytest.raises(sp.tomllib.TOMLDecodeError):
+            sp.read_pyproject(repo / "pyproject.toml")
+
+
+def test_huge_requirements_file_is_not_read(tmp_path: Path, feed: NameFeed, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert sp.MAX_BYTES == 64 * 1024 * 1024
+    repo = _repo(tmp_path, {"requirements.txt": "demo>=1\n" * 64, "requirements-inc.txt": "-r big.txt\nlib>=1\n",
+                            "big.txt": "x>=1\n" * 64})
+    monkeypatch.setattr(sp, "MAX_BYTES", 100)
+    with pytest.raises(ValueError, match="larger than 100 bytes"):
+        sp.read_requirements(repo / "requirements.txt", repo)
+    assert sp.read_requirements(repo / "requirements-inc.txt", repo).private_index   # a huge include: withheld
+    rep = engine.scan_path(repo, unpinned_ranges=True)
+    reasons = dict(rep.unscannable)
+    assert reasons["requirements.txt"].endswith("ranges not read: ValueError")
+    assert not {q["package"]["name"] for q in feed.queries} & {"demo", "x"}
