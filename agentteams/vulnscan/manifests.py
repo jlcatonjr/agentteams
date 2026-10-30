@@ -25,7 +25,16 @@ one with nothing to scan:
 | NuGet | ``packages.lock.json`` (``*.csproj`` when there is no lockfile) |
 | pnpm (npm) | ``pnpm-lock.yaml`` |
 | conda, Lean | ``environment.yml`` / ``.yaml``, ``lake-manifest.json`` |
+| SwiftPM, CocoaPods, Pub, Hex | ``Package.resolved``, ``Podfile.lock``, ``pubspec.lock``, ``mix.lock`` |
+| Bun, Deno (npm packages) | ``bun.lock``, ``bun.lockb`` (binary), ``deno.lock`` |
+| CRAN, Hackage | ``renv.lock``, ``stack.yaml.lock`` / ``cabal.project.freeze`` |
+| Julia | ``Manifest.toml`` (only next to a ``Project.toml``) |
+| RubyGems | ``Gemfile`` when there is no ``Gemfile.lock`` |
+| Conan, vcpkg (C/C++) | ``conan.lock`` (``conanfile.txt`` / ``conanfile.py`` when there is no ``conan.lock``), ``vcpkg.json`` |
 | container images | ``Dockerfile``, ``Dockerfile.*``, ``*.Dockerfile``, ``Containerfile``, ``compose.y(a)ml``, ``docker-compose*.y(a)ml`` |
+
+``package.json``, ``composer.json`` and ``Cargo.toml`` without their lockfile are listed and reported unscannable
+("without a lockfile", with the command that writes one), not as an unsupported ecosystem.
 
 Only ``requirements*.txt`` (:data:`REQ_NAME`) is ever edited by a staged fix; the ``.lock``
 and ``.in`` variants are read, never edited (:data:`REQ_SCAN_NAME`).
@@ -95,12 +104,40 @@ UNSUPPORTED: dict[str, str] = {
     "Containerfile": "container images",
     "compose.yml": "container images",
     "compose.yaml": "container images",
+    "Package.resolved": "SwiftPM",
+    "Podfile.lock": "CocoaPods",
+    "pubspec.lock": "Pub",
+    "mix.lock": "Hex",
+    "bun.lock": "Bun (npm packages)",
+    "bun.lockb": "Bun binary lockfile (npm packages)",
+    "deno.lock": "Deno (npm/JSR)",
+    "renv.lock": "CRAN",
+    "stack.yaml.lock": "Hackage",
+    "cabal.project.freeze": "Hackage",
+    "conan.lock": "Conan (C/C++)",
+    "vcpkg.json": "vcpkg (C/C++)",
 }
 #: Listed only when the directory has no lockfile of the same ecosystem (it would report the same packages).
 _UNSUPPORTED_FALLBACK: dict[str, tuple[str, str]] = {
     "go.mod": ("Go", "go.sum"),
     "build.gradle": ("Gradle", "gradle.lockfile"),
     "build.gradle.kts": ("Gradle", "gradle.lockfile"),
+    "Gemfile": ("RubyGems", "Gemfile.lock"),
+    "conanfile.txt": ("Conan (C/C++)", "conan.lock"),
+    "conanfile.py": ("Conan (C/C++)", "conan.lock"),
+}
+#: Listed only when the directory **has** the sibling named (the file name alone is too generic to claim):
+#: Julia's ``Manifest.toml`` next to its ``Project.toml``. :func:`unsupported_ecosystem` is name-only, so it labels
+#: the name; :func:`discover` alone applies the sibling test.
+_UNSUPPORTED_WITH_SIBLING: dict[str, tuple[str, str]] = {
+    "Manifest.toml": ("Julia", "Project.toml"),
+}
+#: Manifests of scanned ecosystems that hold no exact versions themselves: listed (and reported unscannable with the
+#: hint shown) only when no lockfile of theirs is beside them, or for ``Cargo.toml`` in a directory above them (a
+#: Cargo workspace keeps one ``Cargo.lock`` at its root).
+_NEEDS_LOCK: dict[str, tuple[str, str]] = {
+    "composer.json": ("composer.lock", "composer.json without a lockfile — run `composer update --lock`"),
+    "Cargo.toml": ("Cargo.lock", "Cargo.toml without a lockfile — run `cargo generate-lockfile`"),
 }
 _DOCKERFILE = re.compile(r"^(Dockerfile([.-][\w.-]+)?|[\w.-]+\.Dockerfile|docker-compose[\w.-]*\.ya?ml)$")
 _CSPROJ = re.compile(r"^[\w.-]+\.csproj$")
@@ -166,6 +203,8 @@ def unsupported_ecosystem(name: str) -> str:
         return UNSUPPORTED[name]
     if name in _UNSUPPORTED_FALLBACK:
         return _UNSUPPORTED_FALLBACK[name][0]
+    if name in _UNSUPPORTED_WITH_SIBLING:
+        return _UNSUPPORTED_WITH_SIBLING[name][0]
     if _CSPROJ.match(name):
         return "NuGet"
     if _DOCKERFILE.match(name):
@@ -185,9 +224,13 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
         their directory has no npm, Composer or PyPI lockfile (a ``Cargo.lock`` does not count; a
         ``pyproject.toml`` next to requirements files is listed too: :func:`parse` reads its PEP 621 pins). Manifests of unsupported ecosystems
         (:func:`unsupported_ecosystem`) are listed so they can be reported as unscannable; ``go.mod``,
-        ``build.gradle*`` and ``*.csproj`` only when their directory has no lockfile of the same ecosystem.
+        ``build.gradle*``, ``Gemfile``, ``conanfile.*`` and ``*.csproj`` only when their directory has no lockfile
+        of the same ecosystem, ``Manifest.toml`` only next to a ``Project.toml`` (Julia). ``composer.json`` and
+        ``Cargo.toml`` (:data:`_NEEDS_LOCK`) are listed only without their lockfile (for ``Cargo.toml``, none in
+        its directory or one above it under ``root``).
     """
     found: list[Path] = []
+    cargo_dirs: set[Path] = set()   # directories holding a Cargo.lock (os.walk is top-down: ancestors come first)
     for dirpath, dirnames, filenames in os.walk(root):
         here = Path(dirpath)
         keep = []
@@ -205,8 +248,18 @@ def discover(root: Path, *, include_worktrees: bool = False) -> list[Path]:
                 found.append(here / name)
             elif name in _UNSUPPORTED_FALLBACK and _UNSUPPORTED_FALLBACK[name][1] not in names:
                 found.append(here / name)
+            elif name in _UNSUPPORTED_WITH_SIBLING and _UNSUPPORTED_WITH_SIBLING[name][1] in names:
+                found.append(here / name)
             elif _CSPROJ.match(name) and "packages.lock.json" not in names:
                 found.append(here / name)
+        if "Cargo.lock" in names:
+            cargo_dirs.add(here)
+        for name, (lock, _hint) in _NEEDS_LOCK.items():
+            if name not in names or lock in names:
+                continue
+            if name == "Cargo.toml" and any(d in cargo_dirs for d in here.parents):
+                continue   # a workspace member: the workspace root's Cargo.lock pins it
+            found.append(here / name)
         has_lock = bool(names & set(LOCKFILES))
         if "pyproject.toml" in names and not has_lock:
             found.append(here / "pyproject.toml")
@@ -246,6 +299,8 @@ def parse(path: Path) -> Manifest:
             _pyproject(path, m)
         elif name == "package.json":
             m.unscannable = "package.json without a lockfile — run `npm install --package-lock-only`"
+        elif name in _NEEDS_LOCK:
+            m.unscannable = _NEEDS_LOCK[name][1]
         elif eco := unsupported_ecosystem(name):
             m.unscannable = f"{UNSUPPORTED_REASON}{eco}"
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, tomllib.TOMLDecodeError,

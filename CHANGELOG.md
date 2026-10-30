@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (vulnscan: every common lockfile is detected)
+
+- `manifests.discover` now lists `Package.resolved` (SwiftPM), `Podfile.lock` (CocoaPods), `pubspec.lock` (Pub),
+  `mix.lock` (Hex), `bun.lock` / `bun.lockb` (Bun), `deno.lock` (Deno), `renv.lock` (CRAN), `stack.yaml.lock` /
+  `cabal.project.freeze` (Hackage), `conan.lock` and `vcpkg.json` (C/C++), a Julia `Manifest.toml` next to its
+  `Project.toml`, and `Gemfile` / `conanfile.*` without their lockfile. Each is reported `unsupported ecosystem:
+  <name>`, so a repository holding only these is in the coverage state *unsupported ecosystem* (Rule S-VM reports
+  it), never *nothing to scan*. None of them hides a `package.json` or `pyproject.toml` beside it.
+- `composer.json` and `Cargo.toml` without their lockfile are reported unscannable ("without a lockfile", with the
+  command that writes one), as `package.json` already was; a Cargo workspace member is covered by the root's
+  `Cargo.lock`.
+
 ### vulnscan (a runtime product table: more runtimes, OS releases, unknown kinds reported)
 
 - **`runtimes.PRODUCTS`** replaces the hard-coded Node.js/PHP/Python list. Each row is a frozen `Product`: the

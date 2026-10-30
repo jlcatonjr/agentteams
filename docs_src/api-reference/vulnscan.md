@@ -344,7 +344,18 @@ and reported unscannable with the reason `unsupported ecosystem: <name>`:
 | NuGet | `packages.lock.json` (`*.csproj` when there is no lockfile) |
 | pnpm (npm packages) | `pnpm-lock.yaml` (run `pnpm audit` there) |
 | conda, Lean | `environment.yml` / `environment.yaml`, `lake-manifest.json` |
+| SwiftPM, CocoaPods, Pub, Hex | `Package.resolved`, `Podfile.lock`, `pubspec.lock`, `mix.lock` |
+| Bun, Deno (npm packages) | `bun.lock`, `bun.lockb` (binary), `deno.lock` |
+| CRAN, Hackage | `renv.lock`, `stack.yaml.lock` / `cabal.project.freeze` |
+| Julia | `Manifest.toml`, only next to a `Project.toml` (the name alone is too generic) |
+| RubyGems | `Gemfile` when there is no `Gemfile.lock` |
+| Conan, vcpkg (C/C++) | `conan.lock` (`conanfile.txt` / `conanfile.py` when there is no `conan.lock`), `vcpkg.json` |
 | container images | `Dockerfile`, `Dockerfile.*`, `Dockerfile-*`, `*.Dockerfile`, `Containerfile`, `compose.yml` / `compose.yaml`, `docker-compose*.yml` / `.yaml` |
+
+None of them is in `LOCKFILES`, so none hides a `package.json` or `pyproject.toml` beside it.
+`composer.json` and `Cargo.toml` without their lockfile are listed and unscannable ("composer.json without a
+lockfile — run `composer update --lock`", "Cargo.toml without a lockfile — run `cargo generate-lockfile`"), like
+`package.json`; a `Cargo.toml` with a `Cargo.lock` in a directory above it (a workspace member) is not listed.
 
 A workspace whose only manifests are these is in the coverage state `unsupported ecosystem` (a coverage
 gap: nothing in it is checked), never `nothing to scan`. A workspace that also has supported manifests
@@ -1195,7 +1206,9 @@ Sorted manifest paths under `root`. Vendored and generated trees (`SKIP_DIRS`: `
 `include_worktrees` is set. `package.json` and `pyproject.toml` are listed only when their directory has no
 lockfile (a `pyproject.toml` next to requirements files is listed too, for its PEP 621 pins). Manifests of
 ecosystems the scanner does not read are listed so they can be reported as unscannable; `go.mod`,
-`build.gradle*` and `*.csproj` only when their directory has no lockfile of the same ecosystem.
+`build.gradle*`, `Gemfile`, `conanfile.*` and `*.csproj` only when their directory has no lockfile of the same
+ecosystem, `Manifest.toml` only next to a `Project.toml`. `composer.json` and `Cargo.toml` are listed only
+without their lockfile (for `Cargo.toml`, none in its directory or above it under `root`).
 
 #### `manifests.parse(path)`
 
