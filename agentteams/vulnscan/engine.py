@@ -39,7 +39,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 
-from agentteams.vulnscan import _http, osv, private_sources, project_policy, runtimes
+from agentteams.vulnscan import _http, images, osv, private_sources, project_policy, runtimes
 from agentteams.vulnscan.manifests import Dep, discover, parse
 from agentteams.vulnscan.report import OS_RELEASE, Finding, Report
 
@@ -152,6 +152,9 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     ``exclude`` path is never read or queried (and not listed: the operator chose it), and a repository in
     ``opted_out`` (enrolled by the operator at ``off``) is skipped and listed under ``opted_out``.
 
+    A container manifest (Dockerfile, compose file) has its base images judged (:mod:`.images`); it stays
+    listed unscannable, because the image contents are not scanned.
+
     Each repository's ``vulnerability_scanning`` block (:mod:`.project_policy`) then narrows what leaves
     the machine, never what is checked: ``level: off`` does **not** skip a repository the operator asked to
     scan (it is scanned and listed under ``brief_off``, a mismatch); manifests matching ``exclude_paths``
@@ -204,7 +207,9 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
             report.unscannable.append((rel, GRADLE_OPT_IN))
             continue
         m = parse(path)
-        if m.unscannable:
+        if images.is_container_manifest(path.name):   # base images judged; the layer contents stay unscanned
+            images.scan_manifest(path, rel, target, report)
+        elif m.unscannable:
             report.unscannable.append((rel, m.unscannable))
         if pol.include_dev is not None:
             dev_policy[target] = pol.include_dev

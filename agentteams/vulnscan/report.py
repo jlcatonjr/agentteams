@@ -23,13 +23,15 @@ EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
 #: ``Finding.name`` of the OS release check (``kind="host"``, :mod:`.engine`); :mod:`.server_fixplan` gives it its
 #: own plan line.
 OS_RELEASE = "os-release"
+#: How the report's Kind column names a finding kind, where it differs from the kind.
+KIND_LABEL = {"image": "base image"}
 
 
 @dataclass
 class Finding:
     """One problem: a vulnerable package, a stale runtime, or a host-level check."""
 
-    kind: str                       # "package" | "runtime" | "host" | "ioc"
+    kind: str                       # "package" | "runtime" | "image" (a base image) | "host" | "ioc"
     target: str                     # repo (relative to scan root) or host name
     name: str
     version: str = ""
@@ -267,7 +269,8 @@ class Report:
                     notes.append("at " + ", ".join(f"`{loc}`" for loc in f.locations[:2]))
                 if f.fixed_upstream:   # last, so the existing notes keep their place
                     notes.append("fixed upstream (checkout behind)")
-                out.append(f"| {mark} | {sev} | {f.kind} | {item} | {f.version} | {_fix_cell(f.fix)} | {'; '.join(notes)} |")
+                out.append(f"| {mark} | {sev} | {KIND_LABEL.get(f.kind, f.kind)} | {item} | {f.version} | {_fix_cell(f.fix)} "
+                           f"| {'; '.join(notes)} |")
             out.append("")
         if unscored:
             out += ["## Unscored advisories (no CVSS vector or severity label)", "",

@@ -6,6 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (container base images: support status and pinning)
+
+- **New `agentteams.vulnscan.images`.** `scan_path` now reads each Dockerfile's `FROM` lines (multi-stage,
+  `--platform`, `ARG` defaults before the first `FROM`, labelled "ARG default; `--build-arg` may override") and each
+  compose service's `image:` (build services skipped), and judges the base image: official `python`, `node`, `php`,
+  `ruby`, `golang`, `eclipse-temurin`, `openjdk` (deprecated, LOW), `amazoncorretto` (`java-corretto`), .NET on
+  `mcr.microsoft.com`, `nginx`, `postgres`, `mysql`, `mariadb`, `redis`, and `ubuntu` / `debian` / `alpine` /
+  `amazonlinux`. An end-of-life release line is HIGH; a full-patch tag behind its line is MODERATE; `latest` or no
+  tag is LOW; floating tags (`python:3`, `lts`) are listed as not judged, never fine. The OS in a tag (`-bookworm`,
+  `-jammy`, `-alpine3.18`) is judged for any public image, so `mcr.microsoft.com/playwright/python:v1.57.0-jammy`
+  gets Ubuntu 22.04 judged. Private-registry and local images are not judged and never named; only endoflife.date
+  slugs leave the machine.
+- **Image contents are still not scanned.** Each container manifest stays unscannable with the reason
+  `unsupported ecosystem: container images (layer contents not scanned; base image support status checked)`;
+  coverage states are unchanged.
+- **Findings of kind `image`** show as "base image" in `summary.md`. The fix plan lists them under
+  `## base images: <file> — plan-only (no staged edit)` (`FixResult.image_plan`, dry run only); nothing edits a
+  Dockerfile or compose file, and `executor.validate_diff` refuses such a change.
+- **Fleet-wide effect:** the next `daily` run adds base-image findings for every enrolled repository with a
+  Dockerfile or compose file (for example `python:3.9-slim` is HIGH), and an unreachable endoflife.date now also
+  makes those repositories' scans partial (exit 3).
+
 ### added (vulnscan: Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles are scanned)
 
 - New `agentteams.vulnscan.lockfiles` (stdlib only): `go.mod` (`require` with `replace` applied; Go stdlib not
