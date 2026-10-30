@@ -16,6 +16,10 @@ The match is anchored, never a substring: a detail can echo repository or orches
 match would let that text relabel a policy refusal as retryable. A ledger that cannot be read fails closed: it
 counts as one infra refusal, so the attempt is retried instead of marked done. Stdlib only; no side effects except
 the CLI's ``--out`` file.
+
+With ``--agent-since`` (the day's agent run start, from ``<run>/agent/status.json``), the rows from then up to the
+attempt's start (the agent's own executor requests) are reported in their own section and their refusals listed
+under *Needs you*. They never count toward ``infra_count``: a remediation retry does not redo the agent's requests.
 """
 
 from __future__ import annotations
@@ -151,27 +155,29 @@ def needs_line(row: dict[str, Any]) -> str:
     return _one_line(f"{row.get('op')} {row.get('kind')} for {row.get('target')}{tag}: {text[:DETAIL_CHARS]}")
 
 
-def outcome_from_rows(rows: Iterable[dict[str, Any]], since: str) -> Outcome:
-    """Classify the rows at or after ``since``.
+def outcome_from_rows(rows: Iterable[dict[str, Any]], since: str, until: str | None = None) -> Outcome:
+    """Classify the rows at or after ``since`` (and before ``until``, when given).
 
     Args:
         rows: Parsed ledger rows; a row without a parseable ``ts`` is counted in ``skipped``.
         since: The attempt's start (ISO; UTC or with an offset).
+        until: Exclusive end (ISO), or None for no end.
 
     Returns:
         The attempt's :class:`Outcome`.
 
     Raises:
-        ValueError: ``since`` is not an ISO timestamp.
+        ValueError: ``since`` or ``until`` is not an ISO timestamp.
     """
     start = parse_ts(since)
+    end = parse_ts(until) if until is not None else None
     res = Outcome()
     for row in rows:
         ts = _row_ts(row)
         if ts is None:
             res.skipped += 1
             continue
-        if ts < start:
+        if ts < start or (end is not None and ts >= end):
             continue
         cls = classify(row)
         if cls == "done":
@@ -183,33 +189,37 @@ def outcome_from_rows(rows: Iterable[dict[str, Any]], since: str) -> Outcome:
     return res
 
 
-def outcome(ledger: str | Path, since: str) -> Outcome:
+def outcome(ledger: str | Path, since: str, until: str | None = None) -> Outcome:
     """Read ``ledger`` (JSON lines) and classify this attempt's rows.
 
     Args:
         ledger: Path of ``ledger.jsonl``.
         since: The attempt's start (ISO; UTC or with an offset).
+        until: Exclusive end (ISO), or None for no end.
 
     Returns:
         The :class:`Outcome`; an unreadable ledger sets ``error`` (fail closed) rather than raising.
 
     Raises:
-        ValueError: ``since`` is not an ISO timestamp.
+        ValueError: ``since`` or ``until`` is not an ISO timestamp.
     """
     if not isinstance(since, str):
         raise ValueError(f"since must be an ISO timestamp string, not {type(since).__name__}")
     parse_ts(since)   # a bad SINCE is a usage error, not an unreadable ledger
+    if until is not None:
+        parse_ts(until)
     try:
         text = Path(ledger).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         return Outcome(error=f"ledger unreadable: {type(exc).__name__}")
     parsed = [_parse_line(line) for line in text.splitlines() if line.strip()]
-    res = outcome_from_rows([r for r in parsed if r is not None], since)
+    res = outcome_from_rows([r for r in parsed if r is not None], since, until)
     res.skipped += sum(1 for r in parsed if r is None)
     return res
 
 
-def render_markdown(res: Outcome, *, run_name: str, attempt: int, log_text: str = "") -> str:
+def render_markdown(res: Outcome, *, run_name: str, attempt: int, log_text: str = "",
+                    agent: Outcome | None = None) -> str:
     """Render ``remediation.md`` for one attempt.
 
     Args:
@@ -217,6 +227,7 @@ def render_markdown(res: Outcome, *, run_name: str, attempt: int, log_text: str 
         run_name: The scan run's name (its date).
         attempt: The attempt number for that run.
         log_text: This attempt's part of ``remediation.log`` (PR links, per-repo lines, warnings).
+        agent: The day's agent run's executor rows (before the attempt), or None.
 
     Returns:
         The markdown text, newline-terminated.
@@ -238,17 +249,25 @@ def render_markdown(res: Outcome, *, run_name: str, attempt: int, log_text: str 
         needs.append(f"remediation outcome unknown: {res.error}")
     if res.skipped:
         needs.append(f"{res.skipped} ledger line(s) could not be read (not classified; check the ledger)")
+    if agent is not None:
+        needs += [f"agent run refused: {ln}" for ln in agent.infra + agent.policy]
+        if agent.error:
+            needs.append(f"agent run rows not listed: {agent.error}")
     out = [f"# Vulnscan remediation — {_one_line(run_name)} (attempt {attempt})", "",
            f"PRs opened or claimed this run: {len(prs)}",
            f"Executor operations this attempt: {res.done} done, {len(res.infra)} refused for infrastructure, "
            f"{len(res.policy)} refused by policy"]
     out += [f"- {p}" for p in prs] + ["", "## Per repo", ""] + [f"- {ln}" for ln in sorted(latest.values())]
+    if agent is not None:
+        out += ["", "## Agent run (executor rows)", "",
+                f"Before this attempt, the agent's requests: {agent.done} done, "
+                f"{len(agent.infra) + len(agent.policy)} refused (listed under Needs you; never retried here)"]
     out += ["", "## Needs you", ""] + ([f"- {ln}" for ln in needs] or ["- nothing"])
     return "\n".join(out) + "\n"
 
 
 def report(ledger: str | Path, since: str, *, run_name: str = "", attempt: int = 1,
-           log_text: str = "") -> tuple[Outcome, str]:
+           log_text: str = "", agent_since: str | None = None) -> tuple[Outcome, str]:
     """Return one attempt's outcome and its ``remediation.md`` text.
 
     Args:
@@ -257,6 +276,7 @@ def report(ledger: str | Path, since: str, *, run_name: str = "", attempt: int =
         run_name: The scan run's name.
         attempt: The attempt number.
         log_text: This attempt's log text.
+        agent_since: The day's agent run start (ISO), or None: its rows up to ``since`` get their own section.
 
     Returns:
         ``(outcome, markdown)``.
@@ -265,11 +285,17 @@ def report(ledger: str | Path, since: str, *, run_name: str = "", attempt: int =
         ValueError: ``since`` is not an ISO timestamp.
     """
     res = outcome(ledger, since)
-    return res, render_markdown(res, run_name=run_name, attempt=attempt, log_text=log_text)
+    agent = None
+    if agent_since:
+        try:
+            agent = outcome(ledger, agent_since, until=since)
+        except ValueError:   # status.json is the agent run's file: a bad start is reported, never a usage error
+            agent = Outcome(error=f"agent run start unreadable ({_one_line(agent_since)[:40]!r})")
+    return res, render_markdown(res, run_name=run_name, attempt=attempt, log_text=log_text, agent=agent)
 
 
 def register(sub: Any) -> None:
-    """Add ``remediation-report LEDGER SINCE [--log F] [--run NAME] [--attempt N] [--out F]``.
+    """Add ``remediation-report LEDGER SINCE [--log F] [--run NAME] [--attempt N] [--out F] [--agent-since TS]``.
 
     Args:
         sub: The parser's subparsers action.
@@ -282,6 +308,8 @@ def register(sub: Any) -> None:
     sp.add_argument("--run", default="", help="the scan run's name")
     sp.add_argument("--attempt", type=int, default=1)
     sp.add_argument("--out", type=Path, default=None, help="write remediation.md here (default: not written)")
+    sp.add_argument("--agent-since", default=None,
+                    help="the day's agent run start (ISO): report its executor rows before SINCE, never retried")
 
 
 def dispatch(args: argparse.Namespace, load_cfg: Any = None) -> int:
@@ -301,7 +329,8 @@ def dispatch(args: argparse.Namespace, load_cfg: Any = None) -> int:
         except OSError as exc:
             log_text = f"WARN this attempt's log is unreadable: {type(exc).__name__}"
     try:
-        res, md = report(args.ledger, args.since, run_name=args.run, attempt=args.attempt, log_text=log_text)
+        res, md = report(args.ledger, args.since, run_name=args.run, attempt=args.attempt, log_text=log_text,
+                         agent_since=getattr(args, "agent_since", None))
     except ValueError as exc:
         print(f"remediation-report: bad SINCE: {exc}", file=sys.stderr)
         return 2

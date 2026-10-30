@@ -81,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the agent ran, and fixes approved later waited a day (2026-10-30: remediation 09:01, agent 09:03–09:05). The
   job now waits while the daily run holds its lock and, with the agent on, until `agent/status.json` records
   `finished` (no longer waited for after `GIVE_UP_HOUR`). Re-run `--install` so the installed copy matches.
+- `remediation-report` gains `--agent-since TS`, and the runner passes the agent run's start from
+  `agent/status.json`. The agent's own executor rows before the attempt appear in a new "Agent run (executor rows)"
+  section of `remediation.md`, with their refusals under "Needs you". They never count toward `infra_count`, so they
+  never cause a retry. On 2026-10-30, `remediation.md` said "Needs you: nothing" while the agent's 9 requests had
+  been refused.
 
 ### vulnscan (deploy safety: wait on both job locks, and say which images are missing)
 

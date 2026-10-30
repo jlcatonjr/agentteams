@@ -154,3 +154,31 @@ def test_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: py
     assert main(["remediation-report", str(ledger), "not-a-time"]) == 2
     assert main(["remediation-report", str(tmp_path / "none.jsonl"), SINCE]) == 0
     assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["infra_count"] == 1
+
+
+def test_agent_rows_before_the_attempt_are_reported_but_never_retried(tmp_path: Path) -> None:
+    led = _ledger(tmp_path,
+                  _row("refused", ts="2026-10-29T12:50:00Z", detail="held: stage-fix found nothing fixable"),
+                  _row("refused", ts="2026-10-29T12:51:00Z", detail="tools container unavailable: docker down"),
+                  _row("done", ts="2026-10-29T12:52:00Z", op="server-audit"),
+                  _row("done"))
+    res, md = rr.report(led, SINCE, run_name="2026-10-29", agent_since="2026-10-29T12:45:00Z")
+    assert res.infra_count == 0 and res.done == 1          # the attempt itself: only its own row
+    assert "## Agent run (executor rows)" in md
+    assert "1 done, 2 refused" in md
+    assert "agent run refused: stage-fix refused for /r/app: held: stage-fix found nothing fixable" in md
+    assert "- nothing" not in md.split("## Needs you", 1)[1]
+
+
+def test_without_agent_since_the_report_is_unchanged(tmp_path: Path) -> None:
+    led = _ledger(tmp_path, _row("refused", ts="2026-10-29T12:50:00Z", detail="x"), _row("done"))
+    res, md = rr.report(led, SINCE, run_name="r")
+    assert "Agent run" not in md and res.done == 1 and not res.policy
+
+
+def test_bad_agent_since_is_reported_never_a_retry(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    led = _ledger(tmp_path, _row("done"))
+    out = tmp_path / "remediation.md"
+    assert main(["remediation-report", str(led), SINCE, "--agent-since", "not-a-time", "--out", str(out)]) == 0
+    assert json.loads(capsys.readouterr().out)["infra_count"] == 0
+    assert "agent run rows not listed: agent run start unreadable" in out.read_text(encoding="utf-8")

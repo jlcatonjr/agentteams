@@ -897,7 +897,10 @@ reads the executor's ledger rows since the attempt started, not the log text. It
 *Needs you*. A row counts as infrastructure, and is retried, only when its detail **starts with**
 `tools container unavailable:` or its `reason_code` starts with `infra.`. Text that merely contains
 those words stays a policy refusal, because a detail can echo repository text. A ledger that cannot be
-read counts as an infrastructure refusal, so the attempt is retried. With no infrastructure refusal the
+read counts as an infrastructure refusal, so the attempt is retried. With `--agent-since` (the runner
+passes the agent run's start), the agent's own executor rows before the attempt get their own section and their
+refusals are listed under *Needs you*; they never count as infrastructure, since a retry would not redo them.
+With no infrastructure refusal the
 run gets `remediation.done`. Otherwise it gets `remediation.blocked` and the next tick retries, up to
 `MAX_ATTEMPTS` (8) or `GIVE_UP_HOUR` (17:00 local), and then gives up with a notification.
 
