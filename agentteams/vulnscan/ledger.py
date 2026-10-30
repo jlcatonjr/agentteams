@@ -83,8 +83,8 @@ def _key() -> bytes:
             try:
                 fd = os.open(kfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             except FileExistsError:     # another process created it first: use that one (checked below)
-                pass
-            else:
+                fd = -1
+            if fd >= 0:
                 with os.fdopen(fd, "w") as fh:
                     fh.write(secrets.token_hex(32))
                     fh.flush()
