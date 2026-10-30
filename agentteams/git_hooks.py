@@ -17,7 +17,9 @@ Two public capabilities, exposed on the CLI as ``--refresh-graph`` and
   the agent files on disk, writing only when the content actually changes. This
   is what the installed hook invokes via ``python -m agentteams.git_hooks``.
 - :func:`install_pre_commit_hook` — write (or sentinel-merge) the refresh block
-  into the repo's ``pre-commit`` hook, preserving any pre-existing hook body.
+  into the repo's ``pre-commit`` hook, preserving any pre-existing hook body. The
+  block ends with the API-impact check (:mod:`agentteams.api_impact`), which reports
+  what the staged diff changes in the API and never fails the commit.
   The same install adds the **blocking** env-file guard, which refuses a commit that
   adds or modifies a ``.env`` file. It is a separate block placed before the
   non-blocking refresh block. See :func:`_render_env_guard_block`.
@@ -396,6 +398,9 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False) -
 
     - agent files staged  → refresh references/pipeline-graph.md (agent topology, staged)
     - ``*.py`` files staged → refresh references/architecture-graph.md (module map, staged)
+    - anything staged → ``python -m agentteams.api_impact --pre-commit``: a one-line summary of the
+      staged API impact (``references/api-impact.reference.md``) and, in the agentteams repository,
+      a regenerated and staged ``agentteams.1`` when the CLI parser changed
     - (opt-in ``code_index_hook``) script/dependency files staged → warm the code
       & API index cache. This clause is **sequential to, not a replacement of**,
       the ``*.py`` architecture guard: it refreshes a *gitignored* cache and does
@@ -424,7 +429,8 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False) -
         "# Auto-installed by `agentteams --install-git-hooks`. Regenerates the\n"
         "# repository maps (references/pipeline-graph.md from agent files;\n"
         "# references/architecture-graph.md from package .py files) that are part\n"
-        "# of the commit, from the working tree, and stages the result. Non-blocking:\n"
+        "# of the commit, from the working tree, and stages the result; then reports\n"
+        "# the commit's API impact (agentteams.api_impact). Non-blocking:\n"
         "# never changes the commit's success. Remove this block (or\n"
         "# agentteams --update --no-git-hooks) to disable.\n"
         'if command -v git >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then\n'
@@ -446,6 +452,16 @@ def _render_hook_block(agentteams_path: str, *, code_index_hook: bool = False) -
         "            fi\n"
         "        fi\n"
         f"{code_index_clause}"
+        "        # API impact: report what the staged diff changes in the API (deletions and renames\n"
+        "        # included) and regenerate built-in derived artifacts. `-P` keeps the working tree off\n"
+        "        # sys.path, so it needs Python 3.11+. Never changes the commit's success.\n"
+        "        if [ -n \"$(git diff --cached --name-only 2>/dev/null)\" ]; then\n"
+        "            if python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then\n"
+        f'                {pp} python3 -P -m agentteams.api_impact --pre-commit --repo "$_at_root" || true\n'
+        "            else\n"
+        '                echo "agentteams: api-impact unavailable (agentteams needs Python 3.11+)" >&2\n'
+        "            fi\n"
+        "        fi\n"
         "    fi\n"
         "fi\n"
         "exit $_at_rc\n"

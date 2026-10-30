@@ -253,6 +253,16 @@ def _plan_output_files(
         "component_slug": None,
     })
 
+    # API impact review (always — @orchestrator's API Impact Review sub-protocol, Workflow 11 gate 6b).
+    # What the pre-commit hook detects, how review state is computed from the commits and the committed
+    # ledger, and the review / update / audit / revise / record loop; backed by agentteams.api_impact.
+    files.append({
+        "path": "references/api-impact.reference.md",
+        "template": f"{agents_dir}api-impact.reference.template.md",
+        "type": "reference",
+        "component_slug": None,
+    })
+
     # Operator decision query (always — @orchestrator's Operator Decision Query sub-protocol). How an
     # agent puts a decision to the operator through the host's interactive selection interface, with
     # the recommended option first, and what to do when no operator is present.

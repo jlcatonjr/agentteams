@@ -254,6 +254,7 @@ nav:
               - graph: api-reference/graph.md
               - architecture: api-reference/architecture.md
               - git-hooks: api-reference/git-hooks.md
+              - api-impact: api-reference/api-impact.md
               - model-routing: api-reference/model-routing.md
               - eval-suite: api-reference/eval-suite.md
               - eval-adapters: api-reference/eval-adapters.md

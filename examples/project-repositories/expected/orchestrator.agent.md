@@ -235,7 +235,7 @@ new operational rule remains a manual edit in each deployed team.
 
 | Content Area | Agent | Key Indicators |
 |---|---|---|
-<!-- AGENTTEAMS:BEGIN routing_table_rows v=5 -->
+<!-- AGENTTEAMS:BEGIN routing_table_rows v=6 -->
 | Creating or revising primary Jupyter notebooks, interactive HTML visualizations, Python analysis modules and research whitepapers | `@primary-producer` | New work or revision in `*/outputs/` |
 | Architecture and file hygiene | `@code-hygiene` | Backup files, script lifecycle, duplication, agent doc consistency |
 | Quality and structural defects | `@quality-auditor` | Purposeless content, structural weakness, pattern violations |
@@ -250,6 +250,7 @@ new operational rule remains a manual edit in each deployed team.
 | Daily/weekly/monthly work summary reporting | `@work-summarizer` | Synthesize `tmp/by-week/` plan artifacts, legacy `tmp/` fallbacks, and git history into `workSummaries/` |
 | Commit and push, pull/merge/rebase from main, conflict resolution, file recovery (git diff, revert, restore) | `@git-operations` | "Commit", "push", "pull main", "merge", "rebase", "recover file", "revert", "what changed", "restore old version" |
 | Parallel dispatch of independent plan steps | `@orchestrator` → Workflow 0A | Plan steps with disjoint domains; "run these in parallel"; a `*.steps.csv` carrying `depends_on` |
+| A structural change or new feature was committed; API docs may be stale | `@orchestrator` → API Impact Review | The pre-commit hook printed `API impact`; `api_impact status` lists unreviewed commits; Workflow 11 gate 6b |
 | A decision only the operator can make | `@orchestrator` → Operator Decision Query | A preference, trade-off, approval or costly-to-undo fork the request and code do not settle; another agent returning a decision |
 | Complex request with several separable items | `@orchestrator` → Workflow 0C | Two or more features/defects/findings that each need a plan; "make a metaplan"; parallel implementation of several plans |
 | Coordinated concurrent dispatch of overlapping plan steps | `@orchestrator` → Workflow 0B | Overlapping footprints without shared mutable state; "work these together"; steps that would otherwise serialize on file overlap |
@@ -311,7 +312,7 @@ Applies only when `@post-production-auditor` is present in the team.
 *(If @post-production-auditor in team)* 5. If remediation includes destructive mutation → invoke `@security` before any execution
 6. → **Invoke Workflow 11: Final Check** (always)
 
-<!-- AGENTTEAMS:BEGIN available_workflows v=9 -->
+<!-- AGENTTEAMS:BEGIN available_workflows v=10 -->
 ## Available Workflows
 
 > ⚠️ Destructive operations require `@security` clearance before use.
@@ -543,6 +544,32 @@ this sub-protocol and returns to that step with the answer. Full contract:
 
 ---
 
+### API Impact Review
+
+**Applies to:** every commit that makes a structural change or adds a feature — a module, public symbol, CLI
+option, schema or tracked file added, removed, renamed or re-signed. The `pre-commit` hook reports such a
+commit and regenerates built-in derived artifacts; Workflow 11 gate 6b runs this sub-protocol before the
+session closes (gate 6b, before the push). Full contract: `references/api-impact.reference.md` — do not restate it here.
+
+1. **Scope.** Run `python -m agentteams.api_impact status`. Its unreviewed commits, their changed names and
+   each name's audit checklist are the scope. Exit 2 (no branch base) means pending, not passed: re-run with
+   `--range BASE..HEAD`.
+2. **Review and update the API.** `@module-doc-validator` (Change Impact Analysis on the reported names) and
+   `@module-doc-author` update the API reference, CLI reference and changelog; without module documentation,
+   `@technical-validator` reviews and the owning producer updates. Project-specific API checks run here too.
+3. **Audit the related infrastructure.** Every file on the checklist plus the agent docs, references,
+   templates, tests and user docs that describe the changed area: `@conflict-auditor`, `@adversarial`,
+   `@code-hygiene`, `@technical-validator`. Re-verify each finding's evidence first (Rule 14).
+4. **Revise** through the owning agents (`@agent-updater` for agent docs) and re-audit what changed.
+5. **Record.** Commit the revisions, then `python -m agentteams.api_impact record --note "<reviewed / updated /
+   revised>"` and commit the ledger files on their own; re-run `status` and review any revision commit that
+   was itself impactful. A record is a self-attestation; the ledger shows in the pull request.
+
+An operator choice goes through the **Operator Decision Query**. With no operator present the review still
+runs; if it cannot finish, the session closes as **API review pending**.
+
+---
+
 ### Sandbox Operator Handoff
 
 **Applies to:** any workflow step — numbered or ad-hoc — that needs an operation the agent sandbox
@@ -761,11 +788,12 @@ carry an appended handoff:
 4. Invoke `@conflict-auditor` → verify summaries and conflict-log decisions do not contradict authority sources
 5. Present audited summaries as a numbered list to the user
 6. If no at-large issues are found: note "No at-large issues detected"
+6b. **API impact (closeout gate; runs before step 7 pushes).** *Only when this session committed.* Run `python -m agentteams.api_impact status`. Any unreviewed impactful commit runs the **API Impact Review** before closeout; exit 2 (no branch base) means re-run with `--range BASE..HEAD`, never a pass. The session closes as **API review pending**, never as complete, while one remains.
 7. **CI/CD deployment verification (closeout gate).** *Only when this session pushed or merged to a repository that has GitHub Actions (`.github/workflows/`) and run status is reachable (GitHub REST API, or `gh` if installed — directly, or through a **Sandbox Operator Handoff** when the agent sandbox cannot reach it) — otherwise skip.* Confirm via `@git-operations` (which prefers the `git` CLI and the GitHub REST API over `gh`) that the run(s) the push/merge **triggered** on the updated branch completed with `conclusion == success` (CI **and** any deployment/Pages/release workflow) before declaring the session complete. A failing triggered deployment **blocks closeout** and routes back to `@git-operations` to diagnose and fix until green (or escalate); a cross-repo re-push during the fix re-enters Rule 11 (`@repo-liaison` + `@security`). This is distinct from the pre-merge required status checks that gated the merge. Procedure: `references/github-workflows-merge.reference.md` → *Post-Merge / Post-Push CI/CD Deployment Verification*.
 7b. **Branch inventory (closeout gate).** *Only when this session merged or pushed.* `@git-operations` reports `Branch disposition` for every branch merged this session and `Branch inventory` (`agentteams --branch-inventory` summary line). Anything other than `clean` is surfaced to the user with the proposed disposition; deletions follow `references/branch-lifecycle.reference.md` (grant or clearance), never an ad-hoc delete.
    *Sandbox augmentation (steps 7 and 7b):* when the push, the run status, or the inventory is out of the sandbox's reach, these gates run through a **Sandbox Operator Handoff** (a REST `actions/runs` query, `gh run watch` as fallback, and `agentteams --branch-inventory` in the script) — "unreachable from the sandbox" never counts as the gate's "otherwise skip"; the gate passes on the handoff log's `ok` plus its reported conclusion.
 7c. **Pending handoffs (closeout gate).** *Only when this session wrote a handoff script.* Run `python -m agentteams.sandbox_handoff status` on each. Every handoff not `ok` is re-surfaced to the user with its complete command; the session closes as **awaiting operator handoff**, never as complete, while work depends on one. Step 8's summary records unrun handoffs as pending operator actions.
-8. **Daily work-summary capture (closeout gate).** When this session produced executed work — git commits/merges, applied scripts/migrations, data mutations, or adjacent-repository activity (a plan reaching all `done` also qualifies) — invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` for **today**. **This blocks closeout: the session is not complete until today's summary records the executed work.** Run it as the **terminal** closeout act — *after* step 7's CI/CD gate reports green, or step 7c closes the session as awaiting operator handoff — so any fix-commits produced during CI/CD remediation are captured. A read-only / no-execution session skips this cleanly. **Git history is the authoritative executed-work signal**: a session with commits is never "planning-only", even when no plan file exists or the plan lives outside `tmp/by-week/`. (Rule 12, today-capture.)
+8. **Daily work-summary capture (closeout gate).** When this session produced executed work — git commits/merges, applied scripts/migrations, data mutations, or adjacent-repository activity (a plan reaching all `done` also qualifies) — invoke `@work-summarizer` to append/update `workSummaries/daily/YYYY-MM-DD.md` for **today**. **This blocks closeout: the session is not complete until today's summary records the executed work.** Run it as the **terminal** closeout act — *after* step 7's CI/CD gate reports green, or step 7c closes the session as awaiting operator handoff, or step 6b as API review pending — so any fix-commits produced during CI/CD remediation are captured. A read-only / no-execution session skips this cleanly. **Git history is the authoritative executed-work signal**: a session with commits is never "planning-only", even when no plan file exists or the plan lives outside `tmp/by-week/`. (Rule 12, today-capture.)
 9. **Past-day backfill (Past-Day Backfill Obligation).** If step 8's executed-work condition held, also invoke `@work-summarizer` **Workflow D — Automatic Backfill Sweep** to detect and fill *recent past active-day* daily gaps (strictly-prior dates only — disjoint from step 8's "today"). Semantics (window, `AUTO_BACKFILL_LOOKBACK_CAP_DAYS` cap, create-only scope, honor-prior-skip fail-safe, mandatory audit gate, recommend-only beyond the cap) are defined once in `references/work-summary-backfill.reference.md` → *Automatic Trigger (session-close sweep)*; Workflow D runs at most once per session and is not re-entrant. Surface the sweep result to the user.
 
 ### Workflow 12: Spawn-Authority Query Funnel
