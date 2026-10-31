@@ -24,15 +24,17 @@ guest program itself is P07; the CLI that builds an `AgentSpec` from a rendered 
   max_tool_calls=200, wall_clock_s=1800, max_usd=None, max_delegation_depth=2, max_child_runs=8)` and
   `BudgetLedger` (`reserve` / `commit` / `refund` before and after each call, `carve` for P09 children).
   The defaults are agentteams policy, not provider facts. A USD cap without a price for the model refuses the run.
-- `stage0(spec, task, *, project_root, budget, guest_source, guest_sha256, ...) -> RunResult`: the unconfined
-  launcher (P08 calls it). See "Stage 0 and Stage 1" below.
+- `stage0(spec, task, *, project_root, budget, guest_source=None, guest_sha256=None, ...) -> RunResult`: the
+  unconfined launcher (P08 calls it). Leaving both guest arguments out runs the pinned agent guest (below); passing
+  only one refuses. See "Stage 0 and Stage 1" below.
 - `verify_transcript(path) -> TranscriptReport(ok, complete, records, head, status, error)` and
   `revoke_run(project_root, run_id, reason)` (creates the run's `REVOKED` sentinel; an operator action).
 - `PROTOCOL_VERSION` (1), `ProtocolError`.
 
 Submodules: `protocol` (frames, `encode_event`, `decode_op`, control-pipe lines), `budget`, `transcript`
 (`FileJournal`, `PipeJournal`), `mediation` (`Mediator`, `OutboundDlp`, `ReservedKeyVault`), `tools` (`tool_specs`,
-`TOOL_SPEC_SHA256`), `broker` (`StepPreparer`, `LocalBroker`, `PipeBroker`), `host`, `launch`, `stage1`.
+`TOOL_SPEC_SHA256`), `broker` (`StepPreparer`, `LocalBroker`, `PipeBroker`), `guest_source` (`load_guest_source`,
+`GUEST_SHA256`, `GuestSourceError`), `host`, `launch`, `stage1`.
 
 ## Protocol v1
 
@@ -44,6 +46,33 @@ own name and input), `delegate` (refused until P09), `done` (`ok` only when the 
 tool results are kept host-side and override whatever a guest reports for those ids. A trap, a non-zero exit or a
 malformed frame is a failed step: the host answers the pending tool uses with errors, and three failed steps in a row
 fail the run (`guest-unhealthy`). A wrong version fails it at once.
+
+## The agent guest
+
+The program inside every agent's guest is package data, `agentteams/data/wasm_agent_guest.py`, run by the pinned
+CPython-WASI as `python -I -S -B /src/main.py`. agentteams never imports it. `guest_source.load_guest_source() ->
+(bytes, sha256)` re-reads and re-hashes it against `GUEST_SHA256` on every load and raises `GuestSourceError` on a
+mismatch; the preparer checks the hash again on every step, and `integrity.py` pins both files.
+
+Per step the guest reads one event and answers with one op line (compact JSON, ASCII only):
+
+- `start` -> `model`; a reply with no tool use -> `done ok` (`end_turn`, `other`), at most two `continue` ops after
+  `max_tokens`, otherwise `done failed <stop>`.
+- A reply with tool uses: the in-guest tools run in the guest in the model's order. Host tools (`run_code`,
+  `delegate`) are asked for one op at a time, and the remaining uses travel in `carry`. Results are clipped to fit
+  the op and carry caps. Host-tool results stay host-held, so the guest reports only in-guest and refused results.
+- A malformed event, another protocol version or an internal error -> `done failed` with a short code
+  (`bad-event`, `protocol-version`, `guest-error-<class>`).
+
+In-guest tools take only `/project/<rel>` (read-only) and `/scratch` (read-write) paths listed in the event's
+`mounts`. `..`, `/src` and `/lib` are refused. This check exists to give clear errors; the real boundary is the WASI
+preopen set plus the executor's read-only enforcement. `read_file` and `search_files` (a literal substring search)
+skip symlinks, and `list_dir` reports them without following them. `write_file` writes only under `/scratch`, never
+through a symlink, at most 4 MiB, and refuses instruction-file names (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
+`.cursorrules`, `*.agent.md`; R8) with the same rule as `wasm_exec.copy_out_refused`. Model-authored code never runs
+in this guest: `run_code` is a host tool that runs in a fresh sandbox under the agent's own grant. The guest has no
+network and no process tools, and it uses only `json`, `os`, `stat`, `sys` and `typing`. File contents and model text
+are data (C-4): it passes them along and never acts on what they say.
 
 ## Stage 0 and Stage 1
 

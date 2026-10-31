@@ -49,6 +49,7 @@ from agentteams.vulnscan import gateway_dlp as DLP
 import agentteams.wasm_agent.protocol as P
 from agentteams.wasm_agent.broker import GUEST_OS_CONFINE, BrokerError, LocalBroker, StepPreparer, launch_to_dict
 from agentteams.wasm_agent.budget import Budget
+from agentteams.wasm_agent.guest_source import GuestSourceError, load_guest_source
 from agentteams.wasm_agent.host import (
     OUTPUT_HEADER, STATUSES, AgentSpec, Revocation, RunOptions, RunResult, run_agent,
 )
@@ -250,8 +251,8 @@ def _result_from(data: Mapping[str, Any], journal: FileJournal, run_id: str, not
                      step_timings=[t for t in timings if isinstance(t, dict)][:1000])
 
 
-def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budget, guest_source: bytes,
-           guest_sha256: str, environ: Mapping[str, str] | None = None, base_url: str | None = None,
+def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budget, guest_source: bytes | None = None,
+           guest_sha256: str | None = None, environ: Mapping[str, str] | None = None, base_url: str | None = None,
            stub_script: Sequence[Mapping[str, Any]] | None = None, state: Any = None, guest_os_confine: str = "auto",
            host_confine: str = "auto", resolver: Any = None, profiles: ModuleType = SP,
            control_plane_protected: bool = False, prices: Mapping[str, Mapping[str, float]] | None = None,
@@ -263,8 +264,9 @@ def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budg
         task: The task text.
         project_root: The project root.
         budget: The run's caps.
-        guest_source: The agent-loop guest program (P07's pinned file; a test guest in tests).
-        guest_sha256: Its pinned sha256 (checked before the first step).
+        guest_source: The agent-loop guest program; None (the default) loads P07's pinned
+            ``data/wasm_agent_guest.py`` through ``guest_source.load_guest_source`` (a test guest in tests).
+        guest_sha256: Its pinned sha256 (checked before the first step); given together with *guest_source*.
         environ: Where the key is read from (default ``os.environ``).
         base_url: Optional provider base-URL override (vetted by P06).
         stub_script: ``stub`` provider only: scripted replies (operator smoke tests).
@@ -289,6 +291,13 @@ def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budg
     notices: list[str] = []
     if host_confine not in HOST_CONFINE:
         return _refused(f"host_confine {host_confine!r} must be one of {', '.join(HOST_CONFINE)}", notices)
+    if (guest_source is None) != (guest_sha256 is None):
+        return _refused("guest_source and guest_sha256 go together (or neither, for the pinned guest)", notices)
+    if guest_source is None:
+        try:
+            guest_source, guest_sha256 = load_guest_source()
+        except GuestSourceError as exc:
+            return _refused(str(exc)[:300], notices)
     if resolver is None:
         from agentteams import wasm_runtime
         resolver = wasm_runtime.Resolver(Path(root))
