@@ -53,6 +53,8 @@ tools container also need Docker; `open-pr` needs the GitHub CLI (`gh`); server 
   as clean. For container manifests (Dockerfiles, compose files) the base images are judged: an end-of-life
   release line or OS (`python:3.9-slim`, `-buster`), a pinned patch tag behind its line, and an unpinned
   `latest` are findings. The image contents are not scanned.
+  With `scan --unpinned-ranges` (off by default), the ranges of unpinned Python requirements are also
+  checked against every advisory for each name; such a file stays unscannable, with a coverage note.
 - **This machine's runtimes.** `runtimes` checks the installed Node.js, PHP and Python against security
   releases and end-of-life dates.
 - **Servers.** The packaged server kit audits Linux hosts over ssh, read-only: installed packages,

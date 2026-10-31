@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (vulnscan: unpinned Python requirements are checked by range, off by default)
+
+- **`agentteams.vulnscan.specifiers`** (new, stdlib): a minimal PEP 440 specifier set as version intervals
+  (`>=`, `<=`, `<`, `>`, `!=`, `~=`, `==`, `==x.*`; pre-releases excluded unless named) and `judge`, which
+  intersects it with an advisory's affected ranges: the whole allowed range, part of it, or none.
+- **`engine.scan_path(..., unpinned_ranges=False)`** and **`scan --unpinned-ranges`**: a `requirements*` file
+  with only ranges, or a `pyproject.toml` with no lock, has each direct requirement checked against every
+  advisory OSV holds for its name (`osv.package_ids`: a name-only `querybatch` query that omits the `version`
+  key; `osv.affected_intervals`: a new walker for `introduced` / `fixed` / `last_affected` / `limit`,
+  open-ended ranges and `versions[]`; an unknown event or a `GIT`-only range is "not judged", never clean).
+  Findings are a new kind, `range` (`Finding.spec`, `Finding.partial`; `version` stays empty and the
+  summary's Installed column blank). A whole-range finding has the advisory's severity; a partial one is
+  capped at MODERATE, after `unscored_as` (`Report.apply_unscored` now covers `range` findings); a range
+  overlapping a `MAL-*` record is CRITICAL but not malicious (no install is confirmed). The manifest stays
+  unscannable ("ranges checked against advisories: N direct requirement(s); …"); caps of 500 names and 2,000
+  advisory records per scan become `partial:` coverage notes; an OSV failure is a feed error.
+- **Egress:** it sends unpinned direct requirement names to OSV when `unpinned_ranges` is on; never to PyPI.
+  `private_packages` names, and whole files that name a package index (`--index-url` / `-i` /
+  `--extra-index-url`, also through `-r` / `-c` includes; poetry, uv and pdm sources in `pyproject.toml`), are
+  withheld (`"<repo>: <file> (private index)"`). When any requirements file or `pyproject.toml` of a repository
+  names an index (or cannot be read or parsed), every unpinned-range file of that repository is withheld too
+  (security review P-s1). Requirements files and `pyproject.toml` over 64 MiB are not read.
+- **Exit code:** range findings count toward `--fail-on`. With the feature on, a whole-range HIGH finding makes
+  `scan` (and the daily run) exit 1 where it exited 0 before; partial-range findings stay at most
+  MODERATE, below the default `high`.
+- Range findings are never routed to a fix (`stage-fix` edits only `==` pins); `summary.md` lists the
+  lower-bound raises under "Requirement ranges — plan-only (no staged edit)". The *Remediation effectiveness*
+  fixed/new counts leave them out and count them on their own line.
+- **`vulnscan.json` key `unpinned_ranges`** (boolean, default `false`): the daily run passes it to `scan_path`.
+
 ### vulnscan (container base images: support status and pinning)
 
 - **New `agentteams.vulnscan.images`.** `scan_path` now reads each Dockerfile's `FROM` lines (multi-stage,

@@ -6,6 +6,9 @@ The engine has three entry points over one analysis path:
 - :func:`scan_inventory`: the tab-separated lines a server-kit audit prints;
 - :func:`local_runtimes`: the :data:`runtimes.PRODUCTS` found on the machine running the scan.
 
+With ``unpinned_ranges`` (off by default), :func:`scan_path` also checks the ranges of Python requirements that
+have no exact pin (:func:`analyze_ranges`, :mod:`.specifiers`).
+
 Server inventory line formats (one per line; anything else is ignored):
 
 | Prefix | Fields (tab-separated) |
@@ -35,18 +38,28 @@ import os
 import re
 import shutil
 import subprocess
+import tomllib
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, osv, private_sources, project_policy, runtimes
-from agentteams.vulnscan.manifests import Dep, discover, parse
-from agentteams.vulnscan.report import OS_RELEASE, Finding, Report
+from agentteams.vulnscan import _http, images, osv, private_sources, project_policy, runtimes, specifiers
+from agentteams.vulnscan.manifests import REQ_SCAN_NAME, Dep, Manifest, discover, parse
+from agentteams.vulnscan.report import OS_RELEASE, PARTIAL_RANGE_CAP, Finding, Report
+from agentteams.vulnscan.versions import version_key
 
 #: Python package locations owned by the OS package manager (dpkg / rpm).
 DISTRO_LOCATION = re.compile(r"^/usr/lib(64)?/python3[^/]*/(dist|site)-packages/?$|^/usr/lib/python3/dist-packages/?$")
 #: Rank of an advisory with neither a CVSS vector nor a label until ``Report.apply_unscored`` (HIGH).
 UNSCORED_DEFAULT = osv.UNSCORED_AS["high"]
+#: Distinct unpinned requirement names one :func:`scan_path` sends to OSV; the rest are a coverage note.
+UNPINNED_QUERY_LIMIT = 500
+#: Advisory records one :func:`scan_path` fetches for unpinned ranges; the rest are "not judged".
+UNPINNED_DETAIL_LIMIT = 2000
+#: Coverage note of a manifest whose ranges were checked (it stays unscannable: nothing installed is known).
+RANGES_NOTE = ("ranges checked against advisories: {n} direct requirement(s); the installed versions and transitive "
+               "dependencies are not known, so pin with a lock for full coverage")
 
 
 def repo_of(path: Path, root: Path) -> str:
@@ -104,14 +117,7 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
     except _http.FeedError as exc:
         report.feed_errors.append(f"OSV query for {report.target}: {exc}")
         return
-    ids_all = sorted({i for ids in hits.values() for i in ids})
-    with _cf.ThreadPoolExecutor(max_workers=8) as pool:
-        fetched = dict(zip(ids_all, pool.map(_details_or_none, ids_all)))
-    for vid in sorted(i for i, rec in fetched.items() if rec is None):
-        fetched[vid] = _details_or_none(vid)   # one sequential retry: parallel failures are often transient
-    missing = sorted(i for i, rec in fetched.items() if rec is None)
-    if missing:
-        report.feed_errors.append(f"OSV details unavailable for {len(missing)} advisory(ies): {', '.join(missing[:5])}")
+    fetched = _fetch_details(sorted({i for ids in hits.values() for i in ids}), report)
     for key, ids in hits.items():
         eco, name, ver = key
         records = [fetched[i] for i in ids if fetched.get(i) is not None]
@@ -140,12 +146,168 @@ def analyze(deps: list[tuple[str, Dep]], report: Report, *, distro_check: bool =
                 detail="MALICIOUS package version (OSV MAL-*)" if malicious else ""))
 
 
+@dataclass
+class RangeItem:
+    """One unpinned direct requirement to check (:func:`analyze_ranges`)."""
+
+    target: str                       # repository label, as for findings
+    location: str                     # manifest path relative to the scan root
+    req: specifiers.Requirement
+
+
+def _fetch_details(ids: list[str], report: Report) -> dict[str, dict | None]:
+    """Fetch advisories in parallel, retry failures once in order, and record the ones still missing."""
+    with _cf.ThreadPoolExecutor(max_workers=8) as pool:
+        fetched = dict(zip(ids, pool.map(_details_or_none, ids)))
+    for vid in sorted(i for i, rec in fetched.items() if rec is None):
+        fetched[vid] = _details_or_none(vid)   # one sequential retry: parallel failures are often transient
+    missing = sorted(i for i, rec in fetched.items() if rec is None)
+    if missing:
+        report.feed_errors.append(f"OSV details unavailable for {len(missing)} advisory(ies): {', '.join(missing[:5])}")
+    return fetched
+
+
+def analyze_ranges(items: list[RangeItem], report: Report, *, dev_policy: dict[str, bool] | None = None,
+                   query_limit: int = UNPINNED_QUERY_LIMIT,
+                   detail_limit: int = UNPINNED_DETAIL_LIMIT) -> dict[str, list[str]]:
+    """Check unpinned requirement ranges against every advisory OSV holds for their names; extend ``report``.
+
+    Each distinct name goes to OSV without a version (:func:`osv.package_ids`). Each advisory's affected ranges
+    (:func:`osv.affected_intervals`) are intersected with the requirement's specifier set
+    (:func:`specifiers.judge`). Findings are of kind ``range``, with ``version`` empty and ``spec`` set, one per
+    requirement and class:
+
+    - a ``MAL-*`` advisory the range overlaps: CRITICAL, ``malicious`` False (no install is confirmed), detail
+      "range admits known-malicious versions; check what is installed";
+    - advisories that affect every allowed version: at their severity;
+    - advisories that affect part of the range: at their severity capped at MODERATE (``partial``), with
+      ``fix`` the lower bound that clears them, when known.
+
+    Args:
+        items: The requirements to check.
+        report: Report to extend: ``checked`` counts the names queried, a feed failure goes to ``feed_errors``
+            (never clean).
+        dev_policy: Per target, the project's ``include_dev``.
+        query_limit: Most names queried (:data:`UNPINNED_QUERY_LIMIT`).
+        detail_limit: Most advisory records fetched (:data:`UNPINNED_DETAIL_LIMIT`).
+
+    Returns:
+        Per manifest location, notes for its coverage entry (caps reached, advisories not judged, a feed failure).
+    """
+    dev_policy = dev_policy or {}
+    notes: dict[str, list[str]] = defaultdict(list)
+    names = sorted({("PyPI", it.req.name) for it in items})
+    queried, over = names[:query_limit], set(names[query_limit:])
+    for loc in sorted({it.location for it in items if ("PyPI", it.req.name) in over}):
+        n = sum(1 for it in items if it.location == loc and ("PyPI", it.req.name) in over)
+        notes[loc].append(f"partial: {n} requirement(s) over the query cap ({query_limit}), not checked")
+    report.checked += len(queried)
+    try:
+        hits = osv.package_ids(queried)
+    except _http.FeedError as exc:
+        report.feed_errors.append(f"OSV range query for {report.target}: {exc}")
+        for loc in sorted({it.location for it in items}):
+            notes[loc].append("ranges not checked: the OSV query failed")
+        return notes
+    ids_all = sorted({i for ids in hits.values() for i in ids})
+    fetched = _fetch_details(ids_all[:detail_limit], report)
+    capped = set(ids_all[detail_limit:])
+    for it in items:
+        if ("PyPI", it.req.name) in over:
+            continue
+        ids = hits.get(("PyPI", it.req.name), [])
+        mal: list[str] = []
+        whole: list[tuple[str, dict]] = []
+        part: list[tuple[str, dict, specifiers.Judgement]] = []
+        not_judged = over_cap = 0
+        for vid in ids:
+            if vid in capped:
+                over_cap += 1
+                continue
+            rec = fetched.get(vid)
+            if rec is None:
+                continue   # recorded as a feed error: the run is partially unscanned
+            ivs = osv.affected_intervals(rec, "PyPI", it.req.name)
+            if ivs is None:
+                not_judged += 1
+                continue
+            j = specifiers.judge(it.req.spec, ivs)
+            if j.verdict == "none":
+                continue
+            if osv.is_malicious(vid):
+                mal.append(vid)
+            elif j.verdict == "whole":
+                whole.append((vid, rec))
+            else:
+                part.append((vid, rec, j))
+        if not_judged:
+            notes[it.location].append(f"{it.req.name}: {not_judged} advisory(ies) not judged (unknown range event, "
+                                      "GIT-only or malformed range)")
+        if over_cap:
+            notes[it.location].append(f"partial: {it.req.name}: {over_cap} advisory(ies) over the detail cap "
+                                      f"({detail_limit}), not judged")
+        _range_findings(it, mal, whole, part, report, dev_policy)
+    return notes
+
+
+def _range_findings(it: RangeItem, mal: list[str], whole: list[tuple[str, dict]],
+                    part: list[tuple[str, dict, specifiers.Judgement]], report: Report,
+                    dev_policy: dict[str, bool]) -> None:
+    """Append the (at most three) range findings of one requirement: malicious, whole range, part of it."""
+    req = it.req
+    spec = req.spec.text or "any version"
+    marker = "; environment marker ignored (judged for every environment)" if req.marker else ""
+    base = {"kind": "range", "target": it.target, "name": req.name, "ecosystem": "PyPI", "scope": req.scope,
+            "spec": req.spec.text, "locations": [it.location],
+            "count_dev": dev_policy.get(it.target) if req.scope == "dev" else None}
+    if mal:
+        report.findings.append(Finding(**base, severity=4, rated=4, ids=sorted(mal),
+                                       detail="range admits known-malicious versions; check what is installed" + marker))
+    if whole:
+        ranks = [osv.severity(rec) for _v, rec in whole]
+        rated, unscored = max(ranks), ranks.count(0)
+        report.findings.append(Finding(
+            **base, severity=max(rated, UNSCORED_DEFAULT if unscored else 0), rated=rated, unscored=unscored,
+            ids=sorted(v for v, _r in whole), detail=f"every version `{spec}` allows is affected" + marker))
+    if part:
+        ranks = [osv.severity(rec) for _v, rec, _j in part]
+        rated, unscored = max(ranks), ranks.count(0)
+        raises = [j.raise_to for _v, _r, j in part]
+        fix = max(raises, key=version_key) if all(raises) else ""
+        if fix and not osv.FIX_VERSION.fullmatch(fix):
+            fix = ""
+        overlap = " or ".join(_shown(iv) for iv in specifiers.merge(o for _v, _r, j in part for o in j.overlap))
+        report.findings.append(Finding(
+            **base, severity=min(max(rated, UNSCORED_DEFAULT if unscored else 0), PARTIAL_RANGE_CAP), rated=rated,
+            unscored=unscored, partial=True, fix=fix, unfixed=sum(1 for r in raises if not r),
+            ids=sorted(v for v, _r, _j in part),
+            detail=f"`{spec}` allows vulnerable versions `{overlap}`; the installed version is unknown" + marker))
+
+
+def _shown(iv: specifiers.Interval) -> str:
+    """Return an interval for a report, or ``(unusual versions)`` when a bound from the feed is not plain version text."""
+    plain = all(b is None or osv.FIX_VERSION.fullmatch(b) for b in (iv.lo, iv.hi))
+    return iv.text() if plain else "(unusual versions)"
+
+
+def _range_file(path: Path, m: Manifest, repo: Path) -> specifiers.RangeFile | None:
+    """Return the unpinned requirements of an unscannable Python manifest, or None when it has none to check."""
+    if REQ_SCAN_NAME.match(path.name) and not m.deps and m.unpinned:
+        return specifiers.read_requirements(path, repo)
+    if path.name == "pyproject.toml" and m.unscannable and not m.unscannable.startswith("could not parse"):
+        siblings = [p for p in path.parent.iterdir() if REQ_SCAN_NAME.match(p.name) and p.is_file()]
+        return specifiers.read_pyproject(path, [d.name for d in m.deps]
+                                         + [d.name for s in siblings for d in parse(s).deps])
+    return None
+
+
 #: Unscannable reason of a ``gradle.lockfile`` read without the opt-in (re-exported).
 GRADLE_OPT_IN = private_sources.GRADLE_OPT_IN
 
 
 def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[str | Path] = (),
-              opted_out: Iterable[str | Path] = (), gradle_lockfiles: bool = False) -> Report:
+              opted_out: Iterable[str | Path] = (), gradle_lockfiles: bool = False,
+              unpinned_ranges: bool = False) -> Report:
     """Scan every manifest under ``root``: the operator decides what is checked, each brief narrows what is sent.
 
     The operator's choices come first and apply before any manifest is read: a manifest inside an
@@ -167,12 +329,19 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     a non-nuget.org source, and pnpm/Bun names in an ``.npmrc`` scope with a non-npmjs registry. A
     ``gradle.lockfile`` is read only with ``gradle_lockfiles`` (otherwise unscannable, :data:`GRADLE_OPT_IN`).
 
+    With ``unpinned_ranges``, a Python manifest without exact pins (a ``requirements*`` file of ranges only, a
+    ``pyproject.toml`` with no lock) also has its direct requirements' ranges checked (:func:`analyze_ranges`).
+    It stays *unscannable*, with :data:`RANGES_NOTE` as its reason. The same brief rules apply, and more is
+    withheld: a whole file that names a package index (``withheld``, ``"<repo>: <path in repo> (private
+    index)"``, :mod:`.specifiers`), and each ``private_packages`` name.
+
     Args:
         root: Repository or parent directory.
         include_worktrees: Also scan linked worktrees (normally duplicates).
         exclude: The operator's ``exclude`` paths (``~`` allowed); symlinks are resolved on both sides.
         opted_out: Repository paths the operator enrolled at ``off``.
         gradle_lockfiles: Read ``gradle.lockfile`` files (off by default).
+        unpinned_ranges: Check unpinned Python requirement ranges (default False; sends their names to OSV).
 
     Returns:
         The report; targets are repositories relative to ``root``.
@@ -182,6 +351,9 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
     deps: list[tuple[str, Dep]] = []
     policies = project_policy.PolicyCache()
     dev_policy: dict[str, bool] = {}
+    ranges: list[RangeItem] = []
+    range_files: dict[str, list[int]] = {}   # location -> [unscannable index, requirements kept, unchecked, unread]
+    index_files: dict[str, list[tuple[Path, Path]]] = defaultdict(list)   # target -> (file, repo): P-s1
     excl = [Path(os.path.realpath(Path(x).expanduser())) for x in exclude]
     off = {Path(os.path.realpath(Path(x).expanduser())) for x in opted_out}
     sources = private_sources.PrivateSources(root)
@@ -200,6 +372,8 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
         if pol.level == "off" and target not in report.brief_off:
             report.brief_off.append(target)   # a brief cannot switch off what the operator scans
         in_repo = path.relative_to(repo).as_posix()
+        if unpinned_ranges and (REQ_SCAN_NAME.match(path.name) or path.name == "pyproject.toml"):
+            index_files[target].append((path, repo))   # brief-excluded too: it still names the repository's index
         if pol.exclude_paths and project_policy.is_excluded(in_repo, pol.exclude_paths):
             report.excluded.append(f"{target}: {in_repo}")
             continue
@@ -213,6 +387,9 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
             report.unscannable.append((rel, m.unscannable))
         if pol.include_dev is not None:
             dev_policy[target] = pol.include_dev
+        if unpinned_ranges and m.unscannable:
+            _collect_ranges(path, m, repo, rel, f"{target}: {in_repo}", target, pol.private_packages, ranges,
+                            range_files, report)
         for d in m.deps:
             if (pol.private_packages and project_policy.is_private(d.name, pol.private_packages, d.ecosystem)) \
                     or sources.is_private(repo, path.name, d.ecosystem, d.name):
@@ -222,7 +399,83 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
             else:
                 deps.append((target, Dep(d.ecosystem, d.name, d.version, d.scope, rel)))
     analyze(deps, report, dev_policy=dev_policy)
+    ranges = _withhold_index_repos(root, index_files, ranges, range_files, report)
+    if ranges:
+        notes = analyze_ranges(ranges, report, dev_policy=dev_policy)
+        _note_ranges(report, range_files, notes)
     return report
+
+
+def _collect_ranges(path: Path, m: Manifest, repo: Path, rel: str, label: str, target: str,
+                    private: tuple[str, ...], ranges: list[RangeItem], range_files: dict[str, list[int]],
+                    report: Report) -> None:
+    """Read one unscannable manifest's unpinned requirements into ``ranges``, withholding what must stay local."""
+    try:
+        rf = _range_file(path, m, repo)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, ValueError) as exc:
+        report.unscannable[-1] = (rel, f"{m.unscannable}; ranges not read: {type(exc).__name__}")
+        return
+    if rf is None:
+        return
+    if rf.private_index:
+        report.withheld.append(f"{label} (private index)")
+        report.unscannable[-1] = (rel, f"{m.unscannable}; ranges not checked: it names a package index, so its "
+                                       "names stay local")
+        return
+    kept = 0
+    for req in rf.reqs:
+        if private and project_policy.is_private(req.name, private, "PyPI"):
+            name = f"{target}: {req.name} (PyPI)"
+            if name not in report.withheld:
+                report.withheld.append(name)
+            continue
+        ranges.append(RangeItem(target, rel, req))
+        kept += 1
+    range_files[rel] = [len(report.unscannable) - 1, kept, rf.unchecked, rf.unreadable]
+
+
+#: Coverage note of an unpinned-range file withheld because another file of its repository names an index.
+REPO_INDEX_NOTE = ("ranges not checked: a requirements file or pyproject.toml in this repository names a package "
+                   "index, so its names stay local")
+
+
+def _withhold_index_repos(root: Path, index_files: dict[str, list[tuple[Path, Path]]], ranges: list[RangeItem],
+                          range_files: dict[str, list[int]], report: Report) -> list[RangeItem]:
+    """Withhold every unpinned-range file of a repository where any requirements file or pyproject names an index.
+
+    Security review P-s1: a file's own ``-i`` line (and its includes) is not the only signal; a sibling that names
+    the private index means the repository's other unpinned names are private too.
+
+    Returns:
+        The range items still to check.
+    """
+    checked = {repo_of(root / r, root) for r in range_files}   # only repositories with ranges still to send
+    private = {t for t, files in index_files.items()
+               if t in checked and any(specifiers.names_index(p, repo) for p, repo in files)}
+    if not private:
+        return ranges
+    for rel in [r for r in range_files if repo_of(root / r, root) in private]:
+        path = root / rel
+        index = range_files.pop(rel)[0]
+        report.unscannable[index] = (rel, f"{report.unscannable[index][1]}; {REPO_INDEX_NOTE}")
+        label = f"{repo_of(path, root)}: {path.relative_to(project_policy.repo_dir(path, root)).as_posix()} (private index)"
+        if label not in report.withheld:
+            report.withheld.append(label)
+    return [it for it in ranges if it.target not in private]
+
+
+def _note_ranges(report: Report, range_files: dict[str, list[int]], notes: dict[str, list[str]]) -> None:
+    """Rewrite each checked manifest's unscannable reason to :data:`RANGES_NOTE` and its coverage notes."""
+    for rel, (index, kept, unchecked, unreadable) in range_files.items():
+        extra = list(notes.get(rel, []))
+        if unchecked:
+            extra.append(f"{unchecked} requirement(s) not checked (URL, VCS, editable or ===)")
+        if unreadable:
+            extra.append(f"{unreadable} requirement(s) not judged (specifier not read)")
+        if any(e.startswith("ranges not checked") for e in extra):
+            report.unscannable[index] = (rel, "; ".join([report.unscannable[index][1], *extra]))
+        else:
+            report.unscannable[index] = (rel, "; ".join([RANGES_NOTE.format(n=kept), *extra]))
 
 
 def _runtime_findings(target: str, items: list[tuple[str, str, str, str]], report: Report) -> None:

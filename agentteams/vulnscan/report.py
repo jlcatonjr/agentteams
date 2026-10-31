@@ -23,15 +23,22 @@ EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
 #: ``Finding.name`` of the OS release check (``kind="host"``, :mod:`.engine`); :mod:`.server_fixplan` gives it its
 #: own plan line.
 OS_RELEASE = "os-release"
-#: How the report's Kind column names a finding kind, where it differs from the kind.
-KIND_LABEL = {"image": "base image"}
+#: Highest severity of a range finding where only part of the allowed range is affected (MODERATE).
+PARTIAL_RANGE_CAP = SEVERITY_RANK["MODERATE"]
+#: How the summary names a finding kind where it differs from the kind (``range``: an unpinned requirement
+#: range, :mod:`.specifiers`; ``image``: a container base image, :mod:`.images`).
+KIND_LABEL = {"range": "requirement range", "image": "base image"}
+#: Heads the summary's list of lower-bound raises for range findings (never staged: ``stage-fix`` edits only
+#: ``==`` pins).
+RANGE_PLAN_NOTE = ("`stage-fix` never edits a requirement range (it changes only `==` pins), so these rows are for a "
+                   "person: raise the lower bound, or better, pin with a lock. The installed version is unknown.")
 
 
 @dataclass
 class Finding:
     """One problem: a vulnerable package, a stale runtime, or a host-level check."""
 
-    kind: str                       # "package" | "runtime" | "image" (a base image) | "host" | "ioc"
+    kind: str                       # "package" | "range" | "runtime" | "image" | "host" | "ioc" (KIND_LABEL)
     target: str                     # repo (relative to scan root) or host name
     name: str
     version: str = ""
@@ -51,6 +58,8 @@ class Finding:
     malformed: int = 0              # advisories whose record had malformed parts, skipped (osv.quirks; R8)
     fix_hidden: int = 0             # advisories whose fix version has an unusual format (not shown, counted unfixed)
     fixed_upstream: bool = False    # name==version is gone from the same file at origin/HEAD (the checkout is behind)
+    spec: str = ""                  # range: the requirement's specifier set ("" = any version); version stays ""
+    partial: bool = False           # range: only part of the allowed range is affected (capped at MODERATE)
 
     def shows_unscored(self) -> bool:
         """Return whether the severity comes from ``unscored_as`` (no advisory publishes one as high).
@@ -107,8 +116,9 @@ class Report:
     def apply_unscored(self, level: str) -> None:
         """Count every unscored advisory as ``level`` (the config's ``unscored_as``), never as harmless.
 
-        A package finding's severity becomes the higher of what its advisories publish and ``level`` when
-        any advisory is unscored; malicious findings stay critical.
+        A package or range finding's severity becomes the higher of what its advisories publish and ``level``
+        when any advisory is unscored; malicious findings stay critical. A partial range finding is then capped
+        at MODERATE (:data:`PARTIAL_RANGE_CAP`), after the unscored rank is applied.
 
         Args:
             level: ``critical``, ``high``, ``moderate`` or ``low``.
@@ -120,8 +130,10 @@ class Report:
             raise ValueError(f"unscored_as must be one of {', '.join(UNSCORED_AS)} (got {level!r})")
         self.unscored_as = level
         for f in self.findings:
-            if f.kind == "package" and f.unscored and not f.malicious:
+            if f.kind in ("package", "range") and f.unscored and not f.malicious:
                 f.severity = max(f.rated, UNSCORED_AS[level])
+            if f.kind == "range" and f.partial:
+                f.severity = min(f.severity, PARTIAL_RANGE_CAP)
 
     def unscored_findings(self) -> list[Finding]:
         """Return the findings whose severity comes from ``unscored_as`` (listed separately).
@@ -247,6 +259,8 @@ class Report:
                     f"UNSCORED (as {SEVERITY_NAME.get(f.severity, '?')})" if f.shows_unscored()
                     else SEVERITY_NAME.get(f.severity, "?"))
                 item = f"{f.name} ({f.ecosystem})" if f.ecosystem else f.name
+                if f.kind == "range":
+                    item = f"{f.name} `{f.spec or 'any version'}` ({f.ecosystem})"
                 notes = []
                 if f.scope == "dev":
                     notes.append("dev-only" + {True: " (counted: project brief)",
@@ -269,9 +283,15 @@ class Report:
                     notes.append("at " + ", ".join(f"`{loc}`" for loc in f.locations[:2]))
                 if f.fixed_upstream:   # last, so the existing notes keep their place
                     notes.append("fixed upstream (checkout behind)")
-                out.append(f"| {mark} | {sev} | {KIND_LABEL.get(f.kind, f.kind)} | {item} | {f.version} | {_fix_cell(f.fix)} "
+                fix = f">={f.fix}" if f.kind == "range" and f.fix else _fix_cell(f.fix)
+                out.append(f"| {mark} | {sev} | {KIND_LABEL.get(f.kind, f.kind)} | {item} | {f.version} | {fix} "
                            f"| {'; '.join(notes)} |")
             out.append("")
+        raises = [f for f in self.findings if f.kind == "range" and f.fix and f.locations]
+        if raises:
+            out += ["## Requirement ranges — plan-only (no staged edit)", "", RANGE_PLAN_NOTE, ""]
+            out += [f"- {_code(f.target)}: raise the lower bound in {_code(f.locations[0])}: "
+                    f"`{f.name}{f.spec}` → `{f.name}>={f.fix}`" for f in raises] + [""]
         if unscored:
             out += ["## Unscored advisories (no CVSS vector or severity label)", "",
                     f"Counted as {self.unscored_as.upper()} toward the exit threshold (`unscored_as`); "
@@ -290,6 +310,11 @@ class Report:
             if items:
                 out += [f"## {title}", ""] + [f"- {i}" for i in items] + [""]
         return "\n".join(out)
+
+
+def _code(text: object) -> str:
+    """``text`` as an inline code span that cannot break its line or span (repository paths are untrusted)."""
+    return "`" + "".join("?" if c in "`|" or ord(c) < 32 or ord(c) == 127 else c for c in str(text)) + "`"
 
 
 def new_finding_keys(current: Report, previous: Report | None) -> set[str]:

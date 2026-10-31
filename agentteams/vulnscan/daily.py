@@ -75,7 +75,7 @@ _FIX_MODES = ("plan", "apply-worktree")
 #: What stops one scan root or one fix plan (recorded for it; the others are kept). The same as stops a whole run.
 _ITEM_ERRORS = (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError)
 MAX_SCAN_WORKERS = 8         # each scan already sends up to 8 OSV requests at once: a ceiling, not a target
-_BOOL_KEYS = ("include_worktrees", "include_dev", "local_runtimes", "allow_major")
+_BOOL_KEYS = ("include_worktrees", "include_dev", "local_runtimes", "allow_major", "unpinned_ranges")
 
 DEFAULT_CONFIG: dict = {
     "repo_roots": [],            # e.g. ["~/code"] — a repo or a folder of repos (enrolled projects come from the registry)
@@ -85,6 +85,7 @@ DEFAULT_CONFIG: dict = {
     "fail_on": "high",           # critical | high | moderate | low | any | none
     "unscored_as": "high",       # what an advisory with no CVSS vector or severity label counts as
     "include_dev": False,
+    "unpinned_ranges": False,    # true: also check unpinned Python requirement ranges (their names go to OSV)
     "cooldown_days": 0,          # ignored: Rule S-10's cooldown never holds a fix for a scanned vulnerability
     "local_runtimes": True,
     "fix_mode": "plan",          # plan | apply-worktree
@@ -640,7 +641,8 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
     def scan(spec: Any) -> Report | Exception:   # network-bound: the roots are looked up at once
         try:
             return engine.scan_path(spec.path, include_worktrees=bool(cfg["include_worktrees"]), exclude=exclude,
-                                    opted_out=opted_out)   # excluded manifests are never read or sent
+                                    opted_out=opted_out,   # excluded manifests are never read or sent
+                                    unpinned_ranges=bool(cfg.get("unpinned_ranges", False)))
         except _ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
             return exc
 

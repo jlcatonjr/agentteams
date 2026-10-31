@@ -132,7 +132,7 @@ section and the agent phase use that record instead of probing again, and `summa
 
 | Destination | What | Controls |
 |---|---|---|
-| OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | package names and versions; runtime versions | HTTPS to those hosts only, no redirects |
+| OSV.dev, PyPI, nodejs.org, www.php.net, endoflife.date | package names and versions; runtime versions; with `unpinned_ranges` on, the names (no versions) of unpinned direct Python requirements, to OSV.dev only | HTTPS to those hosts only, no redirects |
 | The npm registry (`stage-fix` in a repository with `package-lock.json`) | the lockfile's dependency tree, through `npm audit fix --package-lock-only` | npm runs in the [tools container](#subprocess-confinement-tools-container), whose egress proxy allows only `registry.npmjs.org:443`. npm runs on a scratch copy holding only `package.json` and the lockfile, with empty user and global npm config, the public registry, `--strict-ssl=true` and `--ignore-scripts`; the repository's `.npmrc` is never read. npm workspaces fail closed (npm errors, nothing is staged) |
 | The model API (through the gateway) | everything the agents read and write: the scan summary and findings, repository paths, host names, fix plans, executor results, your notes | one route, one model; a DLP filter refuses requests carrying secrets or keys and redacts home paths, email addresses, private IP addresses and the host names and private package names the gateway is given ([DLP](#agentteamsvulnscangateway)). It bounds, never closes, exfiltration through the model endpoint: choose an `upstream` and model provider you trust with the rest |
 | GitHub (`open-pr`) | the fix branch and a pull request body with the fix plan and the agent's rationale (sanitised, quoted) | only to `origin` of a repository a grant covers |
@@ -240,6 +240,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `fail_on` | `"high"` | Lowest severity that makes the run exit 1 |
 | `unscored_as` | `"high"` | What an advisory with neither a CVSS vector nor a severity label counts as: `critical`, `high`, `moderate` or `low` ([Severity](#severity)). Such findings are marked UNSCORED and listed separately |
 | `include_dev` | `false` | Dev-only dependencies count toward `fail_on` |
+| `unpinned_ranges` | `false` | Also check the ranges of Python requirements without exact pins, sending their names (no versions) to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check the runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
@@ -419,6 +420,54 @@ Only endoflife.date product slugs leave the machine, never an image name. Findin
 `## base images: <file> — plan-only (no staged edit)`, and `executor.validate_diff` refuses a Dockerfile or
 compose change.
 
+### Unpinned Python requirements
+
+A `requirements*` file with only range specifiers, or a `pyproject.toml` with no lock, has no exact versions
+and is unscannable. With `unpinned_ranges` on, `engine.scan_path` also checks each of its **direct**
+requirements' ranges against every advisory OSV holds for the name (`engine.analyze_ranges`,
+[`specifiers`](#agentteamsvulnscanspecifiers)). It never guesses one version and never asks PyPI.
+
+- **Switch.** `unpinned_ranges` (boolean, default `false`): `engine.scan_path(..., unpinned_ranges=True)` or
+  `scan PATH --unpinned-ranges`, and for the daily run the `vulnscan.json` key `unpinned_ranges`. Turn it on
+  after reviewing one run.
+- **Egress.** When on, it sends unpinned direct requirement names to OSV (`/v1/querybatch`, the package name
+  with no `version` key), the same host and the same names pinned scanning already sends; nothing goes to
+  pypi.org. Withheld, as for pinned packages: names matching `private_packages`, and a whole file that names
+  a package index (`withheld`, `"<repo>: <path in repo> (private index)"`): a requirements file with an
+  `--index-url` / `-i` / `--extra-index-url` line, itself or in a file it includes with `-r` / `-c` (an
+  include that leaves the repository counts as one), and a `pyproject.toml` with `[[tool.poetry.source]]`,
+  `[[tool.uv.index]]`, `[tool.uv.sources]` with an `index`, or `[[tool.pdm.source]]`. When any one
+  requirements file or `pyproject.toml` of a repository names an index (or cannot be read or parsed), every
+  unpinned-range file of that repository is withheld too, with `engine.REPO_INDEX_NOTE` in its reason
+  (`specifiers.names_index`). Files over 64 MiB (`specifiers.MAX_BYTES`) are not read. `level: off` behaves
+  as for pinned packages (scanned, listed under `brief_off`).
+- **Judgement.** Each advisory's affected ranges (`osv.affected_intervals`) are intersected with the
+  specifier set. Findings have kind `range` (shown as "requirement range"), an empty `version` and the
+  specifier in `spec`:
+
+  | Overlap | Severity | Detail |
+  |---|---|---|
+  | every allowed version is affected | the advisory's | "every version `<spec>` allows is affected" |
+  | part of the range (`partial`) | the advisory's, capped at MODERATE after `unscored_as` | "`<spec>` allows vulnerable versions `<range>`; the installed version is unknown"; `fix` is the lower bound that clears it, when every overlapping range ends in a `fixed` event |
+  | a `MAL-*` advisory | CRITICAL, `malicious` false (no install is confirmed, so no exit 4 or isolate banner) | "range admits known-malicious versions; check what is installed" |
+  | none | no finding | |
+
+  An environment marker is ignored (the requirement is judged for every environment; the detail says so).
+  URL, VCS, `-e` and `===` requirements are counted as not checked. Files named like `dev` or `test`, and
+  pyproject optional groups named like dev/test/lint/doc/type, give `dev` findings.
+- **Exit code.** Range findings count toward `--fail-on` like package findings: a whole-range HIGH finding
+  exits 1 (`fail_on: high`); a partial one is at most MODERATE and stays below the default.
+- **Remediation.** Range findings are never routed to a fix (`daily`, `review` and `stage-fix` take
+  `package` findings, and `stage-fix` edits only `==` pins). `summary.md` lists each known lower-bound raise
+  under "Requirement ranges — plan-only (no staged edit)". The *Remediation effectiveness* fixed and new
+  counts leave range findings out; they have a line of their own.
+- **Coverage stays honest.** The manifest stays unscannable, with the reason "ranges checked against
+  advisories: N direct requirement(s); the installed versions and transitive dependencies are not known, so
+  pin with a lock for full coverage", followed by any notes: requirements not checked, advisories not judged
+  (an unknown range event, `GIT`-only or malformed ranges), and `partial:` when a cap was reached
+  (`engine.UNPINNED_QUERY_LIMIT` = 500 names, `engine.UNPINNED_DETAIL_LIMIT` = 2,000 advisory records per
+  `scan_path`). An OSV failure goes to `feed_errors` (exit 3), never clean.
+
 ### Severity
 
 A package finding's severity is the highest over its advisories (`osv.severity(record)`), each the higher of:
@@ -453,7 +502,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 
 | Command | Purpose |
 |---|---|
-| `scan PATH [--include-worktrees] [--gradle-lockfiles]` | Scan manifests under a repo or a folder of repos (`--gradle-lockfiles`: also read `gradle.lockfile`, off by default) |
+| `scan PATH [--include-worktrees] [--gradle-lockfiles] [--unpinned-ranges]` | Scan manifests under a repo or a folder of repos (`--gradle-lockfiles`: also read `gradle.lockfile`, off by default). `--unpinned-ranges` also checks the ranges of Python requirements without exact pins and sends their names to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `inventory LOG [--host H]` | Analyse a server-kit audit log (the host label defaults to the log file's name without its extension) |
 | `runtimes` | The runtimes in `runtimes.PRODUCTS` found on this machine |
 | `fix PATH [--apply] [--allow-major] [--allow-dirty] [--include-worktrees] [--no-npm]` | Plan, or make, dependency fixes in a working tree you control (`--cooldown-days` is ignored, since its fixes fall under Rule S-10's remediation carve-out; it prints a note). git runs hardened (no hooks, fsmonitor, system or global config); `--apply` refuses a tree whose own git config defines a filter driver or a conditional include (`includeIf`), or that git refuses to open (e.g. `safe.directory`: "git refuses to read this repository (...) — fix it by hand") |
@@ -586,7 +635,7 @@ A Finding (`report.Finding`):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `kind` | string | `package`, `runtime`, `image` (a base image; see [Container images](#container-images)), `host` or `ioc` |
+| `kind` | string | `package`, `range` ([an unpinned requirement](#unpinned-python-requirements)), `runtime`, `image` (a base image; see [Container images](#container-images)), `host` or `ioc` |
 | `target` | string | repository (relative to the scan root), host name, or `this-machine` for local runtimes (`engine.LOCAL_TARGET`) |
 | `name` | string | package or runtime name; `host` / `compromise indicator` for host checks |
 | `version` | string | installed version (`""` when not applicable) |
@@ -606,6 +655,8 @@ A Finding (`report.Finding`):
 | `distro` | boolean | a Python package in an OS-managed location (ignored by `--fail-on`) |
 | `count_dev` | boolean or null | dev scope only: the project's `include_dev`, which overrides the run's `--include-dev` for this finding; null follows the run |
 | `detail` | string | host-check or runtime message, or the malicious-package note |
+| `spec` | string | `range` only: the requirement's specifier set (`""`: any version); `version` is then `""` |
+| `partial` | boolean | `range` only: part of the allowed range is affected (severity capped at MODERATE) |
 
 ---
 
@@ -1075,7 +1126,7 @@ vulnscan or to test an integration.
 
 ### `agentteams.vulnscan.engine`
 
-#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=(), gradle_lockfiles=False)`
+#### `engine.scan_path(root, *, include_worktrees, exclude=(), opted_out=(), gradle_lockfiles=False, unpinned_ranges=False)`
 
 Scan every manifest under `root` (a repository or a folder of repositories). Returns a
 [`Report`](#json-output) whose targets are repositories relative to `root`. A feed failure lands
@@ -1085,7 +1136,14 @@ skipped (`opted_out`). Each repository's brief then narrows what is sent, never 
 ([`project_policy`](#agentteamsvulnscanproject_policy)): `level: off` does **not** skip it (it is
 scanned and listed in `brief_off`), manifests under `exclude_paths` are skipped (`excluded`), packages
 matching `private_packages` are never sent to OSV (`withheld`), and `include_dev` sets `count_dev` on
-its dev-only findings.
+its dev-only findings. `unpinned_ranges=True` also checks the ranges of Python manifests without exact pins
+([Unpinned Python requirements](#unpinned-python-requirements)).
+
+#### `engine.analyze_ranges(items, report, *, dev_policy=None, query_limit=UNPINNED_QUERY_LIMIT, detail_limit=UNPINNED_DETAIL_LIMIT)`
+
+Check `engine.RangeItem(target, location, req)` requirements against OSV by name and append `range`
+findings to `report`. Returns `{location: [coverage notes]}` (caps reached, advisories not judged, a failed
+query). A failed query goes to `report.feed_errors`.
 
 #### `engine.analyze(deps, report, *, distro_check, dev_policy=None)`
 
@@ -1378,6 +1436,20 @@ The `Finding.key()` values present in `current` but not in `previous` (every key
 `querybatch`. Raises `FeedError` (`agentteams.vulnscan._http`) on a malformed or incomplete reply
 or endless pagination: nothing is concluded about the items.
 
+#### `osv.package_ids(items)`
+
+`{(ecosystem, name): [advisory ids]}` for every package OSV holds advisories for, whatever the version: the
+`querybatch` query names the package and **omits** the `version` key. Raises `FeedError` as
+`vulnerable_ids` does.
+
+#### `osv.affected_intervals(record, ecosystem, name)`
+
+The versions an advisory affects for one package, as `specifiers.Interval` values: `introduced` opens an
+interval (`"0"`: unbounded), `fixed` closes it before that version (marked `fixed`), `last_affected` closes it
+at that version, `limit` before it, an unclosed `introduced` is open-ended, and each `versions[]` entry is a
+single version. `None` (not judged) for a malformed record, an unknown event or range type, an entry with only
+`GIT` ranges, or no interval for the package; a `GIT` range beside a release range is skipped.
+
 #### `osv.details(vuln_id)`
 
 The full OSV record (cached per process). Raises `FeedError`.
@@ -1403,6 +1475,19 @@ paired with a range start that could not be read. A fix version outside `osv.FIX
 unusual format, for that package version in this process; `(0, 0)` for advisories it has not seen.
 `engine` calls it for each package finding and passes the two counts to `Finding` as `malformed=` and
 `fix_hidden=` (R8).
+
+### `agentteams.vulnscan.specifiers`
+
+Minimal PEP 440 specifier sets as version intervals, on `versions.version_key`, for
+[unpinned requirements](#unpinned-python-requirements). No network.
+
+| Name | Behaviour |
+|---|---|
+| `parse_specifier(text)` | A `SpecifierSet` (`text`, allowed `intervals`, `prereleases`; `contains(version)`) from `>=`, `<=`, `<`, `>`, `!=`, `~=`, `==`, `==x.*` / `!=x.*`, comma-combined, optionally parenthesised. Pre-releases are excluded unless a clause names one. Raises `ValueError` for anything else, `===` included |
+| `parse_requirement(line, scope="runtime")` | A `Requirement` (`name`, `spec`, `scope`, `marker`), `"unchecked"` (URL, VCS, `-e`, `name @ url`, `===`), `"unreadable"`, or `None` (blank or an option line) |
+| `judge(spec, affected)` | A `Judgement`: `verdict` `whole` / `partial` / `none`, the affected `overlap`, and for `partial` the `raise_to` lower bound (the highest `fixed` version among the overlapping ranges, when every one ends in a fix) |
+| `read_requirements(path, repo)` / `read_pyproject(path, skip=())` | A `RangeFile` (`reqs`, `unchecked`, `unreadable`, `private_index`); `private_index` files keep `reqs` empty |
+| `Interval`, `intersect(a, b)`, `merge(intervals)` | Version intervals (`None` bounds are unbounded; `fixed` marks an advisory's fix as the upper end) |
 
 ### `agentteams.vulnscan.cvss`
 

@@ -1,0 +1,8 @@
+{
+  "patch_id": "55d5497f548cc3ae0de65de118ad24e85bd278f4",
+  "commit": "9b14f8c810cdd47a589b240fe570d4f26012cb89",
+  "subject": "feat(vulnscan): check unpinned Python requirement ranges against OSV (N6a, off by default)",
+  "impact": "1 modules added, 19 symbols added, 1 symbols changed, 1 cli added",
+  "note": "N6a unpinned Python ranges: new vulnscan.specifiers module; osv.package_ids/affected_intervals; engine.analyze_ranges/RangeItem; scan_path(unpinned_ranges=False); scan --unpinned-ranges; Finding.spec/partial. Docs (api-reference vulnscan.md, README, CHANGELOG) and integrity pin updated; daily config wiring deferred.",
+  "recorded_at": "2026-10-30T16:08:39Z"
+}
