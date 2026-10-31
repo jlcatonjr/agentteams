@@ -494,7 +494,8 @@ def _control_dir(root: str, *parts: str, what: str = "verified copies") -> str:
         path = os.path.join(path, part)
         try:
             if not os.path.lexists(path):
-                os.mkdir(path, 0o700)
+                with contextlib.suppress(FileExistsError):  # a concurrent run created it first; lstat checks it
+                    os.mkdir(path, 0o700)
             st = os.lstat(path)
         except OSError as exc:
             raise WasmExecError(_SESSION_HINT.format(what=what) + f": {exc}") from exc

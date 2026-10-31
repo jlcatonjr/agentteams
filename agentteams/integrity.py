@@ -318,6 +318,13 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/_wasm_archive.py",
     "agentteams/_wasm_pin_update.py",
     "agentteams/cli/wasm_commands.py",
+    # WASM guests (P04): wasm_guests turns Python / JavaScript / a core module into one executor run. It picks the
+    # interpreter, the pins-sourced /lib runtime mounts, the private read-only /src file and the interpreter flags
+    # (-I -S -B), and refuses unsupported languages with no native fallback; the probe scripts are what
+    # probe_language trusts to report a widening. A silent edit widens a guest or blinds the deny probe.
+    "agentteams/wasm_guests.py",
+    "agentteams/data/wasm_probes/probe.py",
+    "agentteams/data/wasm_probes/probe.mjs",
     # The trust anchor of every WASM resolve: the pinned versions, URLs and sha256s. An unpinned edit swaps in
     # another binary's hash and resolve() then vouches for it (wasm_runtime.PINS_SHA256 is computed from this file
     # at import, so it cannot pin itself; the manifest does).

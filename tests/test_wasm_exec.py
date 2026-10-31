@@ -263,6 +263,16 @@ def test_deny_probe_binary_matches_source(tmp_path: Path) -> None:
     assert (tmp_path / "p.wasm").read_bytes() == PROBE.read_bytes()
 
 
+def test_control_dir_tolerates_a_concurrent_creator(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # P04 found it: two first runs raced lexists() -> mkdir() on .agentteams/wasm/exec and one refused.
+    (tmp_path / ".agentteams" / "wasm").mkdir(parents=True)
+    monkeypatch.setattr(W.os.path, "lexists", lambda p: False)  # the other run created each dir in between
+    assert W._control_dir(str(tmp_path), ".agentteams", "wasm", "exec") == str(tmp_path / ".agentteams/wasm/exec")
+    (tmp_path / "f").write_text("")
+    with pytest.raises(W.WasmExecError, match="not a real directory"):
+        W._control_dir(str(tmp_path), "f")
+
+
 def test_prepare_src_files_and_grace() -> None:
     p = W.prepare(PROBE, grant=W.COMPUTE_ONLY, src_files={"b.py": b"2", "a.py": b"1"}, compile_grace_s=0)
     assert p.src_files == (("a.py", b"1"), ("b.py", b"2")) and p.argv0 == "wasm_deny_probe"

@@ -3,8 +3,8 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **363**
-- Packages: **12**
+- Modules mapped: **365**
+- Packages: **13**
 - Internal import edges: **1162**
 - Distinct external dependencies: **11**
 
@@ -22,10 +22,11 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 160 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan` |
+| `agentteams` | 161 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan` |
 | `agentteams.cli` | 52 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan` |
 | `agentteams.data` | 6 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
+| `agentteams.data.wasm_probes` | 1 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
 | `agentteams.eval_adapters` | 2 | — |
 | `agentteams.frameworks` | 30 | `agentteams` |
@@ -155,6 +156,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.data.goose-run-resilient` | — | — |
 | `agentteams.data.vulnscan_tools.egress_proxy` | — | — |
 | `agentteams.data.vulnscan_tools.selftest` | — | — |
+| `agentteams.data.wasm_probes.probe` | — | — |
 | `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
 | `agentteams.enrich` | `agentteams.enrich._audit`, `agentteams.enrich._enrich`, `agentteams.enrich._models`, `agentteams.enrich._tools` | `agentteams.cli.generate` |
@@ -407,6 +409,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.versions` | — | `agentteams.vulnscan.fix`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.report`, `agentteams.vulnscan.runtimes` |
 | `agentteams.vulnscan.worktree_fixes` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.daily` |
 | `agentteams.wasm_exec` | — | `agentteams.sandbox_state` |
+| `agentteams.wasm_guests` | — | — |
 | `agentteams.wasm_pins` | — | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.wasm_runtime` |
 | `agentteams.wasm_runtime` | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.git_exec`, `agentteams.wasm_pins` | `agentteams._wasm_pin_update`, `agentteams.cli.wasm_commands` |
 | `agentteams.whole_body_migration` | `agentteams.fence_twins`, `agentteams.fences`, `agentteams.scan`, `agentteams.unfenced`, `agentteams.user_regions` | `agentteams.fences`, `agentteams.fleet` |
@@ -442,6 +445,8 @@ flowchart LR
     class agentteams_data sub
     agentteams_data_vulnscan_tools["agentteams.data.vulnscan_tools"]
     class agentteams_data_vulnscan_tools sub
+    agentteams_data_wasm_probes["agentteams.data.wasm_probes"]
+    class agentteams_data_wasm_probes sub
     agentteams_enrich["agentteams.enrich"]
     class agentteams_enrich sub
     agentteams_eval_adapters["agentteams.eval_adapters"]
@@ -493,6 +498,7 @@ digraph "agentteams architecture" {
     "agentteams.cli" [fillcolor="#eef6ee"];
     "agentteams.data" [fillcolor="#eef6ee"];
     "agentteams.data.vulnscan_tools" [fillcolor="#eef6ee"];
+    "agentteams.data.wasm_probes" [fillcolor="#eef6ee"];
     "agentteams.enrich" [fillcolor="#eef6ee"];
     "agentteams.eval_adapters" [fillcolor="#eef6ee"];
     "agentteams.frameworks" [fillcolor="#eef6ee"];
@@ -1891,6 +1897,14 @@ digraph "agentteams architecture" {
     "agentteams.data.vulnscan_tools.selftest": {
       "package": "agentteams.data.vulnscan_tools",
       "path": "agentteams/data/vulnscan_tools/selftest.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.data.wasm_probes.probe": {
+      "package": "agentteams.data.wasm_probes",
+      "path": "agentteams/data/wasm_probes/probe.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -4851,6 +4865,14 @@ digraph "agentteams architecture" {
     "agentteams.wasm_exec": {
       "package": "agentteams",
       "path": "agentteams/wasm_exec.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.wasm_guests": {
+      "package": "agentteams",
+      "path": "agentteams/wasm_guests.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
