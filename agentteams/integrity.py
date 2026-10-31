@@ -343,6 +343,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # another binary's hash and resolve() then vouches for it (wasm_runtime.PINS_SHA256 is computed from this file
     # at import, so it cannot pin itself; the manifest does).
     "agentteams/data/wasm_runtime_pins.json",
+    # The agentteams_wasm MCP server (WASM P10, D8). Unlike agentteams_runner it is a trust boundary: no runner
+    # re-checks what it runs. wasm_mcp pins the server's sha256 and every bundle file's (the server carries the same
+    # constants and executes only the bytes it hashed), and builds the launch flags that ARE each agent's grant.
+    # A silent edit widens a grant, swaps the executor the server runs, or blinds its deny probes.
+    "agentteams/wasm_mcp.py",
+    "agentteams/data/agentteams-wasm-mcp.py",
     # Host-mediated model access (WASM P06). The provider key travels only to the vetted base URL, and the
     # request/reply validation bounds what crosses the wire (C-4); a silent edit leaks the key or widens what a reply
     # may carry.
