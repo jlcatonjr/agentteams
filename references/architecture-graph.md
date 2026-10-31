@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **381**
+- Modules mapped: **383**
 - Packages: **14**
-- Internal import edges: **1267**
+- Internal import edges: **1268**
 - Distinct external dependencies: **11**
 
 ---
@@ -24,7 +24,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | --- | --- | --- |
 | `agentteams` | 164 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 54 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan` |
-| `agentteams.data` | 6 | — |
+| `agentteams.data` | 7 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
 | `agentteams.data.wasm_probes` | 1 | — |
 | `agentteams.enrich` | 6 | `agentteams` |
@@ -35,7 +35,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 | `agentteams.redteam` | 16 | `agentteams`, `agentteams.frameworks`, `agentteams.research` |
 | `agentteams.research` | 11 | `agentteams` |
 | `agentteams.vulnscan` | 67 | `agentteams`, `agentteams.cli`, `agentteams.frameworks` |
-| `agentteams.wasm_agent` | 9 | `agentteams`, `agentteams.vulnscan` |
+| `agentteams.wasm_agent` | 10 | `agentteams`, `agentteams.vulnscan` |
 
 ---
 
@@ -159,6 +159,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.data.goose-run-resilient` | — | — |
 | `agentteams.data.vulnscan_tools.egress_proxy` | — | — |
 | `agentteams.data.vulnscan_tools.selftest` | — | — |
+| `agentteams.data.wasm_agent_guest` | — | — |
 | `agentteams.data.wasm_probes.probe` | — | — |
 | `agentteams.drift` | `agentteams.emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.format_spec`, `agentteams.frameworks.registry` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.output_target`, `agentteams.emit`, `agentteams.framework_freshness`, `agentteams.front_matter_baseline`, `agentteams.signing_switch`, `agentteams.stale_detector` |
 | `agentteams.emit` | `agentteams.atomicio`, `agentteams.backup`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.fence_twins`, `agentteams.fences`, `agentteams.frameworks.codex`, `agentteams.frameworks.structural_merge`, `agentteams.front_matter_baseline`, `agentteams.front_matter_merge`, `agentteams.learned_blocks`, `agentteams.project_notes`, `agentteams.shrink_allow`, `agentteams.user_regions` | `agentteams.cli.adopt_step`, `agentteams.cli.backup_switch`, `agentteams.cli.commands`, `agentteams.cli.exit_codes`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.parser`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.drift`, `agentteams.fence_inject`, `agentteams.git_hooks` |
@@ -417,8 +418,9 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.wasm_agent` | `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.transcript` | — |
 | `agentteams.wasm_agent.broker` | `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.tools` | `agentteams.wasm_agent.host`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.stage1` |
 | `agentteams.wasm_agent.budget` | — | `agentteams.wasm_agent`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.mediation`, `agentteams.wasm_agent.stage1` |
+| `agentteams.wasm_agent.guest_source` | — | `agentteams.wasm_agent.launch` |
 | `agentteams.wasm_agent.host` | `agentteams.model_providers`, `agentteams.wasm_agent.broker`, `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.mediation`, `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.tools`, `agentteams.wasm_agent.transcript` | `agentteams.wasm_agent`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.stage1` |
-| `agentteams.wasm_agent.launch` | `agentteams`, `agentteams._sandbox_profiles`, `agentteams.model_providers`, `agentteams.vulnscan.gateway_dlp`, `agentteams.wasm_agent.broker`, `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.transcript`, `agentteams.wasm_exec`, `agentteams.wasm_guests`, `agentteams.wasm_runtime` | `agentteams.wasm_agent` |
+| `agentteams.wasm_agent.launch` | `agentteams`, `agentteams._sandbox_profiles`, `agentteams.model_providers`, `agentteams.vulnscan.gateway_dlp`, `agentteams.wasm_agent.broker`, `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.guest_source`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.transcript`, `agentteams.wasm_exec`, `agentteams.wasm_guests`, `agentteams.wasm_runtime` | `agentteams.wasm_agent` |
 | `agentteams.wasm_agent.mediation` | `agentteams.model_providers`, `agentteams.vulnscan.gateway_dialects`, `agentteams.vulnscan.gateway_dlp`, `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.transcript` | `agentteams.wasm_agent.host` |
 | `agentteams.wasm_agent.protocol` | — | `agentteams.wasm_agent`, `agentteams.wasm_agent.broker`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.mediation`, `agentteams.wasm_agent.stage1`, `agentteams.wasm_agent.tools`, `agentteams.wasm_agent.transcript` |
 | `agentteams.wasm_agent.stage1` | `agentteams.model_providers`, `agentteams.wasm_agent.broker`, `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.protocol`, `agentteams.wasm_agent.transcript`, `agentteams.wasm_exec` | — |
@@ -1964,6 +1966,14 @@ digraph "agentteams architecture" {
     "agentteams.data.vulnscan_tools.selftest": {
       "package": "agentteams.data.vulnscan_tools",
       "path": "agentteams/data/vulnscan_tools/selftest.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams.data.wasm_agent_guest": {
+      "package": "agentteams.data",
+      "path": "agentteams/data/wasm_agent_guest.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -5023,6 +5033,14 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.wasm_agent.guest_source": {
+      "package": "agentteams.wasm_agent",
+      "path": "agentteams/wasm_agent/guest_source.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.wasm_agent.host": {
       "package": "agentteams.wasm_agent",
       "path": "agentteams/wasm_agent/host.py",
@@ -5050,6 +5068,7 @@ digraph "agentteams architecture" {
         "agentteams.vulnscan.gateway_dlp",
         "agentteams.wasm_agent.broker",
         "agentteams.wasm_agent.budget",
+        "agentteams.wasm_agent.guest_source",
         "agentteams.wasm_agent.host",
         "agentteams.wasm_agent.protocol",
         "agentteams.wasm_agent.transcript",
@@ -10228,6 +10247,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.wasm_agent.launch",
       "target": "agentteams.wasm_agent.budget"
+    },
+    {
+      "source": "agentteams.wasm_agent.launch",
+      "target": "agentteams.wasm_agent.guest_source"
     },
     {
       "source": "agentteams.wasm_agent.launch",
