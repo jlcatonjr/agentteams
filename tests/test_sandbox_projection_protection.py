@@ -19,6 +19,7 @@ from agentteams import analyze
 from agentteams import sandbox_projection as sp
 from agentteams.frameworks import _control_plane_protect as cpp
 from agentteams.frameworks.registry import FRAMEWORKS
+from agentteams.wasm_config import WASM_SANDBOX_CLI_KEY, WASM_SUBSTRATE_CLI_KEY, WASM_SUBSTRATE_KEPT_KEY
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
@@ -60,10 +61,10 @@ def test_claude_emits_no_duplicate_when_wasm_already_protects_the_control_plane(
 def test_substrate_paths_follow_the_control_plane_flag():
     base = {"agent_slug_list": []}
     assert cpp.substrate_protect_paths(base) == ()
-    assert cpp.substrate_protect_paths({**base, "_wasm_substrate_cli": "on"}) == (FILE,)
-    assert cpp.substrate_protect_paths({**base, "_wasm_substrate_kept": "on"}) == (FILE,)
-    assert cpp.substrate_protect_paths({**base, "_wasm_substrate_cli": "on", "write_policy": "orchestrator-only"}) == ()
-    assert cpp.substrate_protect_paths({**base, "_wasm_substrate_cli": "on", "_wasm_sandbox_cli": "on"}) == ()
+    assert cpp.substrate_protect_paths({**base, WASM_SUBSTRATE_CLI_KEY: "on"}) == (FILE,)
+    assert cpp.substrate_protect_paths({**base, WASM_SUBSTRATE_KEPT_KEY: "on"}) == (FILE,)
+    assert cpp.substrate_protect_paths({**base, WASM_SUBSTRATE_CLI_KEY: "on", "write_policy": "orchestrator-only"}) == ()
+    assert cpp.substrate_protect_paths({**base, WASM_SUBSTRATE_CLI_KEY: "on", WASM_SANDBOX_CLI_KEY: "on"}) == ()
 
 
 def test_the_helpers_are_unchanged_without_a_substrate():
