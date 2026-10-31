@@ -496,13 +496,12 @@ def _apply_fail_closed_policy(hook_text: str, manifest: dict[str, Any]) -> str:
     Returns:
         The hook text, fail-closed sentinel flipped only when the profile warrants it.
     """
-    from agentteams.sandbox_state import OS_SANDBOX_CLI_KEY, effective_sandbox_state
+    from agentteams.sandbox_state import effective_sandbox_state
 
     state = effective_sandbox_state(manifest)
     if not state.os:
         return hook_text  # no boundary: nothing for a crash to drop
-    explicit_on = state.os_reason in ("brief", "cli") and (
-        manifest.get(OS_SANDBOX_CLI_KEY) or manifest.get("os_sandbox")) == "on"
+    explicit_on = state.os_reason in ("brief", "cli")  # state.os is on, so the switch said "on"
     explicit_profile = (manifest.get("privilege_profile") in {"confined", "exclusive"}
                         and manifest.get("privilege_profile_explicit"))
     if not (explicit_on or explicit_profile):
@@ -631,8 +630,11 @@ def verify_sandbox_wiring(project_root: Path,
     by printing the live content.
 
     **Brief/live drift (P00 D8).** When the effective OS state (from ``manifest``, else the
-    build-log ``sandbox_state``) is OFF but the live settings still enable a sandbox, that is
-    reported as ``DRIFT`` (``ok=False``; the operator decides; nothing is rewritten). While WASM
+    build-log ``sandbox_state``) is OFF by the dedicated switch, or OFF by the profile after a
+    previous boundary existed (a recorded ``sandbox_state``), but the live settings still enable a
+    sandbox, that is reported as ``DRIFT`` (``ok=False``; the operator decides; nothing is
+    rewritten); with the live sandbox gone the profile case says ``RELAXED``, and an unparsable
+    live ``settings.json`` is ``UNREADABLE`` (``ok=False``). While WASM
     is on, the live settings must also carry the control-plane rules
     (:func:`verify_control_plane_merged`); missing ones are ``WASM CONTROL PLANE NOT MERGED``.
 
@@ -654,13 +656,18 @@ def verify_sandbox_wiring(project_root: Path,
     from agentteams.sandbox_state import verifier_sandbox_state
 
     from ._control_plane_protect import wasm_protected_config_paths
-    from ._sandbox_drift import claude_off_drift, switched_off
+    from ._sandbox_drift import claude_off_drift, previous_boundary_recorded, switched_off
 
-    state = verifier_sandbox_state(manifest, project_root / ".claude" / "agents", project_root)
-    if switched_off(state):  # a profile-derived off (cooperative) keeps today's check
+    team_dir = project_root / ".claude" / "agents"
+    state = verifier_sandbox_state(manifest, team_dir, project_root)
+    # S2: a profile-derived off (cooperative) is reported too once a previous boundary existed (recorded state);
+    # a cooperative team that never had one keeps today's check below.
+    if switched_off(state, previous_boundary=previous_boundary_recorded(team_dir)):
         return claude_off_drift(project_root, state)
     ok, msgs = _verify_emitted_sandbox_merged(project_root)
     if state is not None and state.wasm:
+        # TODO(P11): source the MCP protected_config_paths from the build-log when no manifest is given (S4), so a
+        # manifest-less --check-wiring checks the agentteams_wasm MCP config denies too.
         merged, missing = verify_control_plane_merged(
             project_root, wasm_protected_config_paths(manifest) if manifest is not None else ())
         if not merged:

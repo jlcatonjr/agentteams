@@ -194,3 +194,62 @@ def test_stubs_never_fewer_than_before_the_switch(framework):
                     if switch == "on":
                         assert stubs_enabled(framework, m), m
     assert not stubs_enabled("agents-md", {"privilege_profile": "confined"})
+
+
+# --- wave-2 review: S2 (a profile-derived off after a recorded boundary), H2 (UNREADABLE), H3 (None-safe) -------
+
+
+def _record(root: Path, manifest: dict) -> None:
+    team = root / ".claude" / "agents" / "references"
+    team.mkdir(parents=True, exist_ok=True)
+    rec = ss.effective_sandbox_state(manifest).to_record(project_root=root)
+    (team / "build-log.json").write_text(json.dumps({"sandbox_state": rec}))
+
+
+def test_claude_cooperative_after_a_recorded_boundary_is_drift_not_cooperative_ok(tmp_path):
+    _live(tmp_path, {"sandbox": {"enabled": True}})
+    _record(tmp_path, {"privilege_profile": "confined"})
+    (tmp_path / ".claude" / "settings.hooks.example.json").write_text(json.dumps({}))
+    ok, msgs = verify_sandbox_wiring(tmp_path, {"privilege_profile": "cooperative"})
+    assert not ok and msgs[0].startswith("DRIFT: the OS sandbox was relaxed to off (profile:cooperative)")
+    assert not any("(cooperative)." in m for m in msgs)
+
+
+def test_claude_cooperative_after_a_recorded_boundary_with_live_off_says_relaxed(tmp_path):
+    _live(tmp_path, {})
+    _record(tmp_path, {"privilege_profile": "cooperative"})  # the S1 gate records the off state
+    ok, msgs = verify_sandbox_wiring(tmp_path, {"privilege_profile": "cooperative"})
+    assert ok and msgs[0].startswith("RELAXED: the OS sandbox was on for this team and is now off")
+    assert verify_sandbox_wiring(tmp_path)[1][0].startswith("RELAXED")  # from the record alone
+
+
+def test_goose_cooperative_after_a_recorded_boundary_is_drift(tmp_path):
+    team = tmp_path / ".goose" / "recipes" / "references"
+    team.mkdir(parents=True)
+    (team / "build-log.json").write_text(json.dumps({"sandbox_state": ss.effective_sandbox_state(
+        {"privilege_profile": "confined"}).to_record(project_root=tmp_path)}))
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("GOOSE_SANDBOX: 1\n")
+    ok, msgs = verify_goose_sandbox_wiring(tmp_path, {"privilege_profile": "cooperative"}, live_config_path=cfg)
+    assert not ok and msgs[0].startswith("DRIFT: the OS sandbox was relaxed to off")
+
+
+@pytest.mark.parametrize("text", ["{not json", "[1, 2]"])
+def test_claude_off_with_unreadable_live_settings_is_not_ok(tmp_path, text):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(text)
+    ok, msgs = verify_sandbox_wiring(tmp_path, {"privilege_profile": "confined", "os_sandbox": "off"})
+    assert not ok and msgs[0].startswith("UNREADABLE") and "nothing to verify" not in msgs[0]
+    merged, missing = verify_control_plane_merged(tmp_path)
+    assert not merged and missing == ["UNREADABLE .claude/settings.json"]
+
+
+def test_drift_helpers_accept_none_and_non_states():
+    from agentteams.frameworks import _sandbox_drift as d
+
+    assert d.off_message(None) == "OS sandbox is off for this team; nothing to verify."
+    assert d.off_message("not-a-state") == d.off_message(None)
+    assert not d.switched_off(None, previous_boundary=True) and not d.switched_off(object())
+    off = ss.effective_sandbox_state({"privilege_profile": "cooperative"})
+    assert not d.switched_off(off) and d.switched_off(off, previous_boundary=True)
+    assert d.goose_control_plane_ok(None, "", lambda p: p, [])
