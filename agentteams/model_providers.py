@@ -104,6 +104,10 @@ LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 #: ``$schema``, ``default``, ...) is dropped so one tool schema works across families.
 GEMINI_SCHEMA_KEYS = frozenset({"type", "properties", "required", "description", "items", "enum"})
 _RESERVED_KEYS = frozenset({"_provider_id", "_provider_sig"})
+#: Caps on the reserved keys (a forged value must not become a large side channel; P05's event frame is 4 MiB).
+MAX_PROVIDER_ID_CHARS = 256
+MAX_PROVIDER_SIG_CHARS = 1024 * 1024
+_GEMINI_SIG_RE = re.compile(r"[A-Za-z0-9+/=_-]+")
 
 
 # ---------------------------------------------------------------- types
@@ -136,6 +140,18 @@ class ModelProviderError(Exception):
         self.attempts = attempts
         self.retry_after = retry_after
         super().__init__(f"{kind}: {self.message}")
+
+    def rescrub(self, key: str) -> None:
+        """Scrub ``key`` from :attr:`message` and from ``args`` (which ``str()`` reads).
+
+        Args:
+            key: The secret to remove.
+
+        Returns:
+            None.
+        """
+        self.message = _scrub(self.message, key)
+        self.args = (f"{self.kind}: {self.message}",)
 
 
 @dataclass(frozen=True)
@@ -215,8 +231,11 @@ class Provider:
             stub: The stub backend (``stub`` family only).
 
         Raises:
-            Nothing.
+            ModelProviderError: ``config`` for a base URL or key that fails the same checks as :func:`get_provider`.
         """
+        if base_url is not None:
+            base_url = _check_base_url(base_url)
+        _check_key_shape(key, preset.name)
         self.preset = preset
         self.base_url = base_url
         self._key = key
@@ -316,8 +335,8 @@ def _check_base_url(url: str) -> str:
         parts.port  # noqa: B018 - raises on a malformed port
     except ValueError as exc:
         raise ModelProviderError("config", "base URL has a malformed port") from exc
-    if any(seg in (".", "..") for seg in parts.path.split("/")):
-        raise ModelProviderError("config", "base URL path must not contain dot segments")
+    if "%" in parts.path or any(seg in (".", "..") for seg in parts.path.split("/")):
+        raise ModelProviderError("config", "base URL path must not contain dot segments or percent-escapes")
     return url.rstrip("/")
 
 
@@ -468,6 +487,19 @@ def _text_ok(value: object) -> bool:
     return isinstance(value, str) and "\x00" not in value
 
 
+def _sig_ok(sig: object) -> bool:
+    """A ``_provider_sig`` is a Gemini base64 signature or a JSON list of Anthropic thinking blocks, size-capped."""
+    if not isinstance(sig, str) or not sig or len(sig) > MAX_PROVIDER_SIG_CHARS or "\x00" in sig:
+        return False
+    if sig.startswith("["):
+        try:
+            _anthropic_opaque(sig)
+        except ModelProviderError:
+            return False
+        return True
+    return _GEMINI_SIG_RE.fullmatch(sig) is not None
+
+
 def _check_request(messages: Sequence[Mapping[str, Any]], system: str | None, tools: Sequence[ToolSpec],
                    max_tokens: int, model: str, temperature: float | None) -> None:
     """Validate a neutral request before any network I/O (nothing is spent on a malformed call).
@@ -518,7 +550,7 @@ def _check_request(messages: Sequence[Mapping[str, Any]], system: str | None, to
                 extra = set(block) - {"type", "text"}
                 if "text" not in block or not _text_ok(block["text"]) or \
                         extra - ({"_provider_sig"} if role == "assistant" else set()) or \
-                        (extra and not _text_ok(block["_provider_sig"])):
+                        (extra and not _sig_ok(block["_provider_sig"])):
                     raise bad(f"{where}: a text block is {{type, text}} with a NUL-free string")
             elif kind == "tool_use" and role == "assistant":
                 if not {"type", "id", "name", "input"} <= set(block) or \
@@ -529,9 +561,10 @@ def _check_request(messages: Sequence[Mapping[str, Any]], system: str | None, to
                 if not isinstance(block["name"], str) or not TOOL_NAME_RE.fullmatch(block["name"]) or \
                         not isinstance(block["input"], Mapping):
                     raise bad(f"{where}: tool_use needs a valid name and an object input")
-                for rk in _RESERVED_KEYS & set(block):
-                    if block[rk] is not None and not _text_ok(block[rk]):
-                        raise bad(f"{where}: {rk} must be a string or null")
+                pid = block.get("_provider_id")
+                if (pid is not None and not (_text_ok(pid) and 0 < len(pid) <= MAX_PROVIDER_ID_CHARS)) or \
+                        ("_provider_sig" in block and not _sig_ok(block["_provider_sig"])):
+                    raise bad(f"{where}: _provider_id / _provider_sig malformed or too long")
                 seen.add(block["id"])
             elif kind == "tool_result" and role == "user":
                 if not {"type", "tool_use_id", "content"} <= set(block) or \
@@ -643,17 +676,30 @@ def _read_capped(resp: Any, cap: int) -> bytes:
             raise ModelProviderError("protocol", f"response larger than {cap} bytes (discarded)")
 
 
-def _post_json(provider: Provider, url: str, headers: Mapping[str, str], body: Mapping[str, Any],
-               timeout: float) -> _Response:
-    """POST ``body`` as JSON to ``url`` with bounded retries; return the decoded JSON reply.
+def _post_json(provider: Provider, model: str, body: Mapping[str, Any], timeout: float) -> _Response:
+    """POST ``body`` as JSON to the provider's endpoint with bounded retries; return the decoded JSON reply.
+
+    The key lives only in the request headers built here, and they are dropped from this frame's locals before any
+    error leaves it, so a traceback rendered with locals does not show the key (the ``Provider`` repr is redacted).
 
     Raises:
         ModelProviderError: Any transport, HTTP or decoding failure, mapped to :data:`KINDS`, key scrubbed.
     """
-    name, key = provider.preset.name, provider._key
+    url, auth = _request(provider, model)
+    all_headers: dict[str, str] | None = {"Content-Type": "application/json", "Accept": "application/json",
+                                          "User-Agent": USER_AGENT, **auth}
+    auth = {}
+    try:
+        return _send(provider, url, all_headers, body, timeout)
+    finally:
+        all_headers.clear()   # the same dict _send's frame holds, so its locals no longer show the key
+
+
+def _send(provider: Provider, url: str, all_headers: dict[str, str], body: Mapping[str, Any],
+          timeout: float) -> _Response:
+    """The retry loop behind :func:`_post_json`; each attempt's request headers are cleared when it ends."""
+    name = provider.preset.name
     data = json.dumps(body, allow_nan=False, ensure_ascii=False).encode("utf-8")
-    all_headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": USER_AGENT,
-                   **headers}
     opener = _LOOPBACK_OPENER if _is_loopback(url) else _OPENER
     deadline = time.monotonic() + timeout * (1 + MAX_RETRIES) + BACKOFF_CAP_S
     attempts = 0
@@ -661,6 +707,7 @@ def _post_json(provider: Provider, url: str, headers: Mapping[str, str], body: M
     while True:
         attempts += 1
         retry_after: float | None = None
+        req: urllib.request.Request | None = None
         try:
             req = urllib.request.Request(url, data=data, headers=all_headers, method="POST")
             try:
@@ -688,7 +735,7 @@ def _post_json(provider: Provider, url: str, headers: Mapping[str, str], body: M
             status = exc.code
             retry_after = _retry_after(exc.headers)
             try:
-                text = _scrub(_error_text(exc.read(MAX_ERROR_BODY_BYTES)), key)
+                text = _scrub(_error_text(exc.read(MAX_ERROR_BODY_BYTES)), provider._key)
             except (OSError, http.client.HTTPException):
                 text = ""
             finally:
@@ -711,7 +758,11 @@ def _post_json(provider: Provider, url: str, headers: Mapping[str, str], body: M
             if isinstance(reason, (TimeoutError, socket.timeout)):
                 last = ModelProviderError("timeout", f"no response within {timeout}s")
             else:
-                last = ModelProviderError("network", _scrub(f"{type(exc).__name__}: {reason}", key))
+                last = ModelProviderError("network", _scrub(f"{type(exc).__name__}: {reason}", provider._key))
+        finally:
+            if req is not None:     # urllib's frames in a chained traceback hold this same object
+                req.headers.clear()
+                req.unredirected_hdrs.clear()
         last.provider, last.attempts = name, attempts
         if attempts > MAX_RETRIES:
             raise last
@@ -763,7 +814,8 @@ def _tool_name_ok(name: object) -> bool:
 
 #: Anthropic block types returned verbatim on the next request ("pass back every thinking and redacted_thinking
 #: block ... exactly as received" with tool use: platform.claude.com/docs/en/api/errors, verified 2026-10-31).
-_ANTHROPIC_OPAQUE = frozenset({"thinking", "redacted_thinking"})
+_ANTHROPIC_OPAQUE: dict[str, tuple[str, ...]] = {"thinking": ("thinking", "signature"),
+                                                  "redacted_thinking": ("data",)}
 
 _ANTHROPIC_STOPS = {"end_turn": "end_turn", "stop_sequence": "end_turn", "tool_use": "tool_use",
                     "max_tokens": "max_tokens", "model_context_window_exceeded": "max_tokens",
@@ -799,16 +851,32 @@ def _encode_anthropic(model: str, messages: Sequence[Mapping[str, Any]], system:
     return body
 
 
+def _opaque_shape(block: object) -> dict[str, str] | None:
+    """Return a thinking block reduced to its exact documented keys, or ``None`` when it is not one."""
+    if not isinstance(block, dict):
+        return None
+    keys = _ANTHROPIC_OPAQUE.get(block.get("type"))  # type: ignore[arg-type]
+    if keys is None or not all(isinstance(block.get(k), str) for k in keys):
+        return None
+    return {"type": block["type"], **{k: block[k] for k in keys}}
+
+
 def _anthropic_opaque(sig: object) -> list[dict[str, Any]]:
-    """The thinking blocks carried in ``_provider_sig``; anything else (e.g. a Gemini signature) yields none."""
+    """The thinking blocks carried in ``_provider_sig`` (a Gemini signature yields none).
+
+    Raises:
+        ModelProviderError: ``bad_request`` when a JSON-list signature is not exactly a list of thinking blocks
+            with their documented keys (a forged value is refused, not forwarded).
+    """
     if not isinstance(sig, str) or not sig.startswith("["):
         return []
     try:
         blocks = _strict_loads(sig)
     except ValueError:
-        return []
-    ok = isinstance(blocks, list) and all(isinstance(b, dict) and b.get("type") in _ANTHROPIC_OPAQUE for b in blocks)
-    return blocks if ok else []
+        blocks = None
+    if not isinstance(blocks, list) or not blocks or any(_opaque_shape(b) != b for b in blocks):
+        raise ModelProviderError("bad_request", "_provider_sig is not a list of thinking blocks")
+    return blocks
 
 
 def _decode_anthropic(payload: Any, headers: Mapping[str, str], turn: int, preset: Preset,
@@ -821,7 +889,10 @@ def _decode_anthropic(payload: Any, headers: Mapping[str, str], turn: int, prese
     for block in payload["content"]:
         kind = block.get("type") if isinstance(block, dict) else None
         if kind in _ANTHROPIC_OPAQUE:
-            opaque.append(block)
+            shaped = _opaque_shape(block)
+            if shaped is None:
+                raise ModelProviderError("protocol", f"{kind} block without its documented string fields")
+            opaque.append(shaped)
             continue
         if kind == "text" and isinstance(block.get("text"), str):
             out: Block = {"type": "text", "text": block["text"]}
@@ -983,7 +1054,7 @@ def _gemini_model_path(model: str) -> str:
 
 def _is_gemini_sig(sig: object) -> bool:
     # A thoughtSignature is base64 (bytes field); an Anthropic JSON list is never sent to Gemini.
-    return isinstance(sig, str) and bool(sig) and not sig.startswith("[")
+    return isinstance(sig, str) and _GEMINI_SIG_RE.fullmatch(sig) is not None
 
 
 def _encode_gemini(model: str, messages: Sequence[Mapping[str, Any]], system: str | None,
@@ -1292,17 +1363,16 @@ def complete(provider: Provider, model: str, messages: Sequence[Mapping[str, Any
     if preset.family == "stub":
         assert provider._stub is not None  # noqa: S101 - construction invariant
         return provider._stub.reply(model, messages, system, tools, max_tokens)
-    if os.environ.get("CI", "").strip() and os.environ.get(CI_ALLOW_ENV, "") != "1" \
-            and not _is_loopback(provider.base_url):
+    # Loopback is not exempt: a local relay (e.g. a proxy on 127.0.0.1) can still spend on a paid upstream.
+    if os.environ.get("CI", "").strip() and os.environ.get(CI_ALLOW_ENV, "") != "1":
         raise ModelProviderError("config", f"refusing a live model call under CI; set {CI_ALLOW_ENV}=1 to allow",
                                  provider=preset.name)
     encode, decode = _FAMILIES[preset.family]
-    url, headers = _request(provider, model)
     body = encode(model, messages, system, tools, max_tokens, temperature, preset)
-    resp = _post_json(provider, url, headers, body, float(timeout))
+    resp = _post_json(provider, model, body, float(timeout))
     try:
         return decode(resp.payload, resp.headers, len(messages), preset, model)
     except ModelProviderError as exc:
         exc.provider, exc.attempts = preset.name, resp.attempts
-        exc.message = _scrub(exc.message, provider._key)
+        exc.rescrub(provider._key)
         raise
