@@ -197,7 +197,8 @@ was a branch commit, and weekly runs left local-only commits that made live defa
 **Hooks:** no `git commit` runs, so no commit hook runs. `update-ref` still fires a `reference-transaction`
 hook if one is installed. Because a pre-commit secret scanner no longer sees the snapshot, the fleet checks the
 files it would add or change itself (`agentteams.scan`, credential category, high severity) and records no
-snapshot for a workspace that has one: it warns, falls back to `HEAD` as the diff base, and continues.
+snapshot for a workspace that has one. A dirty workspace that ends up with no snapshot (that, a failed
+`git status`, or a ref git could not write) is SKIPped, never updated: its edits would have no rollback point.
 
 **`--fleet-allow-no-verify`** has no effect any more; it is accepted so existing invocations keep working.
 

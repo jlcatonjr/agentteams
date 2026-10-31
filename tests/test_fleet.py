@@ -377,6 +377,19 @@ def test_a_scan_mirror_worktree_is_never_a_fleet_workspace(tmp_path):
     assert found == [repo.resolve()] and skipped == []
 
 
+def test_a_dirty_workspace_with_no_snapshot_is_skipped_not_updated(tmp_path, monkeypatch, capsys):
+    """Without a snapshot its uncommitted agent edits would have no rollback point (@security, 2026-10-31)."""
+    ws = tmp_path / "ws"
+    _mk_agent(ws / ".github" / "agents", "_build-description.json", "{}")
+    _mk_agent(ws / ".github" / "agents", "a.agent.md", "x\n")
+    _init_repo(ws)
+    (ws / ".github" / "agents" / "a.agent.md").write_text("AKIA" + "ABCDEFGHIJKLMNOP\n", encoding="utf-8")
+    ran = []
+    monkeypatch.setattr(fleet, "_run_main", lambda argv: ran.append(argv) or (0, "ok"))
+    fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True), parser=None)
+    assert ran == [] and "not updated" in capsys.readouterr().out
+
+
 def test_allow_no_verify_is_accepted_and_changes_nothing(tmp_path, monkeypatch):
     """--fleet-allow-no-verify still parses into a run; the snapshot is a ref either way."""
     ws = tmp_path / "ws"

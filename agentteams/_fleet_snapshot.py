@@ -47,6 +47,22 @@ def agent_paths(ws: Path) -> list[str]:
     return rels
 
 
+def agent_paths_dirty(ws: Path) -> bool:
+    """Whether the workspace's agent paths have uncommitted changes (modified or untracked).
+
+    Args:
+        ws: The workspace.
+
+    Returns:
+        True if they are dirty, or if git cannot tell (a failed status is never "clean").
+    """
+    paths = agent_paths(ws)
+    if not paths:
+        return False
+    status = run_git(ws, "status", "--porcelain", "--", *paths)
+    return status.returncode != 0 or bool(status.stdout.strip())
+
+
 def worktree_tree(ws: Path, paths: list[str]) -> str | None:
     """The tree of HEAD with *paths* as they are on disk now (untracked files included, ignored ones not).
 

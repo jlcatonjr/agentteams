@@ -50,8 +50,8 @@ from agentteams._fleet_bridge import recorded_bridge_source as _recorded_bridge_
 from agentteams import _fleet_twin_acks as _twin_acks
 from agentteams.git_exec import run_git
 from agentteams._fleet_snapshot import (  # noqa: F401  (re-exported: tests and callers use fleet.*)
-    SNAPSHOT_REF_PREFIX, agent_paths as _agent_paths, git_diff as _git_diff, git_snapshot as _git_snapshot,
-    worktree_tree as _worktree_tree,
+    SNAPSHOT_REF_PREFIX, agent_paths as _agent_paths, agent_paths_dirty as _agent_paths_dirty, git_diff as _git_diff,
+    git_snapshot as _git_snapshot, worktree_tree as _worktree_tree,
 )
 from agentteams.backup import BACKUP_DIR_NAME as _BACKUP_DIR_NAME
 from agentteams.vulnscan import project_policy as _vpolicy
@@ -746,6 +746,14 @@ def run_fleet(args, parser) -> int:
         if apply and is_git:
             snap_ref, committed = _git_snapshot(ws, allow_no_verify=allow_no_verify)
             wr.snapshot_ref, wr.snapshot_committed = snap_ref, committed
+            if not committed and _agent_paths_dirty(ws):
+                # Uncommitted agent edits with no snapshot would have no rollback point: never update over them.
+                detail = "dirty agent paths but no snapshot was recorded (see the warning above) — not updated"
+                wr.targets += [TargetResult(workspace=str(ws), target=tg, status="SKIP", detail=detail)
+                               for tg in targets]
+                print(f"    SKIP: {detail}")
+                results.append(wr)
+                continue
             print(f"    snapshot: {snap_ref[:10] if snap_ref else '—'}"
                   f"{' (ref under ' + SNAPSHOT_REF_PREFIX + ')' if committed else ' (HEAD; clean)'}")
 
