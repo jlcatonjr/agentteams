@@ -567,6 +567,25 @@ def test_stdin_and_caps_validated(tmp_path: Path) -> None:
                   os_confine="off", resolver=res, profiles=SP, **kw)  # type: ignore[arg-type]
 
 
+def test_execute_launch_runs_a_prepared_launch_with_runs_checks(tmp_path: Path) -> None:
+    launch = W.Launch(argv=[sys.executable, "-I", "-c", "import sys; sys.stdout.write(sys.stdin.read() * 3)"], env={},
+                      cwd=str(tmp_path), run_dir=None, cleanup=lambda: None, os_confinement="none", os_reason="off",
+                      read_only_mode="none", timeout_s=30, module_sha256="m" * 64)
+    res = W.execute_launch(launch, b"ab", stdout_cap=4, stderr_cap=64)
+    assert res.truncated and res.trap == "output-cap" and res.module_sha256 == "m" * 64
+    assert W.execute_launch(launch, b"ab", stdout_cap=64, stderr_cap=64).stdout == b"ababab"
+    for stdin, out_cap, err_cap in ((b"x" * (W.MAX_STDIN_BYTES + 1), 1, 1), ("text", 1, 1), (b"", 0, 1),
+                                    (b"", 1, 0), (b"", True, 1)):
+        with pytest.raises(W.WasmExecError):
+            W.execute_launch(launch, stdin, stdout_cap=out_cap, stderr_cap=err_cap)  # type: ignore[arg-type]
+
+
+def test_nested_deny_reads_cover_the_common_credential_stores() -> None:
+    for store in ("~/.ssh", "~/.aws", "~/.gnupg", "~/.docker", "~/.kube", "~/.npmrc", "~/.pypirc", "~/.netrc",
+                  "~/Library/Keychains"):
+        assert store in W.NEST_DENY_READS
+
+
 # --- snapshot copies (R7; the walker lives in _sandbox_profiles) -----------------------------------------------------
 
 def _snap(src: Path, dst: Path, budget: list[int] | None = None) -> None:
