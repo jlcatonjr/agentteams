@@ -1,0 +1,8 @@
+{
+  "patch_id": "cd1216f02a542c4ba17f92bcdf2242ab7bc1dfbe",
+  "commit": "bd634e26906c7c2d92a664fca168eff6a863c7f9",
+  "subject": "feat(vulnscan): stage-major \u2014 automatic semver-major upgrades as PRs",
+  "impact": "2 modules added, 12 symbols added, 5 symbols changed",
+  "note": "stage-major: new modules executor_pr and npm_major. stage_fix/validate_diff/check_lock_edit/zero_change_detail/npm_fix each gain a keyword-only arg with a backward-compatible default (major/manifest/install), so existing callers (worktree_fixes, daily, executor) are unchanged. PinChange gains major=False. Docs and CHANGELOG updated.",
+  "recorded_at": "2026-10-31T16:39:45Z"
+}
