@@ -25,6 +25,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import stat
 from collections.abc import Mapping, Sequence
 from importlib import resources
@@ -50,7 +51,7 @@ GOOSE_TIMEOUT = 300
 #: Largest grant timeout a launch may carry (I5); the server enforces the same bound.
 MAX_TIMEOUT_S = 240
 #: sha256 of the shipped server; ``tests/test_wasm_mcp.py`` keeps it current.
-SHA256 = "e7560d7537a723dfab66c4cb47380e4d1301696a9e5c3458aa949ce3e995fe3f"
+SHA256 = "ce90e1f100e2e6ed342600c129aa74c9a6c26c8e7e04cf5da68fed8a078bd9d8"
 
 #: The bundle: ``(installed path, packaged source)``; modules first, in the server's load order.
 BUNDLE: tuple[tuple[str, str], ...] = (
@@ -243,8 +244,6 @@ def launch_args(agent: str, grant: Any, languages: Sequence[str], pins_sha: str 
         ValueError: A bad slug, empty or unknown languages, a widened grant for the shared instance, or as
             :func:`grant_args`.
     """
-    import re
-
     if agent != SESSION_AGENT and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", agent or ""):
         raise ValueError(f"agent {agent!r} must be an agent slug or {SESSION_AGENT}")
     given = list(languages)
@@ -530,8 +529,12 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
         missing += [r for r in cpp.permission_rules(protect_ledger, control) if r not in deny]
         try:
             local = json.loads((root / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except FileNotFoundError:
+            local = {}   # absent: nothing overrides the project settings
+        except (OSError, ValueError):   # present but unreadable: it might turn the sandbox off (CH-24: say so)
             local = {}
+            missing.append("a readable, valid settings.local.json (it is unreadable or not JSON, so it may turn the "
+                           "sandbox off)")
         lsb = (local.get("sandbox") or {}) if isinstance(local, dict) else {}
         if lsb.get("enabled") is False or lsb.get("allowUnsandboxedCommands") is True:
             missing.append("settings.local.json must not turn the sandbox off")
@@ -583,6 +586,9 @@ def wiring_problems(root: str | Path, framework: str, manifest: dict, *, home: s
         got = _file_sha(root / rel)
         if got is None:
             problems.append(f"{rel} is missing, a symlink or not a regular file; re-render the team")
+        elif got != sha and rel == PROTECTED_PATH:   # the server cannot check its own bytes: only this check does
+            problems.append(f"{rel} does not match its pinned sha256 (the server cannot detect this itself and "
+                            "would still start); re-render")
         elif got != sha:
             problems.append(f"{rel} does not match its pinned sha256 (the server refuses to start); re-render")
     bin_dir = root / BIN_DIR

@@ -49,6 +49,10 @@ path, and no bytecode is written (`-B` plus `sys.dont_write_bytecode`). Any mism
 `initialize` is answered. The pins file is checked against a launch flag, not a constant, so a `--wasm-pin-update`
 needs no server change.
 
+The server cannot check its own bytes. An edited `agentteams-wasm-mcp.py` still starts; only
+`agentteams --check-wiring` (and `--verify-integrity`) reports it. At start the server refuses only when its own path
+is a symlink.
+
 ## `run_wasm`
 
 | Argument | Meaning |
@@ -83,9 +87,10 @@ Only passes are cached, so a runtime installed later is picked up without a rest
   bundle lives in `.agentteams/bin/`. They are session-write-denied only when the OS sandbox is on and R1's rules
   are emitted and merged into the live host config. `control_plane_advisory` reports anything less as
   `WASM grant integrity: advisory (control plane is agent-writable: <reason>)`, never a silent pass.
-- **Read grants exclude secrets (S4).** `--read` paths and `path` arguments use the runner server's deny lists plus
-  every agent-config dir. A granted directory that holds a denied name or a symlink refuses to start, because a WASI
-  preopen is a whole directory. A file added after start is caught at the next start (residual R4).
+- **Read grants exclude secrets (S4).** `--read` paths and `path` arguments use the bundled shared credential list
+  (`_sandbox_profiles.credential_name`, which covers everything the runner server denies) plus VCS and every
+  agent-config dir. A granted directory that holds a denied name or a symlink, or that passes the shared scan caps
+  (20 000 entries, 32 levels), refuses to start, because a WASI preopen is a whole directory. A file added after start is caught at the next start (residual R4).
 - **Verified copies never go to TMPDIR (R3).** wasmtime and the module are copied into
   `.agentteams/wasm/exec/<run-id>/` and re-hashed there. A server that cannot write there refuses the call.
 - **Content is data (C-4).** Guest output is returned verbatim, capped and labelled. Nothing is logged to disk. Each
