@@ -283,6 +283,7 @@ nav:
               - template-pins: api-reference/template-pins.md
           - Host features & bridge emission:
               - host-features: api-reference/host-features.md
+              - sandbox-state: api-reference/sandbox-state.md
               - workspace-privilege-scoping: api-reference/workspace-privilege-scoping.md
               - rank-conformance: api-reference/rank-conformance.md
               - baseline: api-reference/baseline.md
