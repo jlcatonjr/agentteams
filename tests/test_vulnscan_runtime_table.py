@@ -28,6 +28,8 @@ CYCLES: dict[str, list[dict]] = {
                {"cycle": "6", "eol": "2024-11-12", "is_eol": True, "latest": "6.0.36"}],
     "ubuntu": [{"cycle": "24.04", "eol": False, "is_eol": False, "latest": "24.04.1"},
                {"cycle": "20.04", "eol": "2025-05-31", "is_eol": True, "latest": "20.04.6"}],
+    "fedora": [{"cycle": "44", "eol": False, "is_eol": False, "latest": ""},
+               {"cycle": "40", "eol": "2025-05-13", "is_eol": True, "latest": ""}],
     "debian": [{"cycle": "12", "eol": False, "is_eol": False, "latest": "12.7"},
                {"cycle": "10", "eol": "2022-09-10", "is_eol": True, "latest": "10.13"}],
 }
@@ -135,6 +137,13 @@ def test_evaluate_os_release_line_and_codenames(eol: list[str]) -> None:
     assert runtimes.evaluate_os("debian", '"12"', today=TODAY).verdict == "ok"
     assert runtimes.evaluate_os("Debian", "11", today=TODAY).verdict == "unchecked"     # line not listed
     assert runtimes.evaluate_os("alpine", "3.18.4", today=TODAY).verdict == "unchecked"  # feed unreachable
+
+
+def test_alpine_uses_the_renamed_slug_and_fedora_upgrades_to_a_line_name(eol: list[str]) -> None:
+    """endoflife.date renamed alpine to alpine-linux; Fedora lists no latest release, so the line name is the target."""
+    assert runtimes.OS_PRODUCTS["alpine"].eol == "alpine-linux"
+    old = runtimes.evaluate_os("fedora", "40", today=TODAY)
+    assert (old.verdict, old.upgrade_to) == ("eol", "44")
     assert runtimes.evaluate_os("gentoo", "2.15", today=TODAY).verdict == "unchecked"
     assert runtimes.cycle_of("ubuntu", runtimes.OS_CODENAMES["ubuntu"]["jammy"]) == "22.04"
 

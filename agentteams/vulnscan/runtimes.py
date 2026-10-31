@@ -155,7 +155,7 @@ EOL_PRODUCT: dict[str, str] = {k: p.eol for k, p in PRODUCTS.items()}
 OS_PRODUCTS: dict[str, Product] = {
     "ubuntu": Product("ubuntu", 2, label="Ubuntu"),
     "debian": Product("debian", 1, label="Debian"),
-    "alpine": Product("alpine", 2, label="Alpine Linux"),
+    "alpine": Product("alpine-linux", 2, label="Alpine Linux"),
     "amzn": Product("amazon-linux", 1, label="Amazon Linux"),
     "amazonlinux": Product("amazon-linux", 1, label="Amazon Linux"),
     "rhel": Product("rhel", 1, label="Red Hat Enterprise Linux"),
@@ -294,12 +294,15 @@ def _security_releases(feed: str | None, cycle: str) -> list[str] | None:
 
 
 def _release_line(slug: str, cycle: str, today: _dt.date) -> tuple[dict | None, str]:
-    """Return (the cycle's endoflife.date record or None, the newest supported line's latest release)."""
+    """Return (the cycle's endoflife.date record or None, the newest supported line's latest release).
+
+    A product that lists no latest release (Fedora) gives the newest supported line's name instead.
+    """
     cycles = _eol_cycles(slug)
     info = next((c for c in cycles if c["cycle"] == cycle), None)
     supported = [c for c in cycles if not _is_eol(c, today)]
     newest = max((c["latest"] for c in supported if c["latest"]), key=version_key, default="")
-    return info, newest
+    return info, newest or max((c["cycle"] for c in supported), key=version_key, default="")
 
 
 def evaluate(kind: str, version: str, path: str = "", manager: str = "",
