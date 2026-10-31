@@ -239,13 +239,8 @@ def _unbound_reason(team_dir: Path, entry: dict) -> str | None:
         return "is bound to a decision row, but the decisions log is gone"
     rows, fieldnames = read
     _assert_decision_chain_intact(rows, fieldnames)
-    matches = []
-    for row in rows:
-        try:
-            if _decision_binding(row) == binding:
-                matches.append(row)
-        except RuntimeError:   # a row with a '|' in a signed field cannot be the bound one
-            continue
+    # A row with a '|' in a signed field raises here: a malformed log refuses the carry-over (fail-closed).
+    matches = [row for row in rows if _decision_binding(row) == binding]
     if not matches:
         return "is bound to a decision row that is no longer in the decisions log"
     row = matches[-1]
