@@ -302,6 +302,7 @@ nav:
               - proposal_staging: api-reference/proposal-staging.md
               - proposal_run: api-reference/proposal-run.md
               - proposal_runner: api-reference/proposal-runner.md
+              - runner_wasm: api-reference/runner-wasm.md
               - sealed_result: api-reference/sealed-result.md
               - git_exec: api-reference/git-exec.md
               - source_provenance: api-reference/source-provenance.md
