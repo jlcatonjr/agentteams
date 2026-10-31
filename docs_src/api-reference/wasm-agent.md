@@ -24,11 +24,17 @@ guest program itself is P07; the CLI that builds an `AgentSpec` from a rendered 
   max_tool_calls=200, wall_clock_s=1800, max_usd=None, max_delegation_depth=2, max_child_runs=8)` and
   `BudgetLedger` (`reserve` / `commit` / `refund` before and after each call, `carve` for P09 children).
   The defaults are agentteams policy, not provider facts. A USD cap without a price for the model refuses the run.
+  `BudgetExceeded(cap, detail="")` is what the ledger raises when a cap would be (or was) exceeded; `cap` names the
+  `Budget` field.
+- `RunLink(run_id, parent=None, depth=1)`: a parent run (`RunOptions.parent`, for P09 delegation). Revocation checks
+  the run's own `REVOKED` sentinel and every ancestor's, so revoking an ancestor stops the child.
 - `stage0(spec, task, *, project_root, budget, guest_source, guest_sha256, ...) -> RunResult`: the unconfined
   launcher (P08 calls it). See "Stage 0 and Stage 1" below.
 - `verify_transcript(path) -> TranscriptReport(ok, complete, records, head, status, error)` and
   `revoke_run(project_root, run_id, reason)` (creates the run's `REVOKED` sentinel; an operator action).
 - `PROTOCOL_VERSION` (1), `ProtocolError`.
+- `wasm_exec.execute_launch(launch, stdin, *, stdout_cap, stderr_cap) -> WasmResult` (P02) runs a launch Stage 0
+  prepared, with the same stdin-size and cap checks as `wasm_exec.run`; both brokers use it.
 
 Submodules: `protocol` (frames, `encode_event`, `decode_op`, control-pipe lines), `budget`, `transcript`
 (`FileJournal`, `PipeJournal`), `mediation` (`Mediator`, `OutboundDlp`, `ReservedKeyVault`), `tools` (`tool_specs`,
@@ -53,11 +59,18 @@ fail the run (`guest-unhealthy`). A wrong version fails it at once.
   only `agent` or `run_code`, never a grant.
 - When an OS sandbox is usable and the sandbox state's OS switch is on, Stage 0 starts **Stage 1** inside it: no write
   root but the agent's scratch dir (R11), the credential stores (`~/.ssh`, `~/.aws`, `~/.config/gh`,
-  `~/.config/gcloud`, `~/.netrc`, `~/Library/Keychains`), the key dir and the agentteams secrets dir read-denied (R5),
-  network allowed for the provider. Stage 1 receives the key and the per-run MAC key once over a dedicated pipe and
+  `~/.config/gcloud`, `~/.netrc`, `~/Library/Keychains`, `~/.docker`, `~/.kube`, `~/.gnupg`, `~/.npmrc`,
+  `~/.pypirc`; one list, `wasm_exec.NEST_DENY_READS`, shared with the nested wasmtime profile), the key dir and the
+  agentteams secrets dir read-denied (R5), network allowed for the provider. These are file-read denies only: they do
+  not stop Keychain access through the Security framework (`securityd`, a Mach service), which the host profile
+  does not filter. Stage 1 receives the key and the per-run MAC key once over a dedicated pipe and
   starts with an environment of `PATH`, `LANG`, `HOME` and a private `TMPDIR`. Its records and prepare requests go
   over a control pipe; Stage 0 assigns `seq`/`prev`/`hash`, `fsync`s and only then acks, so no model call is made
   without a durable `model-request` record (R4).
+- A bootstrap line over the 6 MiB control cap (a very large task, spec or secret list) refuses the run before
+  Stage 1 starts it (`host-launch: bootstrap frame`): Stage 0 kills and reaps Stage 1 and journals a
+  `protocol-error`. A key-pipe write failure is journaled too. Stage 1 exits with status 2 on an unreadable,
+  malformed or wrong-version bootstrap.
 - Otherwise the same loop runs in Stage 0's process and says so: `WASM host not OS-confined: <reason>` goes to the
   output, the transcript and `RunResult.notices`.
 - Guest `os_confine`: `"inherited"` is forwarded only from the P08 launcher and only when Stage 1 was wrapped
@@ -73,6 +86,8 @@ fail the run (`guest-unhealthy`). A wrong version fails it at once.
 - P06's reserved reply keys (`_provider_id`, `_provider_sig`) never reach a guest or the transcript. The vault keeps
   them host-side and binds each to its turn and block with an HMAC under a per-run key; the `model-reply` record
   carries only their digests and the MAC, which Stage 0 checks. They are restored only to the block they came from.
+  The MAC guards against guests and model output, not against a compromised Stage 1: Stage 1 holds the MAC key (it
+  runs the vault), so a compromised Stage 1 could mint valid MACs. Confining Stage 1 is the OS sandbox's job.
 - The transcript is a hash chain, not a MAC: it detects edits by anything that does not rewrite the whole chain. The
   head is printed at run end.
 - Step cost (R13), dev runtime (wasmtime 36.0.16, CPython 3.14.6 WASI, macOS arm64, 2026-10-31): median full step
