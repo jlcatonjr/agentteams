@@ -22,6 +22,7 @@ from typing import Any
 
 import pytest
 
+from agentteams import _sandbox_profiles as SP
 from agentteams import model_providers as MP
 from agentteams import wasm_exec as W
 from agentteams.wasm_agent import launch as L
@@ -69,7 +70,7 @@ def _run(root: Path, spec: AgentSpec, replies: list[dict[str, Any]], monkeypatch
     monkeypatch.setattr(L, "build_provider", lambda *a, **k: MP.Provider(MP.PROVIDERS["stub"], None, "",
                                                                          MP.StubProvider(script)))
     res = L.stage0(spec, "Work on the docs.", project_root=root, budget=Budget(), stub_script=[],
-                   resolver=DevResolver())
+                   resolver=DevResolver(), host_confine="off")      # in-process, so the capturing provider applies
     return res, seen
 
 
@@ -201,3 +202,19 @@ def test_symlink_out_of_a_read_mount_is_not_readable(tmp_path: Path, monkeypatch
         assert got["t3"]["content"].count("denied") == 2, got["t3"]
     else:
         assert res.reason == "prepare-refused" and seen == []
+
+
+@pytest.mark.skipif(SP.available() is None, reason="no nestable OS sandbox here (Seatbelt cannot nest inside a "
+                    "sandboxed session); operator check in PENDING-operator-commands.md")
+def test_end_to_end_under_a_confined_stage1(tmp_path: Path) -> None:
+    root, scratch = _project(tmp_path)
+    script = [tool_reply(("t1", "read_file", {"path": "/project/docs/a.md"}),
+                         ("t2", "run_code", {"language": "python", "source": "print(6 * 7)"})), text_reply("nested")]
+    res = L.stage0(_spec(root, scratch), "Work on the docs.", project_root=root, budget=Budget(), stub_script=script,
+                   resolver=DevResolver(), host_confine="require")
+    assert (res.status, res.output) == ("ok", "nested"), res
+    assert not any("not OS-confined" in n for n in res.notices)
+    recs = _records(res)
+    assert [s["op"] for s in recs if s["kind"] == "guest-step"] == ["model", "tool", "model", "done"]
+    assert [r["ok"] for r in recs if r["kind"] == "host-tool"] == [True]
+    assert verify_transcript(res.transcript_path).complete
