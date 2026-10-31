@@ -163,6 +163,13 @@ def test_bad_mount_hosts_refused(host: str) -> None:
         W.Mount(host, "/project/x", "ro")
 
 
+@pytest.mark.parametrize("host", ["/a:b", "/p/data:/project/x", "/a/b:", "/:x", "/a/b:ro"])
+def test_any_colon_in_a_mount_host_is_refused(host: str) -> None:
+    """S2: not only '::' — a single ':' in the host path is refused (wasmtime splits --dir on ':')."""
+    with pytest.raises(W.WasmExecError, match="without ':'"):
+        W.Mount(host, "/project/x", "ro")
+
+
 @pytest.mark.parametrize("guest,mode,ok", [
     ("/project/a/b", "ro", True), ("/scratch", "rw", True), ("/lib", "ro", True), ("/lib/python3.14", "ro", True),
     ("/src", "ro", True), ("/etc", "ro", False), ("/project", "ro", False), ("/project/../x", "ro", False),

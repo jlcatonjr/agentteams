@@ -98,6 +98,7 @@ _ARGV0_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$", re.ASCII)
 _AGENT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$", re.ASCII)
 _SRC_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", re.ASCII)
 _VERSION_RE = re.compile(r"^wasmtime (\d+\.\d+\.\d+) ", re.ASCII)
+_WIN_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
 _BAD_HOST_CHARS = ('"', "\n", "\r", "\0") + (() if os.name == "nt" else ("\\",))
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _CONTROL_PLANE = (".agentteams", "wasm")
@@ -134,8 +135,11 @@ DEFAULT_LIMITS = Limits(fuel=GRANT_SPEC["defaults"]["fuel"], max_memory_bytes=GR
 def _check_host(host: str) -> None:
     if host == RUN_SCRATCH:
         return
-    if not isinstance(host, str) or not os.path.isabs(host) or "::" in host or host.startswith("-"):
-        raise WasmExecError(f"mount host {host!r} must be an absolute path without '::'; refused")
+    # wasmtime splits --dir HOST::GUEST[::opts] on ':' runs, so ANY ':' in the host path is refused, not only
+    # '::' (a single ':' can still shift the split on some releases). The one exception is a Windows drive prefix.
+    rest = host[2:] if os.name == "nt" and isinstance(host, str) and _WIN_DRIVE.match(host) else host
+    if not isinstance(host, str) or not os.path.isabs(host) or ":" in rest or host.startswith("-"):
+        raise WasmExecError(f"mount host {host!r} must be an absolute path without ':'; refused")
     if any(c in host for c in _BAD_HOST_CHARS) or any(ord(c) < 0x20 or ord(c) == 0x7F for c in host):
         raise WasmExecError(f"mount host {host!r} contains a character that can't be passed safely; refused")
 
