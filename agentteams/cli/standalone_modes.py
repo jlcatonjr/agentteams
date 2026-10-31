@@ -263,6 +263,10 @@ def run_standalone_modes(
 
         if getattr(args, "wasm_sandbox", None) is not None:  # P01: WASM on means the control plane is checked too
             manifest[WASM_SANDBOX_CLI_KEY] = args.wasm_sandbox
+        from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY
+
+        if getattr(args, "wasm_substrate", None) is not None:  # P20: the projected model-substrate switch
+            manifest[WASM_SUBSTRATE_CLI_KEY] = args.wasm_substrate
         # The verifiers read <project>/.claude/... and <project>/.goose/...; --output names the
         # team's agents dir, so map a default agents dir back to its project root (a non-default
         # layout is passed through unchanged). Before this, the default layout always reported
@@ -333,6 +337,10 @@ def run_standalone_modes(
         runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)
         if runner_problems:
             ok, messages = False, [*messages, *(f"ERROR: {p}" for p in runner_problems)]
+        from agentteams.sandbox_projection import wiring_lines  # P20 D8: the projected file exists/parses/matches
+
+        proj_ok, proj_lines = wiring_lines(manifest, Path(wiring_root), output_dir)
+        ok, messages = ok and proj_ok, [*messages, *proj_lines]
         # mathAgents M6-F4: an unresolved xcrun launcher fails every confined call (exit 71); advisory, exit-neutral.
         messages = [*messages, *xcrun_launcher_lines(wiring_root, description)]
         print(f"Sandbox wiring check ({framework}): {output_dir}")
