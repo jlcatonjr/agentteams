@@ -5,6 +5,8 @@ The one place agentteams starts `wasmtime` (WASM sandbox, plan P02). A guest run
 is usable, wasmtime runs nested inside it ([`confinement`](confinement.md)'s Seatbelt/bwrap builders, via
 `agentteams._sandbox_profiles`). The module imports nothing from agentteams, so the standalone `agentteams_wasm`
 bundle can load the same file. Provisioning and nesting are injected (`resolver=`, `profiles=`, both required).
+The `profiles` module supplies `available`, `seatbelt_profile`, `bwrap_argv`, `snapshot_tree`, `refuse_credentials`,
+`remove_tree` (run-directory cleanup) and `ConfinementError`.
 
 ## Public Surface
 

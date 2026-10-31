@@ -21,7 +21,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import signal
 import stat
 import subprocess
@@ -543,19 +542,6 @@ def _copy_verified(src: str, dst: str, mode: int) -> str:
     return digest.hexdigest()
 
 
-def _remove_tree(path: str) -> None:
-    """Remove a run dir: permissions restored on real directories only; nothing behind a symlink is touched."""
-    if not os.path.isdir(path) or os.path.islink(path):
-        return
-    for dirpath, dirnames, _ in os.walk(path, followlinks=False):
-        for d in [dirpath, *(os.path.join(dirpath, n) for n in dirnames)]:
-            if stat.S_ISDIR(os.lstat(d).st_mode):
-                os.chmod(d, 0o700)
-    shutil.rmtree(path, ignore_errors=True)
-    if os.path.lexists(path):
-        print(f"WASM SANDBOX: could not remove run directory {path}", file=sys.stderr)
-
-
 def _check_mount_host(root: str, m: Mount, scratch: str | None, inside: str | None = None) -> None:
     """A ``/project`` mount: a real directory in the project, not its root, clear of protected paths and keys.
     A runtime mount (*inside* given): a real directory inside the module's directory. Neither may touch scratch."""
@@ -648,7 +634,7 @@ def materialize(prepared: Prepared, args: Sequence[str], *, project_root: str | 
 
     def cleanup() -> None:
         if "dir" in state:
-            _remove_tree(state["dir"])
+            profiles.remove_tree(state["dir"])
 
     done = False
     try:

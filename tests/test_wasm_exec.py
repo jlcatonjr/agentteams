@@ -39,7 +39,8 @@ def _fake_wasmtime(tmp_path: Path) -> str:
 def _profiles(kind: str | None) -> types.ModuleType:
     """A stand-in profiles module: the real builders, a fixed ``available()``."""
     mod = types.ModuleType("fake_profiles")
-    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "refuse_credentials", "ConfinementError"):
+    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "remove_tree", "refuse_credentials",
+                 "ConfinementError"):
         setattr(mod, name, getattr(SP, name))
     mod.available = lambda: kind  # type: ignore[attr-defined]
     return mod
@@ -578,6 +579,20 @@ def test_execute_launch_runs_a_prepared_launch_with_runs_checks(tmp_path: Path) 
                                     (b"", 1, 0), (b"", True, 1)):
         with pytest.raises(W.WasmExecError):
             W.execute_launch(launch, stdin, stdout_cap=out_cap, stderr_cap=err_cap)  # type: ignore[arg-type]
+
+
+def test_remove_tree_restores_modes_and_never_follows_a_symlink(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("k")
+    run = tmp_path / "run"
+    (run / "ro").mkdir(parents=True)
+    (run / "ro" / "f").write_text("x")
+    (run / "link").symlink_to(outside)
+    os.chmod(run / "ro", 0o500)
+    SP.remove_tree(str(run / "link"))                 # a symlink itself is left alone
+    SP.remove_tree(str(run))
+    assert not run.exists() and (outside / "keep").read_text() == "k"
 
 
 def test_nested_deny_reads_cover_the_common_credential_stores() -> None:
