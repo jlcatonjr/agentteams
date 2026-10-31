@@ -33,7 +33,7 @@ CYCLES: dict[str, list[dict]] = {
     "debian": [{"cycle": "13", "eol": False, "is_eol": False, "latest": "13.1"},
                {"cycle": "12", "eol": False, "is_eol": False, "latest": "12.12"},
                {"cycle": "10", "eol": "2022-09-10", "is_eol": True, "latest": "10.13"}],
-    "alpine": [{"cycle": "3.22", "eol": False, "is_eol": False, "latest": "3.22.2"},
+    "alpine-linux": [{"cycle": "3.22", "eol": False, "is_eol": False, "latest": "3.22.2"},
                {"cycle": "3.18", "eol": "2025-05-09", "is_eol": True, "latest": "3.18.12"}],
     "eclipse-temurin": [{"cycle": "17", "eol": False, "is_eol": False, "latest": "17.0.13"}],
     "amazon-corretto": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.472"}],
