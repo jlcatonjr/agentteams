@@ -72,6 +72,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/proposals.py",  # orchestrator-only-writes pilot: the one path that applies agents'
                                 # proposals and runs their commands; a silent widening defeats the policy
     "agentteams/proposal_run.py",  # R2 carve: the command-request half of proposals.py (runs agents' commands)
+    "agentteams/runner_wasm.py",  # WASM P12: the runner's sandbox: wasm jails (shape, grant, verified wasmtime launch)
     "agentteams/proposal_staging.py",  # R3: staged/direct agent writes and the orchestrator's approvals
     "agentteams/runner_mcp.py",  # R4: the agentteams_runner server's install path and pinned hash
     "agentteams/data/agentteams-runner-mcp.py",  # R4: the server granted agents launch to write and execute

@@ -256,6 +256,30 @@ def check_installed_servers(root: Path) -> None:
     check_installed_runner_mcp(root)
 
 
+def check_wasm_runtimes(root: Path, policy: P.Policy) -> None:
+    """Runner start (WASM plan P12): every runtime a ``sandbox: wasm`` jail needs is installed and matches its pins.
+
+    Fails closed at start rather than at the first queued command; each run re-hashes again before it executes.
+
+    Args:
+        root: The project root.
+        policy: The loaded policy.
+
+    Returns:
+        None.
+
+    Raises:
+        RunnerError: A wasm jail's wasmtime or interpreter is absent or does not match its pin.
+    """
+    from agentteams import runner_wasm
+
+    try:
+        runner_wasm.check_runtimes(root, policy.confined)
+    except runner_wasm.RunnerWasmError as exc:
+        raise RunnerError(f"{exc}; run `agentteams --wasm-install --project {root}` outside every agent session") \
+            from exc
+
+
 # --- the runner ---------------------------------------------------------------------------------
 
 
@@ -336,6 +360,7 @@ class Runner:
         self._heartbeat_thread: threading.Thread | None = None
         try:
             check_installed_servers(self.root)
+            check_wasm_runtimes(self.root, policy)
         except RunnerError:
             self.close()
             raise
