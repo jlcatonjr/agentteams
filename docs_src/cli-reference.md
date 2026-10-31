@@ -1777,6 +1777,52 @@ Do not query GitHub. Merged-by-PR is not evaluated, and no remote deletion is pl
 
 ---
 
+## WASM Runtime Provisioning
+
+Explicit operator commands (D4) that fetch and check the pinned WASM runtime and guest interpreters. They are
+standalone: each is refused alongside `--description`, `--self`, `--update` or `--output`, so a render never
+downloads anything. Exit codes: `0` ok, `1` verification failure or refusal, `2` usage, `3` network. Module:
+[`wasm_runtime`](api-reference/wasm-runtime.md).
+
+### `--wasm-install [COMPONENTS]`
+
+Download the pinned components into `<project>/.agentteams/wasm/` (`--project`, default the current directory).
+`COMPONENTS` is a comma list of `wasmtime`, `python`, `javascript`, or `all`; the default is `wasmtime`. It prints
+the plan (version, URL, size, sha256, license, target) and asks `y/N` unless `--yes`; a non-tty without `--yes`
+refuses. `--dry-run` prints the plan only, with no network access and no writes. The archive is checked against
+its pinned size and sha256 before extraction, extraction refuses unsafe members, and the extracted files are
+verified before an atomic move into place. A component whose pin still reads `TODO-PIN` is refused before any
+network access. A previous install that fails re-verification is moved to `.quarantine/`, never deleted.
+
+### `--wasm-status [COMPONENTS]`
+
+Read-only and network-free. Re-hashes each installed component against the packaged pins and prints `ok <version>`,
+`absent`, `MISMATCH: …` or `pin incomplete`. Exits `0` only when every requested component (default `all`) is ok.
+
+### `--wasm-pin-update COMPONENT VERSION`
+
+Operator tool; needs network access to `api.github.com` and the GitHub release asset host. Re-pins one component
+from release metadata and a verified download: S-10 applies (at least 14 days old and the newest such release on
+its major line), every platform asset is checked against its API digest, extracted with the same safe extractor,
+and hashed. The pins file is written only after every platform verified; the unified diff is printed and nothing is
+committed. The diff needs `@security` review before it is committed, then `--write-integrity-manifest`.
+
+### `--remediation GHSA-IDS`
+
+With `--wasm-pin-update`: comma-separated GHSA ids from a recorded `@security` decision that justify adopting a fix
+release inside the S-10 cooldown. Each id must appear in the release notes of the line up to `VERSION`.
+
+### `--tofu`
+
+With `--wasm-pin-update`: accept a release asset whose metadata carries no sha256 digest (trust on first use). The
+pins record `"provenance": "tofu"`; a recorded `@security` decision is required.
+
+### `--pins-out PATH`
+
+With `--wasm-pin-update`: the pins file to rewrite. Defaults to the packaged
+`agentteams/data/wasm_runtime_pins.json` only when it sits in a git work tree (an editable checkout); otherwise it
+is required, so an installed package is never modified in place.
+
 ## Exit Codes
 
 | Code | Meaning |
