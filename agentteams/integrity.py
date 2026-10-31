@@ -355,6 +355,22 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/model_providers/_stub.py",
     "agentteams/model_providers/_transport.py",
     "agentteams/model_providers/_validate.py",
+    # The WASM agent host (P05, ARCH-B). It alone holds the provider key and decides what a guest op may cause:
+    # protocol's closed frames and size caps, host's toolset/pending-id checks (C-3/C-4), mediation's DLP,
+    # journal-before-call and the HMAC-bound reserved-key vault, budget's caps, transcript's Stage-0-only chain and
+    # known-secret withholding (R4), broker's grant-holding preparer (a requester never supplies a grant), launch's
+    # key pipe, env scrub and credential-store denyRead host profile (R5), and stage1's bootstrap. A silent edit to
+    # any of them leaks the key, widens a guest or rewrites the run record without tripping --verify-integrity.
+    "agentteams/wasm_agent/__init__.py",
+    "agentteams/wasm_agent/broker.py",
+    "agentteams/wasm_agent/budget.py",
+    "agentteams/wasm_agent/host.py",
+    "agentteams/wasm_agent/launch.py",
+    "agentteams/wasm_agent/mediation.py",
+    "agentteams/wasm_agent/protocol.py",
+    "agentteams/wasm_agent/stage1.py",
+    "agentteams/wasm_agent/tools.py",
+    "agentteams/wasm_agent/transcript.py",
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude
