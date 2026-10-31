@@ -23,8 +23,7 @@ from agentteams.cli.adopt_step import attach_dry_run_plan, run_adopt_step
 from agentteams.cli.write_policy_warning import warn_unnarrowed_adopted
 from agentteams.frameworks.goose_tool_scoping import grant_merge_notice as goose_grant_merge_notice
 from agentteams.cli import security_gate
-from agentteams.sandbox_projection import emit_projection as _emit_sandbox_projection
-from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY
+from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY  # P20 --wasm-substrate (transient; validated in finalize)
 from agentteams.cli.artifacts import (
     _emit_codex_mcp_if_enabled,  # noqa: F401  (re-exported: tests reach it via generate.)
     _emit_host_mcp_artifacts_if_enabled,
@@ -192,8 +191,7 @@ def _run_generate_inner(
     # when set, so a cooperative team (or the default) stays byte-identical.
     if getattr(args, "allow_fallback_fail_open", False):
         manifest["fallback_fail_open"] = True
-    if getattr(args, "wasm_substrate", None) is not None:  # P20: transient; validated in finalize (apply_wasm_switch)
-        manifest[WASM_SUBSTRATE_CLI_KEY] = args.wasm_substrate
+    manifest.update({WASM_SUBSTRATE_CLI_KEY: args.wasm_substrate} if getattr(args, "wasm_substrate", None) else {})
 
     try:
         _finalize_privilege(
@@ -563,7 +561,6 @@ def _run_generate_inner(
                         )
                 _emit_privilege_artifacts(manifest, output_dir)
                 _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
-                _emit_sandbox_projection(manifest, project_root, output_dir, dry_run=bool(args.dry_run))  # P20
                 print(
                     "  ✓  Healed build-log baseline (no material drift; "
                     "fingerprint refreshed)."
@@ -736,7 +733,6 @@ def _run_generate_inner(
                     )
             _emit_privilege_artifacts(manifest, output_dir)
             _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
-            _emit_sandbox_projection(manifest, project_root, output_dir, dry_run=bool(args.dry_run))  # P20
             git_hooks.maybe_install_git_hooks(args, project_root)
             git_hooks.maybe_refresh_architecture_map(args, project_root)
             if heal_converged:
@@ -970,7 +966,6 @@ def _run_generate_inner(
                 )
         _emit_privilege_artifacts(manifest, output_dir)
         _emit_host_mcp_artifacts_if_enabled(manifest, project_root)
-        _emit_sandbox_projection(manifest, project_root, output_dir, dry_run=bool(args.dry_run))  # P20
         git_hooks.maybe_install_git_hooks(args, project_root)
         git_hooks.maybe_refresh_architecture_map(args, project_root)
 

@@ -37,9 +37,7 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
-import posixpath
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -47,12 +45,9 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.host_features import is_sandbox_capable
-from agentteams.frameworks._control_plane_protect import (
-    control_plane_for,
-    runner_protect_block,
-    seatbelt_denies,
-    substrate_protect_paths,
-)
+from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
+from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
+from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
 from agentteams.sandbox_state import effective_sandbox_state
@@ -651,23 +646,6 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
     ]
-
-
-def _runner_root_expr(root: str) -> str:
-    """Return the bash expression for one VALIDATED write root in the goose Linux runner.
-
-    ``.`` is the repo root, ``~/x`` is under ``$HOME``, an absolute root is itself (never
-    ``$REPO_ROOT//abs``), anything else is under ``$REPO_ROOT``. The literal part is
-    ``shlex.quote``-d, so it can never expand even if validation were bypassed.
-    """
-    rel = posixpath.normpath(root)
-    if rel == ".":
-        return '"$REPO_ROOT"'
-    if root.startswith("~/"):
-        return '"$HOME"/' + shlex.quote(posixpath.normpath(root[2:]))
-    if posixpath.isabs(root):
-        return shlex.quote(rel)
-    return '"$REPO_ROOT"/' + shlex.quote(rel)
 
 
 def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:

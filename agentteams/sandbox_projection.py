@@ -51,6 +51,9 @@ FIELDS: tuple[str, ...] = (
     "schema", "producer", "agentteams_version", "team", "os_sandbox", "os_sandbox_reason", "wasm_sandbox",
     "wasm_sandbox_reason", "model_substrate_wasm", "model_substrate_wasm_source", "require_enforced",
 )
+#: Transient manifest key: the agents dir of this render (set by ``cli.wasm_sandbox_switch.apply_wasm_switch``, never
+#: from input, never persisted).
+TEAM_DIR_KEY = "_sandbox_projection_team_dir"
 #: Fields whose difference alone never causes a rewrite (who wrote it, not what it says).
 _IDENTITY_FIELDS = frozenset({"team"})
 #: Fields ``--check-wiring`` does not compare: how the value was produced, not what the consumer enforces.
@@ -320,9 +323,9 @@ def write_projection(project_root: Path, record: dict[str, Any], *, dry_run: boo
     return outcome
 
 
-def emit_projection(manifest: dict[str, Any], project_root: Path, team_dir: Path, *,
+def emit_projection(manifest: dict[str, Any], project_root: Path, team_dir: Path | None = None, *,
                     dry_run: bool = False) -> ProjectionOutcome | None:
-    """The generate/sync call site: write the projection when set, or say that an unset switch left the file.
+    """The generate (via ``cli.artifacts._emit_host_mcp_artifacts_if_enabled``) and sync call site: write the projection when set, or say that an unset switch left the file.
 
     Best-effort like the sibling project-root artifact writers: a failure is printed (stderr), never raised into the
     build; the render was already preflighted (:func:`preflight`) and ``--check-wiring`` / ``--verify-integrity``
@@ -331,7 +334,7 @@ def emit_projection(manifest: dict[str, Any], project_root: Path, team_dir: Path
     Args:
         manifest: The team manifest.
         project_root: The project root.
-        team_dir: This render's agents dir.
+        team_dir: This render's agents dir; None reads :data:`TEAM_DIR_KEY` (else the project root).
         dry_run: Write nothing.
 
     Returns:
@@ -349,7 +352,8 @@ def emit_projection(manifest: dict[str, Any], project_root: Path, team_dir: Path
                   f"(model_substrate_wasm {value}) stays as the consumer's floor. Lowering it to \"off\" or deleting "
                   "the file is constraint-relaxing (sandbox-wasm-off:model-substrate).")
             return None
-        record = projection_record(manifest, team=_team_rel(team_dir, project_root))
+        team = team_dir if team_dir is not None else manifest.get(TEAM_DIR_KEY) or project_root
+        record = projection_record(manifest, team=_team_rel(Path(team), project_root))
         if record is None:
             return None
         outcome = write_projection(project_root, record, dry_run=dry_run)
@@ -463,6 +467,7 @@ __all__ = [
     "PRODUCER",
     "PROJECTION_REL",
     "SCHEMA_ID",
+    "TEAM_DIR_KEY",
     "ProjectionError",
     "ProjectionOutcome",
     "emit_projection",

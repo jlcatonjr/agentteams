@@ -30,7 +30,8 @@ class WasmSwitchError(ValueError):
     """An invalid ``--wasm-sandbox`` value or ``wasm_sandbox`` block, or a WASM grant that cannot be built."""
 
 
-def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_root: Path | None = None) -> None:
+def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_root: Path | None = None,
+                      team_dir: Path | None = None) -> None:
     """Carry ``--wasm-sandbox`` onto ``manifest`` and validate the WASM half of the effective state.
 
     P20: also validates ``--wasm-substrate`` (the transient ``WASM_SUBSTRATE_CLI_KEY`` ``cli/generate.py`` set) and,
@@ -44,6 +45,8 @@ def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_r
             CLI-set project root must already be on it (``write_root_policy.begin``) for grants with mounts.
         wasm_sandbox_cli: ``--wasm-sandbox`` (operator argv), or None.
         project_root: The project root (P20 projection checks), or None to skip them.
+        team_dir: This render's agents dir, carried as the transient ``sandbox_projection.TEAM_DIR_KEY`` for the
+            projection's ``team`` field (the project root when None).
 
     Raises:
         WasmSwitchError: A bad value, a malformed block, a refused read path, a mount with no project root, or a
@@ -67,6 +70,7 @@ def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_r
         if project_root is not None:
             from agentteams import sandbox_projection
 
+            manifest[sandbox_projection.TEAM_DIR_KEY] = Path(team_dir if team_dir is not None else project_root)
             if source is None:
                 kept = sandbox_projection.kept_value(Path(project_root))
                 if kept is not None:

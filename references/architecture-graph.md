@@ -96,7 +96,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.adopt_step` | `agentteams.adopted_agents`, `agentteams.analyze`, `agentteams.cli.adopt_merge_gate`, `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.agent_doc_sync_switch` | `agentteams.agent_doc_sync` | `agentteams.cli.app`, `agentteams.cli.parser`, `agentteams.cli.parser_validate` |
 | `agentteams.cli.app` | `agentteams.baseline`, `agentteams.cli.agent_doc_sync_switch`, `agentteams.cli.artifacts`, `agentteams.cli.branch_switch`, `agentteams.cli.commands`, `agentteams.cli.decision_log_migrate`, `agentteams.cli.generate`, `agentteams.cli.goose_switch`, `agentteams.cli.json_mode`, `agentteams.cli.mcp_grant_commands`, `agentteams.cli.package_switch`, `agentteams.cli.parser`, `agentteams.cli.proposal_commands`, `agentteams.cli.recipe_check`, `agentteams.cli.render_pipeline`, `agentteams.cli.sync_switch`, `agentteams.cli.wasm_commands`, `agentteams.fence_inject`, `agentteams.fleet`, `agentteams.frameworks.goose`, `agentteams.frameworks.registry`, `agentteams.git_hooks`, `agentteams.host_features`, `agentteams.ingest`, `agentteams.interop_write_policy`, `agentteams.mcp_need_report`, `agentteams.mcp_servers`, `agentteams.signing_switch`, `agentteams.vulnscan.project_policy` | — |
-| `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.schema_cache`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.cli.write_root_policy`, `agentteams.codex_mcp_emit`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.framework_conformance`, `agentteams.frameworks.claude`, `agentteams.front_matter_baseline`, `agentteams.grok_config_emit`, `agentteams.host_features`, `agentteams.mcp_catalog`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.memory_index_store`, `agentteams.model_routing`, `agentteams.sandbox_state`, `agentteams.signing_switch`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.git_hooks` |
+| `agentteams.cli.artifacts` | `agentteams`, `agentteams.atomicio`, `agentteams.backup`, `agentteams.cli.code_index_artifacts`, `agentteams.cli.grants`, `agentteams.cli.management_directives`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.schema_cache`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.cli.write_root_policy`, `agentteams.codex_mcp_emit`, `agentteams.drift`, `agentteams.errors`, `agentteams.eval_suite`, `agentteams.fences`, `agentteams.framework_conformance`, `agentteams.frameworks.claude`, `agentteams.front_matter_baseline`, `agentteams.grok_config_emit`, `agentteams.host_features`, `agentteams.mcp_catalog`, `agentteams.mcp_emit`, `agentteams.memory_index`, `agentteams.memory_index_incremental`, `agentteams.memory_index_store`, `agentteams.model_routing`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.signing_switch`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.git_hooks` |
 | `agentteams.cli.backup_switch` | `agentteams.emit` | `agentteams.cli.parser` |
 | `agentteams.cli.branch_switch` | `agentteams.branch_cleanup`, `agentteams.branch_inventory` | `agentteams.cli.app`, `agentteams.cli.parser`, `agentteams.cli.parser_validate` |
 | `agentteams.cli.code_index_artifacts` | `agentteams.backup`, `agentteams.cli.schema_cache`, `agentteams.code_index`, `agentteams.code_sources`, `agentteams.errors`, `agentteams.memory_index` | `agentteams.cli.artifacts` |
@@ -112,7 +112,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.exit_codes` | `agentteams.emit` | `agentteams.cli.generate` |
 | `agentteams.cli.fleet_switch` | — | `agentteams.cli.parser` |
 | `agentteams.cli.frozen_surfaces` | — | `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives` |
-| `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.cli.adopt_step`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.generate_helpers`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_policy_warning`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.fences`, `agentteams.framework_research`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.sandbox_projection`, `agentteams.security_refs`, `agentteams.shrink_allow`, `agentteams.template_pins`, `agentteams.update_report`, `agentteams.vulnscan.project_policy`, `agentteams.wasm_config`, `agentteams.write_policy` | `agentteams.cli.app` |
+| `agentteams.cli.generate` | `agentteams.ai_bad_habits`, `agentteams.analyze`, `agentteams.audit`, `agentteams.cli.adopt_step`, `agentteams.cli.artifacts`, `agentteams.cli.exit_codes`, `agentteams.cli.generate_helpers`, `agentteams.cli.json_mode`, `agentteams.cli.output_target`, `agentteams.cli.post_emit_checks`, `agentteams.cli.render_pipeline`, `agentteams.cli.security_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_policy_warning`, `agentteams.drift`, `agentteams.emit`, `agentteams.enrich`, `agentteams.errors`, `agentteams.fences`, `agentteams.framework_research`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.frameworks.registry`, `agentteams.front_matter_reconcile`, `agentteams.git_hooks`, `agentteams.graph`, `agentteams.ingest`, `agentteams.liaison_logs`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.security_refs`, `agentteams.shrink_allow`, `agentteams.template_pins`, `agentteams.update_report`, `agentteams.vulnscan.project_policy`, `agentteams.wasm_config`, `agentteams.write_policy` | `agentteams.cli.app` |
 | `agentteams.cli.generate_helpers` | `agentteams`, `agentteams.cli.artifacts`, `agentteams.cli.management_directives`, `agentteams.cli.render_pipeline`, `agentteams.control_plane_io`, `agentteams.drift`, `agentteams.emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.front_matter_reconcile`, `agentteams.integrity`, `agentteams.projection_marker`, `agentteams.prompt_roots`, `agentteams.signing_switch`, `agentteams.team_dir_advisories` | `agentteams.cli.generate`, `agentteams.cli.standalone_modes` |
 | `agentteams.cli.goose_switch` | `agentteams.goose_config` | `agentteams.cli.app`, `agentteams.cli.parser` |
 | `agentteams.cli.governance_targets` | — | `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives`, `agentteams.sandbox_handoff`, `agentteams.wasm_config` |
@@ -317,7 +317,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.runner_mcp` | `agentteams.backup` | `agentteams.audit_agent_contract`, `agentteams.cli.standalone_modes`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_direct_grants`, `agentteams.proposal_runner` |
 | `agentteams.runner_wasm` | `agentteams._sandbox_profiles`, `agentteams.cli.sandbox_effects`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.confinement`, `agentteams.frameworks.registry`, `agentteams.proposal_policy`, `agentteams.sandbox_state`, `agentteams.wasm_exec`, `agentteams.wasm_guests`, `agentteams.wasm_runtime` | `agentteams.cli.os_sandbox_switch`, `agentteams.cli.proposal_commands`, `agentteams.confinement`, `agentteams.proposal_run`, `agentteams.proposal_runner` |
 | `agentteams.sandbox_handoff` | `agentteams.atomicio`, `agentteams.cli.governance_targets`, `agentteams.scan` | — |
-| `agentteams.sandbox_projection` | `agentteams`, `agentteams.frameworks._sandbox_emit`, `agentteams.sandbox_state`, `agentteams.signing_switch`, `agentteams.wasm_config` | `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.multi_sync` |
+| `agentteams.sandbox_projection` | `agentteams`, `agentteams.frameworks._sandbox_emit`, `agentteams.sandbox_state`, `agentteams.signing_switch`, `agentteams.wasm_config` | `agentteams.cli.artifacts`, `agentteams.cli.commands`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.multi_sync` |
 | `agentteams.sandbox_state` | `agentteams.cli.sandbox_effects`, `agentteams.frameworks._write_roots`, `agentteams.signing_switch`, `agentteams.wasm_config`, `agentteams.wasm_exec` | `agentteams.analyze`, `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.cli.write_root_policy`, `agentteams.control_plane_io`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.multi_sync`, `agentteams.runner_wasm`, `agentteams.sandbox_projection`, `agentteams.wasm_config` |
 | `agentteams.scan` | `agentteams.backup`, `agentteams.scan_operational` | `agentteams.agent_doc_sync`, `agentteams.cli.post_emit_checks`, `agentteams.cli.standalone_modes`, `agentteams.env_hygiene`, `agentteams.learned_blocks`, `agentteams.redteam.corpus`, `agentteams.research.screen`, `agentteams.sandbox_handoff`, `agentteams.vulnscan.publish`, `agentteams.whole_body_migration` |
 | `agentteams.scan_operational` | — | `agentteams.scan` |
@@ -1134,6 +1134,7 @@ digraph "agentteams architecture" {
         "agentteams.memory_index_incremental",
         "agentteams.memory_index_store",
         "agentteams.model_routing",
+        "agentteams.sandbox_projection",
         "agentteams.sandbox_state",
         "agentteams.signing_switch",
         "agentteams.write_policy"
@@ -1371,7 +1372,6 @@ digraph "agentteams architecture" {
         "agentteams.liaison_logs",
         "agentteams.mcp_need",
         "agentteams.render",
-        "agentteams.sandbox_projection",
         "agentteams.security_refs",
         "agentteams.shrink_allow",
         "agentteams.template_pins",
@@ -5862,6 +5862,10 @@ digraph "agentteams architecture" {
     },
     {
       "source": "agentteams.cli.artifacts",
+      "target": "agentteams.sandbox_projection"
+    },
+    {
+      "source": "agentteams.cli.artifacts",
       "target": "agentteams.sandbox_state"
     },
     {
@@ -6247,10 +6251,6 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.generate",
       "target": "agentteams.render"
-    },
-    {
-      "source": "agentteams.cli.generate",
-      "target": "agentteams.sandbox_projection"
     },
     {
       "source": "agentteams.cli.generate",

@@ -557,7 +557,7 @@ def finalize_privilege_wiring(
     from agentteams.cli.wasm_sandbox_switch import WasmSwitchError, advise_wasm, apply_wasm_switch
 
     try:  # P01: --wasm-sandbox and the WASM half, validated before anything reads the state (needs the root)
-        apply_wasm_switch(manifest, wasm_sandbox_cli, project_root=project_root)
+        apply_wasm_switch(manifest, wasm_sandbox_cli, project_root=project_root, team_dir=team_dir)
     except WasmSwitchError as exc:
         raise PrivilegeConfinementError(str(exc)) from exc
     resolve_host_features_and_advise(
@@ -793,6 +793,9 @@ def _emit_host_mcp_artifacts_if_enabled(manifest: dict, project_root: Path) -> N
     _emit_mcp_servers_if_enabled(manifest, project_root)
     _emit_codex_mcp_if_enabled(manifest, project_root)
     _emit_grok_config_if_enabled(manifest, project_root)
+    from agentteams.sandbox_projection import emit_projection  # P20: the projected model-substrate switch
+
+    emit_projection(manifest, project_root)
 
 
 def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
