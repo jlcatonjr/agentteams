@@ -585,6 +585,10 @@ or `"failed <reason>"`). The scan uses a mirror only when that record says `ok` 
 verdicts, retry holds and the executor are unchanged, and the operator's `exclude` paths and opted-out checkouts hold
 in the mirror too. The freshness table's *Scanned* column says which one was read.
 
+Two consequences of reading the default branch: a project brief's opt-outs are read from the mirror's copy of the
+brief, so an opt-out you have not committed and pushed does not apply; and `fix_mode: apply-worktree` still stages
+its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the default `plan` mode.
+
 ### Exit codes
 
 | Command | 0 | 1 | 2 | 3 | Other |
