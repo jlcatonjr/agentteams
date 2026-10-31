@@ -88,11 +88,38 @@ Build a BM25 search index over durable text sources.
 - Files are read once; I/O errors are silently skipped (robust to in-flight churn).
 - Paragraphs are extracted per-document (up to 20 substantive paragraphs per source); each truncated to 480 characters for compact JSON.
 - Headings and non-substantive paragraphs are filtered out.
+- `.jsonl` sources: one passage per record (max 20), not per paragraph. A record that parses as a JSON object contributes its string values (the `text`, `content` and `message` fields first), not its raw JSON, so keys and punctuation are not indexed; any other line is used as-is. Tokens and `length` come from those record texts; `source_hash` is still over the whole file. Records with no indexable token are skipped; each passage is redacted and truncated to 480 characters like a paragraph.
 - Stopword list (small, generic English set) is applied during tokenization.
 
 **Raises:**
 
 - No exceptions; I/O failures are silently skipped.
+
+---
+
+### `build_memory_index_from_texts(texts, *, project_name="", framework="", jsonl=None)`
+
+> *Source: `agentteams/memory_index.py`*
+
+Build the same index from in-memory id→text mappings, without reading or writing files. Pure. The output has the same schema as `build_memory_index` and answers `query_index` the same way.
+
+**Args:**
+
+- `texts` (`Mapping[str, str]`) — Document id → document text, indexed in mapping order. Each id is stored verbatim as the document's `path`: an opaque id, not relativized or redacted. A text with no indexable token is skipped (`source_count` still counts it).
+- `project_name` (`str`, keyword-only) — Recorded in the index metadata. Default: `""`.
+- `framework` (`str`, keyword-only) — Recorded in the index metadata. Default: `""`.
+- `jsonl` (`bool | None`, keyword-only) — `True` indexes every text as JSON Lines (one passage per record), `False` as prose (one passage per paragraph). Default `None` decides per id: JSON Lines when the id ends in `.jsonl`.
+
+**Returns:** `dict[str, Any]` — The same payload as `build_memory_index`. Each document's `title` is the text's first `# ` heading or else its id; `source_mtime` is `0.0`, `source_hash` is the SHA-256 of the text, and each document carries `"origin": "text"`.
+
+**Behavior:**
+
+- Paragraph and `.jsonl` record extraction are the same as `build_memory_index`'s (one passage per record, max 20, for JSON Lines).
+- Staleness: `is_index_stale` skips documents marked `"origin": "text"` (whether or not a file exists at the id), so an index built only from texts is stale only when its `sources` hold a file newer than the index.
+
+**Raises:**
+
+- `TypeError` — A key or value of `texts` is not a `str`.
 
 ---
 
@@ -110,7 +137,7 @@ Check if any source file is newer than the index's `built_at` timestamp or no lo
 
 **Returns:** `bool` — `True` if any source content hash mismatches indexed `source_hash`, or if any source mtime > index `built_at` (index is stale); `False` otherwise.
 
-**Safety:** Invalid/missing timestamps are treated as stale (conservative). Missing/unreadable files for hashed documents are also treated as stale.
+**Safety:** Invalid/missing timestamps are treated as stale (conservative), and so is an `index_format_version` other than the current `INDEX_FORMAT_VERSION` (`json-bm25-postings-v3`): an index written in the v2 format is rebuilt once. Missing/unreadable files for hashed documents are also treated as stale, except that documents marked `"origin": "text"` are skipped: they were built from in-memory text (`build_memory_index_from_texts`) and have no file to compare.
 
 ---
 

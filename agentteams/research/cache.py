@@ -19,29 +19,64 @@ Security posture — this cache persists **untrusted third-party bytes**, so:
 - Entries above :data:`_MAX_ENTRY_BYTES` are refused on write and ignored on read.
 - Writes are atomic (``*.tmp`` then ``os.replace``), so a crash mid-write cannot leave an
   entry that reads as valid.
-- The cache directory is gitignored; nothing here is ever committed.
+- The default location never lands in a git-tracked path: inside a git work tree whose
+  ``.gitignore`` does not cover ``references/research-cache``, entries go to the per-user
+  cache directory instead (see :func:`cache_dir`), under a per-project subdirectory so one
+  project cannot read or poison another's entries.
+- The ``git check-ignore`` probe runs through :func:`agentteams.git_exec.run_git` with
+  ``hardened=True`` (no ``core.fsmonitor``, no hooks, no untracked cache, no optional locks, no
+  prompt) and without the environment variables that would point it at a different repository or
+  inject config (``GIT_DIR``, ``GIT_CONFIG_PARAMETERS``, ``GIT_CONFIG_KEY_*`` ...).
 
 Disable entirely with ``AGENTTEAMS_RESEARCH_NO_CACHE=1``.
 """
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import time
+import warnings
 from pathlib import Path
 from typing import Any
+
+from agentteams.git_exec import run_git
 
 #: Kill switch. Any non-empty value other than "0"/"false" disables read and write.
 NO_CACHE_ENV = "AGENTTEAMS_RESEARCH_NO_CACHE"
 
-#: Overrides the cache location. Defaults to ``<cwd>/references/research-cache``, alongside the
-#: other gitignored local retrieval caches (``references/code-index/``, ``references/memory-index.*``).
+#: Overrides the cache location. Without it the cache sits at ``<cwd>/references/research-cache``
+#: (alongside the other gitignored local retrieval caches, ``references/code-index/`` and
+#: ``references/memory-index.*``) only where that path cannot be committed; see :func:`cache_dir`.
 CACHE_DIR_ENV = "AGENTTEAMS_RESEARCH_CACHE_DIR"
 
 _DEFAULT_CACHE_REL = Path("references") / "research-cache"
+
+#: Sub-path under the per-user cache root used when the in-repo default would be committable.
+_USER_CACHE_REL = Path("agentteams") / "research"
+
+#: Seconds allowed for the one ``git check-ignore`` probe.
+_GIT_TIMEOUT_S = 5
+
+#: Variables a git hook (or a hostile parent) exports that would point the probe at a different
+#: repository or index, or inject config that outranks the hardening overrides.
+_GIT_ENV_STRIP = (
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+    "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
+)
+#: Prefixes of the numbered ``GIT_CONFIG_KEY_<n>``/``GIT_CONFIG_VALUE_<n>`` variables, also stripped.
+_GIT_ENV_STRIP_PREFIXES = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
+
+#: Hex digits of the project-root digest that name a project's subdirectory of the user cache.
+_PROJECT_NAMESPACE_CHARS = 16
+
+#: Whether the "using the user cache directory" warning has been emitted in this process.
+_warned_fallback = False
 
 #: Default entry lifetime. Six hours: long enough that a multi-turn agent session reuses its own
 #: lookups, short enough that a daily pipeline never serves yesterday's answer as today's.
@@ -67,13 +102,154 @@ def cache_enabled() -> bool:
 def cache_dir() -> Path:
     """Return the directory cache entries live in.
 
+    Resolution order:
+
+    1. :data:`CACHE_DIR_ENV`, when set.
+    2. ``<cwd>/references/research-cache`` when the working directory is not inside a git work
+       tree (there is nothing to commit it to).
+    3. The same in-repo path when git reports it ignored (``git check-ignore``).
+    4. Otherwise ``<user cache>/<project>`` — :func:`user_cache_dir` joined with the first 16
+       hex digits of the SHA-256 of the resolved project root (the nearest ancestor holding
+       ``.git``; the working directory when there is none) — with one ``UserWarning`` per
+       process saying why. Each project gets its own subdirectory, so entries one project
+       stored can never be served to (or planted for) another. A git error of any kind — ``git`` not installed,
+       a timeout, "dubious ownership" — counts as "not ignored" and lands here too.
+
+    The git probe runs at most once per working directory per process, so a ``.gitignore``
+    edit made during a run is not noticed until the next process.
+
     Returns:
-        The path named by :data:`CACHE_DIR_ENV` when set, else
-        ``references/research-cache`` under the current working directory. The directory is
-        not created here — :func:`store` creates it lazily on first write.
+        The cache directory. It is not created here — :func:`store` creates it lazily on
+        first write.
     """
     override = os.environ.get(CACHE_DIR_ENV, "").strip()
-    return Path(override) if override else Path.cwd() / _DEFAULT_CACHE_REL
+    if override:
+        return Path(override)
+    path, reason = _default_cache_dir(str(Path.cwd()))
+    if reason is not None:
+        _warn_fallback_once(path, reason)
+    return path
+
+
+def user_cache_dir() -> Path:
+    """Return the base per-user research cache directory, shared by every project.
+
+    :func:`cache_dir` never uses this base directly: its fallback is a per-project subdirectory
+    of it (see :func:`cache_dir`, step 4).
+
+    Returns:
+        ``$XDG_CACHE_HOME/agentteams/research`` when ``XDG_CACHE_HOME`` is an absolute path,
+        else ``~/Library/Caches/agentteams/research`` on macOS, else
+        ``~/.cache/agentteams/research``. Not created here.
+    """
+    xdg = os.environ.get("XDG_CACHE_HOME", "").strip()
+    if xdg and Path(xdg).is_absolute():
+        return Path(xdg) / _USER_CACHE_REL
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Caches" / _USER_CACHE_REL
+    return Path.home() / ".cache" / _USER_CACHE_REL
+
+
+@functools.lru_cache(maxsize=None)
+def _default_cache_dir(cwd: str) -> tuple[Path, str | None]:
+    """Pick the default cache directory for one working directory (memoised per process).
+
+    Args:
+        cwd: The working directory, as a string so it can key the memo.
+
+    Returns:
+        ``(path, reason)``. ``reason`` is None when the in-repo default is used, else a short
+        explanation of why the per-user cache directory was chosen instead.
+    """
+    in_repo = Path(cwd) / _DEFAULT_CACHE_REL
+    if not _inside_git_work_tree(Path(cwd)):
+        return in_repo, None
+    ignored, detail = _git_ignores(Path(cwd), _DEFAULT_CACHE_REL / "probe.json")
+    if ignored:
+        return in_repo, None
+    return user_cache_dir() / _project_namespace(Path(cwd)), detail
+
+
+def _project_namespace(cwd: Path) -> str:
+    """Name the user-cache subdirectory for the project ``cwd`` belongs to.
+
+    Args:
+        cwd: The working directory.
+
+    Returns:
+        The first :data:`_PROJECT_NAMESPACE_CHARS` hex digits of the SHA-256 of the resolved
+        project root: the nearest ancestor of ``cwd`` (or ``cwd`` itself) holding ``.git``, else
+        ``cwd``. Every subdirectory of one repository therefore shares one namespace.
+    """
+    start = cwd.resolve()
+    root = next((c for c in (start, *start.parents) if (c / ".git").exists()), start)
+    return hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:_PROJECT_NAMESPACE_CHARS]
+
+
+def _inside_git_work_tree(start: Path) -> bool:
+    """Whether ``start`` or any ancestor holds a ``.git`` entry (directory or worktree file).
+
+    Args:
+        start: The directory to begin the upward search from.
+
+    Returns:
+        True when a ``.git`` entry is found, False otherwise. Pure filesystem check, so a
+        missing ``git`` binary cannot misreport a plain directory as a repository.
+    """
+    return any((candidate / ".git").exists() for candidate in (start, *start.parents))
+
+
+def _git_ignores(cwd: Path, rel: Path) -> tuple[bool, str]:
+    """Ask git whether ``rel`` (relative to ``cwd``) is ignored.
+
+    Args:
+        cwd: Directory to run git in.
+        rel: The path to test.
+
+    Returns:
+        ``(ignored, detail)``. ``ignored`` is True only on a clean ``git check-ignore`` exit 0;
+        every failure — git missing, timeout, a non-0/1 exit such as "dubious ownership" —
+        returns False so the cache fails toward the out-of-repo location. ``detail`` explains
+        the outcome for the fallback warning.
+    """
+    env = {
+        k: v for k, v in os.environ.items()
+        if k not in _GIT_ENV_STRIP and not k.startswith(_GIT_ENV_STRIP_PREFIXES)
+    }
+    target = rel.parent.as_posix()
+    try:
+        proc = run_git(cwd, "check-ignore", "-q", "--", rel.as_posix(),
+                       hardened=True, env=env, timeout=_GIT_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        # CH-24: named types — git not installed / not executable (OSError), a hung probe
+        # (TimeoutExpired, a SubprocessError), or undecodable output (ValueError). Either way we
+        # cannot prove the path is ignored, so fail toward the per-user directory.
+        return False, f"could not run git to check {target} ({type(exc).__name__})"
+    if proc.returncode == 0:
+        return True, ""
+    if proc.returncode == 1:
+        return False, f"{target} is not gitignored in this repository"
+    lines = (proc.stderr or "").strip().splitlines()
+    return False, f"git check-ignore failed ({lines[0] if lines else f'exit {proc.returncode}'})"
+
+
+def _warn_fallback_once(path: Path, reason: str) -> None:
+    """Emit the user-cache fallback warning the first time only.
+
+    Args:
+        path: The directory the cache will use.
+        reason: Why the in-repo default was rejected.
+    """
+    global _warned_fallback
+    if _warned_fallback:
+        return
+    _warned_fallback = True
+    warnings.warn(
+        f"research cache: {reason}; caching in {path} instead. "
+        f"Set {CACHE_DIR_ENV} to choose a location.",
+        UserWarning,
+        stacklevel=3,
+    )
 
 
 def make_key(kind: str, *parts: Any) -> str:

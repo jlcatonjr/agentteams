@@ -15,10 +15,22 @@ verdicts are "survived" or "refuted" — never "verified" or "proven."
 from __future__ import annotations
 
 from agentteams.research.backends import available_backends, backend_names
+from agentteams.research.briefing import (
+    Briefing,
+    BriefingClaim,
+    BriefingStats,
+    Candidate,
+    Retriever,
+    build_briefing,
+)
 from agentteams.research.news import (
+    Coverage,
     PerspectiveKind,
+    PerspectiveSet,
+    gather_perspectives,
     is_news_source,
     perspective_attribution,
+    perspective_summary,
 )
 from agentteams.research.reputable import (
     DATA_CONFIG,
@@ -38,6 +50,11 @@ from agentteams.research.scholarly import (
     search_crossref,
     search_openalex,
 )
+from agentteams.research.screen import (
+    READ_CONTENT_PATTERNS,
+    is_inert_read_content,
+    scan_read_content,
+)
 from agentteams.research.search import (
     SearchProvenance,
     Source,
@@ -52,38 +69,55 @@ from agentteams.research.verify import (
     ChatFn,
     Claim,
     Verdict,
+    audit_claim_pairs,
     audit_claims,
     extract_claims,
+    extract_json,
     revise,
 )
 
 __all__ = [
     "DATA_CONFIG",
     "DEFAULT_CONFIG",
+    "READ_CONTENT_PATTERNS",
     "RESEARCH_CONFIG",
     "SOFTWARE_CONFIG",
     "AllowlistConfig",
+    "Briefing",
+    "BriefingClaim",
+    "BriefingStats",
+    "Candidate",
     "ChatFn",
     "Claim",
+    "Coverage",
     "PerspectiveKind",
+    "PerspectiveSet",
     "ReputableSource",
     "ReputableSourceAllowlist",
+    "Retriever",
     "ScholarlyWork",
     "SearchProvenance",
     "Source",
     "Verdict",
+    "audit_claim_pairs",
     "audit_claims",
     "available_backends",
     "backend_names",
+    "build_briefing",
     "config_for_project_type",
     "extract_claims",
+    "extract_json",
     "extract_published_date",
     "fetch_text",
     "fetch_text_and_date",
     "format_citation",
+    "gather_perspectives",
+    "is_inert_read_content",
     "is_news_source",
     "perspective_attribution",
+    "perspective_summary",
     "revise",
+    "scan_read_content",
     "scholarly_search",
     "search_arxiv",
     "search_crossref",

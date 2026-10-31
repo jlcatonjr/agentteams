@@ -331,6 +331,27 @@ class ReputableSourceAllowlist:
             type=self._config.type_by_domain.get(domain, "unclassified"),
         )
 
+    def classify(self, hit: Source) -> ReputableSource | None:
+        """Public helper: tag one search hit with its allowlist tier and type.
+
+        The same filter :meth:`reputable_sources` applies to every hit, exposed so a caller that
+        runs its own search (e.g. :func:`agentteams.research.news.gather_perspectives`) classifies
+        hits identically rather than re-implementing the domain and path-scope rules.
+
+        Args:
+            hit: A search result, as returned by :func:`agentteams.research.search.web_search`
+                or a caller-supplied search function.
+
+        Returns:
+            A :class:`ReputableSource` when the hit's domain is allowlisted (and, for a
+            path-scoped domain, its URL path is in scope); ``None`` otherwise, including for an
+            unparseable URL.
+
+        Raises:
+            Nothing: an unparseable URL is reported as ``None``.
+        """
+        return self._to_reputable(hit)
+
     def reputable_sources(
         self, topic: str, k: int = 3, timeout_s: float = 8.0
     ) -> list[ReputableSource]:

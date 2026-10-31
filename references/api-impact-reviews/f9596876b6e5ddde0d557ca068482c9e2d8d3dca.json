@@ -1,0 +1,8 @@
+{
+  "patch_id": "f9596876b6e5ddde0d557ca068482c9e2d8d3dca",
+  "commit": "5399cc7bc16e21c5758a6337020fdd1f2eca36fe",
+  "subject": "feat(research): build_briefing composes search, fetch, screen, digest and audit into topic briefings",
+  "impact": "1 modules added, 8 symbols added, 1 symbols changed",
+  "note": "Reviewed nx1f N22: SSRF guard, research.screen, research.briefing",
+  "recorded_at": "2026-10-30T17:06:35Z"
+}

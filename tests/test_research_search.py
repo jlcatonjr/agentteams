@@ -3,6 +3,7 @@ module this was ported from."""
 
 from __future__ import annotations
 
+import socket
 from unittest.mock import patch
 
 import pytest
@@ -230,7 +231,9 @@ def test_blank_query_short_circuits_without_network():
 
 
 def test_is_public_https_accepts_ordinary_public_url() -> None:
-    assert is_public_https("https://example.com/page") is True
+    # Stubbed DNS (research-hardening #15): this asserts the guard's verdict, not the network.
+    with _resolves_to("93.184.216.34"):
+        assert is_public_https("https://example.com/page") is True
 
 
 def test_is_public_https_rejects_non_https_scheme() -> None:
@@ -260,6 +263,44 @@ def test_is_public_https_rejects_malformed_or_hostless_url() -> None:
 
 def test_is_public_https_rejects_unresolvable_hostname() -> None:
     assert is_public_https("https://this-host-does-not-exist.invalid/") is False
+
+
+def _resolves_to(*addrs: str):
+    """A fake ``socket.getaddrinfo`` answering with ``addrs`` (IPv4 or IPv6), so no DNS is used."""
+    def fake(host, port, *args, **kwargs):
+        return [(socket.AF_INET6 if ":" in a else socket.AF_INET, socket.SOCK_STREAM, 6, "",
+                 (a, port, 0, 0) if ":" in a else (a, port)) for a in addrs]
+    return patch("agentteams.research.search.socket.getaddrinfo", side_effect=fake)
+
+
+def test_is_public_https_checks_every_resolved_address() -> None:
+    """A public A record must not hide a private AAAA or a second private A record (2026-10-30)."""
+    with _resolves_to("93.184.216.34"):
+        assert is_public_https("https://news.example/") is True
+    with _resolves_to("93.184.216.34", "::1"):
+        assert is_public_https("https://news.example/") is False
+    with _resolves_to("93.184.216.34", "10.1.2.3"):
+        assert is_public_https("https://news.example/") is False
+
+
+@pytest.mark.parametrize("addr", ["100.64.1.1", "224.0.0.1", "0.0.0.0", "240.0.0.1", "fc00::1",
+                                  "fe80::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1",
+                                  "64:ff9b::7f00:1", "64:ff9b::a00:1", "2002:a00:1::1", "2002:7f00:1::1"])
+def test_is_public_https_rejects_non_global_addresses(addr: str) -> None:
+    """Shared CGNAT space, multicast, unspecified, reserved, IPv6 ULA / link-local / multicast, and
+    IPv6 addresses carrying a private or loopback IPv4 address (mapped, NAT64, 6to4) all fail."""
+    with _resolves_to(addr):
+        assert is_public_https("https://news.example/") is False
+
+
+def test_is_public_https_accepts_public_ipv6() -> None:
+    with _resolves_to("2606:2800:220:1:248:1893:25c8:1946"):
+        assert is_public_https("https://news.example/") is True
+
+
+def test_is_public_https_empty_resolution_fails_closed() -> None:
+    with patch("agentteams.research.search.socket.getaddrinfo", return_value=[]):
+        assert is_public_https("https://news.example/") is False
 
 
 def _build_minimal_pdf(text: str) -> bytes:
