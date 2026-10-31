@@ -23,11 +23,30 @@ from typing import Any
 
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _HEX64 = re.compile(r"[0-9a-f]{64}")
-_VERSION = re.compile(r"^[0-9A-Za-z.+-]{1,32}$")
+
+#: The one pins ``version`` syntax (dotted decimal, e.g. ``36.0.20``), shared by ``wasm_runtime`` and the pin
+#: updater. Use :func:`is_pinned_version`, which also bounds the length, never ``.match`` on its own.
+VERSION_RE = re.compile(r"[0-9]+(?:\.[0-9]+)*")
+MAX_VERSION_LEN = 32
 
 
 class WasmPinError(RuntimeError):
     """An installed component is missing, symlinked, unpinned (``TODO-PIN``) or does not match its pin."""
+
+
+def is_pinned_version(version: object) -> bool:
+    """Whether *version* is a well-formed pins version (dotted decimal, at most :data:`MAX_VERSION_LEN` chars).
+
+    Args:
+        version: The candidate value.
+
+    Returns:
+        True for e.g. ``"36.0.20"``; False for anything else (``"1.0\\n"``, ``"v1"``, ``"1.0-rc1"``).
+
+    Raises:
+        Nothing.
+    """
+    return isinstance(version, str) and len(version) <= MAX_VERSION_LEN and VERSION_RE.fullmatch(version) is not None
 
 
 def host_platform() -> str:
@@ -123,7 +142,7 @@ class PinnedResolver:
         if not isinstance(plat, Mapping):
             raise WasmPinError(f"{component}: no pins for platform {self.platform}")
         version = str(comp.get("version", ""))
-        if not _VERSION.match(version):
+        if not is_pinned_version(version):
             raise WasmPinError(f"{component}: bad pinned version {version!r}")
         return comp, plat, version
 

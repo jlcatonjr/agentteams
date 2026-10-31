@@ -22,11 +22,13 @@ import threading
 import urllib.request
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from agentteams import _wasm_archive as _wa
 from agentteams import _wasm_pin_update as _pu
+from agentteams import wasm_pins
 from agentteams import wasm_runtime as wr
 
 REPO = Path(__file__).resolve().parents[1]
@@ -207,7 +209,7 @@ def test_pins_file_schema_and_no_short_digests():
     for val in re.findall(r'"sha256": "([^"]*)"', text):
         assert val == wr.TODO_PIN or re.fullmatch(r"[0-9a-f]{64}", val), val
     for url in re.findall(r'"url": "([^"]*)"', text):
-        assert url.startswith("https://") and wr._host(url) in wr.DOWNLOAD_HOSTS
+        assert url.startswith("https://") and wr.url_host(url) in wr.DOWNLOAD_HOSTS
 
 
 def test_packaged_pins_carry_the_verified_versions():
@@ -275,21 +277,26 @@ def test_todo_pin_fails_closed_fixture(env):
 # platform mapping
 # ---------------------------------------------------------------------------
 
+def _fake_host(monkeypatch, plat: str, machine: str) -> None:
+    """wasm_runtime.host_platform delegates to wasm_pins.host_platform (H3): fake what that one reads."""
+    monkeypatch.setattr(wasm_pins.sys, "platform", plat)
+    monkeypatch.setattr(wasm_pins.os, "uname", lambda: SimpleNamespace(machine=machine), raising=False)
+
+
 @pytest.mark.parametrize("plat,machine,want", [
     ("darwin", "arm64", "darwin-arm64"), ("darwin", "x86_64", "darwin-x86_64"),
     ("linux", "x86_64", "linux-x86_64"), ("linux", "aarch64", "linux-aarch64"),
     ("win32", "AMD64", "windows-x86_64"),
 ])
 def test_host_platform_mapping(monkeypatch, plat, machine, want):
-    monkeypatch.setattr(wr.sys, "platform", plat)
-    monkeypatch.setattr(wr._platform, "machine", lambda: machine)
-    assert wr.host_platform() == want
+    _fake_host(monkeypatch, plat, machine)
+    assert wr.host_platform() == want == wasm_pins.host_platform()
 
 
 def test_host_platform_unknown_raises(monkeypatch):
-    monkeypatch.setattr(wr.sys, "platform", "sunos5")
-    monkeypatch.setattr(wr._platform, "machine", lambda: "sparc")
-    with pytest.raises(wr.WasmRuntimeError):
+    _fake_host(monkeypatch, "sunos5", "sparc")
+    assert wasm_pins.host_platform() == "sunos5-sparc"   # the shared mapping names it; the runtime refuses it
+    with pytest.raises(wr.WasmRuntimeError, match="no pinned WASM runtime build"):
         wr.host_platform()
 
 
@@ -299,9 +306,9 @@ def test_host_platform_unknown_raises(monkeypatch):
 
 def test_http_scheme_refused(tmp_path):
     with pytest.raises(wr.WasmRuntimeError, match="refusing download URL"):
-        wr._fetch("http://github.com/x", 1, tmp_path / "d")
+        wr.download("http://github.com/x", 1, tmp_path / "d")
     with pytest.raises(wr.WasmRuntimeError, match="refusing download URL"):
-        wr._fetch("https://evil.example/x", 1, tmp_path / "d")
+        wr.download("https://evil.example/x", 1, tmp_path / "d")
     assert not (tmp_path / "d").exists()
 
 
@@ -740,6 +747,75 @@ def test_resolver_protocol(env):
         r.runtime_mounts("python")
 
 
+def test_resolver_delegates_every_method_to_pinned_resolver(env, monkeypatch):
+    """H1: one implementation of the hash checks — every Resolver method goes through wasm_pins.PinnedResolver."""
+    wr.install(env.project, ["python", "javascript"], fetch=env.fetch)
+    seen = []
+    for name in ("resolve", "pinned_version", "expected_sha256", "resolve_tree", "runtime_mounts"):
+        real = getattr(wasm_pins.PinnedResolver, name)
+        monkeypatch.setattr(wasm_pins.PinnedResolver, name,
+                            lambda self, c, _r=real, _n=name: seen.append(_n) or _r(self, c))
+    r = wr.Resolver(env.project)
+    assert r.expected_sha256("python") == _sha(PY_WASM)
+    r.resolve("javascript"), r.pinned_version("python"), r.resolve_tree("python"), r.runtime_mounts("python")
+    assert {"resolve", "pinned_version", "expected_sha256", "resolve_tree", "runtime_mounts"} <= set(seen)
+    assert wr.resolve(env.project, "javascript") and wr.resolve_tree(env.project, "python")
+
+
+def test_resolver_translates_pin_errors(env):
+    """H1: a WasmPinError never escapes; callers see WasmRuntimeError (TODO-PIN, symlinked runtime mount)."""
+    _rewrite_pins(env, lambda d: d["components"]["javascript"]["platforms"]["any"]["files"]["qjs-wasi.wasm"]
+                  .update(sha256=wr.TODO_PIN))
+    with pytest.raises(wr.WasmRuntimeError, match="pin incomplete") as info:
+        wr.Resolver(env.project).expected_sha256("javascript")
+    assert not isinstance(info.value, wasm_pins.WasmPinError)
+    wr.install(env.project, ["python"], fetch=env.fetch)
+    lib = _lib(env)
+    verdir = lib.parent
+    os.chmod(verdir, 0o755)
+    moved = env.tmp / "lib-elsewhere"
+    os.replace(lib, moved)
+    os.symlink(moved, lib)   # the runtime mount itself is a link: the lstat walk refuses it
+    with pytest.raises(wr.WasmRuntimeError, match="symlink"):
+        wr.Resolver(env.project).runtime_mounts("python")
+
+
+def test_tree_digest_is_the_one_wasm_pins_digest(env):
+    """H2: _wasm_archive.tree_digest wraps wasm_pins.tree_digest; the digest format is unchanged."""
+    wr.install(env.project, ["python"], fetch=env.fetch)
+    lib = _lib(env)
+    assert _wa.tree_digest(lib) == wasm_pins.tree_digest(lib) == _stdlib_digest()
+    with pytest.raises(wr.WasmRuntimeError, match="is absent"):
+        _wa.tree_digest(lib / "missing")
+    with pytest.raises(wr.WasmRuntimeError, match="not a directory"):
+        _wa.tree_digest(lib / "python3.15" / "os.py")
+    os.symlink("/etc/hosts", lib / "python3.15" / "x.py")
+    with pytest.raises(wr.WasmRuntimeError, match="not a regular file"):
+        _wa.tree_digest(lib)
+
+
+def test_version_dir_files_is_shared_and_skips_the_tree_by_prefix(tmp_path):
+    """H5: install verification and the pin updater list the same files; ``lib`` and ``lib/...`` are the tree,
+    ``libx`` is not."""
+    (tmp_path / "lib" / "a").mkdir(parents=True)
+    (tmp_path / "lib" / "a" / "m.py").write_text("x")
+    (tmp_path / "libx").write_text("y")
+    (tmp_path / "python.wasm").write_text("z")
+    assert [rel for rel, _ in _wa.version_dir_files(tmp_path, "lib")] == ["libx", "python.wasm"]
+    assert [rel for rel, _ in _wa.version_dir_files(tmp_path, None)] == ["lib/a/m.py", "libx", "python.wasm"]
+    files, tree = _pu._hash_extracted(tmp_path, {"files": {}, "tree": {"root": "lib"}})
+    assert sorted(files) == ["libx", "python.wasm"] and tree["count"] == 1
+
+
+def test_one_version_regex():
+    """H4: one pins-version syntax, the strict dotted-decimal one; every packaged version passes it."""
+    for comp in wr.load_pins()["components"].values():
+        assert wasm_pins.is_pinned_version(comp["version"])
+    for bad in ("1.0\n", "v1", "1.0-rc1", "", "1..0", "1" * 33):
+        assert not wasm_pins.is_pinned_version(bad), bad
+    assert not hasattr(wr, "_VERSION") and not hasattr(wasm_pins, "_VERSION")
+
+
 def test_status_reports_mismatch(env):
     wr.install(env.project, ["javascript"], fetch=env.fetch)
     f = env.project / wr.INSTALL_REL / "javascript" / "0.17.0" / "qjs-wasi.wasm"
@@ -756,7 +832,7 @@ def test_status_is_network_free(env, monkeypatch):
     def no_socket(*a, **k):
         raise AssertionError("network access during status()")
     monkeypatch.setattr(socket, "socket", no_socket)
-    monkeypatch.setattr(wr, "_fetch", no_socket)
+    monkeypatch.setattr(wr, "download", no_socket)
     assert wr.status(env.project)["javascript"] == "ok 0.17.0"
 
 
@@ -770,7 +846,7 @@ def test_render_never_installs(tmp_path, monkeypatch):
 
     def trap(*a, **k):
         raise AssertionError("render touched the WASM downloader / network")
-    monkeypatch.setattr(wr, "_fetch", trap)
+    monkeypatch.setattr(wr, "download", trap)
     monkeypatch.setattr(wr, "install", trap)
     monkeypatch.setattr(wr, "pin_update", trap)
     out = tmp_path / ".github" / "agents"
@@ -894,22 +970,110 @@ def test_pin_update_refuses_missing_digest_without_tofu(env):
     assert json.loads(env.pins.read_text())["components"]["wasmtime"]["provenance"] == "tofu"
 
 
+_DECISION_COLUMNS = ["timestamp", "requesting_agent", "action_reviewed", "verdict", "conditions",
+                     "conditions_verified"]
+
+
+def _decision_log(root: Path, *rows: dict) -> Path:
+    """A fixture project whose references/security-decisions.log.csv holds ``rows`` (legacy schema, unsigned,
+    ungoverned: no agent-privilege.json, so an approved author's PASS row clears)."""
+    import csv
+    log = root / "references" / "security-decisions.log.csv"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=_DECISION_COLUMNS, extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            w.writerow({"timestamp": "2026-10-30", "requesting_agent": "security", "verdict": "PASS",
+                        "conditions_verified": "verified", **r})
+    return log
+
+
 def test_pin_update_s10_cooldown(env):
     assets, fetch = _pin_env(env)
     young = _release("v1.0.0", "2026-10-29T00:00:00Z", assets, body="fixes GHSA-aaaa-bbbb-cccc")
+    gov = env.tmp / "gov"
+    _decision_log(gov, {"action_reviewed": "wasm-pin-remediation:wasmtime",
+                        "conditions": "adopt early: GHSA-aaaa-bbbb-cccc GHSA-zzzz-zzzz-zzzz"})
     before = env.pins.read_bytes()
     with pytest.raises(wr.WasmRuntimeError, match="cooldown"):
         wr.pin_update("wasmtime", "1.0.0", pins_path=env.pins, fetch=fetch, api_get=_api(young, [young]), now=NOW)
     assert env.pins.read_bytes() == before
     with pytest.raises(wr.WasmRuntimeError, match="not named in the release notes"):
         wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-zzzz-zzzz-zzzz"], pins_path=env.pins,
-                      fetch=fetch, api_get=_api(young, [young]), now=NOW)
+                      fetch=fetch, api_get=_api(young, [young]), now=NOW, decision_dir=gov)
     with pytest.raises(wr.WasmRuntimeError, match="malformed advisory"):
         wr.pin_update("wasmtime", "1.0.0", remediation=["CVE-1"], pins_path=env.pins,
-                      fetch=fetch, api_get=_api(young, [young]), now=NOW)
+                      fetch=fetch, api_get=_api(young, [young]), now=NOW, decision_dir=gov)
     wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins,
-                  fetch=fetch, api_get=_api(young, [young]), now=NOW)
+                  fetch=fetch, api_get=_api(young, [young]), now=NOW, decision_dir=gov)
     assert json.loads(env.pins.read_text())["components"]["wasmtime"]["s10"] == "remediation:GHSA-aaaa-bbbb-cccc"
+
+
+def _young(env):
+    assets, fetch = _pin_env(env)
+    young = _release("v1.0.0", "2026-10-29T00:00:00Z", assets, body="fixes GHSA-aaaa-bbbb-cccc")
+    return fetch, _api(young, [young])
+
+
+@pytest.mark.parametrize("rows,why", [
+    ((), "none is recorded"),
+    (({"action_reviewed": "wasm-pin-remediation:python", "conditions": "GHSA-aaaa-bbbb-cccc"},), "'wasm-pin-remediation:python'"),
+    (({"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "fix GHSA-zzzz-zzzz-zzzz"},),
+     "does not name GHSA-aaaa-bbbb-cccc"),
+    (({"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "GHSA-aaaa-bbbb-cccc",
+       "requesting_agent": "orchestrator"},), "not an approved security author"),
+    (({"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "GHSA-aaaa-bbbb-cccc"},
+      {"action_reviewed": "wasm-pin-remediation:wasmtime", "verdict": "HALT", "conditions": "hold"}), "HALT"),
+])
+def test_pin_update_remediation_requires_a_recorded_decision(env, rows, why):
+    """S3: --remediation is refused, before any network access, unless a recorded @security PASS row clears it."""
+    gov = env.tmp / "gov"
+    _decision_log(gov, *rows)
+    fetch, api = _young(env)
+    calls = []
+    before = env.pins.read_bytes()
+    with pytest.raises(wr.WasmRuntimeError, match=re.escape(why)):
+        wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins, fetch=fetch,
+                      api_get=lambda url: calls.append(url) or api(url), now=NOW, decision_dir=gov)
+    assert calls == [] and env.pins.read_bytes() == before
+
+
+def test_pin_update_remediation_without_a_decision_dir_or_log_refuses(env):
+    fetch, api = _young(env)
+    for gov in (None, env.tmp / "empty"):
+        with pytest.raises(wr.WasmRuntimeError, match="needs a recorded @security decision"):
+            wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins,
+                          fetch=fetch, api_get=api, now=NOW, decision_dir=gov)
+
+
+def test_pin_update_remediation_decision_is_consumed_once(env):
+    gov = env.tmp / "gov"
+    log = _decision_log(gov, {"action_reviewed": "wasm-pin-remediation", "conditions": "GHSA-aaaa-bbbb-cccc"})
+    fetch, api = _young(env)
+    wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins, fetch=fetch,
+                  api_get=api, now=NOW, decision_dir=gov)
+    assert ",yes" in log.read_text()   # spent with the write
+    before = env.pins.read_bytes()
+    with pytest.raises(wr.WasmRuntimeError, match="consumed"):
+        wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins, fetch=fetch,
+                      api_get=api, now=NOW, decision_dir=gov)
+    assert env.pins.read_bytes() == before
+
+
+def test_pin_update_failed_download_does_not_consume_the_decision(env):
+    gov = env.tmp / "gov"
+    log = _decision_log(gov, {"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "GHSA-aaaa-bbbb-cccc"})
+    _, api = _young(env)
+    log_before = log.read_bytes()
+
+    def bad(url, size, dest):
+        dest.write_bytes(b"\0" * size)
+        return "0" * 64
+    with pytest.raises(wr.WasmRuntimeError, match="does not match release metadata"):
+        wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins, fetch=bad,
+                      api_get=api, now=NOW, decision_dir=gov)
+    assert log.read_bytes() == log_before
 
 
 def test_pin_update_s10_refuses_when_a_newer_cooled_release_exists(env):

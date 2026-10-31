@@ -157,7 +157,7 @@ Read\-only, network\-free: re\-verify the installed WASM components under <proje
 Operator tool (network): re\-pin COMPONENT at VERSION from GitHub release metadata and a verified download (S\-10 cooldown applies unless \-\-remediation). Writes the pins file (\-\-pins\-out; defaults to the packaged file only in a git work tree) and prints the diff; never commits. The diff needs @security review before it is committed.
 .TP
 .B \-\-remediation GHSA\-IDS
-With \-\-wasm\-pin\-update: comma\-separated GHSA ids (from a recorded @security decision) that justify adopting a fix release inside the S\-10 cooldown; each must appear in the release notes.
+With \-\-wasm\-pin\-update: comma\-separated GHSA ids that justify adopting a fix release inside the S\-10 cooldown; each must appear in the release notes and be named by a recorded wasm\-pin\-remediation PASS decision in <\-\-project>/references/security\-decisions.log.csv (consumed on write).
 .TP
 .B \-\-tofu
 With \-\-wasm\-pin\-update: accept a release asset that has no sha256 digest in its metadata (trust on first use, recorded as provenance 'tofu'); needs a recorded @security decision.

@@ -58,8 +58,8 @@ Pinned provisioning and verify-on-use for the WASM runtime (wasmtime) and the gu
 | `resolve(root, component)` | verified entry file, re-hashed now |
 | `resolve_tree(root, component)` | verified version dir (the CPython stdlib tree re-digested) |
 | `status(root)` | `ok <ver>`, `absent`, `MISMATCH: …` or `pin incomplete` per component; read-only |
-| `Resolver(root)` | the object the executor and guest dispatch receive: `resolve`, `pinned_version`, `resolve_tree`, `runtime_mounts` |
-| `tree_digest(root)` | the tree digest and file count |
+| `Resolver(root)` | the object the executor and guest dispatch receive: `resolve`, `pinned_version`, `expected_sha256`, `resolve_tree`, `runtime_mounts`; a thin wrapper over `wasm_pins.PinnedResolver` (the one hash check) |
+| `tree_digest(root)` | the tree digest and file count (`wasm_pins.tree_digest`, with this module's error type) |
 | `default_pins_out()` | the packaged pins file when it sits in a git work tree, else `None` |
 | `pin_update(component, version, *, remediation=(), tofu=False, pins_path, …)` | re-pin from release metadata and a verified download; returns the diff |
 
@@ -67,7 +67,10 @@ Pinned provisioning and verify-on-use for the WASM runtime (wasmtime) and the gu
 
 `agentteams --wasm-pin-update COMPONENT VERSION` reads `api.github.com` release metadata and applies S-10:
 the release must be at least 14 days old and the newest such release on its major line, unless `--remediation`
-names GHSA ids (from a recorded `@security` decision) that appear in the line's release notes. It downloads every
+names GHSA ids that appear in the line's release notes **and** are named by a recorded `@security` decision: a PASS
+row in `<--project>/references/security-decisions.log.csv` with `action_reviewed` `wasm-pin-remediation` (or
+`wasm-pin-remediation:<component>`) whose conditions or evidence list every id. The gate is checked before any network
+access and the row is consumed when the pins file is written; without it the update refuses. It downloads every
 platform asset, checks it against the API `digest` (an asset without one needs `--tofu`, recorded as
 `"provenance": "tofu"`), extracts it with the same safe extractor, and computes the file and tree hashes. The pins
 file is written only after every platform verified, and the diff is printed. Nothing is committed: the diff needs

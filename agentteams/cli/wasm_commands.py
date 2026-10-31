@@ -76,6 +76,9 @@ def run_wasm_install(args: argparse.Namespace, *,
 
     Returns:
         The exit code.
+
+    Raises:
+        Nothing: a refusal (``WasmRuntimeError``) or network failure is printed and mapped to an exit code.
     """
     try:
         comps = _components(args.wasm_install, "wasmtime")
@@ -119,6 +122,9 @@ def run_wasm_status(args: argparse.Namespace) -> int:
 
     Returns:
         0 when every requested component is ``ok``, 2 on a usage error, else 1.
+
+    Raises:
+        Nothing: an unreadable pins file is printed and mapped to an exit code.
     """
     try:
         comps = _components(args.wasm_status, "all")
@@ -144,7 +150,8 @@ def run_wasm_pin_update(args: argparse.Namespace, *,
     """``agentteams --wasm-pin-update COMPONENT VERSION [--remediation IDS] [--tofu] [--pins-out PATH] [--yes]``.
 
     Writes the pins file only from a verified download and prints the unified diff; never commits.
-    ``--pins-out`` defaults to the packaged pins file only inside a git work tree.
+    ``--pins-out`` defaults to the packaged pins file only inside a git work tree. ``--remediation`` needs a
+    recorded ``wasm-pin-remediation`` decision in ``<--project>/references/security-decisions.log.csv``.
 
     Args:
         args: Parsed CLI arguments.
@@ -153,6 +160,9 @@ def run_wasm_pin_update(args: argparse.Namespace, *,
 
     Returns:
         The exit code.
+
+    Raises:
+        Nothing: a refusal (``WasmRuntimeError``) or network failure is printed and mapped to an exit code.
     """
     component, version = args.wasm_pin_update
     if component not in wasm_runtime.COMPONENTS:
@@ -175,7 +185,7 @@ def run_wasm_pin_update(args: argparse.Namespace, *,
     try:
         diff = wasm_runtime.pin_update(component, version, remediation=remediation,
                                        tofu=bool(getattr(args, "tofu", False)), pins_path=pins_path,
-                                       fetch=fetch, api_get=api_get)
+                                       fetch=fetch, api_get=api_get, decision_dir=_root(args))
     except wasm_runtime.WasmRuntimeError as exc:
         return _fail(exc)
     print(diff or "(no change)")

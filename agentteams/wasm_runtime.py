@@ -2,7 +2,7 @@
 
 The operator runs one explicit command (``agentteams --wasm-install``) that downloads wasmtime and the
 guest interpreters (CPython-WASI, QuickJS-ng WASI) into ``<project>/.agentteams/wasm/``. Nothing here runs
-during rendering: ``urllib`` is imported lazily inside :func:`_fetch`, and only ``cli/wasm_commands.py``
+during rendering: ``urllib`` is imported lazily inside :func:`download`, and only ``cli/wasm_commands.py``
 calls :func:`install` or :func:`pin_update` (a test greps for that).
 
 **Trust anchor.** The packaged ``agentteams/data/wasm_runtime_pins.json``, which sits inside the agentteams
@@ -30,7 +30,6 @@ import datetime as _dt
 import hashlib
 import json
 import os
-import platform as _platform
 import re
 import secrets
 import shutil
@@ -42,6 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from agentteams import wasm_pins
 from agentteams._wasm_archive import (  # re-exported: one error type and one verifier for all callers
     _CHUNK,
     WasmNetworkError,
@@ -56,6 +56,7 @@ from agentteams._wasm_archive import (  # re-exported: one error type and one ve
     _verify_version_dir,
     tree_digest,
 )
+from agentteams.wasm_pins import is_pinned_version
 
 #: The provisionable components, in install order.
 COMPONENTS: tuple[str, ...] = ("wasmtime", "python", "javascript")
@@ -95,8 +96,8 @@ FETCH_RETRIES = 2
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _RUNTIME_GUEST = re.compile(r"^/lib(/[A-Za-z0-9._-]+)*$")
-_SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._+-]+$")
-_VERSION = re.compile(r"^[0-9]+(\.[0-9]+)*$")
+#: A path segment safe to join under the install dir (a version, a component).
+SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._+-]+$")
 _SKIP_DIRS = frozenset({"exec", "scratch"})   # owned by P02 (R3/R8); install never touches them
 
 
@@ -144,6 +145,9 @@ def validate_pins(doc: Mapping[str, Any]) -> list[str]:
     Returns:
         Problem descriptions; empty when the document is well formed. ``TODO-PIN`` values are well
         formed (they fail closed at use, not at load).
+
+    Raises:
+        Nothing: every problem is returned, not raised.
     """
     problems: list[str] = []
     if doc.get("schema") != PINS_SCHEMA:
@@ -156,7 +160,7 @@ def validate_pins(doc: Mapping[str, Any]) -> list[str]:
         if name not in COMPONENTS:
             problems.append(f"{where}: unknown component")
             continue
-        if not _VERSION.match(str(entry.get("version", ""))):
+        if not is_pinned_version(entry.get("version")):
             problems.append(f"{where}.version is not a dotted version")
         src = entry.get("source") or {}
         if not re.match(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", str(src.get("repo", ""))):
@@ -184,7 +188,7 @@ def validate_pins(doc: Mapping[str, Any]) -> list[str]:
 def _validate_platform_entry(pe: Mapping[str, Any], pw: str) -> list[str]:
     problems: list[str] = []
     url = str(pe.get("url", ""))
-    if not url.startswith("https://") or _host(url) not in DOWNLOAD_HOSTS:
+    if not url.startswith("https://") or url_host(url) not in DOWNLOAD_HOSTS:
         problems.append(f"{pw}.url is not https on an allowlisted host")
     if not isinstance(pe.get("size"), int) or pe["size"] <= 0:
         problems.append(f"{pw}.size must be a positive int")
@@ -250,17 +254,28 @@ def pinned(component: str) -> dict[str, Any]:
     Raises:
         WasmRuntimeError: Unknown component or malformed pins file.
     """
-    _check_component(component)
+    check_component(component)
     return copy.deepcopy(load_pins()["components"][component])
 
 
-def _check_component(component: str) -> None:
+def check_component(component: str) -> None:
+    """Refuse a name that is not one of :data:`COMPONENTS`.
+
+    Args:
+        component: The candidate component name.
+
+    Returns:
+        None.
+
+    Raises:
+        WasmRuntimeError: Unknown component.
+    """
     if component not in COMPONENTS:
         raise WasmRuntimeError(f"unknown WASM component {component!r}; expected one of {', '.join(COMPONENTS)}")
 
 
 def host_platform() -> str:
-    """Map the running host to a pins platform key.
+    """Map the running host to a pins platform key (one mapping: :func:`agentteams.wasm_pins.host_platform`).
 
     Returns:
         One of :data:`PLATFORMS`.
@@ -268,19 +283,10 @@ def host_platform() -> str:
     Raises:
         WasmRuntimeError: The OS/architecture pair has no pinned build.
     """
-    machine = _platform.machine().lower()
-    arch = {"arm64": "arm64", "aarch64": "aarch64", "x86_64": "x86_64", "amd64": "x86_64"}.get(machine)
-    if sys.platform == "darwin" and arch in ("arm64", "aarch64"):
-        return "darwin-arm64"
-    if sys.platform == "darwin" and arch == "x86_64":
-        return "darwin-x86_64"
-    if sys.platform.startswith("linux") and arch in ("arm64", "aarch64"):
-        return "linux-aarch64"
-    if sys.platform.startswith("linux") and arch == "x86_64":
-        return "linux-x86_64"
-    if sys.platform == "win32" and arch == "x86_64":
-        return "windows-x86_64"
-    raise WasmRuntimeError(f"no pinned WASM runtime build for {sys.platform}/{machine}")
+    plat = wasm_pins.host_platform()
+    if plat not in PLATFORMS:
+        raise WasmRuntimeError(f"no pinned WASM runtime build for this host ({plat})")
+    return plat
 
 
 def _platform_entry(entry: Mapping[str, Any], plat: str) -> dict[str, Any]:
@@ -309,31 +315,25 @@ def _refuse_incomplete(component: str, version: str, pe: Mapping[str, Any]) -> N
         )
 
 
-def _strip_for(pe: Mapping[str, Any], version: str) -> str:
+def strip_for(pe: Mapping[str, Any], version: str) -> str:
+    """The archive prefix a platform entry strips, with ``{version}`` filled in.
+
+    Args:
+        pe: A pins platform entry.
+        version: The component version.
+
+    Returns:
+        The prefix (``""`` for none).
+
+    Raises:
+        Nothing.
+    """
     return str(pe.get("strip", "")).replace("{version}", version)
 
 
 # ---------------------------------------------------------------------------
-# The pure entry-file hash check (R10): one implementation, in the bundle-shared ``wasm_pins``
-# ---------------------------------------------------------------------------
-
-def _pinned_resolver(install_dir: Path, pins: Mapping[str, Any], *,
-                     platform: str | None) -> Callable[[str], Path]:
-    from agentteams import wasm_pins
-
-    inner = wasm_pins.pinned_resolver(install_dir, pins, platform=platform or host_platform())
-
-    def _resolve(component: str) -> Path:
-        _check_component(component)
-        try:
-            return inner.resolve(component)
-        except wasm_pins.WasmPinError as exc:   # one error type for this module's callers
-            raise WasmRuntimeError(str(exc)) from exc
-    return _resolve
-
-
-# ---------------------------------------------------------------------------
-# Resolve (verify on use)
+# Resolve (verify on use). Every hash check is the bundle-shared ``wasm_pins.PinnedResolver`` (R10): this
+# module adds only the install-dir checks, the operator-facing messages and the one error type.
 # ---------------------------------------------------------------------------
 
 def _install_dir(project_root: Path, *, create: bool = False) -> Path:
@@ -357,7 +357,7 @@ def _install_dir(project_root: Path, *, create: bool = False) -> Path:
 
 
 def resolve(project_root: Path, component: str, *, platform: str | None = None) -> Path:
-    """Return the verified entry file of an installed component, re-hashing it now.
+    """Return the verified entry file of an installed component, re-hashing it now (see :meth:`Resolver.resolve`).
 
     Args:
         project_root: The project root.
@@ -371,17 +371,7 @@ def resolve(project_root: Path, component: str, *, platform: str | None = None) 
         WasmRuntimeError: Unknown component, pin incomplete, absent, symlinked, or hash mismatch; the
             message names the fix.
     """
-    _check_component(component)
-    pins = load_pins()
-    entry = pins["components"][component]
-    _refuse_incomplete(component, entry["version"], _platform_entry(entry, platform or host_platform()))
-    idir = _install_dir(project_root)
-    try:
-        return _pinned_resolver(idir, pins, platform=platform)(component)
-    except WasmRuntimeError as exc:
-        raise WasmRuntimeError(
-            f"{exc} — run `agentteams --wasm-install {component} --project {Path(project_root).resolve()}`"
-        ) from exc
+    return Resolver(project_root, platform=platform).resolve(component)
 
 
 def resolve_tree(project_root: Path, component: str, *, platform: str | None = None) -> Path:
@@ -398,23 +388,7 @@ def resolve_tree(project_root: Path, component: str, *, platform: str | None = N
     Raises:
         WasmRuntimeError: No tree pinned, pin incomplete, or any file added, changed, removed or linked.
     """
-    entry_path = resolve(project_root, component, platform=platform)
-    entry = load_pins()["components"][component]
-    pe = _platform_entry(entry, platform or host_platform())
-    tree = pe.get("tree")
-    if not tree:
-        raise WasmRuntimeError(f"{component} pins no tree")
-    verdir = _install_dir(project_root) / component / str(entry["version"])
-    root = _lstat_walk(verdir, str(tree["root"]).split("/"), leaf_dir=True)
-    digest, count = tree_digest(root)
-    if digest != tree["sha256"] or count != tree["count"]:
-        raise WasmRuntimeError(
-            f"{component} {entry['version']}: tree {tree['root']}/ does not match its pin "
-            f"({count} files) — run `agentteams --wasm-install {component}`"
-        )
-    if entry_path.parent != verdir and verdir not in entry_path.parents:
-        raise WasmRuntimeError(f"{component}: entry outside its version dir")
-    return verdir
+    return Resolver(project_root, platform=platform).resolve_tree(component)
 
 
 def status(project_root: Path, *, platform: str | None = None) -> dict[str, str]:
@@ -425,7 +399,11 @@ def status(project_root: Path, *, platform: str | None = None) -> dict[str, str]
         platform: Platform key override (tests).
 
     Returns:
-        ``{component: "ok <ver>" | "absent" | "MISMATCH: <why>" | "pin incomplete"}``.
+        ``{component: "ok <ver>" | "absent" | "MISMATCH: <why>" | "pin incomplete" | "unsupported: <why>"}``.
+
+    Raises:
+        WasmRuntimeError: The packaged pins file is unreadable or malformed (a per-component failure is
+            reported in the result, never raised).
     """
     out: dict[str, str] = {}
     pins = load_pins()
@@ -458,17 +436,40 @@ def status(project_root: Path, *, platform: str | None = None) -> dict[str, str]
 class Resolver:
     """The injected resolver P02 (``WasmResolver`` protocol) and P04 receive; neither imports this module.
 
-    Every method re-verifies on every call.
+    A thin wrapper over :class:`agentteams.wasm_pins.PinnedResolver` (the one implementation of the hash
+    checks and the lstat/symlink walk): it checks the install dir itself is a real directory, refuses a
+    ``TODO-PIN`` with the pin-update hint, and turns :class:`~agentteams.wasm_pins.WasmPinError` into
+    :class:`WasmRuntimeError`. The pins file is re-read and every method re-verifies on every call.
 
     Args:
         project_root: The project root the install lives under.
+        platform: Platform key override (tests); ``None`` uses the host.
     """
 
-    def __init__(self, project_root: Path) -> None:
+    def __init__(self, project_root: Path, *, platform: str | None = None) -> None:
         self.project_root = Path(project_root).resolve()
+        self.platform = platform
+
+    def _pinned(self, component: str, *, installed: bool) -> tuple[wasm_pins.PinnedResolver, dict[str, Any]]:
+        check_component(component)
+        pins = load_pins()
+        plat = self.platform or host_platform()
+        pe = _platform_entry(pins["components"][component], plat)
+        if installed:   # TODO-PIN is refused before the install is looked at (Rule 5)
+            _refuse_incomplete(component, str(pins["components"][component]["version"]), pe)
+        idir = _install_dir(self.project_root) if installed else self.project_root / INSTALL_REL
+        return wasm_pins.pinned_resolver(idir, pins, platform=plat), pe
+
+    def _call(self, component: str, method: str, *, installed: bool = True) -> Any:
+        inner = self._pinned(component, installed=installed)[0]
+        try:
+            return getattr(inner, method)(component)
+        except (wasm_pins.WasmPinError, OSError) as exc:   # one error type for this module's callers
+            hint = f" — run `agentteams --wasm-install {component} --project {self.project_root}`" if installed else ""
+            raise WasmRuntimeError(f"{exc}{hint}") from exc
 
     def resolve(self, component: str) -> Path:
-        """Verified entry file (see :func:`resolve`).
+        """Verified entry file (``PinnedResolver.resolve``).
 
         Args:
             component: One of :data:`COMPONENTS`.
@@ -477,12 +478,12 @@ class Resolver:
             The entry path.
 
         Raises:
-            WasmRuntimeError: As :func:`resolve`.
+            WasmRuntimeError: Unknown component, pin incomplete, absent, symlinked, or hash mismatch.
         """
-        return resolve(self.project_root, component)
+        return self._call(component, "resolve")
 
     def pinned_version(self, component: str) -> str:
-        """The pinned version string.
+        """The pinned version string (``PinnedResolver.pinned_version``); needs no install.
 
         Args:
             component: One of :data:`COMPONENTS`.
@@ -491,12 +492,26 @@ class Resolver:
             The version, e.g. ``"36.0.20"``.
 
         Raises:
-            WasmRuntimeError: Unknown component.
+            WasmRuntimeError: Unknown component, or no pins for it on this platform.
         """
-        return str(pinned(component)["version"])
+        return self._call(component, "pinned_version", installed=False)
+
+    def expected_sha256(self, component: str) -> str:
+        """The pinned sha256 of the entry file (``PinnedResolver.expected_sha256``); needs no install.
+
+        Args:
+            component: One of :data:`COMPONENTS`.
+
+        Returns:
+            The lowercase hex digest.
+
+        Raises:
+            WasmRuntimeError: Unknown component, or the pin is missing or ``TODO-PIN`` (Rule 5).
+        """
+        return self._call(component, "expected_sha256", installed=False)
 
     def resolve_tree(self, component: str) -> Path:
-        """Verified version dir (see :func:`resolve_tree`).
+        """Verified entry file and pinned tree (``PinnedResolver.resolve`` + ``resolve_tree``); the version dir.
 
         Args:
             component: A component with a pinned tree.
@@ -505,12 +520,16 @@ class Resolver:
             The version directory.
 
         Raises:
-            WasmRuntimeError: As :func:`resolve_tree`.
+            WasmRuntimeError: No tree pinned, pin incomplete, or any file added, changed, removed or linked.
         """
-        return resolve_tree(self.project_root, component)
+        pe = self._pinned(component, installed=False)[1]
+        if not pe.get("tree"):
+            raise WasmRuntimeError(f"{component} pins no tree")
+        self.resolve(component)
+        return self._call(component, "resolve_tree")
 
     def runtime_mounts(self, component: str) -> tuple[tuple[Path, str], ...]:
-        """Verified ``(host_dir, guest_name)`` read-only mounts the interpreter needs.
+        """Verified ``(host_dir, guest_name)`` read-only mounts the interpreter needs (``PinnedResolver.runtime_mounts``).
 
         Args:
             component: One of :data:`COMPONENTS`.
@@ -521,24 +540,43 @@ class Resolver:
         Raises:
             WasmRuntimeError: Verification failed.
         """
-        mounts = pinned(component).get("runtime_mounts", [])
-        if not mounts:
-            return ()
-        verdir = self.resolve_tree(component)
-        return tuple((verdir / str(m["tree"]), str(m["guest"])) for m in mounts)
+        mounts = self._call(component, "runtime_mounts")
+        return tuple((Path(host), guest) for host, guest in mounts)
 
 
 # ---------------------------------------------------------------------------
 # Fetch (lazy urllib; allowlisted redirects; size-bounded streaming sha256)
 # ---------------------------------------------------------------------------
 
-def _host(url: str) -> str:
+def url_host(url: str) -> str:
+    """The lowercased host of *url* (``""`` when it has none).
+
+    Args:
+        url: Any URL.
+
+    Returns:
+        The host name.
+
+    Raises:
+        Nothing.
+    """
     from urllib.parse import urlparse
     return (urlparse(url).hostname or "").lower()
 
 
-def _check_download_url(url: str) -> None:
-    if not url.startswith("https://") or _host(url) not in DOWNLOAD_HOSTS:
+def check_download_url(url: str) -> None:
+    """Refuse a download URL that is not https on :data:`DOWNLOAD_HOSTS`.
+
+    Args:
+        url: The URL to start a download on (or a redirect target).
+
+    Returns:
+        None.
+
+    Raises:
+        WasmRuntimeError: The scheme or host is not allowlisted.
+    """
+    if not url.startswith("https://") or url_host(url) not in DOWNLOAD_HOSTS:
         raise WasmRuntimeError(f"refusing download URL (https on {sorted(DOWNLOAD_HOSTS)} only): {url}")
 
 
@@ -568,7 +606,7 @@ def _redirect_handler_class() -> type:
             Raises:
                 WasmRuntimeError: Target is not https on an allowlisted host.
             """
-            _check_download_url(newurl)
+            check_download_url(newurl)
             return super().redirect_request(req, fp, code, msg, headers, newurl)
 
     return _AllowlistRedirect
@@ -601,7 +639,7 @@ def _stream_to(resp: Any, size: int, dest: Path) -> str:
     return h.hexdigest()
 
 
-def _fetch(url: str, size: int, dest: Path) -> str:
+def download(url: str, size: int, dest: Path) -> str:
     """Download ``url`` into new file ``dest`` (HTTPS, allowlisted redirects, size-bounded).
 
     Args:
@@ -620,7 +658,7 @@ def _fetch(url: str, size: int, dest: Path) -> str:
     import urllib.error
     import urllib.request
 
-    _check_download_url(url)
+    check_download_url(url)
     opener = urllib.request.build_opener(_redirect_handler_class())
     last: Exception | None = None
     for attempt in range(FETCH_RETRIES + 1):
@@ -629,7 +667,7 @@ def _fetch(url: str, size: int, dest: Path) -> str:
                 os.unlink(dest)
             req = urllib.request.Request(url, headers={"User-Agent": "agentteams-wasm-install/1"})
             with opener.open(req, timeout=FETCH_TIMEOUT_S) as resp:
-                _check_download_url(resp.geturl())
+                check_download_url(resp.geturl())
                 return _stream_to(resp, size, dest)
         except urllib.error.HTTPError as exc:
             raise WasmNetworkError(f"{url}: HTTP {exc.code}") from exc
@@ -708,7 +746,7 @@ def install_plan(project_root: Path, components: Sequence[str], *, platform: str
     idir = Path(project_root).resolve() / INSTALL_REL
     lines: list[str] = []
     for comp in components:
-        _check_component(comp)
+        check_component(comp)
         entry = pins["components"][comp]
         pe = _platform_entry(entry, plat)
         _refuse_incomplete(comp, entry["version"], pe)
@@ -752,7 +790,7 @@ def install(project_root: Path, components: Sequence[str], *, platform: str | No
     gi = idir / ".gitignore"
     if not os.path.lexists(gi):
         gi.write_text("*\n", encoding="utf-8")
-    fetch = fetch or _fetch
+    fetch = fetch or download
     installed: list[str] = []
     already: list[str] = []
     quarantined: list[str] = []
@@ -761,7 +799,7 @@ def install(project_root: Path, components: Sequence[str], *, platform: str | No
         entry = pins["components"][comp]
         version = str(entry["version"])
         pe = _platform_entry(entry, plat)
-        if not _SAFE_SEGMENT.match(version):
+        if not SAFE_SEGMENT.match(version):
             raise WasmRuntimeError(f"{comp}: unsafe version {version!r}")
         final = idir / comp / version
         if os.path.lexists(final):
@@ -788,7 +826,7 @@ def install(project_root: Path, components: Sequence[str], *, platform: str | No
             tree_dir = staging / "tree"
             os.mkdir(tree_dir, 0o700)
             notices.extend(f"{comp}: {m}" for m in _extract(
-                archive, str(pe["archive"]), tree_dir, strip=_strip_for(pe, version),
+                archive, str(pe["archive"]), tree_dir, strip=strip_for(pe, version),
                 keep=list(pe.get("keep") or [pe["entry"]]), entry=str(pe["entry"])))
             try:
                 _verify_version_dir(tree_dir, pe)
@@ -835,6 +873,9 @@ def default_pins_out() -> Path | None:
 
     Returns:
         :data:`PINS_PATH` or ``None`` (a wheel install is never modified in place).
+
+    Raises:
+        Nothing.
     """
     from agentteams import _wasm_pin_update
     return _wasm_pin_update.default_pins_out()
@@ -843,7 +884,7 @@ def default_pins_out() -> Path | None:
 def pin_update(component: str, version: str, *, remediation: Sequence[str] = (), tofu: bool = False,
                pins_path: Path, fetch: Callable[[str, int, Path], str] | None = None,
                api_get: Callable[[str], Any] | None = None, now: _dt.datetime | None = None,
-               work_dir: Path | None = None) -> str:
+               work_dir: Path | None = None, decision_dir: Path | None = None) -> str:
     """Re-pin ``component`` at ``version`` from a verified download; write ``pins_path``; return the diff.
 
     Operator-only (``--wasm-pin-update``); see :func:`agentteams._wasm_pin_update.pin_update`.
@@ -851,13 +892,15 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
     Args:
         component: One of :data:`COMPONENTS`.
         version: Target version.
-        remediation: GHSA ids justifying adoption inside the S-10 cooldown.
+        remediation: GHSA ids justifying adoption inside the S-10 cooldown (each named by a recorded
+            ``wasm-pin-remediation`` decision in ``decision_dir``).
         tofu: Accept an asset with no API digest.
         pins_path: The pins file to read and rewrite.
         fetch: Download function (tests).
         api_get: Metadata getter (tests).
         now: Clock override for S-10.
         work_dir: Scratch directory for downloads.
+        decision_dir: The project root holding ``references/security-decisions.log.csv`` (S3).
 
     Returns:
         The unified diff.
@@ -869,4 +912,4 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
     from agentteams import _wasm_pin_update
     return _wasm_pin_update.pin_update(component, version, remediation=remediation, tofu=tofu,
                                        pins_path=pins_path, fetch=fetch, api_get=api_get, now=now,
-                                       work_dir=work_dir)
+                                       work_dir=work_dir, decision_dir=decision_dir)

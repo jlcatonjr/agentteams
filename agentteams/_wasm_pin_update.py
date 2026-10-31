@@ -3,11 +3,12 @@
 Private helper split out of ``agentteams/wasm_runtime.py`` (CH-07 module ceiling); reached through
 ``wasm_runtime.pin_update`` / ``wasm_runtime.default_pins_out`` and called only by ``cli/wasm_commands.py``.
 It reads release metadata from api.github.com, applies S-10, and re-pins from a download verified with the
-same ``_fetch`` and safe extractor ``install`` uses. The pins file is written only after every platform verified.
+same ``download`` and safe extractor ``install`` uses. The pins file is written only after every platform verified.
 """
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import datetime as _dt
 import difflib
@@ -17,7 +18,8 @@ import re
 import secrets
 import shutil
 import subprocess
-from collections.abc import Callable, Mapping, Sequence
+import warnings
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -30,26 +32,33 @@ from agentteams._wasm_archive import (
     _hash_file_nofollow,
     _make_writable,
     tree_digest,
+    version_dir_files,
 )
+from agentteams.wasm_pins import is_pinned_version
 from agentteams.wasm_runtime import (
     API_HOST,
     FETCH_RETRIES,
     FETCH_TIMEOUT_S,
-    _check_component,
-    _check_download_url,
-    _host,
-    _SAFE_SEGMENT,
-    _strip_for,
-    _VERSION,
+    SAFE_SEGMENT,
+    check_component,
+    check_download_url,
+    strip_for,
+    url_host,
     validate_pins,
 )
 
 #: S-10 cooldown, days.
 COOLDOWN_DAYS = 14
 
+#: The security-gate action a ``--remediation`` adoption is recorded under (S3): a PASS row in the project's
+#: ``references/security-decisions.log.csv`` whose ``action_reviewed`` is ``wasm-pin-remediation`` or
+#: ``wasm-pin-remediation:<component>`` and whose conditions/evidence name every GHSA id passed.
+WASM_PIN_REMEDIATION = "wasm-pin-remediation"
+
 _API_MAX_BYTES = 8 << 20
 _GHSA = re.compile(r"^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$")
-
+_GHSA_IN_TEXT = re.compile(r"GHSA(?:-[0-9a-z]{4}){3}")
+_DECISION_TEXT_FIELDS = ("action_reviewed", "scope", "conditions", "evidence", "effect_targets")
 
 
 def _api_get(url: str) -> Any:
@@ -58,7 +67,7 @@ def _api_get(url: str) -> Any:
     import urllib.error
     import urllib.request
 
-    if not url.startswith("https://") or _host(url) != API_HOST:
+    if not url.startswith("https://") or url_host(url) != API_HOST:
         raise WasmRuntimeError(f"refusing metadata URL: {url}")
 
     class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -91,9 +100,71 @@ def _api_get(url: str) -> Any:
     raise WasmNetworkError(f"{url}: failed after {FETCH_RETRIES + 1} attempts: {last}")
 
 
+def _remediation_decision(decision_dir: Path | None, component: str, remediation: Sequence[str]) -> dict[str, str]:
+    """Return the recorded @security decision that clears adopting *remediation* early, or refuse (S3).
+
+    Read-only: the gate is checked with ``check_clearance`` (HALTs, author, signature, chain); the row is
+    consumed only when the pins file is written (:func:`_consume_remediation`).
+
+    Raises:
+        WasmRuntimeError: No decisions log, no unconsumed PASS row for the action, a row for another component,
+            a GHSA id the row does not name, or a gate refusal.
+    """
+    from agentteams.cli import security_gate
+
+    for gid in remediation:
+        if not _GHSA.match(gid):
+            raise WasmRuntimeError(f"malformed advisory id {gid!r}")
+    hint = (f"--remediation needs a recorded @security decision: a PASS row in references/security-decisions.log.csv "
+            f"with action_reviewed={WASM_PIN_REMEDIATION}:{component} naming {', '.join(remediation)} in its conditions "
+            "or evidence")
+    if decision_dir is None or not (decision_dir / "references" / "security-decisions.log.csv").is_file():
+        raise WasmRuntimeError(f"{hint} (no decisions log under {decision_dir or '(no project)'})")
+    try:
+        row = security_gate._latest_security_decision(decision_dir, action=WASM_PIN_REMEDIATION)
+        if row is None:
+            raise WasmRuntimeError(f"{hint} (none is recorded, or the newest one is consumed)")
+        with _component_suffix_is_enforced():
+            allowed, reason = security_gate.check_clearance(decision_dir, action=WASM_PIN_REMEDIATION)
+        if not allowed:   # HALT (C-2), unapproved author, bad signature, broken chain, unverified conditions
+            raise WasmRuntimeError(f"{WASM_PIN_REMEDIATION}: the security gate refuses: {reason}")
+        reviewed = (row.get("action_reviewed") or "").strip().lower()
+        if reviewed not in (WASM_PIN_REMEDIATION, f"{WASM_PIN_REMEDIATION}:{component}"):
+            raise WasmRuntimeError(f"{hint} (the newest {WASM_PIN_REMEDIATION} decision is {reviewed!r})")
+        named = set(_GHSA_IN_TEXT.findall(" ".join(row.get(k) or "" for k in _DECISION_TEXT_FIELDS)))
+        missing = [g for g in remediation if g not in named]
+        if missing:
+            raise WasmRuntimeError(f"{hint} (the decision does not name {', '.join(missing)})")
+    except (RuntimeError, OSError, ValueError) as exc:
+        if isinstance(exc, WasmRuntimeError):
+            raise
+        raise WasmRuntimeError(f"{WASM_PIN_REMEDIATION}: {exc}") from exc
+    return row
+
+
+@contextlib.contextmanager
+def _component_suffix_is_enforced() -> Iterator[None]:
+    """Silence the gate's W11 "the suffix restricts nothing" warning: here the ``:<component>`` suffix IS enforced
+    (:func:`_remediation_decision` refuses a row naming another component)."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=r".*reads as a scoped clearance.*")
+        yield
+
+
+def _consume_remediation(decision_dir: Path) -> None:
+    """Spend the remediation decision (one decision, one re-pin); a failure refuses the write."""
+    from agentteams.cli import security_gate
+
+    try:
+        with _component_suffix_is_enforced():
+            security_gate._assert_destructive_action_allowed(decision_dir, action=WASM_PIN_REMEDIATION, consume=True)
+    except (RuntimeError, OSError, ValueError) as exc:
+        raise WasmRuntimeError(f"{WASM_PIN_REMEDIATION}: {exc}") from exc
+
+
 def _vtuple(tag: str) -> tuple[int, ...] | None:
     v = tag[1:] if tag.startswith("v") else tag
-    return tuple(int(x) for x in v.split(".")) if _VERSION.match(v) else None
+    return tuple(int(x) for x in v.split(".")) if is_pinned_version(v) else None
 
 
 def _parse_time(s: str) -> _dt.datetime:
@@ -143,16 +214,11 @@ def _hash_extracted(verdir: Path, pe: Mapping[str, Any]) -> tuple[dict[str, Any]
     tree = pe.get("tree")
     tree_root = str(tree["root"]) if tree else None
     files: dict[str, Any] = {}
-    for dirpath, dirnames, filenames in os.walk(verdir, followlinks=False):
-        for name in filenames:
-            p = Path(dirpath) / name
-            rel = p.relative_to(verdir).as_posix()
-            if tree_root and rel.startswith(tree_root + "/"):
-                continue
-            spec: dict[str, Any] = {"sha256": _hash_file_nofollow(p)[0]}
-            if (old_files.get(rel) or {}).get("exec"):
-                spec["exec"] = True
-            files[rel] = spec
+    for rel, p in version_dir_files(verdir, tree_root):   # the same file set install verifies
+        spec: dict[str, Any] = {"sha256": _hash_file_nofollow(p)[0]}
+        if (old_files.get(rel) or {}).get("exec"):
+            spec["exec"] = True
+        files[rel] = spec
     new_tree = None
     if tree:
         root = verdir / tree_root
@@ -168,6 +234,9 @@ def default_pins_out() -> Path | None:
 
     Returns:
         :data:`wasm_runtime.PINS_PATH` or ``None`` (a wheel install is never modified in place).
+
+    Raises:
+        Nothing: a missing git binary or a git timeout reads as "not a work tree".
     """
     try:
         from agentteams.git_exec import run_git
@@ -180,37 +249,43 @@ def default_pins_out() -> Path | None:
 def pin_update(component: str, version: str, *, remediation: Sequence[str] = (), tofu: bool = False,
                pins_path: Path, fetch: Callable[[str, int, Path], str] | None = None,
                api_get: Callable[[str], Any] | None = None, now: _dt.datetime | None = None,
-               work_dir: Path | None = None) -> str:
+               work_dir: Path | None = None, decision_dir: Path | None = None) -> str:
     """Re-pin ``component`` at ``version`` from a verified download; write ``pins_path``; return the diff.
 
     Operator-only (``--wasm-pin-update``). Reads release metadata from api.github.com, applies S-10,
-    downloads every platform asset with :func:`_fetch`, checks it against the API digest, extracts it
+    downloads every platform asset with :func:`wasm_runtime.download`, checks it against the API digest, extracts it
     with :func:`_extract`, and computes file and tree hashes. ``pins_path`` is written only after every
     platform verified; any failure leaves it byte-identical. Never commits.
 
     Args:
         component: One of :data:`COMPONENTS` (its existing entry supplies the layout templates).
         version: Target version, e.g. ``"36.0.20"``.
-        remediation: GHSA ids that justify adopting a release inside the cooldown.
+        remediation: GHSA ids that justify adopting a release inside the cooldown; each must be named by a
+            recorded ``wasm-pin-remediation`` decision in ``decision_dir`` (consumed when the pins are written).
         tofu: Accept an asset with no API digest (recorded as ``"provenance": "tofu"``).
         pins_path: The pins file to read and rewrite.
         fetch: Download function (tests inject one).
         api_get: Metadata getter (tests inject one).
         now: Clock override for S-10.
         work_dir: Scratch directory for downloads; ``None`` makes a private temp dir.
+        decision_dir: The project root whose ``references/security-decisions.log.csv`` records the remediation
+            decision; required with ``remediation``.
 
     Returns:
         The unified diff between the old and new pins file.
 
     Raises:
-        WasmRuntimeError: S-10 refusal, missing digest without ``tofu``, layout change, or mismatch.
+        WasmRuntimeError: S-10 refusal, a remediation without its recorded decision, missing digest without
+            ``tofu``, layout change, or mismatch.
         WasmNetworkError: Metadata or download failure.
     """
     import tempfile
 
-    _check_component(component)
-    if not _SAFE_SEGMENT.match(version) or not _VERSION.match(version):
+    check_component(component)
+    if not SAFE_SEGMENT.match(version) or not is_pinned_version(version):
         raise WasmRuntimeError(f"unsafe version {version!r}")
+    if remediation:   # before any network access
+        _remediation_decision(decision_dir, component, list(remediation))
     old_text = pins_path.read_text(encoding="utf-8")
     doc = json.loads(old_text)
     problems = validate_pins(doc)
@@ -220,7 +295,7 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
     repo = entry["source"]["repo"]
     tag = str(entry["source"]["tag"]).replace("{version}", version)
     api_get = api_get or _api_get
-    fetch = fetch or wr._fetch   # module lookup: honours a patched downloader
+    fetch = fetch or wr.download   # module lookup: honours a patched downloader
     now = now or _dt.datetime.now(_dt.UTC)
     release = api_get(f"https://{API_HOST}/repos/{repo}/releases/tags/{tag}")
     releases = api_get(f"https://{API_HOST}/repos/{repo}/releases?per_page=100")
@@ -241,7 +316,7 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
                                        f"{pat.pattern}, found {len(match)}")
             asset = match[0]
             url, size = str(asset["browser_download_url"]), int(asset["size"])
-            _check_download_url(url)
+            check_download_url(url)
             digest = str(asset.get("digest") or "")
             if digest.startswith("sha256:"):
                 digest = digest[len("sha256:"):]
@@ -260,7 +335,7 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
                                        f"(size {n}/{size}, sha256 {got} vs {digest or '(none)'})")
             out = pdir / "x"
             os.mkdir(out, 0o700)
-            _extract(archive, str(pe["archive"]), out, strip=_strip_for(pe, version),
+            _extract(archive, str(pe["archive"]), out, strip=strip_for(pe, version),
                      keep=list(pe.get("keep") or [pe["entry"]]), entry=str(pe["entry"]))
             files, tree = _hash_extracted(out, pe)
             if pe["entry"] not in files:
@@ -281,6 +356,12 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
     new_text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     tmp = pins_path.with_name(f".{pins_path.name}.{secrets.token_hex(4)}.tmp")
     tmp.write_text(new_text, encoding="utf-8")
-    os.replace(tmp, pins_path)
+    try:
+        if remediation and decision_dir is not None:   # _remediation_decision refused a None dir up front
+            _consume_remediation(decision_dir)
+        os.replace(tmp, pins_path)
+    finally:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
     return "".join(difflib.unified_diff(old_text.splitlines(keepends=True), new_text.splitlines(keepends=True),
                                         fromfile=f"a/{pins_path.name}", tofile=f"b/{pins_path.name}"))

@@ -30,7 +30,7 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: test checks both directions against the call sites. The five sandbox-relaxation families
 #: (``cli/sandbox_effects.py``) are called as ``<kind>:<qualifier>`` instance ids and as the bare family.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
-                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish",
+                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish", "wasm-pin-remediation",
                                  *SANDBOX_RELAXATION_KINDS)
 
 

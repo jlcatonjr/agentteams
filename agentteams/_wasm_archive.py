@@ -1,7 +1,8 @@
 """_wasm_archive.py — hashing, path checks and safe archive extraction for ``wasm_runtime``.
 
-Private helper split out of ``agentteams/wasm_runtime.py`` (CH-07 module ceiling). Stdlib only; imports nothing
-from agentteams, so it can join the standalone WASM bundle if P10 needs tree verification there. Extraction is
+Private helper split out of ``agentteams/wasm_runtime.py`` (CH-07 module ceiling). Stdlib only; the one agentteams
+import is the bundle-shared ``wasm_pins`` (whose :func:`~agentteams.wasm_pins.tree_digest` is the only tree digest;
+:func:`tree_digest` here is a thin wrapper with this module's error type). Extraction is
 hand-rolled, member by member (no ``extractall``): absolute paths, ``..``/``.`` segments, backslashes, drive
 letters, NUL, links, devices, FIFOs, sparse members, encrypted or exotic zip entries, duplicates, and members
 outside the pinned prefix are refused, and sizes are counted while streaming, never taken from headers.
@@ -16,6 +17,8 @@ import stat
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+
+from agentteams import wasm_pins
 
 # Extraction bounds (plan P03 §5.4).
 MAX_MEMBERS = 20_000
@@ -84,16 +87,16 @@ def _lstat_walk(base: Path, rel_parts: Sequence[str], *, leaf_dir: bool = False)
 
 
 def tree_digest(root: Path) -> tuple[str, int]:
-    """Digest every regular file under ``root``: sha256 over sorted ``"<rel>\\0<sha256>\\n"`` lines.
+    """:func:`agentteams.wasm_pins.tree_digest` (the one tree digest P03 pins), refusing an absent or non-directory root.
 
     Args:
         root: A directory (not followed if it is a symlink).
 
     Returns:
-        ``(hexdigest, file_count)``.
+        ``(hexdigest, file_count)``: sha256 over sorted ``"<rel>\\0<sha256>\\n"`` lines.
 
     Raises:
-        WasmRuntimeError: A symlink, device, FIFO or socket is present, or ``root`` is not a directory.
+        WasmRuntimeError: A symlink, device, FIFO or socket is present, or ``root`` is absent or not a directory.
     """
     try:
         st = os.lstat(root)
@@ -101,19 +104,42 @@ def tree_digest(root: Path) -> tuple[str, int]:
         raise WasmRuntimeError(f"{root} is absent") from exc
     if not stat.S_ISDIR(st.st_mode):
         raise WasmRuntimeError(f"{root} is not a directory")
-    lines: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    try:
+        return wasm_pins.tree_digest(root)
+    except (wasm_pins.WasmPinError, OSError) as exc:
+        raise WasmRuntimeError(f"{root}: {exc}") from exc
+
+
+def version_dir_files(verdir: Path, tree_root: str | None) -> list[tuple[str, Path]]:
+    """List a version dir's regular files outside its pinned tree, as sorted ``(posix relpath, path)`` pairs.
+
+    Shared by install verification (:func:`_verify_version_dir`) and the pin updater, so both agree on which
+    files are individually pinned: a path is in the tree iff ``(rel + "/").startswith(tree_root + "/")``.
+
+    Args:
+        verdir: The version directory (or an extraction staging dir).
+        tree_root: The pinned tree's root relative to ``verdir`` (``None`` when the component pins no tree).
+
+    Returns:
+        The files, sorted by relpath.
+
+    Raises:
+        WasmRuntimeError: An entry outside the tree is neither a regular file nor a directory (links included).
+    """
+    out: list[tuple[str, Path]] = []
+    for dirpath, dirnames, filenames in os.walk(verdir, followlinks=False):
         for name in list(dirnames) + filenames:
             p = Path(dirpath) / name
+            rel = p.relative_to(verdir).as_posix()
+            if tree_root and (rel + "/").startswith(tree_root + "/"):
+                continue
             mode = os.lstat(p).st_mode
-            rel = p.relative_to(root).as_posix()
             if stat.S_ISDIR(mode):
                 continue
             if not stat.S_ISREG(mode):
-                raise WasmRuntimeError(f"{p} is not a regular file or directory; refusing")
-            lines.append(f"{rel}\0{_hash_file_nofollow(p)[0]}\n")
-    lines.sort()
-    return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest(), len(lines)
+                raise WasmRuntimeError(f"{rel} is not a regular file")
+            out.append((rel, p))
+    return sorted(out)
 
 
 
@@ -331,23 +357,13 @@ def _verify_version_dir(verdir: Path, pe: Mapping[str, Any]) -> None:
     tree = pe.get("tree")
     tree_root = str(tree["root"]) if tree else None
     seen: set[str] = set()
-    for dirpath, dirnames, filenames in os.walk(verdir, followlinks=False):
-        for name in list(dirnames) + filenames:
-            p = Path(dirpath) / name
-            rel = p.relative_to(verdir).as_posix()
-            mode = os.lstat(p).st_mode
-            if stat.S_ISDIR(mode):
-                continue
-            if not stat.S_ISREG(mode):
-                raise WasmRuntimeError(f"{rel} is not a regular file")
-            if tree_root and (rel + "/").startswith(tree_root + "/"):
-                continue
-            if rel not in files:
-                raise WasmRuntimeError(f"{rel} is not pinned")
-            got, _ = _hash_file_nofollow(p)
-            if got != files[rel]["sha256"]:
-                raise WasmRuntimeError(f"{rel} sha256 mismatch (have {got}, pinned {files[rel]['sha256']})")
-            seen.add(rel)
+    for rel, p in version_dir_files(verdir, tree_root):
+        if rel not in files:
+            raise WasmRuntimeError(f"{rel} is not pinned")
+        got, _ = _hash_file_nofollow(p)
+        if got != files[rel]["sha256"]:
+            raise WasmRuntimeError(f"{rel} sha256 mismatch (have {got}, pinned {files[rel]['sha256']})")
+        seen.add(rel)
     missing = sorted(set(files) - seen)
     if missing:
         raise WasmRuntimeError(f"pinned file(s) missing: {', '.join(missing)}")

@@ -533,8 +533,9 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="GHSA-IDS",
         dest="remediation",
-        help="With --wasm-pin-update: comma-separated GHSA ids (from a recorded @security decision) that "
-        "justify adopting a fix release inside the S-10 cooldown; each must appear in the release notes.",
+        help="With --wasm-pin-update: comma-separated GHSA ids that justify adopting a fix release inside the "
+        "S-10 cooldown; each must appear in the release notes and be named by a recorded wasm-pin-remediation "
+        "PASS decision in <--project>/references/security-decisions.log.csv (consumed on write).",
     )
     parser.add_argument(
         "--tofu",
