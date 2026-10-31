@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **346**
+- Modules mapped: **348**
 - Packages: **11**
-- Internal import edges: **1112**
+- Internal import edges: **1117**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 153 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research`, `agentteams.vulnscan` |
+| `agentteams` | 155 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research`, `agentteams.vulnscan` |
 | `agentteams.cli` | 50 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan` |
 | `agentteams.data` | 6 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -57,6 +57,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams._interop_grok` | `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_helpers` | `agentteams.interop` |
 | `agentteams._makefile_screen` | — | `agentteams.vscode_tasks` |
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.analyze_tools`, `agentteams.branch_cleanup`, `agentteams.ingest` |
+| `agentteams._wasm_archive` | — | `agentteams._wasm_pin_update`, `agentteams.wasm_runtime` |
+| `agentteams._wasm_pin_update` | `agentteams._wasm_archive`, `agentteams.git_exec`, `agentteams.wasm_runtime` | `agentteams.wasm_runtime` |
 | `agentteams.adopted_agents` | `agentteams.yaml_frontmatter` | `agentteams.analyze`, `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step` |
 | `agentteams.advisory` | — | — |
 | `agentteams.agent_doc_sync` | `agentteams.learned_blocks`, `agentteams.scan` | `agentteams.cli.agent_doc_sync_switch` |
@@ -207,7 +209,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.front_matter_baseline` | `agentteams.drift`, `agentteams.front_matter_merge` | `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.fleet` |
 | `agentteams.front_matter_merge` | — | `agentteams.audit_agent_contract`, `agentteams.emit`, `agentteams.fences`, `agentteams.front_matter_baseline`, `agentteams.front_matter_reconcile`, `agentteams.sync_classifier`, `agentteams.unfenced` |
 | `agentteams.front_matter_reconcile` | `agentteams.front_matter_merge`, `agentteams.yaml_frontmatter` | `agentteams.cli.generate`, `agentteams.cli.generate_helpers` |
-| `agentteams.git_exec` | — | `agentteams._fleet_twin_acks`, `agentteams.cli.operator_signing`, `agentteams.cli.signer_location`, `agentteams.env_hygiene`, `agentteams.fleet`, `agentteams.integrity`, `agentteams.multi_sync`, `agentteams.proposals`, `agentteams.research.cache`, `agentteams.source_provenance`, `agentteams.wasm_runtime` |
+| `agentteams.git_exec` | — | `agentteams._fleet_twin_acks`, `agentteams._wasm_pin_update`, `agentteams.cli.operator_signing`, `agentteams.cli.signer_location`, `agentteams.env_hygiene`, `agentteams.fleet`, `agentteams.integrity`, `agentteams.multi_sync`, `agentteams.proposals`, `agentteams.research.cache`, `agentteams.source_provenance`, `agentteams.wasm_runtime` |
 | `agentteams.git_hooks` | `agentteams`, `agentteams.architecture`, `agentteams.cli.artifacts`, `agentteams.emit`, `agentteams.errors`, `agentteams.graph` | `agentteams.cli.app`, `agentteams.cli.generate` |
 | `agentteams.goose_config` | — | `agentteams.cli.goose_switch` |
 | `agentteams.governance_logs` | — | `agentteams.cli.commands`, `agentteams.interop_grant_check` |
@@ -390,7 +392,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.vulnscan.tools_image` | `agentteams.vulnscan.paths`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.__main__`, `agentteams.vulnscan.docker_readiness` |
 | `agentteams.vulnscan.versions` | — | `agentteams.vulnscan.fix`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.osv`, `agentteams.vulnscan.report`, `agentteams.vulnscan.runtimes` |
 | `agentteams.vulnscan.worktree_fixes` | `agentteams.vulnscan.daily`, `agentteams.vulnscan.executor`, `agentteams.vulnscan.fix`, `agentteams.vulnscan.manifests`, `agentteams.vulnscan.subproc_confine` | `agentteams.vulnscan.daily` |
-| `agentteams.wasm_runtime` | `agentteams.git_exec` | `agentteams.cli.wasm_commands` |
+| `agentteams.wasm_runtime` | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.git_exec` | `agentteams._wasm_pin_update`, `agentteams.cli.wasm_commands` |
 | `agentteams.whole_body_migration` | `agentteams.fence_twins`, `agentteams.fences`, `agentteams.scan`, `agentteams.unfenced`, `agentteams.user_regions` | `agentteams.fences`, `agentteams.fleet` |
 | `agentteams.write_policy` | — | `agentteams.analyze`, `agentteams.audit_agent_contract`, `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_detect` |
 | `agentteams.yaml_frontmatter` | — | `agentteams.adopted_agents`, `agentteams.bridge_sources`, `agentteams.canonical`, `agentteams.capability_map`, `agentteams.cli.adopt_only`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.codex`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.grok`, `agentteams.front_matter_reconcile`, `agentteams.graph_inputs`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_helpers` |
@@ -600,6 +602,26 @@ digraph "agentteams architecture" {
       "path": "agentteams/_utils.py",
       "is_package": false,
       "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams._wasm_archive": {
+      "package": "agentteams",
+      "path": "agentteams/_wasm_archive.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams._wasm_pin_update": {
+      "package": "agentteams",
+      "path": "agentteams/_wasm_pin_update.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams._wasm_archive",
+        "agentteams.git_exec",
+        "agentteams.wasm_runtime"
+      ],
       "external": [],
       "repo_local": []
     },
@@ -4646,6 +4668,8 @@ digraph "agentteams architecture" {
       "path": "agentteams/wasm_runtime.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams._wasm_archive",
+        "agentteams._wasm_pin_update",
         "agentteams.git_exec"
       ],
       "external": [],
@@ -4828,6 +4852,18 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams._interop_grok",
       "target": "agentteams.interop_helpers"
+    },
+    {
+      "source": "agentteams._wasm_pin_update",
+      "target": "agentteams._wasm_archive"
+    },
+    {
+      "source": "agentteams._wasm_pin_update",
+      "target": "agentteams.git_exec"
+    },
+    {
+      "source": "agentteams._wasm_pin_update",
+      "target": "agentteams.wasm_runtime"
     },
     {
       "source": "agentteams.adopted_agents",
@@ -9192,6 +9228,14 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.vulnscan.worktree_fixes",
       "target": "agentteams.vulnscan.subproc_confine"
+    },
+    {
+      "source": "agentteams.wasm_runtime",
+      "target": "agentteams._wasm_archive"
+    },
+    {
+      "source": "agentteams.wasm_runtime",
+      "target": "agentteams._wasm_pin_update"
     },
     {
       "source": "agentteams.wasm_runtime",

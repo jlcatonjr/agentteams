@@ -3,7 +3,9 @@
 Pinned provisioning and verify-on-use for the WASM runtime (wasmtime) and the guest interpreters
 (CPython-WASI, QuickJS-ng WASI).
 
-> Source: `agentteams/wasm_runtime.py`; pins: `agentteams/data/wasm_runtime_pins.json` (the trust anchor).
+> Source: `agentteams/wasm_runtime.py`, with private helpers `agentteams/_wasm_archive.py` (hashing, path checks,
+> safe extraction; stdlib-only) and `agentteams/_wasm_pin_update.py` (the pin updater); pins:
+> `agentteams/data/wasm_runtime_pins.json` (the trust anchor).
 > CLI: [`--wasm-install`, `--wasm-status`, `--wasm-pin-update`](../cli-reference.md#wasm-runtime-provisioning),
 > handled by `agentteams/cli/wasm_commands.py`, the only caller of `install()` and `pin_update()`.
 

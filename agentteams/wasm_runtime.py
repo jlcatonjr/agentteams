@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import copy
 import datetime as _dt
-import difflib
 import hashlib
 import json
 import os
@@ -42,6 +41,21 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from agentteams._wasm_archive import (  # re-exported: one error type and one verifier for all callers
+    _CHUNK,
+    WasmNetworkError,
+    WasmRuntimeError,
+    _chmod_readonly,
+    _extract,
+    _hash_file_nofollow,
+    _lstat_walk,
+    _make_writable,
+    _member_problem,
+    _mkdirs,
+    _verify_version_dir,
+    tree_digest,
+)
 
 #: The provisionable components, in install order.
 COMPONENTS: tuple[str, ...] = ("wasmtime", "python", "javascript")
@@ -75,35 +89,15 @@ PLATFORMS: tuple[str, ...] = (
 
 ARCHIVE_KINDS: frozenset[str] = frozenset({"tar.xz", "zip", "none"})
 
-# Extraction bounds (plan §5.4).
-MAX_MEMBERS = 20_000
-MAX_TOTAL_BYTES = 512 << 20
-MAX_FILE_BYTES = 256 << 20
-MAX_ZIP_RATIO = 200
 MAX_REDIRECTS = 5
 FETCH_TIMEOUT_S = 60.0
 FETCH_RETRIES = 2
-_CHUNK = 1 << 20
-_API_MAX_BYTES = 8 << 20
-
-#: S-10 cooldown, days.
-COOLDOWN_DAYS = 14
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
-_GHSA = re.compile(r"^GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}$")
 _RUNTIME_GUEST = re.compile(r"^/lib(/[A-Za-z0-9._-]+)*$")
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._+-]+$")
-_DRIVE = re.compile(r"^[A-Za-z]:")
 _VERSION = re.compile(r"^[0-9]+(\.[0-9]+)*$")
 _SKIP_DIRS = frozenset({"exec", "scratch"})   # owned by P02 (R3/R8); install never touches them
-
-
-class WasmRuntimeError(Exception):
-    """Provisioning or verification refused; the message names the operator fix."""
-
-
-class WasmNetworkError(WasmRuntimeError):
-    """A download or release-metadata request failed at the network layer."""
 
 
 @dataclass(frozen=True)
@@ -320,87 +314,6 @@ def _strip_for(pe: Mapping[str, Any], version: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Hashing and path checks (verify on use)
-# ---------------------------------------------------------------------------
-
-def _hash_file_nofollow(path: Path) -> tuple[str, int]:
-    """sha256 + size of a regular file opened without following a final symlink."""
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
-    try:
-        fd = os.open(path, flags)
-    except OSError as exc:
-        raise WasmRuntimeError(f"cannot open {path} without following links: {exc}") from exc
-    try:
-        st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode):
-            raise WasmRuntimeError(f"{path} is not a regular file")
-        h = hashlib.sha256()
-        n = 0
-        while True:
-            chunk = os.read(fd, _CHUNK)
-            if not chunk:
-                break
-            n += len(chunk)
-            h.update(chunk)
-        return h.hexdigest(), n
-    finally:
-        os.close(fd)
-
-
-def _lstat_walk(base: Path, rel_parts: Sequence[str], *, leaf_dir: bool = False) -> Path:
-    """Walk ``rel_parts`` under ``base`` refusing any symlink; return the final path."""
-    cur = base
-    for i, part in enumerate(rel_parts):
-        cur = cur / part
-        try:
-            st = os.lstat(cur)
-        except FileNotFoundError as exc:
-            raise WasmRuntimeError(f"{cur} is absent") from exc
-        if stat.S_ISLNK(st.st_mode):
-            raise WasmRuntimeError(f"{cur} is a symlink; refusing")
-        last = i == len(rel_parts) - 1
-        if not last or leaf_dir:
-            if not stat.S_ISDIR(st.st_mode):
-                raise WasmRuntimeError(f"{cur} is not a directory")
-        elif not stat.S_ISREG(st.st_mode):
-            raise WasmRuntimeError(f"{cur} is not a regular file")
-    return cur
-
-
-def tree_digest(root: Path) -> tuple[str, int]:
-    """Digest every regular file under ``root``: sha256 over sorted ``"<rel>\\0<sha256>\\n"`` lines.
-
-    Args:
-        root: A directory (not followed if it is a symlink).
-
-    Returns:
-        ``(hexdigest, file_count)``.
-
-    Raises:
-        WasmRuntimeError: A symlink, device, FIFO or socket is present, or ``root`` is not a directory.
-    """
-    try:
-        st = os.lstat(root)
-    except OSError as exc:
-        raise WasmRuntimeError(f"{root} is absent") from exc
-    if not stat.S_ISDIR(st.st_mode):
-        raise WasmRuntimeError(f"{root} is not a directory")
-    lines: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        for name in list(dirnames) + filenames:
-            p = Path(dirpath) / name
-            mode = os.lstat(p).st_mode
-            rel = p.relative_to(root).as_posix()
-            if stat.S_ISDIR(mode):
-                continue
-            if not stat.S_ISREG(mode):
-                raise WasmRuntimeError(f"{p} is not a regular file or directory; refusing")
-            lines.append(f"{rel}\0{_hash_file_nofollow(p)[0]}\n")
-    lines.sort()
-    return _sha256_bytes("".join(lines).encode("utf-8")), len(lines)
-
-
-# ---------------------------------------------------------------------------
 # The pure entry-file hash check (R10)
 #
 # MERGE-NOTE (orchestrator, P02/P03 reconciliation): METAPLAN R10 puts
@@ -443,20 +356,20 @@ def _local_pinned_resolver(install_dir: Path, pins: Mapping[str, Any], *,
 
 def _pinned_resolver(install_dir: Path, pins: Mapping[str, Any], *,
                      platform: str | None) -> Callable[[str], Path]:
-    try:  # MERGE-NOTE: prefer P02's bundle-shared implementation once it exists (R10).
-        from agentteams.wasm_exec import pinned_resolver as _p02  # type: ignore[attr-defined]
-    except ImportError:
-        _p02 = None
-    if _p02 is None or platform is not None:
+    import importlib
+    import importlib.util
+
+    # MERGE-NOTE: prefer P02's bundle-shared implementation once it exists (R10).
+    p02 = importlib.import_module("agentteams.wasm_exec") if importlib.util.find_spec("agentteams.wasm_exec") else None
+    if p02 is None or not hasattr(p02, "pinned_resolver") or platform is not None:
         return _local_pinned_resolver(install_dir, pins, platform=platform)
-    inner = _p02(install_dir, pins)
+    inner = p02.pinned_resolver(install_dir, pins)
+    p02_error = getattr(p02, "WasmExecError", WasmRuntimeError)
 
     def _wrapped(component: str) -> Path:
         try:
             return Path(inner(component))
-        except WasmRuntimeError:
-            raise
-        except Exception as exc:  # noqa: BLE001 — P02 raises its own error type; re-raise as ours
+        except p02_error as exc:   # P02's refusal type becomes ours (one error type for callers)
             raise WasmRuntimeError(str(exc)) from exc
     return _wrapped
 
@@ -768,267 +681,6 @@ def _fetch(url: str, size: int, dest: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Archive safety
-# ---------------------------------------------------------------------------
-
-def _member_problem(name: str) -> str | None:
-    """Why ``name`` is an unsafe archive member path, or ``None``."""
-    if not name:
-        return "empty name"
-    if "\0" in name:
-        return "NUL in name"
-    if "\\" in name:
-        return "backslash in name"
-    if name.startswith("/"):
-        return "absolute path"
-    if _DRIVE.match(name):
-        return "drive letter"
-    for seg in name.rstrip("/").split("/"):
-        if seg in ("", ".", ".."):
-            return f"bad path segment {seg!r}"
-    return None
-
-
-def _kept(rel: str, keep: Sequence[str]) -> bool:
-    for k in keep:
-        if k.endswith("/"):
-            if rel == k.rstrip("/") or rel.startswith(k):
-                return True
-        elif rel == k:
-            return True
-    return False
-
-
-def _mkdirs(base: Path, rel_parts: Sequence[str]) -> Path:
-    cur = base
-    for part in rel_parts:
-        cur = cur / part
-        try:
-            os.mkdir(cur, 0o700)
-        except FileExistsError:
-            pass
-        st = os.lstat(cur)
-        if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
-            raise WasmRuntimeError(f"extraction path {cur} is not a real directory")
-    return cur
-
-
-class _Extractor:
-    """Bounded, member-by-member writer shared by the tar and zip paths."""
-
-    def __init__(self, dest: Path, strip: str, keep: Sequence[str]) -> None:
-        self.dest = dest
-        self.strip = strip.strip("/")
-        self.keep = list(keep)
-        self.members = 0
-        self.total = 0
-        self.seen: set[str] = set()
-        self.skipped: list[str] = []
-        self.written: list[str] = []
-
-    def target(self, raw: str, is_dir: bool) -> str | None:
-        """Validate a member name; return the stripped relative path to write, or None to skip."""
-        self.members += 1
-        if self.members > MAX_MEMBERS:
-            raise WasmRuntimeError(f"archive has more than {MAX_MEMBERS} members")
-        why = _member_problem(raw)
-        if why:
-            raise WasmRuntimeError(f"unsafe archive member {raw!r}: {why}")
-        name = raw.rstrip("/")
-        if self.strip:
-            if name == self.strip:
-                return None
-            if not name.startswith(self.strip + "/"):
-                raise WasmRuntimeError(f"archive member {raw!r} is outside the pinned prefix {self.strip!r}/")
-            name = name[len(self.strip) + 1:]
-        if name in self.seen:
-            raise WasmRuntimeError(f"duplicate archive member {name!r}")
-        self.seen.add(name)
-        if not _kept(name, self.keep):
-            if not is_dir:
-                self.skipped.append(name)
-            return None
-        return name
-
-    def write(self, rel: str, src: Any) -> None:
-        """Stream ``src`` into ``dest/rel`` with streaming size bounds."""
-        parts = rel.split("/")
-        parent = _mkdirs(self.dest, parts[:-1])
-        flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-                 | getattr(os, "O_BINARY", 0))
-        fd = os.open(parent / parts[-1], flags, 0o600)
-        n = 0
-        try:
-            while True:
-                chunk = src.read(_CHUNK)
-                if not chunk:
-                    break
-                n += len(chunk)
-                self.total += len(chunk)
-                if n > MAX_FILE_BYTES:
-                    raise WasmRuntimeError(f"archive member {rel!r} exceeds {MAX_FILE_BYTES} bytes")
-                if self.total > MAX_TOTAL_BYTES:
-                    raise WasmRuntimeError(f"archive expands past {MAX_TOTAL_BYTES} bytes")
-                os.write(fd, chunk)
-        finally:
-            os.close(fd)
-        self.written.append(rel)
-
-
-def _extract(archive: Path, kind: str, dest: Path, *, strip: str, keep: Sequence[str],
-             entry: str) -> list[str]:
-    """Safely extract ``archive`` into the existing empty directory ``dest``.
-
-    Args:
-        archive: The verified download.
-        kind: ``"tar.xz"``, ``"zip"`` or ``"none"`` (the download *is* ``entry``).
-        dest: Target directory.
-        strip: Required leading directory, removed from every member (``""`` for none).
-        keep: Paths to extract; a trailing ``/`` keeps a subtree. Everything else is skipped and reported.
-        entry: The entry file name (used for ``kind == "none"``).
-
-    Returns:
-        Notices (skipped members).
-
-    Raises:
-        WasmRuntimeError: Any unsafe member, bound exceeded, or unsupported archive.
-    """
-    ex = _Extractor(dest, strip, keep)
-    if kind == "none":
-        if _member_problem(entry):
-            raise WasmRuntimeError(f"unsafe entry name {entry!r}")
-        with open(archive, "rb") as src:
-            ex.write(entry, src)
-    elif kind == "tar.xz":
-        _extract_tar(archive, ex)
-    elif kind == "zip":
-        _extract_zip(archive, ex)
-    else:
-        raise WasmRuntimeError(f"unsupported archive kind {kind!r}")
-    notices = []
-    if ex.skipped:
-        shown = ", ".join(sorted(ex.skipped)[:20])
-        more = f" (+{len(ex.skipped) - 20} more)" if len(ex.skipped) > 20 else ""
-        notices.append(f"skipped {len(ex.skipped)} archive member(s) not in the pinned keep list: {shown}{more}")
-    return notices
-
-
-def _extract_tar(archive: Path, ex: _Extractor) -> None:
-    try:
-        import lzma  # noqa: F401 — presence check; tarfile uses it for r:xz
-    except ImportError as exc:
-        raise WasmRuntimeError("this Python lacks lzma; .tar.xz cannot be verified-extracted") from exc
-    import tarfile
-
-    try:
-        with tarfile.open(archive, mode="r:xz") as tf:
-            for m in tf:
-                if m.issym() or m.islnk():
-                    raise WasmRuntimeError(f"archive member {m.name!r} is a link; refusing")
-                if m.isdev() or m.isfifo() or m.ischr() or m.isblk():
-                    raise WasmRuntimeError(f"archive member {m.name!r} is a device/FIFO; refusing")
-                if m.issparse():
-                    raise WasmRuntimeError(f"archive member {m.name!r} is sparse; refusing")
-                if not (m.isreg() or m.isdir()):
-                    raise WasmRuntimeError(f"archive member {m.name!r} has unsupported type {m.type!r}")
-                rel = ex.target(m.name, m.isdir())
-                if rel is None or m.isdir():
-                    continue
-                src = tf.extractfile(m)
-                if src is None:
-                    raise WasmRuntimeError(f"archive member {m.name!r} has no data")
-                with src:
-                    ex.write(rel, src)
-    except (tarfile.TarError, EOFError, OSError) as exc:
-        if isinstance(exc, WasmRuntimeError):
-            raise
-        raise WasmRuntimeError(f"corrupt tar.xz archive: {exc}") from exc
-
-
-def _extract_zip(archive: Path, ex: _Extractor) -> None:
-    import zipfile
-
-    try:
-        with zipfile.ZipFile(archive) as zf:
-            for zi in zf.infolist():
-                raw = zi.orig_filename
-                mode = (zi.external_attr >> 16) & 0o170000
-                is_dir = raw.endswith("/")
-                if mode == stat.S_IFLNK:
-                    raise WasmRuntimeError(f"zip member {raw!r} is a symlink; refusing")
-                if mode and mode not in (stat.S_IFREG, stat.S_IFDIR):
-                    raise WasmRuntimeError(f"zip member {raw!r} is not a regular file or directory")
-                if zi.flag_bits & 0x1:
-                    raise WasmRuntimeError(f"zip member {raw!r} is encrypted; refusing")
-                if zi.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
-                    raise WasmRuntimeError(f"zip member {raw!r} uses unsupported compression {zi.compress_type}")
-                if not is_dir and zi.file_size / max(zi.compress_size, 1) > MAX_ZIP_RATIO:
-                    raise WasmRuntimeError(f"zip member {raw!r} expands more than {MAX_ZIP_RATIO}x; refusing")
-                rel = ex.target(raw, is_dir)
-                if rel is None or is_dir:
-                    continue
-                with zf.open(zi) as src:
-                    ex.write(rel, src)
-    except zipfile.BadZipFile as exc:
-        raise WasmRuntimeError(f"corrupt zip archive: {exc}") from exc
-
-
-def _verify_version_dir(verdir: Path, pe: Mapping[str, Any]) -> None:
-    """Strictly verify an extracted version dir: every file pinned, nothing extra, no links.
-
-    Raises:
-        WasmRuntimeError: Any mismatch, missing file, extra file, or non-regular entry.
-    """
-    files = pe.get("files") or {}
-    tree = pe.get("tree")
-    tree_root = str(tree["root"]) if tree else None
-    seen: set[str] = set()
-    for dirpath, dirnames, filenames in os.walk(verdir, followlinks=False):
-        for name in list(dirnames) + filenames:
-            p = Path(dirpath) / name
-            rel = p.relative_to(verdir).as_posix()
-            mode = os.lstat(p).st_mode
-            if stat.S_ISDIR(mode):
-                continue
-            if not stat.S_ISREG(mode):
-                raise WasmRuntimeError(f"{rel} is not a regular file")
-            if tree_root and (rel + "/").startswith(tree_root + "/"):
-                continue
-            if rel not in files:
-                raise WasmRuntimeError(f"{rel} is not pinned")
-            got, _ = _hash_file_nofollow(p)
-            if got != files[rel]["sha256"]:
-                raise WasmRuntimeError(f"{rel} sha256 mismatch (have {got}, pinned {files[rel]['sha256']})")
-            seen.add(rel)
-    missing = sorted(set(files) - seen)
-    if missing:
-        raise WasmRuntimeError(f"pinned file(s) missing: {', '.join(missing)}")
-    if tree:
-        root = _lstat_walk(verdir, tree_root.split("/"), leaf_dir=True)
-        digest, count = tree_digest(root)
-        if digest != tree["sha256"] or count != tree["count"]:
-            raise WasmRuntimeError(f"tree {tree_root}/ digest/count mismatch ({count} files)")
-
-
-def _chmod_readonly(verdir: Path, pe: Mapping[str, Any]) -> None:
-    files = pe.get("files") or {}
-    for dirpath, dirnames, filenames in os.walk(verdir, topdown=False, followlinks=False):
-        for name in filenames:
-            p = Path(dirpath) / name
-            rel = p.relative_to(verdir).as_posix()
-            os.chmod(p, 0o555 if (files.get(rel) or {}).get("exec") else 0o444)
-        os.chmod(dirpath, 0o555)
-
-
-def _make_writable(path: Path) -> None:
-    if not os.path.lexists(path) or os.path.islink(path):
-        return
-    for dirpath, dirnames, filenames in os.walk(path, followlinks=False):
-        os.chmod(dirpath, 0o700)
-    os.chmod(path, 0o700)
-
-
-# ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
 
@@ -1217,119 +869,8 @@ def _record_installed(idir: Path, comp: str, version: str, plat: str, archive_sh
 
 
 # ---------------------------------------------------------------------------
-# Pin update (operator tool behind --wasm-pin-update)
+# Pin update (operator tool behind --wasm-pin-update; implemented in _wasm_pin_update)
 # ---------------------------------------------------------------------------
-
-def _api_get(url: str) -> Any:
-    """GET JSON from api.github.com (https, no redirects, bounded)."""
-    import http.client
-    import urllib.error
-    import urllib.request
-
-    if not url.startswith("https://") or _host(url) != API_HOST:
-        raise WasmRuntimeError(f"refusing metadata URL: {url}")
-
-    class _NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
-            raise WasmRuntimeError(f"refusing redirect from {url} to {newurl}")
-
-    opener = urllib.request.build_opener(_NoRedirect)
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
-                                               "User-Agent": "agentteams-wasm-pin-update/1"})
-    last: Exception | None = None
-    for _attempt in range(FETCH_RETRIES + 1):
-        try:
-            parts: list[bytes] = []
-            total = 0
-            with opener.open(req, timeout=FETCH_TIMEOUT_S) as resp:
-                while True:   # read to EOF: a single bounded read() can return a short body
-                    chunk = resp.read(_CHUNK)
-                    if not chunk:
-                        break
-                    total += len(chunk)
-                    if total > _API_MAX_BYTES:
-                        raise WasmRuntimeError(f"{url}: response exceeds {_API_MAX_BYTES} bytes")
-                    parts.append(chunk)
-            return json.loads(b"".join(parts).decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            raise WasmNetworkError(f"{url}: HTTP {exc.code}") from exc
-        except (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError,
-                ValueError) as exc:
-            last = exc   # transient (a truncated chunked body, a cut-off JSON document): retry
-    raise WasmNetworkError(f"{url}: failed after {FETCH_RETRIES + 1} attempts: {last}")
-
-
-def _vtuple(tag: str) -> tuple[int, ...] | None:
-    v = tag[1:] if tag.startswith("v") else tag
-    return tuple(int(x) for x in v.split(".")) if _VERSION.match(v) else None
-
-
-def _parse_time(s: str) -> _dt.datetime:
-    return _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-
-def _s10_check(release: Mapping[str, Any], releases: Sequence[Mapping[str, Any]], version: str,
-               remediation: Sequence[str], now: _dt.datetime) -> str:
-    """Apply S-10; return the ``s10`` pins value.
-
-    Raises:
-        WasmRuntimeError: Draft/prerelease, cooldown not cleared, a newer cleared release exists, or a
-            remediation id is malformed or absent from the line's release notes.
-    """
-    if release.get("draft") or release.get("prerelease"):
-        raise WasmRuntimeError(f"{release.get('tag_name')} is a draft or prerelease")
-    target = _vtuple(version)
-    if target is None:
-        raise WasmRuntimeError(f"unparseable version {version!r}")
-    stable = [r for r in releases if not r.get("draft") and not r.get("prerelease")
-              and (_vtuple(str(r.get("tag_name", ""))) or (None,))[0] == target[0]]
-    if remediation:
-        bodies = "\n".join(str(r.get("body") or "") for r in stable
-                           if (_vtuple(str(r.get("tag_name", ""))) or ()) <= target)
-        bodies += "\n" + str(release.get("body") or "")
-        for gid in remediation:
-            if not _GHSA.match(gid):
-                raise WasmRuntimeError(f"malformed advisory id {gid!r}")
-            if gid not in bodies:
-                raise WasmRuntimeError(f"{gid} is not named in the release notes up to {version}")
-        return "remediation:" + ",".join(remediation)
-    cutoff = now - _dt.timedelta(days=COOLDOWN_DAYS)
-    if _parse_time(str(release["published_at"])) > cutoff:
-        raise WasmRuntimeError(
-            f"{version} was published {release['published_at']}, inside the {COOLDOWN_DAYS}-day S-10 cooldown; "
-            "pass --remediation GHSA-... (recorded @security decision) to adopt a fix release early"
-        )
-    newer = [str(r["tag_name"]) for r in stable
-             if (_vtuple(str(r["tag_name"])) or ()) > target and _parse_time(str(r["published_at"])) <= cutoff]
-    if newer:
-        raise WasmRuntimeError(f"{version} is not the newest cooled-down release on its line (newer: {', '.join(newer)})")
-    return "cooldown-clear"
-
-
-def _hash_extracted(verdir: Path, pe: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    old_files = pe.get("files") or {}
-    tree = pe.get("tree")
-    tree_root = str(tree["root"]) if tree else None
-    files: dict[str, Any] = {}
-    for dirpath, dirnames, filenames in os.walk(verdir, followlinks=False):
-        for name in filenames:
-            p = Path(dirpath) / name
-            rel = p.relative_to(verdir).as_posix()
-            if tree_root and rel.startswith(tree_root + "/"):
-                continue
-            spec: dict[str, Any] = {"sha256": _hash_file_nofollow(p)[0]}
-            if (old_files.get(rel) or {}).get("exec"):
-                spec["exec"] = True
-            files[rel] = spec
-    new_tree = None
-    if tree:
-        root = verdir / tree_root
-        if not root.is_dir() or root.is_symlink():
-            raise WasmRuntimeError(f"pinned tree {tree_root}/ is absent from the new archive")
-        digest, count = tree_digest(root)
-        new_tree = {"root": tree_root, "sha256": digest, "count": count}
-    return files, new_tree
-
 
 def default_pins_out() -> Path | None:
     """The packaged pins file when it sits in a git work tree (an editable checkout), else ``None``.
@@ -1337,12 +878,8 @@ def default_pins_out() -> Path | None:
     Returns:
         :data:`PINS_PATH` or ``None`` (a wheel install is never modified in place).
     """
-    try:
-        from agentteams.git_exec import run_git
-        proc = run_git(PINS_PATH.parent, "rev-parse", "--is-inside-work-tree", timeout=30, devnull_stdin=True)
-    except (OSError, subprocess.TimeoutExpired):  # no git binary: not a work tree
-        return None
-    return PINS_PATH if proc.returncode == 0 and proc.stdout.strip() == "true" else None
+    from agentteams import _wasm_pin_update
+    return _wasm_pin_update.default_pins_out()
 
 
 def pin_update(component: str, version: str, *, remediation: Sequence[str] = (), tofu: bool = False,
@@ -1351,104 +888,27 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
                work_dir: Path | None = None) -> str:
     """Re-pin ``component`` at ``version`` from a verified download; write ``pins_path``; return the diff.
 
-    Operator-only (``--wasm-pin-update``). Reads release metadata from api.github.com, applies S-10,
-    downloads every platform asset with :func:`_fetch`, checks it against the API digest, extracts it
-    with :func:`_extract`, and computes file and tree hashes. ``pins_path`` is written only after every
-    platform verified; any failure leaves it byte-identical. Never commits.
+    Operator-only (``--wasm-pin-update``); see :func:`agentteams._wasm_pin_update.pin_update`.
 
     Args:
-        component: One of :data:`COMPONENTS` (its existing entry supplies the layout templates).
-        version: Target version, e.g. ``"36.0.20"``.
-        remediation: GHSA ids that justify adopting a release inside the cooldown.
-        tofu: Accept an asset with no API digest (recorded as ``"provenance": "tofu"``).
+        component: One of :data:`COMPONENTS`.
+        version: Target version.
+        remediation: GHSA ids justifying adoption inside the S-10 cooldown.
+        tofu: Accept an asset with no API digest.
         pins_path: The pins file to read and rewrite.
-        fetch: Download function (tests inject one).
-        api_get: Metadata getter (tests inject one).
+        fetch: Download function (tests).
+        api_get: Metadata getter (tests).
         now: Clock override for S-10.
-        work_dir: Scratch directory for downloads; ``None`` makes a private temp dir.
+        work_dir: Scratch directory for downloads.
 
     Returns:
-        The unified diff between the old and new pins file.
+        The unified diff.
 
     Raises:
-        WasmRuntimeError: S-10 refusal, missing digest without ``tofu``, layout change, or mismatch.
+        WasmRuntimeError: Refusal or mismatch; ``pins_path`` is left unchanged.
         WasmNetworkError: Metadata or download failure.
     """
-    import tempfile
-
-    _check_component(component)
-    if not _SAFE_SEGMENT.match(version) or not _VERSION.match(version):
-        raise WasmRuntimeError(f"unsafe version {version!r}")
-    old_text = pins_path.read_text(encoding="utf-8")
-    doc = json.loads(old_text)
-    problems = validate_pins(doc)
-    if problems:
-        raise WasmRuntimeError("pins file is malformed: " + "; ".join(problems))
-    entry = doc["components"][component]
-    repo = entry["source"]["repo"]
-    tag = str(entry["source"]["tag"]).replace("{version}", version)
-    api_get = api_get or _api_get
-    fetch = fetch or _fetch
-    now = now or _dt.datetime.now(_dt.UTC)
-    release = api_get(f"https://{API_HOST}/repos/{repo}/releases/tags/{tag}")
-    releases = api_get(f"https://{API_HOST}/repos/{repo}/releases?per_page=100")
-    s10 = _s10_check(release, releases, version, list(remediation), now)
-    assets = release.get("assets") or []
-    new_entry = copy.deepcopy(entry)
-    new_entry.update({"version": version, "release": str(release.get("html_url", "")),
-                      "published_at": str(release.get("published_at", "")), "s10": s10,
-                      "provenance": "tofu" if tofu else "download-verified"})
-    owned_tmp = work_dir is None
-    work = Path(tempfile.mkdtemp(prefix="agentteams-pin-")) if owned_tmp else work_dir
-    try:
-        for pkey, pe in entry["platforms"].items():
-            pat = re.compile(str(pe["asset_re"]).replace("{version}", re.escape(version)))
-            match = [a for a in assets if pat.match(str(a.get("name", "")))]
-            if len(match) != 1:
-                raise WasmRuntimeError(f"{component} {version} {pkey}: expected one asset matching "
-                                       f"{pat.pattern}, found {len(match)}")
-            asset = match[0]
-            url, size = str(asset["browser_download_url"]), int(asset["size"])
-            _check_download_url(url)
-            digest = str(asset.get("digest") or "")
-            if digest.startswith("sha256:"):
-                digest = digest[len("sha256:"):]
-            elif not tofu:
-                raise WasmRuntimeError(f"{asset['name']} has no sha256 digest in release metadata; "
-                                       "re-run with --tofu only on a recorded @security decision")
-            else:
-                digest = ""
-            pdir = work / f"{component}-{pkey}"
-            os.mkdir(pdir, 0o700)
-            archive = pdir / "download"
-            fetch(url, size, archive)
-            got, n = _hash_file_nofollow(archive)
-            if n != size or (digest and got != digest):
-                raise WasmRuntimeError(f"{asset['name']}: download does not match release metadata "
-                                       f"(size {n}/{size}, sha256 {got} vs {digest or '(none)'})")
-            out = pdir / "x"
-            os.mkdir(out, 0o700)
-            _extract(archive, str(pe["archive"]), out, strip=_strip_for(pe, version),
-                     keep=list(pe.get("keep") or [pe["entry"]]), entry=str(pe["entry"]))
-            files, tree = _hash_extracted(out, pe)
-            if pe["entry"] not in files:
-                raise WasmRuntimeError(f"{asset['name']}: entry {pe['entry']!r} absent after extraction")
-            npe = new_entry["platforms"][pkey]
-            npe.update({"url": url, "size": size, "sha256": got, "files": files})
-            if tree is not None:
-                npe["tree"] = tree
-    finally:
-        if owned_tmp:
-            _make_writable(work)
-            shutil.rmtree(work, ignore_errors=True)
-    doc["components"][component] = new_entry
-    doc["updated"] = now.date().isoformat()
-    problems = validate_pins(doc)
-    if problems:
-        raise WasmRuntimeError("updated pins would be malformed: " + "; ".join(problems))
-    new_text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
-    tmp = pins_path.with_name(f".{pins_path.name}.{secrets.token_hex(4)}.tmp")
-    tmp.write_text(new_text, encoding="utf-8")
-    os.replace(tmp, pins_path)
-    return "".join(difflib.unified_diff(old_text.splitlines(keepends=True), new_text.splitlines(keepends=True),
-                                        fromfile=f"a/{pins_path.name}", tofile=f"b/{pins_path.name}"))
+    from agentteams import _wasm_pin_update
+    return _wasm_pin_update.pin_update(component, version, remediation=remediation, tofu=tofu,
+                                       pins_path=pins_path, fetch=fetch, api_get=api_get, now=now,
+                                       work_dir=work_dir)

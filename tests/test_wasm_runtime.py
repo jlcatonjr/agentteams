@@ -25,6 +25,8 @@ from pathlib import Path
 
 import pytest
 
+from agentteams import _wasm_archive as _wa
+from agentteams import _wasm_pin_update as _pu
 from agentteams import wasm_runtime as wr
 
 REPO = Path(__file__).resolve().parents[1]
@@ -478,7 +480,7 @@ def test_extract_refuses_duplicate_member(tmp_path):
 
 
 def test_extract_refuses_too_many_members(tmp_path, monkeypatch):
-    monkeypatch.setattr(wr, "MAX_MEMBERS", 3)
+    monkeypatch.setattr(_wa, "MAX_MEMBERS", 3)
     with pytest.raises(wr.WasmRuntimeError, match="more than 3 members"):
         _ex_tar(tmp_path, [(f"{STRIP}/f{i}", b"x", "reg") for i in range(5)])
 
@@ -489,13 +491,13 @@ def test_extract_refuses_zip_bomb_ratio(tmp_path):
 
 
 def test_extract_refuses_oversize_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(wr, "MAX_FILE_BYTES", 10)
+    monkeypatch.setattr(_wa, "MAX_FILE_BYTES", 10)
     with pytest.raises(wr.WasmRuntimeError, match="exceeds 10 bytes"):
         _ex_tar(tmp_path, [(f"{STRIP}/wasmtime", b"x" * 11, "reg")])
 
 
 def test_extract_refuses_total_overrun(tmp_path, monkeypatch):
-    monkeypatch.setattr(wr, "MAX_TOTAL_BYTES", 15)
+    monkeypatch.setattr(_wa, "MAX_TOTAL_BYTES", 15)
     with pytest.raises(wr.WasmRuntimeError, match="expands past"):
         _ex_tar(tmp_path, [(f"{STRIP}/wasmtime", b"x" * 10, "reg"), (f"{STRIP}/LICENSE", b"y" * 10, "reg")])
 
@@ -791,7 +793,8 @@ def test_only_cli_calls_install():
     offenders = []
     for p in (REPO / "agentteams").rglob("*.py"):
         rel = p.relative_to(REPO).as_posix()
-        if rel in ("agentteams/wasm_runtime.py", "agentteams/cli/wasm_commands.py"):
+        if rel in ("agentteams/wasm_runtime.py", "agentteams/_wasm_pin_update.py",
+                   "agentteams/cli/wasm_commands.py"):
             continue
         text = p.read_text(encoding="utf-8")
         if "wasm_runtime" in text and pat.search(text):
@@ -954,6 +957,6 @@ def test_pin_update_refuses_missing_runtime_tree(env):
 
 def test_metadata_getter_refuses_other_hosts():
     with pytest.raises(wr.WasmRuntimeError, match="refusing metadata URL"):
-        wr._api_get("https://evil.example/repos/x")
+        _pu._api_get("https://evil.example/repos/x")
     with pytest.raises(wr.WasmRuntimeError, match="refusing metadata URL"):
-        wr._api_get("http://api.github.com/repos/x")
+        _pu._api_get("http://api.github.com/repos/x")
