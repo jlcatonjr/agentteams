@@ -150,6 +150,12 @@ def _check_base_url(url: str) -> str:
 
     Allowed: ``https://`` to any host, or ``http://`` to a loopback host; no userinfo, query or fragment.
 
+    Rule (C-4, @security S5): a base URL comes only from operator configuration — a preset, the operator's
+    environment, or an explicit operator argument. It is never taken from read content (a brief field an agent
+    can write, guest or model output, a fetched page, an adjacent repository): the provider key is sent to this
+    host, so a content-chosen URL would exfiltrate it. These checks bound the URL's shape, not its trust. As of
+    the wave-1 review no caller outside ``model_providers`` passes ``base_url`` at all.
+
     Raises:
         ModelProviderError: ``config`` otherwise.
     """
