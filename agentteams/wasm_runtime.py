@@ -1236,16 +1236,27 @@ def _api_get(url: str) -> Any:
     opener = urllib.request.build_opener(_NoRedirect)
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
                                                "User-Agent": "agentteams-wasm-pin-update/1"})
-    try:
-        with opener.open(req, timeout=FETCH_TIMEOUT_S) as resp:
-            body = resp.read(_API_MAX_BYTES + 1)
-    except urllib.error.HTTPError as exc:
-        raise WasmNetworkError(f"{url}: HTTP {exc.code}") from exc
-    except (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError) as exc:
-        raise WasmNetworkError(f"{url}: {exc}") from exc
-    if len(body) > _API_MAX_BYTES:
-        raise WasmRuntimeError(f"{url}: response exceeds {_API_MAX_BYTES} bytes")
-    return json.loads(body.decode("utf-8"))
+    last: Exception | None = None
+    for _attempt in range(FETCH_RETRIES + 1):
+        try:
+            parts: list[bytes] = []
+            total = 0
+            with opener.open(req, timeout=FETCH_TIMEOUT_S) as resp:
+                while True:   # read to EOF: a single bounded read() can return a short body
+                    chunk = resp.read(_CHUNK)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > _API_MAX_BYTES:
+                        raise WasmRuntimeError(f"{url}: response exceeds {_API_MAX_BYTES} bytes")
+                    parts.append(chunk)
+            return json.loads(b"".join(parts).decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise WasmNetworkError(f"{url}: HTTP {exc.code}") from exc
+        except (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError,
+                ValueError) as exc:
+            last = exc   # transient (a truncated chunked body, a cut-off JSON document): retry
+    raise WasmNetworkError(f"{url}: failed after {FETCH_RETRIES + 1} attempts: {last}")
 
 
 def _vtuple(tag: str) -> tuple[int, ...] | None:
