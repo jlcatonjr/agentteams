@@ -609,9 +609,23 @@ brief's, and each gate's `exec`). For each xcrun launcher in `/usr/bin` it print
 paths the Seatbelt profile will allow (the real tool as a `literal`, git's helpers as a `subpath`). When they can't be resolved it prints a `WARNING` naming the
 launcher: confined calls to it will fail (exit 71). These lines are advisory and don't change the exit status.
 
+### `--os-sandbox {on,off}`
+
+Overrides the brief's `os_sandbox` for this run. `off` suppresses every OS boundary agentteams emits for the
+selected framework (the Claude settings `sandbox` block, the Goose Seatbelt profile, the Codex/Goose/Grok runners,
+the Grok profile, and the neutral launcher `sandbox/confine-run.sh`); everything else `privilege_profile` controls
+stays as it is. `on` emits the boundary even under `cooperative`, and counts as the explicit opt-in that makes the
+Claude gate hook fail closed.
+
+Turning the OS sandbox off is constraint-relaxing (Rule 15). In a governed workspace (strict decision signing, on by
+default) it needs an operator Ed25519-signed decision for `sandbox-os-off:<framework>`; elsewhere generation prints a
+`SANDBOX RELAXATION` notice and records it. It is refused with `write_policy: orchestrator-only`, and together with
+an explicit `--target-host-features <fw>:sandbox`. It never changes live settings, the launcher, or the runner's
+`confined_programs` sandbox. `--check-wiring --os-sandbox off` reports live config that still enables a sandbox.
+
 ### `--allow-unenforced-confinement`
 
-Permit `generate` to proceed when a `confined`/`exclusive` `privilege_profile` is requested on a target with no OS-level sandbox to enforce it (Goose, Codex, Copilot, native Windows). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
+Permit `generate` to proceed when the OS sandbox (a `confined`/`exclusive` `privilege_profile`, or `os_sandbox: on`) is requested on a target with no OS-level sandbox to enforce it (native Windows and other hosts with no emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.
 
 ### `--accept-write-root PATH`
 
@@ -637,7 +651,7 @@ environment variable or an `@file`.
 
 ### `--allow-fallback-fail-open`
 
-CC-2 opt-out. For a `confined`/`exclusive` `privilege_profile`, agentteams emits the constitutional-gate hook **fail-closed**: an unexpected crash in the gate emits a `deny` decision rather than letting the harness fail open (a crash → silent allow), because a workspace that opted into a boundary must not have it silently dropped by a gate error. This flag restores the historical **fail-open** behavior for those profiles — use it only when a buggy gate bricking the session is a worse risk than a missed block. Cooperative teams are unaffected (they are always fail-open) and remain byte-identical.
+CC-2 opt-out. When the OS sandbox is on and was explicitly requested (an explicit `confined`/`exclusive` `privilege_profile`, or `os_sandbox: on`), agentteams emits the constitutional-gate hook **fail-closed**: an unexpected crash in the gate emits a `deny` decision rather than letting the harness fail open (a crash → silent allow), because a workspace that opted into a boundary must not have it silently dropped by a gate error. This flag restores the historical **fail-open** behavior — use it only when a buggy gate bricking the session is a worse risk than a missed block. Teams with the OS sandbox off (cooperative, or `os_sandbox: off`) are unaffected: they are always fail-open.
 
 **Hook decision log (environment, not a flag).** The emitted constitutional-gate hook reads two optional
 environment variables at run time. `AGENTTEAMS_GATE_LOG=<absolute path>` appends one JSON line per hook

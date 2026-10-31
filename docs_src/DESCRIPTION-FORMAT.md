@@ -178,6 +178,24 @@ Each entry:
 
 ---
 
+### `os_sandbox`
+
+**Type:** `"on"` or `"off"` · **Default:** absent (follows `privilege_profile`: confined/exclusive = on, cooperative = off)
+**Purpose:** Switches the OS sandbox boundary independently of `privilege_profile`:
+- `"off"` suppresses every OS boundary agentteams emits for the selected framework (the Claude settings `sandbox`
+  block, the Goose Seatbelt profile, the Codex/Goose/Grok runners, the Grok profile, the neutral launcher); the rest
+  of `privilege_profile` is unchanged, and the control-plane stubs a sibling team's launcher needs are still emitted;
+- `"on"` emits the boundary even under `cooperative`, and counts as the explicit opt-in that makes the Claude gate
+  hook fail closed.
+
+`--os-sandbox on|off` overrides it for one run. Any other value fails closed. Turning the boundary off is
+constraint-relaxing (Rule 15): in a governed workspace (strict decision signing, on by default) it needs an
+operator Ed25519-signed decision `sandbox-os-off:<framework>`; otherwise generation prints a `SANDBOX RELAXATION`
+notice. The effective state is recorded in the build-log `sandbox_state`, and `--check-wiring` reports live config
+that still enables a sandbox. Never touches live settings or the runner's `confined_programs` sandbox.
+
+---
+
 ### `write_policy`
 
 **Type:** `"default"` or `"orchestrator-only"` · **Default:** absent (off)
@@ -187,7 +205,7 @@ Each entry:
 - the operator's out-of-session runner applies everything.
 
 **Requirements and support:**
-- an explicit `privilege_profile` of `"confined"` or `"exclusive"`;
+- an explicit `privilege_profile` of `"confined"` or `"exclusive"`, and `os_sandbox` not `"off"`;
 - **supported on Claude** (and Codex through its launcher);
 - **refused on Goose**: Goose delegates inherit the orchestrator's write tools (agentteams #204).
 

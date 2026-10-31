@@ -492,6 +492,11 @@
       "type": "boolean",
       "description": "Whether the operator EXPLICITLY set privilege_profile in the brief (vs. inheriting the confined default introduced 2026-W39). Recorded at build so the one non-inert privilege-keyed artifact — Claude's constitutional-gate.py fail-open->fail-closed flip (claude._apply_fail_closed_policy) — fires only on an explicit confined/exclusive, never on the defaulted confined; this keeps the default flip inert-until-merged."
     },
+    "os_sandbox": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "P00: the brief's dedicated OS-sandbox switch, carried only when the brief sets it (absent: derived from privilege_profile). The effective state is recorded in sandbox_state; --os-sandbox is transient and never persisted."
+    },
     "enforce_decision_signing": {
       "type": "boolean",
       "description": "Strict agent-privilege switch carried from the project description (defaults true). When true, an unsigned authorizing security-decision row is refused (fail-closed) rather than trusted on its author name. Emitted into the team as references/agent-privilege.json, read by the security gate at enforcement time (see project-description.schema.json)."

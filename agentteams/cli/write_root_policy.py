@@ -131,7 +131,8 @@ def warn_prompt_root_relaxation(manifest: dict[str, Any], *, framework_id: str, 
 
 
 def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxState, *, framework_id: str,
-                            exceptions: tuple[SandboxExceptions | None, SandboxExceptions] | None = None) -> list[str]:
+                            exceptions: tuple[SandboxExceptions | None, SandboxExceptions] | None = None,
+                            profile_would_emit: bool = True) -> list[str]:
     """Print one ``SANDBOX RELAXATION`` line per relaxation ``new_state`` makes over ``old_state`` (D7; all frameworks).
 
     The notice is what an ungoverned workspace gets instead of a signature check, and what a governed one gets beside
@@ -142,6 +143,8 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
         new_state: The state this render emits.
         framework_id: The target framework.
         exceptions: ``(previous, new)`` native-exec keep / runner program inputs, or None.
+        profile_would_emit: Whether the privilege profile would emit an OS boundary were it not switched off
+            (the gate's own input; P00 passes it so the notice and the gate agree on a first render).
 
     Returns:
         The printed lines (each starts with :data:`SANDBOX_RELAXATION_PREFIX`).
@@ -158,8 +161,8 @@ def warn_sandbox_relaxation(old_state: SandboxState | None, new_state: SandboxSt
     )
     from agentteams.cli.sandbox_relaxation_gate import plan_relaxations
 
-    planned = plan_relaxations(old_state, new_state, framework_id=framework_id, profile_would_emit=True,
-                               exceptions=exceptions)
+    planned = plan_relaxations(old_state, new_state, framework_id=framework_id,
+                               profile_would_emit=profile_would_emit, exceptions=exceptions)
     lines: list[str] = []
     for r in (p for p in planned if not p.continuing):
         if r.kind == SANDBOX_OS_OFF and old_state is not None:
@@ -221,6 +224,7 @@ def enforce(
     confined: bool,
     sandbox_states: tuple[SandboxState | None, SandboxState] | None = None,
     sandbox_exceptions: tuple[SandboxExceptions | None, SandboxExceptions] | None = None,
+    sandbox_profile_would_emit: bool = True,
 ) -> None:
     """Validate the final roots, record provenance, print widenings, and require acceptance.
 
@@ -234,13 +238,14 @@ def enforce(
         confined: Whether any confinement consumes the roots (inert otherwise).
         sandbox_states: ``(previous, new)`` sandbox states; when given, :func:`warn_sandbox_relaxation` runs first.
         sandbox_exceptions: ``(previous, new)`` gate inputs passed to :func:`warn_sandbox_relaxation`.
+        sandbox_profile_would_emit: Passed to :func:`warn_sandbox_relaxation` as ``profile_would_emit``.
 
     Raises:
         WriteRootPolicyError: A root is hard-banned, or an external root is unaccepted.
     """
     if sandbox_states is not None:
         warn_sandbox_relaxation(sandbox_states[0], sandbox_states[1], framework_id=framework_id,
-                                exceptions=sandbox_exceptions)
+                                exceptions=sandbox_exceptions, profile_would_emit=sandbox_profile_would_emit)
     warn_prompt_root_relaxation(manifest, framework_id=framework_id, confined=confined)
     if not confined:
         return

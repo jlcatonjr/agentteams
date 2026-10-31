@@ -1011,14 +1011,29 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--os-sandbox",
+        choices=("on", "off"),
+        dest="os_sandbox",
+        default=None,
+        help=(
+            "Override the brief's os_sandbox for this run (on|off). \"off\" suppresses every "
+            "OS boundary agentteams emits for the selected framework; it is refused with "
+            "write_policy orchestrator-only and, in a governed workspace, needs an operator "
+            "Ed25519-signed decision sandbox-os-off:<framework> (Rule 15). Does not change live "
+            "settings, the launcher, or the runner's confined_programs sandbox. Conflicts with "
+            "an explicit --target-host-features <fw>:sandbox."
+        ),
+    )
+    parser.add_argument(
         "--allow-unenforced-confinement",
         action="store_true",
         dest="allow_unenforced_confinement",
         default=False,
         help=(
-            "Permit generation to proceed when a confined/exclusive privilege_profile "
-            "is requested on a target that has no OS-level sandbox to enforce it (e.g. "
-            "Goose, Codex, Copilot, native Windows). Without this flag, generate FAILS "
+            "Permit generation to proceed when the OS sandbox (a confined/exclusive "
+            "privilege_profile, or os_sandbox on) is requested on a target that has no "
+            "OS-level sandbox to enforce it (native Windows and other hosts with no "
+            "emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generate FAILS "
             "CLOSED (non-zero exit) rather than emit a boundary that silently does not "
             "take effect; with it, the request degrades to the advisory notice."
         ),
@@ -1042,9 +1057,11 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="allow_fallback_fail_open",
         help=(
             "CC-2: keep the emitted constitutional-gate hook fail-OPEN (a gate crash is a "
-            "harness allow) even for a confined/exclusive privilege_profile, whose default "
-            "is now fail-CLOSED (a crash emits a deny, so it cannot become a silent allow "
-            "in a workspace that opted into a boundary). Use only if a buggy gate bricking "
+            "harness allow) even when the OS sandbox is on and was explicitly requested (an "
+            "explicit confined/exclusive privilege_profile, or os_sandbox on), whose default "
+            "is fail-CLOSED (a crash emits a deny, so it cannot become a silent allow "
+            "in a workspace that opted into a boundary). With the OS sandbox off the hook "
+            "stays fail-open anyway. Use only if a buggy gate bricking "
             "the session is a worse risk than a missed block for this workspace."
         ),
     )
