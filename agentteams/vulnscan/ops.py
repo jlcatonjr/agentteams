@@ -11,7 +11,9 @@ import re
 from typing import Any
 
 #: Operations whose target is an absolute repository path (the executor guards and the MCP server check it).
-REPO_OPS: tuple[str, ...] = ("stage-fix", "open-pr", "close-superseded")
+REPO_OPS: tuple[str, ...] = ("stage-fix", "stage-major", "open-pr", "close-superseded")
+#: The ops that stage a fix (``stage-major`` is ``stage-fix`` with semver-major upgrades allowed).
+STAGE_OPS: tuple[str, ...] = ("stage-fix", "stage-major")
 
 #: A PR URL the executor records for ``open-pr``: ``https://HOST/OWNER/REPO/pull/N`` (groups: host, owner, repo, n).
 PR_URL = re.compile(r"^https://([A-Za-z0-9.-]+)/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/(\d+)$")

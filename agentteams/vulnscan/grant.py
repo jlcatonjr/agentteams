@@ -14,6 +14,10 @@ action (Rule 15). Each grant is:
 - **Capped**: more than :data:`MAX_ACTIVE` valid grants refuses them all, so relaxations cannot
   silently proliferate.
 
+``stage-major`` (``stage-fix`` with semver-major upgrades allowed) is a constraint-relaxing op of its own
+(Rule 15): it relaxes the "no major jump" bound of ``stage-fix``, so only a grant that lists it explicitly covers it;
+a grant listing ``stage-fix`` never implies it.
+
 ``merge`` and ``server-apply`` are part of the schema for the planned full-automation stage, but
 version 1 refuses to sign or honour them. Every use also re-checks for an unretracted @security
 HALT (C-2), which no grant overrides.
@@ -38,7 +42,8 @@ from agentteams.vulnscan import paths
 from agentteams.vulnscan.ops import REPO_OPS
 
 PURPOSE_TAG = "agentteams-vulnscan-remediation-grant-v1"
-OPS_V1: frozenset[str] = frozenset({"stage-fix", "open-pr", "close-superseded", "server-audit", "server-dryrun"})
+OPS_V1: frozenset[str] = frozenset({"stage-fix", "stage-major", "open-pr", "close-superseded", "server-audit",
+                                    "server-dryrun"})
 OPS_RESERVED: frozenset[str] = frozenset({"merge", "server-apply"})   # full-automation stage; refused in v1
 MAX_DAYS = 30
 MAX_USES = 500

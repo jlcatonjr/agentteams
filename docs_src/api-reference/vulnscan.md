@@ -48,7 +48,7 @@ and only within what you signed.
   operation, target and remaining use count; no `@security` HALT is open on `vulnscan-remediation`
   in the decision log named **inside the grant**; and no open escalation blocks the target.
 - The executor computes every change itself. `stage-fix` may only raise dependency pins and change
-  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base). Before any fetch it
+  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base-majorfalse). Before any fetch it
   refuses a repository that git refuses to open (ledgered `refused`), or whose own git config
   defines a filter driver (ledgered `failed`) (`fix.git_config_problem`). The one exception is git-lfs's standard
   filter config, value for value (`fix.LFS_FILTER`: `filter.lfs.clean = git-lfs clean -- %f`, `smudge = git-lfs
@@ -243,7 +243,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `unpinned_ranges` | `false` | Also check the ranges of Python requirements without exact pins, sending their names (no versions) to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check the runtimes in `runtimes.PRODUCTS` found on this machine |
-| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
+| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base-majorfalse) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
 | `scan_workers` | `4` | How many scan roots, and then how many fix plans, are looked up at once (1–8; `1` = one after another; each scan already sends up to 8 OSV requests at once). The lookups are network-bound (OSV, the package registries); results are merged in root order, so the report and the fix plans do not depend on it. Each worker runs in a copy of the caller's context, so a confinement scope applies as it would serially. `apply-worktree` staging, servers and local runtimes stay serial |
 | `notify` | `"desktop"` | `none`, `desktop`, or `command:<program and args>` (the program gets the fixed message as its last argument) |
@@ -514,7 +514,7 @@ them (`dispatch(args, load_cfg)`): `operator_cli` (`halts`, `resolve`, `say`, `p
 | `scan`, `inventory`, `runtimes`: `--unscored-as critical\|high\|moderate\|low` | What an unscored advisory counts as for `--fail-on` (default `high`; `daily` uses the config's `unscored_as`) |
 | `server-kit [DEST]` | Export the server scripts (keeps an existing `hosts.conf` / `apps.conf`) |
 | `grant sign\|list\|revoke` | Standing remediation grants ([Grants](#grants)); `sign --from-registry` proposes the enrolled `remediate` projects and asks per owner ([Grants from the registry](#grants-from-the-registry)) |
-| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
+| `act OP TARGET [--rationale R]` | Run one grant-covered action yourself, through the executor (`OP`: `stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit` or `server-dryrun`) |
 | `serve-requests` | Serve the spooled requests once. Refuses while a run holds the run lock; has no run, so it refuses `report` requests |
 | `review [--since DATE] [--gh-replies]` / `review --ack [--note N]` | After-action review, with an overdue notice when actions have gone unacknowledged for more than 3 days ([`overdue`](#overduedays-rows)); `--ack` records that you reviewed it |
 | `agent-image build --cli-version V --cli-sha256 S [--framework F] [--python-image IMG] [--source DIR]` | Build the agent image for one framework (default `agent.framework`; `goose`, `claude`, `copilot` or `codex` in this release) from an agentteams source checkout. `--goose-version` / `--goose-sha256` are aliases of `--cli-version` / `--cli-sha256`. `scripts/vulnscan-agent-image.sh` (`FRAMEWORK=`, default `goose`) fetches the pinned release and checks its digest (goose and codex: against GitHub's release metadata, codex also its sigstore bundle when `cosign` is installed; claude: from the GPG-verified release manifest) and the digest the driver records, and runs this. copilot has no release checksum: `--cli-sha256` is the driver's installed-tree hash, which the build checks after `npm ci --ignore-scripts` from the committed lockfile and `npm audit signatures` |
@@ -539,8 +539,8 @@ The signing commands (`grant sign`, `publish-grant sign`, `resolve` for serious 
 `--allow-checkout-signing` and `--confirm-review-sha256` ([Signing](#signing)). `DATE` is always
 `YYYY-MM-DD`.
 
-`grant sign` takes `--op OP` (repeatable: `stage-fix`, `open-pr`, `close-superseded`, `server-audit`,
-`server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
+`grant sign` takes `--op OP` (repeatable: `stage-fix`, `stage-major`, `open-pr`, `close-superseded`,
+`server-audit`, `server-dryrun`), `--repo-root DIR` and `--host NAME` (both repeatable), `--days N` (default 14),
 `--max-uses N` (default 50), `--key-id ID` and `--governance-dir DIR`. `publish-grant sign` takes
 `--ops-repo DIR`, `--remote-url URL` (default: the ops repository's `remote.origin.url`), `--node-id`,
 `--owner-id`, `--governance-dir DIR`, `--days N` (default 30), `--max-uses N` (default 60) and `--key-id ID`.
@@ -798,8 +798,8 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix* |
-| `request` | `op` (`stage-fix`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` for a repository in `staged-fixes.json` is refused (request `open-pr`) |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix or stage-major* |
+| `request` | `op` (`stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` or `stage-major` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
 | `request_status` | `id` | The executor's result, or `pending` with a `note` not to poll (the executor serves requests on its own schedule). After `MAX_PENDING_POLLS` (3) pending answers for one id in a run, further polls of it are refused with the same note |
@@ -829,7 +829,7 @@ executor validates):
 |---|---|
 | `id` | 32 lowercase hex characters; equals the file name; never reused (replay is refused) |
 | `op` | an `OPS` value, or `report` / `escalate` |
-| `target` | absolute repo path (`stage-fix`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
+| `target` | absolute repo path (`stage-fix`, `stage-major`, `open-pr`, `close-superseded`), exact `hosts.conf` name (server ops), any target (`escalate`), `"run"` (`report`) |
 | `rationale` | string, kept in the ledger |
 | `created` | ISO timestamp |
 | `payload` | only for `report` (`{"markdown"}`) and `escalate` (`{"kind", "evidence"}`) |
@@ -854,16 +854,19 @@ for one can never verify as the other.
 | Valid at once | at most 2 (more: all refused) | at most 1 (more: all refused) |
 | Gate action (HALT) | `vulnscan-remediation` | `vulnscan-publish` |
 
-**Operations.** v1 grants may name `stage-fix`, `open-pr`, `close-superseded`, `server-audit` and
-`server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
-An existing grant does not cover `close-superseded` until the operator signs one that names it.
+**Operations.** v1 grants may name `stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit`
+and `server-dryrun`. `merge` and `server-apply` are reserved: the CLI lists them, and `grant.build` refuses them.
+An existing grant does not cover `close-superseded` or `stage-major` until the operator signs one that names it.
+`stage-major` is **constraint-relaxing** (Rule 15): it lifts `stage-fix`'s "no semver-major jump" bound, so a grant
+naming `stage-fix` never implies it; like every grant, one naming it is Ed25519-signed by the operator
+([Major upgrades](#major-upgrades-stage-major)).
 
 **Bounds `grant.build` enforces:**
 
 - at least one operation, and only v1 operations;
 - `days` 1–30 and `max_uses` 1–500;
 - `repo_roots` are resolved to absolute paths and may not be `/` or your home directory itself;
-  `stage-fix`, `open-pr` and `close-superseded` need at least one;
+  `stage-fix`, `stage-major`, `open-pr` and `close-superseded` need at least one;
 - `hosts` must be plain names, never `all`; server operations need at least one. Whether a name is
   in `hosts.conf` is checked when the operation runs;
 - `governance_dir` must contain `references/security-decisions.log.csv`.
@@ -908,6 +911,66 @@ A repository check that does not answer within 30 s refuses the request, and so 
 **PR bodies** pass the same scrubber as published reports (`publish.rewrite_paths`): home paths become
 `~`, this machine's host name `<this-host>`, RFC 1918 addresses `<private-ip>`. The fix plan and the
 agent's quoted rationale are both inside the body.
+
+### Major upgrades (`stage-major`)
+
+`stage-major REPO` is `stage-fix` with semver-major upgrades allowed (`executor.stage_fix(repo, cfg, major=True)`,
+`fix.fix_path(..., allow_major=True)`). The operator decided on 2026-10-31 that remediation is automatic, majors
+included, delivered as PRs that CI must pass; this op is how. It differs from `stage-fix` in these ways only:
+
+- **Grant.** Only a grant that names `stage-major` covers it (constraint-relaxing, Rule 15).
+- **pip.** A `==` pin may move to the smallest clean release on a new major line (`PinChange.major` is set).
+- **npm.** A `major-held` package that `package.json` lists **directly** (`dependencies` or `devDependencies`) has
+  its spec raised to `^<fixed version>` in place, every other byte kept (`npm_major.rewrite_specs`), and npm
+  re-resolves the lockfile with `npm install --package-lock-only --ignore-scripts` (same scratch copy, registry,
+  `--strict-ssl` and cooldown handling as the audit fix), before `npm audit fix` runs as usual. A package only
+  some other package depends on stays `major-held` ("transitive only"): its parent must move first. npm
+  workspaces stay refused. A spec that is a URL, path, git or `npm:` alias is never rewritten. `npm install`
+  fails closed: it is refused (the stage fails, nothing is written) unless the tools container is active
+  (never on the host, never with `confine.subprocesses: false`), and unless the base `package.json` and lockfile
+  name only registry sources: no git, URL, `file:`, `link:` or `npm:` spec, and every lockfile entry resolved
+  over `https://` to the registry allowlist (`manifests.npm_off_registry`). If npm then reports an error or leaves
+  the lockfile unchanged, the whole stage is refused, so a raised spec is never committed beside a stale
+  lockfile. A `package.json` that cannot be read leaves every row `major-held`, saying so.
+- **`validate_diff(..., major=True)`** also accepts a `package.json` change, but only raises of existing
+  `dependencies` / `devDependencies` specs to `^X.Y.Z` above the old one, with every other member unchanged
+  (`npm_major.check_package_json_edit`); the lockfile's root `dependencies` / `devDependencies` may then change
+  only to exactly that manifest's (`manifests.check_lock_edit(..., manifest=...)`). `stage-fix` refuses any
+  `package.json` change, as before.
+- **Refusals.** A change that takes no major upgrade is refused ("stage-major staged no major upgrade: request
+  stage-fix"), so a non-major fix is never labelled MAJOR. A change that fixes nothing records
+  `nothing fixable even with a major upgrade` (`retry_guard.MAJOR_FUTILE_DETAIL`), never "nothing fixable without
+  a major jump". The futile-retry hold is per op: a held `stage-major` never holds `stage-fix`, nor the reverse.
+- **Commit and PR.** The branch is still `vulnscan/<YYYYMMDD>-<digest>`. The commit is
+  `security(deps)!: major upgrade of known-vulnerable dependencies (<digest>)`, with a body listing each package
+  `old → new` and a `BREAKING CHANGE:` footer; the staged state and the result carry `"major": true`. `open-pr`
+  titles the PR `security(deps)!: MAJOR upgrade of known-vulnerable dependencies (<digest>)`, opens its body
+  saying that it is a major upgrade that may need code changes and that CI must cover it, and labels it
+  `vulnscan-major` (`executor_pr`). The label is created when missing; if gh still reports it missing
+  (`could not add label` / `label ... not found`, `executor_pr.label_refused`) an open PR for the branch is
+  claimed (gh may have opened it before the label failed), else the PR is opened without the label: a missing
+  label never fails the PR. Any other `gh pr create` failure stands.
+
+**No duplicate PRs** (`open_prs`, both `stage-fix` and `stage-major`). Before staging, the executor lists the
+repository's open PRs (read-only: `gh pr list --state open --json number,title,headRefName,author,isCrossRepository
+--limit 100`, the executor's gh environment). A PR opened by Dependabot or Renovate (`open_prs.TRUSTED_AUTHORS`) on
+the repository itself (not a fork), whose head branch does not start with `vulnscan/`, and that names a package, by its title (`Bump <name> from <a> to <b>`, `chore(deps): bump <name> ...`,
+`Update dependency <name> to v<b>`) or its head branch (`dependabot/<eco>/<path>/<name>-<ver>`,
+`renovate/<name>-<ver>`), keeps that package: the fix leaves it (`pr-held`, "left to #227"; names compare
+case-insensitively with `_` / `-` / `.` alike). Requirements pins and npm majors are filtered; `npm audit fix`
+picks its own versions and is not. A person's PR or a fork's never holds a package back: a title alone could
+otherwise suppress a critical fix indefinitely, so such a PR may get a duplicate instead. When nothing remains the stage is refused with `an open PR already updates
+<names> (#227, #228); not duplicated`, which is not a futile result (no retry hold: each run checks again, so it
+lifts once those PRs close). Staging does not wait on gh (a failed listing stages as before); `open-pr` lists them
+again and fails closed: a gh failure opens nothing, and a package another PR now updates retires the staged change
+with the same detail. The staged state records `packages` and `left_to_prs`, and the PR body lists the packages
+left to other PRs.
+
+Every executor PR body (majors and not) says it may be merged automatically once every check, a test check
+included, passes, so CI must cover the change: the operator's auto-merge job merges green `vulnscan/*` PRs.
+
+The agent requests `stage-major` only for a repository whose fix plan shows `major-held` rows and whose
+`stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix.
 
 ### Grants from the registry
 
@@ -1374,7 +1437,7 @@ when the key names a worktree (no `/`), the directory is real, and the day's rec
 
 Finds dependency manifests and reads exact versions from them; the formats are listed under
 [Supported manifests](#supported-manifests). It also holds the two edit checks the executor's
-[`validate_diff`](#validate_diffwt-base) applies to a staged fix.
+[`validate_diff`](#validate_diffwt-base-majorfalse) applies to a staged fix.
 
 #### `Dep` / `Manifest`
 
@@ -1417,13 +1480,15 @@ ending), and each new version is a final release above the old one (`versions` o
 `--hash` options is never edited. Only `requirements*.txt` (`REQ_NAME`) is ever edited; the `.lock` and `.in`
 variants (`REQ_SCAN_NAME`) are read only.
 
-#### `check_lock_edit(rel, old, new)` / `lock_entries(rel, text)`
+#### `check_lock_edit(rel, old, new, *, manifest=None)` / `lock_entries(rel, text)`
 
 `check_lock_edit` raises `ValueError` when an npm lockfile edit changes the root package's `dependencies`,
 `devDependencies`, `optionalDependencies`, `peerDependencies`, `scripts` or `workspaces`, or when any entry
 would fetch from outside `REGISTRY_HOSTS` (`registry.npmjs.org`, `registry.yarnpkg.com`) over `https://`.
 An entry with no `resolved` URL passes only with a plain registry version. The one exception is a workspace
-link or `file:` entry kept unchanged from the base and inside the repository. `lock_entries` parses the
+link or `file:` entry kept unchanged from the base and inside the repository. With `manifest` (`stage-major`: the
+`package.json` the same change edits) the root `dependencies` / `devDependencies` may change, only to exactly the
+manifest's. `lock_entries` parses the
 lockfile type-safely and returns `(root entry, [(name, entry), …])` from `packages` and, recursively,
 `dependencies`; it raises `ValueError` for malformed JSON or a level that is not an object.
 
@@ -1535,14 +1600,14 @@ of the FIRST reference calculator (BSD-2-Clause).
 
 ### `agentteams.vulnscan.fix`
 
-#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests, gradle_lockfiles=False)`
+#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests, gradle_lockfiles=False, skip=None)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
 `allow_major=False`, `cooldown_days=0` (no release-age gate, under Rule S-10's remediation carve-out; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
 `manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists each
 container manifest's base-image findings (`images.plan`) in `image_plan`, plan-only; `apply` skips them. A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
-never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
+never does (there npm alone decides). `skip` (`{normalized name: [PR numbers]}`, from `open_prs.claimed`) leaves those requirements pins and npm majors to the open PRs that already update them (`pr-held`). Returns a `FixResult`. Symlinked manifests are refused, never followed.
 Each repository's brief applies here as in `scan_path`. A manifest in an `off` repository or under
 `exclude_paths` is recorded in `refused` and never read. Private packages are never looked up
 (`plan_requirements` and `plan_npm_lock` take `private=`). An npm lockfile that holds a private package is
@@ -1577,8 +1642,8 @@ these files, and `executor_guard.refuse_plan_only` refuses a `stage-fix` where t
 floor, not a promise (the plan shows it as `≥`). npm runs without `--before` (`executor.REMEDIATION_COOLDOWN_DAYS` is 0):
 the fix releases, and the dependencies they pull in, fall under Rule S-10's remediation carve-out. Actions follow `plan_requirements`, with npm's limits:
 `malicious`; `no-clean-release` (no advisory names a fix); `major-held` when the fix leaves the
-installed version's caret range (`1.x` → `2.x`, `0.3.x` → `0.4.x`), whatever `allow_major` says,
-because npm without `--force` never takes it; `workspace-held` when the lockfile's root package or
+installed version's caret range (`1.x` → `2.x`, `0.3.x` → `0.4.x`), because npm without `--force` never takes it
+(with `allow_major`, `fix_path` takes a direct one through `npm_majors` instead); `workspace-held` when the lockfile's root package or
 the `package.json` beside it declares `workspaces` (`stage-fix` fails closed there);
 `npm-unavailable` when npm is not on `PATH`. Dev-only packages are planned like the rest (npm fixes
 them too) and say `dev only` in the note. Raises `FeedError`.
@@ -1599,11 +1664,22 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 ``Repository (the `stage-fix` target): `<path>` ``, or, when `target_problem` is set, by
 ``Directory `<path>`: `stage-fix` cannot take it (<problem>).``
 
+#### `fix.npm_majors(lockfile, *, label, cooldown_days=0, private=(), skip=None)`
+
+`stage-major`'s npm step, called by `fix_path` with `apply` and `allow_major` before the audit fix. Returns
+`(rows, npm output)`: the lockfile's `major-held` rows, those `package.json` lists directly turned into `fix` rows
+with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`, the lockfile re-resolved by
+`npm_fix(..., install=True)`), those `skip` names (another open PR updates them) `pr-held`, the rest still
+`major-held` with the reason (transitive only, workspaces, or a
+`package.json` that could not be rewritten). Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
+with it, it runs `npm install --no-audit --package-lock-only --ignore-scripts` with the audit fix's isolation.
+
 #### `PinChange`
 
 Dataclass for one requirements edit or npm plan row: `path`, `name`, `old`, `new`, `action` (`fix`,
 `major-held`, `no-clean-release`, `cooldown-held`, `hash-held`, `malicious`; npm rows also
-`workspace-held`, `npm-unavailable`; Cargo, `plan_lockfile` and base-image rows `plan-only`), `ids`, `note`.
+`workspace-held`, `npm-unavailable`; Cargo, `plan_lockfile` and base-image rows `plan-only`), `ids`, `note`,
+`major` (a semver-major upgrade taken under `allow_major`).
 
 ### `agentteams.vulnscan.lockfiles`
 
@@ -2025,10 +2101,19 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   byte for byte; one that `close-superseded` closed does not count. The staged state is retired and the result
   says `closed_unmerged: <its URL>` (`pr` is empty, `detail: "not re-opened"`). Best effort: if gh or git fails,
   the pull request is opened as before (`executor_supersede.closed_pr_for_change`).
+- Before anything is pushed, the repository's open PRs are listed again (`open_prs.refuse_duplicate`, fail closed:
+  a gh failure opens nothing). If a PR that is not the executor's now updates a package the staged change updates,
+  the staged state is retired and the result is `failed` with `an open PR already updates <names> (#N); not
+  duplicated`. `stage_fix` checks the same list before staging and leaves such packages out (`fix_path(...,
+  skip=open_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
-  written: home paths, this host's name and private IPv4 addresses are scrubbed.
+  written: home paths, this host's name and private IPv4 addresses are scrubbed. `ExecError`, the executor's git
+  identity and its hardened git / gh environments (`gh_env`, `gh_push_env`, `gh_cwd`) live in the leaf module
+  `executor_env` and are re-exported here. The title, body and
+  `gh pr create` call live in `executor_pr`; a staged `stage-major` change gets the MAJOR title, body and
+  `vulnscan-major` label ([Major upgrades](#major-upgrades-stage-major)), and the result carries `major: true`.
 
 Re-staging the same change on the same day releases the earlier local branch only when the executor
 created it and every worktree holding it is executor-owned; otherwise `stage-fix` refuses. When
@@ -2052,10 +2137,12 @@ the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming t
 `publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
 `executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
-#### `validate_diff(wt, base)`
+#### `validate_diff(wt, base, *, major=False)`
 
 Check a staged change against `base` before `stage-fix` commits it, and before `daily` keeps an
-`apply-worktree` result. Returns the changed paths; raises `ExecError` on anything else:
+`apply-worktree` result. Returns the changed paths; raises `ExecError` on anything else. With `major`
+(`stage-major` only) a `package.json` may change too, within the rules in
+[Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`):
 
 - only requirements files and npm lockfiles may change or appear, as regular, non-executable files;
   renames, deletions, mode changes and symlinks are refused;

@@ -10,7 +10,11 @@
   held back (``hash-held``) rather than left with a stale hash, and a symlinked manifest is
   refused, never followed.
 - **npm lockfiles**: ``npm audit fix --package-lock-only --ignore-scripts`` (with ``--before=<cutoff>``
-  only for a positive ``cooldown_days``). It touches the lockfile only and runs no install scripts. Semver-major fixes are left for a person (no ``--force``). It runs on a
+  only for a positive ``cooldown_days``). It touches the lockfile only and runs no install scripts. Semver-major fixes
+  are never forced (no ``--force``); with ``allow_major`` (the executor's ``stage-major``) a ``major-held`` package that
+  is a direct dependency has its ``package.json`` spec raised to ``^<fixed version>`` and the lockfile re-resolved with
+  ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; transitive-only majors and npm
+  workspaces stay held). It runs on a
   scratch copy with the public registry and TLS verification fixed, never reading the
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
@@ -50,8 +54,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, lockfiles, osv, private_sources, project_policy, subproc_confine
-from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
+from agentteams.vulnscan import _http, images, lockfiles, npm_major, open_prs, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
+from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
@@ -98,11 +103,13 @@ class PinChange:
     name: str
     old: str
     new: str = ""
-    # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious; npm rows (plan_npm_lock)
+    # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious | pr-held (an open PR that is
+    # not the executor's already updates it, ``skip``); npm rows (plan_npm_lock)
     # also workspace-held | npm-unavailable; Cargo.lock rows (plan_cargo_lock) plan-only | no-clean-release | malicious
     action: str = "fix"
     ids: list[str] = field(default_factory=list)
     note: str = ""
+    major: bool = False   # a semver-major upgrade taken under ``allow_major`` (the executor's ``stage-major``)
 
 
 @dataclass
@@ -383,7 +390,9 @@ def plan_requirements(path: Path, *, cooldown_days: int = 0, allow_major: bool =
             else:
                 c.new = new
                 if major(new) != major(ver) and not allow_major:
-                    c.action, c.note = "major-held", f"major jump {ver} → {new}: review the changelog, then allow_major"
+                    c.action, c.note = "major-held", f"major jump {ver} → {new}: stage-fix leaves it; stage-major takes it"
+                elif major(new) != major(ver):
+                    c.major, c.note = True, f"MAJOR upgrade {ver} → {new}; {c.note}"
         changes.append(c)
     return changes
 
@@ -453,7 +462,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
     version the advisories call fixed, not a version npm is bound to write. Rows mirror
     :func:`plan_requirements`: ``malicious`` is never fixed; ``no-clean-release`` when no advisory names a
     fix; ``major-held`` when the fix leaves the installed version's caret range (npm without ``--force``
-    never takes it, so ``allow_major`` does not apply); dev-only packages are fixed like the rest, as npm
+    never takes it; ``stage-major`` raises a direct dependency's spec instead, :func:`npm_majors`); dev-only packages are fixed like the rest, as npm
     does. Two holds are npm's own: ``workspace-held`` (``stage-fix`` fails closed on npm workspaces: its
     scratch copy has no member packages) and ``npm-unavailable`` (npm is not on PATH).
 
@@ -498,7 +507,8 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             c.action, c.note = "no-clean-release", f"{dev}no advisory names a fixed version"
         elif _semver_line(c.new) != _semver_line(ver):
             c.action = "major-held"
-            c.note = f"{dev}semver-major {ver} → {c.new}: npm audit fix (no --force) leaves it; change package.json by hand"
+            c.note = (f"{dev}semver-major {ver} → {c.new}: stage-fix leaves it; stage-major takes it when package.json "
+                      "lists it directly")
         elif workspaces:
             c.action, c.note = "workspace-held", f"{dev}npm workspaces: stage-fix fails closed here — fix by hand"
         elif not have_npm:
@@ -625,8 +635,8 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
     return changes
 
 
-def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> str:
-    """Run npm's lockfile-only, script-free audit fix for ``directory``.
+def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, install: bool = False) -> str:
+    """Run npm's lockfile-only, script-free audit fix (or, with ``install``, lockfile-only install) for ``directory``.
 
     npm runs on a scratch copy holding only ``package.json`` and the lockfile, with its user and
     global config pointed at an empty file, inherited ``npm_config_*`` variables dropped, and the
@@ -640,18 +650,21 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> 
         directory: Folder holding package-lock.json.
         cooldown_days: Releases newer than this are not considered (``--before``); 0 sets no cutoff.
         apply: Write the lockfile; otherwise ``--dry-run``.
+        install: Run ``npm install --package-lock-only --ignore-scripts`` instead (``stage-major``: re-resolve the
+            lockfile after :func:`npm_majors` raised a ``package.json`` spec), with the same cooldown and isolation.
 
     Returns:
         npm's output, or a note when npm is unavailable or a manifest is a symlink.
     """
     confined = subproc_confine.active() is not None
     npm = "npm" if confined else shutil.which("npm")
+    verb = ["install", "--no-audit"] if install else ["audit", "fix"]
     if not npm:
-        return "npm not installed — run `npm audit fix --package-lock-only --ignore-scripts` where it is"
+        return f"npm not installed — run `npm {verb[0]} ... --package-lock-only --ignore-scripts` where it is"
     names = [n for n in ("package.json", *NPM_LOCKFILES) if (directory / n).is_symlink() or (directory / n).exists()]
     if any((directory / n).is_symlink() for n in names):
-        return "npm audit fix not run: package.json or the lockfile is a symlink"
-    cmd = [npm, "audit", "fix", "--package-lock-only", "--ignore-scripts", "--no-fund",
+        return f"npm {' '.join(verb[:2])} not run: package.json or the lockfile is a symlink"
+    cmd = [npm, *verb, "--package-lock-only", "--ignore-scripts", "--no-fund",
            f"--registry={NPM_REGISTRY}", "--strict-ssl=true"]
     if cooldown_days > 0:   # no cutoff at 0: --before=<today> would still exclude today's releases
         cmd.append(f"--before={(_dt.date.today() - _dt.timedelta(days=cooldown_days)).isoformat()}")
@@ -676,13 +689,117 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> 
                 proc = subprocess.run(cmd, cwd=scratch, env=env, capture_output=True, text=True, timeout=600,
                                       check=False)
         except subprocess.TimeoutExpired:
-            return "npm audit fix timed out after 600s"
+            return f"npm {verb[0]} timed out after 600s"
         if apply:
             for n in names:
                 if n in NPM_LOCKFILES and (scratch / n).is_file() and \
                         (scratch / n).read_bytes() != (directory / n).read_bytes():
                     shutil.copyfile(scratch / n, directory / n)
     return (proc.stdout + proc.stderr) or f"npm exited {proc.returncode}"
+
+
+def _leave_to_prs(rows: list[PinChange], skip: dict[str, list[int]] | None) -> None:
+    """Mark each ``fix`` row whose package another open PR already updates as ``pr-held`` ("left to #N", D1)."""
+    for c in rows:
+        nums = (skip or {}).get(open_prs.normalize(c.name))
+        if nums and c.action in ("fix", "major-held"):
+            c.action, c.major = "pr-held", False
+            c.note = f"left to {', '.join(f'#{n}' for n in nums)} (an open PR already updates it; not duplicated)"
+
+
+def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: tuple[str, ...] = (),
+               skip: dict[str, list[int]] | None = None) -> tuple[list[PinChange], str]:
+    """Take ``lockfile``'s ``major-held`` packages that ``package.json`` lists directly (``stage-major``).
+
+    Each such package's spec becomes ``^<fixed version>`` in the section that already lists it
+    (:func:`npm_major.rewrite_specs`, every other byte kept), then npm re-resolves the lockfile
+    (:func:`npm_fix` with ``install``). A package ``package.json`` does not list (transitive only), every
+    package of an npm workspace, and every package when ``package.json`` cannot be read, stays ``major-held``
+    with a note saying why.
+
+    Fail closed (S1, H1): before anything is written, ``npm install`` is refused unless the tools container is
+    active (:func:`subproc_confine.active`; never on the host, never when confinement is opted out) and the base
+    ``package.json`` and lockfile name only registry sources (:func:`manifests.npm_off_registry`). After it, a
+    reported npm error or an unchanged lockfile refuses the whole stage, so a raised spec is never committed
+    beside a stale lockfile.
+
+    Args:
+        lockfile: package-lock.json or npm-shrinkwrap.json (``package.json`` beside it is never a symlink here).
+        label: The lockfile's path in the plan.
+        cooldown_days: Passed to npm (``--before``), as for the audit fix.
+        private: The project's ``private_packages`` patterns.
+        skip: ``{normalized name: [PR numbers]}`` another open PR already updates: never raised (``pr-held``).
+
+    Returns:
+        (the major rows: taken ones as ``fix`` with ``major`` set, held ones as ``major-held``; npm's output or "").
+
+    Raises:
+        FeedError: OSV could not be read.
+        OSError: ``package.json`` could not be written.
+        ExecError: npm install would run unconfined or against a non-registry source, or it failed.
+    """
+    rows = [c for c in plan_npm_lock(lockfile, cooldown_days=cooldown_days, label=label, private=private)[0]
+            if c.action == "major-held"]
+    _leave_to_prs(rows, skip)
+    if not [c for c in rows if c.action == "major-held"]:
+        return rows, ""
+    if _npm_workspaces(lockfile):
+        for c in rows:
+            c.note += "; npm workspaces: stage-major fails closed here"
+        return rows, ""
+    pkg = lockfile.parent / "package.json"
+    try:
+        text = pkg.read_text(encoding="utf-8")
+        manifest, unread = json.loads(text), ""
+    except (OSError, ValueError) as exc:   # missing or malformed: nothing here is rewritten, and the rows say why
+        manifest, text, unread = None, "", f"package.json cannot be read ({type(exc).__name__})"
+    if manifest is not None and not isinstance(manifest, dict):
+        unread = "package.json is not an object"
+    if unread:
+        for c in rows:
+            c.note += f"; {unread}: stays held — fix by hand"
+        return rows, ""
+    specs: dict[str, tuple[str, str]] = {}
+    for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
+        if c.action == "pr-held":
+            continue
+        section = npm_major.direct_section(manifest, c.name)
+        if section:
+            specs[c.name] = (section, f"^{c.new.lstrip('vV')}")
+    if specs:
+        try:
+            new_text = npm_major.rewrite_specs(text, specs)
+        except ValueError as exc:
+            for c in rows:
+                c.note += f"; package.json not rewritten ({exc}): fix by hand"
+            return rows, ""
+        if subproc_confine.active() is None:   # S1: npm install resolves every spec; only ever in the container
+            raise ExecError(f"{label}: stage-major refuses npm install outside the tools container (confinement is "
+                            "off or opted out)")
+        lock_before = lockfile.read_bytes()
+        if problem := npm_off_registry(label, text, lock_before.decode("utf-8", "replace")):
+            raise ExecError(f"stage-major refuses npm install: {problem}")
+        with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
+            fh.write(new_text)
+    pkg_label = str(Path(label).parent / "package.json")
+    for c in rows:
+        if c.action == "pr-held":
+            continue
+        if c.name in specs:
+            section, spec = specs[c.name]
+            c.path, c.action, c.major = pkg_label, "fix", True
+            c.note = f"MAJOR upgrade: package.json {section}.{c.name} → {spec} (lockfile re-resolved by npm install)"
+        else:
+            c.note += "; transitive only (package.json does not list it): stays held — its parent must move first"
+    if not specs:
+        return rows, ""
+    out = npm_fix(lockfile.parent, cooldown_days=cooldown_days, apply=True, install=True)
+    failed = next((ln for ln in out.splitlines() if ln.startswith(("npm error", "npm ERR!"))), "")
+    if failed or lockfile.read_bytes() == lock_before:   # H1: never package.json without its re-resolved lockfile
+        why = failed or (out.strip().splitlines() or ["no output"])[-1]
+        raise ExecError(f"{label}: npm install did not re-resolve the lockfile after package.json was raised "
+                        f"({why[:200]}); nothing is staged")
+    return rows, out
 
 
 def advisory_counts(path: Path, private: tuple[str, ...] = ()) -> Counter[tuple[str, str, str]] | None:
@@ -725,13 +842,15 @@ def _add_resolved(res: FixResult, path: Path, old: bytes, rel: str, private: tup
 
 def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 0,
              include_worktrees: bool = False, allow_dirty: bool = False, npm: bool = True,
-             manifests: list[Path] | None = None, gradle_lockfiles: bool = False) -> FixResult:
+             manifests: list[Path] | None = None, gradle_lockfiles: bool = False,
+             skip: dict[str, list[int]] | None = None) -> FixResult:
     """Plan (and with ``apply``, make) dependency fixes for every manifest under ``root``.
 
     Args:
         root: Working tree to change. Point it at a worktree or branch you control.
         apply: Write changes.
-        allow_major: Also take major-version jumps.
+        allow_major: Also take major-version jumps: requirements pins, and npm packages ``package.json`` lists
+            directly (:func:`npm_majors`).
         cooldown_days: Minimum release age (0, the default: none; Rule S-10's remediation carve-out).
         include_worktrees: Descend into linked worktrees too.
         allow_dirty: Edit files that already have uncommitted changes.
@@ -741,6 +860,9 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             without nested repositories); default: everything :func:`discover` finds.
         gradle_lockfiles: Plan ``gradle.lockfile`` files too (off by default: refused with
             :data:`private_sources.GRADLE_OPT_IN`).
+        skip: ``{normalized package name: [PR numbers]}`` that another open PR already updates
+            (:func:`open_prs.claimed`): those requirements pins and npm majors are left to it (``pr-held``). npm's
+            own ``audit fix`` chooses its versions and is not filtered.
 
     Returns:
         A :class:`FixResult`. Feed failures are recorded under ``feed_errors``; a symlinked
@@ -777,6 +899,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
                 continue
+            _leave_to_prs(changes, skip)
             res.changes += changes
             if apply and any(c.action == "fix" for c in changes):
                 unsafe = git_config_problem(path.parent)
@@ -805,8 +928,17 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             if apply and _dirty(path) and not allow_dirty:
                 res.refused.append((rel, "uncommitted changes — commit/stash first or use a worktree"))
                 continue
-            old = path.read_bytes()
-            res.npm.append((str(path.parent.relative_to(root)) or ".", npm_fix(path.parent, cooldown_days=cooldown_days, apply=apply)))
+            old, where = path.read_bytes(), str(path.parent.relative_to(root)) or "."
+            if apply and allow_major:   # stage-major: direct semver-major upgrades first, then the audit fix
+                try:
+                    majors, out = npm_majors(path, label=rel, cooldown_days=cooldown_days, private=private,
+                                             skip=skip)
+                except _http.FeedError as exc:
+                    res.feed_errors.append(f"{rel}: {exc}")
+                    continue
+                res.changes += majors
+                res.npm += [(where, out)] if out else []
+            res.npm.append((where, npm_fix(path.parent, cooldown_days=cooldown_days, apply=apply)))
             _add_resolved(res, path, old, rel, private)
         elif path.name == "composer.lock":
             res.composer.append(f"`{rel}`: composer update <pkg> --no-install --no-scripts --no-plugins "

@@ -114,7 +114,7 @@ container on an internal-only network:
 - **Runtimes.** goose (default), Claude Code, the GitHub Copilot CLI or Codex, each through its own
   driver, image build and isolation self-test (`agent-image build`, `agent-selftest`).
 - **The agents' tools.** An MCP server inside the container lets the agents read the summary, findings
-  and fix plans, and queue requests: `stage-fix`, `open-pr`, `close-superseded`, `server-audit`,
+  and fix plans, and queue requests: `stage-fix`, `stage-major` (majors), `open-pr`, `close-superseded`, `server-audit`,
   `server-dryrun`, an escalation, or the run report. Everything they read from advisories or
   repositories is labelled as data.
 - **Egress gateway.** The only route out of the container. It holds the model API key (the agent

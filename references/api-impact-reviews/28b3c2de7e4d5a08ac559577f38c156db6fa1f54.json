@@ -1,0 +1,8 @@
+{
+  "patch_id": "28b3c2de7e4d5a08ac559577f38c156db6fa1f54",
+  "commit": "2c1ecc98f45167c8ca9f855831848f5707803657",
+  "subject": "fix(vulnscan): stage-major review fixes (security S1/S2, hygiene H1-H4)",
+  "impact": "1 modules added, 8 symbols added, 4 symbols removed",
+  "note": "Review fixes + D1. New leaf modules: executor_env (ExecError, GIT_IDENTITY, git/gh envs; re-exported by executor, so executor.ExecError/gh_env/etc. callers are unchanged) and open_prs (open-PR de-duplication). Additive keyword-only args with defaults: fix.fix_path(skip=None), fix.npm_majors(skip=None), executor_pr.body(left=None). New: manifests.npm_off_registry, executor_pr.label_refused. Removed from executor: _sanitize (moved earlier) and the private env helpers, now aliases of executor_env. No caller changes needed; docs/CHANGELOG updated.",
+  "recorded_at": "2026-10-31T17:37:41Z"
+}

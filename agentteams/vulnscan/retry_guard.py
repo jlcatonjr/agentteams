@@ -10,6 +10,10 @@ advisory, a new release or a change on the default branch changes the plan and l
 The decision reads only the MAC-chained ledger and the run directories; it never runs git or a registry
 lookup. The operator is told once per held plan (:func:`mark_held`, fixed-text notification); the daily
 summary counts held repositories (:func:`held_count`). Nothing here blocks other repositories or other ops.
+
+``stage-major`` (semver-major upgrades allowed) is held the same way but on its own: the hold is keyed on the op,
+so a futile ``stage-major`` never holds ``stage-fix`` and vice versa. A ``stage-major`` that changes nothing is
+recorded as :data:`MAJOR_FUTILE_DETAIL`, never as "nothing fixable without a major jump".
 """
 
 from __future__ import annotations
@@ -24,6 +28,9 @@ from typing import Any
 from agentteams.vulnscan import paths
 
 FUTILE_DETAIL = "nothing fixable without a major jump"
+#: ``stage-major``'s futile result: even with semver-major upgrades allowed, the change fixes nothing.
+MAJOR_FUTILE_DETAIL = "nothing fixable even with a major upgrade"
+_HELD_OPS = ("stage-fix", "stage-major")
 #: Recorded instead of :data:`FUTILE_DETAIL` when the default branch has nothing vulnerable: the fix is already
 #: upstream and the local checkout (whose scan wrote the fix plan) is behind. Held the same way.
 UPSTREAM_DETAIL = "already fixed on the default branch"
@@ -60,14 +67,19 @@ def plan_digest(repo: str, day: str | None = None) -> str:
     return ""
 
 
-def _last_futile(target: str, rows: list[dict[str, Any]]) -> tuple[str, str] | None:
-    """Return (local date, detail prefix) of ``target``'s last stage-fix outcome when it was futile, else None."""
+def futile_detail(major: bool) -> str:
+    """Return the "nothing fixable" detail a staging op records: :data:`MAJOR_FUTILE_DETAIL` for ``stage-major``."""
+    return MAJOR_FUTILE_DETAIL if major else FUTILE_DETAIL
+
+
+def _last_futile(target: str, rows: list[dict[str, Any]], op: str = "stage-fix") -> tuple[str, str] | None:
+    """Return (local date, detail prefix) of ``target``'s last ``op`` outcome when it was futile, else None."""
     last: dict[str, Any] | None = None
     for r in rows:
-        if r.get("op") == "stage-fix" and r.get("target") == target and r.get("kind") in ("done", "failed"):
+        if r.get("op") == op and r.get("target") == target and r.get("kind") in ("done", "failed"):
             last = r
     detail = str(last.get("detail", "")) if last is not None else ""
-    prefix = next((p for p in (FUTILE_DETAIL, UPSTREAM_DETAIL) if detail.startswith(p)), "")
+    prefix = next((p for p in (FUTILE_DETAIL, MAJOR_FUTILE_DETAIL, UPSTREAM_DETAIL) if detail.startswith(p)), "")
     if last is None or last.get("kind") != "failed" or not prefix:
         return None
     try:
@@ -77,10 +89,12 @@ def _last_futile(target: str, rows: list[dict[str, Any]]) -> tuple[str, str] | N
 
 
 def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
-    """Return why a ``stage-fix`` of ``target`` would only repeat a "nothing fixable" result, or "".
+    """Return why a ``stage-fix`` (or ``stage-major``) of ``target`` would only repeat a "nothing fixable" result, or "".
+
+    Each op is held only by its own last result: a futile ``stage-major`` never holds ``stage-fix``, nor the reverse.
 
     Args:
-        op: The requested operation (only ``stage-fix`` is ever held).
+        op: The requested operation (only ``stage-fix`` and ``stage-major`` are ever held).
         target: Canonical repository path.
         rows: Ledger rows.
 
@@ -88,9 +102,9 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
         A refusal reason starting with :data:`HELD_PREFIX`, or "" when the retry may run (no such result,
         or the plan changed, or either plan is missing: unknown means retry).
     """
-    if op != "stage-fix":
+    if op not in _HELD_OPS:
         return ""
-    found = _last_futile(target, rows)
+    found = _last_futile(target, rows, op)
     if found is None:
         return ""
     day, prefix = found
@@ -98,10 +112,14 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
     if not then or then != now:
         return ""
     if prefix == UPSTREAM_DETAIL:
-        return (f"{HELD_PREFIX}stage-fix found the fix {UPSTREAM_DETAIL} on {day} and this repository's fix plan "
+        return (f"{HELD_PREFIX}{op} found the fix {UPSTREAM_DETAIL} on {day} and this repository's fix plan "
                 "has not changed since; it is not staged again until the plan changes (update the local checkout)")
+    if prefix == MAJOR_FUTILE_DETAIL:
+        return (f"{HELD_PREFIX}stage-major found {MAJOR_FUTILE_DETAIL} on {day} and this repository's fix plan has "
+                "not changed since; it is not staged again until the plan changes (the rest needs a person)")
     return (f"{HELD_PREFIX}stage-fix found {FUTILE_DETAIL} on {day} and this repository's fix plan has not "
-            "changed since; it is not staged again until the plan changes (a major upgrade is a manual change)")
+            "changed since; it is not staged again until the plan changes (request stage-major for its major-held "
+            "rows, if the grant allows it)")
 
 
 def _read_held() -> dict[str, str]:
@@ -152,18 +170,19 @@ def nothing_vulnerable(wt: Path) -> bool:
     return rep.checked > 0 and not rep.feed_errors and not any(f.kind == "package" for f in rep.findings)
 
 
-def zero_change_detail(wt: Path, head: str, *, refused: bool) -> str:
-    """Return the stage-fix refusal for a fix that changed nothing (npm ran cleanly).
+def zero_change_detail(wt: Path, head: str, *, refused: bool, major: bool = False) -> str:
+    """Return the stage-fix (or stage-major) refusal for a fix that changed nothing (npm ran cleanly).
 
     Args:
         wt: The executor's worktree at the base commit.
         head: The base ref, named in the refusal.
         refused: Whether ``fix_path`` refused some edit (then nothing is ever called "fixed upstream").
+        major: The op is ``stage-major``: :data:`MAJOR_FUTILE_DETAIL` replaces :data:`FUTILE_DETAIL`.
 
     Returns:
         :data:`UPSTREAM_DETAIL` when the base has nothing vulnerable (the scanned local checkout is behind),
-        else :data:`FUTILE_DETAIL`; both are held by :func:`futile_reason` until the fix plan changes.
+        else :func:`futile_detail`; each is held by :func:`futile_reason` until the fix plan changes.
     """
     if not refused and nothing_vulnerable(wt):
         return f"{UPSTREAM_DETAIL} ({head}): nothing vulnerable there; update the local checkout"
-    return FUTILE_DETAIL
+    return futile_detail(major)
