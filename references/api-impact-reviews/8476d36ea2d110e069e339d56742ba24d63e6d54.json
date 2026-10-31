@@ -1,0 +1,8 @@
+{
+  "patch_id": "8476d36ea2d110e069e339d56742ba24d63e6d54",
+  "commit": "356a576a207cc9bb87ea0fe0b45d93ecda4c8033",
+  "subject": "fix(fleet): review fixes for ref snapshots: credential check, status failure, REVIEW on a missing tree, docs",
+  "impact": "1 symbols added",
+  "note": "Reviewed (vfu M5): new private module agentteams/_fleet_snapshot.py (agent_paths, agent_paths_dirty, worktree_tree, git_snapshot, credential_files, git_diff), split out of fleet.py for CH-07 and re-exported there under the old private names; no public API removed; --fleet-allow-no-verify kept as an accepted no-op; docs, man page and CHANGELOG updated. @security CLEAR with conditions (applied), @code-hygiene PASS with fixes (applied).",
+  "recorded_at": "2026-10-31T18:06:02Z"
+}
