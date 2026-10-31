@@ -126,6 +126,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`wasm_exec`](wasm-exec.md) | The wasmtime executor: pinned compute-only grant, exact-shape argv check, OS nesting, capability probe (WASM P02) |
 | [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
 | [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
+| [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |
 | [`wasm_config`](wasm-config.md) | The brief's `wasm_sandbox` block, `--wasm-sandbox`, per-agent grants as `Grant(mounts, limits)`, and `wasm_eligible` (WASM P01) |
 | [`wasm_agent`](wasm-agent.md) | The WASM agent host: step-mode protocol, Stage 0/1 split, budgets, DLP, key custody, hash-chained transcript (WASM P05) |
 | [`wasm_mcp`](wasm-mcp.md) | The `agentteams_wasm` MCP server: `run_wasm` for vendor-CLI agents, its hash-checked bundle and the per-agent launch flags that carry each grant (WASM P10) |

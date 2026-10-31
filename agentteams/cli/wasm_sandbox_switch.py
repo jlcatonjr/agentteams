@@ -19,6 +19,7 @@ with exactly the added tokens).
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,24 +30,53 @@ class WasmSwitchError(ValueError):
     """An invalid ``--wasm-sandbox`` value or ``wasm_sandbox`` block, or a WASM grant that cannot be built."""
 
 
-def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None) -> None:
+def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_root: Path | None = None,
+                      team_dir: Path | None = None) -> None:
     """Carry ``--wasm-sandbox`` onto ``manifest`` and validate the WASM half of the effective state.
 
+    P20: also validates ``--wasm-substrate`` (the transient ``WASM_SUBSTRATE_CLI_KEY`` ``cli/generate.py`` set) and,
+    given the project root, either preflights the projected ``.agentteams/sandbox-state.json`` (no symlinked dir or
+    file; fail closed before anything is emitted) or, when neither the brief nor argv sets the switch, carries a
+    file the previous render left as the *kept* floor (``WASM_SUBSTRATE_KEPT_KEY``), so the relaxation gate sees no
+    change while the floor stays.
+
     Args:
-        manifest: The team manifest (mutated: the transient CLI key when the flag is given). The CLI-set project
-            root must already be on it (``write_root_policy.begin``) for grants with mounts.
+        manifest: The team manifest (mutated: the transient CLI key when the flag is given; the kept key). The
+            CLI-set project root must already be on it (``write_root_policy.begin``) for grants with mounts.
         wasm_sandbox_cli: ``--wasm-sandbox`` (operator argv), or None.
+        project_root: The project root (P20 projection checks), or None to skip them.
+        team_dir: This render's agents dir, carried as the transient ``sandbox_projection.TEAM_DIR_KEY`` for the
+            projection's ``team`` field (the project root when None).
 
     Raises:
-        WasmSwitchError: A bad value, a malformed block, a refused read path, or a mount with no project root.
+        WasmSwitchError: A bad value, a malformed block, a refused read path, a mount with no project root, or a
+            projection that cannot be written safely.
         ImportError: WASM is on and ``agentteams.wasm_exec`` is not importable (fail closed).
     """
-    from agentteams.wasm_config import WASM_SANDBOX_CLI_KEY, validate_wasm_sandbox_cli, wasm_state_fields
+    from agentteams.wasm_config import (
+        WASM_SANDBOX_CLI_KEY,
+        WASM_SUBSTRATE_KEPT_KEY,
+        substrate_switch,
+        validate_wasm_sandbox_cli,
+        wasm_state_fields,
+    )
 
     try:
         if wasm_sandbox_cli is not None:
             manifest[WASM_SANDBOX_CLI_KEY] = validate_wasm_sandbox_cli(wasm_sandbox_cli)
         wasm_state_fields(manifest)
+        manifest.pop(WASM_SUBSTRATE_KEPT_KEY, None)  # only ever derived from disk, here
+        _value, source = substrate_switch(manifest)
+        if project_root is not None:
+            from agentteams import sandbox_projection
+
+            manifest[sandbox_projection.TEAM_DIR_KEY] = Path(team_dir if team_dir is not None else project_root)
+            if source is None:
+                kept = sandbox_projection.kept_value(Path(project_root))
+                if kept is not None:
+                    manifest[WASM_SUBSTRATE_KEPT_KEY] = kept
+            else:
+                sandbox_projection.preflight(Path(project_root))
     except ValueError as exc:
         raise WasmSwitchError(str(exc)) from exc
 

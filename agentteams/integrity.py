@@ -320,6 +320,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # A silent edit widens what a guest may read or write, or turns WASM off without the gate seeing it.
     "agentteams/wasm_config.py",
     "agentteams/cli/wasm_sandbox_switch.py",
+    # The model-substrate projection (P20). sandbox_projection writes .agentteams/sandbox-state.json, a floor a
+    # consumer (baseAgent's battery) trusts for its own --wasm switch, and its schema is the exact shape a consumer
+    # checks. A silent edit lowers that floor, or loosens the shape, without the relaxation gate seeing it.
+    "agentteams/sandbox_projection.py",
+    "agentteams/schemas/sandbox-state.schema.json",
     # The WASM sandbox (2026-10-31, wave-1 @security S4). wasm_exec is the one place wasmtime starts: its grant
     # shape check, mount-host refusals ('::'/':', control chars) and empty environment ARE the compute-only
     # boundary (C-3). wasm_pins is the one hash check every resolve goes through (R10), wasm_runtime/_wasm_archive

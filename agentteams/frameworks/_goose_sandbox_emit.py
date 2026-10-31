@@ -37,9 +37,7 @@ source of truth shared with the Claude path.
 
 from __future__ import annotations
 
-import posixpath
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -48,6 +46,8 @@ from typing import Any
 
 from agentteams.host_features import is_sandbox_capable
 from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
+from agentteams.frameworks._control_plane_protect import substrate_protect_paths  # P20 D5
+from agentteams.frameworks._write_roots import runner_root_expr as _runner_root_expr  # moved; re-exported
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
 from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
 from agentteams.sandbox_state import effective_sandbox_state
@@ -229,6 +229,7 @@ def _build_seatbelt_profile(
     copilot_present: bool = False,
     protect_ledger: bool = False,
     control_plane_protect: tuple[str, ...] | None = None,
+    substrate_protect: tuple[str, ...] = (),
 ) -> str:
     """Build the ``sandbox.sb`` Apple-Seatbelt profile text for goose confinement.
 
@@ -259,6 +260,8 @@ def _build_seatbelt_profile(
             Only then are the ``.github`` ancestor-rename literals emitted: a create-deny on the
             ``.github`` literal would stop a goose agent CREATING ``.github`` in a repo without one.
         control_plane_protect: METAPLAN R1 (``_control_plane_protect.control_plane_for``); None = off.
+        substrate_protect: P20 D5 (``_control_plane_protect.substrate_protect_paths``): the projected
+            model-substrate file, denied on its own when the control plane is not protected.
 
     Returns:
         The profile text (ends with a trailing newline).
@@ -362,7 +365,7 @@ def _build_seatbelt_profile(
     # live settings.json allowWrite baseline. A subpath deny covers the dir entry itself (rename).
     # write_policy "orchestrator-only" (P4a): the ledger dir too; only the out-of-session runner writes it.
     # R7 (@security C11): the recipes too, which carry each granted agent's agentteams_runner launch arguments.
-    ledger = seatbelt_denies(protect_ledger, control_plane_protect)  # R1 (P00): also whenever WASM is on
+    ledger = seatbelt_denies(protect_ledger, control_plane_protect, substrate_protect)  # R1 (P00); P20 D5
     cp_exprs = [e for e in (_seatbelt_path_expr(p) for p in (
         *control_plane, framework_config_dir("claude"), framework_config_dir("grok"),
         *sib["copilot"], *sib["codex"], *sib["grok"],
@@ -628,6 +631,7 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         write_roots, deny_read, egress_endpoint, deny_network=deny_network, control_plane_protect=control_plane_for(manifest),
         copilot_present=SIBLING_DENY_DIRS["copilot"] in sibling_deny_dirs(manifest),
         protect_ledger=manifest.get("write_policy") == "orchestrator-only",  # P4a; R1 above: or wasm
+        substrate_protect=substrate_protect_paths(manifest),  # P20 D5
     )
     config_text = _build_config_example(
         write_roots, exclusive=deny_read is not None, egress_endpoint=egress_endpoint
@@ -642,23 +646,6 @@ def goose_sandbox_output_files(manifest: dict[str, Any]) -> list[tuple[str, str]
         (GOOSE_SANDBOX_PROFILE_REL, profile_text),
         (GOOSE_CONFIG_EXAMPLE_REL, config_text),
     ]
-
-
-def _runner_root_expr(root: str) -> str:
-    """Return the bash expression for one VALIDATED write root in the goose Linux runner.
-
-    ``.`` is the repo root, ``~/x`` is under ``$HOME``, an absolute root is itself (never
-    ``$REPO_ROOT//abs``), anything else is under ``$REPO_ROOT``. The literal part is
-    ``shlex.quote``-d, so it can never expand even if validation were bypassed.
-    """
-    rel = posixpath.normpath(root)
-    if rel == ".":
-        return '"$REPO_ROOT"'
-    if root.startswith("~/"):
-        return '"$HOME"/' + shlex.quote(posixpath.normpath(root[2:]))
-    if posixpath.isabs(root):
-        return shlex.quote(rel)
-    return '"$REPO_ROOT"/' + shlex.quote(rel)
 
 
 def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
@@ -709,7 +696,8 @@ def _build_linux_goose_runner(manifest: dict[str, Any]) -> str:
     from agentteams.frameworks._write_roots import runner_exclude_flags
 
     exclude_flags, skipped_note = runner_exclude_flags(manifest)
-    protect_block, protect_flag = runner_protect_block(control_plane_for(manifest), "REPO_ROOT")  # R1 (P00)
+    protect_block, protect_flag = runner_protect_block(control_plane_for(manifest), "REPO_ROOT",  # R1 (P00)
+                                                       substrate_protect_paths(manifest))  # P20 D5
     return (
         "#!/usr/bin/env bash\n"
         "# .goose/confined-run.example.sh — EXAMPLE: run goose CONFINED on Linux. INERT / operator-run.\n"

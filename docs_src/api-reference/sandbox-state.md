@@ -87,8 +87,14 @@ on-disk boundary evidence can only turn a switch on. OS evidence: the framework'
 launcher, and for claude a live `.claude/settings.json` or an emitted `.claude/settings.hooks.example.json` whose
 `sandbox.enabled` is `true` (an example that was emitted but never merged still counts).
 
+`model_substrate` (P20) is `--wasm-substrate` > the brief's `wasm_sandbox.model_substrate` > the value of a
+pipeline-owned `.agentteams/sandbox-state.json` the CLI kept in place when neither sets it > `None`
+([`wasm_config.substrate_switch`](wasm-config.md)). The previous state ORs the build-log record with that file: a
+file that says anything but `"off"` counts as on. On to off (or unset) is `sandbox-wasm-off:model-substrate`.
+
 ## See also
 
 - [`host_features`](host-features.md) — `merge_profile_features(..., os_sandbox=)`.
 - [`--os-sandbox`](../cli-reference.md) and the brief key `os_sandbox` (`DESCRIPTION-FORMAT.md`).
 - [`wasm_config`](wasm-config.md) — the brief key `wasm_sandbox` and `--wasm-sandbox`.
+- [`sandbox_projection`](sandbox-projection.md) — the projected model-substrate switch (`--wasm-substrate`).

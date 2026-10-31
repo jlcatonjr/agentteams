@@ -1039,6 +1039,20 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--wasm-substrate",
+        choices=("on", "off"),
+        dest="wasm_substrate",
+        default=None,
+        help=(
+            "Override the brief's wasm_sandbox.model_substrate for this run (on|off): the model-substrate WASM "
+            "switch agentteams projects to consumers that run model code (for example baseAgent's battery) in "
+            ".agentteams/sandbox-state.json. \"on\": the consumer must run model code WASM-confined under an "
+            "enforcing runner and refuse rather than fall back. Independent of --wasm-sandbox (agent code). "
+            "\"off\" after on is constraint-relaxing: in a governed workspace it needs an operator Ed25519-signed "
+            "decision sandbox-wasm-off:model-substrate (Rule 15). agentteams never runs or confines model code."
+        ),
+    )
+    parser.add_argument(
         "--allow-unenforced-confinement",
         action="store_true",
         dest="allow_unenforced_confinement",

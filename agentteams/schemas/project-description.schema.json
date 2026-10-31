@@ -440,7 +440,7 @@
             "on",
             "off"
           ],
-          "description": "Reserved for the model-substrate projection (P20 owns its behaviour and final text). Independent of enabled."
+          "description": "Project a model-substrate WASM switch to consumers that run model code (for example baseAgent's battery), written to .agentteams/sandbox-state.json (schema agentteams-sandbox-state/v1). Absent: nothing is projected. \"on\": the consumer must run model code WASM-confined under an enforcing runner, and must refuse rather than fall back to native or to an unenforced runner. \"off\": the consumer runs native substrates by default. Independent of wasm_sandbox.enabled (which confines agent code). Turning it from on to off is constraint-relaxing (sandbox-wasm-off:model-substrate)."
         }
       }
     },

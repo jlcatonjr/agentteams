@@ -2,11 +2,12 @@
 
 **From:** agentteams orchestrator · **Date:** 2026-10-31 · **Protocol:** 3 (orchestrator-to-orchestrator)
 **Target:** baseAgent (`~/githubrepositories/baseAgent`), at commit `49e0e1a6daf2b9f2656fae8cf2dc0efc33983449`
-**Clearance:** `@security` review of this document **pending** (P19 step 6); nothing below is applied until it is
-recorded and the baseAgent operator approves.
+**Clearance:** `@security` review of this document **pending** (P19 step 6; §4 also P20 step 12); nothing below is
+applied until it is recorded and the baseAgent operator approves.
 **Channel:** mediated — this artifact is the request. baseAgent is read-only from the agentteams session that wrote
 it; no cross-repo write has occurred. The operator delivers this document to baseAgent's orchestrator.
-**Source plan:** agentteams `tmp/by-week/2026-W44/wasm-sandbox/P19-baseagent-alignment.plan.md` (METAPLAN v2.1 §6 R9).
+**Source plans:** agentteams `tmp/by-week/2026-W44/wasm-sandbox/P19-baseagent-alignment.plan.md` (METAPLAN v2.1 §6 R9)
+and, for §4, `P20-substrate-projection.plan.md`.
 
 ---
 
@@ -218,8 +219,130 @@ def test_vendored_spec_matches_an_installed_agentteams():
 
 ## 4. Substrate switch (P20)
 
-*Placeholder — agentteams plan P20 (`substrate-projection`) fills this section: projecting the WASM switch into
-baseAgent-style model-substrate consumers.*
+**Source plan:** agentteams `tmp/by-week/2026-W44/wasm-sandbox/P20-substrate-projection.plan.md` (operator decision
+D1 "both"; investigation report `references/plans/sandbox-toggles-investigation.report.md` Part 4 B.1, B.4).
+**Clearance for this section:** `@security` review **pending** (P20 step 12), like the rest of this document.
+baseAgent citations are at commit `49e0e1a6` (read-only from the agentteams session).
+
+### 4.1 Why, in one paragraph
+
+Today "WASM on" in the battery means picking the right `--substrate` *and* the right `--runner`, and the two entry
+points disagree on the runner default: `paid_cell.mjs:73` `const RUNNER = flag("runner", "node")` (node:wasi, not a
+sandbox, as `paid_cell.mjs:18-19` and `substrate_keys.mjs:12-14` say), while `launch_wave.mjs:150`
+`const cmdRunner = M.runner_cmd || "wasmtime"` and `paid_schelling.mjs:164` falls back to `node` when `--runner` is
+absent. A hand-launched `c-wasm-cmd` cell is therefore unsandboxed by default, and nothing records whether a row ran
+confined. The request below adds one fail-closed switch and per-row stamps, and lets agentteams' projected file set
+its default and floor.
+
+### 4.2 What agentteams now emits (Layer D)
+
+When a brief sets `wasm_sandbox.model_substrate` (or the operator passes `agentteams --wasm-substrate on|off`),
+generation writes `.agentteams/sandbox-state.json` at the project root (schema `agentteams-sandbox-state/v1`,
+`agentteams/schemas/sandbox-state.schema.json`; writer `agentteams/sandbox_projection.py`). Nothing is written when
+the key is absent, which is baseAgent's state today: its root `brief.json` has no `wasm_sandbox` block and its
+`.agentteams/` holds only `bin/`. Example:
+
+```json
+{
+  "schema": "agentteams-sandbox-state/v1",
+  "producer": "agentteams",
+  "agentteams_version": "1.1.0",
+  "team": ".claude/agents",
+  "os_sandbox": "on",
+  "os_sandbox_reason": "profile:confined",
+  "wasm_sandbox": "off",
+  "wasm_sandbox_reason": "default-off",
+  "model_substrate_wasm": "on",
+  "model_substrate_wasm_source": "brief",
+  "require_enforced": true
+}
+```
+
+| Field | Meaning for baseAgent |
+|---|---|
+| `model_substrate_wasm` | The projected switch: `on` = model code must run WASM-confined under an enforcing runner (refuse, never fall back); `off` = native by default. **A floor, never a ceiling.** |
+| `require_enforced` | Always `true`. A file without it, or with any other value, must be refused. |
+| `os_sandbox`, `wasm_sandbox` (+ `_reason`) | agentteams' render-time intent for the *agent* team (OS boundary; agent-code WASM). Informational for row stamps only: not proof that the battery's process is confined, and `wasm_sandbox` says nothing about model code. |
+| `team`, `agentteams_version`, `model_substrate_wasm_source` | Provenance (`brief` or `cli`). |
+
+No limits, paths, grants or provider names are projected: baseAgent keeps its certified grant and limits
+(`wasmtime_cmd_runner.mjs:37` `DEFAULT_LIMITS`, `:68` `LIMIT_BOUNDS`; grant parity is §2). The file is data (C-4):
+every value is enumerated. agentteams rewrites only a file whose `producer` is `"agentteams"`, never removes it when
+the brief key goes away (it stays as the floor), write-protects it in the emitted session sandboxes where the
+`.agentteams` control plane is not already protected, and treats on to off as constraint-relaxing
+(`sandbox-wasm-off:model-substrate`: baseAgent is governed, so the operator's Ed25519-signed decision is required).
+`agentteams --verify-integrity` exits 1 when the file shows a lower floor than the last render recorded.
+
+### 4.3 Request B — one `--wasm` switch in the battery (one atomic unit; apply together or not at all)
+
+1. **The switch.** Add `wasm` to `VALUE_FLAGS` (`paid_cell.mjs:45`, the fail-closed argv check) and parse
+   `--wasm on|off` in `paid_cell.mjs`, `paid_schelling.mjs` (forwarded to each cell, as `--runner` is at
+   `paid_schelling.mjs:118-120`) and `launch_wave.mjs` (forwarded in `poolArgs`, `launch_wave.mjs:575-582`), plus a
+   `BA_WASM` env default and a wave-manifest field `"wasm": "on" | "off" | "mixed"` beside `runner_cmd`
+   (`experiments/battery/waves/lean-2026-10.json:15`; the schema check is `launch_wave.mjs:122`). Any other value
+   refuses (exit 2), like every other refusal in these files.
+2. **Resolution order:** CLI `--wasm` > wave-manifest `wasm` > `BA_WASM` > the projected file > unset (unset = today's
+   behaviour: the substrate key as given). A projected `on` can be lowered **only** by an explicit argv `--wasm off`,
+   which prints `SANDBOX RELAXATION: model-substrate WASM switch lowered from the projected on` to stderr and stamps
+   the row (item 5). `BA_WASM=off` or a manifest `"wasm": "off"` against a projected `on` refuses (exit 2): the
+   environment and the manifest are not operator argv.
+3. **`on` resolves and refuses (B.1):**
+   - a language-only `--substrate <lang>` resolves to `<lang>-wasm-cmd` with runner `wasmtime`, so the
+     `paid_cell.mjs:73` default `node` no longer applies (`--wasm on` implies the runner);
+   - an explicit `<lang>-native` key refuses;
+   - a language with no certified `wasm-cmd` build refuses and never falls back to native. Today only `c-wasm-cmd`,
+     `cpp-wasm-cmd`, `rust-wasm-cmd` exist (`substrate_keys.mjs:78-80`, built by `cmd(lang)` at `:49-53`);
+   - `--runner node` (node:wasi) refuses, and so does any `wasm-inguest` key (runner `node-jco`,
+     `substrate_keys.mjs:57`: import-surface confinement, no CPU/memory bounds), unless an explicit
+     `--wasm-unenforced` acknowledgement is given and stamped (item 5). It must never become a silently unsandboxed
+     "on";
+   - the resolved substrate must have its G-STD certification report (`substrate_keys.mjs:23-25`; for `wasm-cmd` the
+     `--runner wasmtime` report, `spec.certification.wasmtime` at `:52`), as `launch_wave.mjs` gate G2 (`:59`) already checks.
+   `off`: a language-only key resolves to `<lang>-native`; an explicit WASM key under `off` refuses (pick one).
+   Put the resolution in one exported function next to `resolveSubstrate` (`substrate_keys.mjs:120`) so `paid_cell`,
+   `paid_schelling` and `launch_wave` cannot drift.
+4. **Waves.** In `buildWave` (`launch_wave.mjs:152-180`), with a projected or manifest `on` every cell must satisfy
+   item 3. `"mixed"` keeps the native arms, but every WASM arm must be enforced (`wasm-cmd` + `wasmtime`) or
+   acknowledged for the wave (`"wasm_unenforced_ack": true` in the manifest), recorded in the run manifest. The
+   dry-run row check (`launch_wave.mjs:691-698`, which already compares `r.runner` with `runnerOf`) also checks the new
+   stamps against the resolution.
+5. **Row stamps (B.4)**, appended after the P0-NAMES stamps (`paid_cell.mjs:228-231`) so existing fields and readers
+   are unchanged: `wasm_sandbox` (`"on" | "off" | "unset"`), `wasm_sandbox_source`
+   (`"cli" | "manifest" | "env" | "agentteams" | "default"`), `wasm_enforced` (`true` only for `wasm-cmd` +
+   `wasmtime`), `wasm_runner` (the runner actually used, the same value as today's `runner`, and `null` for native),
+   `os_sandbox` (`"unverified"` unless B.3's hoisted confine option reports that it applied; never copied from the
+   projected file's `os_sandbox`), and `wasm_unenforced_ack: true` when item 3's acknowledgement was used. Refusal rows
+   (the zero-spend JSON lines at `paid_cell.mjs:80`) carry `wasm_sandbox` and `wasm_sandbox_source` too.
+6. **Reader for `.agentteams/sandbox-state.json`.** An exact-shape parse (never `eval` or `import`): absent = no
+   projection. Present but unreadable, a symlink, larger than 4 KiB, not a JSON object, a key missing or extra,
+   `schema` != `"agentteams-sandbox-state/v1"`, `producer` != `"agentteams"`, `require_enforced` !== `true`, or
+   `model_substrate_wasm` not `"on"`/`"off"` = refuse every WASM-switch-dependent run (exit 2) rather than guess.
+   agentteams' reference reader is `agentteams.sandbox_projection.read_projection` / `validate_record`; a test may
+   vendor the schema file and pin its sha256, as Request A does for the grant.
+7. **Tests (zero spend, stub backends: `BATTERY_STUB_BACKEND`):** the refusal matrix (unsupported language, `--runner
+   node`, in-guest under `on`, a native key under `on`, `BA_WASM=off` / manifest `off` against a projected `on`, each
+   malformed-file case of item 6), the resolution table, the stamps on accept and refuse rows, and the 2x2
+   OS x WASM matrix (report Part 4 B.5) on macOS and Linux before any "both on" claim.
+
+**Honesty ceiling.** Until Request B lands, the projected file has no effect in baseAgent: nothing there reads it, and
+the `paid_cell.mjs:73` `node` default stays unsafe (plan risk R2).
+
+### 4.4 Follow-ups (not requested now)
+
+- B.2: a gateway backend (`serve/llm_gateway.py` protocol) beside OpenRouter and the stub, so the switch is
+  provider-agnostic in fact; the switch itself must not read the provider.
+- B.3: hoist `confine="off" | "auto"` (`augment/backends/goose_adapter.py:137`, default `off`) into a shared option
+  any CLI-backed backend accepts, so `os_sandbox` in item 5 can be reported as applied rather than `unverified`.
+- Grant and limit parity stay in §2 (Request A).
+
+### 4.5 Open decisions for the baseAgent operator
+
+| Id | Question | agentteams' proposed default |
+|---|---|---|
+| Q1 | May a wave that deliberately mixes native and WASM arms (the lean wave lists both) run under a projected `on`? | Yes, only with `"wasm": "mixed"` in the manifest, and every WASM arm enforced or acknowledged (item 4). |
+| Q2 | Does `wasm-inguest` on node-jco ever count as `on`? (report open decision 4) | No. Only with `--wasm-unenforced` and a row stamp. |
+| Q3 | May argv `--wasm off` lower a projected `on`? | Yes, from argv only, with the stderr line and a row stamp; env and manifest cannot. |
+| B.3 | The default of the run-time OS axis (`off` vs `auto`). | Operator's call (report open decision 3). |
 
 ## Honesty ceilings
 
@@ -231,5 +354,5 @@ baseAgent-style model-substrate consumers.*
 
 ## Approval
 
-The baseAgent operator (as target orchestrator) selects for Request A and for each finding: **apply now (agentteams
+The baseAgent operator (as target orchestrator) selects for Request A, for Request B (§4.3) and for each finding: **apply now (agentteams
 orchestrator as delegate)** / **operator applies** / **record finding only, defer**.

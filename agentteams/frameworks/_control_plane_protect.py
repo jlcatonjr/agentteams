@@ -15,7 +15,13 @@ What each flag emits (the order under ``protect_ledger`` alone is unchanged, so 
   ``manifest["wasm_wiring"]["protected_config_paths"]``), as a denyWrite plus an ``Edit`` rule.
 
 Grok gets no rule: its profile cannot deny a write without denying the read (``_grok_sandbox_emit``), so P13 records
-Grok Track-A as advisory. Integrity-pinned.
+Grok Track-A as advisory.
+
+P20 D5: the projected model-substrate file (``.agentteams/sandbox-state.json``) is a floor a consumer trusts, but the
+switch is independent of WASM, so the control plane may be unprotected while it is rendered. Then (and only then:
+:func:`substrate_protect_paths` is empty whenever the control plane is protected, which already covers the file) the
+file alone gets a denyWrite and an ``Edit`` rule (Claude), a Seatbelt deny and a Linux-runner ``--protect`` (Goose).
+The Codex and Grok runners already ``--protect`` the whole ``.agentteams`` whenever it exists. Integrity-pinned.
 """
 
 from __future__ import annotations
@@ -26,6 +32,8 @@ from typing import Any
 #: imports this one).
 LEDGER_DIR_REL = ".agentteams"
 STATUS_DIR_REL = ".agentteams-status"
+#: == ``sandbox_projection.PROJECTION_REL`` (test-locked).
+SUBSTRATE_FILE_REL = ".agentteams/sandbox-state.json"
 
 
 def protect_control_plane(manifest: dict[str, Any]) -> bool:
@@ -86,12 +94,36 @@ def control_plane_for(manifest: dict[str, Any]) -> tuple[str, ...] | None:
     return wasm_protected_config_paths(manifest) if protect_control_plane(manifest) else None
 
 
-def write_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None) -> tuple[str, ...]:
+def substrate_protect_paths(manifest: dict[str, Any]) -> tuple[str, ...]:
+    """Return the projected model-substrate file to protect on its own (P20 D5), or ``()``.
+
+    Non-empty only when the manifest sets the model-substrate switch (brief, argv, or a kept file) and neither
+    ``write_policy: orchestrator-only`` nor WASM already protects the whole ``.agentteams`` (no rule twice).
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        ``(".agentteams/sandbox-state.json",)`` or ``()``.
+
+    Raises:
+        ValueError: A bad switch value or a malformed ``wasm_sandbox`` record.
+    """
+    from agentteams.wasm_config import substrate_switch
+
+    if substrate_switch(manifest)[0] is None or protect_control_plane(manifest):
+        return ()
+    return (SUBSTRATE_FILE_REL,)
+
+
+def write_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None,
+                 substrate: tuple[str, ...] = ()) -> tuple[str, ...]:
     """Return the Claude ``denyWrite`` entries for the two flags.
 
     Args:
         protect_ledger: ``write_policy: orchestrator-only``.
         control_plane: :func:`control_plane_for`'s value.
+        substrate: :func:`substrate_protect_paths`'s value (P20).
 
     Returns:
         The entries, in emission order.
@@ -102,10 +134,11 @@ def write_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None) ->
     out: tuple[str, ...] = ()
     if protect_ledger or control_plane is not None:
         out = (LEDGER_DIR_REL, STATUS_DIR_REL) if protect_ledger else (LEDGER_DIR_REL,)
-    return out + tuple(control_plane or ())
+    return out + tuple(control_plane or ()) + tuple(substrate)
 
 
-def permission_rules(protect_ledger: bool, control_plane: tuple[str, ...] | None) -> list[str]:
+def permission_rules(protect_ledger: bool, control_plane: tuple[str, ...] | None,
+                     substrate: tuple[str, ...] = ()) -> list[str]:
     """Return the Claude ``permissions.deny`` rules for the two flags.
 
     The sandbox's denyWrite doesn't bind the built-in Write/Edit tools, so they need ``Edit`` rules too; CLI and
@@ -118,6 +151,7 @@ def permission_rules(protect_ledger: bool, control_plane: tuple[str, ...] | None
     Args:
         protect_ledger: ``write_policy: orchestrator-only``.
         control_plane: :func:`control_plane_for`'s value.
+        substrate: :func:`substrate_protect_paths`'s value (P20).
 
     Returns:
         The rules, in emission order (unchanged order under ``protect_ledger`` alone).
@@ -132,10 +166,11 @@ def permission_rules(protect_ledger: bool, control_plane: tuple[str, ...] | None
         rules += [f"Read(/{LEDGER_DIR_REL}/**)", "Read(/.agentteams-queue/**)", f"Edit(/{STATUS_DIR_REL}/**)"]
     if protect_ledger or control_plane is not None:
         rules.append("Edit(/.claude/agents/**)")
-    return rules + [f"Edit(/{p})" for p in control_plane or ()]
+    return rules + [f"Edit(/{p})" for p in (*(control_plane or ()), *substrate)]
 
 
-def seatbelt_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None) -> tuple[str, ...]:
+def seatbelt_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None,
+                    substrate: tuple[str, ...] = ()) -> tuple[str, ...]:
     """Return the project-relative paths the Goose Seatbelt control-plane deny adds for the two flags.
 
     The recipes carry each granted agent's MCP launch arguments (``agentteams_runner``; under WASM,
@@ -144,6 +179,7 @@ def seatbelt_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None)
     Args:
         protect_ledger: ``write_policy: orchestrator-only``.
         control_plane: :func:`control_plane_for`'s value.
+        substrate: :func:`substrate_protect_paths`'s value (P20; only ever non-empty when both flags are off).
 
     Returns:
         The paths, in emission order (unchanged order under ``protect_ledger`` alone).
@@ -152,20 +188,22 @@ def seatbelt_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None)
         Nothing.
     """
     if not (protect_ledger or control_plane is not None):
-        return ()
+        return tuple(substrate)
     base = (LEDGER_DIR_REL, STATUS_DIR_REL, ".goose/recipes") if protect_ledger else (LEDGER_DIR_REL, ".goose/recipes")
     return base + tuple(p for p in control_plane or () if p not in base)
 
 
-def runner_protect_block(control_plane: tuple[str, ...] | None, root_var: str) -> tuple[str, str]:
+def runner_protect_block(control_plane: tuple[str, ...] | None, root_var: str,
+                         substrate: tuple[str, ...] = ()) -> tuple[str, str]:
     """Return ``(bash lines, launcher flag)`` that ``--protect`` the control plane in an emitted runner script.
 
     Only present paths are protected (the launcher refuses a missing ``--protect`` path). Each path is a validated
     plain relative path, so it is safe unquoted in the loop.
 
     Args:
-        control_plane: :func:`control_plane_for`'s value; None emits nothing.
+        control_plane: :func:`control_plane_for`'s value; None emits nothing (but ``substrate``).
         root_var: The script's project-root variable name (e.g. ``REPO_ROOT``).
+        substrate: :func:`substrate_protect_paths`'s value (P20; only ever non-empty when ``control_plane`` is None).
 
     Returns:
         ``("", "")`` when off.
@@ -173,9 +211,9 @@ def runner_protect_block(control_plane: tuple[str, ...] | None, root_var: str) -
     Raises:
         Nothing.
     """
-    if control_plane is None:
+    if control_plane is None and not substrate:
         return "", ""
-    paths = " ".join((LEDGER_DIR_REL, *control_plane))
+    paths = " ".join((LEDGER_DIR_REL, *control_plane) if control_plane is not None else substrate)
     block = ('PROTECT=()\n'
              f'for p in {paths}; do [ -e "${root_var}/$p" ] && PROTECT+=( --protect "${root_var}/$p" ); done\n')
     return block, ' ${PROTECT[@]+"${PROTECT[@]}"}'
@@ -187,6 +225,7 @@ __all__ = [
     "protect_control_plane",
     "runner_protect_block",
     "seatbelt_denies",
+    "substrate_protect_paths",
     "wasm_protected_config_paths",
     "write_denies",
 ]

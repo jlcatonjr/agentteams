@@ -635,6 +635,20 @@ composition notes (`wasm-without-os-sandbox` when the OS sandbox is off, `wasm-o
 sandbox) and records them in the team manifest's `advisories`; it never claims enforcement.
 `--check-wiring --wasm-sandbox on` checks the control-plane denies too.
 
+### `--wasm-substrate {on,off}`
+
+Overrides the brief's `wasm_sandbox.model_substrate` for this run: the model-substrate WASM switch agentteams projects
+to consumers that run model code (for example baseAgent's battery) in `.agentteams/sandbox-state.json` (schema
+`agentteams-sandbox-state/v1`). `on` means the consumer must run model code WASM-confined under an enforcing runner and
+refuse rather than fall back to native or to an unenforced runner; `off` means native substrates by default. The file
+is written only when the brief or this flag sets the switch, and it is a floor, never a ceiling: the consumer enforces
+it (agentteams never runs or confines model code). The switch is independent of `--wasm-sandbox`, which confines agent
+code. `off` after `on` is constraint-relaxing (Rule 15): in a governed workspace it needs an operator Ed25519-signed
+decision for `sandbox-wasm-off:model-substrate`; elsewhere generation prints a `SANDBOX RELAXATION` notice. A foreign
+file (`producer` other than `agentteams`) is never rewritten. `--check-wiring --wasm-substrate on` reports whether the
+file exists, parses and matches; `--verify-integrity` exits 1 when the file projects a lower floor than the last render
+recorded.
+
 ### `--allow-unenforced-confinement`
 
 Permit `generate` to proceed when the OS sandbox (a `confined`/`exclusive` `privilege_profile`, or `os_sandbox: on`) is requested on a target with no OS-level sandbox to enforce it (native Windows and other hosts with no emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.

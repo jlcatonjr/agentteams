@@ -231,6 +231,18 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
                 "resolve_deny_read_abspath"):
         if brief.get(key) is not None:
             priv[key] = brief[key]
+    # P20 D7: the projected model-substrate switch rides with the posture, so a sync keeps the file current.
+    block = brief.get("wasm_sandbox")
+    substrate = block.get("model_substrate") if isinstance(block, dict) else None
+    if substrate is not None:
+        from agentteams.wasm_config import validate_wasm_substrate_cli
+
+        try:
+            priv["model_substrate"] = validate_wasm_substrate_cli(substrate)
+        except ValueError:
+            print(f"  note: {path.name}: wasm_sandbox.model_substrate must be \"on\" or \"off\"; no privilege "
+                  "posture is projected", file=sys.stderr)
+            return {}
     return priv
 
 
@@ -277,7 +289,30 @@ def _projected_privilege_manifest(root: Path, framework: str, privilege: dict[st
                 "resolve_deny_read_abspath"):
         if privilege.get(key) is not None:
             manifest[key] = privilege[key]
+    # P20 D7: the model-substrate switch (the WASM half stays off here, as before: enabled defaults to false), or the
+    # floor a pipeline file holds when the brief no longer sets it (so the gate sees no change).
+    from agentteams.wasm_config import WASM_SUBSTRATE_KEPT_KEY
+
+    if privilege.get("model_substrate") in ("on", "off"):
+        manifest["wasm_sandbox"] = {"model_substrate": privilege["model_substrate"]}
+    else:
+        from agentteams.sandbox_projection import kept_value
+
+        kept = kept_value(Path(root))
+        if kept is not None:
+            manifest[WASM_SUBSTRATE_KEPT_KEY] = kept
     return manifest
+
+
+def _sync_projection(root: Path, framework: str, manifest: dict[str, Any], *, dry_run: bool) -> list[str]:
+    """Keep ``.agentteams/sandbox-state.json`` current on sync (P20 D7); the dry pass only preflights it."""
+    from agentteams import sandbox_projection
+
+    if dry_run:
+        sandbox_projection.preflight(Path(root))  # ProjectionError is a ValueError: aborts before touching disk
+        return []
+    outcome = sandbox_projection.emit_projection(manifest, Path(root), framework_agents_dir(root, framework))
+    return [str(outcome.path.resolve())] if outcome is not None and outcome.status == "written" else []
 
 
 def _check_projected_relaxation(root: Path, framework: str, manifest: dict[str, Any], state: Any,
@@ -334,8 +369,9 @@ def _emit_privilege_artifacts(
     state = effective_sandbox_state(manifest) if manifest is not None else None
     if manifest is not None:  # no privilege block projects nothing (and removes nothing): no relaxation to gate
         _check_projected_relaxation(root, framework, manifest, state, notice=not dry_run)
+    projected = _sync_projection(root, framework, manifest, dry_run=dry_run) if manifest is not None else []
     if state is None or not state.os:
-        written = _write_store_sentinel(root, framework, dry_run=dry_run)
+        written = projected + _write_store_sentinel(root, framework, dry_run=dry_run)
         if manifest is not None and manifest.get("privilege_profile") in {"confined", "exclusive"}:
             # Rule 12 (P00 row 18): the switch must never remove stubs a sibling confined launcher needs.
             from agentteams.control_plane_io import write_control_plane_stubs
@@ -347,7 +383,7 @@ def _emit_privilege_artifacts(
     agents_dir = framework_agents_dir(root, framework)
     adapter = FRAMEWORKS[framework]()
     project = Path(root).resolve()
-    written: list[str] = []
+    written: list[str] = list(projected)
     from agentteams.frameworks.claude import guard_gate_pin_files
 
     # Never project a pin over/without its ignore rule (an operator-owned .gitignore is left alone).
