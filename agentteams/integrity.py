@@ -312,6 +312,13 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
+    # WASM configuration (P01). wasm_config is the one validator between the agent-writable brief's wasm_sandbox
+    # block and a guest's mounts: its read-path bans (control plane, credentials, trust roots, symlinks), the fixed
+    # scratch location, the WASM switch R1's control-plane protection reads, and wasm_eligible (offering run_wasm is
+    # a C-3 grant). cli/wasm_sandbox_switch carries --wasm-sandbox and validates the WASM half before the gate runs.
+    # A silent edit widens what a guest may read or write, or turns WASM off without the gate seeing it.
+    "agentteams/wasm_config.py",
+    "agentteams/cli/wasm_sandbox_switch.py",
     # The WASM sandbox (2026-10-31, wave-1 @security S4). wasm_exec is the one place wasmtime starts: its grant
     # shape check, mount-host refusals ('::'/':', control chars) and empty environment ARE the compute-only
     # boundary (C-3). wasm_pins is the one hash check every resolve goes through (R10), wasm_runtime/_wasm_archive
