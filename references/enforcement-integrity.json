@@ -3,7 +3,7 @@
     ".claude/hooks/constitutional-gate.py": "e03a2a4b0254714f3e3118a0ad5d5533b176f6144ca04833c86df1f1df2c7e23",
     ".github/hooks/constitutional-gate.py": "e03a2a4b0254714f3e3118a0ad5d5533b176f6144ca04833c86df1f1df2c7e23",
     "agentteams/_fleet_twin_acks.py": "69cc16063d05c16deb059f5412beed7f1922bc3dabc5532073dfca76511af207",
-    "agentteams/_sandbox_profiles.py": "93de741c85301e23c5c637905ff18cbdaec59bc8e22666b71b067f3b09106c67",
+    "agentteams/_sandbox_profiles.py": "c133b7f1091451f61349b24a850c8006eeb4ea94af1e8fb6d77424bbe969ed81",
     "agentteams/agent_doc_sync.py": "fbcdd2db4a87e36bddf9eccd48bc8d1bcf4e62c52b31c5b62f0adfcc79ec1208",
     "agentteams/atomicio.py": "f46a347095799d84845d52cc5f1e800cb7f43fcdf737c83a99f501add14f7214",
     "agentteams/audit_agent_contract.py": "a92f7e4317af18f6f88e8f2297af536197de64ac294e54697139c8c57084de7b",

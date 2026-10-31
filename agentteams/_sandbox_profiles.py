@@ -1,4 +1,5 @@
-"""_sandbox_profiles.py — the pure OS-sandbox profile builders (Seatbelt SBPL, bwrap argv) and the platform probe.
+"""_sandbox_profiles.py — the pure OS-sandbox profile builders (Seatbelt SBPL, bwrap argv), the platform probe, and
+the snapshot copy that stands in for an OS-enforced read-only mount when no profile can nest (:func:`snapshot_tree`).
 
 One source of truth for two callers (METAPLAN v2 §6 R2):
 
@@ -25,6 +26,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -227,3 +229,74 @@ def bwrap_argv(*, root: Path, write_roots: Sequence[str], tmp_dir: Path, cwd: Pa
     argv += ["--unshare-pid", "--unshare-ipc", *(["--unshare-net"] if deny_network else []),
              "--die-with-parent", "--new-session", "--chdir", _real(str(cwd))]
     return argv
+
+
+# --- read-only fallback: the snapshot copy (WASM, when no profile can nest; METAPLAN v2 R7) ---------------------------
+
+def _charge(budget: list[int], nbytes: int = 0, entries: int = 0) -> None:
+    budget[0] -= nbytes
+    budget[1] -= entries
+    if budget[0] < 0 or budget[1] < 0:
+        raise ConfinementError("read mount too large to snapshot; enable an OS sandbox")
+
+
+def _snap_dir(dfd: int, dst: str, budget: list[int]) -> None:
+    os.mkdir(dst, 0o700)
+    with os.scandir(dfd) as entries:
+        names = sorted(e.name for e in entries)
+    for name in names:
+        _charge(budget, entries=1)
+        st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+        is_dir, is_reg = stat.S_ISDIR(st.st_mode), stat.S_ISREG(st.st_mode) and st.st_nlink == 1
+        if not (is_dir or is_reg):
+            what = "a hardlink" if stat.S_ISREG(st.st_mode) else "a symlink" if stat.S_ISLNK(st.st_mode) else \
+                "a FIFO, socket or device"
+            raise ConfinementError(f"snapshot: {name} is {what}; refused")
+        flags = os.O_RDONLY | os.O_NOFOLLOW | (os.O_DIRECTORY if is_dir else os.O_NONBLOCK)
+        cfd = os.open(name, flags, dir_fd=dfd)
+        try:
+            fst = os.fstat(cfd)
+            if fst.st_ino != st.st_ino or fst.st_mode != st.st_mode or (is_reg and fst.st_nlink != 1):
+                raise ConfinementError(f"snapshot: {name} changed during the copy")
+            if is_dir:
+                _snap_dir(cfd, os.path.join(dst, name), budget)
+                continue
+            out = os.open(os.path.join(dst, name), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
+            try:
+                for chunk in iter(lambda: os.read(cfd, 1 << 20), b""):
+                    _charge(budget, nbytes=len(chunk))
+                    os.write(out, chunk)
+            finally:
+                os.close(out)
+        finally:
+            os.close(cfd)
+    os.chmod(dst, 0o500)
+
+
+def snapshot_tree(src: str, dst: str, budget: list[int]) -> None:
+    """Copy the directory *src* to the new *dst* for a read-only mount no OS profile can enforce.
+
+    The walk opens every directory and file relative to its parent's descriptor with ``O_NOFOLLOW`` and re-checks
+    each entry with ``fstat`` after opening, so a path swapped mid-walk is refused rather than followed. Symlinks,
+    hardlinked files, FIFOs, sockets and devices are refused. Copies are 0o400 and directories 0o500.
+
+    Args:
+        src: The real source directory.
+        dst: The destination, which must not exist (its parent must).
+        budget: ``[bytes, entries]`` still allowed; decremented during the copy, shared across one run's mounts.
+
+    Returns:
+        None.
+
+    Raises:
+        ConfinementError: On a refused entry, a change during the walk, an exhausted budget, or a platform
+            without ``dir_fd`` support.
+        OSError: On an I/O failure.
+    """
+    if os.open not in os.supports_dir_fd or not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        raise ConfinementError("read-only mounts without an OS sandbox need dir_fd support (not on this platform)")
+    fd = os.open(src, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        _snap_dir(fd, dst, budget)
+    finally:
+        os.close(fd)
