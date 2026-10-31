@@ -100,10 +100,16 @@ def _openssl_cycle(version: str) -> str:
     return ".".join(nums[:3] if nums and nums[0] in ("0", "1") else nums[:2])
 
 
-def _postgres_cycle(version: str) -> str:
-    """PostgreSQL 10 and later name a line by the major (``16``); 9.x by two parts (``9.6``)."""
-    parts = version.split(".")
-    return parts[0] if parts[0].isdigit() and int(parts[0]) >= 10 else ".".join(parts[:2])
+def _major_from(first: int) -> Callable[[str], str]:
+    """A cycle rule: majors from ``first`` name a line alone (``16``); older ones by two parts (``9.6``).
+
+    endoflife.date names PostgreSQL lines this way from 10, .NET from 5 (``8``; ``3.1``) and Docker
+    Engine from 27 (``28``; ``26.1``).
+    """
+    def cycle(version: str) -> str:
+        parts = version.split(".")
+        return parts[0] if parts[0].isdigit() and int(parts[0]) >= first else ".".join(parts[:2])
+    return cycle
 
 
 _V3 = r"(\d+\.\d+\.\d+)"
@@ -122,13 +128,14 @@ PRODUCTS: dict[str, Product] = {
     "java": Product("eclipse-temurin", 1, None, (_JAVA,), _JAVA_LABEL, _java_cycle, _java_norm),
     "java-corretto": Product("amazon-corretto", 1, None, (), "Java (Amazon Corretto)", _java_cycle, _java_norm),
     "dotnet": Product("dotnet", 2, None, (Probe(("dotnet", "--list-runtimes"), "stdout",
-                                                r"^Microsoft\.[A-Za-z.]+ " + _V3, each=True),), ".NET"),
+                                                r"^Microsoft\.[A-Za-z.]+ " + _V3, each=True),), ".NET",
+                      _major_from(5)),
     "nginx": Product("nginx", 2, None, (Probe(("nginx", "-v"), "both", r"nginx/" + _V3),)),
     "openssl": Product("openssl", 2, None, (Probe(("openssl", "version"), "stdout", r"^OpenSSL (\d+\.\d+\.\d+[a-z]*)",
                                                   require="OpenSSL"),), "OpenSSL", _openssl_cycle),
     "postgresql": Product("postgresql", 1, None, (
         Probe(("postgres", "--version"), "stdout", r"\(PostgreSQL\) (\d+\.\d+(?:\.\d+)?)"),
-        Probe(("psql", "--version"), "stdout", r"\(PostgreSQL\) (\d+\.\d+(?:\.\d+)?)")), "PostgreSQL", _postgres_cycle),
+        Probe(("psql", "--version"), "stdout", r"\(PostgreSQL\) (\d+\.\d+(?:\.\d+)?)")), "PostgreSQL", _major_from(10)),
     "mysql": Product("mysql", 2, None, (Probe(("mysqld", "--version"), "stdout", r"Ver " + _V3, reject="MariaDB"),), "MySQL"),
     "mariadb": Product("mariadb", 2, None, (
         Probe(("mariadbd", "--version"), "stdout", r"Ver " + _V3, require="MariaDB"),
@@ -136,7 +143,8 @@ PRODUCTS: dict[str, Product] = {
     "redis": Product("redis", 2, None, (Probe(("redis-server", "--version"), "stdout", r"v=" + _V3),), "Redis"),
     # Server version only: never starts a daemon; no socket access leaves stdout empty (unscannable).
     "docker": Product("docker-engine", 2, None, (Probe(("docker", "version", "--format", "{{.Server.Version}}"),
-                                                       "stdout", r"^(\d+\.\d+\.\d+)"),), "Docker Engine"),
+                                                       "stdout", r"^(\d+\.\d+\.\d+)"),), "Docker Engine",
+                      _major_from(27)),
 }
 
 #: endoflife.date product per kind (derived from :data:`PRODUCTS`; kept for existing callers).
