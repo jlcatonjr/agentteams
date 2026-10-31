@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
 from agentteams.atomicio import _atomic_write_text
 from agentteams.cli.signed_ledger import is_expired
@@ -186,7 +187,7 @@ def lapsed_active_exceptions(registry: dict, *, now: datetime | None = None) -> 
 
 
 def assert_within_aggregate_cap(
-    root: Path, *, adding: int = 1, now: datetime | None = None
+    root: Path, *, adding: int = 1, now: datetime | None = None, retiring: Iterable[str] = ()
 ) -> None:
     """Refuse (fail-closed) when activating ``adding`` more relaxing exceptions would exceed the cap.
 
@@ -200,11 +201,18 @@ def assert_within_aggregate_cap(
         root: The workspace root.
         adding: How many new relaxing exceptions are about to activate (default 1).
         now: Reference time.
+        retiring: Ids the caller retires (flips to ``sunset``) in the same pass before activating, so they are not
+            counted. Used only by the sandbox-relaxation gate to replace a lapsed exception with a freshly signed
+            one; an id named here that the caller does not then retire stays lapsed in the file, and every later
+            check refuses again (Rule 12: the exclusion cannot outlive the pass that names it).
 
     Raises:
         ExceptionRegistryError: A lapsed active exception exists, or the cap would be exceeded.
     """
     registry = load_registry(root)
+    skip = set(retiring)
+    if skip:
+        registry = {**registry, "exceptions": [e for e in registry["exceptions"] if e.get("id") not in skip]}
     cap = _configured_cap(registry)
     lapsed = lapsed_active_exceptions(registry, now=now)
     if lapsed:
@@ -367,6 +375,73 @@ def mark_declined(
     return registry
 
 
+def entries_for(root: Path, action: str) -> list[dict]:
+    """Return every registry entry recorded for a gate ``action`` (exact id, case-insensitive), in file order.
+
+    Args:
+        root: The workspace root.
+        action: The gate action id, e.g. ``sandbox-os-off:claude``.
+
+    Returns:
+        The entries, whatever their status.
+
+    Raises:
+        ExceptionRegistryError: The registry is malformed.
+    """
+    wanted = (action or "").strip().lower()
+    return [e for e in load_registry(root).get("exceptions", [])
+            if isinstance(e, dict) and str(e.get("action") or "").strip().lower() == wanted]
+
+
+def active_entry_for(root: Path, action: str, *, now: datetime | None = None) -> dict | None:
+    """Return the newest active (unexpired, with activations left) relaxing entry for ``action``, or None.
+
+    Args:
+        root: The workspace root.
+        action: The gate action id.
+        now: Reference time.
+
+    Returns:
+        The entry, or None when no entry for ``action`` is active.
+
+    Raises:
+        ExceptionRegistryError: The registry, or an entry's expiry or counters, is malformed.
+    """
+    active = active_relaxing_exceptions({"exceptions": entries_for(root, action)}, now=now)
+    return active[-1] if active else None
+
+
+def retire_exception(root: Path, exception_id: str, *, reason: str) -> dict:
+    """Flip an active exception to the terminal ``sunset`` state because what it relaxed has ended.
+
+    Strictly tightening: an entry already in a terminal state is left as it is (a ``declined`` entry is never
+    relabelled), and nothing is ever re-activated here.
+
+    Args:
+        root: The workspace root.
+        exception_id: The id to retire.
+        reason: Why it ended (recorded as ``retired_reason``).
+
+    Returns:
+        The registry as written (or as read, when the entry was already terminal).
+
+    Raises:
+        ExceptionRegistryError: The id is unknown, or no reason was given.
+    """
+    if not (reason or "").strip():
+        raise ExceptionRegistryError("retiring an exception requires a reason")
+    registry = load_registry(root)
+    entry = _find_entry(registry, exception_id)
+    if entry is None:
+        raise ExceptionRegistryError(f"unknown exception id {exception_id!r}")
+    if (entry.get("status") or _ACTIVE_STATUS).strip().lower() in _TERMINAL_STATUSES:
+        return registry
+    entry["status"] = "sunset"
+    entry["retired_reason"] = reason
+    write_registry(root, registry)
+    return registry
+
+
 def list_exceptions(root: Path) -> list[dict]:
     """Return every registry entry (for ``--list-exceptions``), or an empty list when absent."""
     return list(load_registry(root).get("exceptions", []))
@@ -389,14 +464,17 @@ def write_registry(root: Path, registry: dict) -> None:
 __all__ = [
     "EXCEPTION_REGISTRY_REL",
     "ExceptionRegistryError",
+    "active_entry_for",
     "active_relaxing_exceptions",
     "assert_within_aggregate_cap",
     "audit_exceptions",
+    "entries_for",
     "lapsed_active_exceptions",
     "list_exceptions",
     "load_registry",
     "mark_declined",
     "register_exception",
+    "retire_exception",
     "same_chain",
     "write_registry",
 ]
