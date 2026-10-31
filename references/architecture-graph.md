@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **344**
+- Modules mapped: **345**
 - Packages: **11**
-- Internal import edges: **1109**
+- Internal import edges: **1110**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 152 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research`, `agentteams.vulnscan` |
+| `agentteams` | 153 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.research`, `agentteams.vulnscan` |
 | `agentteams.cli` | 49 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan` |
 | `agentteams.data` | 6 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -56,6 +56,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams._fleet_twin_acks` | `agentteams.atomicio`, `agentteams.fence_twins`, `agentteams.fleet`, `agentteams.git_exec` | `agentteams.fleet` |
 | `agentteams._interop_grok` | `agentteams.capability_map`, `agentteams.frameworks._agents_md_ownership`, `agentteams.frameworks.base`, `agentteams.frameworks.grok`, `agentteams.interop`, `agentteams.interop_helpers` | `agentteams.interop` |
 | `agentteams._makefile_screen` | — | `agentteams.vscode_tasks` |
+| `agentteams._sandbox_profiles` | — | `agentteams.confinement` |
 | `agentteams._utils` | — | `agentteams.analyze`, `agentteams.analyze_tools`, `agentteams.branch_cleanup`, `agentteams.ingest` |
 | `agentteams.adopted_agents` | `agentteams.yaml_frontmatter` | `agentteams.analyze`, `agentteams.cli.adopt_only`, `agentteams.cli.adopt_step` |
 | `agentteams.advisory` | — | — |
@@ -137,7 +138,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.code_index` | — | `agentteams.cli.code_index_artifacts`, `agentteams.code_sources`, `agentteams.mcp_servers.recall` |
 | `agentteams.code_sources` | `agentteams.code_index` | `agentteams.cli.code_index_artifacts` |
 | `agentteams.codex_mcp_emit` | `agentteams.atomicio`, `agentteams.mcp_emit`, `agentteams.team_dir_advisories`, `agentteams.toml_write` | `agentteams.cli.artifacts`, `agentteams.grok_config_emit`, `agentteams.mcp_catalog` |
-| `agentteams.confinement` | `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` |
+| `agentteams.confinement` | `agentteams._sandbox_profiles`, `agentteams.atomicio`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.proposal_commands`, `agentteams.cli.standalone_modes`, `agentteams.mcp_direct_grants`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals` |
 | `agentteams.control_plane_io` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit` | `agentteams.cli.generate_helpers`, `agentteams.multi_sync`, `agentteams.projection_marker` |
 | `agentteams.convert` | `agentteams.frameworks.base`, `agentteams.frameworks.registry`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy` | `agentteams.cli.commands` |
 | `agentteams.data.agentteams-runner-mcp` | — | — |
@@ -588,6 +589,14 @@ digraph "agentteams architecture" {
     "agentteams._makefile_screen": {
       "package": "agentteams",
       "path": "agentteams/_makefile_screen.py",
+      "is_package": false,
+      "imports_internal": [],
+      "external": [],
+      "repo_local": []
+    },
+    "agentteams._sandbox_profiles": {
+      "package": "agentteams",
+      "path": "agentteams/_sandbox_profiles.py",
       "is_package": false,
       "imports_internal": [],
       "external": [],
@@ -1695,6 +1704,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/confinement.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams._sandbox_profiles",
         "agentteams.atomicio",
         "agentteams.frameworks._sandbox_emit"
       ],
@@ -6293,6 +6303,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.codex_mcp_emit",
       "target": "agentteams.toml_write"
+    },
+    {
+      "source": "agentteams.confinement",
+      "target": "agentteams._sandbox_profiles"
     },
     {
       "source": "agentteams.confinement",
