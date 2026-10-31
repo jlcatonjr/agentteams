@@ -545,6 +545,7 @@ def finalize_privilege_wiring(
     manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
     *, allow_unenforced: bool = True, team_dir: Path | None = None,
     accepted_write_roots: list[str] | None = None, dry_run: bool = False, os_sandbox_cli: str | None = None,
+    brief_confined_programs: Any = None,
 ) -> None:
     """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
 
@@ -567,6 +568,8 @@ def finalize_privilege_wiring(
             registering an exception or retiring one.
         os_sandbox_cli: ``--os-sandbox`` (operator argv), carried as the transient
             ``sandbox_state.OS_SANDBOX_CLI_KEY`` (never read from input, never persisted).
+        brief_confined_programs: The brief's ``confined_programs`` (WASM plan P12): with the operator file (which
+            wins, as at the runner) it fills ``SandboxExceptions.wasm_programs`` / ``os_programs`` for the gate.
 
     Raises:
         PrivilegeConfinementError: Unenforceable confinement (P1-2), an invalid ``os_sandbox``
@@ -609,7 +612,8 @@ def finalize_privilege_wiring(
         raise write_root_policy.WriteRootPolicyError(
             'write_policy "orchestrator-only" needs the session sandbox: --os-sandbox off turns it off')
     sandbox_states = _sandbox_relaxation_gate(manifest, state, framework_id, project_root,
-                                              team_dir=team_dir, dry_run=dry_run)
+                                              team_dir=team_dir, dry_run=dry_run,
+                                              brief_confined_programs=brief_confined_programs)
     grant_roots = apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
     coordination_roots = apply_coordination_roots_to_write_roots(manifest)
     write_root_policy.enforce(
@@ -623,6 +627,7 @@ def finalize_privilege_wiring(
 
 def _sandbox_relaxation_gate(
     manifest: dict, state: Any, framework_id: str, project_root: Path, *, team_dir: Path | None, dry_run: bool,
+    brief_confined_programs: Any = None,
 ) -> tuple[Any, Any] | None:
     """Run the P15 sandbox-relaxation gate for this render and record the state (P00 D7).
 
@@ -632,32 +637,59 @@ def _sandbox_relaxation_gate(
     ``privilege_profile: cooperative`` change alone stays ungoverned, as before P00).
 
     Args:
-        manifest: The team manifest (mutated: ``sandbox_relaxations``, ``sandbox_state``).
+        manifest: The team manifest (mutated: ``sandbox_relaxations``, ``sandbox_state``, ``sandbox_exceptions``).
         state: The effective :class:`~agentteams.sandbox_state.SandboxState`.
         framework_id: The target framework.
         project_root: The project root (evidence files, record paths).
         team_dir: The team dir (build-log, decisions log, exception registry); the project root when None.
         dry_run: Check only: consume nothing, register and retire nothing.
+        brief_confined_programs: The brief's ``confined_programs``. Under ``write_policy: orchestrator-only`` the
+            runner programs' modes (operator file, else this) become the gate's ``SandboxExceptions``
+            (``wasm-to-os-switch``, WASM plan P12) and are recorded as ``sandbox_exceptions``; the gate is then
+            engaged too, so a switch cannot step around it.
 
     Returns:
         ``(previous, new)`` states for the ``SANDBOX RELAXATION`` notice, or None when not engaged.
 
     Raises:
         SandboxRelaxationError: A relaxation is refused in a governed workspace (nothing consumed).
+        WriteRootPolicyError: The operator ``confined_programs`` file fails its custody checks.
     """
     from agentteams.cli import sandbox_relaxation_gate as gate
-    from agentteams.sandbox_state import has_recorded_state, os_switch_set, previous_sandbox_state
+    from agentteams.sandbox_state import (
+        has_recorded_state,
+        os_switch_set,
+        previous_sandbox_exceptions,
+        previous_sandbox_state,
+    )
 
     team = Path(team_dir) if team_dir is not None else Path(project_root)
-    if not (os_switch_set(manifest) or state.wasm or has_recorded_state(team)):
+    exceptions = None
+    if manifest.get("write_policy") == "orchestrator-only":
+        from agentteams import runner_wasm
+        from agentteams._sandbox_profiles import ConfinementError
+
+        try:
+            new_exc = runner_wasm.runner_exceptions(runner_wasm.effective_raw(Path(project_root),
+                                                                              brief_confined_programs))
+        except ConfinementError as exc:   # an unreadable operator file: the runner refuses it too
+            raise WriteRootPolicyError(f"the operator confined_programs file: {exc}") from exc
+        previous_exc = previous_sandbox_exceptions(team)
+        # Engaged once any runner program is (or was recorded) on sandbox: wasm; a team that never used it keeps a
+        # byte-identical build-log. Once recorded, every later render re-checks the switch's standing exception.
+        if new_exc.wasm_programs or previous_exc is not None:
+            exceptions = (previous_exc, new_exc)
+    if not (os_switch_set(manifest) or state.wasm or has_recorded_state(team) or exceptions):
         return None
     old = previous_sandbox_state(team, project_root, framework_id)
     relaxations = gate.plan_relaxations(
         old, state, framework_id=framework_id,
-        profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"})
+        profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"}, exceptions=exceptions)
     manifest["sandbox_relaxations"] = gate.authorize(team, relaxations, consume=not dry_run)
-    gate.retire_on_tighten(team, old, state, framework_id=framework_id, dry_run=dry_run)
+    gate.retire_on_tighten(team, old, state, framework_id=framework_id, exceptions=exceptions, dry_run=dry_run)
     manifest["sandbox_state"] = state.to_record(project_root=Path(project_root))
+    if exceptions is not None:
+        manifest["sandbox_exceptions"] = exceptions[1].to_record()
     return old, state
 
 

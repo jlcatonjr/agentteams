@@ -506,3 +506,47 @@ def test_other_start_errors_print_no_reinstall_hint(tmp_path, _home):
     out = _cli("--serve-requests", "--once", "--project", str(root), "--description", str(root / "nope.json"),
                cwd=root, home=_home)
     assert out.returncode == 1 and "--install-confined" not in out.stderr
+
+
+# --- WASM plan P12: sandbox: wasm entries in the operator file ---------------------------------------------------
+
+WASM_JAIL = {"data-analyst": {"sandbox": "wasm", "wasm": {"languages": ["python"], "read": ["data"], "scratch": True,
+                                                          "limits": {"timeout_s": 60}}}}
+
+
+def test_cli_install_round_trips_a_wasm_entry(tmp_path, _home):
+    root = _git_project(tmp_path)
+    src = tmp_path / "w.json"
+    src.write_text(json.dumps(WASM_JAIL))
+    args = ("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"))
+    digest = hashlib.sha256(C.confined_bytes(WASM_JAIL)).hexdigest()
+    out = _cli(*args, "--confirm-review-sha256", digest, cwd=root, home=_home)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(C.confined_file_for(root).read_text()) == WASM_JAIL
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"data-analyst": {"sandbox": "wasm", "exec": ["/usr/bin"],
+                                                "wasm": {"languages": ["python"]}}}))
+    out = _cli("--install-confined", str(bad), "--project", str(root), "--description", str(root / "brief.json"),
+               cwd=root, home=_home)
+    assert out.returncode == 1 and "no exec list" in out.stderr
+
+
+def test_cli_install_wasm_to_os_switch_goes_through_the_gate(tmp_path, _home):
+    root = _git_project(tmp_path)
+    C.install_confined_file(root, WASM_JAIL)
+    team = root / ".claude" / "agents"
+    (team / "references").mkdir(parents=True)
+    (team / "references" / "build-log.json").write_text("{}")
+    (team / "references" / "agent-privilege.json").write_text(json.dumps({"enforce_decision_signing": True}))
+    switched = {"data-analyst": {"exec": ["/usr/bin"], "write": []}}
+    src = tmp_path / "os.json"
+    src.write_text(json.dumps(switched))
+    digest = hashlib.sha256(C.confined_bytes(switched)).hexdigest()
+    out = _cli("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"),
+               "--confirm-review-sha256", digest, cwd=root, home=_home)
+    assert out.returncode == 1 and "wasm-to-os-switch:data-analyst" in out.stderr, out.stderr
+    assert json.loads(C.confined_file_for(root).read_text()) == WASM_JAIL      # nothing installed
+    (team / "references" / "agent-privilege.json").write_text(json.dumps({"enforce_decision_signing": False}))
+    out = _cli("--install-confined", str(src), "--project", str(root), "--description", str(root / "brief.json"),
+               "--confirm-review-sha256", digest, cwd=root, home=_home)
+    assert out.returncode == 0 and "SANDBOX RELAXATION: wasm-to-os-switch:data-analyst" in out.stderr, out.stderr
