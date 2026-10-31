@@ -835,6 +835,118 @@
         }
       }
     },
+    "wasm_sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P01: the brief's wasm_sandbox block in normalised form (wasm_config.WasmConfig.to_record), carried only when the brief has the block. The effective switch (with --wasm-sandbox, which is transient and never persisted) and the per-agent grants are in sandbox_state.",
+      "required": [
+        "enabled",
+        "languages",
+        "limits",
+        "agents",
+        "native_exec",
+        "native_exec_keep",
+        "model_substrate"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "languages": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "module",
+              "python",
+              "javascript"
+            ]
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fuel",
+            "max_memory_bytes",
+            "timeout_s"
+          ],
+          "properties": {
+            "fuel": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000000000000
+            },
+            "max_memory_bytes": {
+              "type": "integer",
+              "minimum": 1048576,
+              "maximum": 4294967296
+            },
+            "timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          }
+        },
+        "agents": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "read_paths",
+              "scratch"
+            ],
+            "properties": {
+              "read_paths": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+                }
+              },
+              "scratch": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "native_exec": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "deny",
+            "keep"
+          ]
+        },
+        "native_exec_keep": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "model_substrate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "on",
+            "off",
+            null
+          ]
+        }
+      }
+    },
     "sandbox_state": {
       "type": "object",
       "description": "P15 (METAPLAN 2.1): the render's effective sandbox state (SandboxState.to_record). Project-relative only; recorded in references/build-log.json so the next render can tell an OS/WASM 'off' that was on (a constraint-relaxing effect, Rule 15) from one that never was.",

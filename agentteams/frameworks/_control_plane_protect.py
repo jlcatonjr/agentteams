@@ -38,11 +38,13 @@ def protect_control_plane(manifest: dict[str, Any]) -> bool:
         Whether to emit the control-plane write protection.
 
     Raises:
-        ValueError: An invalid ``os_sandbox`` value.
+        ValueError: An invalid ``--wasm-sandbox`` value or a malformed ``wasm_sandbox`` record.
     """
-    from agentteams.sandbox_state import effective_sandbox_state
+    from agentteams.wasm_config import wasm_switch
 
-    return manifest.get("write_policy") == "orchestrator-only" or effective_sandbox_state(manifest).wasm
+    # The WASM switch alone (P01): the same value as ``effective_sandbox_state(manifest).wasm``, without building
+    # grants, so R1 holds on every render path, including those with no CLI-set project root.
+    return manifest.get("write_policy") == "orchestrator-only" or wasm_switch(manifest)[0]
 
 
 def wasm_protected_config_paths(manifest: dict[str, Any]) -> tuple[str, ...]:

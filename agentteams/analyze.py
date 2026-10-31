@@ -215,6 +215,25 @@ ALWAYS_INCLUDED_DOMAIN_AGENTS = [
 # Public entry point
 # ---------------------------------------------------------------------------
 
+def _wasm_sandbox_record(description: dict[str, Any], agent_slugs: list[str]) -> dict[str, Any]:
+    """Return the normalised ``wasm_sandbox`` record for the manifest (P01; fail closed).
+
+    The symlink check runs against ``existing_project_path`` when it names a directory (brief data: it can only
+    refuse more); the effective state repeats it under the CLI's real project root.
+
+    Raises:
+        ValueError: A malformed block (``wasm_config.normalize_wasm_sandbox``), naming the key path.
+    """
+    from agentteams.wasm_config import normalize_wasm_sandbox
+
+    raw = description["wasm_sandbox"]
+    if not isinstance(raw, dict):
+        raise ValueError(f"wasm_sandbox must be an object (got {type(raw).__name__})")
+    existing = description.get("existing_project_path")
+    root = Path(existing) if isinstance(existing, str) and existing and Path(existing).is_dir() else None
+    return normalize_wasm_sandbox(raw, agent_slugs=agent_slugs, project_root=root).to_record()
+
+
 def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vscode") -> dict[str, Any]:
     """Build and return a team manifest from a normalized project description.
 
@@ -644,6 +663,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         components=[c["slug"] for c in components])
     if mcp_candidates:
         manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
+    if "wasm_sandbox" in description:  # P01: carried only when the brief has the block (else byte-identical)
+        manifest["wasm_sandbox"] = _wasm_sandbox_record(description, all_slugs)
     # Specified-server automation (report §5.4/§6): copy operator-DECLARED server
     # definitions through to the manifest verbatim. Populated solely when the
     # description declares mcp_servers, so manifests without specified servers are
