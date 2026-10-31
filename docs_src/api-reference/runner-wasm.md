@@ -24,7 +24,10 @@ inside a fresh Seatbelt/bwrap wrap. Entries without `sandbox` (or with `"os"`) b
 - `exec`, `write` and `allow_unresolved_launcher_with_package_store` are refused: the only program is the pinned
   wasmtime, and a guest writes only its scratch.
 - `languages` ⊆ [`wasm_guests.LANGUAGES`](wasm-guests.md). `read` are literal project-relative directories, preopened
-  read-only at `/project/<rel>` (never the ledger, `.git`, the control plane or a secret). `scratch: true` preopens
+  read-only at `/project/<rel>` (never the ledger, `.git`, the control plane or a secret; the top segment is compared
+  case-folded, so `.GITHUB` is refused). A `read` directory holding a credential-named entry anywhere below it is
+  refused when the grant is built and again at `wasm_exec.materialize` (a bounded scan; a tree past 20,000 entries or
+  32 levels is refused too). `scratch: true` preopens
   `<project>/.agentteams/wasm/scratch/<agent>/` at `/scratch`. `limits` lie inside `wasm_exec.LIMIT_BOUNDS`; the run's
   `timeout_s` never exceeds the command entry's timeout or the MCP channel cap.
 
@@ -36,7 +39,9 @@ refused, as is a wasm agent's command outside the runner.
 
 ## Public Surface
 
-- `SANDBOX_KINDS`, `WASM_ARGV0`, `EXTENSIONS`, `SCRATCH_REL`, `RunnerWasmError`.
+- `SANDBOX_KINDS`, `WASM_ARGV0` (derived from `wasm_guests.LANGUAGES`), `EXTENSIONS`, `SCRATCH_REL`, `VCS_PARTS`,
+  `RunnerWasmError`. `DENY_*` / `denied_name`: `VCS_PARTS` plus the one shared credential list in `_sandbox_profiles`
+  (`credential_name`), the list `wasm_config` uses too.
 - `validate_entry(agent, spec, control_plane_of, *, protected_rel) -> dict` (called by `load_confined`).
 - `prepare_command(root, agent, argv, jail, *, timeout_s, resolver=None) -> WasmCommand`: validation and
   `wasm_guests.argv_for` before any ledger row; wasmtime and the interpreter are re-hashed against the pins.
@@ -44,7 +49,7 @@ refused, as is a wasm agent's command outside the runner.
   under the logged `allow_unconfined_runs` opt-out, with a `[runner] WASM only` notice). Executables run from the
   install dir, re-hashed just before exec (R3'); a copy, when needed, lands in `.agentteams/wasm/exec/<run-id>/`,
   never TMPDIR. The wasmtime environment is empty.
-- `build_grant`, `grant_digest`, `exec_literal`, `check_runtimes(root, confined)` (runner start, fail closed).
+- `build_grant` (through `sandbox_state.grant_from_tokens`; jail limits through `wasm_config.limits_of`), `grant_digest`, `exec_literal`, `check_runtimes(root, confined)` (runner start, fail closed).
 - `program_modes(raw)`, `runner_exceptions(raw) -> SandboxExceptions`, `effective_raw(root, brief_confined)`,
   `switch_relaxations`, `check_switch`, `team_dirs`, `gate_policy_change`: the `wasm-to-os-switch` effect through the
   P15 gate.

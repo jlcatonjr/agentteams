@@ -72,10 +72,15 @@ class SandboxState:
 previous_sandbox_state(team_dir, project_root, framework_id) -> SandboxState | None
 previous_sandbox_exceptions(team_dir) -> SandboxExceptions | None
 grant_tokens(agent, grant, *, project_root) -> frozenset[str]
-grant_from_tokens(agent, tokens, limits, *, project_root) -> Grant
+grant_from_tokens(agent, tokens, limits, *, project_root, check_credentials=True) -> Grant
 state_tokens(state) -> frozenset[str]
 keep_tokens(state, exceptions) -> frozenset[str]
 ```
+
+`grant_from_tokens` is the one grant builder (brief grants and the runner's jails): it refuses a read path through a
+symlink and, unless `check_credentials=False` (parsing a recorded state, where nothing is mounted), a read directory
+holding credential-named entries anywhere below it or too large to scan (`_sandbox_profiles.refuse_credentials`).
+`verifier_sandbox_state` lets an `ImportError` (no `wasm_exec` for a recorded grant) propagate: fail closed.
 
 `previous_sandbox_state` fails toward "was on": a malformed record yields `SandboxState.conservative()`, and
 on-disk boundary evidence can only turn a switch on. OS evidence: the framework's boundary files, the neutral

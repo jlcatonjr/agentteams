@@ -210,7 +210,7 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
   "limits": {"fuel": 10000000000, "memory_mib": 64, "timeout_s": 120},
   "agents": {"primary-producer": {"read_paths": ["docs", "src"], "scratch": true}},
   "native_exec": "replace",
-  "native_exec_keep": []
+  "native_exec_keep": ["git-operations", "navigator"]
 }
 ```
 
@@ -222,13 +222,19 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
   (agentteams picks the location). Read paths may not be absolute or `~`, contain `..`, name the whole project, reach
   the control plane (`.git`, `.agentteams`, `.claude`, `.goose`, `.codex`, `.grok`, `.github/agents`,
   `.github/hooks`, `sandbox`, or an ancestor of one), credential material (`.env*`, `*.pem`, `*.key`, `id_*`, ...), a
-  governance / trust root, or anything that resolves through a symlink. There is no network key.
+  governance / trust root, or anything that resolves through a symlink. A read directory that holds credential-named
+  entries anywhere below it (or is too large to scan: 20,000 entries or 32 levels) is refused when the grant is
+  built and again before each run. There is no network key.
 - `native_exec`: `replace` (default), `deny` or `keep`; `native_exec_keep`: agents that keep native execution while
-  WASM is on (default empty; the orchestrator and the team builder are exempt by design and may not be listed).
+  WASM is on. Every agent holding an execute-class tool is WASM-eligible. When the key is absent the default is
+  `navigator` and `git-operations` (they need git), restricted to the team's agents; an explicit list replaces the
+  default (list both to extend it, `[]` to keep none). The orchestrator and the team builder are exempt by design and
+  may not be listed.
 - `model_substrate`: reserved (`on` / `off`) for the model-substrate projection.
 
 Every unknown key, wrong type or unknown agent slug refuses the render, naming the key path. Widening a grant and
-keeping native execution are constraint-relaxing (`wasm-grant-widen:<framework>`, `native-exec-keep`), and so is
+keeping native execution (the default keep entries included) are constraint-relaxing
+(`wasm-grant-widen:<framework>`, `native-exec-keep:<framework>`, under any `write_policy`), and so is
 turning WASM off after it was on (`sandbox-wasm-off:<framework>`): in a governed workspace each needs an operator
 Ed25519-signed decision; elsewhere generation prints a `SANDBOX RELAXATION` notice. Grants are carried but inert while
 WASM is off. See [`wasm_config`](api-reference/wasm-config.md).
