@@ -19,6 +19,9 @@ bundle can load the same file. Provisioning and nesting are injected (`resolver=
 - `prepare(module, *, grant, runtime_mounts=(), src_files=None, compile_grace_s=15) -> Prepared`: validation only.
   The module must have the binary `\0asm` v1 header, so `.wat` text and components are refused.
 - `materialize(...) -> Launch` (for a caller that owns the `Popen`) and `run(...) -> WasmResult`.
+- `execute_launch(launch, stdin, *, stdout_cap, stderr_cap) -> WasmResult`: runs an already-materialized launch with
+  the same stdin-size (8 MiB) and output-cap checks as `run`, which calls it; the caller releases the launch. The WASM
+  agent host's brokers use it for launches Stage 0 prepared.
 - `WasmResult.os_confinement` is `nested`, `inherited` or `none`. Only `nested` counts as enforced.
   `read_only_mode` is `os`, `snapshot` or `none`. `trap` is diagnostic only, because the guest can forge stderr.
 - `classify_trap(exit_code, stderr, *, host_label=None)`, `copy_out_refused(name)`.
@@ -35,6 +38,10 @@ bundle can load the same file. Provisioning and nesting are injected (`resolver=
 - Before a run, `materialize` refuses a `/project` mount that overlaps a protected path (compared case-folded, so
   `.GITHUB` is `.github`) or holds a credential-named entry anywhere below it: the bounded scan
   `profiles.refuse_credentials` from the injected `_sandbox_profiles` module (the one shared credential list).
+- The nested profile read-denies `NEST_DENY_READS` (`~/.ssh`, `~/.aws`, `~/.config/gh`, `~/.config/gcloud`,
+  `~/.netrc`, `~/Library/Keychains`, `~/.docker`, `~/.kube`, `~/.gnupg`, `~/.npmrc`, `~/.pypirc`); the WASM agent's
+  Stage 1 host profile reuses the list. These are file denies only: Keychain items stay reachable through the
+  Security framework (`securityd`), which the profile does not filter.
 
 ## See also
 
