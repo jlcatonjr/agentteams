@@ -1,7 +1,9 @@
 """METAPLAN R1 (P00 D11): the ``.agentteams`` control plane is session-write-denied whenever WASM is on.
 
-``protect_control_plane = protect_ledger or state.wasm``. WASM is off until P01 lands, so these tests drive the WASM
-half by patching :func:`agentteams.sandbox_state.effective_sandbox_state`; the emitter wiring is real.
+``protect_control_plane = protect_ledger or state.wasm``. These tests drive the WASM half by patching the switch
+(:func:`agentteams.wasm_config.wasm_switch`, which ``protect_control_plane`` reads since P01, and
+:func:`agentteams.sandbox_state.effective_sandbox_state`); the emitter wiring is real. The real brief / CLI switch is
+covered in ``tests/test_wasm_manifest_fields.py``.
 
 * claude: ``.agentteams`` denyWrite + ``Edit(/.agentteams/**)`` + ``Edit(/.claude/agents/**)``; the runner-protocol
   ledger ``Read`` denies and ``.agentteams-status`` stay on ``protect_ledger`` only (Rule-12 carve-out); each rule
@@ -22,6 +24,7 @@ import pytest
 
 from agentteams import analyze
 from agentteams import sandbox_state as ss
+from agentteams import wasm_config
 from agentteams.frameworks._control_plane_protect import protect_control_plane, wasm_protected_config_paths
 from agentteams.frameworks._goose_sandbox_emit import _build_linux_goose_runner, _build_seatbelt_profile, _seatbelt_path_expr
 from agentteams.frameworks import _control_plane_protect as cpp
@@ -51,6 +54,7 @@ def wasm_on(monkeypatch):
                                wasm_languages=("python",))
 
     monkeypatch.setattr(ss, "effective_sandbox_state", with_wasm)
+    monkeypatch.setattr(wasm_config, "wasm_switch", lambda manifest: (True, "brief"))
 
 
 def test_wasm_on_claude_emits_the_control_plane_rules_without_the_ledger_reads():

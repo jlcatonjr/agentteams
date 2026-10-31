@@ -154,6 +154,8 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         "sandbox_state", "sandbox_exceptions", "sandbox_relaxations",
         # P00: the dedicated OS-sandbox switch, carried only when the brief sets it.
         "os_sandbox",
+        # P01: the normalised wasm_sandbox block, carried only when the brief has it.
+        "wasm_sandbox",
         # R6: carried only under the switch and only when the brief grants agentteams_runner.
         "mcp_grants",
         # MCP catalogue: carried from the brief only when non-empty, so a team that opts into nothing

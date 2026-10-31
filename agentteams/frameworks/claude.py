@@ -496,12 +496,12 @@ def _apply_fail_closed_policy(hook_text: str, manifest: dict[str, Any]) -> str:
     Returns:
         The hook text, fail-closed sentinel flipped only when the profile warrants it.
     """
-    from agentteams.sandbox_state import effective_sandbox_state
+    from agentteams.sandbox_state import os_switch_state
 
-    state = effective_sandbox_state(manifest)
-    if not state.os:
+    os_on, os_reason = os_switch_state(manifest)  # the OS half only (P01: no WASM grant, so no project root needed)
+    if not os_on:
         return hook_text  # no boundary: nothing for a crash to drop
-    explicit_on = state.os_reason in ("brief", "cli")  # state.os is on, so the switch said "on"
+    explicit_on = os_reason in ("brief", "cli")  # the OS boundary is on, so the switch said "on"
     explicit_profile = (manifest.get("privilege_profile") in {"confined", "exclusive"}
                         and manifest.get("privilege_profile_explicit"))
     if not (explicit_on or explicit_profile):

@@ -58,6 +58,8 @@ _FORBIDDEN_CHARS = frozenset("\"'$`\\;&|<>*?[]{}()!#")
 _PROJECT_PROTECTED: tuple[str, ...] = (
     ".git", ".claude", ".goose", ".codex", ".grok", ".github/agents", ".github/hooks", "sandbox", ".agentteams",
 )
+#: Public name for other modules (``wasm_config``'s read-path check) that must refuse the same paths.
+PROJECT_PROTECTED: tuple[str, ...] = _PROJECT_PROTECTED
 
 #: Home persistence and credential paths (``~``-relative) a write root may not be at or inside.
 _HOME_PROTECTED: tuple[str, ...] = (

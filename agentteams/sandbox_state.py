@@ -33,8 +33,8 @@ from agentteams.cli.sandbox_effects import native_exec_token, read_token, scratc
 if TYPE_CHECKING:
     from agentteams.wasm_exec import Grant, Limits
 
-#: The WASM guest languages, in order. Mirrors ``wasm_guests.LANGUAGES`` (P04), which cannot be imported here before
-#: it lands; the wave-2 test battery (P17) pins the two equal.
+#: The WASM guest languages, in order. Mirrors ``wasm_guests.LANGUAGES`` (P04, the single source that
+#: ``wasm_config`` validates against); ``tests/test_wasm_config.py`` pins the two equal.
 WASM_LANGUAGES: tuple[str, ...] = ("module", "python", "javascript")
 
 #: Where an agent's private scratch dir lives, relative to the project root (METAPLAN R8).
@@ -534,30 +534,97 @@ def _os_switch(manifest: dict[str, Any]) -> tuple[bool, str]:
     return False, f"profile:{profile}" if isinstance(profile, str) and _SLUG_RE.match(profile) else "profile:none"
 
 
+def os_switch_state(manifest: dict[str, Any]) -> tuple[bool, str]:
+    """Return ``(os, os_reason)`` alone: the OS half of :func:`effective_sandbox_state`, without the WASM half.
+
+    For consumers that ask only about the OS boundary (the emitter twins, the gate-hook flip): it builds no WASM
+    grant, so it needs no project root.
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        ``(os, os_reason)`` by the P00 precedence.
+
+    Raises:
+        ValueError: As :func:`effective_sandbox_state` (OS values only).
+    """
+    return _os_switch(manifest)
+
+
 def effective_sandbox_state(manifest: dict[str, Any]) -> SandboxState:
-    """Return the effective sandbox state of ``manifest`` (METAPLAN §2.1; P00 derives the OS half).
+    """Return the effective sandbox state of ``manifest`` (METAPLAN §2.1; P00 derives the OS half, P01 the WASM half).
 
     OS precedence, first match wins: ``--os-sandbox`` (:data:`OS_SANDBOX_CLI_KEY`) -> an explicit argv
     ``*:sandbox`` token (:data:`EXPLICIT_SANDBOX_TOKENS_KEY`) -> the brief's ``os_sandbox`` -> a confined/exclusive
     ``privilege_profile`` -> any ``*:sandbox`` host-feature token -> off. With no switch set this is exactly the
     pre-P00 framework-neutral request test (:func:`legacy_os_requested`), so existing renders are unchanged.
 
-    The WASM half stays at its off defaults until P01/P20 extend this function.
+    WASM (P01, :func:`agentteams.wasm_config.wasm_state_fields`): ``--wasm-sandbox`` > the brief's
+    ``wasm_sandbox.enabled`` > off. Off: no languages, no grants (an inert grant is not a relaxation). On: the
+    block's languages and a ``Grant(mounts, limits)`` per agent whose grant is not compute-only, host paths under
+    the CLI-set project root. ``model_substrate`` stays None until P20 derives it.
 
     Args:
-        manifest: The team manifest (``privilege_profile``, ``host_features``, ``os_sandbox`` and the transient
-            CLI keys).
+        manifest: The team manifest (``privilege_profile``, ``host_features``, ``os_sandbox``, ``wasm_sandbox``,
+            ``agent_slug_list`` and the transient CLI keys).
 
     Returns:
         The state.
 
     Raises:
-        ValueError: An ``os_sandbox`` value other than on/off, or ``--os-sandbox off`` together with an explicit
-            ``--target-host-features <fw>:sandbox``.
+        ValueError: An ``os_sandbox`` value other than on/off, ``--os-sandbox off`` together with an explicit
+            ``--target-host-features <fw>:sandbox``, a malformed ``wasm_sandbox`` / ``--wasm-sandbox`` value, or a
+            WASM mount needed while the project root is unknown (fail closed).
+        ImportError: WASM is on and :mod:`agentteams.wasm_exec` is not importable (fail closed).
     """
+    from agentteams.wasm_config import wasm_state_fields
+
     os_on, os_reason = _os_switch(manifest)
-    return SandboxState(os=os_on, os_reason=os_reason, wasm=False, wasm_reason="default-off", wasm_languages=(),
-                        wasm_grants={}, model_substrate=None)
+    wasm, wasm_reason, languages, grants = wasm_state_fields(manifest)
+    return SandboxState(os=os_on, os_reason=os_reason, wasm=wasm, wasm_reason=wasm_reason, wasm_languages=languages,
+                        wasm_grants=grants, model_substrate=None)
+
+
+def wasm_grant_for(state: SandboxState, agent: str) -> Grant | None:
+    """Return the grant ``agent``'s WASM guests run under, or None when WASM is off (METAPLAN R9, plan D8).
+
+    Reads only :class:`SandboxState`, never the brief or the manifest. ``None`` tells the caller not to run a guest;
+    there is no exception path.
+
+    Args:
+        state: The effective sandbox state.
+        agent: The agent slug.
+
+    Returns:
+        None iff ``state.wasm`` is false; else the agent's grant, or ``wasm_exec.COMPUTE_ONLY`` (the same object)
+        when it has none.
+
+    Raises:
+        ImportError: WASM is on and :mod:`agentteams.wasm_exec` is not importable (fail closed).
+    """
+    if not state.wasm:
+        return None
+    grant = state.wasm_grants.get(agent)
+    return grant if grant is not None else _wasm_exec().COMPUTE_ONLY
+
+
+def wasm_eligible(agent_meta: Mapping[str, object]) -> bool:
+    """Return whether an agent is offered ``run_wasm`` while WASM is on (R9; see :func:`agentteams.wasm_config.
+    wasm_eligible`, the single predicate P11/P13/P14 read).
+
+    Args:
+        agent_meta: ``{"slug": str, "tools": list[str]}``.
+
+    Returns:
+        True iff the tools hold ``execute`` and ``edit``; False for anything else, including missing tools.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.wasm_config import wasm_eligible as eligible
+
+    return eligible(agent_meta)
 
 
 def os_sandbox_requested(manifest: dict[str, Any], token: str | None = None) -> bool:
@@ -577,12 +644,12 @@ def os_sandbox_requested(manifest: dict[str, Any], token: str | None = None) -> 
     Raises:
         ValueError: As :func:`effective_sandbox_state`.
     """
-    state = effective_sandbox_state(manifest)
-    if not state.os:
+    os_on, os_reason = _os_switch(manifest)  # the OS half only: no WASM grant (and so no project root) needed
+    if not os_on:
         return False
     if token is None or token in (manifest.get("host_features") or []):
         return True
-    return state.os_reason in ("cli", "brief") or state.os_reason.startswith("profile:")
+    return os_reason in ("cli", "brief") or os_reason.startswith("profile:")
 
 
 def os_switch_set(manifest: dict[str, Any]) -> bool:
@@ -617,9 +684,13 @@ def verifier_sandbox_state(manifest: dict[str, Any] | None, team_dir: Path,
         The state, or None when neither source says anything (no manifest, no usable record).
 
     Raises:
-        ValueError: An invalid ``os_sandbox`` value in ``manifest``.
+        ValueError: An invalid ``os_sandbox`` value in ``manifest``, or a malformed ``wasm_sandbox`` block.
     """
     if manifest is not None:
+        from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
+
+        if not isinstance(manifest.get(PROJECT_ROOT_KEY), Path):  # the CLI's root, so WASM grants can be built
+            manifest = {**manifest, PROJECT_ROOT_KEY: Path(project_root).resolve()}
         return effective_sandbox_state(manifest)
     log = _read_build_log(team_dir)
     if not log:
@@ -699,9 +770,12 @@ __all__ = [
     "legacy_os_requested",
     "os_sandbox_requested",
     "os_switch_set",
+    "os_switch_state",
     "previous_sandbox_exceptions",
     "previous_sandbox_state",
     "state_tokens",
     "validate_os_sandbox",
     "verifier_sandbox_state",
+    "wasm_eligible",
+    "wasm_grant_for",
 ]

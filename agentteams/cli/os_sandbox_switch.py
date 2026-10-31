@@ -7,8 +7,10 @@ Carved out of ``cli/artifacts.py`` (wave-2 @code-hygiene H1). Two jobs:
   explicit token is refused) and prints the ENABLED/OFF notice.
 * :func:`engage_relaxation_gate` runs the P15 sandbox-relaxation gate (Rule 15) and records ``sandbox_state``.
 
-**When the gate engages** (:func:`gate_engaged`): a switch is in play (brief ``os_sandbox`` / ``--os-sandbox``), WASM
-is on, the previous render recorded a ``sandbox_state``, or (wave-2 @security S1) the previous state
+**When the gate engages** (:func:`gate_engaged`): a switch is in play (brief ``os_sandbox`` / ``--os-sandbox``, P01:
+brief ``wasm_sandbox`` / ``--wasm-sandbox``), WASM is on, the previous render recorded a ``sandbox_state``, WASM
+evidence on disk (an installed runtime or ``agentteams_wasm`` server) meets a WASM-off render (P01: so a
+``sandbox-wasm-off:<fw>`` cannot be stepped around by deleting the build-log), or (wave-2 @security S1) the previous state
 (:func:`~agentteams.sandbox_state.previous_sandbox_state`: the record OR on-disk boundary evidence) had the OS
 sandbox on and the new state has it off, whatever ``os_reason`` says. So ``confined`` -> ``cooperative`` with a
 boundary on disk is a ``sandbox-os-off:<fw>`` relaxation: refused in a governed workspace without the operator's
@@ -103,26 +105,31 @@ def resolve_os_switch(manifest: dict, explicit_tokens: list[str], framework_id: 
 
 
 def gate_engaged(manifest: dict, state: SandboxState, previous: SandboxState | None, *,
-                 recorded: bool) -> bool:
-    """Return whether the P15 relaxation gate must run for this render (wave-2 S1).
+                 recorded: bool, wasm: bool = True) -> bool:
+    """Return whether the P15 relaxation gate must run for this render (wave-2 S1; P01 adds the WASM switch).
 
     Args:
         manifest: The team manifest (the switch keys).
         state: The new effective state.
         previous: :func:`~agentteams.sandbox_state.previous_sandbox_state` (record OR evidence), or None.
         recorded: Whether the previous render recorded a ``sandbox_state``.
+        wasm: Whether this render derives the WASM half (False for the multi-framework sync projection, which
+            projects no WASM half: a WASM on -> off there would be an artefact of the projection, not a change).
 
     Returns:
-        True when a switch is in play, WASM is on, a state was recorded, or the OS sandbox goes from on to off
-        (any ``os_reason``).
+        True when an OS or WASM switch is in play, WASM is on, a state was recorded, or the OS sandbox (or, with
+        ``wasm``, WASM: a runtime or the ``agentteams_wasm`` server on disk) goes from on to off.
 
     Raises:
         Nothing.
     """
     from agentteams.sandbox_state import os_switch_set
+    from agentteams.wasm_config import wasm_switch_set
 
     os_off = previous is not None and previous.os and not state.os
-    return os_switch_set(manifest) or state.wasm or recorded or os_off
+    wasm_off = wasm and previous is not None and previous.wasm and not state.wasm
+    switch = os_switch_set(manifest) or (wasm and wasm_switch_set(manifest))
+    return switch or state.wasm or recorded or os_off or wasm_off
 
 
 def engage_relaxation_gate(
@@ -214,7 +221,7 @@ def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, 
     from agentteams.sandbox_state import previous_sandbox_state
 
     old = previous_sandbox_state(agents_dir, root, framework_id)
-    if not gate_engaged(manifest or {}, state, old, recorded=False):
+    if not gate_engaged(manifest or {}, state, old, recorded=False, wasm=False):
         return None
     relaxations = gate.plan_relaxations(
         old, state, framework_id=framework_id,

@@ -1025,6 +1025,20 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--wasm-sandbox",
+        choices=("on", "off"),
+        dest="wasm_sandbox",
+        default=None,
+        help=(
+            "Override the brief's wasm_sandbox.enabled for this run (on|off). \"on\" uses the brief's "
+            "languages, limits and per-agent grants (compute-only defaults when the block is absent) and "
+            "write-protects the .agentteams control plane. \"off\" after WASM was on is constraint-relaxing: "
+            "in a governed workspace it needs an operator Ed25519-signed decision "
+            "sandbox-wasm-off:<framework> (Rule 15). Grants, native-exec exceptions and network are never "
+            "set from argv."
+        ),
+    )
+    parser.add_argument(
         "--allow-unenforced-confinement",
         action="store_true",
         dest="allow_unenforced_confinement",
