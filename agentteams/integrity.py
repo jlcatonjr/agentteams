@@ -202,6 +202,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/coverage.py",         # effective scan roots and coverage states
     "agentteams/vulnscan/project_cli.py",      # enroll / roots / status commands
     "agentteams/vulnscan/project_policy.py",   # per-project level, exclusions, private packages
+    "agentteams/vulnscan/private_sources.py",  # GOPRIVATE, nuget.config and .npmrc sources: names kept local
     "agentteams/vulnscan/executor_guard.py",   # grants-first; protected repos by origin; scan-only refusal
     "agentteams/vulnscan/repo_alias.py",       # the agent's repository aliases (mapped back by mcp.py)
     "agentteams/vulnscan/executor_serve.py",   # spool request schema checks, batch preflight (split from executor.py)
@@ -243,6 +244,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # what validate_diff lets stage-fix change.
     "agentteams/vulnscan/__main__.py",
     "agentteams/vulnscan/manifests.py",
+    "agentteams/vulnscan/lockfiles.py",       # the Go/pnpm/Bun/RubyGems/Gradle/NuGet lockfile readers
     # 2026-10-22 (vulnscan-test-campaign M1): the rest of the package. Every module runs in the unsandboxed daily
     # job: _http.py holds the feed allowlist, osv.py/engine.py/versions.py/runtimes.py decide what counts as
     # vulnerable (a silent edit could fail open), fix.py computes the change stage-fix commits, schedule.py writes

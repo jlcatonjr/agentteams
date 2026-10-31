@@ -348,11 +348,13 @@ def refuse_scan_only(target: str) -> None:
 
 
 def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
-    """Refuse a ``stage-fix`` on a repository whose only fix plans are plan-only (crates.io ``Cargo.lock``).
+    """Refuse a ``stage-fix`` on a repository whose only fix plans are plan-only (``manifests.PLAN_ONLY_LOCKS``:
+    ``Cargo.lock``, ``go.mod``, ``pnpm-lock.yaml``, ``bun.lock``, ``Gemfile.lock``, ``gradle.lockfile``,
+    ``packages.lock.json``).
 
     Checked before a grant use is spent: ``stage-fix`` could only fail there, with a reason that does not apply
     ("nothing fixable without a major jump"), and the retry guard lets it try again whenever the plan changes.
-    A repository with any manifest ``stage-fix`` may edit, or with no ``Cargo.lock``, is left to the usual checks.
+    A repository with any manifest ``stage-fix`` may edit, or with no plan-only lockfile, is left to the usual checks.
 
     Args:
         op: Requested operation.
@@ -370,10 +372,10 @@ def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
     excl = project_policy.read_policy(repo).exclude_paths
     found = [m.relative_to(repo).as_posix() for m in manifests.discover(repo)]
     found = [rel for rel in found if not (excl and project_policy.is_excluded(rel, excl))]
-    plan_only = [rel for rel in found if rel.rsplit("/", 1)[-1] in manifests.CRATE_LOCKS]
+    plan_only = [rel for rel in found if rel.rsplit("/", 1)[-1] in manifests.PLAN_ONLY_LOCKS]
     if plan_only and not any(editable.search(rel) for rel in found):
-        raise _exec_error(f"{repo.name}: only plan-only fixes here ({len(plan_only)} Cargo.lock file(s)); stage-fix "
-                          "never edits a Cargo.lock: run the fix plan's commands by hand")
+        raise _exec_error(f"{repo.name}: only plan-only fixes here ({len(plan_only)} plan-only lockfile(s) such as "
+                          "Cargo.lock or go.mod); stage-fix never edits them: run the fix plan's commands by hand")
 
 
 def refuse_repo_op(op: str, target: str, editable: re.Pattern[str]) -> None:

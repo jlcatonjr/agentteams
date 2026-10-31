@@ -6,6 +6,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (vulnscan: Go, pnpm, Bun, RubyGems, Gradle and NuGet lockfiles are scanned)
+
+- New `agentteams.vulnscan.lockfiles` (stdlib only): `go.mod` (`require` with `replace` applied; Go stdlib not
+  judged, go < 1.17 and `go.work` noted), `pnpm-lock.yaml` v6/v9 (a restricted line reader, no YAML library;
+  conservative dev scope), text `bun.lock` (JSONC), `Gemfile.lock` (rubygems.org gems), `gradle.lockfile` (Maven
+  `group:artifact`) and NuGet `packages.lock.json`. A hostile or malformed file (an unusual name or version, an
+  unknown lockfile version, over 64 MiB) is unscannable and never raises.
+- Fixes for them are plan-only: `fix.plan_lockfile` writes each tool's command under
+  `## <label>: <lock> — plan-only (no staged edit)`; `executor.validate_diff` refuses a change to any of them and
+  `executor_guard.refuse_plan_only` refuses a `stage-fix` where they are all a repository has.
+- Discovery: `go.mod` is scanned and `go.sum` beside it is no longer listed (alone it stays unsupported, `Go (go.sum
+  without go.mod)`); `bun.lock` now covers a `package.json` like `pnpm-lock.yaml`; `bun.lockb` stays unsupported.
+- `versions.version_key` orders Go pseudo-versions, RubyGems `.pre`, Maven qualifiers (`M`, `SNAPSHOT`, `RELEASE`,
+  `FINAL`, `GA`, `SP`) and NuGet four-part versions. `project_policy.is_private` stays case-insensitive for them.
+- Private names stay local without a brief (new `agentteams.vulnscan.private_sources`, security review): Go modules
+  matching `GOPRIVATE`/`GONOPROXY`/`GONOSUMDB` (environment, then `go env` from `/` with `GOTOOLCHAIN=local`; Go's
+  prefix-glob rule), every NuGet package of a repository whose `nuget.config` (in it or a parent within the scan
+  root) names a non-nuget.org source, and pnpm/Bun names in an `.npmrc` scope with a non-npmjs registry are
+  `withheld` by `scan_path` and `fix_path` and never sent to OSV.
+- **`gradle.lockfile` is opt-in** (`scan --gradle-lockfiles`, `scan_path(gradle_lockfiles=True)`,
+  `fix_path(gradle_lockfiles=True)`): nothing tells a private Maven repository from Maven Central, so by default it
+  is unscannable, "gradle.lockfile not read (opt-in: …)". The daily run has no config key for it yet, so it never
+  reads one.
+
+### added (vulnscan: every common lockfile is detected)
+
+- `manifests.discover` now lists `Package.resolved` (SwiftPM), `Podfile.lock` (CocoaPods), `pubspec.lock` (Pub),
+  `mix.lock` (Hex), `bun.lock` / `bun.lockb` (Bun), `deno.lock` (Deno), `renv.lock` (CRAN), `stack.yaml.lock` /
+  `cabal.project.freeze` (Hackage), `conan.lock` and `vcpkg.json` (C/C++), a Julia `Manifest.toml` next to its
+  `Project.toml`, and `Gemfile` / `conanfile.*` without their lockfile. Each is reported `unsupported ecosystem:
+  <name>`, so a repository holding only these is in the coverage state *unsupported ecosystem* (Rule S-VM reports
+  it), never *nothing to scan*. None of them hides a `package.json` or `pyproject.toml` beside it.
+- `composer.json` and `Cargo.toml` without their lockfile are reported unscannable ("without a lockfile", with the
+  command that writes one), as `package.json` already was; a Cargo workspace member is covered by the root's
+  `Cargo.lock`.
+
 ### vulnscan (a runtime product table: more runtimes, OS releases, unknown kinds reported)
 
 - **`runtimes.PRODUCTS`** replaces the hard-coded Node.js/PHP/Python list. Each row is a frozen `Product`: the

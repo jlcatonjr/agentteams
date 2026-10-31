@@ -19,6 +19,9 @@
   advisories call fixed and the command ``cargo update -p <name>@<installed> --precise <version>`` for a person
   to run. It is never applied, and ``stage-fix`` cannot stage it (``executor.validate_diff`` refuses a
   ``Cargo.lock`` change).
+- **go.mod, pnpm-lock.yaml, bun.lock, Gemfile.lock, gradle.lockfile, packages.lock.json**: plan only too
+  (:func:`plan_lockfile`), with the command each tool takes (:data:`lockfiles.FORMATS`); ``executor.validate_diff``
+  refuses a change to any of them.
 
 With ``apply``, every manifest a change touches is re-read against OSV before and after, and
 :attr:`FixResult.resolved` counts the advisory occurrences the change removed: npm can move a package within
@@ -40,10 +43,11 @@ import shutil
 import subprocess
 import tempfile
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, osv, project_policy, subproc_confine
+from agentteams.vulnscan import _http, lockfiles, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -57,6 +61,20 @@ CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor r
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
+
+
+def lockfile_note(name: str) -> str:
+    """Return the note heading a plan-only section of one :data:`lockfiles.FORMATS` lockfile (like :data:`CARGO_NOTE`).
+
+    Args:
+        name: The lockfile's name (``go.mod``, ``pnpm-lock.yaml``, ...).
+
+    Returns:
+        The note.
+    """
+    return (f"Plan-only: `stage-fix` never edits a `{name}` (the executor refuses the change), so do not request "
+            "`stage-fix` for these rows; report them for a person to run the command shown, then "
+            f"{lockfiles.FORMATS[name].then}. \"→\" is the smallest version the advisories call fixed.")
 
 
 def _plain(text: str) -> str:
@@ -89,6 +107,7 @@ class FixResult:
     npm: list[tuple[str, str]] = field(default_factory=list)       # (dir, summary)
     composer: list[str] = field(default_factory=list)
     cargo_plan: list[PinChange] = field(default_factory=list)      # Cargo.lock: plan-only, never applied or staged
+    lock_plan: list[PinChange] = field(default_factory=list)       # lockfiles.FORMATS files: plan-only, likewise
     refused: list[tuple[str, str]] = field(default_factory=list)   # (path, reason)
     feed_errors: list[str] = field(default_factory=list)
     applied: bool = False
@@ -105,7 +124,7 @@ class FixResult:
             4 if a malicious pin was found, 3 if a feed failed, 1 if anything was held back or
             refused (major jump, cooldown, no clean release, dirty file, a plan-only Cargo.lock row), else 0.
         """
-        rows = self.changes + self.npm_plan + self.cargo_plan
+        rows = self.changes + self.npm_plan + self.cargo_plan + self.lock_plan
         if any(c.action == "malicious" for c in rows):
             return 4
         if self.feed_errors:
@@ -151,6 +170,14 @@ class FixResult:
                     "| Crate | Installed | → | Action | Command / notes |", "|---|---|---|---|---|"]
             out += [f"| {_plain(c.name)} | {_plain(c.old)} | {c.new or '—'} | {c.action} | {c.note} |"
                     for c in self.cargo_plan if c.path == lock]
+            out.append("")
+        for lock in dict.fromkeys(c.path for c in self.lock_plan):
+            fmt_name = str(lock).replace("\\", "/").rsplit("/", 1)[-1]
+            fmt = lockfiles.FORMATS[fmt_name]
+            out += [f"## {fmt.section}: {self._code(lock)} — plan-only (no staged edit)", "", lockfile_note(fmt_name),
+                    "", "| Package | Installed | → | Action | Command / notes |", "|---|---|---|---|---|"]
+            out += [f"| {_cell(c.name, fmt.name)} | {_cell(c.old, fmt.version)} | {_cell(c.new, fmt.version) or '—'} "
+                    f"| {c.action} | {c.note} |" for c in self.lock_plan if c.path == lock]
             out.append("")
         if self.refused:
             out += ["## Refused", ""] + [f"- `{p}`: {r}" for p, r in self.refused] + [""]
@@ -523,6 +550,66 @@ def plan_cargo_lock(path: Path, *, label: str = "", private: tuple[str, ...] = (
     return changes
 
 
+def _cell(text: str, pattern: re.Pattern[str]) -> str:
+    """Return ``text`` for a fix-plan table cell, or ``(unusual)`` when it is not of the format's plain form."""
+    return text if not text or pattern.fullmatch(text) else "(unusual)"
+
+
+def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
+                  hidden: Callable[[str, str], bool] | None = None) -> list[PinChange]:
+    """List each vulnerable package of one :data:`lockfiles.FORMATS` lockfile with its command (plan only).
+
+    The rows follow :func:`plan_cargo_lock`: ``plan-only`` with ``new`` the smallest version the advisories call
+    fixed and the format's command in the note (``go get <mod>@v<ver>``, ``pnpm update <name>@<ver>``,
+    ``bun update <name>@<ver>``, ``bundle update --conservative <name>``, a Gradle build-script change then
+    ``./gradlew dependencies --write-locks``, ``dotnet add package <name> --version <ver>``); ``malicious``;
+    ``no-clean-release``. A command is written only when the name, the installed and the fixed version are all of
+    the format's plain form (the lockfile and the feed are data), else the note says to fix it by hand. Nothing is
+    applied, and ``stage-fix`` cannot stage these files.
+
+    Args:
+        path: The lockfile (``go.mod`` for Go).
+        label: Path shown in the plan (defaults to ``path``).
+        private: The project's ``private_packages`` patterns: those packages are never looked up.
+        hidden: ``(ecosystem, name) -> bool``: also never looked up when true (the repository's own private
+            sources, :mod:`.private_sources`).
+
+    Returns:
+        One :class:`PinChange` per vulnerable package version (none when the file yields no versions).
+
+    Raises:
+        FeedError: OSV could not be read.
+    """
+    label = label or str(path)
+    fmt = lockfiles.FORMATS[path.name]
+    m = parse(path)
+    pkgs = sorted({(d.name, d.version) for d in m.deps
+                   if not project_policy.is_private(d.name, private, d.ecosystem)
+                   and not (hidden and hidden(d.ecosystem, d.name))})
+    hits = osv.vulnerable_ids((fmt.ecosystem, n, v) for n, v in pkgs)
+    changes: list[PinChange] = []
+    for name, ver in pkgs:
+        ids = hits.get((fmt.ecosystem, name, ver))
+        if not ids:
+            continue
+        c = PinChange(label, name, ver, action="plan-only", ids=ids)
+        changes.append(c)
+        if any(osv.is_malicious(i) for i in ids):
+            c.action, c.note = "malicious", "MALICIOUS version installed — isolate, rebuild, rotate credentials; do not just bump"
+            continue
+        fixed, unfixed = osv.minimal_fix(ids, fmt.ecosystem, name, ver)
+        c.new = fixed or ""
+        if not c.new:
+            c.action, c.note = "no-clean-release", f"{len(ids)} advisories; no advisory names a fixed version"
+            continue
+        if not (fmt.name.fullmatch(name) and fmt.version.fullmatch(ver) and fmt.version.fullmatch(c.new)):
+            c.note = f"{len(ids)} advisories; the name or a version has an unusual form: fix by hand"
+            continue
+        c.note = f"{fmt.command(name, ver, c.new)} ({len(ids)} advisories"
+        c.note += f", {unfixed} without a fix)" if unfixed else ")"
+    return changes
+
+
 def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False) -> str:
     """Run npm's lockfile-only, script-free audit fix for ``directory``.
 
@@ -623,7 +710,7 @@ def _add_resolved(res: FixResult, path: Path, old: bytes, rel: str, private: tup
 
 def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 0,
              include_worktrees: bool = False, allow_dirty: bool = False, npm: bool = True,
-             manifests: list[Path] | None = None) -> FixResult:
+             manifests: list[Path] | None = None, gradle_lockfiles: bool = False) -> FixResult:
     """Plan (and with ``apply``, make) dependency fixes for every manifest under ``root``.
 
     Args:
@@ -637,6 +724,8 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             packages (:func:`plan_npm_lock`) either way.
         manifests: Plan only these manifest files under ``root`` (``daily`` passes one repository's,
             without nested repositories); default: everything :func:`discover` finds.
+        gradle_lockfiles: Plan ``gradle.lockfile`` files too (off by default: refused with
+            :data:`private_sources.GRADLE_OPT_IN`).
 
     Returns:
         A :class:`FixResult`. Feed failures are recorded under ``feed_errors``; a symlinked
@@ -647,6 +736,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
     res = FixResult(applied=apply, resolved=0 if apply else None)
     found = discover(root, include_worktrees=include_worktrees) if manifests is None else sorted(manifests)
     policies = project_policy.PolicyCache()
+    sources = private_sources.PrivateSources(root)
     for path in found:
         rel = str(path.relative_to(root))
         repo = project_policy.repo_dir(path, root)
@@ -709,6 +799,14 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         elif path.name in CRATE_LOCKS:   # plan only, with or without apply: nothing here edits a Cargo.lock
             try:
                 res.cargo_plan += plan_cargo_lock(path, label=rel, private=private)
+            except _http.FeedError as exc:
+                res.feed_errors.append(f"{rel}: {exc}")
+        elif path.name == "gradle.lockfile" and not gradle_lockfiles:   # no private-repository signal
+            res.refused.append((rel, private_sources.GRADLE_OPT_IN))
+        elif path.name in lockfiles.FORMATS:   # plan only, with or without apply, like a Cargo.lock
+            try:
+                res.lock_plan += plan_lockfile(path, label=rel, private=private,
+                                               hidden=lambda eco, n, r=repo, f=path.name: sources.is_private(r, f, eco, n))
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
     return res
