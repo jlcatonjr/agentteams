@@ -99,6 +99,8 @@ def _status_kind(status: int) -> str:
 
 
 
+# UNVERIFIED: a heuristic. No provider doc read here names a fixed error code for a content-policy 4xx, so a
+# 4xx whose error text carries one of these markers maps to "refused" rather than "bad_request".
 _REFUSAL_MARKERS = ("content_filter", "content_policy", "safety", "responsibleai", "prohibited")
 
 
@@ -109,7 +111,9 @@ def _error_text(raw: bytes) -> str:
     except ValueError:
         return raw.decode("utf-8", errors="replace")
     err = body.get("error") if isinstance(body, dict) else None
-    if isinstance(err, dict):  # Anthropic, OpenAI and Google all nest {"error": {..., "message": ...}}
+    # Anthropic's nested {"error": {type, message}} is verified (api/errors); OpenAI's and Google's are
+    # UNVERIFIED here (same nesting assumed). Anything else falls back to the scrubbed, capped raw text.
+    if isinstance(err, dict):
         parts = [str(err.get(k)) for k in ("type", "code", "status") if isinstance(err.get(k), (str, int))]
         return " ".join(parts + [str(err.get("message", ""))]).strip()
     if isinstance(err, str):
