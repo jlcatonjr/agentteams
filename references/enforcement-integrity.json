@@ -106,7 +106,7 @@
     "agentteams/vulnscan/checkout_freshness.py": "44371af5d66b20f1f73d712e25a1d5f3ee390029d32ac699554789de5fd9e81d",
     "agentteams/vulnscan/coverage.py": "7632ccb55fbab1ac2f13d3484f4bb4aab8e83ea96c367b2d34c186a41cf60632",
     "agentteams/vulnscan/cvss.py": "46a2bd82170436ed29502bef39f151732102e26f1e3ecd8b3eadc255167d108f",
-    "agentteams/vulnscan/daily.py": "8fbccc9211805ad7f0e0cf818709ab37d46de67f034ed7b49f64a98c3286fa59",
+    "agentteams/vulnscan/daily.py": "510f291df0bd6eb396a70e804eb3deceba8d7c14af9c4c39554cdc58784dbe49",
     "agentteams/vulnscan/debrief.py": "1e9ce07edd0c1797421ebf6560fddd620dc1edb02b8fea5517d24afcc531bf59",
     "agentteams/vulnscan/docker_mode.py": "04104757e47b41aa5eb16f5665c8616462cb527b27f279f63ffd79fafc99d439",
     "agentteams/vulnscan/docker_readiness.py": "e000be08e05b0452665cacc18caa3d0bea17f7d5d06f57c2b2507b6850705cea",

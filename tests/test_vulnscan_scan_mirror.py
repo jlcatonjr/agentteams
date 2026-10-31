@@ -89,4 +89,29 @@ def test_without_a_fresh_mirror_the_checkout_is_scanned_as_before(xdg: Path, fee
     _stamp(root, "failed fetch")
     rep, _, run_dir = daily.run_daily(_cfg(repo_roots=[str(root)], scan_mirror="vulnscan-mirror"), today=DAY)
     assert [(f.target, f.version) for f in rep.findings if f.name == "PyJWT"] == [(str(root), "2.3.0")]
-    assert "| checkout |" in (run_dir / "summary.md").read_text(encoding="utf-8")
+    assert "| checkout (no fresh mirror today) |" in (run_dir / "summary.md").read_text(encoding="utf-8")
+
+
+def test_an_excluded_path_stays_excluded_inside_the_mirror(xdg: Path, feed: Feed, tmp_path: Path) -> None:  # noqa: F811
+    root, mirror = _repo(tmp_path, "2.15.0", "2.15.0")
+    (mirror / "sub").mkdir()
+    (mirror / "sub" / "requirements.txt").write_text("PyJWT==2.3.0\n", encoding="utf-8")   # excluded by the operator
+    _stamp(root, "ok " + "a" * 40)
+    cfg = _cfg(repo_roots=[str(root)], scan_mirror="vulnscan-mirror", exclude=[str(root / "sub")])
+    rep, _, run_dir = daily.run_daily(cfg, today=DAY)
+    assert not [f for f in rep.findings if f.name == "PyJWT"] and not list(run_dir.glob("fixplan-*.md"))
+    rep, _, _ = daily.run_daily({**cfg, "exclude": []}, today=DAY)               # control: not excluded, found
+    assert [f.version for f in rep.findings if f.name == "PyJWT"] == ["2.3.0"]
+
+
+def test_a_symlinked_worktrees_folder_or_a_bad_record_scans_the_checkout(xdg: Path, tmp_path: Path) -> None:
+    root, mirror = _repo(tmp_path, "2.3.0", "2.15.0")
+    on = {"scan_mirror": "vulnscan-mirror"}
+    scan_mirror.stamp_path(DAY).parent.mkdir(parents=True, exist_ok=True)
+    scan_mirror.stamp_path(DAY).write_text("[not a record]", encoding="utf-8")
+    assert scan_mirror.mirror_for(on, root, DAY) is None
+    _stamp(root, "ok " + "a" * 40)
+    moved = tmp_path / "real-worktrees"
+    mirror.parent.rename(moved)
+    mirror.parent.symlink_to(moved)
+    assert scan_mirror.mirror_for(on, root, DAY) is None

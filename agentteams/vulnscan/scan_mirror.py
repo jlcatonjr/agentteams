@@ -36,6 +36,18 @@ def stamp_path(day: str) -> Path:
     return paths.state_dir() / STAMP_DIR / f"{day}.json"
 
 
+def valid_name(name: object) -> bool:
+    """Return whether ``name`` is a usable worktree name for ``scan_mirror`` ("" = off is valid too).
+
+    Args:
+        name: The config value.
+
+    Returns:
+        True for "" or a single path component (no ``/`` or ``\\``, not ``.`` or ``..``).
+    """
+    return isinstance(name, str) and name not in {".", ".."} and "/" not in name and "\\" not in name
+
+
 def mirror_for(cfg: dict[str, Any], root: Path, day: str) -> Path | None:
     """Return the mirror to scan for ``root`` today, or None to scan the checkout itself.
 
@@ -49,10 +61,10 @@ def mirror_for(cfg: dict[str, Any], root: Path, day: str) -> Path | None:
         ``ok`` for this checkout; else None.
     """
     name = str(cfg.get("scan_mirror") or "").strip()
-    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+    if not name or not valid_name(name):
         return None
     mirror = root.parent / f"{root.name}.worktrees" / name
-    if mirror.is_symlink() or not mirror.is_dir():
+    if mirror.parent.is_symlink() or mirror.is_symlink() or not mirror.is_dir():
         return None
     try:
         record = json.loads(stamp_path(day).read_text(encoding="utf-8"))

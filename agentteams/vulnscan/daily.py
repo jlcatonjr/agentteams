@@ -156,7 +156,7 @@ def _config_problem(cfg: dict[str, Any]) -> str:
         return f"cooldown_days must be a whole number of days >= 0{got(cfg['cooldown_days'])}"
     if not isinstance(cfg["fix_mode"], str) or cfg["fix_mode"] not in _FIX_MODES:
         return f"fix_mode must be one of {', '.join(_FIX_MODES)}{got(cfg['fix_mode'])}"
-    if not isinstance(cfg["scan_mirror"], str) or "/" in cfg["scan_mirror"] or cfg["scan_mirror"] in (".", ".."):
+    if not scan_mirror.valid_name(cfg["scan_mirror"]):
         return f"scan_mirror must be a worktree name (no '/'){got(cfg['scan_mirror'])}"
     if not _is_int(cfg["scan_workers"]) or not 1 <= cfg["scan_workers"] <= MAX_SCAN_WORKERS:
         return f"scan_workers must be a whole number from 1 to {MAX_SCAN_WORKERS}{got(cfg['scan_workers'])}"
@@ -653,7 +653,7 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         except _ITEM_ERRORS as exc:   # this root is unscanned (recorded below); the other roots are kept
             return exc
 
-    plan_jobs: list[tuple[Path, list[str]]] = []
+    plan_jobs: list[tuple[Path, list[str], Path]] = []
     for root_spec, rep in zip(specs, _parallel(cfg, scan, specs), strict=True):   # merged here, in root order
         root_s, root = root_spec.label, root_spec.path
         if isinstance(rep, Exception):
@@ -662,7 +662,8 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
         _drop_excluded(cfg, root, rep)   # defence in depth only
         for row in _freshness(root, rep):   # read-only, no fetch; labels fixed_upstream (T2-D)
             row["repo"] = _under(root_s, row["repo"])
-            row["scanned"] = f"mirror `{mirrors[root].name}`" if mirrors[root] else "checkout"
+            row["scanned"] = (f"mirror `{mirrors[root].name}`" if mirrors[root] else
+                              "checkout (no fresh mirror today)" if cfg.get("scan_mirror") else "checkout")
             if (rows := _FRESH.get()) is not None:
                 rows.append(row)
         slug = (root.name or "root") if root_spec.source == "repo_roots" else plan_slug(root.resolve())
