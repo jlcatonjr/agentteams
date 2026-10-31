@@ -667,7 +667,10 @@ def _collect(cfg: dict, today: str, run_dir: Path, total: Report, staged: list[s
             if (rows := _FRESH.get()) is not None:
                 rows.append(row)
         slug = (root.name or "root") if root_spec.source == "repo_roots" else plan_slug(root.resolve())
-        (run_dir / f"repos-{slug}.json").write_text(json.dumps(rep.to_dict(), indent=2), encoding="utf-8")
+        record = {**rep.to_dict(), "target": str(root)}   # named after the checkout, like every finding
+        if mirrors[root]:
+            record["scanned_from"] = str(mirrors[root])
+        (run_dir / f"repos-{slug}.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
         _prefix_policy_labels(rep, root_s)
         total.merge(rep)
         repos = sorted({f.target for f in rep.findings if f.kind == "package" and f.fix and not f.malicious})

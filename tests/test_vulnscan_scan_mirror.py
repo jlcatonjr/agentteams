@@ -81,6 +81,8 @@ def test_the_daily_scan_reads_the_fresh_mirror_and_reports_the_checkout(xdg: Pat
     assert len(plans) == 1 and str(root) in plans[0].read_text(encoding="utf-8")   # plan targets the checkout
     assert "vulnscan-mirror" not in plans[0].name
     assert "mirror `vulnscan-mirror`" in (run_dir / "summary.md").read_text(encoding="utf-8")
+    record = json.loads((run_dir / "repos-app.json").read_text(encoding="utf-8"))
+    assert record["target"] == str(root) and record["scanned_from"] == str(_mirror)
 
 
 def test_without_a_fresh_mirror_the_checkout_is_scanned_as_before(xdg: Path, feed: Feed,  # noqa: F811
@@ -90,6 +92,7 @@ def test_without_a_fresh_mirror_the_checkout_is_scanned_as_before(xdg: Path, fee
     rep, _, run_dir = daily.run_daily(_cfg(repo_roots=[str(root)], scan_mirror="vulnscan-mirror"), today=DAY)
     assert [(f.target, f.version) for f in rep.findings if f.name == "PyJWT"] == [(str(root), "2.3.0")]
     assert "| checkout (no fresh mirror today) |" in (run_dir / "summary.md").read_text(encoding="utf-8")
+    assert "scanned_from" not in json.loads((run_dir / "repos-app.json").read_text(encoding="utf-8"))
 
 
 def test_an_excluded_path_stays_excluded_inside_the_mirror(xdg: Path, feed: Feed, tmp_path: Path) -> None:  # noqa: F811

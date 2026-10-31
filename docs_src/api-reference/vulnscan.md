@@ -583,7 +583,8 @@ to `origin/HEAD` before the scan, and writes `<state>/scan-mirrors/<YYYY-MM-DD>.
 or `"failed <reason>"`). The scan uses a mirror only when that record says `ok` for today and the directory is real
 (not a symlink); otherwise it scans the checkout as before. Everything stays named after the checkout, so handoff
 verdicts, retry holds and the executor are unchanged, and the operator's `exclude` paths and opted-out checkouts hold
-in the mirror too. The freshness table's *Scanned* column says which one was read.
+in the mirror too. The freshness table's *Scanned* column says which one was read, and the run's per-root
+`repos-<name>.json` keeps `target` = the checkout and adds `scanned_from` = the mirror path when one was used.
 
 Two consequences of reading the default branch: a project brief's opt-outs are read from the mirror's copy of the
 brief, so an opt-out you have not committed and pushed does not apply; and `fix_mode: apply-worktree` still stages
