@@ -424,7 +424,6 @@ class PrivilegeConfinementError(RuntimeError):
     """
 
 
-
 from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError  # noqa: E402
 from agentteams.cli.write_root_policy import WriteRootPolicyError  # noqa: E402
 
