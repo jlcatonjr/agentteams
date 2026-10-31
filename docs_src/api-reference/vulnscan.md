@@ -373,6 +373,52 @@ A workspace whose only manifests are these is in the coverage state `unsupported
 gap: nothing in it is checked), never `nothing to scan`. A workspace that also has supported manifests
 keeps its state, and the coverage section lists its unsupported files.
 
+### Container images
+
+**The image contents are not scanned**: the OS packages and libraries inside an image's layers are not
+read or looked up. What `scan_path` checks is the support status and pinning of each **base image** a
+container manifest names (`agentteams.vulnscan.images`). Each container manifest therefore stays listed
+unscannable, with the reason `unsupported ecosystem: container images (layer contents not scanned; base
+image support status checked)`, and coverage, which keys on file names, still puts an images-only
+workspace in `unsupported ecosystem`.
+
+References read: a Dockerfile's `FROM [--platform=..] <ref> [AS <name>]` (a `FROM` naming an earlier stage
+and `scratch` are skipped; `${NAME}` takes the default of an `ARG NAME=default` written before the first
+`FROM`, and the finding says "ARG default; `--build-arg` may override"), and a compose file's
+`services.<name>.image` (a service with `build:` is skipped: its Dockerfile is scanned on its own). A
+reference with an unresolved variable is listed as not judged, never guessed.
+
+| Image | Judged as |
+|---|---|
+| `python`, `pypy` | `python` |
+| `node`, `php`, `ruby`, `nginx`, `mysql`, `mariadb`, `redis` | the kind of the same name |
+| `golang` | `go` |
+| `postgres` | `postgresql` |
+| `eclipse-temurin`; `openjdk` (also LOW: "deprecated image; use eclipse-temurin") | `java` |
+| `amazoncorretto` | `java-corretto` |
+| `mcr.microsoft.com/dotnet/{runtime,aspnet,sdk}` | `dotnet` |
+| `ubuntu`, `debian`, `alpine`, `amazonlinux` | the OS release (`runtimes.evaluate_os`) |
+
+An official image is the bare name, `library/<name>` or `docker.io/library/<name>`. The tag decides:
+
+| Tag | Result |
+|---|---|
+| a release line (`3.12-slim`, `18-alpine`, `8.0`) | HIGH when the line is end-of-life; otherwise fine (a rebuild takes the line's newest patch) |
+| a full patch (`3.11.4`) | also MODERATE "pinned patch tag behind <latest>" (HIGH when a newer release on the line is a security release) |
+| fewer parts than the line (`python:3`, `redis:7`), or a keyword (`lts`, `stable`, `current`) | not judged: "floating … release line not determinable" (never fine) |
+| `latest`, or none | LOW: "unpinned tag: rebuilds change silently" |
+| a `@sha256:` digest | counted in the manifest's reason: "contents frozen at the pinned digest" (not a finding) |
+
+The OS in a tag (`-bookworm`, `-jammy`, `-alpine3.18`, `-al2023`) is judged too, as `base OS: …`, for any
+public image: `mcr.microsoft.com/playwright/python:v1.57.0-jammy` gets Ubuntu 22.04 judged while the
+playwright line itself is listed as not judged. An image on a private registry (any registry not in
+`images.PUBLIC_REGISTRIES`) or a bare name vulnscan does not know (a local build) is not judged and is
+shown only as `(private registry image)` or `(local or unlisted image)`; a `latest` tag there is still LOW.
+Only endoflife.date product slugs leave the machine, never an image name. Findings have `kind` `image`
+(shown as "base image") and are never fixed automatically: the fix plan lists them under
+`## base images: <file> — plan-only (no staged edit)`, and `executor.validate_diff` refuses a Dockerfile or
+compose change.
+
 ### Severity
 
 A package finding's severity is the highest over its advisories (`osv.severity(record)`), each the higher of:
@@ -540,7 +586,7 @@ A Finding (`report.Finding`):
 
 | Field | Type | Meaning |
 |---|---|---|
-| `kind` | string | `package`, `runtime`, `host` or `ioc` |
+| `kind` | string | `package`, `runtime`, `image` (a base image; see [Container images](#container-images)), `host` or `ioc` |
 | `target` | string | repository (relative to the scan root), host name, or `this-machine` for local runtimes (`engine.LOCAL_TARGET`) |
 | `name` | string | package or runtime name; `host` / `compromise indicator` for host checks |
 | `version` | string | installed version (`""` when not applicable) |
@@ -1167,6 +1213,38 @@ raised to HIGH when its security data is unavailable. The others are judged on e
 only, and their detail says "no upstream security-release feed; judged on end-of-life and latest patch
 only".
 
+### `agentteams.vulnscan.images`
+
+Base-image support checks for container manifests ([Container images](#container-images)). `ImageRef(registry,
+repository, tag, digest, line, source, arg_default)` is one reference; `public`, `official` and `display()` decide
+whether it is judged and how a report names it. `IMAGE_PRODUCTS`, `MCR_PRODUCTS` and `OS_IMAGES` map images to
+`runtimes.PRODUCTS` / `OS_PRODUCTS` keys; `MAX_BYTES` (1 MiB) and `MAX_REFS` (256) bound one manifest.
+
+#### `images.refs(path)`
+
+`(references, notes)` for one Dockerfile, Containerfile or compose file; each note says what was not judged
+and why (an unresolved variable, an unusual reference, a file too large, binary or not UTF-8). Never raises.
+
+#### `images.parse_ref(text, line, source, arg_default=False)` / `images.tag_os(tag)` / `images.is_container_manifest(name)`
+
+Split a reference (None outside the reference syntax); the OS a tag names (`("debian", "bookworm")`,
+`("alpine", "3.19")`, or None); whether a file name is a container manifest.
+
+#### `images.judge(ref, rel, target, today=None)`
+
+A `Judgement(findings, notes, feed_errors, checked)` for one reference, by the rules above. An unreachable
+endoflife.date is a feed error (the run is partial); a release line it does not list is a note.
+
+#### `images.scan_manifest(path, rel, target, report, today=None)`
+
+Judge every reference of one manifest into `report`: the manifest's reason (`CONTAINER_REASON`, with the digest
+count), a note per reference not judged, findings (a reference repeated on several lines is judged once and
+located at each) and feed errors. `engine.scan_path` calls it for every container manifest.
+
+#### `images.plan(path, rel, today=None)`
+
+`(findings, feed errors)` for the fix plan; `fix.fix_path` turns each finding into a plan-only `PinChange`.
+
 ### `agentteams.vulnscan.project_policy`
 
 A project's own scanning intent: the brief's `vulnerability_scanning` block
@@ -1339,7 +1417,8 @@ of the FIRST reference calculator (BSD-2-Clause).
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
 `allow_major=False`, `cooldown_days=0` (no release-age gate, under Rule S-10's remediation carve-out; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
-`manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists
+`manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists each
+container manifest's base-image findings (`images.plan`) in `image_plan`, plan-only; `apply` skips them. A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
 never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
 Each repository's brief applies here as in `scan_path`. A manifest in an `off` repository or under
@@ -1386,7 +1465,9 @@ them too) and say `dev only` in the note. Raises `FeedError`.
 
 Dataclass: `changes` (`PinChange` list), `npm_plan` (`PinChange` list from `plan_npm_lock`), `cargo_plan`
 (`PinChange` list from `plan_cargo_lock`, counted by `exit_code()` like held rows), `lock_plan` (likewise, from
-`plan_lockfile`),
+`plan_lockfile`), `image_plan` (`PinChange`
+list of base-image findings, dry run only, rendered under `## base images: <file> — plan-only (no staged edit)`
+and counted like `cargo_plan`),
 `npm_notes` (lockfile → note), `npm` (`(directory, summary)` tuples), `composer`, `refused`
 (`(path, reason)` tuples), `feed_errors`, `applied`, `target` (the repository a daily plan is for)
 `target_problem` (why `stage-fix` cannot take it) and `resolved` (how many advisory occurrences the
@@ -1400,7 +1481,7 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 
 Dataclass for one requirements edit or npm plan row: `path`, `name`, `old`, `new`, `action` (`fix`,
 `major-held`, `no-clean-release`, `cooldown-held`, `hash-held`, `malicious`; npm rows also
-`workspace-held`, `npm-unavailable`; Cargo and `plan_lockfile` rows `plan-only`), `ids`, `note`.
+`workspace-held`, `npm-unavailable`; Cargo, `plan_lockfile` and base-image rows `plan-only`), `ids`, `note`.
 
 ### `agentteams.vulnscan.lockfiles`
 

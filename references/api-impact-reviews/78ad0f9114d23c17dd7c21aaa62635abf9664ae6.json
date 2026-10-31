@@ -1,0 +1,8 @@
+{
+  "patch_id": "78ad0f9114d23c17dd7c21aaa62635abf9664ae6",
+  "commit": "03782c7eeb002f71ef6d4bec73bfda9ec8c8f407",
+  "subject": "feat(vulnscan): container base images \u2014 support status and pinning (N2)",
+  "impact": "1 modules added, 12 symbols added",
+  "note": "restack onto the L1 ESM set -u fix (2767eeac): patch-id changed only through the manifest hunk; API impact unchanged from the reviewed original",
+  "recorded_at": "2026-10-31T12:43:23Z"
+}

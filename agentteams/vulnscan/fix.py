@@ -15,6 +15,9 @@
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
 - **composer.lock**: guidance only (``composer update <pkg> --no-install --no-scripts --no-plugins``).
+- **Dockerfiles and compose files**: plan only (:mod:`.images`): each base image that is end-of-life, a pinned
+  patch tag behind its line, unpinned (``latest``) or deprecated, with a supported tag to move ``FROM`` / ``image:``
+  to. Listed in a dry run only; never applied, and ``executor.validate_diff`` refuses a change to these files.
 - **Cargo.lock**: plan only (:func:`plan_cargo_lock`): each vulnerable crate with the smallest version the
   advisories call fixed and the command ``cargo update -p <name>@<installed> --precise <version>`` for a person
   to run. It is never applied, and ``stage-fix`` cannot stage it (``executor.validate_diff`` refuses a
@@ -47,7 +50,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, lockfiles, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan import _http, images, lockfiles, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
@@ -58,6 +61,11 @@ NPM_LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json")
 CARGO_NOTE = ("Plan-only: `stage-fix` never edits a `Cargo.lock` (the executor refuses the change), so do not "
               "request `stage-fix` for these rows; report them for a person to run the command shown, then "
               "`cargo build` and the tests. \"→\" is the smallest version the advisories call fixed.")
+#: Heads every base-image section of a fix plan.
+IMAGE_NOTE = ("Plan-only: `stage-fix` never edits a Dockerfile or compose file (the executor refuses the change), so "
+              "do not request `stage-fix` for these rows; report them for a person to change `FROM <ref>` (or "
+              "`image:`) to a supported line, e.g. the tag under \"→\", then rebuild and run the tests. The image "
+              "contents are not scanned.")
 #: What a crates.io crate name or a Cargo.lock version may be before a command is written with it (the lockfile is
 #: repository content: a name that could break the command or the table gets no command).
 _CRATE_SPEC = re.compile(r"[A-Za-z0-9_.+-]{1,64}")
@@ -108,6 +116,7 @@ class FixResult:
     composer: list[str] = field(default_factory=list)
     cargo_plan: list[PinChange] = field(default_factory=list)      # Cargo.lock: plan-only, never applied or staged
     lock_plan: list[PinChange] = field(default_factory=list)       # lockfiles.FORMATS files: plan-only, likewise
+    image_plan: list[PinChange] = field(default_factory=list)      # base images: plan-only, dry run only
     refused: list[tuple[str, str]] = field(default_factory=list)   # (path, reason)
     feed_errors: list[str] = field(default_factory=list)
     applied: bool = False
@@ -122,9 +131,10 @@ class FixResult:
 
         Returns:
             4 if a malicious pin was found, 3 if a feed failed, 1 if anything was held back or
-            refused (major jump, cooldown, no clean release, dirty file, a plan-only Cargo.lock row), else 0.
+            refused (major jump, cooldown, no clean release, dirty file, a plan-only Cargo.lock or base-image
+            row), else 0.
         """
-        rows = self.changes + self.npm_plan + self.cargo_plan + self.lock_plan
+        rows = self.changes + self.npm_plan + self.cargo_plan + self.lock_plan + self.image_plan
         if any(c.action == "malicious" for c in rows):
             return 4
         if self.feed_errors:
@@ -178,6 +188,11 @@ class FixResult:
                     "", "| Package | Installed | → | Action | Command / notes |", "|---|---|---|---|---|"]
             out += [f"| {_cell(c.name, fmt.name)} | {_cell(c.old, fmt.version)} | {_cell(c.new, fmt.version) or '—'} "
                     f"| {c.action} | {c.note} |" for c in self.lock_plan if c.path == lock]
+        for df in dict.fromkeys(c.path for c in self.image_plan):
+            out += [f"## base images: {self._code(df)} — plan-only (no staged edit)", "", IMAGE_NOTE, "",
+                    "| Image | Tag | → | Action | Notes |", "|---|---|---|---|---|"]
+            out += [f"| {c.name} | {c.old} | {self._code(c.new) if c.new else '—'} | {c.action} | {c.note} |"
+                    for c in self.image_plan if c.path == df]
             out.append("")
         if self.refused:
             out += ["## Refused", ""] + [f"- `{p}`: {r}" for p, r in self.refused] + [""]
@@ -796,6 +811,12 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
         elif path.name == "composer.lock":
             res.composer.append(f"`{rel}`: composer update <pkg> --no-install --no-scripts --no-plugins "
                                 "(then `composer audit`)")
+        elif images.is_container_manifest(path.name) and not apply:   # plan only; nothing here edits these files
+            found_images, errors = images.plan(path, rel)
+            res.feed_errors += errors
+            res.image_plan += [PinChange(rel, f.name, f.version, f.fix, "plan-only", note=f"{f.detail} (line "
+                                         + ", ".join(loc.rsplit(":", 1)[-1] for loc in f.locations) + ")")
+                               for f in found_images]
         elif path.name in CRATE_LOCKS:   # plan only, with or without apply: nothing here edits a Cargo.lock
             try:
                 res.cargo_plan += plan_cargo_lock(path, label=rel, private=private)

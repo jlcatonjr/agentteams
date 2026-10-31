@@ -1,0 +1,8 @@
+{
+  "patch_id": "6313211786c2682be79eeb648f42013dbabe89ef",
+  "commit": "e84d1dbc93d7ed490262559e3f627ca2cf7e52aa",
+  "subject": "feat(vulnscan): container base images \u2014 support status and pinning (N2)",
+  "impact": "1 modules added, 12 symbols added",
+  "note": "feat/vulnscan-image-eol rebased onto feat/vulnscan-coverage-manifests (origin/main 81080e72); API-visible: images module, report.KIND_LABEL, FixResult.image_plan, finding kind 'image'",
+  "recorded_at": "2026-10-30T20:20:28Z"
+}

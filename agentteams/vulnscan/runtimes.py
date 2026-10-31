@@ -214,24 +214,44 @@ def cycle_of(kind: str, version: str) -> str:
 
 
 def _eol_cycles(product: str) -> list[dict]:
-    """Return endoflife.date cycles as [{'cycle','eol','latest'}], handling API v1 and v0 shapes."""
+    """Return endoflife.date cycles as [{'cycle','eol','latest'}], handling API v1 and v0 shapes.
+
+    A slug whose v1 and v0 reads both fail is remembered as failed for the rest of the run (security review I-s1):
+    every later call raises the same :class:`_http.FeedError` at once, so an outage costs one v1 + v0 wait per slug,
+    not one per image reference or runtime.
+
+    Raises:
+        _http.FeedError: Neither API answered (now, or earlier in this run).
+    """
     key = f"eol:{product}"
+    failed = _CACHE.get(f"eol-failed:{product}")
+    if isinstance(failed, _http.FeedError):
+        raise _http.FeedError(f"{failed} (cached failure; not refetched this run)")
     if key not in _CACHE:
         try:
-            data = _http.fetch_json(f"https://endoflife.date/api/v1/products/{product}")
-            rels = ((data or {}).get("result") or {}).get("releases") or []
-            cycles = [{"cycle": str(r.get("name")),
-                       "eol": r.get("eolFrom") if r.get("isEol") or r.get("eolFrom") else False,
-                       "is_eol": bool(r.get("isEol")),
-                       "eoes": r.get("eoesFrom"), "is_eoes": r.get("isEoes"),
-                       "latest": str(((r.get("latest") or {}).get("name")) or "")} for r in rels]
-        except _http.FeedError:
-            data = _http.fetch_json(f"https://endoflife.date/api/{product}.json")
-            cycles = [{"cycle": str(r.get("cycle")), "eol": r.get("eol"), "is_eol": None,
-                       "eoes": r.get("extendedSupport"), "is_eoes": None,
-                       "latest": str(r.get("latest") or "")} for r in (data or [])]
+            cycles = _fetch_cycles(product)
+        except _http.FeedError as exc:
+            _CACHE[f"eol-failed:{product}"] = exc
+            raise
         _CACHE[key] = cycles
     return _CACHE[key]  # type: ignore[return-value]
+
+
+def _fetch_cycles(product: str) -> list[dict]:
+    """Read one slug from endoflife.date: API v1, then v0 when v1 fails (:class:`_http.FeedError` when both do)."""
+    try:
+        data = _http.fetch_json(f"https://endoflife.date/api/v1/products/{product}")
+        rels = ((data or {}).get("result") or {}).get("releases") or []
+        return [{"cycle": str(r.get("name")),
+                 "eol": r.get("eolFrom") if r.get("isEol") or r.get("eolFrom") else False,
+                 "is_eol": bool(r.get("isEol")),
+                 "eoes": r.get("eoesFrom"), "is_eoes": r.get("isEoes"),
+                 "latest": str(((r.get("latest") or {}).get("name")) or "")} for r in rels]
+    except _http.FeedError:
+        data = _http.fetch_json(f"https://endoflife.date/api/{product}.json")
+        return [{"cycle": str(r.get("cycle")), "eol": r.get("eol"), "is_eol": None,
+                 "eoes": r.get("extendedSupport"), "is_eoes": None,
+                 "latest": str(r.get("latest") or "")} for r in (data or [])]
 
 
 def _is_eol(cycle: dict, today: _dt.date) -> bool:

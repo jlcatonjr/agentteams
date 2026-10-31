@@ -255,6 +255,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/engine.py",
     "agentteams/vulnscan/versions.py",
     "agentteams/vulnscan/runtimes.py",
+    "agentteams/vulnscan/images.py",          # 2026-10-30 (N2): which base images count as end-of-life
     "agentteams/vulnscan/fix.py",
     "agentteams/vulnscan/schedule.py",
     "agentteams/vulnscan/report.py",
