@@ -251,6 +251,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `stale_after_hours` | `26` | Age after which commands (`daily` and `schedule status` included) warn that no daily run completed, and after which `daily --catch-up` runs the missed scan |
 | `governance_dir` | `""` | Used only by `halts`, to find a decision log when no grant names one. The executor uses the directory **signed into the grant** |
 | `handoff_required` | `false` | `true` puts every repository under handoff delivery: `open-pr` waits for the repository orchestrator's `approve-staged` verdict ([handoff](#agentteamsvulnscanhandoff)). A project's brief can ask for it alone with `vulnerability_scanning.delivery: handoff` |
+| `scan_mirror` | `""` | A worktree name. When set, the daily scan reads `<repo>.worktrees/<name>` (a detached worktree an operator job moves to `origin/HEAD`) instead of the checkout, but only when `<state>/scan-mirrors/<YYYY-MM-DD>.json` records it `ok` today; findings, fix plans and the freshness row stay named after the checkout ([Scan mirrors](#scan-mirrors)) |
 | `agent` | see below | Agent mode |
 | `confine` | `{}` | The tools container for git, npm and the server kit in executor ops and `apply-worktree` staging ([Subprocess confinement](#subprocess-confinement-tools-container)); `{}` takes the defaults below |
 | `catch_up` | `{"max_retries_per_day": 2}` | `daily --catch-up` also re-runs today's run when it exited 3 because of Docker (an `infra.*` code in `summary.json["infra_codes"]` or `remediation.docker`) and Docker is ready now, at most `max_retries_per_day` times per date (0–10; counted in the run directory's `infra-retry.count`) ([`catch_up_due`](#dailycatch_up_duecfg-dailycatch_upcfg)) |
@@ -570,7 +571,24 @@ package finding is labelled `fixed_upstream` when the checkout is behind and eve
 exists at `origin/HEAD` but no longer pins that `name==version` (a file removed upstream proves nothing); its Notes
 cell ends with `fixed upstream (checkout behind)`. Repositories nested in another inside the scan root, and
 third-party clones (`daily.foreign_clone`), are skipped; a git query that fails leaves the repository unlabelled.
-What is scanned, the fix plans, grants and handoffs are unchanged: the working tree is still what is scanned.
+What is scanned, the fix plans, grants and handoffs are unchanged: the working tree is still what is scanned, unless
+`scan_mirror` points the scan at a fresh default-branch worktree ([Scan mirrors](#scan-mirrors)).
+
+### Scan mirrors
+
+A checkout kept on a feature branch is scanned as it is, which can be far behind the default branch. With
+`scan_mirror` set, the daily run scans the repository's default branch instead, from a detached worktree at
+`<repo>.worktrees/<scan_mirror>`. vulnscan never fetches: an operator job creates the worktree, fetches and moves it
+to `origin/HEAD` before the scan, and writes `<state>/scan-mirrors/<YYYY-MM-DD>.json` (`{"<checkout>": "ok <sha>"}`
+or `"failed <reason>"`). The scan uses a mirror only when that record says `ok` for today and the directory is real
+(not a symlink); otherwise it scans the checkout as before. Everything stays named after the checkout, so handoff
+verdicts, retry holds and the executor are unchanged, and the operator's `exclude` paths and opted-out checkouts hold
+in the mirror too. The freshness table's *Scanned* column says which one was read, and the run's per-root
+`repos-<name>.json` keeps `target` = the checkout and adds `scanned_from` = the mirror path when one was used.
+
+Two consequences of reading the default branch: a project brief's opt-outs are read from the mirror's copy of the
+brief, so an opt-out you have not committed and pushed does not apply; and `fix_mode: apply-worktree` still stages
+its fixes from `origin/HEAD` against the checkout, so use `scan_mirror` with the default `plan` mode.
 
 ### Exit codes
 
@@ -1332,6 +1350,25 @@ exclude or withhold everything.
 `delivery` and `base_branch` are applied by the executor ([Scope](#grants)): `delivery: plan` refuses
 `open-pr`, `delivery: handoff` makes `open-pr` wait for the project orchestrator's `approve-staged` verdict
 ([handoff](#agentteamsvulnscanhandoff)), and `base_branch` is the PR base (it must exist on origin).
+
+### `agentteams.vulnscan.scan_mirror`
+
+#### `scan_mirror.stamp_path(day)`
+
+The refresh job's record for `day` (`YYYY-MM-DD`): `<state>/scan-mirrors/<day>.json`.
+
+#### `scan_mirror.valid_name(name)`
+
+Whether a `scan_mirror` value is usable: `""` (off) or one path component (no `/` or `\`, not `.` or `..`).
+
+#### `scan_mirror.mirror_for(cfg, root, day)`
+
+The mirror to scan for the checkout `root` on `day`, or `None` to scan the checkout: `<root>.worktrees/<scan_mirror>`
+when the key names a worktree (no `/`), the directory is real, and the day's record says `ok` for `root`.
+
+#### `scan_mirror.also_under(skips, root, mirror)`
+
+`skips` (resolved exclude paths or opted-out checkouts) plus, for each inside `root`, the same path inside `mirror`.
 
 ### `agentteams.vulnscan.manifests`
 

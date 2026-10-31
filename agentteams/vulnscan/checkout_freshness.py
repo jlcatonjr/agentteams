@@ -117,14 +117,16 @@ def _freshness_section(fresh: list[dict[str, Any]]) -> str:
     if not fresh:
         return ""
     lines = ["## Checkout freshness (read-only: as of each repository's last fetch)", "",
-             "| Repository | Branch | Behind origin/HEAD | Last fetch | Findings already fixed upstream |",
-             "|---|---|---|---|---|"]
+             "| Repository | Branch | Behind origin/HEAD | Last fetch | Findings already fixed upstream | Scanned |",
+             "|---|---|---|---|---|---|"]
     for r in fresh:
         behind = r.get("error") or ("no origin/HEAD" if r["behind"] is None else str(r["behind"]))
         age = "never" if r["fetch_age_h"] is None else f"{r['fetch_age_h']:.0f}h ago"
-        lines.append(f"| `{r['repo']}` | `{r['branch']}` | {behind} | {age} | {r['fixed_upstream']} |")
+        lines.append(f"| `{r['repo']}` | `{r['branch']}` | {behind} | {age} | {r['fixed_upstream']} |"
+                     f" {r.get('scanned', 'checkout')} |")
     lines += ["", "A finding noted *fixed upstream (checkout behind)* is gone from that file at `origin/HEAD`: "
-              "pull the checkout. It stays in the findings and is not counted as fixed.", ""]
+              "pull the checkout. It stays in the findings and is not counted as fixed. *Scanned* says whether the "
+              "scan read the checkout or its default-branch mirror (config `scan_mirror`, refreshed today).", ""]
     from agentteams.vulnscan import publish   # lazy, as in effectiveness: publish imports the executor
 
     return publish.rewrite_paths("\n".join(lines))
