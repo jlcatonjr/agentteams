@@ -28,6 +28,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
+from agentteams import _sandbox_profiles as _profiles
 from agentteams.cli.sandbox_effects import native_exec_token, read_token, scratch_token, valid_rel
 
 if TYPE_CHECKING:
@@ -150,23 +151,29 @@ def state_tokens(state: SandboxState | None) -> frozenset[str]:
     return frozenset(_mount_token(a, m, None) for a, g in state.wasm_grants.items() for m in g.mounts)
 
 
-def grant_from_tokens(agent: str, tokens: Iterable[str], limits: Limits, *, project_root: Path) -> Grant:
+def grant_from_tokens(agent: str, tokens: Iterable[str], limits: Limits, *, project_root: Path,
+                      check_credentials: bool = True) -> Grant:
     """Build ``agent``'s grant from its tokens (the inverse of :func:`grant_tokens`).
 
-    Mounts are in a canonical order: the read mounts sorted by path, then ``/scratch``.
+    Mounts are in a canonical order: the read mounts sorted by path, then ``/scratch``. The one grant builder: the
+    brief's grants (``wasm_config``) and the runner's jails (``runner_wasm.build_grant``) both come through here.
 
     Args:
         agent: The agent slug.
         tokens: ``wasm:<agent>:read:<rel>`` / ``wasm:<agent>:scratch`` tokens.
         limits: The grant's limits.
         project_root: The project root the host paths are resolved against.
+        check_credentials: Scan each existing read directory for credential-named entries
+            (``_sandbox_profiles.refuse_credentials``, bounded; wave-3 @security S3). False only when parsing a
+            recorded state (bookkeeping, nothing is mounted); ``wasm_exec.materialize`` scans again before a run.
 
     Returns:
         The grant.
 
     Raises:
-        ValueError: A token for another agent, an unknown token, or a read path that resolves through a symlink
-            (its realpath is not the plain path inside the project).
+        ValueError: A token for another agent, an unknown token, a read path that resolves through a symlink
+            (its realpath is not the plain path inside the project), or a read directory holding credential-named
+            entries or too large to scan.
         ImportError: :mod:`agentteams.wasm_exec` is not importable (fail closed).
     """
     wx = _wasm_exec()
@@ -186,6 +193,11 @@ def grant_from_tokens(agent: str, tokens: Iterable[str], limits: Limits, *, proj
         host = root / rel
         if os.path.realpath(host) != str(host):
             raise ValueError(f"read path {rel!r} resolves through a symlink; a grant must name the real path")
+        if check_credentials and host.is_dir():
+            try:
+                _profiles.refuse_credentials(str(host), f"read path {rel!r}")
+            except _profiles.ConfinementError as exc:
+                raise ValueError(str(exc)) from exc
         mounts.append(wx.Mount(host=str(host), guest=f"/project/{rel}", mode="ro"))
     if scratch:
         mounts.append(wx.Mount(host=str(root / SCRATCH_REL / agent), guest="/scratch", mode="rw"))
@@ -304,7 +316,8 @@ def _grant_from_record(agent: object, entry: object, project_root: Path) -> Any 
         return None
     wx = _wasm_exec()
     try:
-        return grant_from_tokens(agent, tokens, wx.Limits(**limits), project_root=project_root)
+        return grant_from_tokens(agent, tokens, wx.Limits(**limits), project_root=project_root,
+                                 check_credentials=False)
     except (TypeError, ValueError, wx.WasmExecError):   # out-of-bounds limits are malformed too, not a crash
         return None
 
@@ -617,7 +630,7 @@ def wasm_eligible(agent_meta: Mapping[str, object]) -> bool:
         agent_meta: ``{"slug": str, "tools": list[str]}``.
 
     Returns:
-        True iff the tools hold ``execute`` and ``edit``; False for anything else, including missing tools.
+        True iff the tools hold ``execute`` (D12); False for anything else, including missing tools.
 
     Raises:
         Nothing.
@@ -685,6 +698,8 @@ def verifier_sandbox_state(manifest: dict[str, Any] | None, team_dir: Path,
 
     Raises:
         ValueError: An invalid ``os_sandbox`` value in ``manifest``, or a malformed ``wasm_sandbox`` block.
+        ImportError: The recorded state carries WASM grants and :mod:`agentteams.wasm_exec` is not importable
+            (fail closed: a drift check never reports "no state" because the executor is missing; wave-3 H6).
     """
     if manifest is not None:
         from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
@@ -695,10 +710,7 @@ def verifier_sandbox_state(manifest: dict[str, Any] | None, team_dir: Path,
     log = _read_build_log(team_dir)
     if not log:
         return None
-    try:
-        return SandboxState.from_record(log.get(BUILD_LOG_STATE_KEY), project_root=_root(project_root))
-    except ImportError:
-        return None
+    return SandboxState.from_record(log.get(BUILD_LOG_STATE_KEY), project_root=_root(project_root))
 
 
 def has_recorded_state(team_dir: Path) -> bool:

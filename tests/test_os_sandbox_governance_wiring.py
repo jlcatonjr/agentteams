@@ -24,7 +24,7 @@ from agentteams.cli.artifacts import PrivilegeConfinementError, finalize_privile
 from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError
 from agentteams.cli.write_root_policy import WriteRootPolicyError
 from agentteams.sandbox_state import OS_SANDBOX_CLI_KEY
-from tests.test_sandbox_relaxation_gate import _log, _row, _team, stub_ed25519  # noqa: F401  (fixture)
+from tests._sandbox_gate_helpers import _log, _row, _team
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"

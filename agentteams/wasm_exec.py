@@ -566,8 +566,9 @@ def _check_mount_host(root: str, m: Mount, scratch: str | None, inside: str | No
         keys = os.path.realpath(os.path.expanduser(NEST_KEY_DIR))
         if not _within(real, root) or real == root:
             raise WasmExecError(f"{m.guest}: host {m.host} must be inside the project, not its root")
+        low = real.lower()  # case-folded everywhere (S4): .GITHUB is .github on darwin; elsewhere it over-refuses
         for prot in [os.path.join(root, p) for p in NEST_PROTECTED_REL] + [keys]:
-            if _within(real, prot) or _within(prot, real):
+            if _within(low, prot.lower()) or _within(prot.lower(), low):
                 raise WasmExecError(f"{m.guest}: host {m.host} overlaps the protected {prot}; refused")
     if scratch and (_within(real, scratch) or _within(scratch, real)):
         raise WasmExecError(f"{m.guest}: a read mount may not overlap the scratch directory")
@@ -678,6 +679,10 @@ def materialize(prepared: Prepared, args: Sequence[str], *, project_root: str | 
         for m in prepared.grant.mounts:
             if m.guest != "/scratch":
                 _check_mount_host(root, m, scratch)
+                try:  # the shared bounded credential scan, again just before the run (S3)
+                    profiles.refuse_credentials(os.path.realpath(m.host), m.guest)
+                except profiles.ConfinementError as exc:
+                    raise WasmExecError(str(exc)) from exc
         for m in prepared.runtime_mounts:
             _check_mount_host(root, m, scratch, inside=os.path.dirname(os.path.realpath(prepared.module)))
         runtime, mounts = list(prepared.runtime_mounts), list(prepared.grant.mounts)

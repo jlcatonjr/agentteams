@@ -44,8 +44,9 @@ from agentteams._sandbox_profiles import ConfinementError
 
 #: The two runner sandboxes a ``confined_programs`` entry may declare (``"os"`` is the default).
 SANDBOX_KINDS = ("os", "wasm")
-#: The pseudo-programs a wasm agent's ``argv[0]`` may name, and the guest language each selects.
-WASM_ARGV0 = {"wasm:module": "module", "wasm:python": "python", "wasm:javascript": "javascript"}
+#: The pseudo-programs a wasm agent's ``argv[0]`` may name, and the guest language each selects (derived from
+#: ``wasm_guests.LANGUAGES``, the single source).
+WASM_ARGV0 = {f"wasm:{lang}": lang for lang in _wg.LANGUAGES}
 #: File extensions ``argv[1]`` must carry for each language.
 EXTENSIONS = {"module": (".wasm",), "python": (".py",), "javascript": (".js", ".mjs")}
 #: The per-agent scratch parent (R8; == ``sandbox_state.SCRATCH_REL``, test-locked).
@@ -53,17 +54,19 @@ SCRATCH_REL = ".agentteams/wasm/scratch"
 #: The one agent-writable path inside a protected tree a wasm jail adds (R11): ``<SCRATCH_REL>/<agent>``.
 SCRATCH_GUEST = "/scratch"
 
-# Never preopened, whatever the root (== the agentteams_runner server's read denies, test-locked).
-DENY_PARTS = (".git", ".hg", ".svn", ".agentteams", ".agentteams-queue", ".ssh", ".aws", ".gnupg", ".kube", ".docker")
-DENY_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".jks", ".keystore", ".kdbx", ".tfstate", ".tfvars", ".env")
-DENY_NAMES = (".env", ".envrc", ".netrc", ".npmrc", ".pypirc", ".pgpass", ".htpasswd", ".git-credentials")
-DENY_PREFIXES = ("id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", ".env.", "credentials")
-DENY_INFIXES = (".tfstate.",)
-DENY_ALLOWED = (".env.example", ".env.sample", ".env.template")
+#: VCS internals and the control plane / queue: never preopened (beside the credential names).
+VCS_PARTS = (".git", ".hg", ".svn", ".agentteams", ".agentteams-queue")
+# Never preopened, whatever the root (== the agentteams_runner server's read denies, test-locked). The credential
+# names are the one shared list in ``_sandbox_profiles`` (wave-3 @security S1), the same one wasm_config uses.
+DENY_PARTS = VCS_PARTS + _profiles.CREDENTIAL_PARTS
+DENY_SUFFIXES = _profiles.CREDENTIAL_SUFFIXES
+DENY_NAMES = _profiles.CREDENTIAL_NAMES
+DENY_PREFIXES = _profiles.CREDENTIAL_PREFIXES
+DENY_INFIXES = _profiles.CREDENTIAL_INFIXES
+DENY_ALLOWED = _profiles.CREDENTIAL_ALLOWED
 
 _ENTRY_KEYS = frozenset({"sandbox", "wasm"})
 _WASM_KEYS = frozenset({"languages", "read", "scratch", "limits"})
-_LIMIT_KEYS = frozenset({"fuel", "memory_mib", "timeout_s"})
 _SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$", re.ASCII)
 _AGENT = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$", re.ASCII)
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
@@ -82,16 +85,12 @@ def denied_name(segment: str) -> bool:
         segment: One path component.
 
     Returns:
-        True when it matches the deny parts, names, prefixes, suffixes or infixes (and is not an allowed example).
+        True for a :data:`VCS_PARTS` name or a shared credential name (``_sandbox_profiles.credential_name``).
 
     Raises:
         Nothing.
     """
-    low = segment.lower()
-    if low in DENY_ALLOWED:
-        return False
-    return (low in DENY_PARTS or low in DENY_NAMES or low.startswith(DENY_PREFIXES) or low.endswith(DENY_SUFFIXES)
-            or any(i in low for i in DENY_INFIXES))
+    return segment.lower() in VCS_PARTS or _profiles.credential_name(segment)
 
 
 def _check_rel(agent: str, what: str, rel: object, protected_rel: tuple[str, ...],
@@ -102,25 +101,23 @@ def _check_rel(agent: str, what: str, rel: object, protected_rel: tuple[str, ...
     if any(p in ("", ".", "..") or not _SEGMENT.match(p) for p in parts):
         raise ConfinementError(f"confined_programs.{agent}.{what} {rel!r} must be a literal path of "
                                "[A-Za-z0-9._-] segments (no '.', '..' or wildcard)")
-    if parts[0] in protected_rel or control_plane_of(rel) or any(denied_name(p) for p in parts):
+    # Case-folded on every platform (wave-3 @security S4): on a case-insensitive filesystem (darwin's default)
+    # ``.GITHUB`` is ``.github``; on a case-sensitive one this only over-refuses.
+    if (parts[0].lower() in {p.lower() for p in protected_rel} or control_plane_of(rel)
+            or any(denied_name(p) for p in parts)):
         raise ConfinementError(f"confined_programs.{agent}.{what} {rel!r} covers the ledger, .git, the control "
                                "plane or a secret; refused")
     return "/".join(parts)
 
 
 def _limits(agent: str, raw: object) -> dict[str, int]:
-    raw = {} if raw is None else raw
-    if not isinstance(raw, dict) or set(raw) - _LIMIT_KEYS:
-        raise ConfinementError(f"confined_programs.{agent}.wasm.limits takes only {sorted(_LIMIT_KEYS)}")
-    if any(type(v) is not int for v in raw.values()):
-        raise ConfinementError(f"confined_programs.{agent}.wasm.limits values must be integers")
-    d = _wx.DEFAULT_LIMITS
-    mib = raw.get("memory_mib")
+    """The jail limits through ``wasm_config.limits_of`` (the one MiB -> bytes conversion; wave-3 H2)."""
+    from agentteams.wasm_config import limits_of
+
     try:
-        limits = _wx.Limits(fuel=raw.get("fuel", d.fuel), timeout_s=raw.get("timeout_s", d.timeout_s),
-                            max_memory_bytes=d.max_memory_bytes if mib is None else mib << 20 if mib > 0 else mib)
-    except _wx.WasmExecError as exc:
-        raise ConfinementError(f"confined_programs.{agent}.wasm.limits: {exc}") from exc
+        limits = limits_of(raw, f"confined_programs.{agent}.wasm.limits")
+    except ValueError as exc:
+        raise ConfinementError(str(exc)) from exc
     return {"fuel": limits.fuel, "max_memory_bytes": limits.max_memory_bytes, "timeout_s": limits.timeout_s}
 
 
@@ -356,7 +353,16 @@ def gate_policy_change(root: Path, previous_raw: object, new_raw: object, *, out
 
 @dataclass(frozen=True)
 class WasmCommand:
-    """A verified guest run, ready for :func:`launch` (nothing written yet)."""
+    """A verified guest run, ready for :func:`launch` (nothing written yet).
+
+    Attributes:
+        language: The guest language (a ``wasm_guests.LANGUAGES`` entry).
+        prepared: The ``wasm_exec.Prepared`` guest (module hash, grant, runtime mounts, ``/src`` files).
+        guest_args: The guest's own arguments, after ``argv_for``.
+        resolver: The provisioning resolver ``materialize`` re-hashes wasmtime and the interpreter with.
+        scratch_rel: ``.agentteams/wasm/scratch/<agent>`` when the jail grants scratch, else None.
+        meta: The ledger fields (language, path, module/source/grant/wasmtime sha256).
+    """
 
     language: str
     prepared: Any
@@ -423,24 +429,26 @@ def build_grant(root: Path, agent: str, jail: Mapping[str, Any], *, timeout_s: i
         The grant.
 
     Raises:
-        RunnerWasmError: A read path is not an existing directory, or the grant is refused.
+        RunnerWasmError: A read path is not an existing directory or holds credential-named entries (bounded scan),
+            or the grant is refused.
     """
+    from agentteams.cli.sandbox_effects import read_token, scratch_token
+    from agentteams.sandbox_state import grant_from_tokens
+
     real_root = os.path.realpath(root)
     w = jail["wasm"]
-    mounts = []
+    for rel in w["read"]:
+        host = os.path.join(real_root, *rel.split("/"))
+        if os.path.realpath(host) != host or not os.path.isdir(host):
+            raise RunnerWasmError(f"wasm.read {rel!r} must be an existing real directory (no symlinks)")
+    lim = w["limits"]
     try:
-        for rel in w["read"]:
-            host = os.path.join(real_root, *rel.split("/"))
-            if os.path.realpath(host) != host or not os.path.isdir(host):
-                raise RunnerWasmError(f"wasm.read {rel!r} must be an existing real directory (no symlinks)")
-            mounts.append(_wx.Mount(host, f"/project/{rel}", "ro"))
-        if w["scratch"]:
-            mounts.append(_wx.Mount(os.path.join(real_root, *SCRATCH_REL.split("/"), agent), SCRATCH_GUEST, "rw"))
-        lim = w["limits"]
+        tokens = [read_token(agent, rel) for rel in w["read"]] + ([scratch_token(agent)] if w["scratch"] else [])
         limits = _wx.Limits(fuel=lim["fuel"], max_memory_bytes=lim["max_memory_bytes"],
                             timeout_s=max(1, min(int(lim["timeout_s"]), int(timeout_s))))
-        return _wx.Grant(mounts=tuple(mounts), limits=limits)
-    except _wx.WasmExecError as exc:
+        # The one token -> Mount mapping (wave-3 H2): symlink and credential checks included.
+        return grant_from_tokens(agent, tokens, limits, project_root=Path(real_root))
+    except (_wx.WasmExecError, ValueError) as exc:
         raise RunnerWasmError(f"wasm grant refused: {exc}") from exc
 
 
@@ -608,6 +616,7 @@ __all__ = [
     "EXTENSIONS",
     "SANDBOX_KINDS",
     "SCRATCH_REL",
+    "VCS_PARTS",
     "WASM_ARGV0",
     "RunnerWasmError",
     "WasmCommand",

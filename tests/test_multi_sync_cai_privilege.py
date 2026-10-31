@@ -19,7 +19,7 @@ import pytest
 
 from agentteams import multi_sync as ms
 from agentteams.host_features import expand_privilege_profile
-from tests.test_sandbox_relaxation_gate import _log, _row, _team, stub_ed25519  # noqa: F401  (fixture)
+from tests._sandbox_gate_helpers import _log, _row, _team
 
 REPO = Path(__file__).resolve().parent.parent
 

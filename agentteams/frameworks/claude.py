@@ -652,6 +652,8 @@ def verify_sandbox_wiring(project_root: Path,
 
     Raises:
         ValueError: An invalid ``os_sandbox`` value in ``manifest``.
+        ImportError: The recorded state carries WASM grants and ``agentteams.wasm_exec`` is not importable (fail
+            closed, never "nothing to check").
     """
     from agentteams.sandbox_state import verifier_sandbox_state
 
