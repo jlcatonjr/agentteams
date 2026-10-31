@@ -129,7 +129,7 @@ with a stop condition, escalate anyway and mention the note in the evidence.
      does not stay open beside the new one.
 
    Rationale must name the advisory ids and severity. Skip every row whose action is not `fix`
-   (`major-held`, `cooldown-held` (only under a legacy configured cooldown), `no-clean-release`, `hash-held`, `workspace-held`,
+   (`major-held`, `cooldown-held` (not produced for scan fixes: S-10's remediation carve-out exempts them), `no-clean-release`, `hash-held`, `workspace-held`,
    `npm-unavailable`; `malicious` is a stop condition), and list them for the operator with the reason.
 4. **Servers.** Request `server-audit` for hosts with host findings or that are stale. Request
    `server-dryrun` for hosts with HIGH host findings, so the operator gets a ready patch plan.
