@@ -184,7 +184,7 @@ def _json_len(value: Any) -> int:
     return len(json.dumps(value, separators=(",", ":"), ensure_ascii=True))
 
 
-def clip(text: str, cap: int) -> str:
+def truncate_text(text: str, cap: int) -> str:
     """Clip *text* so its JSON-encoded form is at most *cap* bytes, marking the cut.
 
     Args:
@@ -215,7 +215,7 @@ def _fit_results(results: list[dict[str, Any]], budget: int) -> list[dict[str, A
     if not results or _json_len(results) <= budget:
         return results
     share = max(64, budget // len(results) - 64)
-    return [_result(r["tool_use_id"], r["ok"], clip(r["content"], share)) for r in results]
+    return [_result(r["tool_use_id"], r["ok"], truncate_text(r["content"], share)) for r in results]
 
 
 def _code(text: str) -> str:
@@ -472,7 +472,7 @@ def run_tool(use: dict[str, Any], mounts: list[Any], limits: dict[str, int]) -> 
         ok, text = False, f"{type(exc).__name__}: {exc.strerror or 'operation failed'}"
     except (ValueError, MemoryError) as exc:     # UnicodeError is a ValueError
         ok, text = False, type(exc).__name__
-    return ok, clip(text, limits["max_tool_output_bytes"])
+    return ok, truncate_text(text, limits["max_tool_output_bytes"])
 
 
 # --- decision function -----------------------------------------------------------------------------------------------
