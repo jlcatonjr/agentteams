@@ -59,7 +59,8 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
-from agentteams.vulnscan import executor_pr, executor_supersede, npm_major, report_store, repo_alias, retry_guard
+from agentteams.vulnscan import executor_pr, executor_supersede, npm_major, open_prs, report_store, repo_alias
+from agentteams.vulnscan import retry_guard
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
     GIT_IDENTITY,
@@ -518,10 +519,14 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
             raise ExecError(f"{repo}: in the executor's worktree, {unsafe}")
         git(wt, "reset", "-q", "--hard", base)
         cooldown = REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
-        res = fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown)
+        claims = open_prs.staging_claims(lambda: _origin_repo(wt))   # D1: never duplicate another open PR
+        res = fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
         changed = validate_diff(wt, base, major=major)
+        left = open_prs.left_to_prs(res.changes, claims)
+        if left and (not changed or major and not executor_pr.major_changes(res.changes)):
+            raise ExecError(open_prs.duplicate_detail(left))   # not futile: it lifts once those PRs close
         if not changed:   # an npm that failed to run must not read as "nothing fixable"
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
@@ -548,7 +553,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
                 with contextlib.suppress(ExecError, OSError, subprocess.SubprocessError):
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
-              "changed": changed, "resolved": res.resolved, "plan": res.markdown(), **({"major": True} if major else {})}
+              "changed": changed, "resolved": res.resolved, "plan": res.markdown(), **({"major": True} if major else {}),
+              "packages": sorted({c.name for c in res.changes if c.action == "fix"}), **({"left_to_prs": left} if left else {})}
     _write_json(staged_file(repo), result)
     return result
 
@@ -586,6 +592,9 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
             _worktrees_dir().resolve()):
         raise ExecError("staged state is invalid or its worktree is gone")
     target_repo = _origin_repo(wt)   # before anything is pushed; never let gh pick a base repo
+    if dup := open_prs.refuse_duplicate(target_repo, st.get("packages") or []):   # D1, fail closed on a gh failure
+        _finish_open_pr(repo, wt, staged)   # retire the staged change: the next stage leaves those packages out
+        raise ExecError(dup)
     base_branch = st["base_ref"].split("/", 1)[-1]   # the brief's base_branch, else origin's default branch
     executor_guard.require_remote_branch(wt, base_branch)
     ref = f"refs/heads/{branch}"
@@ -619,7 +628,8 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
     major = st.get("major") is True   # stage-major: MAJOR title, body and label (executor_pr)
     body_file = wt.parent / f"{wt.name}.pr.md"
-    body_file.write_text(executor_pr.body(st["plan"], rationale, major=major), encoding="utf-8")
+    body_file.write_text(executor_pr.body(st["plan"], rationale, major=major, left=st.get("left_to_prs")),
+                         encoding="utf-8")
     url = executor_pr.create(target_repo, base_branch, branch, body_file, major=major,
                              open_url=lambda: _open_pr_url(wt, target_repo, branch))
     _finish_open_pr(repo, wt, staged)

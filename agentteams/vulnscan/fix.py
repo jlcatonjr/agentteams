@@ -54,7 +54,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, lockfiles, npm_major, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan import _http, images, lockfiles, npm_major, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
@@ -103,7 +103,8 @@ class PinChange:
     name: str
     old: str
     new: str = ""
-    # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious; npm rows (plan_npm_lock)
+    # fix | major-held | no-clean-release | cooldown-held | hash-held | malicious | pr-held (an open PR that is
+    # not the executor's already updates it, ``skip``); npm rows (plan_npm_lock)
     # also workspace-held | npm-unavailable; Cargo.lock rows (plan_cargo_lock) plan-only | no-clean-release | malicious
     action: str = "fix"
     ids: list[str] = field(default_factory=list)
@@ -697,8 +698,17 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, ins
     return (proc.stdout + proc.stderr) or f"npm exited {proc.returncode}"
 
 
-def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
-               private: tuple[str, ...] = ()) -> tuple[list[PinChange], str]:
+def _leave_to_prs(rows: list[PinChange], skip: dict[str, list[int]] | None) -> None:
+    """Mark each ``fix`` row whose package another open PR already updates as ``pr-held`` ("left to #N", D1)."""
+    for c in rows:
+        nums = (skip or {}).get(open_prs.normalize(c.name))
+        if nums and c.action in ("fix", "major-held"):
+            c.action, c.major = "pr-held", False
+            c.note = f"left to {', '.join(f'#{n}' for n in nums)} (an open PR already updates it; not duplicated)"
+
+
+def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: tuple[str, ...] = (),
+               skip: dict[str, list[int]] | None = None) -> tuple[list[PinChange], str]:
     """Take ``lockfile``'s ``major-held`` packages that ``package.json`` lists directly (``stage-major``).
 
     Each such package's spec becomes ``^<fixed version>`` in the section that already lists it
@@ -718,6 +728,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
         label: The lockfile's path in the plan.
         cooldown_days: Passed to npm (``--before``), as for the audit fix.
         private: The project's ``private_packages`` patterns.
+        skip: ``{normalized name: [PR numbers]}`` another open PR already updates: never raised (``pr-held``).
 
     Returns:
         (the major rows: taken ones as ``fix`` with ``major`` set, held ones as ``major-held``; npm's output or "").
@@ -729,8 +740,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
     """
     rows = [c for c in plan_npm_lock(lockfile, cooldown_days=cooldown_days, label=label, private=private)[0]
             if c.action == "major-held"]
-    if not rows:
-        return [], ""
+    _leave_to_prs(rows, skip)
+    if not [c for c in rows if c.action == "major-held"]:
+        return rows, ""
     if _npm_workspaces(lockfile):
         for c in rows:
             c.note += "; npm workspaces: stage-major fails closed here"
@@ -749,6 +761,8 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
         return rows, ""
     specs: dict[str, tuple[str, str]] = {}
     for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
+        if c.action == "pr-held":
+            continue
         section = npm_major.direct_section(manifest, c.name)
         if section:
             specs[c.name] = (section, f"^{c.new.lstrip('vV')}")
@@ -769,6 +783,8 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
             fh.write(new_text)
     pkg_label = str(Path(label).parent / "package.json")
     for c in rows:
+        if c.action == "pr-held":
+            continue
         if c.name in specs:
             section, spec = specs[c.name]
             c.path, c.action, c.major = pkg_label, "fix", True
@@ -826,7 +842,8 @@ def _add_resolved(res: FixResult, path: Path, old: bytes, rel: str, private: tup
 
 def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cooldown_days: int = 0,
              include_worktrees: bool = False, allow_dirty: bool = False, npm: bool = True,
-             manifests: list[Path] | None = None, gradle_lockfiles: bool = False) -> FixResult:
+             manifests: list[Path] | None = None, gradle_lockfiles: bool = False,
+             skip: dict[str, list[int]] | None = None) -> FixResult:
     """Plan (and with ``apply``, make) dependency fixes for every manifest under ``root``.
 
     Args:
@@ -843,6 +860,9 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             without nested repositories); default: everything :func:`discover` finds.
         gradle_lockfiles: Plan ``gradle.lockfile`` files too (off by default: refused with
             :data:`private_sources.GRADLE_OPT_IN`).
+        skip: ``{normalized package name: [PR numbers]}`` that another open PR already updates
+            (:func:`open_prs.claimed`): those requirements pins and npm majors are left to it (``pr-held``). npm's
+            own ``audit fix`` chooses its versions and is not filtered.
 
     Returns:
         A :class:`FixResult`. Feed failures are recorded under ``feed_errors``; a symlinked
@@ -879,6 +899,7 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             except _http.FeedError as exc:
                 res.feed_errors.append(f"{rel}: {exc}")
                 continue
+            _leave_to_prs(changes, skip)
             res.changes += changes
             if apply and any(c.action == "fix" for c in changes):
                 unsafe = git_config_problem(path.parent)
@@ -910,7 +931,8 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             old, where = path.read_bytes(), str(path.parent.relative_to(root)) or "."
             if apply and allow_major:   # stage-major: direct semver-major upgrades first, then the audit fix
                 try:
-                    majors, out = npm_majors(path, label=rel, cooldown_days=cooldown_days, private=private)
+                    majors, out = npm_majors(path, label=rel, cooldown_days=cooldown_days, private=private,
+                                             skip=skip)
                 except _http.FeedError as exc:
                     res.feed_errors.append(f"{rel}: {exc}")
                     continue

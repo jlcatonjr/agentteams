@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   job), so CI must cover it. `ExecError`, the git identity and the gh environments moved to the leaf module
   `agentteams.vulnscan.executor_env` (re-exported by `executor`), ending the `executor` ↔ `executor_pr` import
   cycle.
+- **No duplicate PRs (D1):** before `stage-fix` / `stage-major` stage a change, and again at `open-pr`, the
+  executor lists the repository's open PRs (`agentteams.vulnscan.open_prs`, read-only `gh pr list --state open`).
+  A package that a non-`vulnscan/*` PR (Dependabot, Renovate, a person) already updates, by its title or
+  `dependabot/` / `renovate/` branch, is left to it (`pr-held`, "left to #227"; `fix_path(..., skip=)`). When
+  nothing remains: `an open PR already updates <names> (#227, #228); not duplicated` (never held as futile).
+  Staging ignores a gh failure; `open-pr` fails closed. The staged state records `packages` and `left_to_prs`;
+  the PR body lists them.
 - **`retry_guard`:** the futile-retry hold is keyed on the op, so a held `stage-major` never holds `stage-fix` and
   vice versa; `stage-major` records `nothing fixable even with a major upgrade` (`MAJOR_FUTILE_DETAIL`), never
   "nothing fixable without a major jump". The `stage-fix` hold now points at `stage-major`.

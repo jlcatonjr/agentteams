@@ -16,7 +16,7 @@ import pytest
 
 pytest.importorskip("cryptography")
 from agentteams.vulnscan import executor, executor_pr, fix, grant, manifests, mcp, npm_major, osv  # noqa: E402
-from agentteams.vulnscan import retry_guard  # noqa: E402
+from agentteams.vulnscan import ledger, open_prs, retry_guard  # noqa: E402
 from tests.test_vulnscan_executor import (  # noqa: E402
     GIT,
     _assert_refused_cleanly,
@@ -573,3 +573,107 @@ def test_pr_bodies_say_they_may_be_merged_automatically() -> None:
         assert "never merged automatically" not in text
         assert "may be merged automatically once every check, a test check included, passes" in text
         assert "CI must cover" in text
+
+
+# ---------------------------------------------------------------- D1: never duplicate another open PR
+
+REQS = "Flask-Cors==4.0.0\ngunicorn==20.1.0\n"
+DEPENDABOT_227 = {"number": 227, "title": "Bump flask_cors from 4.0.0 to 6.0.0", "headRefName": "x-cors",
+                  "author": {"login": "app/dependabot"}}
+RENOVATE_228 = {"number": 228, "title": "chore: something", "headRefName": "renovate/gunicorn-22.x",
+                "author": {"login": "app/renovate"}}
+OWN_PR = {"number": 9, "title": "Bump gunicorn from 20.1.0 to 22.0.0", "headRefName": "vulnscan/20261030-abcdef0123"}
+
+
+def _pip_world(env: dict, monkeypatch: pytest.MonkeyPatch, prs: list | Exception) -> Path:
+    then = datetime(2026, 1, 1, tzinfo=UTC)
+    fixed = {"Flask-Cors": "6.0.0", "gunicorn": "22.0.0"}
+    monkeypatch.setattr(fix, "_releases", lambda name: [(fixed[name], then)])
+    monkeypatch.setattr(osv, "vulnerable_ids", lambda items: {
+        k: [f"GHSA-{k[1]}"] for k in set(items) if (k[1], k[2]) in (("Flask-Cors", "4.0.0"), ("gunicorn", "20.1.0"))})
+
+    def list_open(target_repo: str) -> list:
+        assert target_repo == "github.com/o/svc"
+        if isinstance(prs, Exception):
+            raise prs
+        return prs
+
+    monkeypatch.setattr(open_prs, "list_open", list_open)
+    repo = _repo_with_remote(env["tmp"], {"requirements.txt": REQS})
+    _install(env, ops=["stage-major", "open-pr"], hosts=[], max_uses=20)
+    return repo
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_a_change_every_package_of_which_another_pr_updates_is_refused(env: dict,
+                                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _pip_world(env, monkeypatch, [DEPENDABOT_227, RENOVATE_228, OWN_PR])   # a Dependabot title, a renovate branch
+    res = executor.act("stage-major", str(repo), env["cfg"], request_id="6" * 32)
+    assert res["status"] == "failed"
+    assert res["detail"] == "an open PR already updates Flask-Cors, gunicorn (#227, #228); not duplicated"
+    _assert_refused_cleanly(repo, "6" * 32)
+    rows = ledger.read()
+    assert retry_guard.futile_reason("stage-major", str(repo.resolve()), rows) == ""   # never held as futile
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_a_partial_overlap_drops_only_the_claimed_package(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _pip_world(env, monkeypatch, [DEPENDABOT_227])
+    res = executor.act("stage-major", str(repo), env["cfg"])
+    assert res["status"] == "done", res
+    staged = json.loads(executor.staged_file(repo.resolve()).read_text())
+    assert staged["packages"] == ["gunicorn"] and staged["left_to_prs"] == {"Flask-Cors": [227]}
+    assert (Path(staged["worktree"]) / "requirements.txt").read_text() == "Flask-Cors==4.0.0\ngunicorn==22.0.0\n"
+    bindir = _gh(env, monkeypatch)
+    pr = executor.act("open-pr", str(repo), env["cfg"])
+    assert pr["status"] == "done", pr
+    body = next(Path(staged["worktree"]).parent.glob("*.pr.md")).read_text()
+    assert "- `Flask-Cors`: left to #227" in body
+    assert any(c.startswith("pr create ") for c in (bindir / "gh.log").read_text().splitlines())
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_gh_failure_does_not_block_staging_but_blocks_open_pr(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _pip_world(env, monkeypatch, executor.ExecError("gh pr list (open PRs) failed: HTTP 503"))
+    res = executor.act("stage-major", str(repo), env["cfg"])
+    assert res["status"] == "done" and "left_to_prs" not in res, res
+    bindir = _gh(env, monkeypatch)
+    pr = executor.act("open-pr", str(repo), env["cfg"])
+    assert pr["status"] == "failed" and "HTTP 503" in pr["detail"]
+    assert not (bindir / "gh.log").exists()                               # nothing pushed or opened
+    assert executor.staged_file(repo.resolve()).is_file()                 # still staged: a later open-pr retries
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_open_pr_refuses_when_another_pr_appeared_meanwhile(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    prs: list = []
+    repo = _pip_world(env, monkeypatch, prs)
+    assert executor.act("stage-major", str(repo), env["cfg"])["status"] == "done"
+    prs.append(RENOVATE_228)
+    bindir = _gh(env, monkeypatch)
+    pr = executor.act("open-pr", str(repo), env["cfg"])
+    assert pr["status"] == "failed" and pr["detail"] == "an open PR already updates gunicorn (#228); not duplicated"
+    assert not (bindir / "gh.log").exists() and not executor.staged_file(repo.resolve()).exists()   # retired
+
+
+def test_open_pr_names_from_titles_and_branches() -> None:
+    prs = [DEPENDABOT_227, RENOVATE_228, OWN_PR,
+           {"number": 229, "title": "Update dependency vite to v6", "headRefName": "renovate/major-vite"},
+           {"number": 230, "title": "deps", "headRefName": "dependabot/npm_and_yarn/web/lxml-6.0.0"},
+           {"number": 231, "title": "Bump the pip group across 1 directory with 2 updates", "headRefName": "a"},
+           {"number": "232", "title": "Bump evil from 1 to 2", "headRefName": "b"}]
+    assert open_prs.claimed(prs) == {"flask-cors": [227], "gunicorn": [228], "vite": [229], "lxml": [230]}
+
+
+def test_list_open_runs_a_read_only_gh_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list = []
+    monkeypatch.setattr(open_prs, "gh_cwd", lambda: tmp_path)
+    monkeypatch.setattr(open_prs, "gh_push_env", lambda: {})
+    monkeypatch.setattr(open_prs.subprocess, "run", lambda argv, **kw: seen.append(argv) or
+                        subprocess.CompletedProcess(argv, 0, json.dumps([DEPENDABOT_227]), ""))
+    assert open_prs.list_open("github.com/o/svc") == [DEPENDABOT_227]
+    assert seen == [["gh", "pr", "list", "--repo", "github.com/o/svc", "--state", "open", "--json",
+                     "number,title,headRefName,author", "--limit", "100"]]
+    monkeypatch.setattr(open_prs.subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "boom"))
+    with pytest.raises(executor.ExecError, match="boom"):
+        open_prs.list_open("github.com/o/svc")

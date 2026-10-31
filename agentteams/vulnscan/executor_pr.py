@@ -111,13 +111,14 @@ def title(branch: str, *, major: bool) -> str:
     return f"security(deps): fix known-vulnerable dependencies ({digest})"
 
 
-def body(plan: str, rationale: str, *, major: bool) -> str:
+def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] | None = None) -> str:
     """Return the PR body, passed through the publish scrubber (home paths, host name, private IPs).
 
     Args:
         plan: The staged fix plan (Markdown).
         rationale: The agent's rationale (untrusted; quoted by :func:`sanitize`).
         major: The staged change is a ``stage-major`` one.
+        left: ``{package: [PR numbers]}`` the change left to other open PRs (D1), listed as "left to #N".
 
     Returns:
         The body.
@@ -129,10 +130,18 @@ def body(plan: str, rationale: str, *, major: bool) -> str:
             "affected code paths before this is merged.\n\n") if major else ""
     text = (f"{head}Automated security fix staged by the agentteams **vulnscan executor** "
             f"(deterministic; dependency {'manifests' if major else 'pins'} and lockfiles only).\n\n{plan}\n\n"
+            f"{_left_section(left)}"
             f"### Agent rationale (untrusted text, quoted)\n\n{sanitize(rationale)}\n\n"
             "Tests run in CI. This PR may be merged automatically once every check, a test check included, "
             "passes, so CI must cover the change.\n")
     return publish.rewrite_paths(text)
+
+
+def _left_section(left: dict[str, list[int]] | None) -> str:
+    """The PR body's list of packages left to other open PRs ("left to #227"), or ""."""
+    rows = [f"- `{_CONTROL.sub('?', str(name)).replace('`', '?')[:100]}`: left to "
+            + ", ".join(f"#{n}" for n in nums if isinstance(n, int)) for name, nums in sorted((left or {}).items())]
+    return ("### Left to other open PRs (not duplicated)\n\n" + "\n".join(rows) + "\n\n") if rows else ""
 
 
 def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, major: bool,

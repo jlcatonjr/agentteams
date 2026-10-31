@@ -951,6 +951,20 @@ included, delivered as PRs that CI must pass; this op is how. It differs from `s
   claimed (gh may have opened it before the label failed), else the PR is opened without the label: a missing
   label never fails the PR. Any other `gh pr create` failure stands.
 
+**No duplicate PRs** (`open_prs`, both `stage-fix` and `stage-major`). Before staging, the executor lists the
+repository's open PRs (read-only: `gh pr list --state open --json number,title,headRefName,author --limit 100`,
+the executor's gh environment). A PR whose head branch does not start with `vulnscan/` (Dependabot, Renovate, a
+person) and that names a package, by its title (`Bump <name> from <a> to <b>`, `chore(deps): bump <name> ...`,
+`Update dependency <name> to v<b>`) or its head branch (`dependabot/<eco>/<path>/<name>-<ver>`,
+`renovate/<name>-<ver>`), keeps that package: the fix leaves it (`pr-held`, "left to #227"; names compare
+case-insensitively with `_` / `-` / `.` alike). Requirements pins and npm majors are filtered; `npm audit fix`
+picks its own versions and is not. When nothing remains the stage is refused with `an open PR already updates
+<names> (#227, #228); not duplicated`, which is not a futile result (no retry hold: each run checks again, so it
+lifts once those PRs close). Staging does not wait on gh (a failed listing stages as before); `open-pr` lists them
+again and fails closed: a gh failure opens nothing, and a package another PR now updates retires the staged change
+with the same detail. The staged state records `packages` and `left_to_prs`, and the PR body lists the packages
+left to other PRs.
+
 Every executor PR body (majors and not) says it may be merged automatically once every check, a test check
 included, passes, so CI must cover the change: the operator's auto-merge job merges green `vulnscan/*` PRs.
 
@@ -1585,14 +1599,14 @@ of the FIRST reference calculator (BSD-2-Clause).
 
 ### `agentteams.vulnscan.fix`
 
-#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests, gradle_lockfiles=False)`
+#### `fix.fix_path(root, *, apply, allow_major, cooldown_days, include_worktrees, allow_dirty, npm, manifests, gradle_lockfiles=False, skip=None)`
 
 Plan (with `apply=True`, make) dependency fixes under `root`. Defaults: `apply=False`,
 `allow_major=False`, `cooldown_days=0` (no release-age gate, under Rule S-10's remediation carve-out; the CLI and the daily job always pass 0), `include_worktrees=False`, `allow_dirty=False`, `npm=True`,
 `manifests=None` (every manifest `discover` finds; `daily` passes one repository's). A dry run lists each
 container manifest's base-image findings (`images.plan`) in `image_plan`, plan-only; `apply` skips them. A dry run lists
 each npm lockfile's vulnerable packages through `plan_npm_lock` whether or not `npm` is set; `apply`
-never does (there npm alone decides). Returns a `FixResult`. Symlinked manifests are refused, never followed.
+never does (there npm alone decides). `skip` (`{normalized name: [PR numbers]}`, from `open_prs.claimed`) leaves those requirements pins and npm majors to the open PRs that already update them (`pr-held`). Returns a `FixResult`. Symlinked manifests are refused, never followed.
 Each repository's brief applies here as in `scan_path`. A manifest in an `off` repository or under
 `exclude_paths` is recorded in `refused` and never read. Private packages are never looked up
 (`plan_requirements` and `plan_npm_lock` take `private=`). An npm lockfile that holds a private package is
@@ -1649,12 +1663,13 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 ``Repository (the `stage-fix` target): `<path>` ``, or, when `target_problem` is set, by
 ``Directory `<path>`: `stage-fix` cannot take it (<problem>).``
 
-#### `fix.npm_majors(lockfile, *, label, cooldown_days=0, private=())`
+#### `fix.npm_majors(lockfile, *, label, cooldown_days=0, private=(), skip=None)`
 
 `stage-major`'s npm step, called by `fix_path` with `apply` and `allow_major` before the audit fix. Returns
 `(rows, npm output)`: the lockfile's `major-held` rows, those `package.json` lists directly turned into `fix` rows
 with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`, the lockfile re-resolved by
-`npm_fix(..., install=True)`), the rest still `major-held` with the reason (transitive only, workspaces, or a
+`npm_fix(..., install=True)`), those `skip` names (another open PR updates them) `pr-held`, the rest still
+`major-held` with the reason (transitive only, workspaces, or a
 `package.json` that could not be rewritten). Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
 with it, it runs `npm install --no-audit --package-lock-only --ignore-scripts` with the audit fix's isolation.
 
@@ -2085,6 +2100,11 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
   byte for byte; one that `close-superseded` closed does not count. The staged state is retired and the result
   says `closed_unmerged: <its URL>` (`pr` is empty, `detail: "not re-opened"`). Best effort: if gh or git fails,
   the pull request is opened as before (`executor_supersede.closed_pr_for_change`).
+- Before anything is pushed, the repository's open PRs are listed again (`open_prs.refuse_duplicate`, fail closed:
+  a gh failure opens nothing). If a PR that is not the executor's now updates a package the staged change updates,
+  the staged state is retired and the result is `failed` with `an open PR already updates <names> (#N); not
+  duplicated`. `stage_fix` checks the same list before staging and leaves such packages out (`fix_path(...,
+  skip=open_prs.staging_claims(...))`); see [Major upgrades](#major-upgrades-stage-major) for the matching rules.
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
