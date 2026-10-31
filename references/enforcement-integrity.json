@@ -150,7 +150,7 @@
     "agentteams/vulnscan/retry_guard.py": "8b6665c54962219c3ec7b5ebc1792fc9994bb7750853433c8f6a2c82724ea80d",
     "agentteams/vulnscan/review.py": "ff5312e2eaa6e86f4ae864ea522b491359fb6636fa49072d341ce686f0bbb9cd",
     "agentteams/vulnscan/run_records.py": "69f23d192c4509fe99fdb765f6d07e3136a7bb3a2ddca1d2ee0ee204ca3ad0eb",
-    "agentteams/vulnscan/runtimes.py": "a3a1446191a6f00ae8234da5d2154f8c16c193976aefd8546698bf733d9f2df9",
+    "agentteams/vulnscan/runtimes.py": "1a0b273dfbde44fe6410f91e120d431a41664162a31a6bcebb1c3ab7b0abc955",
     "agentteams/vulnscan/schedule.py": "5057a6cb3544a333bc5acc5723d929cb5e730faf9aca55f6b92aee61c99a52db",
     "agentteams/vulnscan/selftest_canary.py": "90b7f4841169d456daf7e2509410112f431013a0a990c523e1965d58ce062b5d",
     "agentteams/vulnscan/selftest_cli.py": "640e4cc724478b534c1db55d421c2c4db06a486c84fc87158ef4b2e21bab1fc2",
