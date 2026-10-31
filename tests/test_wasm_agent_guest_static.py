@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parents[1]
 SOURCE = GUEST_PATH.read_text(encoding="utf-8")
 TREE = ast.parse(SOURCE)
 FORBIDDEN_CALLS = {"eval", "exec", "compile", "__import__", "open", "breakpoint", "input", "globals", "vars"}
-MAX_LINES = 700
+MAX_LINES = 650   # plan target 600; 638 after the W5R trim (the rest is required docstrings)
 
 
 def test_imports_are_on_the_allowlist() -> None:

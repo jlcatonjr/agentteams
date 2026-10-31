@@ -49,7 +49,7 @@ from agentteams.vulnscan import gateway_dlp as DLP
 import agentteams.wasm_agent.protocol as P
 from agentteams.wasm_agent.broker import GUEST_OS_CONFINE, BrokerError, LocalBroker, StepPreparer, launch_to_dict
 from agentteams.wasm_agent.budget import Budget
-from agentteams.wasm_agent.guest_source import GuestSourceError, load_guest_source
+from agentteams.wasm_agent.guest_source import GUEST_SHA256, GuestSourceError, load_guest_source
 from agentteams.wasm_agent.host import (
     OUTPUT_HEADER, STATUSES, AgentSpec, Revocation, RunOptions, RunResult, run_agent,
 )
@@ -61,6 +61,9 @@ HOST_DENY_READS = (*W.NEST_DENY_READS, DLP.SECRETS_DIR)
 #: The only variables Stage 1's environment keeps (no key, token or secret name survives).
 ENV_KEEP = ("PATH", "LANG", "HOME")
 HOST_CONFINE = ("auto", "require", "off")
+#: Test-only opt-in (``=1``) for a *guest_source* other than the pinned guest (@security P07 C1); never set outside
+#: the test suite (``tests/conftest.py``).
+TEST_GUEST_ENV = "AGENTTEAMS_WASM_TEST_GUEST"
 BOOTSTRAP_VERSION = 1
 _BOOT = ("import sys; sys.path.insert(0, sys.argv[1]); from agentteams.wasm_agent.stage1 import main; "
          "raise SystemExit(main(sys.argv[2:]))")
@@ -266,7 +269,8 @@ def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budg
         budget: The run's caps.
         guest_source: The agent-loop guest program; None (the default) loads P07's pinned
             ``data/wasm_agent_guest.py`` through ``guest_source.load_guest_source`` (a test guest in tests).
-        guest_sha256: Its pinned sha256 (checked before the first step); given together with *guest_source*.
+        guest_sha256: Its pinned sha256 (checked before the first step); given together with *guest_source*. Any
+            hash other than ``guest_source.GUEST_SHA256`` is refused unless :data:`TEST_GUEST_ENV` is ``1``.
         environ: Where the key is read from (default ``os.environ``).
         base_url: Optional provider base-URL override (vetted by P06).
         stub_script: ``stub`` provider only: scripted replies (operator smoke tests).
@@ -293,6 +297,9 @@ def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budg
         return _refused(f"host_confine {host_confine!r} must be one of {', '.join(HOST_CONFINE)}", notices)
     if (guest_source is None) != (guest_sha256 is None):
         return _refused("guest_source and guest_sha256 go together (or neither, for the pinned guest)", notices)
+    if guest_sha256 is not None and guest_sha256 != GUEST_SHA256 and os.environ.get(TEST_GUEST_ENV) != "1":
+        return _refused(f"only the pinned guest program runs (sha256 {GUEST_SHA256[:16]}...); a caller-supplied "
+                        f"guest needs the test-only {TEST_GUEST_ENV}=1", notices)
     if guest_source is None:
         try:
             guest_source, guest_sha256 = load_guest_source()

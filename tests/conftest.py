@@ -323,3 +323,22 @@ def _goose_switch_machinery_under_test():
         os.environ.pop(write_policy.GOOSE_OVERRIDE_ENV, None)
     else:
         os.environ[write_policy.GOOSE_OVERRIDE_ENV] = previous
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _wasm_test_guests_allowed():
+    """Let the suite run Stage 0 with test guest programs (``launch.TEST_GUEST_ENV``; @security P07 C1).
+
+    Outside tests ``stage0`` runs only the pinned guest. ``tests/test_wasm_agent_launch.py`` clears this to check
+    the shipped default refuses. Set here as a string constant so the session does not import the WASM agent.
+    """
+    import os
+
+    name = "AGENTTEAMS_WASM_TEST_GUEST"
+    previous = os.environ.get(name)
+    os.environ[name] = "1"
+    yield
+    if previous is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = previous
