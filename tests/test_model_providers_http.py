@@ -32,6 +32,7 @@ class _Server:
         self.actions: list[dict[str, Any]] = []
         self.hits: dict[str, int] = {}
         self.bodies: list[bytes] = []
+        self.client_gone = 0
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -60,7 +61,7 @@ class _Server:
                         return
                     self.wfile.write(body)
                 except (BrokenPipeError, ConnectionResetError):
-                    pass
+                    outer.client_gone += 1   # expected when the client stops reading (size cap, timeout)
 
             do_POST = _serve
             do_GET = _serve
