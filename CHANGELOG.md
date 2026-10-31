@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### added (vulnscan: scan mirrors)
+
+- **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a
+  detached worktree `<repo>.worktrees/<name>` that an operator job refreshes, instead of a checkout that may sit on
+  an old feature branch. It is used only when `<state>/scan-mirrors/<date>.json` records it fresh today; findings,
+  fix plans and the checkout-freshness row stay named after the checkout (new *Scanned* column). New module
+  `agentteams.vulnscan.scan_mirror`.
+
 ### added (vulnscan: unpinned Python requirements are checked by range, off by default)
 
 - **`agentteams.vulnscan.specifiers`** (new, stdlib): a minimal PEP 440 specifier set as version intervals
