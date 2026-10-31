@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from agentteams import model_providers as mp
+from agentteams.model_providers import _transport
 from tests._model_provider_fakes import user
 
 OK = {"id": "c1", "choices": [{"message": {"content": "hello"}, "finish_reason": "stop"}],
@@ -94,7 +95,7 @@ def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Server]:
 @pytest.fixture()
 def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     seen: list[float] = []
-    monkeypatch.setattr(mp, "_sleep", seen.append)
+    monkeypatch.setattr(_transport, "_sleep", seen.append)
     return seen
 
 

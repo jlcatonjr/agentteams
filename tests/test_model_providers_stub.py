@@ -76,7 +76,9 @@ def test_script_file(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("content", ['[{"content": [], "content": []}]', '[{"content": [], "usage": {"cost": NaN}}]',
                                      '{"content": []}', '[{"content": [{"type": "image"}]}]', "not json",
-                                     '[{"content": [], "stop": "maybe"}]', '[{"content": [], "extra": 1}]'])
+                                     '[{"content": [], "stop": "maybe"}]', '[{"content": [], "extra": 1}]',
+                                     '[{"content": [], "usage": {"cost": true}}]',
+                                     '[{"content": [], "usage": {"input_tokens": -1}}]'])
 def test_bad_script_files(tmp_path: Path, content: str) -> None:
     f = tmp_path / "script.json"
     f.write_text(content, encoding="utf-8")

@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from agentteams import model_providers as mp
+from agentteams.model_providers import _transport
 
 
 def block_network(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -17,12 +18,12 @@ def block_network(monkeypatch: pytest.MonkeyPatch) -> None:
     def _refuse(self: Any, *a: Any, **k: Any) -> Any:
         raise AssertionError("network access attempted in an offline test")
     monkeypatch.setattr(urllib.request.OpenerDirector, "open", _refuse)
-    monkeypatch.setattr(mp, "_sleep", lambda s: None)
+    monkeypatch.setattr(_transport, "_sleep", lambda s: None)
     monkeypatch.delenv("CI", raising=False)
 
 
 class FakeResponse:
-    """Enough of ``http.client.HTTPResponse`` for :func:`agentteams.model_providers._post_json`."""
+    """Enough of ``http.client.HTTPResponse`` for :func:`agentteams.model_providers._transport._post_json`."""
 
     def __init__(self, url: str, body: bytes, *, status: int = 200, content_type: str = "application/json",
                  headers: dict[str, str] | None = None) -> None:
@@ -54,7 +55,7 @@ class Recorder:
         self.replies = list(replies)
         self.requests: list[dict[str, Any]] = []
         self.headers = headers or {}
-        for opener in (mp._OPENER, mp._LOOPBACK_OPENER):
+        for opener in (_transport._OPENER, _transport._LOOPBACK_OPENER):
             monkeypatch.setattr(opener, "open", self._open)
 
     def _open(self, req: urllib.request.Request, timeout: float | None = None) -> FakeResponse:

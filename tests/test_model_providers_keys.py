@@ -10,10 +10,12 @@ import traceback
 import urllib.error
 from email.message import Message
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 
 from agentteams import model_providers as mp
+from agentteams.model_providers._common import _scrub
 from tests._model_provider_fakes import Recorder, block_network, provider, user
 
 KEY = "sk-synthetic-NOT-A-REAL-KEY-0123456789"
@@ -86,7 +88,7 @@ def test_key_echoed_in_an_error_body_is_scrubbed(monkeypatch: pytest.MonkeyPatch
 def test_scrub_header_echo_forms() -> None:
     for text in ("x-api-key: abcd1234efgh", "x-goog-api-key=abcd1234efgh", '"api_key": "abcd1234efgh"',
                  "Authorization: Bearer abcd1234efgh"):
-        assert "abcd1234efgh" not in mp._scrub(text)
+        assert "abcd1234efgh" not in _scrub(text)
 
 
 def test_ci_refuses_a_live_provider(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -119,7 +121,8 @@ def test_model_for_tier_has_no_default() -> None:
 
 def test_no_default_model_ids_in_the_module() -> None:
     # URLs (documentation citations such as ai.google.dev/gemini-api/...) are not model ids; drop them first.
-    source = re.sub(r"\S*/\S*", " ", open(mp.__file__, encoding="utf-8").read())
+    text = "".join(p.read_text(encoding="utf-8") for p in Path(mp.__file__).parent.glob("*.py"))
+    source = re.sub(r"\S*/\S*", " ", text)
     for pattern in ("claude-", "gpt-", "gemini-", "grok-", "llama3", "llama-", "sonnet", "opus", "haiku"):
         assert pattern not in source.lower(), pattern
     for preset in mp.PROVIDERS.values():
