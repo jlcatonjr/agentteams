@@ -1,0 +1,8 @@
+{
+  "patch_id": "c027763ea9d2f8f405d5a5b63f01d30a07d1204d",
+  "commit": "cffd829dea86a07b9ee168cc95150641cf4918cb",
+  "subject": "feat(vulnscan): never duplicate another open dependency PR (D1)",
+  "impact": "1 modules added, 8 symbols added, 3 symbols changed",
+  "note": "Review fixes + D1. New leaf modules: executor_env (ExecError, GIT_IDENTITY, git/gh envs; re-exported by executor, so executor.ExecError/gh_env/etc. callers are unchanged) and open_prs (open-PR de-duplication). Additive keyword-only args with defaults: fix.fix_path(skip=None), fix.npm_majors(skip=None), executor_pr.body(left=None). New: manifests.npm_off_registry, executor_pr.label_refused. Removed from executor: _sanitize (moved earlier) and the private env helpers, now aliases of executor_env. No caller changes needed; docs/CHANGELOG updated.",
+  "recorded_at": "2026-10-31T17:37:41Z"
+}
