@@ -1,0 +1,8 @@
+{
+  "patch_id": "ff27199f0a90c14aa4d2949f92d74cb125b5c392",
+  "commit": "13407babd74ebc6fa9c0d5b1cbaa5aa5bfb90289",
+  "subject": "fix(fleet): the pre-update snapshot goes to a ref, never onto the checked-out branch",
+  "impact": "1 modules added, 4 symbols added",
+  "note": "Re-recorded after rebase onto origin/main 87718e26 (vfu M5): the CHANGELOG conflict with the scan-mirror entry changed the first commit's patch-id; code unchanged from the reviewed c69297a3..c1633b39 (@security CLEAR, @code-hygiene PASS with fixes).",
+  "recorded_at": "2026-10-31T19:29:31Z"
+}
