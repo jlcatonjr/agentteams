@@ -13,6 +13,7 @@ One :class:`Mediator` per run owns the host-side conversation and is the only ca
 5. Strips the reserved provider keys from the reply (:class:`ReservedKeyVault`) before anything else sees it. They stay
    host-side, are re-attached only to the very turn they came from, and only after their HMAC re-verifies; a guest can
    never supply one (it never authors history in step mode, and any reserved key found in the host copy is refused).
+   The MAC key lives in the host process (Stage 1 when wrapped), so it does not protect against a compromised host.
 
 Model output is data (C-4): the host never parses reply text for instructions.
 
@@ -287,11 +288,10 @@ class Mediator:
         self.messages.append({"role": "user", "content": filtered})
 
     def _usd_estimate(self, input_bytes: int) -> float:
-        p = (self.prices or {}).get(self.model)
-        if p is None:
-            return 0.0
-        est = -(-input_bytes // 3)
-        return (est * max(p["input_per_mtok"], p["cache_write_per_mtok"]) + self.max_tokens * p["output_per_mtok"]) / 1e6
+        # The gateway's own reservation pricing (the input at the dearer of input/cache-write; 0 when unpriced).
+        checked = GD.Checked(b"", self.model, max_output=self.max_tokens,
+                             input_estimate=-(-input_bytes // GD.BYTES_PER_TOKEN))
+        return GD.reservation(self.prices or {}, checked)[1]
 
     def call(self) -> MP.ModelReply:
         """Make one model call on the current conversation and append the (stripped) reply.

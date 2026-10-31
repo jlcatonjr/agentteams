@@ -9,7 +9,8 @@ split from executing:
   ``wasm_exec.Launch`` via ``wasm_guests.argv_for`` + ``wasm_exec.materialize``. The requester never supplies a grant,
   so a compromised Stage 1 cannot widen one (C-3).
 * :class:`LocalBroker` (Stage 0 in-process mode) and :class:`PipeBroker` (Stage 1, asking Stage 0 over the control
-  pipe) both execute the returned launch with the executor's bounded runner and release it afterwards.
+  pipe) both execute the returned launch with ``wasm_exec.execute_launch`` (the same stdin/cap checks and bounded
+  runner as ``wasm_exec.run``) and release it afterwards.
 
 There is no test-only broker in this module: tests implement the :class:`ExecBroker` protocol themselves.
 
@@ -199,34 +200,6 @@ def launch_from_dict(data: Mapping[str, Any], executor: ModuleType) -> Any:
                            module_sha256=str(data["module_sha256"]))
 
 
-def execute(launch: Any, stdin: bytes, *, stdout_cap: int, stderr_cap: int, executor: ModuleType) -> Any:
-    """Execute a prepared launch with the executor's bounded runner and return a ``WasmResult``.
-
-    Uses ``wasm_exec._execute`` (bounded stdio, own process group, host timeout) so the run is identical to
-    ``wasm_exec.run`` minus the prepare, which Stage 0 did.
-
-    Args:
-        launch: A ``wasm_exec.Launch``.
-        stdin: The guest's stdin (the event frame; data).
-        stdout_cap: Bytes kept from stdout.
-        stderr_cap: Bytes kept from stderr.
-        executor: The ``wasm_exec`` module.
-
-    Returns:
-        A ``wasm_exec.WasmResult``.
-
-    Raises:
-        WasmExecError: wasmtime could not start.
-    """
-    started = time.monotonic()
-    code, out, err, host = executor._execute(launch, stdin, stdout_cap, stderr_cap)  # noqa: SLF001 - see docstring
-    return executor.WasmResult(exit_code=code, stdout=out, stderr=err,
-                               trap=executor.classify_trap(code, err, host_label=host),
-                               os_confinement=launch.os_confinement, truncated=host == "output-cap",
-                               os_reason=launch.os_reason, read_only_mode=launch.read_only_mode,
-                               wall_s=round(time.monotonic() - started, 3), module_sha256=launch.module_sha256)
-
-
 class LocalBroker:
     """Stage 0 in-process mode: prepare with the :class:`StepPreparer` directly, execute, release."""
 
@@ -262,8 +235,8 @@ class LocalBroker:
         ticket, launch, prep = self.preparer.prepare(purpose, language=language, source=source)
         started = time.monotonic()
         try:
-            res = execute(launch, stdin, stdout_cap=stdout_cap, stderr_cap=stderr_cap,
-                          executor=self.preparer.executor)
+            res = self.preparer.executor.execute_launch(launch, stdin, stdout_cap=stdout_cap,
+                                                        stderr_cap=stderr_cap)
         except self.preparer.executor.WasmExecError as exc:
             raise BrokerError(str(exc)) from exc
         finally:
@@ -279,7 +252,7 @@ class PipeBroker:
 
         Args:
             control: An object with ``call(message) -> reply``.
-            executor: The ``wasm_exec`` module (for ``Launch`` / ``_execute`` only; Stage 1 never materializes).
+            executor: The ``wasm_exec`` module (for ``Launch`` / ``execute_launch`` only; Stage 1 never materializes).
 
         Raises:
             Nothing.
@@ -318,7 +291,7 @@ class PipeBroker:
         prep = round(time.monotonic() - started, 4)
         started = time.monotonic()
         try:
-            res = execute(launch, stdin, stdout_cap=stdout_cap, stderr_cap=stderr_cap, executor=self.executor)
+            res = self.executor.execute_launch(launch, stdin, stdout_cap=stdout_cap, stderr_cap=stderr_cap)
         except self.executor.WasmExecError as exc:
             raise BrokerError(str(exc)) from exc
         finally:   # a lost release is backstopped: Stage 0 releases every ticket at run end (release_all)

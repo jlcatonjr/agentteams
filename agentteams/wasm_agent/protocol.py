@@ -20,7 +20,7 @@ import json
 import math
 import os
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,14 +40,19 @@ MAX_DEPTH = 32
 MAX_CONTROL_BYTES = 6 << 20
 
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$", re.ASCII)
-_RUN_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.ASCII)
+#: A run id: 32 lowercase hex (Stage 0 draws 16 random bytes). The transcript uses the same pattern.
+RUN_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.ASCII)
 
 #: Event kinds the host sends.
 EVENT_KINDS = ("start", "model_reply", "tool_result", "delegate_result", "denied")
-#: Ops a guest may answer with.
+#: Ops a guest may answer with (the keys of the closed op shapes; :func:`decode_op` refuses any other).
 OPS = ("model", "tool", "delegate", "done")
-#: ``denied`` event codes.
+#: ``denied`` event codes (:func:`encode_event` refuses any other).
 DENIED_CODES = ("budget", "not-granted", "dlp", "depth", "refused")
+#: The Stage 0 -> Stage 1 bootstrap (key pipe, one line): its version and its exact key set.
+BOOTSTRAP_VERSION = 1
+BOOT_KEYS = frozenset({"v", "provider", "key", "base_url", "stub_script", "mac_key", "run_id", "project_root", "spec",
+                       "task", "budget", "secrets", "prices", "notices", "call_timeout_s"})
 #: ``done`` reasons are free codes but must match this shape.
 _REASON_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$", re.ASCII)
 
@@ -156,16 +161,19 @@ def encode_event(event: Mapping[str, Any]) -> bytes:
         The LF-terminated frame bytes.
 
     Raises:
-        ProtocolError: ``shape`` for a malformed event, ``frame`` when it exceeds :data:`MAX_EVENT_BYTES`.
+        ProtocolError: ``shape`` for a malformed event (incl. a ``denied`` code outside :data:`DENIED_CODES`),
+            ``frame`` when it exceeds :data:`MAX_EVENT_BYTES`.
     """
     want = {"run_id", "step", "agent", "mounts", "limits", "carry", "event"}
     if set(event) != want:
         raise ProtocolError("shape", f"event keys must be exactly {sorted(want)}")
-    if not isinstance(event["run_id"], str) or not _RUN_ID_RE.match(event["run_id"]):
+    if not isinstance(event["run_id"], str) or not RUN_ID_RE.match(event["run_id"]):
         raise ProtocolError("shape", "run_id must be 32 lowercase hex")
     body = event["event"]
     if not isinstance(body, Mapping) or body.get("kind") not in EVENT_KINDS:
         raise ProtocolError("shape", "event.kind is not a known kind")
+    if body["kind"] == "denied" and body.get("code") not in DENIED_CODES:
+        raise ProtocolError("shape", f"denied code must be one of {', '.join(DENIED_CODES)}")
     frame = {"v": PROTOCOL_VERSION, "type": "event", "accept": [PROTOCOL_VERSION], **event}
     try:
         data = canonical(frame) + b"\n"
@@ -293,7 +301,7 @@ def decode_op(stdout: bytes, *, expect_ids: frozenset[str], toolset: frozenset[s
     if doc.get("v") != PROTOCOL_VERSION or type(doc.get("v")) is not int:
         raise ProtocolError("protocol-version", f"op v={doc.get('v')!r}; this host accepts [{PROTOCOL_VERSION}]")
     op = doc.get("op")
-    if op not in _OP_KEYS:
+    if op not in OPS:
         raise ProtocolError("shape", f"unknown op {str(op)[:40]!r}")
     need, optional = _OP_KEYS[op]
     if not need <= set(doc) or set(doc) - need - optional:
@@ -405,7 +413,7 @@ class LineReader:
 
 
 def read_line(fd: int, cap: int = MAX_CONTROL_BYTES) -> dict[str, Any] | None:
-    """Read exactly one control line from *fd* byte-wise (for a one-shot pipe such as the key pipe).
+    """Read the first control line from a one-shot pipe such as the key pipe (bytes after it are discarded).
 
     Args:
         fd: The pipe read end.
@@ -420,20 +428,3 @@ def read_line(fd: int, cap: int = MAX_CONTROL_BYTES) -> dict[str, Any] | None:
     """
     return LineReader(fd, cap).read()
 
-
-def json_list(value: Any, what: str) -> Sequence[Any]:
-    """Return *value* when it is a list, else refuse (a small shape helper for control messages).
-
-    Args:
-        value: The value.
-        what: Its name, for the error.
-
-    Returns:
-        The list.
-
-    Raises:
-        ProtocolError: ``shape`` when it is not a list.
-    """
-    if not isinstance(value, list):
-        raise ProtocolError("shape", f"{what} must be a list")
-    return value

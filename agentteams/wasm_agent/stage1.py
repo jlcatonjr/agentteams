@@ -12,6 +12,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import signal
 from collections.abc import Sequence
@@ -23,12 +24,8 @@ from agentteams import wasm_exec as W
 import agentteams.wasm_agent.protocol as P
 from agentteams.wasm_agent.broker import PipeBroker
 from agentteams.wasm_agent.budget import Budget
-from agentteams.wasm_agent.host import AgentSpec, Revocation, RunOptions, grant_from_dict, run_agent
+from agentteams.wasm_agent.host import AgentSpec, Revocation, RunOptions, build_provider, grant_from_dict, run_agent
 from agentteams.wasm_agent.transcript import PipeJournal
-
-_BOOT_KEYS = {"v", "provider", "key", "base_url", "stub_script", "mac_key", "run_id", "project_root", "spec", "task",
-              "budget", "secrets", "prices", "notices", "call_timeout_s"}
-
 
 class ControlClient:
     """Stage 1's end of the control pipe: one request, one reply, strictly in turn."""
@@ -86,14 +83,6 @@ def spec_from_dict(data: dict[str, Any]) -> AgentSpec:
                      spec_sha256=str(data["spec_sha256"]))
 
 
-def _provider(boot: dict[str, Any]) -> MP.Provider:
-    if boot["stub_script"] is not None:
-        if boot["provider"] != "stub":
-            raise MP.ModelProviderError("config", "stub_script is only valid for the stub provider")
-        return MP.Provider(MP.PROVIDERS["stub"], None, "", MP.StubProvider(boot["stub_script"]))
-    return MP.Provider.from_key(boot["provider"], boot["key"], base_url=boot["base_url"])
-
-
 def main(argv: Sequence[str]) -> int:
     """Stage 1 entry point.
 
@@ -101,10 +90,11 @@ def main(argv: Sequence[str]) -> int:
         argv: ``--key-fd N --ctl-in N --ctl-out N``.
 
     Returns:
-        0 when a result was delivered to Stage 0, 2 otherwise.
+        0 when a result was delivered to Stage 0; 2 for an unreadable, malformed or wrong-version bootstrap, a spec
+        or provider that does not build, or a result Stage 0 did not acknowledge.
 
     Raises:
-        Nothing.
+        SystemExit: From ``argparse`` for malformed arguments (status 2).
     """
     ap = argparse.ArgumentParser(prog="agentteams-wasm-host-stage1")
     for flag in ("--key-fd", "--ctl-in", "--ctl-out"):
@@ -112,9 +102,13 @@ def main(argv: Sequence[str]) -> int:
     args = ap.parse_args(list(argv))
     try:
         boot = P.read_line(args.key_fd)
+    except (P.ProtocolError, OSError):
+        return 2
     finally:
-        os.close(args.key_fd)
-    if not isinstance(boot, dict) or set(boot) != _BOOT_KEYS or boot.get("v") != 1:
+        with contextlib.suppress(OSError):
+            os.close(args.key_fd)
+    if not isinstance(boot, dict) or set(boot) != P.BOOT_KEYS or type(boot["v"]) is not int or \
+            boot["v"] != P.BOOTSTRAP_VERSION:
         return 2
     control = ControlClient(args.ctl_in, args.ctl_out)
     run_id, root = str(boot["run_id"]), Path(str(boot["project_root"]))
@@ -123,7 +117,8 @@ def main(argv: Sequence[str]) -> int:
         signal.signal(s, lambda signum, frame: revocation.set(f"signal:{signum}"))
     try:
         spec = spec_from_dict(boot["spec"])
-        provider = _provider(boot)
+        provider = build_provider(str(boot["provider"]), boot["key"], base_url=boot["base_url"],
+                                  stub_script=boot["stub_script"])
         options = RunOptions(project_root=root, run_id=run_id, budget=Budget.from_dict(boot["budget"]),
                              journal=PipeJournal(control), exec_broker=PipeBroker(control, W), provider=provider,
                              mac_key=bytes.fromhex(boot["mac_key"]), secrets=list(boot["secrets"]),

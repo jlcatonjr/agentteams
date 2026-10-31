@@ -7,8 +7,10 @@ revocation, applies DLP to every outbound prompt, and has Stage 0 write a hash-c
 OS-confined host process.
 
 Public entry points (P08, P09, P17): :func:`run_agent`, :class:`AgentSpec`, :class:`RunOptions`,
-:class:`RunResult`, :class:`Budget`, :class:`BudgetLedger`, :func:`verify_transcript`, :func:`revoke_run`,
-:func:`stage0`.
+:class:`RunResult`, :class:`Budget`, :class:`BudgetLedger`, :class:`BudgetExceeded` (a cap would be or was
+exceeded; ``cap`` names it), :class:`RunLink` (a parent run for P09 delegation, so revoking an ancestor stops the
+child), :func:`verify_transcript` / :class:`TranscriptReport`, :func:`revoke_run`, :func:`stage0`,
+:data:`PROTOCOL_VERSION`, :class:`ProtocolError`.
 
 Stdlib only.
 """
