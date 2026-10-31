@@ -1,0 +1,202 @@
+"""os_sandbox_switch.py — the generate-time OS-sandbox switch and its relaxation-gate engagement (P00 D7).
+
+Carved out of ``cli/artifacts.py`` (wave-2 @code-hygiene H1). Two jobs:
+
+* :func:`resolve_os_switch` sets ``manifest["host_features"]`` from the dedicated switch (``--os-sandbox`` beats the
+  brief's ``os_sandbox``; an explicit argv ``*:sandbox`` token beats a brief ``off``; ``--os-sandbox off`` with an
+  explicit token is refused) and prints the ENABLED/OFF notice.
+* :func:`engage_relaxation_gate` runs the P15 sandbox-relaxation gate (Rule 15) and records ``sandbox_state``.
+
+**When the gate engages** (:func:`gate_engaged`): a switch is in play (brief ``os_sandbox`` / ``--os-sandbox``), WASM
+is on, the previous render recorded a ``sandbox_state``, or (wave-2 @security S1) the previous state
+(:func:`~agentteams.sandbox_state.previous_sandbox_state`: the record OR on-disk boundary evidence) had the OS
+sandbox on and the new state has it off, whatever ``os_reason`` says. So ``confined`` -> ``cooperative`` with a
+boundary on disk is a ``sandbox-os-off:<fw>`` relaxation: refused in a governed workspace without the operator's
+Ed25519-signed decision, a ``SANDBOX RELAXATION`` notice otherwise. A team with no record and no evidence is not
+engaged and keeps a byte-identical build-log (the P00 carve-out now covers only that case).
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from agentteams.sandbox_state import SandboxState
+
+_CONFINING = frozenset({"confined", "exclusive"})
+
+
+class OsSwitchError(ValueError):
+    """An invalid ``os_sandbox`` / ``--os-sandbox`` value, or ``--os-sandbox off`` with an explicit token."""
+
+
+def resolve_os_switch(manifest: dict, explicit_tokens: list[str], framework_id: str) -> SandboxState:
+    """Set ``manifest["host_features"]`` by the dedicated OS switch and print the switch notice.
+
+    Args:
+        manifest: The team manifest (mutated: ``host_features`` and the transient explicit-token key).
+        explicit_tokens: Tokens parsed from ``--target-host-features``.
+        framework_id: The target framework id.
+
+    Returns:
+        The effective :class:`~agentteams.sandbox_state.SandboxState`.
+
+    Raises:
+        OsSwitchError: An invalid ``os_sandbox`` / ``--os-sandbox`` value, or ``--os-sandbox off`` together with an
+            explicit ``*:sandbox`` token (the caller maps it to ``PrivilegeConfinementError``).
+    """
+    from agentteams.host_features import merge_profile_features
+    from agentteams.sandbox_state import (
+        EXPLICIT_SANDBOX_TOKENS_KEY,
+        OS_SANDBOX_CLI_KEY,
+        effective_sandbox_state,
+        os_switch_set,
+        validate_os_sandbox,
+    )
+
+    # --os-sandbox (transient, operator argv) beats the brief; an explicit argv *:sandbox token beats a brief "off"
+    # (both are the operator's; the brief is agent-writable), and --os-sandbox off together with an explicit token
+    # is refused (never pick one silently).
+    explicit_sandbox = [str(t) for t in explicit_tokens if str(t).endswith(":sandbox")]
+    if explicit_sandbox:
+        manifest[EXPLICIT_SANDBOX_TOKENS_KEY] = explicit_sandbox  # transient; never persisted
+    try:
+        cli_value = validate_os_sandbox(manifest.get(OS_SANDBOX_CLI_KEY))
+        brief_value = validate_os_sandbox(manifest.get("os_sandbox"))
+        effective_sandbox_state(manifest)  # raises on the --os-sandbox off + explicit token conflict
+    except ValueError as exc:
+        raise OsSwitchError(str(exc)) from exc
+    if cli_value is None and brief_value == "off" and explicit_sandbox:
+        merged = merge_profile_features(explicit_tokens, manifest.get("privilege_profile"), framework_id)
+        manifest["host_features"] = [t for t in merged if not str(t).endswith(":sandbox") or t in explicit_sandbox]
+    else:
+        manifest["host_features"] = merge_profile_features(
+            explicit_tokens, manifest.get("privilege_profile"), framework_id,
+            os_sandbox=cli_value or brief_value,
+        )
+    state = effective_sandbox_state(manifest)
+    if manifest["host_features"]:
+        print(f"  Host features: {', '.join(manifest['host_features'])}")
+    # Default-on notice (2026-W39): privilege_profile now defaults to "confined", so a team
+    # that never set the field gets write-confinement emitted. Mirrors the
+    # enforce_decision_signing "default on at update, notify after, opportunity to switch
+    # off" contract — name the opt-out so the tightening is never silent. Inert until the
+    # operator merges the emitted sandbox example (never writes live settings/config).
+    # P00: printed from the effective state, naming the dedicated os_sandbox opt-out.
+    if state.os and (manifest.get("privilege_profile") in _CONFINING or os_switch_set(manifest)):
+        print(
+            "  🛡  Workspace sandbox (OS boundary) is ENABLED for this team "
+            f"({state.os_reason}; privilege_profile defaults to confined as of 2026-W39). An OS "
+            "write-confinement boundary is emitted for qualifying providers (inert until you merge "
+            "the emitted settings/config example). To opt out, set \"os_sandbox\": \"off\" in the "
+            "brief (or pass --os-sandbox off) and re-run --update."
+        )
+    elif not state.os and os_switch_set(manifest):
+        print(
+            f"  ·  Workspace sandbox (OS boundary) is OFF for this team ({state.os_reason}): no OS "
+            "boundary is emitted for this framework; the rest of privilege_profile "
+            f"({manifest.get('privilege_profile')}) still applies."
+        )
+    return state
+
+
+def gate_engaged(manifest: dict, state: SandboxState, previous: SandboxState | None, *,
+                 recorded: bool) -> bool:
+    """Return whether the P15 relaxation gate must run for this render (wave-2 S1).
+
+    Args:
+        manifest: The team manifest (the switch keys).
+        state: The new effective state.
+        previous: :func:`~agentteams.sandbox_state.previous_sandbox_state` (record OR evidence), or None.
+        recorded: Whether the previous render recorded a ``sandbox_state``.
+
+    Returns:
+        True when a switch is in play, WASM is on, a state was recorded, or the OS sandbox goes from on to off
+        (any ``os_reason``).
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.sandbox_state import os_switch_set
+
+    os_off = previous is not None and previous.os and not state.os
+    return os_switch_set(manifest) or state.wasm or recorded or os_off
+
+
+def engage_relaxation_gate(
+    manifest: dict, state: SandboxState, framework_id: str, project_root: Path, *, team_dir: Path | None,
+    dry_run: bool,
+) -> tuple[SandboxState | None, SandboxState] | None:
+    """Run the P15 sandbox-relaxation gate for this render and record the state (P00 D7, wave-2 S1).
+
+    Engaged per :func:`gate_engaged`. A team with no record and no on-disk boundary evidence that never used the
+    switch is not engaged and keeps a byte-identical build-log.
+
+    Args:
+        manifest: The team manifest (mutated: ``sandbox_relaxations``, ``sandbox_state``).
+        state: The effective state.
+        framework_id: The target framework.
+        project_root: The project root (evidence files, record paths).
+        team_dir: The team dir (build-log, decisions log, exception registry); the project root when None.
+        dry_run: Check only: consume nothing, register and retire nothing.
+
+    Returns:
+        ``(previous, new)`` states for the ``SANDBOX RELAXATION`` notice, or None when not engaged.
+
+    Raises:
+        SandboxRelaxationError: A relaxation is refused in a governed workspace (nothing consumed).
+        ImportError: The record carries WASM grants and ``agentteams.wasm_exec`` is not importable (fail closed).
+    """
+    from agentteams.cli import sandbox_relaxation_gate as gate
+    from agentteams.sandbox_state import has_recorded_state, previous_sandbox_state
+
+    team = Path(team_dir) if team_dir is not None else Path(project_root)
+    old = previous_sandbox_state(team, project_root, framework_id)
+    if not gate_engaged(manifest, state, old, recorded=has_recorded_state(team)):
+        return None
+    relaxations = gate.plan_relaxations(
+        old, state, framework_id=framework_id, profile_would_emit=manifest.get("privilege_profile") in _CONFINING)
+    manifest["sandbox_relaxations"] = gate.authorize(team, relaxations, consume=not dry_run)
+    gate.retire_on_tighten(team, old, state, framework_id=framework_id, dry_run=dry_run)
+    manifest["sandbox_state"] = state.to_record(project_root=Path(project_root))
+    return old, state
+
+
+def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, manifest: dict | None,
+                               state: SandboxState) -> tuple[SandboxState | None, SandboxState] | None:
+    """Check (never consume) the gate for a multi-framework sync projection (P00 D7, wave-2 S1).
+
+    Engaged as :func:`gate_engaged` with ``recorded=False``: a switch is in play or the OS sandbox goes from on to
+    off. The sync path records no state and projects no WASM half, so a recorded state alone does not engage it
+    (that would plan a ``sandbox-wasm-off`` for every WASM team the projection merely re-syncs).
+
+    Args:
+        agents_dir: The framework's agents dir (the team dir: build-log, decisions log, registry).
+        root: The project root (evidence files).
+        framework_id: The framework being projected.
+        manifest: The projected privilege manifest, or None (no privilege block).
+        state: The projected effective state.
+
+    Returns:
+        ``(previous, new)`` for the notice when engaged, else None.
+
+    Raises:
+        SandboxRelaxationError: The relaxation is refused (governed workspace, no signed decision or active
+            exception).
+    """
+    from agentteams.cli import sandbox_relaxation_gate as gate
+    from agentteams.sandbox_state import previous_sandbox_state
+
+    old = previous_sandbox_state(agents_dir, root, framework_id)
+    if not gate_engaged(manifest or {}, state, old, recorded=False):
+        return None
+    relaxations = gate.plan_relaxations(
+        old, state, framework_id=framework_id,
+        profile_would_emit=(manifest or {}).get("privilege_profile") in _CONFINING)
+    gate.authorize(agents_dir, relaxations, consume=False)
+    return old, state
+
+
+__all__ = ["OsSwitchError", "check_projected_relaxation", "engage_relaxation_gate", "gate_engaged", "resolve_os_switch"]

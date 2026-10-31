@@ -181,3 +181,59 @@ def test_cli_flag_conflict_and_write_policy_refusals(tmp_path):
     assert proc.returncode == 1 and "--os-sandbox off" in proc.stderr
     proc = _generate(tmp_path, brief, "--os-sandbox", "maybe")
     assert proc.returncode == 2 and "--os-sandbox" in proc.stderr
+
+
+# --- wave-2 @security S1: confined -> cooperative over on-disk boundary evidence is a relaxation ------------------
+
+
+def _claude_evidence(project: Path, kind: str) -> None:
+    """Leave the evidence a confined claude render leaves: the live settings or only the emitted example."""
+    name = "settings.json" if kind == "live" else "settings.hooks.example.json"
+    (project / ".claude").mkdir(exist_ok=True)
+    (project / ".claude" / name).write_text(json.dumps({"hooks": {}, "sandbox": {"enabled": True}}))
+
+
+@pytest.mark.parametrize("kind", ["live", "example"])
+def test_governed_cooperative_over_evidence_without_a_signed_decision_is_refused(tmp_path, kind):
+    team = _team(tmp_path)
+    _claude_evidence(tmp_path, kind)
+    with pytest.raises(SandboxRelaxationError, match="sandbox-os-off:claude"):
+        _wire(_manifest(privilege_profile="cooperative"), tmp_path, team)
+    assert er.list_exceptions(team) == []
+
+
+def test_governed_cooperative_over_evidence_with_a_signed_decision_proceeds_and_records(
+        tmp_path, stub_ed25519, capsys):
+    team = _team(tmp_path)
+    _claude_evidence(tmp_path, "live")
+    _log(team, _row("sandbox-os-off:claude"))
+    manifest = _wire(_manifest(privilege_profile="cooperative"), tmp_path, team)
+    assert manifest["sandbox_state"]["os"] == "off"
+    assert manifest["sandbox_state"]["os_reason"] == "profile:cooperative"
+    assert [r["authorization"] for r in manifest["sandbox_relaxations"]] == ["ed25519-decision"]
+    assert [e["action"] for e in er.list_exceptions(team)] == ["sandbox-os-off:claude"]
+    assert "SANDBOX RELAXATION: os sandbox OFF for claude (reason: profile:cooperative); it was on" in (
+        capsys.readouterr().err)
+
+
+def test_ungoverned_cooperative_over_evidence_prints_the_notice_and_records(tmp_path, capsys):
+    team = _team(tmp_path, governed=False)
+    _claude_evidence(tmp_path, "example")
+    manifest = _wire(_manifest(privilege_profile="cooperative"), tmp_path, team)
+    assert [r["authorization"] for r in manifest["sandbox_relaxations"]] == ["notice-only"]
+    assert manifest["sandbox_state"]["os"] == "off"
+    assert "SANDBOX RELAXATION: os sandbox OFF for claude" in capsys.readouterr().err
+
+
+def test_no_record_and_no_evidence_stays_unengaged(tmp_path):
+    team = _team(tmp_path)
+    (tmp_path / ".claude" / "settings.hooks.example.json").write_text(json.dumps({"hooks": {}}))  # no sandbox
+    manifest = _wire(_manifest(privilege_profile="cooperative"), tmp_path, team)
+    assert "sandbox_state" not in manifest and "sandbox_relaxations" not in manifest
+
+
+def test_confined_over_evidence_is_not_a_relaxation_and_records_nothing(tmp_path):
+    team = _team(tmp_path)
+    _claude_evidence(tmp_path, "example")
+    manifest = _wire(_manifest(), tmp_path, team)
+    assert "sandbox_state" not in manifest  # on -> on: byte-identical build-log

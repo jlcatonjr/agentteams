@@ -310,6 +310,7 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
     "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the five sandbox-relaxation kinds + token vocabulary
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
+    "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
     # The WASM sandbox (2026-10-31, wave-1 @security S4). wasm_exec is the one place wasmtime starts: its grant
     # shape check, mount-host refusals ('::'/':', control chars) and empty environment ARE the compute-only

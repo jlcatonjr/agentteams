@@ -63,6 +63,11 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # runners -> per-topic runner modules), deferred as a larger blast-radius refactor.
     # commands.py grew to 1207 before the 2026-09-30 pin-signing-cli-modules carve moved the
     # --sign-decision body into the integrity-pinned cli/operator_signing.py (now 1092).
+    # artifacts.py was 1229 before the P00 os_sandbox switch (2026-10-31) took it to 1336; the wave-2
+    # @code-hygiene H1 carve moved the switch resolution and the relaxation-gate engagement into the
+    # integrity-pinned cli/os_sandbox_switch.py (now 1253: the remaining delta is P00's
+    # PRIVILEGE_WIRING_ERRORS tuple, the write_policy refusal and docstrings, which belong beside
+    # finalize_privilege_wiring).
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the

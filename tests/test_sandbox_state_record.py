@@ -232,6 +232,28 @@ def test_claude_live_settings_evidence(tmp_path):
     assert prev.os is True and prev.os_reason == "unknown"
 
 
+def test_claude_emitted_example_evidence(tmp_path):
+    """Wave-2 S1: a team that emitted a sandbox block but never merged it still had a boundary."""
+    root = _root(tmp_path)
+    team = _log(root)
+    example = root / ".claude" / "settings.hooks.example.json"
+    example.write_text(json.dumps({"hooks": {}}))  # emitted for every claude team: no sandbox, no evidence
+    assert ss.previous_sandbox_state(team, root, "claude") is None
+    example.write_text(json.dumps({"hooks": {}, "sandbox": {"enabled": True}}))
+    assert ss.previous_sandbox_state(team, root, "claude").os is True
+    assert ss.previous_sandbox_state(team, root, "goose") is None  # claude's evidence only
+
+
+def test_claude_example_beside_a_non_canonical_team_dir_counts_but_never_outside_the_project(tmp_path):
+    root = _root(tmp_path)
+    team = root / "agents-elsewhere" / "team"
+    (team / "references").mkdir(parents=True)
+    (team.parent / "settings.hooks.example.json").write_text(json.dumps({"sandbox": {"enabled": True}}))
+    assert ss.previous_sandbox_state(team, root, "claude").os is True
+    (tmp_path / "settings.hooks.example.json").write_text(json.dumps({"sandbox": {"enabled": True}}))
+    assert ss.previous_sandbox_state(root, root, "claude") is None  # the project root's parent is never read
+
+
 def test_wasm_and_substrate_evidence(tmp_path):
     root = _root(tmp_path)
     team = _log(root)

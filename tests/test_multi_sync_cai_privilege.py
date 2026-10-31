@@ -115,3 +115,46 @@ def test_os_sandbox_round_trips_through_team_cai(tmp_path, linux):
 def test_cai_schema_lists_the_field():
     schema = json.loads((REPO / "agentteams" / "schemas" / "agent-cai.schema.json").read_text())
     assert "os_sandbox" in schema["properties"]["privilege"]["description"]
+
+
+# --- wave-2 @security S1: the projection gate engages on any on -> off over the previous state ---------------------
+
+
+def _example_evidence(root: Path) -> None:
+    (root / ".claude").mkdir(parents=True, exist_ok=True)
+    (root / ".claude" / "settings.hooks.example.json").write_text(json.dumps({"sandbox": {"enabled": True}}))
+
+
+def test_governed_sync_cooperative_over_evidence_is_refused(tmp_path, linux):
+    _team(tmp_path)
+    _example_evidence(tmp_path)
+    priv = {"privilege_profile": "cooperative", "privilege_profile_explicit": True}  # no os_sandbox key
+    with pytest.raises(ValueError, match="sync refused.*sandbox-os-off:claude"):
+        ms._emit_privilege_artifacts(tmp_path, "claude", priv, dry_run=True)
+
+
+def test_governed_sync_cooperative_over_evidence_with_a_signed_decision_proceeds(tmp_path, linux, stub_ed25519):
+    team = _team(tmp_path)
+    _example_evidence(tmp_path)
+    log = _log(team, _row("sandbox-os-off:claude"))
+    before = log.read_text()
+    priv = {"privilege_profile": "cooperative", "privilege_profile_explicit": True}
+    ms._emit_privilege_artifacts(tmp_path, "claude", priv, dry_run=False)
+    assert log.read_text() == before  # checked, never consumed
+
+
+def test_ungoverned_sync_cooperative_over_evidence_prints_the_notice(tmp_path, linux, capsys):
+    _team(tmp_path, governed=False)
+    _example_evidence(tmp_path)
+    priv = {"privilege_profile": "cooperative", "privilege_profile_explicit": True}
+    ms._emit_privilege_artifacts(tmp_path, "claude", priv, dry_run=True)
+    assert "SANDBOX RELAXATION" not in capsys.readouterr().err  # the dry pre-check prints nothing
+    ms._emit_privilege_artifacts(tmp_path, "claude", priv, dry_run=False)
+    assert "SANDBOX RELAXATION: os sandbox OFF for claude (reason: profile:cooperative)" in capsys.readouterr().err
+
+
+def test_sync_without_evidence_is_unchanged(tmp_path, linux, capsys):
+    _team(tmp_path)  # governed, no record, no evidence
+    priv = {"privilege_profile": "cooperative", "privilege_profile_explicit": True}
+    ms._emit_privilege_artifacts(tmp_path, "claude", priv, dry_run=False)
+    assert "SANDBOX RELAXATION" not in capsys.readouterr().err

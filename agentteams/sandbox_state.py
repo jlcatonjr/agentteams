@@ -51,12 +51,20 @@ _REASON_RE = re.compile(r"^[a-z][a-z0-9:._-]{0,127}$")
 _SUBSTRATE_VALUES = (None, "on", "off")
 
 #: On-disk OS-boundary evidence per framework (project-relative). ``sandbox/confine-run.sh`` (the neutral launcher)
-#: counts for every framework; claude's evidence is the live ``.claude/settings.json`` ``sandbox.enabled``.
+#: counts for every framework. Claude's evidence is content-checked (:data:`_OS_EVIDENCE_SANDBOX_JSON`): the example
+#: is emitted for every Claude team, so only one whose ``sandbox.enabled`` is True is a boundary.
 _OS_EVIDENCE: dict[str, tuple[str, ...]] = {
     "goose": (".goose/sandbox.sb",),
     "codex": (".codex/confined-run.example.sh",),
     "grok": (".grok/sandbox.toml",),
 }
+#: JSON files that are OS-boundary evidence when their ``sandbox.enabled`` is exactly True: the live Claude settings
+#: and the previously emitted settings example (wave-2 @security S1: a team that emitted a boundary but never merged
+#: it still had one). The example is also looked for beside the team dir (``<agents>/../``), where it is emitted.
+_OS_EVIDENCE_SANDBOX_JSON: dict[str, tuple[str, ...]] = {
+    "claude": (".claude/settings.json", ".claude/settings.hooks.example.json"),
+}
+_CLAUDE_EXAMPLE_NAME = "settings.hooks.example.json"
 _OS_EVIDENCE_ALL: tuple[str, ...] = ("sandbox/confine-run.sh",)
 #: WASM evidence: an installed runtime (P03) or the installed ``agentteams_wasm`` MCP server (P10).
 _WASM_EVIDENCE: tuple[str, ...] = (".agentteams/wasm/installed.json", ".agentteams/bin/agentteams-wasm-mcp.py")
@@ -359,14 +367,25 @@ def _read_build_log(team_dir: Path) -> dict | None:
     return data if isinstance(data, dict) else {}
 
 
-def _claude_live_sandbox_enabled(root: Path) -> bool:
-    """True when the live ``.claude/settings.json`` has ``sandbox.enabled`` exactly True (booleans only, no echo)."""
+def _json_sandbox_enabled(path: Path) -> bool:
+    """True when the JSON file at ``path`` has ``sandbox.enabled`` exactly True (booleans only, no echo)."""
+    if not os.path.lexists(path):
+        return False
     try:
-        data = json.loads(_read_regular_text(root / ".claude" / "settings.json"))
+        data = json.loads(_read_regular_text(path))
     except (ValueError, json.JSONDecodeError):
         return False
     sandbox = data.get("sandbox") if isinstance(data, dict) else None
     return isinstance(sandbox, dict) and sandbox.get("enabled") is True
+
+
+def _sandbox_json_evidence(root: Path, team_dir: Path, framework_id: str) -> bool:
+    """True when any of ``framework_id``'s content-checked evidence files enables a sandbox."""
+    paths = [root / p for p in _OS_EVIDENCE_SANDBOX_JSON.get(framework_id, ())]
+    beside_team = Path(os.path.realpath(team_dir)).parent
+    if framework_id == "claude" and beside_team.is_relative_to(root):  # never read outside the project
+        paths.append(beside_team / _CLAUDE_EXAMPLE_NAME)
+    return any(_json_sandbox_enabled(p) for p in dict.fromkeys(paths))
 
 
 def _substrate_evidence(root: Path) -> bool:
@@ -387,7 +406,8 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
     1. The build-log record (``references/build-log.json`` key ``sandbox_state``), read ``O_NOFOLLOW`` after an lstat
        regular-file check. A present but malformed record, or a build-log that is a symlink or not valid JSON, yields
        :meth:`SandboxState.conservative`.
-    2. Evidence, OR-ed in (never AND): ``os`` is on when this framework's boundary files exist; ``wasm`` when a runtime
+    2. Evidence, OR-ed in (never AND): ``os`` is on when this framework's boundary files exist (for claude: the live
+       settings or the emitted ``settings.hooks.example.json`` with ``sandbox.enabled`` True); ``wasm`` when a runtime
        or the ``agentteams_wasm`` server is installed; ``model_substrate`` is ``"on"`` when the P20 projection says so.
        Grants come from the record only.
     3. No record and no evidence: None (a new team, or one never confined).
@@ -411,8 +431,8 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
         if record is None:
             record = SandboxState.conservative()
     os_paths = (*_OS_EVIDENCE.get(framework_id, ()), *_OS_EVIDENCE_ALL)
-    os_evidence = any(os.path.lexists(root / p) for p in os_paths) or (
-        framework_id == "claude" and _claude_live_sandbox_enabled(root))
+    os_evidence = any(os.path.lexists(root / p) for p in os_paths) or _sandbox_json_evidence(
+        root, Path(team_dir), framework_id)
     wasm_evidence = any(os.path.lexists(root / p) for p in _WASM_EVIDENCE)
     substrate_evidence = _substrate_evidence(root)
     if record is None and not (os_evidence or wasm_evidence or substrate_evidence):
@@ -482,6 +502,9 @@ def legacy_os_requested(manifest: dict[str, Any]) -> bool:
 
     Returns:
         Whether the profile or a token requests a boundary.
+
+    Raises:
+        Nothing.
     """
     return manifest.get("privilege_profile") in _CONFINING_PROFILES or bool(_sandbox_tokens(manifest))
 
@@ -570,6 +593,9 @@ def os_switch_set(manifest: dict[str, Any]) -> bool:
 
     Returns:
         True when either is present.
+
+    Raises:
+        Nothing.
     """
     return manifest.get("os_sandbox") is not None or manifest.get(OS_SANDBOX_CLI_KEY) is not None
 
