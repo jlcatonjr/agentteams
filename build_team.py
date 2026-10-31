@@ -713,8 +713,12 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
 
     from agentteams.frameworks.grok import GROK_TOOL_NOTICES_KEY as _GROK_NOTICES
 
+    # v1.6 (P15): the sandbox state and the relaxation-gate inputs, recorded only when the manifest carries them (P00/
+    # P01/P20 populate sandbox_state, P12/P13 sandbox_exceptions), so every other build-log stays 1.5 and byte-identical.
+    # The next render's previous_sandbox_state() reads them back.
+    _sandbox = {k: manifest[k] for k in ("sandbox_state", "sandbox_exceptions") if isinstance(manifest.get(k), dict)}
     log = {
-        "schema_version": "1.5",
+        "schema_version": "1.6" if _sandbox else "1.5",
         # v1.5 addition — render provenance so a freshness scan can tell WHICH
         # generator version / WHEN a render was produced (framework_freshness.py).
         # Older logs omit these; consumers must treat them as optional.
@@ -763,6 +767,7 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # Grok only: scoped tool entries the render dropped (allow) or widened to the whole tool (deny), because grok
         # does not honour scopes (GROK-FU-R8-SCOPE). Absent for every other framework and for clean grok renders.
         **({"grok_tool_notices": list(manifest[_GROK_NOTICES])} if manifest.get(_GROK_NOTICES) else {}),
+        **_sandbox,
     }
     from agentteams import prompt_roots  # #8 phase 1: per-fence prompt-root hashes (detection only)
 

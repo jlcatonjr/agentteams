@@ -33,6 +33,9 @@ _UNDOCUMENTED: frozenset[str] = frozenset({
     # write_sidecar), the same utility category as `budget`/`errors`/`atomicio`. Its behavior is
     # documented where it is used (references/architecture-quality-standards.md, and each consumer's
     # provenance sidecar); it does not yet warrant a standalone api-reference page.
+    # `sandbox_state`: WASM-sandbox program P15 (wave 1); its api-reference page is written by P18 (docs),
+    # which removes this entry. Until then it is documented in its module docstring and the P15 plan.
+    "sandbox_state",
 })
 
 

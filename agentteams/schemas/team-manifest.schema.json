@@ -829,6 +829,203 @@
           "description": "Shell command run when checks fail (optional)."
         }
       }
+    },
+    "sandbox_state": {
+      "type": "object",
+      "description": "P15 (METAPLAN 2.1): the render's effective sandbox state (SandboxState.to_record). Project-relative only; recorded in references/build-log.json so the next render can tell an OS/WASM 'off' that was on (a constraint-relaxing effect, Rule 15) from one that never was.",
+      "additionalProperties": false,
+      "required": [
+        "os",
+        "os_reason",
+        "wasm",
+        "wasm_reason",
+        "wasm_languages",
+        "wasm_grants",
+        "model_substrate"
+      ],
+      "properties": {
+        "os": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        },
+        "os_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9:._-]{0,127}$",
+          "description": "brief | cli | profile:<p> | host-feature:<tok> | unknown"
+        },
+        "wasm": {
+          "type": "string",
+          "enum": [
+            "on",
+            "off"
+          ]
+        },
+        "wasm_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9:._-]{0,127}$",
+          "description": "brief | cli | default-off | unknown"
+        },
+        "wasm_languages": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "module",
+              "python",
+              "javascript"
+            ]
+          }
+        },
+        "wasm_grants": {
+          "type": "object",
+          "description": "Agent slug -> the grant tokens beyond compute-only and the run limits. Raising limits mints no token.",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tokens",
+              "limits"
+            ],
+            "properties": {
+              "tokens": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^wasm:[a-z0-9][a-z0-9-]*:(read:[A-Za-z0-9._/-]+|scratch)$"
+                }
+              },
+              "limits": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fuel",
+                  "max_memory_bytes",
+                  "timeout_s"
+                ],
+                "properties": {
+                  "fuel": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "max_memory_bytes": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "timeout_s": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "model_substrate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "on",
+            "off",
+            null
+          ]
+        }
+      }
+    },
+    "sandbox_exceptions": {
+      "type": "object",
+      "description": "P15: relaxation-gate inputs outside SandboxState: agents keeping native exec while WASM is on (P13), and runner confined_programs entries on sandbox: wasm / sandbox: os (P12).",
+      "additionalProperties": false,
+      "required": [
+        "native_exec_keep",
+        "wasm_programs"
+      ],
+      "properties": {
+        "native_exec_keep": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "wasm_programs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "os_programs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        }
+      }
+    },
+    "sandbox_relaxations": {
+      "type": "array",
+      "description": "P15: one record per sandbox relaxation this render made and how it was authorized (sandbox_relaxation_gate.authorize). Identifiers only, never conditions text.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "action",
+          "authorization"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "sandbox-os-off",
+              "sandbox-wasm-off",
+              "wasm-grant-widen",
+              "native-exec-keep",
+              "wasm-to-os-switch"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "pattern": "^[a-z-]+:[a-z0-9][a-z0-9-]*$"
+          },
+          "authorization": {
+            "type": "string",
+            "enum": [
+              "ed25519-decision",
+              "notice-only",
+              "pre-governance",
+              "active-exception"
+            ]
+          },
+          "exception_id": {
+            "type": "string"
+          },
+          "decision_date": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "signature_prefix": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

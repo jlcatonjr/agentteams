@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from agentteams.cli.sandbox_effects import SANDBOX_RELAXATION_KINDS
+
 #: Token boundaries for the HALT-side match: any non-alphanumeric run, after camelCase and
 #: letter/digit boundaries are split (``m6OverwriteRender``, ``overwrite2``, ``(prune)``, ``overwrite,``).
 #: Wide on purpose: on the HALT side a false match only blocks.
@@ -25,9 +27,11 @@ _TOKEN_SPLIT = re.compile(r"[^a-z0-9]+")
 #: The action ids agentteams' own gates are called with (``_assert_destructive_action_allowed``,
 #: ``check_clearance``, ``_assert_no_unretracted_halt``); ``branch-cleanup`` is the family of the
 #: per-plan ``branch-cleanup:<sha256>`` id. The pre-upgrade report checks old HALTs against these; a
-#: test checks both directions against the call sites.
+#: test checks both directions against the call sites. The five sandbox-relaxation families
+#: (``cli/sandbox_effects.py``) are called as ``<kind>:<qualifier>`` instance ids and as the bare family.
 GATE_ACTIONS: tuple[str, ...] = ("overwrite", "prune", "restore-backup", "adopt-orphans-merge", "branch-delete",
-                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish")
+                                 "branch-cleanup", "vulnscan-remediation", "vulnscan-publish",
+                                 *SANDBOX_RELAXATION_KINDS)
 
 
 def action_matches(action_reviewed: str, action: str) -> bool:
