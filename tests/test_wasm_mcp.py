@@ -256,6 +256,11 @@ def test_wiring_problems_reports_install_shadowing_and_unprotected_control_plane
     assert any("__pycache__ is bytecode" in p for p in probs)
     assert any(".mcp.json defines an MCP server named agentteams_wasm" in p for p in probs)
     assert not any(M.PROTECTED_PATH in p for p in probs)
+    (root / M.PROTECTED_PATH).write_bytes(b"# edited server\n")
+    probs = M.wiring_problems(root, "claude", _ON, home=root)
+    edited = [p for p in probs if M.PROTECTED_PATH in p]
+    # only this check catches an edited server: it would still start, so the message must not claim it refuses
+    assert len(edited) == 1 and "cannot detect this itself" in edited[0] and "refuses to start" not in edited[0]
 
 
 def test_control_plane_advisory_names_the_reason(tmp_path: Path) -> None:
@@ -272,6 +277,10 @@ def test_control_plane_advisory_names_the_reason(tmp_path: Path) -> None:
     _claude_settings(root, os_on)
     (root / ".claude" / "settings.local.json").write_text(json.dumps({"sandbox": {"enabled": False}}))
     assert "settings.local.json" in M.control_plane_advisory(root, "claude", os_on)
+    (root / ".claude" / "settings.local.json").write_text("{not json")   # CH-24: malformed is not "absent"
+    assert "settings.local.json (it is unreadable or not JSON" in M.control_plane_advisory(root, "claude", os_on)
+    (root / ".claude" / "settings.local.json").unlink()
+    assert M.control_plane_advisory(root, "claude", os_on) is None
     assert "grok" in M.control_plane_advisory(root, "grok", os_on)
     assert "codex" in M.control_plane_advisory(root, "codex", os_on)
     assert "sandbox.sb is missing" in M.control_plane_advisory(root, "goose", os_on)

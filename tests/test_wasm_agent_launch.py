@@ -212,6 +212,26 @@ def test_guest_source_must_match_its_pin(tmp_path: Path, native: None) -> None:
     assert res.status == "refused" and "pinned sha256" in res.reason
 
 
+def test_a_caller_supplied_guest_is_refused_outside_tests(tmp_path: Path, native: None,
+                                                          monkeypatch: pytest.MonkeyPatch) -> None:
+    """@security P07 C1: only the pinned guest runs unless the test-only opt-in is set."""
+    from agentteams.wasm_agent import guest_source as GS
+
+    monkeypatch.delenv(L.TEST_GUEST_ENV, raising=False)
+    res = _stage0(project(tmp_path), profiles=_fake_profiles(None))
+    assert res.status == "refused" and "only the pinned guest program runs" in res.reason
+    assert L.TEST_GUEST_ENV == "AGENTTEAMS_WASM_TEST_GUEST"   # the name tests/conftest.py sets
+    root = project(tmp_path / "p")
+
+    class NoRuntime:
+        def resolve(self, name: str) -> Any:
+            raise LookupError(f"{name} not installed")
+
+    pinned = L.stage0(spec(root), "t", project_root=root, budget=Budget(), guest_source=GS.load_guest_source()[0],
+                      guest_sha256=GS.GUEST_SHA256, resolver=NoRuntime())
+    assert pinned.status == "refused" and pinned.reason.startswith("runtime:")   # got past the guest check
+
+
 # --- in-process (no OS sandbox) ----------------------------------------------------------------------------------
 
 def test_in_process_run_says_it_is_not_confined(tmp_path: Path, native: None) -> None:

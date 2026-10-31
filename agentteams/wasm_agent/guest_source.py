@@ -17,7 +17,7 @@ from pathlib import Path
 #: The guest program, relative to the ``agentteams`` package directory.
 GUEST_REL = "data/wasm_agent_guest.py"
 #: sha256 of the guest program's bytes (re-pinned whenever the program changes; a test checks it).
-GUEST_SHA256 = "c64a9b52d38ff31cfd6565c7d280fb0b259e038c49887df316baf0a6e7ff2752"
+GUEST_SHA256 = "f22939efc1aa3d9fce1b9092ff53d95712a9b0935b4be5fd85a1995b7db34896"
 #: Largest accepted guest program (the source is reviewed whole; a bigger file is not the reviewed one).
 MAX_GUEST_BYTES = 256 << 10
 

@@ -209,6 +209,20 @@ def test_internal_error_becomes_guest_error(guest: Any, monkeypatch: pytest.Monk
     assert isinstance(_decode(op), P.DoneOp)
 
 
+def test_malformed_carry_becomes_guest_error_and_other_bugs_stay_loud(guest: Any,
+                                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    """A carry entry of the wrong shape is answered (done failed); an unexpected error is not swallowed."""
+    fr = frame({"kind": "tool_result", "id": "a"}, carry={"results": [], "pending": [{"id": "a"}, "not-an-object"]})
+    op = step(guest, fr)
+    assert (op["status"], op["reason"]) == ("failed", "guest-error-typeerror")
+
+    def bug(*a: Any) -> Any:
+        raise ZeroDivisionError("x")
+    monkeypatch.setattr(guest, "decide", bug)
+    with pytest.raises(ZeroDivisionError):
+        step(guest, frame({"kind": "start"}))
+
+
 def test_script_writes_exactly_one_ascii_line() -> None:
     proc = run_script(_raw(frame(reply(text="ünïcödé ✓"))))
     assert proc.returncode == 0 and proc.stdout.count(b"\n") == 1 and proc.stdout.isascii()

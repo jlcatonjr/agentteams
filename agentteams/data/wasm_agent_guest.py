@@ -35,10 +35,7 @@ import sys
 from typing import Any
 
 PROTOCOL_VERSION = 1
-MAX_EVENT_BYTES = 4 << 20
-MAX_OP_BYTES = 1 << 20
-MAX_CARRY_BYTES = 256 << 10
-MAX_DEPTH = 32
+MAX_EVENT_BYTES, MAX_OP_BYTES, MAX_CARRY_BYTES, MAX_DEPTH = 4 << 20, 1 << 20, 256 << 10, 32
 #: Bytes kept free in an op or carry for the frame around the tool results.
 FRAME_SLACK = 16 << 10
 #: Imports this file may use (enforced by tests/test_wasm_agent_guest_static.py).
@@ -59,25 +56,19 @@ TOOL_INPUTS = {
 INSTRUCTION_FILE_NAMES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md", ".cursorrules")
 INSTRUCTION_FILE_SUFFIX = ".agent.md"
 
-MAX_CONTINUES = 2
-MAX_ID_CHARS = 64
-MAX_PATH_CHARS = 4096
-MAX_WRITE_BYTES = 4 << 20
-MAX_LIST_ENTRIES = 1000
-MAX_PATTERN_CHARS = 512
-SEARCH_FILE_BYTES = 1 << 20
-SEARCH_TOTAL_BYTES = 64 << 20
-SEARCH_MAX_MATCHES = 500
-SEARCH_MAX_ENTRIES = 20000
+MAX_CONTINUES, MAX_ID_CHARS, MAX_PATH_CHARS, MAX_WRITE_BYTES = 2, 64, 4096, 4 << 20
+MAX_LIST_ENTRIES, MAX_PATTERN_CHARS = 1000, 512
+SEARCH_FILE_BYTES, SEARCH_TOTAL_BYTES, SEARCH_MAX_MATCHES, SEARCH_MAX_ENTRIES = 1 << 20, 64 << 20, 500, 20000
 SEARCH_LINE_CHARS = 400
 #: Upper bounds on the host-sent limits (a malformed event cannot make the guest emit an oversize frame).
 LIMIT_CAPS = {"max_tool_output_bytes": 512 << 10, "max_read_bytes": 4 << 20}
 _EVENT_KEYS = frozenset(("v", "type", "accept", "run_id", "step", "agent", "mounts", "limits", "carry", "event"))
 #: 0 where the platform lacks it; read_file/write_file then rely on their lstat check (R-2: fail closed).
 _O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
-#: Failures of this program itself that :func:`handle` turns into ``done failed guest-error-*`` (named, not broad).
-_INTERNAL_ERRORS = (ArithmeticError, AttributeError, LookupError, MemoryError, OSError, RecursionError, TypeError,
-                    ValueError)
+#: What a well-formed frame with a wrongly-shaped body can still raise here (the host-echoed ``carry`` is opaque data,
+#: so e.g. a ``pending`` entry that is not an object reaches an index), plus ``MemoryError``. :func:`handle` answers
+#: these with ``done failed guest-error-*``; anything else is a guest bug and exits non-zero (a failed step).
+_INTERNAL_ERRORS = (AttributeError, LookupError, MemoryError, TypeError)
 
 
 class BadEvent(Exception):
@@ -220,8 +211,7 @@ def _fit_results(results: list[dict[str, Any]], budget: int) -> list[dict[str, A
 
 def _code(text: str) -> str:
     out = "".join(c if c.isascii() and (c.isalnum() or c in "_-") else "-" for c in str(text).lower())
-    out = out.strip("-_")[:64] or "failed"
-    return out
+    return out.strip("-_")[:64] or "failed"
 
 
 def _done(status: str, reason: str) -> dict[str, Any]:

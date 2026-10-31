@@ -7,6 +7,7 @@ installed under a test pins file (``tests/_wasm_mcp_helpers.py``); they skip whe
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
@@ -443,3 +444,130 @@ def test_live_nested_when_the_host_can_nest(live: Any) -> None:
     err, out = live.client.call({"language": "python", "source": "print(open('/project/data/f.txt').read())"})
     assert not err, out
     assert out["os_confinement"] == "nested" and out["read_only_mode"] == "os" and out["stdout"] == "project data\n\n"
+
+
+# --- W5R remediation: shared credential list, scan caps, advisories, parity -----------------------------------
+
+def _runner_module() -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location("_runner_mcp_server_t", Path(M.__file__).parent / "data"
+                                                  / "agentteams-runner-mcp.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+@pytest.mark.parametrize("rel, refused", [
+    (".env-prod", True), ("id_xmss", True), ("credentials.json", True), ("data/.env.local", True),
+    ("data/.SSH/x", True), (".claude/agents", True), (".env.example", False), ("data/report.csv", False),
+])
+def test_deny_check_uses_the_shared_credential_list(rel: str, refused: bool) -> None:
+    srv = _server_module()
+    assert srv.denied(rel, SP.credential_name) is refused
+    if refused:
+        with pytest.raises(ValueError, match="names a secret"):
+            srv.check_rel(rel, "path", SP.credential_name)
+    else:
+        assert srv.check_rel(rel, "path", SP.credential_name) == rel
+    assert not hasattr(srv, "DENY_PREFIXES")   # no hand-copied (weaker) credential list survives
+
+
+def test_server_deny_check_is_a_superset_of_the_shared_list_and_the_runner() -> None:
+    """Parity: everything SP or agentteams-runner-mcp.py denies, this server denies too."""
+    srv, runner = _server_module(), _runner_module()
+    samples = {*SP.CREDENTIAL_PARTS, *SP.CREDENTIAL_NAMES, *(p + "x" for p in SP.CREDENTIAL_PREFIXES),
+               *("x" + s for s in SP.CREDENTIAL_SUFFIXES), *("a" + i + "b" for i in SP.CREDENTIAL_INFIXES),
+               *runner.DENY_PARTS, *runner.DENY_NAMES, *(p + "x" for p in runner.DENY_PREFIXES),
+               *("x" + s for s in runner.DENY_SUFFIXES), *("a" + i + "b" for i in runner.DENY_INFIXES)}
+    samples -= {*SP.CREDENTIAL_ALLOWED, *runner.DENY_ALLOWED}
+    weaker = sorted(n for n in samples if not srv.denied(n, SP.credential_name))
+    assert not weaker, weaker
+    assert all(not srv.denied(n, SP.credential_name) for n in SP.CREDENTIAL_ALLOWED)
+    more = {".env-prod", "id_xmss", "credentials.json", ".ENVRC", "x.tfstate.bak", ".env.example", "README.md"}
+    for n in samples | more:   # whatever the runner's own check denies, this server's check denies
+        if runner.Server._denied(n):
+            assert srv.denied(n, SP.credential_name), n
+
+
+def test_scan_read_dir_uses_the_shared_entry_and_depth_caps(tmp_path: Path) -> None:
+    srv = _server_module()
+    deep = tmp_path / "top"
+    cur = deep
+    for i in range(4):
+        cur = cur / f"d{i}"
+    cur.mkdir(parents=True)
+    caps = types.SimpleNamespace(CREDENTIAL_SCAN_MAX_ENTRIES=100, CREDENTIAL_SCAN_MAX_DEPTH=3,
+                                 credential_name=SP.credential_name)
+    with pytest.raises(srv.StartError, match="nested deeper than 3 levels"):
+        srv.scan_read_dir(str(deep), caps)
+    srv.scan_read_dir(str(deep), types.SimpleNamespace(**{**vars(caps), "CREDENTIAL_SCAN_MAX_DEPTH": 4}))
+    with pytest.raises(srv.StartError, match="more than 2 entries"):
+        srv.scan_read_dir(str(deep), types.SimpleNamespace(**{**vars(caps), "CREDENTIAL_SCAN_MAX_ENTRIES": 2}))
+    (deep / "d0" / ".env-prod").write_text("k=v\n")
+    with pytest.raises(srv.StartError, match="holds a denied file"):
+        srv.scan_read_dir(str(deep), SP)
+    assert not hasattr(srv, "READ_TREE_MAX_ENTRIES")   # the caps come from the shared module
+
+
+def test_read_flag_naming_a_shared_credential_refuses_after_the_bundle_loads(tmp_path: Path) -> None:
+    root, pins = _installed(tmp_path)
+    srv = _server_module()
+    for rel in (".env-prod", "id_xmss", "credentials.json"):
+        res = _start(root, [*M.PYTHON_FLAGS, M.PROTECTED_PATH, "--agent", "a", "--languages", "module", "--read", rel,
+                            "--fuel", "1", "--max-memory-bytes", "65536", "--timeout-s", "1", "--pins-sha256", pins,
+                            "--grant-sha256", srv.grant_digest([rel], False, 1, 65536, 1)])
+        assert res.returncode == 2 and b"--read" in res.stderr and b"names a secret" in res.stderr, rel
+
+
+def test_unreadable_pinned_version_is_an_advisory_not_a_silent_none(tmp_path: Path) -> None:
+    server, _ = _fake_server(tmp_path, _Res())
+
+    class NoVersion(FakeResolver):
+        def pinned_version(self, component: str) -> str:
+            raise server.wp.WasmPinError(f"no pins for component {component!r}")
+
+    server.resolver = lambda: NoVersion("/bin/true", "36.0.20")
+    out = server.call("run_wasm", {"language": "python", "source": "x"})
+    assert out["runtime"]["wasmtime"] is None and "no pins for component" in out["runtime"]["advisory"]
+
+
+def test_refuses_to_start_when_its_own_path_is_a_symlink(tmp_path: Path) -> None:
+    root, pins = _installed(tmp_path)
+    real = root / M.BIN_DIR / "agentteams-wasm-mcp-real.py"
+    (root / M.PROTECTED_PATH).rename(real)
+    os.symlink(real.name, root / M.PROTECTED_PATH)
+    res = _start(root, H.args_for("analyst", W.COMPUTE_ONLY, pins))
+    assert res.returncode == 2 and b"own path is a symlink" in res.stderr
+
+
+class _Normalise(ast.NodeTransformer):
+    """Erase the server pair's intentional differences, so anything else that drifts fails the parity test."""
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
+        if node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant):
+            node.body = node.body[1:]                    # docstrings differ in wording only
+        return self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> ast.AST:
+        # Intentional: agentteams_wasm returns guest text verbatim, so it does not \u-escape non-ASCII output.
+        node.keywords = [k for k in node.keywords if k.arg != "ensure_ascii"]
+        return self.generic_visit(node)
+
+    def visit_If(self, node: ast.If) -> ast.AST:
+        test = node.test
+        if (isinstance(test, ast.Compare) and isinstance(test.comparators[0], ast.Constant)
+                and test.comparators[0].value == "tools/list"):
+            node.body = [ast.Pass()]                     # intentional: one tool vs the runner's granted list
+        return self.generic_visit(node)
+
+
+def _rpc_ast(path: Path) -> str:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    fns = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ("_reply", "serve")]
+    return "\n".join(ast.dump(_Normalise().visit(f)) for f in fns)
+
+
+def test_jsonrpc_loop_matches_the_runner_server() -> None:
+    """``_reply``/``serve`` are the runner server's, except the differences :class:`_Normalise` names."""
+    runner = Path(M.__file__).parent / "data" / "agentteams-runner-mcp.py"
+    assert _rpc_ast(H.SERVER).count("FunctionDef") == 2
+    assert _rpc_ast(H.SERVER) == _rpc_ast(runner)

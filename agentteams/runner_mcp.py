@@ -11,6 +11,7 @@ itself can't be edited silently. Plan: ``references/plans/mcp-mediated-agent-wri
 from __future__ import annotations
 
 from importlib import resources
+from os import PathLike
 
 #: The MCP server name agents see (``mcp__agentteams_runner__<tool>``).
 SERVER_NAME = "agentteams_runner"
@@ -195,13 +196,24 @@ def _json(path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _shadowing(root, home, name: str = SERVER_NAME) -> list[str]:
+def _shadowing(root: str | PathLike[str], home: str | PathLike[str], name: str = SERVER_NAME) -> list[str]:
     """Every config scope that defines a server named *name* (default agentteams_runner; @security C13, R7 item 1).
 
     Which entry Claude Code prefers between a subagent's inline server and a configured one of the same name isn't
     something to rely on, so a match in any scope is refused: project ``.mcp.json`` and settings, the user's
     ``~/.claude.json`` (top level and this project's local entry), machine-managed config, and Goose's user config.
     ``agentteams_wasm`` (WASM P10, S7) passes its own *name*; the behaviour for ``agentteams_runner`` is unchanged.
+
+    Args:
+        root: The project root.
+        home: The home directory holding ``.claude.json`` and Goose's ``config.yaml``.
+        name: The MCP server name to look for.
+
+    Returns:
+        One message per scope that defines *name*, or that is unreadable (so a shadowing entry can't be ruled out).
+
+    Raises:
+        Nothing: an unreadable or malformed scope is reported in the list, never raised.
     """
     import os
     import re
