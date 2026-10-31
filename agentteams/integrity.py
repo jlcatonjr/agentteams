@@ -306,6 +306,34 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the five sandbox-relaxation kinds + token vocabulary
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
+    # The WASM sandbox (2026-10-31, wave-1 @security S4). wasm_exec is the one place wasmtime starts: its grant
+    # shape check, mount-host refusals ('::'/':', control chars) and empty environment ARE the compute-only
+    # boundary (C-3). wasm_pins is the one hash check every resolve goes through (R10), wasm_runtime/_wasm_archive
+    # the verify-on-use wrapper and the safe extractor, _wasm_pin_update the S-10 / remediation-decision gate, and
+    # cli/wasm_commands the only caller of install/pin_update. A silent edit to any of them runs an unverified
+    # wasmtime or interpreter, or widens what a guest may touch, without tripping --verify-integrity.
+    "agentteams/wasm_exec.py",
+    "agentteams/wasm_pins.py",
+    "agentteams/wasm_runtime.py",
+    "agentteams/_wasm_archive.py",
+    "agentteams/_wasm_pin_update.py",
+    "agentteams/cli/wasm_commands.py",
+    # The trust anchor of every WASM resolve: the pinned versions, URLs and sha256s. An unpinned edit swaps in
+    # another binary's hash and resolve() then vouches for it (wasm_runtime.PINS_SHA256 is computed from this file
+    # at import, so it cannot pin itself; the manifest does).
+    "agentteams/data/wasm_runtime_pins.json",
+    # Host-mediated model access (WASM P06). The provider key travels only to the vetted base URL, and the
+    # request/reply validation bounds what crosses the wire (C-4); a silent edit leaks the key or widens what a reply
+    # may carry.
+    "agentteams/model_providers/__init__.py",
+    "agentteams/model_providers/_anthropic.py",
+    "agentteams/model_providers/_common.py",
+    "agentteams/model_providers/_config.py",
+    "agentteams/model_providers/_gemini.py",
+    "agentteams/model_providers/_openai.py",
+    "agentteams/model_providers/_stub.py",
+    "agentteams/model_providers/_transport.py",
+    "agentteams/model_providers/_validate.py",
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude
