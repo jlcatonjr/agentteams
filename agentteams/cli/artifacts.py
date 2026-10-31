@@ -500,6 +500,7 @@ def finalize_privilege_wiring(
     manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
     *, allow_unenforced: bool = True, team_dir: Path | None = None,
     accepted_write_roots: list[str] | None = None, dry_run: bool = False, os_sandbox_cli: str | None = None,
+    brief_confined_programs: Any = None,
 ) -> None:
     """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
 
@@ -522,6 +523,8 @@ def finalize_privilege_wiring(
             registering an exception or retiring one.
         os_sandbox_cli: ``--os-sandbox`` (operator argv), carried as the transient
             ``sandbox_state.OS_SANDBOX_CLI_KEY`` (never read from input, never persisted).
+        brief_confined_programs: The brief's ``confined_programs`` (WASM plan P12): with the operator file (which
+            wins, as at the runner) it fills ``SandboxExceptions.wasm_programs`` / ``os_programs`` for the gate.
 
     Raises:
         PrivilegeConfinementError: Unenforceable confinement (P1-2), an invalid ``os_sandbox``
@@ -566,7 +569,8 @@ def finalize_privilege_wiring(
     from agentteams.cli.os_sandbox_switch import engage_relaxation_gate
 
     sandbox_states = engage_relaxation_gate(manifest, state, framework_id, project_root,
-                                            team_dir=team_dir, dry_run=dry_run)
+                                            team_dir=team_dir, dry_run=dry_run,
+                                            brief_confined_programs=brief_confined_programs)
     grant_roots = apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
     coordination_roots = apply_coordination_roots_to_write_roots(manifest)
     write_root_policy.enforce(

@@ -44,9 +44,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable, NamedTuple, TypedDict
 
 from agentteams import _sandbox_profiles as _profiles
+from agentteams import runner_wasm as _runner_wasm
 from agentteams._sandbox_profiles import (  # noqa: F401  re-exported: one source (METAPLAN v2 R2)
     ConfinementError,
     _clean,
@@ -554,12 +555,24 @@ def launcher_store_refusal(agent: str, unresolved: list[str], store_warnings: li
             f"outputs, fix xcrun (xcode-select -p), or set confined_programs.{agent}.{OPT_IN_LAUNCHER_STORE}: true")
 
 
-def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[str], Any]) -> dict[str, dict[str, Any]]:
+class Jail(TypedDict, total=False):
+    """One validated ``confined_programs`` entry (:func:`load_confined`). ``exec`` and ``write`` are always present
+    (empty for a ``sandbox: wasm`` jail); ``sandbox`` and ``wasm`` only for a wasm jail (WASM plan P12)."""
+
+    exec: list[str]
+    write: list[str]
+    allow_unresolved_launcher_with_package_store: bool
+    sandbox: str
+    wasm: dict[str, Any]
+
+
+def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[str], Any]) -> dict[str, Jail]:
     """Validate ``confined_programs`` and gates' optional ``exec``.
 
     Exec paths must be absolute (or ``~/``). Write roots must be safe relative paths clear of the project
     root, the ledger, the queue, ``.git`` and the control plane. No exec path may lie inside a write root, or a
-    command could build a binary there and then run it.
+    command could build a binary there and then run it. An entry may set ``sandbox`` to ``"os"`` (the default, the
+    shape above) or ``"wasm"`` (:func:`agentteams.runner_wasm.validate_entry`: no ``exec``, a ``wasm`` block).
 
     Args:
         raw: ``confined_programs``, from the operator-owned file (P5b) or else the brief.
@@ -567,7 +580,8 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         control_plane_of: :func:`agentteams.frameworks._write_roots.control_plane_of`.
 
     Returns:
-        ``{agent: {"exec": [...], "write": [...]}}``, plus ``OPT_IN_LAUNCHER_STORE: True`` when set.
+        ``{agent: {"exec": [...], "write": [...]}}``, plus ``OPT_IN_LAUNCHER_STORE: True`` when set; a wasm jail is
+        ``{"sandbox": "wasm", "exec": [], "write": [], "wasm": {...}}``.
 
     Raises:
         ConfinementError: On any malformed or unsafe entry.
@@ -578,8 +592,18 @@ def load_confined(raw: Any, gates: dict[str, Any], control_plane_of: Callable[[s
         for path in gate.get("exec") or []:
             if not (isinstance(path, str) and (path.startswith("/") or path.startswith("~/"))):
                 raise ConfinementError(f"proposal_gates.{name}.exec entries must be absolute or ~/ paths")
-    confined: dict[str, dict[str, list[str]]] = {}
+    confined: dict[str, Jail] = {}
     for agent, spec in raw.items():
+        sandbox = spec.get("sandbox", "os") if isinstance(spec, dict) else None
+        if sandbox not in _runner_wasm.SANDBOX_KINDS and isinstance(spec, dict):
+            raise ConfinementError(f"confined_programs.{agent}.sandbox must be one of "
+                                   f"{', '.join(_runner_wasm.SANDBOX_KINDS)}")
+        if sandbox == "wasm":
+            confined[agent] = _runner_wasm.validate_entry(agent, spec, control_plane_of,  # type: ignore[assignment]
+                                                          protected_rel=PROTECTED_REL)
+            continue
+        if isinstance(spec, dict) and "sandbox" in spec:
+            spec = {k: v for k, v in spec.items() if k != "sandbox"}  # an explicit "os" is the default shape
         if not (isinstance(spec, dict) and set(spec) <= {"exec", "write", OPT_IN_LAUNCHER_STORE}):
             raise ConfinementError(f"confined_programs.{agent} must be {{exec, write}} (and optionally "
                                    f"{OPT_IN_LAUNCHER_STORE})")

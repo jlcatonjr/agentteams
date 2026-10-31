@@ -127,7 +127,7 @@ def gate_engaged(manifest: dict, state: SandboxState, previous: SandboxState | N
 
 def engage_relaxation_gate(
     manifest: dict, state: SandboxState, framework_id: str, project_root: Path, *, team_dir: Path | None,
-    dry_run: bool,
+    dry_run: bool, brief_confined_programs: Any = None,
 ) -> tuple[SandboxState | None, SandboxState] | None:
     """Run the P15 sandbox-relaxation gate for this render and record the state (P00 D7, wave-2 S1).
 
@@ -141,6 +141,10 @@ def engage_relaxation_gate(
         project_root: The project root (evidence files, record paths).
         team_dir: The team dir (build-log, decisions log, exception registry); the project root when None.
         dry_run: Check only: consume nothing, register and retire nothing.
+        brief_confined_programs: The brief's ``confined_programs``. Under ``write_policy: orchestrator-only`` the
+            runner programs' modes (operator file, else this) become the gate's ``SandboxExceptions``
+            (``wasm-to-os-switch``, WASM plan P12) and are recorded as ``sandbox_exceptions``; the gate is then
+            engaged too, so a switch cannot step around it.
 
     Returns:
         ``(previous, new)`` states for the ``SANDBOX RELAXATION`` notice, or None when not engaged.
@@ -148,19 +152,39 @@ def engage_relaxation_gate(
     Raises:
         SandboxRelaxationError: A relaxation is refused in a governed workspace (nothing consumed).
         ImportError: The record carries WASM grants and ``agentteams.wasm_exec`` is not importable (fail closed).
+        WriteRootPolicyError: The operator ``confined_programs`` file fails its custody checks.
     """
     from agentteams.cli import sandbox_relaxation_gate as gate
-    from agentteams.sandbox_state import has_recorded_state, previous_sandbox_state
+    from agentteams.sandbox_state import has_recorded_state, previous_sandbox_exceptions, previous_sandbox_state
 
     team = Path(team_dir) if team_dir is not None else Path(project_root)
+    exceptions = None
+    if manifest.get("write_policy") == "orchestrator-only":
+        from agentteams import runner_wasm
+        from agentteams._sandbox_profiles import ConfinementError
+        from agentteams.cli.write_root_policy import WriteRootPolicyError
+
+        try:
+            new_exc = runner_wasm.runner_exceptions(runner_wasm.effective_raw(Path(project_root),
+                                                                              brief_confined_programs))
+        except ConfinementError as exc:   # an unreadable operator file: the runner refuses it too
+            raise WriteRootPolicyError(f"the operator confined_programs file: {exc}") from exc
+        previous_exc = previous_sandbox_exceptions(team)
+        # Engaged once any runner program is (or was recorded) on sandbox: wasm; a team that never used it keeps a
+        # byte-identical build-log. Once recorded, every later render re-checks the switch's standing exception.
+        if new_exc.wasm_programs or previous_exc is not None:
+            exceptions = (previous_exc, new_exc)
     old = previous_sandbox_state(team, project_root, framework_id)
-    if not gate_engaged(manifest, state, old, recorded=has_recorded_state(team)):
+    if not (gate_engaged(manifest, state, old, recorded=has_recorded_state(team)) or exceptions):
         return None
     relaxations = gate.plan_relaxations(
-        old, state, framework_id=framework_id, profile_would_emit=manifest.get("privilege_profile") in _CONFINING)
+        old, state, framework_id=framework_id, profile_would_emit=manifest.get("privilege_profile") in _CONFINING,
+        exceptions=exceptions)
     manifest["sandbox_relaxations"] = gate.authorize(team, relaxations, consume=not dry_run)
-    gate.retire_on_tighten(team, old, state, framework_id=framework_id, dry_run=dry_run)
+    gate.retire_on_tighten(team, old, state, framework_id=framework_id, exceptions=exceptions, dry_run=dry_run)
     manifest["sandbox_state"] = state.to_record(project_root=Path(project_root))
+    if exceptions is not None:
+        manifest["sandbox_exceptions"] = exceptions[1].to_record()
     return old, state
 
 
