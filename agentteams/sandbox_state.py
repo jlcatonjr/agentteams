@@ -1,9 +1,9 @@
 """sandbox_state.py — the effective sandbox state of a render, its build-log record, and the previous state.
 
 METAPLAN §2.1: P15 owns the frozen :class:`SandboxState` (the OS switch, the WASM switch, the WASM languages and
-per-agent grants, and the projected model-substrate switch). P00 (OS) and P01 (WASM) add
-``effective_sandbox_state(manifest)``; every consumer that reasons about a boundary reads this, never
-``privilege_profile`` directly.
+per-agent grants, and the projected model-substrate switch). P00 adds the OS derivation
+(:func:`effective_sandbox_state`, :func:`os_sandbox_requested`, :func:`validate_os_sandbox`); P01 extends it for WASM.
+Every consumer that reasons about a boundary reads this, never ``privilege_profile`` directly.
 
 This module also holds the one token<->``Mount`` mapping (plan Interface issue 2): a read-only ``/project/<rel>``
 mount is ``wasm:<agent>:read:<rel>``, the private ``/scratch`` mount is ``wasm:<agent>:scratch``. Any other mount in an
@@ -428,6 +428,198 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
     )
 
 
+#: The two values of the dedicated OS-sandbox switch (brief ``os_sandbox``, argv ``--os-sandbox``; P00).
+OS_SANDBOX_VALUES: tuple[str, ...] = ("on", "off")
+
+#: Transient manifest key carrying ``--os-sandbox`` (operator argv). Set only by ``cli/generate.py`` and the
+#: ``--check-wiring`` path, never read from input: :func:`effective_sandbox_state` honours it only as one of
+#: :data:`OS_SANDBOX_VALUES`. The team manifest is never persisted whole, and the build-log records only
+#: ``sandbox_state``, so it never reaches disk.
+OS_SANDBOX_CLI_KEY = "_os_sandbox_cli"
+
+#: Transient manifest key carrying the ``*:sandbox`` tokens the operator passed explicitly on
+#: ``--target-host-features`` (set by ``cli.artifacts.resolve_host_features_and_advise``; never from input).
+EXPLICIT_SANDBOX_TOKENS_KEY = "_explicit_sandbox_tokens"
+
+_CONFINING_PROFILES = frozenset({"confined", "exclusive"})
+
+
+def validate_os_sandbox(value: object) -> str | None:
+    """Return the validated ``os_sandbox`` value.
+
+    Fails closed on a typo (CC-6 analogue of ``validate_privilege_profile``): ``"OFF"``, ``true`` or ``1`` look like
+    a choice while meaning none, so they are refused rather than ignored.
+
+    Args:
+        value: The raw brief / argv value.
+
+    Returns:
+        ``None`` for an absent value, else ``"on"`` or ``"off"``.
+
+    Raises:
+        ValueError: Any other value.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and value in OS_SANDBOX_VALUES:
+        return value
+    raise ValueError(f"os_sandbox must be \"on\" or \"off\" (got {value!r})")
+
+
+def _sandbox_tokens(manifest: dict[str, Any]) -> list[str]:
+    return [t for t in (manifest.get("host_features") or []) if isinstance(t, str) and t.endswith(":sandbox")]
+
+
+def legacy_os_requested(manifest: dict[str, Any]) -> bool:
+    """Return today's (pre-``os_sandbox``) framework-neutral request test, ignoring the switch.
+
+    A confined/exclusive ``privilege_profile`` or any ``*:sandbox`` host-feature token. Kept for the one consumer that
+    must never see fewer boundaries than before the switch existed: the control-plane stubs a sibling team's launcher
+    needs (``control_plane_io.stubs_enabled``, METAPLAN R9).
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        Whether the profile or a token requests a boundary.
+    """
+    return manifest.get("privilege_profile") in _CONFINING_PROFILES or bool(_sandbox_tokens(manifest))
+
+
+def _os_switch(manifest: dict[str, Any]) -> tuple[bool, str]:
+    """Return ``(os, os_reason)`` by the P00 precedence (first match wins). Raises ValueError on a bad value or the
+    argv conflict."""
+    cli = validate_os_sandbox(manifest.get(OS_SANDBOX_CLI_KEY))
+    explicit = [t for t in (manifest.get(EXPLICIT_SANDBOX_TOKENS_KEY) or ())
+                if isinstance(t, str) and t.endswith(":sandbox")]
+    if cli == "off" and explicit:
+        raise ValueError(f"--os-sandbox off conflicts with the explicit --target-host-features {explicit[0]}; "
+                         "drop one of them")
+    if cli is not None:
+        return cli == "on", "cli"
+    if explicit:  # operator argv beats the (agent-writable) brief
+        return True, f"host-feature:{explicit[0]}"
+    brief = validate_os_sandbox(manifest.get("os_sandbox"))
+    if brief is not None:
+        return brief == "on", "brief"
+    profile = manifest.get("privilege_profile")
+    if profile in _CONFINING_PROFILES:
+        return True, f"profile:{profile}"
+    tokens = _sandbox_tokens(manifest)
+    if tokens:
+        return True, f"host-feature:{tokens[0]}"
+    return False, f"profile:{profile}" if isinstance(profile, str) and _SLUG_RE.match(profile) else "profile:none"
+
+
+def effective_sandbox_state(manifest: dict[str, Any]) -> SandboxState:
+    """Return the effective sandbox state of ``manifest`` (METAPLAN §2.1; P00 derives the OS half).
+
+    OS precedence, first match wins: ``--os-sandbox`` (:data:`OS_SANDBOX_CLI_KEY`) -> an explicit argv
+    ``*:sandbox`` token (:data:`EXPLICIT_SANDBOX_TOKENS_KEY`) -> the brief's ``os_sandbox`` -> a confined/exclusive
+    ``privilege_profile`` -> any ``*:sandbox`` host-feature token -> off. With no switch set this is exactly the
+    pre-P00 framework-neutral request test (:func:`legacy_os_requested`), so existing renders are unchanged.
+
+    The WASM half stays at its off defaults until P01/P20 extend this function.
+
+    Args:
+        manifest: The team manifest (``privilege_profile``, ``host_features``, ``os_sandbox`` and the transient
+            CLI keys).
+
+    Returns:
+        The state.
+
+    Raises:
+        ValueError: An ``os_sandbox`` value other than on/off, or ``--os-sandbox off`` together with an explicit
+            ``--target-host-features <fw>:sandbox``.
+    """
+    os_on, os_reason = _os_switch(manifest)
+    return SandboxState(os=os_on, os_reason=os_reason, wasm=False, wasm_reason="default-off", wasm_languages=(),
+                        wasm_grants={}, model_substrate=None)
+
+
+def os_sandbox_requested(manifest: dict[str, Any], token: str | None = None) -> bool:
+    """Return whether an OS boundary is emitted for ``manifest`` (the one helper every emitter twin delegates to).
+
+    Args:
+        manifest: The team manifest.
+        token: The calling emitter's own token (``"claude:sandbox"``, ``"goose:sandbox"``, ...), or None for the
+            framework-neutral question (the launcher, write-root widening).
+
+    Returns:
+        False when the effective OS state is off. When on: True for ``token=None``, when ``token`` is in
+        ``host_features``, or when the switch or the profile asks (reason ``cli`` / ``brief`` / ``profile:*``),
+        which keeps the convert/render paths (no profile->token union) emitting for a confined manifest. A
+        boundary that is on only because of ANOTHER framework's token is not this framework's.
+
+    Raises:
+        ValueError: As :func:`effective_sandbox_state`.
+    """
+    state = effective_sandbox_state(manifest)
+    if not state.os:
+        return False
+    if token is None or token in (manifest.get("host_features") or []):
+        return True
+    return state.os_reason in ("cli", "brief") or state.os_reason.startswith("profile:")
+
+
+def os_switch_set(manifest: dict[str, Any]) -> bool:
+    """Return whether the dedicated OS switch is set at all (brief ``os_sandbox`` or ``--os-sandbox``).
+
+    Args:
+        manifest: The team manifest.
+
+    Returns:
+        True when either is present.
+    """
+    return manifest.get("os_sandbox") is not None or manifest.get(OS_SANDBOX_CLI_KEY) is not None
+
+
+def verifier_sandbox_state(manifest: dict[str, Any] | None, team_dir: Path,
+                           project_root: Path) -> SandboxState | None:
+    """Return the sandbox state a read-only drift check compares live config against (P00 D8).
+
+    The manifest's effective state when a manifest is given (the brief, plus ``--os-sandbox``), else the
+    ``sandbox_state`` the last render recorded in the build-log. Evidence files are NOT OR-ed in here: a drift check
+    must report what the brief asks for, not what disk suggests.
+
+    Args:
+        manifest: The team manifest, or None.
+        team_dir: The team directory (holds ``references/build-log.json``).
+        project_root: The project root.
+
+    Returns:
+        The state, or None when neither source says anything (no manifest, no usable record).
+
+    Raises:
+        ValueError: An invalid ``os_sandbox`` value in ``manifest``.
+    """
+    if manifest is not None:
+        return effective_sandbox_state(manifest)
+    log = _read_build_log(team_dir)
+    if not log:
+        return None
+    try:
+        return SandboxState.from_record(log.get(BUILD_LOG_STATE_KEY), project_root=_root(project_root))
+    except ImportError:
+        return None
+
+
+def has_recorded_state(team_dir: Path) -> bool:
+    """Return whether the previous render recorded a ``sandbox_state`` (or left an unusable build-log).
+
+    Once a team has used a sandbox switch, every later render keeps going through the relaxation gate, so removing
+    the switch from the brief cannot step around it.
+
+    Args:
+        team_dir: The team directory.
+
+    Returns:
+        True when the build-log carries the key, or exists but cannot be read (fail toward governed).
+    """
+    log = _read_build_log(team_dir)
+    return log is not None and (log == {} or BUILD_LOG_STATE_KEY in log)
+
+
 def previous_sandbox_exceptions(team_dir: Path) -> SandboxExceptions | None:
     """Return the gate inputs the previous render recorded (build-log key ``sandbox_exceptions``).
 
@@ -466,14 +658,24 @@ def keep_tokens(state: SandboxState | None, exceptions: SandboxExceptions | None
 __all__ = [
     "BUILD_LOG_EXCEPTIONS_KEY",
     "BUILD_LOG_STATE_KEY",
+    "EXPLICIT_SANDBOX_TOKENS_KEY",
+    "OS_SANDBOX_CLI_KEY",
+    "OS_SANDBOX_VALUES",
     "SCRATCH_REL",
     "WASM_LANGUAGES",
     "SandboxExceptions",
     "SandboxState",
+    "effective_sandbox_state",
     "grant_from_tokens",
     "grant_tokens",
+    "has_recorded_state",
     "keep_tokens",
+    "legacy_os_requested",
+    "os_sandbox_requested",
+    "os_switch_set",
     "previous_sandbox_exceptions",
     "previous_sandbox_state",
     "state_tokens",
+    "validate_os_sandbox",
+    "verifier_sandbox_state",
 ]

@@ -254,6 +254,11 @@ def run_standalone_modes(
     # -----------------------------------------------------------------------
     if getattr(args, "check_wiring", False):
         framework = str(manifest.get("framework") or "claude")
+        # P00: the drift checks compare live config with the effective OS state, so --os-sandbox counts here too.
+        from agentteams.sandbox_state import OS_SANDBOX_CLI_KEY, effective_sandbox_state
+
+        if getattr(args, "os_sandbox", None) is not None:
+            manifest[OS_SANDBOX_CLI_KEY] = args.os_sandbox
         # The verifiers read <project>/.claude/... and <project>/.goose/...; --output names the
         # team's agents dir, so map a default agents dir back to its project root (a non-default
         # layout is passed through unchanged). Before this, the default layout always reported
@@ -283,7 +288,7 @@ def run_standalone_modes(
         elif framework == "claude":
             from agentteams.frameworks.claude import verify_sandbox_wiring
 
-            ok, messages = verify_sandbox_wiring(wiring_root)
+            ok, messages = verify_sandbox_wiring(wiring_root, manifest)
             from agentteams.cli.generate_helpers import live_excluded_commands_warning
 
             excluded = live_excluded_commands_warning(wiring_root)
@@ -293,14 +298,23 @@ def run_standalone_modes(
             from agentteams.cli.itest_tripwire import tripwire_notes
 
             messages = list(messages) + tripwire_notes()
+        elif framework == "grok":
+            from agentteams.frameworks._grok_sandbox_emit import verify_grok_sandbox_wiring
+
+            ok, messages = verify_grok_sandbox_wiring(wiring_root, manifest)
         else:
             # codex/copilot have no OS sandbox agentteams configures — report honestly
             # (exit-neutral) rather than running the Claude checker against a foreign tree.
-            ok, messages = True, [
-                f"no OS-enforced sandbox wiring is emitted for the {framework!r} framework — "
-                "nothing to verify. Confine such targets from OUTSIDE the process (container "
-                "+ seccomp-bpf + Landlock on Linux, plus egress filtering)."
-            ]
+            _state = effective_sandbox_state(manifest)
+            if not _state.os and _state.os_reason in ("brief", "cli"):
+                ok, messages = True, [
+                    f"OS sandbox is off for this team by {_state.os_reason}; nothing to verify."]
+            else:
+                ok, messages = True, [
+                    f"no OS-enforced sandbox wiring is emitted for the {framework!r} framework — "
+                    "nothing to verify. Confine such targets from OUTSIDE the process (container "
+                    "+ seccomp-bpf + Landlock on Linux, plus egress filtering)."
+                ]
         from agentteams.frameworks.claude import verify_gate_interpreter  # 1.0 must-fix: the gate can import agentteams
 
         gate_ok, gate_messages = verify_gate_interpreter(wiring_root, framework)

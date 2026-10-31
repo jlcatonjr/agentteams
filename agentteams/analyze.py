@@ -270,6 +270,11 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     privilege_profile = host_features.validate_privilege_profile(
         description.get("privilege_profile")
     )
+    # P00: the dedicated OS-sandbox switch, independent of the profile. Carried only when the
+    # brief sets it (so a team without it keeps a byte-identical manifest); a typo fails closed.
+    from agentteams.sandbox_state import validate_os_sandbox
+
+    os_sandbox = validate_os_sandbox(description.get("os_sandbox"))
     workspace_write_roots = description.get("workspace_write_roots")
     # Sanctioned loopback egress proxy for an EXCLUSIVE goose team (network-isolated). Wired
     # here so it is reachable (audit 2026-W39, C1): the goose Seatbelt emitter re-allows this
@@ -562,6 +567,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         "team_id": team_id,
         "privilege_profile": privilege_profile,
         "privilege_profile_explicit": privilege_profile_explicit,
+        **({"os_sandbox": os_sandbox} if os_sandbox is not None else {}),
         "enforce_decision_signing": enforce_decision_signing,
         **({"is_management_repo": True} if is_management_repo else {}),
         **({"authorized_managers": authorized_managers} if authorized_managers else {}),

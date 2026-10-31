@@ -122,6 +122,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # Opt-in prompt-root protection (follow-up #8 phase 2, 2026-10-01): the Edit rules and
     # present-only denyWrite set _sandbox_emit.py emits, and the RELAXATION-notice rule set.
     "agentteams/frameworks/_prompt_root_protect.py",
+    # WASM-sandbox P00 (METAPLAN R1): the .agentteams control-plane write protection every emitter applies whenever
+    # WASM is on (or under the write policy). A silent edit dropping a rule re-opens the WASM runtime and MCP bundle
+    # to session writes. And the read-only drift checks --check-wiring runs (P13 reads verify_control_plane_merged).
+    "agentteams/frameworks/_control_plane_protect.py",
+    "agentteams/frameworks/_sandbox_drift.py",
     # The write-root chokepoint (follow-up #2, 2026-09-30; @security CLEAR_WITH_CONDITIONS). Every
     # emitter refuses hard-banned roots through it, and the CLI acceptance gate below uses it; a
     # silent edit here re-opens `~`, `/` or shell injection into the operator-run goose runner.

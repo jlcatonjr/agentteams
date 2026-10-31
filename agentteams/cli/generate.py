@@ -182,11 +182,7 @@ def _run_generate_inner(
     # -----------------------------------------------------------------------
     project_root, output_dir = resolve_output_dir(args, adapter, description)
 
-    from agentteams.cli.artifacts import (
-        PrivilegeConfinementError,
-        finalize_privilege_wiring as _finalize_privilege,
-    )
-    from agentteams.cli.write_root_policy import WriteRootPolicyError
+    from agentteams.cli.artifacts import PRIVILEGE_WIRING_ERRORS, finalize_privilege_wiring as _finalize_privilege
 
     # CC-2: --allow-fallback-fail-open keeps the constitutional-gate hook fail-OPEN even for a
     # confined/exclusive profile (whose default is now fail-CLOSED — a gate crash must not be a
@@ -204,8 +200,9 @@ def _run_generate_inner(
             allow_unenforced=bool(getattr(args, "allow_unenforced_confinement", False)),
             team_dir=output_dir,
             accepted_write_roots=list(getattr(args, "accept_write_root", None) or []),
+            dry_run=bool(getattr(args, "dry_run", False)), os_sandbox_cli=getattr(args, "os_sandbox", None),
         )
-    except (PrivilegeConfinementError, WriteRootPolicyError) as exc:
+    except PRIVILEGE_WIRING_ERRORS as exc:
         # P1-2: confined/exclusive requested on a host with no OS sandbox to enforce it,
         # and the operator did not pass --allow-unenforced-confinement. Fail closed.
         print(f"Error: {exc}", file=sys.stderr)

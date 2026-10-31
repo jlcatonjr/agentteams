@@ -152,6 +152,8 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         # inputs (P12/P13) and the relaxation gate; no caller is wired in wave 1, and later only when a sandbox
         # switch is set, so every other team stays byte-identical.
         "sandbox_state", "sandbox_exceptions", "sandbox_relaxations",
+        # P00: the dedicated OS-sandbox switch, carried only when the brief sets it.
+        "os_sandbox",
         # R6: carried only under the switch and only when the brief grants agentteams_runner.
         "mcp_grants",
         # MCP catalogue: carried from the brief only when non-empty, so a team that opts into nothing

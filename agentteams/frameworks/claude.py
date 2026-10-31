@@ -58,6 +58,8 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _sandbox_feature_enabled,
     sibling_deny_dirs,
 )
+from ._control_plane_protect import control_plane_for
+from ._sandbox_drift import verify_control_plane_merged  # noqa: F401  (re-export: P13 reads it from here)
 from ._prompt_root_protect import prompt_roots_enabled
 from ._write_roots import project_root_of
 from agentteams.yaml_frontmatter import parse_yaml_front_matter as _parse_yaml_front_matter
@@ -322,6 +324,7 @@ class ClaudeAdapter(FrameworkAdapter):
                     project_root=project_root_of(manifest),  # transient, CLI-set (never input)
                     protect_prompt_roots=prompt_roots_enabled(manifest),  # #8 phase 2, opt-in
                     protect_ledger=manifest.get("write_policy") == "orchestrator-only",  # P4a
+                    control_plane_protect=control_plane_for(manifest),  # METAPLAN R1: protect_ledger or wasm
                 )
                 # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
                 # missing deny path). Its frozen sentinel is emitted for every team by
@@ -454,6 +457,11 @@ def guard_gate_pin_files(
 _FAIL_CLOSED_SENTINEL = "_FAIL_CLOSED_ON_ERROR = False"
 
 
+#: The gate template's crash-deny reason, and its replacement when only ``os_sandbox: on`` flipped the hook (P00).
+_PROFILE_CRASH_REASON = "because this workspace uses a confined/exclusive privilege_profile"
+_SWITCH_CRASH_REASON = "because this workspace's OS sandbox is on and was explicitly requested (os_sandbox on)"
+
+
 def _apply_fail_closed_policy(hook_text: str, manifest: dict[str, Any]) -> str:
     """Emit the constitutional gate fail-CLOSED for a confined/exclusive profile (CC-2).
 
@@ -474,23 +482,39 @@ def _apply_fail_closed_policy(hook_text: str, manifest: dict[str, Any]) -> str:
     defaulted ``confined`` still emits the (inert) sandbox example but leaves a wired hook
     fail-OPEN; only an explicit ``confined``/``exclusive`` in the brief flips it.
 
+    **Keyed on the effective OS sandbox (P00).** The flip also needs the boundary to be on
+    (``sandbox_state.effective_sandbox_state``): a team whose ``os_sandbox`` is ``off`` has no
+    boundary for a crash to silently drop, so it keeps a fail-OPEN hook. An explicit
+    ``os_sandbox: "on"`` (brief or ``--os-sandbox on``) counts as the explicit opt-in, so it
+    flips the hook even under a defaulted or ``cooperative`` profile.
+
     Args:
         hook_text: The verbatim ``constitutional-gate.py`` template text.
         manifest: The team manifest (read for ``privilege_profile``,
-            ``privilege_profile_explicit``, and ``fallback_fail_open``).
+            ``privilege_profile_explicit``, ``os_sandbox``, and ``fallback_fail_open``).
 
     Returns:
         The hook text, fail-closed sentinel flipped only when the profile warrants it.
     """
-    if manifest.get("privilege_profile") not in {"confined", "exclusive"}:
-        return hook_text
-    if not manifest.get("privilege_profile_explicit"):
+    from agentteams.sandbox_state import OS_SANDBOX_CLI_KEY, effective_sandbox_state
+
+    state = effective_sandbox_state(manifest)
+    if not state.os:
+        return hook_text  # no boundary: nothing for a crash to drop
+    explicit_on = state.os_reason in ("brief", "cli") and (
+        manifest.get(OS_SANDBOX_CLI_KEY) or manifest.get("os_sandbox")) == "on"
+    explicit_profile = (manifest.get("privilege_profile") in {"confined", "exclusive"}
+                        and manifest.get("privilege_profile_explicit"))
+    if not (explicit_on or explicit_profile):
         return hook_text  # defaulted confined stays fail-OPEN — explicit opt-in required
     if manifest.get("fallback_fail_open"):
         return hook_text
-    return hook_text.replace(
-        _FAIL_CLOSED_SENTINEL, "_FAIL_CLOSED_ON_ERROR = True", 1
-    )
+    flipped = hook_text.replace(_FAIL_CLOSED_SENTINEL, "_FAIL_CLOSED_ON_ERROR = True", 1)
+    if not explicit_profile:
+        # P00 row 21: the crash-deny text names the profile; a switch-only flip names the switch instead. Done here,
+        # not in the (pinned) template, so every team without the switch keeps a byte-identical hook.
+        flipped = flipped.replace(_PROFILE_CRASH_REASON, _SWITCH_CRASH_REASON, 1)
+    return flipped
 
 
 #: Where each framework installs the constitutional gate (project-relative), for ``--check-wiring``.
@@ -592,7 +616,8 @@ def verify_gate_interpreter(project_root: Path, framework: str = "claude") -> tu
     return False, messages
 
 
-def verify_sandbox_wiring(project_root: Path) -> tuple[bool, list[str]]:
+def verify_sandbox_wiring(project_root: Path,
+                          manifest: dict[str, Any] | None = None) -> tuple[bool, list[str]]:
     """Verify an emitted sandbox boundary was actually merged into live settings (P1-3).
 
     The emitted ``sandbox`` block lives in ``.claude/settings.hooks.example.json`` and is
@@ -605,16 +630,46 @@ def verify_sandbox_wiring(project_root: Path) -> tuple[bool, list[str]]:
     ``settings.json`` (which may hold secrets) — a mismatch is reported as a boolean, not
     by printing the live content.
 
+    **Brief/live drift (P00 D8).** When the effective OS state (from ``manifest``, else the
+    build-log ``sandbox_state``) is OFF but the live settings still enable a sandbox, that is
+    reported as ``DRIFT`` (``ok=False``; the operator decides; nothing is rewritten). While WASM
+    is on, the live settings must also carry the control-plane rules
+    (:func:`verify_control_plane_merged`); missing ones are ``WASM CONTROL PLANE NOT MERGED``.
+
     Args:
         project_root: The generated project root (holds ``.claude/``).
+        manifest: The team manifest (brief + ``--os-sandbox``), or None to use the build-log record.
 
     Returns:
         ``(ok, messages)``. ``ok`` is ``False`` only when a confinement WAS emitted but the
         live settings do not enable it (or leave the unsandboxed-command escape hatch open,
-        or carry different write roots) — the "unmerged/ineffective boundary" case. When no
-        confinement was requested, or the example is absent, ``ok`` is ``True`` with an
-        explanatory message (nothing to enforce).
+        or carry different write roots) — the "unmerged/ineffective boundary" case — or on
+        brief/live drift, or an unmerged WASM control plane. When no confinement was
+        requested, or the example is absent, ``ok`` is ``True`` with an explanatory message
+        (nothing to enforce).
+
+    Raises:
+        ValueError: An invalid ``os_sandbox`` value in ``manifest``.
     """
+    from agentteams.sandbox_state import verifier_sandbox_state
+
+    from ._control_plane_protect import wasm_protected_config_paths
+    from ._sandbox_drift import claude_off_drift, switched_off
+
+    state = verifier_sandbox_state(manifest, project_root / ".claude" / "agents", project_root)
+    if switched_off(state):  # a profile-derived off (cooperative) keeps today's check
+        return claude_off_drift(project_root, state)
+    ok, msgs = _verify_emitted_sandbox_merged(project_root)
+    if state is not None and state.wasm:
+        merged, missing = verify_control_plane_merged(
+            project_root, wasm_protected_config_paths(manifest) if manifest is not None else ())
+        if not merged:
+            ok, msgs = False, [*msgs, f"WASM CONTROL PLANE NOT MERGED: {', '.join(missing)}"]
+    return ok, msgs
+
+
+def _verify_emitted_sandbox_merged(project_root: Path) -> tuple[bool, list[str]]:
+    """The P1-3 check proper: is the emitted example's sandbox block merged into the live settings."""
     claude_dir = project_root / ".claude"
     example = claude_dir / "settings.hooks.example.json"
     live = claude_dir / "settings.json"

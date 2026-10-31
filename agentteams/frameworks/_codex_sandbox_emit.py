@@ -61,16 +61,21 @@ def codex_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     ``privilege_profile`` expansion) and the ``privilege_profile`` field itself, so a confined
     manifest also emits on the ``convert``/``render`` paths that do not run the
     profile-to-host_features union. The neutral launcher this runner wraps is gated the same way.
+    A one-line delegate to :func:`agentteams.sandbox_state.os_sandbox_requested` (P00), so the
+    dedicated ``os_sandbox`` switch turns it off (or on) independently of the profile.
 
     Args:
         manifest: The team manifest.
 
     Returns:
         Whether confinement is requested.
+
+    Raises:
+        ValueError: An invalid ``os_sandbox`` value.
     """
-    if "codex:sandbox" in (manifest.get("host_features") or []):
-        return True
-    return manifest.get("privilege_profile") in {"confined", "exclusive"}
+    from agentteams.sandbox_state import os_sandbox_requested
+
+    return os_sandbox_requested(manifest, token="codex:sandbox")
 
 
 #: Runs INSIDE the launcher as ``bash -c "$SELF_PROBE" codex-confined <codex args>`` and then becomes Codex
@@ -251,6 +256,13 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
     exclude_flags, skipped_note = runner_exclude_flags(manifest)
     gate = codex_role_gate_enabled(manifest)
     gate_block = _runner_gate_block() if gate else ""
+    # METAPLAN R1 (P00 D11): .agentteams is protected unconditionally below; when WASM is on, also each MCP config
+    # path that launches agentteams_wasm (validated plain relative paths, so safe unquoted in the loop).
+    from agentteams.frameworks._control_plane_protect import control_plane_for
+
+    extra = control_plane_for(manifest) or ()
+    extra_block = (f'for p in {" ".join(extra)}; do [ -e "$ROOT/$p" ] && PROTECT+=( --protect "$ROOT/$p" ); done\n'
+                   if extra else "")
     bypass = " --dangerously-bypass-hook-trust" if gate else ""
     py_setenv = ' --setenv AGENTTEAMS_PYTHON="$PY"' if gate else ""
     return (
@@ -309,6 +321,7 @@ def _build_codex_runner(manifest: dict[str, Any]) -> str:
         'PROTECT=()\n'
         'if [ -e "$ROOT/.agentteams" ]; then PROTECT+=( --protect "$ROOT/.agentteams" ); fi\n'
         'if [ -e "$ROOT/.agentteams-status" ]; then PROTECT+=( --protect "$ROOT/.agentteams-status" ); fi\n'
+        + extra_block +
         'for f in config.toml hooks.json AGENTS.md AGENTS.override.md rules prompts skills plugins; do\n'
         '  PROTECT+=( --protect "$CODEX_HOME/$f" ); done\n'
         'EGRESS="${CODEX_CONFINE_EGRESS:-host}"\n'
