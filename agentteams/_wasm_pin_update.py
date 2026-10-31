@@ -358,6 +358,8 @@ def pin_update(component: str, version: str, *, remediation: Sequence[str] = (),
     tmp.write_text(new_text, encoding="utf-8")
     try:
         if remediation and decision_dir is not None:   # _remediation_decision refused a None dir up front
+            # Re-check: the row spent must be one that names these ids now, not just at the start of the run.
+            _remediation_decision(decision_dir, component, list(remediation))
             _consume_remediation(decision_dir)
         os.replace(tmp, pins_path)
     finally:

@@ -1061,6 +1061,23 @@ def test_pin_update_remediation_decision_is_consumed_once(env):
     assert env.pins.read_bytes() == before
 
 
+def test_pin_update_rechecks_the_decision_before_consuming_it(env):
+    """S3: a decision swapped in during the run (here: one naming other ids) is not the one spent."""
+    gov = env.tmp / "gov"
+    log = _decision_log(gov, {"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "GHSA-aaaa-bbbb-cccc"})
+    fetch, api = _young(env)
+
+    def swap_then_fetch(url, size, dest):
+        _decision_log(gov, {"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "GHSA-zzzz-zzzz-zzzz"})
+        return fetch(url, size, dest)
+    before = env.pins.read_bytes()
+    with pytest.raises(wr.WasmRuntimeError, match="does not name GHSA-aaaa-bbbb-cccc"):
+        wr.pin_update("wasmtime", "1.0.0", remediation=["GHSA-aaaa-bbbb-cccc"], pins_path=env.pins,
+                      fetch=swap_then_fetch, api_get=api, now=NOW, decision_dir=gov)
+    assert env.pins.read_bytes() == before and ",yes" not in log.read_text()
+    assert not list(env.pins.parent.glob(".pins.json.*.tmp"))
+
+
 def test_pin_update_failed_download_does_not_consume_the_decision(env):
     gov = env.tmp / "gov"
     log = _decision_log(gov, {"action_reviewed": "wasm-pin-remediation:wasmtime", "conditions": "GHSA-aaaa-bbbb-cccc"})

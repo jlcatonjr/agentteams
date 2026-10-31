@@ -5,7 +5,7 @@
     "agentteams/_fleet_twin_acks.py": "69cc16063d05c16deb059f5412beed7f1922bc3dabc5532073dfca76511af207",
     "agentteams/_sandbox_profiles.py": "c133b7f1091451f61349b24a850c8006eeb4ea94af1e8fb6d77424bbe969ed81",
     "agentteams/_wasm_archive.py": "18abac594dc6eb7d4462ba9f28e757ff09b738c81b4a6f26d97b31cb85f68536",
-    "agentteams/_wasm_pin_update.py": "9dd94c2f1398881d1582abdf149ee7c138a68ea09fc90324c730e3a86ccbe818",
+    "agentteams/_wasm_pin_update.py": "f4452d958d933d3ebc052d95615c8d43034b8c9f9abeff8131f861a40efad112",
     "agentteams/agent_doc_sync.py": "fbcdd2db4a87e36bddf9eccd48bc8d1bcf4e62c52b31c5b62f0adfcc79ec1208",
     "agentteams/atomicio.py": "f46a347095799d84845d52cc5f1e800cb7f43fcdf737c83a99f501add14f7214",
     "agentteams/audit_agent_contract.py": "a92f7e4317af18f6f88e8f2297af536197de64ac294e54697139c8c57084de7b",
