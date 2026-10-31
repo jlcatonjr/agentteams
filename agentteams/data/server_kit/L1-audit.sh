@@ -152,7 +152,7 @@ osrel_get(){  # one os-release value, quotes stripped (the file is parsed, never
     | sed -e "s/^[\"']//" -e "s/[\"']\$//" | tr -d '\t\r'
 }
 esm_line(){  # Ubuntu Pro ESM state from the client's last status file; `pro status` can contact the network
-  local f="${AGENTTEAMS_L1_ROOT:-}/var/lib/ubuntu-advantage/status.json" out
+  local f="${AGENTTEAMS_L1_ROOT:-}/var/lib/ubuntu-advantage/status.json" out=""   # set: bash 5 + set -u
   if [ -r "$f" ] && command -v python3 >/dev/null 2>&1; then
     out=$(python3 -I - "$f" <<'PY'
 import json, sys

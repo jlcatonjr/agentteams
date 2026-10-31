@@ -58,14 +58,16 @@ class Kit:
         self.bin = root / "bin"
         self.calls_dir = root / "calls"
         self.cwd = root / "cwd"
-        for d in (self.kit, self.conf, self.bin, self.calls_dir, self.cwd):
+        self.l1root = root / "l1root"   # L1's os-release / ESM files: never the runner's own (Ubuntu CI has them)
+        for d in (self.kit, self.conf, self.bin, self.calls_dir, self.cwd, self.l1root):
             d.mkdir()
         for f in KIT_SRC.glob("*.sh"):
             shutil.copy2(f, self.kit / f.name)
         self.tool("ssh", FAKE_SSH)
         self.env = {"PATH": f"{self.bin}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(root),
                     "AGENTTEAMS_SERVER_KIT_CONFIG": str(self.conf), "AGENTTEAMS_SERVER_KIT_LOGS": str(root / "logs"),
-                    "AGENTTEAMS_VULNSCAN_NO_REPORT": "1", "FAKE_SSH_DIR": str(self.calls_dir), "LC_ALL": "C"}
+                    "AGENTTEAMS_VULNSCAN_NO_REPORT": "1", "FAKE_SSH_DIR": str(self.calls_dir), "LC_ALL": "C",
+                    "AGENTTEAMS_L1_ROOT": str(self.l1root)}
 
     def tool(self, name: str, body: str, where: Path | None = None) -> Path:
         p = (where or self.bin) / name
@@ -564,7 +566,8 @@ def test_g27_l1_strips_cr_from_indicator_data_itself(kit: Kit) -> None:
     marker = kit.root / "marker-file"
     marker.write_text("x")
     proc = subprocess.run([BASH, str(kit.kit / "L1-audit.sh")], capture_output=True, text=True, timeout=120,
-                          env={"PATH": str(hb), "AGENTTEAMS_IOC_DATA": f"file {marker}\r\nname x.pth\r\n"},
+                          env={"PATH": str(hb), "AGENTTEAMS_IOC_DATA": f"file {marker}\r\nname x.pth\r\n",
+                               "AGENTTEAMS_L1_ROOT": str(kit.l1root)},
                           check=False)
     assert f"IOC\tindicator path present: {marker}\n" in proc.stdout, (proc.stdout, proc.stderr)
     assert proc.returncode == 4
@@ -761,7 +764,7 @@ def test_l1_deep_checks_env_rules(kit: Kit) -> None:
 @pytest.mark.parametrize("bad", ["--apply", "deep", "--deep=1"])
 def test_l1_refuses_unknown_options(kit: Kit, bad: str) -> None:
     proc = subprocess.run([BASH, str(kit.kit / "L1-audit.sh"), bad], capture_output=True, text=True, timeout=60,
-                          env={"PATH": "/usr/bin:/bin"}, check=False)
+                          env={"PATH": "/usr/bin:/bin", "AGENTTEAMS_L1_ROOT": str(kit.l1root)}, check=False)
     assert proc.returncode == 2 and "L1 takes only --deep" in proc.stderr
 
 
