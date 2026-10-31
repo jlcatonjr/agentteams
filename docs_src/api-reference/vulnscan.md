@@ -952,13 +952,14 @@ included, delivered as PRs that CI must pass; this op is how. It differs from `s
   label never fails the PR. Any other `gh pr create` failure stands.
 
 **No duplicate PRs** (`open_prs`, both `stage-fix` and `stage-major`). Before staging, the executor lists the
-repository's open PRs (read-only: `gh pr list --state open --json number,title,headRefName,author --limit 100`,
-the executor's gh environment). A PR whose head branch does not start with `vulnscan/` (Dependabot, Renovate, a
-person) and that names a package, by its title (`Bump <name> from <a> to <b>`, `chore(deps): bump <name> ...`,
+repository's open PRs (read-only: `gh pr list --state open --json number,title,headRefName,author,isCrossRepository
+--limit 100`, the executor's gh environment). A PR opened by Dependabot or Renovate (`open_prs.TRUSTED_AUTHORS`) on
+the repository itself (not a fork), whose head branch does not start with `vulnscan/`, and that names a package, by its title (`Bump <name> from <a> to <b>`, `chore(deps): bump <name> ...`,
 `Update dependency <name> to v<b>`) or its head branch (`dependabot/<eco>/<path>/<name>-<ver>`,
 `renovate/<name>-<ver>`), keeps that package: the fix leaves it (`pr-held`, "left to #227"; names compare
 case-insensitively with `_` / `-` / `.` alike). Requirements pins and npm majors are filtered; `npm audit fix`
-picks its own versions and is not. When nothing remains the stage is refused with `an open PR already updates
+picks its own versions and is not. A person's PR or a fork's never holds a package back: a title alone could
+otherwise suppress a critical fix indefinitely, so such a PR may get a duplicate instead. When nothing remains the stage is refused with `an open PR already updates
 <names> (#227, #228); not duplicated`, which is not a futile result (no retry hold: each run checks again, so it
 lifts once those PRs close). Staging does not wait on gh (a failed listing stages as before); `open-pr` lists them
 again and fails closed: a gh failure opens nothing, and a package another PR now updates retires the staged change

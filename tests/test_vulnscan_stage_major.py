@@ -579,9 +579,9 @@ def test_pr_bodies_say_they_may_be_merged_automatically() -> None:
 
 REQS = "Flask-Cors==4.0.0\ngunicorn==20.1.0\n"
 DEPENDABOT_227 = {"number": 227, "title": "Bump flask_cors from 4.0.0 to 6.0.0", "headRefName": "x-cors",
-                  "author": {"login": "app/dependabot"}}
+                  "author": {"login": "app/dependabot"}, "isCrossRepository": False}
 RENOVATE_228 = {"number": 228, "title": "chore: something", "headRefName": "renovate/gunicorn-22.x",
-                "author": {"login": "app/renovate"}}
+                "author": {"login": "app/renovate"}, "isCrossRepository": False}
 OWN_PR = {"number": 9, "title": "Bump gunicorn from 20.1.0 to 22.0.0", "headRefName": "vulnscan/20261030-abcdef0123"}
 
 
@@ -658,11 +658,25 @@ def test_open_pr_refuses_when_another_pr_appeared_meanwhile(env: dict, monkeypat
 
 def test_open_pr_names_from_titles_and_branches() -> None:
     prs = [DEPENDABOT_227, RENOVATE_228, OWN_PR,
-           {"number": 229, "title": "Update dependency vite to v6", "headRefName": "renovate/major-vite"},
-           {"number": 230, "title": "deps", "headRefName": "dependabot/npm_and_yarn/web/lxml-6.0.0"},
-           {"number": 231, "title": "Bump the pip group across 1 directory with 2 updates", "headRefName": "a"},
-           {"number": "232", "title": "Bump evil from 1 to 2", "headRefName": "b"}]
+           {"number": 229, "title": "Update dependency vite to v6", "headRefName": "renovate/major-vite",
+            "author": {"login": "renovate[bot]"}, "isCrossRepository": False},
+           {"number": 230, "title": "deps", "headRefName": "dependabot/npm_and_yarn/web/lxml-6.0.0",
+            "author": {"login": "dependabot[bot]"}, "isCrossRepository": False},
+           {"number": 231, "title": "Bump the pip group across 1 directory with 2 updates", "headRefName": "a",
+            "author": {"login": "app/dependabot"}, "isCrossRepository": False},
+           {"number": "232", "title": "Bump evil from 1 to 2", "headRefName": "b",
+            "author": {"login": "app/dependabot"}, "isCrossRepository": False}]
     assert open_prs.claimed(prs) == {"flask-cors": [227], "gunicorn": [228], "vite": [229], "lxml": [230]}
+
+
+def test_only_dependabot_or_renovate_on_the_repository_itself_can_hold_a_package_back() -> None:
+    """A title alone is not trusted: a person's or a fork's "Bump X" PR never suppresses a fix (security D1)."""
+    base = {"number": 240, "title": "Bump gunicorn from 20.1.0 to 22.0.0", "headRefName": "dependabot/pip/gunicorn-22.0.0"}
+    assert open_prs.claimed([{**base, "author": {"login": "someone"}, "isCrossRepository": False}]) == {}
+    assert open_prs.claimed([{**base, "author": {"login": "app/dependabot"}, "isCrossRepository": True}]) == {}
+    assert open_prs.claimed([{**base, "author": {"login": "app/dependabot"}}]) == {}        # unknown: not trusted
+    assert open_prs.claimed([{**base, "author": {"login": "app/dependabot"}, "isCrossRepository": False}]) == \
+        {"gunicorn": [240]}
 
 
 def test_list_open_runs_a_read_only_gh_query(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -673,7 +687,7 @@ def test_list_open_runs_a_read_only_gh_query(tmp_path: Path, monkeypatch: pytest
                         subprocess.CompletedProcess(argv, 0, json.dumps([DEPENDABOT_227]), ""))
     assert open_prs.list_open("github.com/o/svc") == [DEPENDABOT_227]
     assert seen == [["gh", "pr", "list", "--repo", "github.com/o/svc", "--state", "open", "--json",
-                     "number,title,headRefName,author", "--limit", "100"]]
+                     "number,title,headRefName,author,isCrossRepository", "--limit", "100"]]
     monkeypatch.setattr(open_prs.subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "boom"))
     with pytest.raises(executor.ExecError, match="boom"):
         open_prs.list_open("github.com/o/svc")

@@ -137,7 +137,7 @@
     "agentteams/vulnscan/notes.py": "183e0dbd37cfecb1649549bd2b1731ec8f4dceadac75a34f6b28f4f53f420fe3",
     "agentteams/vulnscan/notify.py": "619cd314a11fa8ab009a1dadfae72948695822c98fd5dea8de9d16d368a05628",
     "agentteams/vulnscan/npm_major.py": "c2dc467506cfedf161da37b58643df1120b1c75e0f851275bfd78b0501452aa7",
-    "agentteams/vulnscan/open_prs.py": "3d596da4e4a5c212783946c0d8cb283fe1ac53c6a1be62d4de58f3dac8253e98",
+    "agentteams/vulnscan/open_prs.py": "edb08e38c75e443a467ba3c098cdb38c0ef43e01a3b71ce55dc2ee50c004957e",
     "agentteams/vulnscan/operator_cli.py": "0e77a16eccc043f16e719c2528e4a27e6d24cea51e14f32a780ff6d9ae09c34b",
     "agentteams/vulnscan/ops.py": "57b2e38aff301329282fa01d9de69524f6c06b079aab399e9f9f8c8db637a262",
     "agentteams/vulnscan/osv.py": "87084849b8a2b4b52e883a4c77ffa7aa15eaa323bed5965075ca0ee6b88f8454",

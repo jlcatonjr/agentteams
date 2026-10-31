@@ -28,6 +28,10 @@ from typing import Any
 from agentteams.vulnscan.executor_env import ExecError, gh_cwd, gh_push_env
 
 LIMIT = 100
+#: Authors whose open PRs may hold back a package (gh reports apps as ``app/<name>``, REST as ``<name>[bot]``).
+#: Anyone else's PR, a fork's included, never suppresses a fix: a title alone ("Bump X from ...") is not trusted.
+TRUSTED_AUTHORS = frozenset({"app/dependabot", "dependabot[bot]", "dependabot", "app/renovate", "renovate[bot]",
+                             "renovate"})
 _NAME = r"(@?[A-Za-z0-9][\w.\-/@]*?)"
 _TITLES = (
     re.compile(rf"(?:^|:\s*)bump(?:s|ed)?\s+(?:the\s+)?{_NAME}\s+(?:from|to|requirement|in|and)\b", re.I),
@@ -70,7 +74,7 @@ def list_open(target_repo: str) -> list[dict[str, Any]]:
     """
     try:
         proc = subprocess.run(["gh", "pr", "list", "--repo", target_repo, "--state", "open", "--json",
-                               "number,title,headRefName,author", "--limit", str(LIMIT)], cwd=gh_cwd(),
+                               "number,title,headRefName,author,isCrossRepository", "--limit", str(LIMIT)], cwd=gh_cwd(),
                               capture_output=True, text=True, env=gh_push_env(), timeout=120, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         raise ExecError(f"gh pr list (open PRs) failed: {exc}") from exc
@@ -92,12 +96,15 @@ def packages_of(pr: dict[str, Any]) -> set[str]:
         pr: One entry of :func:`list_open`.
 
     Returns:
-        The names (empty for the executor's own ``vulnscan/*`` PRs and for PRs that name no package).
+        The names: empty for the executor's own ``vulnscan/*`` PRs, PRs that name no package, PRs from a fork, and
+        PRs whose author is not in :data:`TRUSTED_AUTHORS`.
     """
     branch, title = pr.get("headRefName"), pr.get("title")
     branch = branch if isinstance(branch, str) else ""
-    if branch.startswith("vulnscan/"):
-        return set()
+    author = pr.get("author")
+    login = author.get("login") if isinstance(author, dict) else None
+    if branch.startswith("vulnscan/") or pr.get("isCrossRepository") is not False or login not in TRUSTED_AUTHORS:
+        return set()   # only Dependabot / Renovate PRs on the repository itself may hold a package back
     names = {m.group(1) for rx in _TITLES for m in rx.finditer(title)} if isinstance(title, str) else set()
     names |= {m.group(1).rsplit("/", 1)[-1] if not m.group(1).startswith("@") else m.group(1)
               for rx in _BRANCHES if (m := rx.match(branch))}
