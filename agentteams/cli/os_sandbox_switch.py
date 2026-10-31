@@ -275,12 +275,11 @@ def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, 
     if not gate_engaged(manifest or {}, state, old, recorded=False, wasm=False):
         return None
     if old is not None:
-        # The projection derives only the OS half, so its WASM fields (and the model-substrate switch) are the
-        # previous ones: sync never changes them, and comparing against an empty WASM half would plan a spurious
+        # The projection derives the OS half and the model-substrate switch, not the agent-WASM half, so that half is
+        # the previous one: sync never changes it, and comparing against an empty one would plan a spurious
         # sandbox-wasm-off (refused in a governed workspace) for every WASM team whose OS half engages the gate.
         state = dataclasses.replace(state, wasm=old.wasm, wasm_reason=old.wasm_reason,
-                                    wasm_languages=old.wasm_languages, wasm_grants=old.wasm_grants,
-                                    model_substrate=old.model_substrate)
+                                    wasm_languages=old.wasm_languages, wasm_grants=old.wasm_grants)
     relaxations = gate.plan_relaxations(
         old, state, framework_id=framework_id,
         profile_would_emit=(manifest or {}).get("privilege_profile") in _CONFINING)

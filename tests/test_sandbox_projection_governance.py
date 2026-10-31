@@ -24,7 +24,7 @@ from agentteams.cli.os_sandbox_switch import gate_engaged
 from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError
 from agentteams.sandbox_state import SandboxState
 from agentteams.wasm_config import WASM_SUBSTRATE_CLI_KEY
-from tests.test_sandbox_relaxation_gate import _log, _row, _team, stub_ed25519  # noqa: F401  (fixture)
+from tests._sandbox_gate_helpers import _log, _row, _team  # noqa: F401  (stub_ed25519 is a conftest fixture)
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"

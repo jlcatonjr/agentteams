@@ -21,7 +21,7 @@ from agentteams.wasm_config import (
     substrate_switch,
     validate_wasm_substrate_cli,
 )
-from tests.test_sandbox_relaxation_gate import _team
+from tests._sandbox_gate_helpers import _team
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"

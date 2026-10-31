@@ -1,5 +1,6 @@
 """Sync projection keeps the previous WASM half (merge fix, P20 report): only the OS half is projected.
 
+The projection does carry the model-substrate switch, so its on -> off is still checked on sync (P20).
 Without it, a WASM-on team whose OS half engages the gate during sync was compared against an empty WASM half and
 had a spurious ``sandbox-wasm-off`` planned, which a governed workspace refuses.
 """
@@ -35,13 +36,13 @@ def _actions(relaxations) -> list[str]:
 
 def test_sync_of_a_wasm_team_plans_no_wasm_off(monkeypatch, tmp_path):
     previous = _state(os_on=True, wasm_on=True)
-    projected = dataclasses.replace(previous, wasm=False, wasm_reason="off", wasm_languages=(), model_substrate=None)
+    projected = dataclasses.replace(previous, wasm=False, wasm_reason="off", wasm_languages=())
     assert not [a for a in _actions(_run(monkeypatch, tmp_path, previous, projected)) if "wasm-off" in a]
 
 
 def test_sync_still_plans_the_os_off(monkeypatch, tmp_path):
     previous = _state(os_on=True, wasm_on=True)
     projected = dataclasses.replace(previous, os=False, os_reason="brief-off", wasm=False, wasm_reason="off",
-                                    wasm_languages=(), model_substrate=None)
+                                    wasm_languages=())
     acts = _actions(_run(monkeypatch, tmp_path, previous, projected))
     assert any("sandbox-os-off" in a for a in acts) and not any("wasm-off" in a for a in acts)
