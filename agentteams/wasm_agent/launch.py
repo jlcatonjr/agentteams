@@ -13,7 +13,8 @@ directory, the agent scratch dir and the exec area, then either
   output, the transcript and ``RunResult.notices`` (D2: never silent).
 
 **Key custody.** The key is read from the environment here, sent to Stage 1 once over a dedicated pipe (with the
-per-run reserved-key MAC key) and never placed in any environment, argv or file. Stage 1 starts with a scrubbed
+per-run reserved-key MAC key, which therefore binds reserved keys against guests and models, not against a compromised
+Stage 1) and never placed in any environment, argv or file. Stage 1 starts with a scrubbed
 environment; wasmtime children get an empty one and no inherited descriptors.
 
 **Guest ``os_confine``** (R5). P05 never originates ``"inherited"``; it forwards the launcher's value only when it
@@ -51,12 +52,13 @@ from agentteams.wasm_agent.broker import GUEST_OS_CONFINE, BrokerError, LocalBro
 from agentteams.wasm_agent.budget import Budget
 from agentteams.wasm_agent.guest_source import GUEST_SHA256, GuestSourceError, load_guest_source
 from agentteams.wasm_agent.host import (
-    OUTPUT_HEADER, STATUSES, AgentSpec, Revocation, RunOptions, RunResult, run_agent,
+    OUTPUT_HEADER, STATUSES, AgentSpec, Revocation, RunOptions, RunResult, build_provider, run_agent,
 )
 from agentteams.wasm_agent.transcript import FileJournal, JournalError, ensure_dir
 
 #: What the confined host may not read (R5): the executor's credential stores plus the agentteams secrets dir (its
-#: values reach Stage 1 over the key pipe instead).
+#: values reach Stage 1 over the key pipe instead). File denies only: Keychain items stay reachable through the Security
+#: framework (securityd), which the profile does not filter.
 HOST_DENY_READS = (*W.NEST_DENY_READS, DLP.SECRETS_DIR)
 #: The only variables Stage 1's environment keeps (no key, token or secret name survives).
 ENV_KEEP = ("PATH", "LANG", "HOME")
@@ -64,7 +66,6 @@ HOST_CONFINE = ("auto", "require", "off")
 #: Test-only opt-in (``=1``) for a *guest_source* other than the pinned guest (@security P07 C1); never set outside
 #: the test suite (``tests/conftest.py``).
 TEST_GUEST_ENV = "AGENTTEAMS_WASM_TEST_GUEST"
-BOOTSTRAP_VERSION = 1
 _BOOT = ("import sys; sys.path.insert(0, sys.argv[1]); from agentteams.wasm_agent.stage1 import main; "
          "raise SystemExit(main(sys.argv[2:]))")
 _SECRET_NAME = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
@@ -353,7 +354,7 @@ def stage0(spec: AgentSpec, task: str, *, project_root: str | Path, budget: Budg
                                  preparer=preparer, prices=prices, notices=notices, call_timeout_s=call_timeout_s)
         else:
             notices.append(f"WASM host OS-confined: nested:{kind}")
-            boot = {"v": BOOTSTRAP_VERSION, "provider": spec.provider, "key": key, "base_url": base_url,
+            boot = {"v": P.BOOTSTRAP_VERSION, "provider": spec.provider, "key": key, "base_url": base_url,
                     "stub_script": list(stub_script) if stub_script is not None else None, "mac_key": mac_key.hex(),
                     "run_id": run_id, "project_root": root, "spec": spec.to_dict(), "task": task,
                     "budget": budget.to_dict(), "secrets": known, "prices": prices, "notices": notices,
@@ -388,29 +389,6 @@ def _in_process(spec: AgentSpec, task: str, *, root: str, run_id: str, budget: B
                          prices=prices, revocation=revocation, notices=notices, call_timeout_s=call_timeout_s)
     with _signals(lambda signum: revocation.set(f"signal:{signum}")):
         return run_agent(spec, task, options)
-
-
-def build_provider(name: str, key: str, *, base_url: str | None = None,
-                   stub_script: Sequence[Mapping[str, Any]] | None = None) -> MP.Provider:
-    """Build the P06 provider from a handed-over key (Stage 1, or Stage 0's in-process mode).
-
-    Args:
-        name: Preset name.
-        key: The key (``""`` for keyless presets).
-        base_url: Optional base-URL override.
-        stub_script: ``stub`` only: scripted replies.
-
-    Returns:
-        The provider.
-
-    Raises:
-        ModelProviderError: ``config`` / ``protocol`` from P06.
-    """
-    if stub_script is not None:
-        if name != "stub":
-            raise MP.ModelProviderError("config", "stub_script is only valid for the stub provider")
-        return MP.Provider(MP.PROVIDERS["stub"], None, "", MP.StubProvider(stub_script))
-    return MP.Provider.from_key(name, key, base_url=base_url)
 
 
 @contextlib.contextmanager
@@ -460,6 +438,13 @@ def _exec_allow(root: str, resolver: Any, control_plane_protected: bool) -> tupl
     return literals, paths
 
 
+def _stop(proc: subprocess.Popen) -> None:
+    """Kill Stage 1 and reap it (no zombie, no orphaned descriptor holder)."""
+    with contextlib.suppress(OSError):
+        proc.kill()
+    proc.wait()
+
+
 def _wrapped(kind: str, boot: dict[str, Any], *, root: str, scratch: str | None, journal: FileJournal,
              preparer: StepPreparer, resolver: Any, profiles: ModuleType, control_plane_protected: bool,
              env: Mapping[str, str], budget: Budget, run_id: str, notices: list[str]) -> RunResult:
@@ -479,8 +464,18 @@ def _wrapped(kind: str, boot: dict[str, Any], *, root: str, scratch: str | None,
         for fd in (key_r, in_r, out_w):
             os.close(fd)
             pipes.remove(fd)
-        with contextlib.suppress(OSError):
+        try:
             P.write_line(key_w, boot)
+        except P.ProtocolError as exc:   # an oversize bootstrap (task/spec/secrets): Stage 1 never starts its run
+            _stop(proc)
+            boot.clear()
+            with contextlib.suppress(JournalError):
+                journal.append("protocol-error", {"source": "stage0", "code": "boot-" + exc.code})
+            return RunResult("refused", f"host-launch: bootstrap {exc.code}", "", run_id, journal.head, {}, notices)
+        except OSError as exc:           # Stage 1 died before reading it; it then exits without a result
+            with contextlib.suppress(JournalError):
+                journal.append("protocol-error", {"source": "stage0", "code": "key-pipe",
+                                                  "detail": type(exc).__name__})
         os.close(key_w)
         pipes.remove(key_w)
         boot.clear()   # drop Stage 0's extra reference to the key
@@ -493,14 +488,13 @@ def _wrapped(kind: str, boot: dict[str, Any], *, root: str, scratch: str | None,
         try:
             proc.wait(timeout=30)
         except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
+            _stop(proc)
         if data is None:
             return RunResult("failed", "host-exited", "", run_id, journal.head, {}, notices)
         return _result_from(data, journal, run_id, notices)
     except (LaunchError, OSError) as exc:
         if proc is not None and proc.poll() is None:
-            proc.kill()
+            _stop(proc)
         return RunResult("refused", f"host-launch: {str(exc)[:200]}", "", run_id, journal.head, {}, notices)
     finally:
         for fd in pipes:

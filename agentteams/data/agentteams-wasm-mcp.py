@@ -66,9 +66,9 @@ GRANT_SCHEMA = "agentteams-wasm-mcp-grant/v1"
 #: The bundle's modules, in load order: (module name, installed file, sha256). ``wasm_mcp.BUNDLE_SHA256`` equals
 #: these (a test keeps them in step with the packaged files).
 BUNDLE_MODULES: tuple[tuple[str, str, str], ...] = (
-    ("_sandbox_profiles", "_sandbox_profiles.py", "4ba73a39488e3c7e674535bea7460cb115de963a01ef1f9a9e3a5f522116251b"),
+    ("_sandbox_profiles", "_sandbox_profiles.py", "e576f50fdd82dd9d87c92a644f93cc8dd35ed2fc70e2f2345177749ce5ba7ff6"),
     ("wasm_pins", "wasm_pins.py", "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df"),
-    ("wasm_exec", "wasm_exec.py", "cca8c394f8d21585edbfc504e0e42f844b1bfa9d16d73fe3241c423d1e63838a"),
+    ("wasm_exec", "wasm_exec.py", "efe3d4982188b600f52593c992e779121e703dbb95f81c3af8e9d90deb250ba6"),
     ("wasm_guests", "wasm_guests.py", "a3b23dd61bd3ea924f47c37debec44ff7442d2c5af32475d6de18e34c7c7ba5c"),
 )
 #: The bundle's data files: (installed file, sha256). The pins file is checked against ``--pins-sha256`` instead.

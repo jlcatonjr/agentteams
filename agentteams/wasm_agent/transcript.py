@@ -11,7 +11,9 @@ chain.
 ``hash = sha256(prev || canonical_json(record without hash))``. This is a hash chain, not a MAC: it detects edits by
 anything that does not rewrite the whole chain; the head is printed to the operator at run end. The reserved
 provider keys (``_provider_id`` / ``_provider_sig``) are never journaled; a ``model-reply`` record carries their
-digests and an HMAC under the run's key (:func:`reserved_mac`), which Stage 0 checks before appending.
+digests and an HMAC under the run's key (:func:`reserved_mac`), which Stage 0 checks before appending. Stage 1 holds
+that key (it runs the vault), so the MAC catches guest- or model-side tampering and mis-binding, not a compromised
+Stage 1.
 
 Stdlib only.
 """
@@ -22,7 +24,6 @@ import contextlib
 import hashlib
 import hmac
 import os
-import re
 import stat
 import sys
 import time
@@ -32,7 +33,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from agentteams.atomicio import write_new_atomic
-from agentteams.wasm_agent.protocol import ProtocolError, canonical, strict_loads
+from agentteams.wasm_agent.protocol import RUN_ID_RE, ProtocolError, canonical, strict_loads
 
 #: Closed record-kind set.
 RECORD_KINDS = ("run-start", "model-request", "model-reply", "dlp", "guest-step", "host-tool", "delegate-start",
@@ -47,7 +48,6 @@ RUNS_REL = (".agentteams", "wasm-runs")
 TRANSCRIPT_NAME = "transcript.jsonl"
 RESULT_NAME = "result.json"
 REVOKED_NAME = "REVOKED"
-RUN_ID_RE = re.compile(r"^[0-9a-f]{32}$", re.ASCII)
 _NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 _RESERVED_FIELDS = ("turn", "index", "type", "id", "pid_sha256", "sig_sha256")
 

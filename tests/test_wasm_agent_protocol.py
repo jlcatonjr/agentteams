@@ -116,6 +116,21 @@ def test_encode_event_shape_and_version() -> None:
         P.encode_event({**event, "extra": 1})
 
 
+def test_denied_events_carry_only_the_closed_codes() -> None:
+    event = {"run_id": "ab" * 16, "step": 0, "agent": {"slug": "a", "tools": []}, "mounts": [], "limits": {},
+             "carry": None}
+    for code in P.DENIED_CODES:
+        P.encode_event({**event, "event": {"kind": "denied", "code": code, "message": "m"}})
+    for bad in ("telepathy", None, 1):
+        with pytest.raises(P.ProtocolError) as exc:
+            P.encode_event({**event, "event": {"kind": "denied", "code": bad, "message": "m"}})
+        assert exc.value.code == "shape"
+
+
+def test_ops_is_the_closed_op_shape_set() -> None:
+    assert set(P.OPS) == set(P._OP_KEYS)   # noqa: SLF001 - the public tuple must name exactly the decoded shapes
+
+
 def test_control_lines_round_trip_and_cap() -> None:
     r, w = os.pipe()
     try:

@@ -226,6 +226,29 @@ class _End(Exception):
         super().__init__(f"{status}: {reason}")
 
 
+def build_provider(name: str, key: str, *, base_url: str | None = None,
+                   stub_script: Sequence[Mapping[str, Any]] | None = None) -> MP.Provider:
+    """Build the P06 provider from a handed-over key (Stage 1, or Stage 0's in-process mode).
+
+    Args:
+        name: Preset name.
+        key: The key (``""`` for keyless presets).
+        base_url: Optional base-URL override.
+        stub_script: ``stub`` only: scripted replies.
+
+    Returns:
+        The provider.
+
+    Raises:
+        ModelProviderError: ``config`` / ``protocol`` from P06.
+    """
+    if stub_script is not None:
+        if name != "stub":
+            raise MP.ModelProviderError("config", "stub_script is only valid for the stub provider")
+        return MP.Provider(MP.PROVIDERS["stub"], None, "", MP.StubProvider(stub_script))
+    return MP.Provider.from_key(name, key, base_url=base_url)
+
+
 def _event_mounts(grant: Any) -> list[dict[str, str]]:
     return [{"guest": m.guest, "mode": m.mode} for m in grant.mounts]
 
@@ -410,8 +433,7 @@ def run_agent(spec: AgentSpec, task: str, options: RunOptions) -> RunResult:
         Nothing for run failures (they become a result); programming errors propagate.
     """
     r = _Run(spec, options)
-    totals: dict[str, Any] = {}
-    status, reason, output = "failed", "internal", ""
+    output = ""
     try:
         r.record("run-start", {"agent": spec.to_dict() | {"system_prompt_sha256": hashlib.sha256(
             spec.system_prompt.encode()).hexdigest(), "system_prompt": None}, "budget": options.budget.to_dict(),

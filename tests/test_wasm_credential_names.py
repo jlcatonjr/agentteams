@@ -154,7 +154,8 @@ def test_runner_grant_is_refused_at_build_time(tmp_path: Path) -> None:
 
 def _profiles() -> types.ModuleType:
     mod = types.ModuleType("fake_profiles")
-    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "refuse_credentials", "ConfinementError"):
+    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "remove_tree", "refuse_credentials",
+                 "ConfinementError"):
         setattr(mod, name, getattr(SP, name))
     mod.available = lambda: None  # type: ignore[attr-defined]
     return mod

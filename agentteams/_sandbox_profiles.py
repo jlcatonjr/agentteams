@@ -1,5 +1,6 @@
 """_sandbox_profiles.py — the pure OS-sandbox profile builders (Seatbelt SBPL, bwrap argv), the platform probe, and
-the snapshot copy that stands in for an OS-enforced read-only mount when no profile can nest (:func:`snapshot_tree`).
+the snapshot copy that stands in for an OS-enforced read-only mount when no profile can nest (:func:`snapshot_tree`),
+and the symlink-safe removal of run/snapshot directories (:func:`remove_tree`).
 
 One source of truth for two callers (METAPLAN v2 §6 R2):
 
@@ -407,3 +408,26 @@ def snapshot_tree(src: str, dst: str, budget: list[int]) -> None:
         _snap_dir(fd, dst, budget)
     finally:
         os.close(fd)
+
+
+def remove_tree(path: str) -> None:
+    """Remove a run or snapshot directory: permissions restored on real directories only, symlinks never followed.
+
+    Args:
+        path: The directory (a symlink or a missing path is left alone).
+
+    Returns:
+        None (a directory that cannot be removed is reported on stderr).
+
+    Raises:
+        Nothing.
+    """
+    if not os.path.isdir(path) or os.path.islink(path):
+        return
+    for dirpath, dirnames, _ in os.walk(path, followlinks=False):
+        for d in [dirpath, *(os.path.join(dirpath, n) for n in dirnames)]:
+            if stat.S_ISDIR(os.lstat(d).st_mode):
+                os.chmod(d, 0o700)
+    shutil.rmtree(path, ignore_errors=True)
+    if os.path.lexists(path):
+        print(f"WASM SANDBOX: could not remove run directory {path}", file=sys.stderr)

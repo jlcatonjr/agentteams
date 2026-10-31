@@ -27,7 +27,6 @@ import pytest
 from agentteams import _sandbox_profiles as SP
 from agentteams import wasm_exec as W
 from agentteams import wasm_pins
-from agentteams.wasm_agent import broker as B
 from agentteams.wasm_agent import launch as L
 from agentteams.wasm_agent.budget import Budget
 from agentteams.wasm_agent.host import AgentSpec
@@ -73,12 +72,12 @@ def _records(res: Any) -> list[dict[str, Any]]:
 @pytest.fixture
 def argv_spy(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     seen: list[list[str]] = []
-    real = B.execute
+    real = W.execute_launch
 
     def spy(launch: Any, stdin: bytes, **kw: Any) -> Any:
         seen.append(list(launch.argv))
         return real(launch, stdin, **kw)
-    monkeypatch.setattr(B, "execute", spy)
+    monkeypatch.setattr(W, "execute_launch", spy)
     return seen
 
 

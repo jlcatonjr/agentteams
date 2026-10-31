@@ -21,7 +21,6 @@ import json
 import os
 import re
 import secrets
-import shutil
 import signal
 import stat
 import subprocess
@@ -73,8 +72,10 @@ NEST_PROTECTED_REL = (".agentteams", ".agentteams-queue", ".agentteams-status", 
                       ".grok", ".github")
 NEST_KEY_DIR = "~/.config/agentteams/keys"
 NEST_DEV_WRITES = ("/dev/null", "/dev/zero", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/dtracehelper")
-#: Credential stores the nested wasmtime may not read (R5).
-NEST_DENY_READS = ("~/.ssh", "~/.aws", "~/.config/gh", "~/.config/gcloud", "~/.netrc", "~/Library/Keychains")
+#: Credential stores the nested wasmtime (and, via ``wasm_agent.launch.HOST_DENY_READS``, Stage 1) may not read (R5).
+#: File denies only: they do not stop Keychain access through the Security framework (securityd, a Mach service).
+NEST_DENY_READS = ("~/.ssh", "~/.aws", "~/.config/gh", "~/.config/gcloud", "~/.netrc", "~/Library/Keychains",
+                   "~/.docker", "~/.kube", "~/.gnupg", "~/.npmrc", "~/.pypirc")
 
 #: R8: files a guest may never place where an agent harness would load them as instructions.
 REFUSED_COPY_OUT_NAMES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md", ".cursorrules")
@@ -541,19 +542,6 @@ def _copy_verified(src: str, dst: str, mode: int) -> str:
     return digest.hexdigest()
 
 
-def _remove_tree(path: str) -> None:
-    """Remove a run dir: permissions restored on real directories only; nothing behind a symlink is touched."""
-    if not os.path.isdir(path) or os.path.islink(path):
-        return
-    for dirpath, dirnames, _ in os.walk(path, followlinks=False):
-        for d in [dirpath, *(os.path.join(dirpath, n) for n in dirnames)]:
-            if stat.S_ISDIR(os.lstat(d).st_mode):
-                os.chmod(d, 0o700)
-    shutil.rmtree(path, ignore_errors=True)
-    if os.path.lexists(path):
-        print(f"WASM SANDBOX: could not remove run directory {path}", file=sys.stderr)
-
-
 def _check_mount_host(root: str, m: Mount, scratch: str | None, inside: str | None = None) -> None:
     """A ``/project`` mount: a real directory in the project, not its root, clear of protected paths and keys.
     A runtime mount (*inside* given): a real directory inside the module's directory. Neither may touch scratch."""
@@ -646,7 +634,7 @@ def materialize(prepared: Prepared, args: Sequence[str], *, project_root: str | 
 
     def cleanup() -> None:
         if "dir" in state:
-            _remove_tree(state["dir"])
+            profiles.remove_tree(state["dir"])
 
     done = False
     try:
@@ -794,6 +782,37 @@ def _execute(launch: Launch, stdin: bytes, stdout_cap: int, stderr_cap: int
     return proc.returncode, bytes(out), bytes(err), labels[0] if labels else None
 
 
+def _check_io(stdin: bytes, stdout_cap: int, stderr_cap: int) -> None:
+    if not isinstance(stdin, bytes) or len(stdin) > MAX_STDIN_BYTES:
+        raise WasmExecError(f"stdin must be bytes of at most {MAX_STDIN_BYTES}")
+    if type(stdout_cap) is not int or type(stderr_cap) is not int or min(stdout_cap, stderr_cap) < 1:
+        raise WasmExecError("output caps must be positive")
+
+
+def execute_launch(launch: Launch, stdin: bytes, *, stdout_cap: int, stderr_cap: int) -> WasmResult:
+    """Execute an already-materialized launch (bounded stdio, own process group, host timeout); no cleanup.
+
+    Args:
+        launch: From :func:`materialize` (or rebuilt from one by a caller that prepared it elsewhere).
+        stdin: The guest's stdin (at most 8 MiB; data, never instructions).
+        stdout_cap: Bytes kept from stdout; more kills the run (``trap="output-cap"``, ``truncated``).
+        stderr_cap: The same for stderr.
+
+    Returns:
+        A :class:`WasmResult`.
+
+    Raises:
+        WasmExecError: Oversize/non-bytes stdin, a non-positive cap, or wasmtime could not start.
+    """
+    _check_io(stdin, stdout_cap, stderr_cap)
+    started = time.monotonic()
+    code, out, err, host = _execute(launch, stdin, stdout_cap, stderr_cap)
+    return WasmResult(exit_code=code, stdout=out, stderr=err, trap=classify_trap(code, err, host_label=host),
+                      os_confinement=launch.os_confinement, truncated=host == "output-cap",
+                      os_reason=launch.os_reason, read_only_mode=launch.read_only_mode,
+                      wall_s=round(time.monotonic() - started, 3), module_sha256=launch.module_sha256)
+
+
 def run(prepared: Prepared, args: Sequence[str], *, stdin: bytes = b"", project_root: str | Path,
         os_confine: OsConfine, stdout_cap: int = 1 << 20, stderr_cap: int = 256 << 10, resolver: WasmResolver,
         profiles: ModuleType, control_plane_protected: bool = False) -> WasmResult:
@@ -817,21 +836,13 @@ def run(prepared: Prepared, args: Sequence[str], *, stdin: bytes = b"", project_
     Raises:
         WasmExecError: On any refusal before the guest starts.
     """
-    if not isinstance(stdin, bytes) or len(stdin) > MAX_STDIN_BYTES:
-        raise WasmExecError(f"stdin must be bytes of at most {MAX_STDIN_BYTES}")
-    if min(stdout_cap, stderr_cap) < 1:
-        raise WasmExecError("output caps must be positive")
+    _check_io(stdin, stdout_cap, stderr_cap)
     launch = materialize(prepared, args, project_root=project_root, os_confine=os_confine, resolver=resolver,
                          profiles=profiles, control_plane_protected=control_plane_protected)
-    started = time.monotonic()
     try:
-        code, out, err, host = _execute(launch, stdin, stdout_cap, stderr_cap)
+        return execute_launch(launch, stdin, stdout_cap=stdout_cap, stderr_cap=stderr_cap)
     finally:
         launch.cleanup()
-    return WasmResult(exit_code=code, stdout=out, stderr=err, trap=classify_trap(code, err, host_label=host),
-                      os_confinement=launch.os_confinement, truncated=host == "output-cap",
-                      os_reason=launch.os_reason, read_only_mode=launch.read_only_mode,
-                      wall_s=round(time.monotonic() - started, 3), module_sha256=launch.module_sha256)
 
 
 # --- capability probe ----------------------------------------------------------------------------------------------

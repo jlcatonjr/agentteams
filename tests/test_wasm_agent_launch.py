@@ -23,6 +23,7 @@ import pytest
 from agentteams import _sandbox_profiles as SP
 from agentteams import wasm_exec as W
 from agentteams.wasm_agent import launch as L
+from agentteams.wasm_agent import protocol as P
 from agentteams.wasm_agent.budget import Budget
 from agentteams.wasm_agent.transcript import verify_transcript
 from tests._wasm_agent_helpers import GUEST_SHA, GUEST_SRC, KEY, project, spec, text_reply
@@ -327,3 +328,81 @@ def test_key_custody_through_a_wrapped_stage1(tmp_path: Path, native: None, unwr
     assert "--key-fd" in argv and set(env) <= {"PATH", "LANG", "HOME", "TMPDIR"}
     blob = b"".join(p.read_bytes() for p in (root / ".agentteams").rglob("*") if p.is_file())
     assert KEY.encode() not in blob                            # nor in any transcript/result file
+
+
+# --- the bootstrap line (A1, H3, H4) -------------------------------------------------------------------------------
+
+def _popen_spy(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    procs: list[Any] = []
+    monkeypatch.setattr(L, "host_profile_argv", lambda kind, **kw: [])
+    real = L.subprocess.Popen
+
+    def spy(argv: list[str], **kw: Any) -> Any:
+        procs.append(real(argv, **kw))
+        return procs[-1]
+    monkeypatch.setattr(L.subprocess, "Popen", spy)
+    return procs
+
+
+def _kinds_and_codes(res: Any) -> list[tuple[str, Any]]:
+    recs = [json.loads(x) for x in Path(res.transcript_path).read_text().splitlines()]
+    return [(r["kind"], r.get("code")) for r in recs]
+
+
+def test_an_oversize_bootstrap_refuses_and_reaps_stage1(tmp_path: Path, native: None,
+                                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    procs = _popen_spy(monkeypatch)
+    monkeypatch.setattr(P, "MAX_CONTROL_BYTES", 512)    # Stage 0 side only; Stage 1 is a separate process
+    res = _stage0(project(tmp_path), profiles=_fake_profiles("seatbelt"), task="x" * 4096)
+    assert (res.status, res.reason) == ("refused", "host-launch: bootstrap frame"), res
+    assert len(procs) == 1 and procs[0].returncode is not None          # killed and waited, not left running
+    assert ("protocol-error", "boot-frame") in _kinds_and_codes(res)
+
+
+def test_a_key_pipe_write_failure_is_journaled(tmp_path: Path, native: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    _popen_spy(monkeypatch)
+    real = P.write_line
+
+    def write_line(fd: int, message: Any) -> None:
+        if "mac_key" in message:
+            raise BrokenPipeError("stage 1 went away")
+        real(fd, message)
+    monkeypatch.setattr(P, "write_line", write_line)
+    res = _stage0(project(tmp_path), profiles=_fake_profiles("seatbelt"))
+    assert (res.status, res.reason) == ("failed", "host-exited"), res
+    assert ("protocol-error", "key-pipe") in _kinds_and_codes(res)
+
+
+def test_the_bootstrap_carries_exactly_the_shared_key_set(tmp_path: Path, native: None,
+                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    _popen_spy(monkeypatch)
+    seen: list[set[str]] = []
+    real = P.write_line
+
+    def write_line(fd: int, message: Any) -> None:
+        if "mac_key" in message:
+            seen.append(set(message))
+            assert message["v"] == P.BOOTSTRAP_VERSION
+        real(fd, message)
+    monkeypatch.setattr(P, "write_line", write_line)
+    assert _stage0(project(tmp_path), profiles=_fake_profiles("seatbelt")).status == "ok"
+    assert seen == [set(P.BOOT_KEYS)]
+
+
+@pytest.mark.parametrize("payload", [b"not json\n", b'{"v": 1}\n', b'{"v": 1', None], ids=["json", "keys", "mid-line",
+                                                                                         "bad-fd"])
+def test_stage1_main_returns_2_for_an_unusable_bootstrap(payload: bytes | None) -> None:
+    from agentteams.wasm_agent import stage1 as S1
+    r, w = os.pipe()
+    if payload is None:
+        os.close(r)                    # read_line then fails with OSError (EBADF)
+    else:
+        os.write(w, payload)
+    os.close(w)
+    assert S1.main(["--key-fd", str(r), "--ctl-in", "0", "--ctl-out", "1"]) == 2
+
+
+def test_no_wasm_agent_module_reaches_into_the_executors_privates() -> None:
+    pkg = Path(L.__file__).parent
+    for py in pkg.glob("*.py"):
+        assert "._execute" not in py.read_text(), py.name   # brokers use the public wasm_exec.execute_launch

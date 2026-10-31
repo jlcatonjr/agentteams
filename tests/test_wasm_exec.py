@@ -39,7 +39,8 @@ def _fake_wasmtime(tmp_path: Path) -> str:
 def _profiles(kind: str | None) -> types.ModuleType:
     """A stand-in profiles module: the real builders, a fixed ``available()``."""
     mod = types.ModuleType("fake_profiles")
-    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "refuse_credentials", "ConfinementError"):
+    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "remove_tree", "refuse_credentials",
+                 "ConfinementError"):
         setattr(mod, name, getattr(SP, name))
     mod.available = lambda: kind  # type: ignore[attr-defined]
     return mod
@@ -565,6 +566,39 @@ def test_stdin_and_caps_validated(tmp_path: Path) -> None:
         with pytest.raises(W.WasmExecError):
             W.run(p, [], project_root=project(tmp_path) if not (tmp_path / "proj").exists() else tmp_path / "proj",
                   os_confine="off", resolver=res, profiles=SP, **kw)  # type: ignore[arg-type]
+
+
+def test_execute_launch_runs_a_prepared_launch_with_runs_checks(tmp_path: Path) -> None:
+    launch = W.Launch(argv=[sys.executable, "-I", "-c", "import sys; sys.stdout.write(sys.stdin.read() * 3)"], env={},
+                      cwd=str(tmp_path), run_dir=None, cleanup=lambda: None, os_confinement="none", os_reason="off",
+                      read_only_mode="none", timeout_s=30, module_sha256="m" * 64)
+    res = W.execute_launch(launch, b"ab", stdout_cap=4, stderr_cap=64)
+    assert res.truncated and res.trap == "output-cap" and res.module_sha256 == "m" * 64
+    assert W.execute_launch(launch, b"ab", stdout_cap=64, stderr_cap=64).stdout == b"ababab"
+    for stdin, out_cap, err_cap in ((b"x" * (W.MAX_STDIN_BYTES + 1), 1, 1), ("text", 1, 1), (b"", 0, 1),
+                                    (b"", 1, 0), (b"", True, 1)):
+        with pytest.raises(W.WasmExecError):
+            W.execute_launch(launch, stdin, stdout_cap=out_cap, stderr_cap=err_cap)  # type: ignore[arg-type]
+
+
+def test_remove_tree_restores_modes_and_never_follows_a_symlink(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep").write_text("k")
+    run = tmp_path / "run"
+    (run / "ro").mkdir(parents=True)
+    (run / "ro" / "f").write_text("x")
+    (run / "link").symlink_to(outside)
+    os.chmod(run / "ro", 0o500)
+    SP.remove_tree(str(run / "link"))                 # a symlink itself is left alone
+    SP.remove_tree(str(run))
+    assert not run.exists() and (outside / "keep").read_text() == "k"
+
+
+def test_nested_deny_reads_cover_the_common_credential_stores() -> None:
+    for store in ("~/.ssh", "~/.aws", "~/.gnupg", "~/.docker", "~/.kube", "~/.npmrc", "~/.pypirc", "~/.netrc",
+                  "~/Library/Keychains"):
+        assert store in W.NEST_DENY_READS
 
 
 # --- snapshot copies (R7; the walker lives in _sandbox_profiles) -----------------------------------------------------
