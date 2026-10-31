@@ -1385,9 +1385,9 @@ agentteams --fleet /path/to/parent --update --merge --yes       # apply
 How it works, per discovered workspace:
 
 1. **Discovery** — finds dirs containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
-2. **Snapshot (git commit)** — before applying, each git workspace's agent-infra state is committed as `chore(fleet): pre-update snapshot` (or left at `HEAD` when already clean). This is the recoverable rollback point and the diff base. (Non-git workspaces rely on the automatic `.agentteams-backups/` snapshot.)
+2. **Snapshot (to a ref)** — before applying, each git workspace's agent-infra state is recorded as a commit (`chore(fleet): pre-update snapshot`) under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace hash>`, or left at `HEAD` when already clean. The checked-out branch, `HEAD`, the index and the working tree are never changed, so a live checkout keeps fast-forwarding from its remote. No commit hook runs; a workspace whose changed agent files hold a high-severity credential finding gets no snapshot, and a dirty workspace with no snapshot is SKIPped, never updated. This is the recoverable rollback point and the diff base. The refs stay local (never pushed), but `clone --mirror` / `push --mirror` copy them; list them with `git for-each-ref refs/agentteams/fleet-snapshots/` and delete one with `git update-ref -d <ref>`. (Non-git workspaces rely on the automatic `.agentteams-backups/` snapshot.)
 3. **In-process update** — re-enters the standard update path per target with `--update --merge` (copilot-vscode `.github/agents/`, or a native Claude team's `.claude/agents/`) or `--bridge-merge` (for bridge-consumer `.claude/`). No subprocess is spawned, so a successful merge is never misreported because of an interpreter/exit-code quirk; a failure in one target is isolated and the run continues.
-4. **Diff analysis** — after applying, `git diff <snapshot>` is classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
+4. **Diff analysis** — after applying, the snapshot is diffed against the agent paths as they are now (tree to tree, so files untracked before the update count correctly) and classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
 
 Statuses per `(workspace, target)`: `OK` (only fenced/generated regeneration), `REVIEW` (shrink Notice or USER-EDITABLE deletion — inspect the diff), `FAIL` (the merge itself errored), `SKIP` (ambiguous `.claude` with no bridge signal and no descriptor), `WOULD-UPDATE` (dry-run).
 
@@ -1497,10 +1497,9 @@ review (§6.1 capability carve-out).
 
 ### `--fleet-allow-no-verify`
 
-Allow fleet snapshot commits to bypass pre-commit hooks (`--no-verify` /
-`core.hooksPath=/dev/null`). Off by default — hooks run normally and a warning is printed if
-a hook blocks the snapshot. Use only when workspace hooks are known-safe to skip, e.g. a
-commit-signing hook that would reject the ephemeral internal snapshot commit.
+No effect; kept so existing invocations keep working. Fleet snapshots are written to
+`refs/agentteams/fleet-snapshots/` without `git commit`, so no commit hook runs and nothing lands on
+the checked-out branch.
 
 ### `--recipe-check`
 

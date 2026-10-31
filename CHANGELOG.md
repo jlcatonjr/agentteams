@@ -58,6 +58,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rows and whose `stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix. The
   MCP server refuses a `stage-major` for a repository with a staged fix, as for `stage-fix`.
 
+### fixed (fleet: the pre-update snapshot goes to a ref, never onto the checked-out branch)
+
+- **`fleet._git_snapshot`** no longer runs `git commit` on the workspace's current branch. Run weekly against
+  live checkouts, that left local-only `chore(fleet): pre-update snapshot` commits on default branches
+  (data-quality-monitor 10, traffic-file-enrichment-app 17, colorado-collectors 4, …) while the real updates
+  arrived upstream as merged PRs, so the branches diverged and could no longer fast-forward. The snapshot is now
+  a commit built in a temporary index and kept under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace
+  hash>`: the branch, `HEAD`, the index and the working tree are untouched, no commit hook runs, a repository with no
+  commit yet is handled, and two workspaces in one repository get two refs. Since no pre-commit secret scanner
+  sees a ref, a workspace whose changed agent files hold a high-severity credential finding (`agentteams.scan`)
+  gets no snapshot, and a dirty workspace left without one is SKIPped, never updated. A post-update tree that cannot be built marks the target REVIEW. Snapshot commits already on
+  branches are not rewritten; each repository cleans those up on its own.
+- **Diff analysis is tree to tree** (`fleet._worktree_tree`; `_git_diff`, `_user_editable_deletions` and
+  `_classify` take the post-update tree): a file untracked before the update no longer counts as deleted, and a
+  file the update creates is now seen.
+- **`--fleet-allow-no-verify`** has no effect (accepted so invocations keep working); its help, the man page and
+  the CLI reference say so. The fleet API reference's rollback no longer suggests `reset --hard`.
+
 ### added (vulnscan: unpinned Python requirements are checked by range, off by default)
 
 - **`agentteams.vulnscan.specifiers`** (new, stdlib): a minimal PEP 440 specifier set as version intervals
