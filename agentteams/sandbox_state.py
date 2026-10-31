@@ -297,7 +297,7 @@ def _grant_from_record(agent: object, entry: object, project_root: Path) -> Any 
     wx = _wasm_exec()
     try:
         return grant_from_tokens(agent, tokens, wx.Limits(**limits), project_root=project_root)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, wx.WasmExecError):   # out-of-bounds limits are malformed too, not a crash
         return None
 
 

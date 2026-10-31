@@ -5,8 +5,6 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import json
-import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -16,36 +14,12 @@ from agentteams import sandbox_state as ss
 _HAS_WASM_EXEC = importlib.util.find_spec("agentteams.wasm_exec") is not None
 
 
-def _fake_wasm_exec() -> types.ModuleType:
-    """A stand-in with P02's contract shapes (Limits / Mount / Grant), for the parsing logic only."""
-    mod = types.ModuleType("agentteams.wasm_exec")
-
-    @dataclasses.dataclass(frozen=True)
-    class Limits:
-        fuel: int
-        max_memory_bytes: int
-        timeout_s: int
-
-    @dataclasses.dataclass(frozen=True)
-    class Mount:
-        host: str
-        guest: str
-        mode: str
-
-    @dataclasses.dataclass(frozen=True)
-    class Grant:
-        mounts: tuple
-        limits: Limits
-
-    mod.Limits, mod.Mount, mod.Grant = Limits, Mount, Grant
-    return mod
-
-
 @pytest.fixture
-def wx(monkeypatch):
-    mod = _fake_wasm_exec()
-    monkeypatch.setitem(sys.modules, "agentteams.wasm_exec", mod)
-    return mod
+def wx():
+    """The real executor (P02 is merged). A sys.modules stand-in would not reach ``from agentteams import
+    wasm_exec`` once the real module is imported elsewhere in the run, so tests would compare two Grant classes."""
+    from agentteams import wasm_exec
+    return wasm_exec
 
 
 def _root(tmp_path: Path) -> Path:
@@ -112,8 +86,10 @@ def test_grant_tokens_from_mounts(tmp_path, wx):
 ])
 def test_non_grant_mounts_are_refused(tmp_path, wx, mount):
     root = _root(tmp_path)
-    grant = wx.Grant(mounts=(mount(wx, root),), limits=wx.Limits(1, 65536, 1))
-    with pytest.raises(ValueError):
+    # Refused at either layer: the real executor rejects most of these when the Mount/Grant is built
+    # (WasmExecError); grant_tokens rejects the rest (ValueError). Neither may yield tokens.
+    with pytest.raises((ValueError, wx.WasmExecError)):
+        grant = wx.Grant(mounts=(mount(wx, root),), limits=wx.Limits(1, 65536, 1))
         ss.grant_tokens("analyst", grant, project_root=root)
 
 
