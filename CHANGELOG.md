@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### security (S-10: release cooldown restored, latest stable only, scan-remediation carve-out)
+
+- **The 14-day package-release cooldown is back in force (operator ruling, 2026-10-29)**, reversing the
+  2026-10-26 deprecation in 1.0.4, in every ecosystem. **New: only the latest stable release is adopted**: no
+  pre-releases, no yanked or deprecated releases, no older release when a newer stable one has cleared the
+  cooldown; holding a package back needs a recorded `@security` clearance.
+- **Carve-out: neither rule ever blocks remediating a vulnerability one of the carve-out's scans detected.** The 1.0 line has no
+  vulnscan, so the scan is the ecosystem audit tools Rule S-10 already names (`npm audit`, `pip-audit`,
+  `cargo audit`) or an OSV.dev query of the installed versions (operator decision, 2026-10-31); a report from any
+  other source qualifies only once one of those confirms it, and the change cites the tool, advisory id and
+  installed version (@security, 2026-10-31). The fix release
+  may be adopted inside the cooldown and need not be the latest stable release. It must still pass the
+  known-vulnerability search (no OSV `MAL-*` entry) and Rule S-9's identity check, and the carve-out covers only
+  the packages the scan flagged (and the dependencies their fix pulls in). The advisory-backed exception that
+  1.0.3 had is replaced by this carve-out.
+- Generated `@security` agents carry it in Rule S-10 (fence v13), the verdict table, the install trigger and the
+  S-9 cross-reference; the security feed's prevention playbook and the security hardening guide follow. Built by
+  reverting e365b154 and porting the rule text of 1ec3a632 (`main`) by hand, without its vulnscan and server-kit
+  parts.
+
 ## [1.0.4] - 2026-10-26
 
 ### release notes
