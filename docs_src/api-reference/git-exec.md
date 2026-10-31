@@ -22,7 +22,7 @@ configured filter driver (`filter.<name>.clean`) can still run during `status` o
 | `cli.signer_location` | yes | the install-location check before the key is read |
 | `proposals` (the runner's change snapshot) | yes, except `core.hooksPath` | the project is agent-writable; the snapshot resolves `--git-path hooks` to watch for a planted hook, so it must see the real hooks path. Safe only while `GIT_OPTIONAL_LOCKS=0` stops `status` writing the index (which would run `post-index-change`) |
 | `source_provenance` | yes | read-only; runs on every render |
-| `fleet` | no | the snapshot commits, and commit hooks are part of that contract |
+| `fleet` | no | it works in the operator's own checkouts with their own git config (snapshot refs, diffs) |
 | `multi_sync` | no | unchanged behaviour |
 
 The module is integrity-pinned: the pinned `proposals`, `operator_signing`, `signer_location` and `integrity` import it.

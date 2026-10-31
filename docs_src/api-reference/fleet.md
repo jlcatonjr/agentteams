@@ -27,9 +27,9 @@ agentteams --fleet /path/to/parent --update --merge --yes --fleet-report /tmp/fl
 ### What one run does, per discovered workspace
 
 1. **Discover** — find directories containing `.github/agents/` and/or `.claude/`, pruning `node_modules`, `.git`, `.agentteams-backups`, `__pycache__`, `.venv`, `venv`, `.goose`, `tmp`, `.worktrees`, and `archive`, and never recursing into `.github`/`.claude` internals.
-2. **Snapshot (git commit)** — before applying, commit the workspace's agent-infra state as `chore(fleet): pre-update snapshot` (or stay at `HEAD` when already clean). This is the recoverable rollback point and the diff base. Non-git workspaces fall back to the automatic `<output_dir>/.agentteams-backups/<ts>/` snapshot.
+2. **Snapshot (to a ref)** — before applying, record the workspace's agent-infra state as a commit (`chore(fleet): pre-update snapshot`) under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace hash>` (or stay at `HEAD` when already clean). It is built in a temporary index: the checked-out branch, `HEAD`, the index and the working tree are never changed, and no hook runs. This is the recoverable rollback point and the diff base. The refs stay local, but `clone --mirror` / `push --mirror` copy them. Non-git workspaces fall back to the automatic `<output_dir>/.agentteams-backups/<ts>/` snapshot.
 3. **Update in-process** — re-enter the standard update path per target (`--update --merge` for `.github/agents/` and native `.claude/agents/`, `.goose/recipes/` and `.codex/agents/` teams, each with `--project <workspace>` so the project scan runs; `--bridge-merge` for bridge consumers). A bridge refreshes from the source framework its entry file records inside the `AGENTTEAMS-BRIDGE` fence ("Use source framework `goose` …": `.goose/recipes`; `claude`: `.claude/agents`; otherwise `.github/agents`). A recorded source fleet can't use is a `SKIP`, never a re-bridge from `.github/agents`. No subprocess is spawned, so a successful merge is never misreported because of an interpreter/exit-code quirk, and a failure in one target is isolated.
-4. **Diff analysis** — after applying, `git diff <snapshot>` is classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. A `USER-EDITABLE` region opens only at a real marker (a blockquote notice naming it, such as `## Project-Specific Notes`' `> ⚙️ **USER-EDITABLE**` or the orchestrator's project-rules notice; a heading naming it; or an explicit `BEGIN USER-EDITABLE` comment). It runs to the next real `<!-- AGENTTEAMS:BEGIN … -->` fence, an end marker, or the end of the file, so a user's own `## ` heading inside it stays covered. A fenced line is never user-editable, and prose that merely mentions the phrase (or quotes a fence marker) opens nothing. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
+4. **Diff analysis** — after applying, the snapshot is diffed tree to tree against the agent paths as they are now (so a file untracked before the update is not a deletion, and a file the update creates is an addition) and classified by the **authoritative content signals** — shrink Notices and deletions inside `USER-EDITABLE` regions — **not** the process exit code. A `USER-EDITABLE` region opens only at a real marker (a blockquote notice naming it, such as `## Project-Specific Notes`' `> ⚙️ **USER-EDITABLE**` or the orchestrator's project-rules notice; a heading naming it; or an explicit `BEGIN USER-EDITABLE` comment). It runs to the next real `<!-- AGENTTEAMS:BEGIN … -->` fence, an end marker, or the end of the file, so a user's own `## ` heading inside it stays covered. A fenced line is never user-editable, and prose that merely mentions the phrase (or quotes a fence marker) opens nothing. Per-workspace `.diff` files plus `report.json` and `summary.md` are written under `<DIR>/.agentteams-fleet/<run-id>/`.
 
 ### Per-target status
 
@@ -110,8 +110,8 @@ Aggregate result for one workspace.
 
 - `path` (`str`) — Absolute path of the workspace.
 - `is_git` (`bool`) — Whether the workspace is a git repository.
-- `snapshot_ref` (`str | None`) — The snapshot commit/HEAD used as the diff base and rollback point.
-- `snapshot_committed` (`bool`) — `True` if a snapshot commit was created (workspace was dirty), `False` if `HEAD` was already clean.
+- `snapshot_ref` (`str | None`) — The snapshot commit (kept under `refs/agentteams/fleet-snapshots/`) or `HEAD`, used as the diff base and rollback point.
+- `snapshot_committed` (`bool`) — `True` if a snapshot commit was recorded (workspace was dirty), `False` if `HEAD` was already clean. No commit is ever made on the checked-out branch.
 - `diff_file` (`str | None`) — Path to the persisted per-workspace `.diff`.
 - `targets` (`list[TargetResult]`) — One entry per updated target.
 
@@ -144,11 +144,15 @@ Entry point dispatched from `build_team.main()` when `--fleet` is set. Discovers
 
 ## Rollback
 
-The pre-update snapshot is the recoverable point. To undo a workspace's update:
+The pre-update snapshot is the recoverable point. To undo a workspace's update, put the agent paths back as they
+were and remove the files the update added (the workspace's `.diff` in the report lists them as `new file`):
 
 ```bash
-git -C /path/to/workspace reset --hard <snapshot_ref>   # snapshot_ref is in report.json
+git -C /path/to/workspace restore --source=<snapshot_ref> --worktree -- .github/agents .claude   # the agent paths
 ```
+
+This touches only the agent paths and leaves the branch, the index and any other work alone. Never use
+`reset --hard`: it would also discard unrelated uncommitted work in that checkout.
 
 Non-git workspaces restore from their `<output_dir>/.agentteams-backups/<ts>/` snapshot (see [`emit.restore_backup`](emit.md)).
 

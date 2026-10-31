@@ -481,7 +481,7 @@ Which infrastructures to update per workspace (default: both). `both` = copilot\
 Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
 .TP
 .B \-\-fleet\-allow\-no\-verify
-Allow snapshot commits to bypass pre\-commit hooks (\-\-no\-verify / core.hooksPath=/dev/null). Off by default — hooks run normally and a warning is printed if a hook blocks the snapshot. Use this flag only when workspace hooks are known\-safe to skip (e.g., a commit\-signing hook that would reject the ephemeral internal snapshot commit).
+No effect (kept so existing invocations work): fleet snapshots are written to refs/agentteams/fleet\-snapshots/ without git commit, so no hook runs and nothing lands on the checked\-out branch.
 .TP
 .B \-\-sync\-init
 Bootstrap pinned multi\-framework sync: seed the canonical hub from the \-\-pin framework, project it to every framework in the sync set, and record per\-framework baselines. Writes .agentteams/pin.json. The project root is \-\-project (default: CWD); \-\-output is refused.
