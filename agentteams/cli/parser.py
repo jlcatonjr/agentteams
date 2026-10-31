@@ -493,6 +493,65 @@ def _build_parser() -> argparse.ArgumentParser:
         "plain python3 can import agentteams, and fails with the fix when neither can.",
     )
     parser.add_argument(
+        "--wasm-install",
+        nargs="?",
+        const="wasmtime",
+        default=None,
+        metavar="COMPONENTS",
+        dest="wasm_install",
+        help="Operator command (D4): download the pinned WASM runtime and guest interpreters into "
+        "<project>/.agentteams/wasm/. COMPONENTS is a comma list of wasmtime, python, javascript, or "
+        "'all' (default: wasmtime). Each artifact is checked against its pinned size and sha256 before "
+        "extraction; a component whose pin still reads TODO-PIN is refused. Prints the plan and asks to "
+        "confirm unless --yes; a non-tty without --yes refuses. --dry-run prints the plan only. Never "
+        "runs during rendering. Exit 0 ok, 1 verification failure, 2 usage, 3 network.",
+    )
+    parser.add_argument(
+        "--wasm-status",
+        nargs="?",
+        const="all",
+        default=None,
+        metavar="COMPONENTS",
+        dest="wasm_status",
+        help="Read-only, network-free: re-verify the installed WASM components under "
+        "<project>/.agentteams/wasm/ against the packaged pins (ok, absent, MISMATCH, pin incomplete). "
+        "Exits 0 only when every requested component (default: all) is ok.",
+    )
+    parser.add_argument(
+        "--wasm-pin-update",
+        nargs=2,
+        default=None,
+        metavar=("COMPONENT", "VERSION"),
+        dest="wasm_pin_update",
+        help="Operator tool (network): re-pin COMPONENT at VERSION from GitHub release metadata and a "
+        "verified download (S-10 cooldown applies unless --remediation). Writes the pins file "
+        "(--pins-out; defaults to the packaged file only in a git work tree) and prints the diff; never "
+        "commits. The diff needs @security review before it is committed.",
+    )
+    parser.add_argument(
+        "--remediation",
+        default=None,
+        metavar="GHSA-IDS",
+        dest="remediation",
+        help="With --wasm-pin-update: comma-separated GHSA ids (from a recorded @security decision) that "
+        "justify adopting a fix release inside the S-10 cooldown; each must appear in the release notes.",
+    )
+    parser.add_argument(
+        "--tofu",
+        action="store_true",
+        dest="tofu",
+        help="With --wasm-pin-update: accept a release asset that has no sha256 digest in its metadata "
+        "(trust on first use, recorded as provenance 'tofu'); needs a recorded @security decision.",
+    )
+    parser.add_argument(
+        "--pins-out",
+        default=None,
+        metavar="PATH",
+        dest="pins_out",
+        help="With --wasm-pin-update: the pins file to rewrite. Required unless the packaged "
+        "agentteams/data/wasm_runtime_pins.json sits in a git work tree.",
+    )
+    parser.add_argument(
         "--self",
         action="store_true",
         dest="self_update",

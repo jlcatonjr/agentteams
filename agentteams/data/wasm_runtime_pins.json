@@ -1,0 +1,209 @@
+{
+  "components": {
+    "javascript": {
+      "license": "MIT",
+      "platforms": {
+        "any": {
+          "archive": "none",
+          "asset_re": "^qjs-wasi\\.wasm$",
+          "entry": "qjs-wasi.wasm",
+          "files": {
+            "qjs-wasi.wasm": {
+              "sha256": "42a732a676ec2d93488c19411e0fad283bf72658fdad746f089914b523c783b1"
+            }
+          },
+          "keep": [
+            "qjs-wasi.wasm"
+          ],
+          "sha256": "42a732a676ec2d93488c19411e0fad283bf72658fdad746f089914b523c783b1",
+          "size": 1569050,
+          "strip": "",
+          "url": "https://github.com/quickjs-ng/quickjs/releases/download/v0.17.0/qjs-wasi.wasm"
+        }
+      },
+      "provenance": "api-digest",
+      "published_at": "2026-09-18T21:39:55Z",
+      "release": "https://github.com/quickjs-ng/quickjs/releases/tag/v0.17.0",
+      "runtime_mounts": [],
+      "s10": "cooldown-clear",
+      "source": {
+        "repo": "quickjs-ng/quickjs",
+        "tag": "v{version}"
+      },
+      "version": "0.17.0"
+    },
+    "python": {
+      "license": "PSF-2.0 (CPython); MIT (build repository)",
+      "platforms": {
+        "any": {
+          "archive": "zip",
+          "asset_re": "^python-{version}-wasi_sdk-[0-9]+\\.zip$",
+          "entry": "python.wasm",
+          "files": {
+            "python.wasm": {
+              "sha256": "TODO-PIN"
+            }
+          },
+          "keep": [
+            "python.wasm",
+            "LICENSE",
+            "lib/"
+          ],
+          "sha256": "00b791b3729230f97a625087f534d71978433fb1e068e13a9cac8cd3f2541742",
+          "size": 15430316,
+          "strip": "",
+          "tree": {
+            "count": "TODO-PIN",
+            "root": "lib",
+            "sha256": "TODO-PIN"
+          },
+          "url": "https://github.com/brettcannon/cpython-wasi-build/releases/download/v3.15.0/python-3.15.0-wasi_sdk-33.zip"
+        }
+      },
+      "provenance": "api-digest",
+      "published_at": "2026-10-09T20:26:35Z",
+      "release": "https://github.com/brettcannon/cpython-wasi-build/releases/tag/v3.15.0",
+      "runtime_mounts": [
+        {
+          "guest": "/lib",
+          "tree": "lib"
+        }
+      ],
+      "s10": "cooldown-clear",
+      "source": {
+        "repo": "brettcannon/cpython-wasi-build",
+        "tag": "v{version}"
+      },
+      "version": "3.15.0"
+    },
+    "wasmtime": {
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "platforms": {
+        "darwin-arm64": {
+          "archive": "tar.xz",
+          "asset_re": "^wasmtime-v{version}-aarch64-macos\\.tar\\.xz$",
+          "entry": "wasmtime",
+          "files": {
+            "LICENSE": {
+              "sha256": "TODO-PIN"
+            },
+            "wasmtime": {
+              "exec": true,
+              "sha256": "TODO-PIN"
+            }
+          },
+          "keep": [
+            "wasmtime",
+            "LICENSE"
+          ],
+          "sha256": "7228786d479b0e5bddf293d07f53b9aecb1a8f1d55a02821640aa65a522e2631",
+          "size": 8497516,
+          "strip": "wasmtime-v{version}-aarch64-macos",
+          "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.20/wasmtime-v36.0.20-aarch64-macos.tar.xz"
+        },
+        "darwin-x86_64": {
+          "archive": "tar.xz",
+          "asset_re": "^wasmtime-v{version}-x86_64-macos\\.tar\\.xz$",
+          "entry": "wasmtime",
+          "files": {
+            "LICENSE": {
+              "sha256": "TODO-PIN"
+            },
+            "wasmtime": {
+              "exec": true,
+              "sha256": "TODO-PIN"
+            }
+          },
+          "keep": [
+            "wasmtime",
+            "LICENSE"
+          ],
+          "sha256": "ae74e3ca8376810b391ee5243ef7f338467b3f81a2f05472b7e2fd0475c870ef",
+          "size": 9674940,
+          "strip": "wasmtime-v{version}-x86_64-macos",
+          "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.20/wasmtime-v36.0.20-x86_64-macos.tar.xz"
+        },
+        "linux-aarch64": {
+          "archive": "tar.xz",
+          "asset_re": "^wasmtime-v{version}-aarch64-linux\\.tar\\.xz$",
+          "entry": "wasmtime",
+          "files": {
+            "LICENSE": {
+              "sha256": "TODO-PIN"
+            },
+            "wasmtime": {
+              "exec": true,
+              "sha256": "TODO-PIN"
+            }
+          },
+          "keep": [
+            "wasmtime",
+            "LICENSE"
+          ],
+          "sha256": "5b98344e0d53758b0584dda6b57afbf26a86ba3b5bbd38f9b0003b2a23b3761a",
+          "size": 9156960,
+          "strip": "wasmtime-v{version}-aarch64-linux",
+          "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.20/wasmtime-v36.0.20-aarch64-linux.tar.xz"
+        },
+        "linux-x86_64": {
+          "archive": "tar.xz",
+          "asset_re": "^wasmtime-v{version}-x86_64-linux\\.tar\\.xz$",
+          "entry": "wasmtime",
+          "files": {
+            "LICENSE": {
+              "sha256": "TODO-PIN"
+            },
+            "wasmtime": {
+              "exec": true,
+              "sha256": "TODO-PIN"
+            }
+          },
+          "keep": [
+            "wasmtime",
+            "LICENSE"
+          ],
+          "sha256": "66d843c88cd9ecd5ca31004301ee337b8750bf08a839d06c2e7598e531b06de8",
+          "size": 10275620,
+          "strip": "wasmtime-v{version}-x86_64-linux",
+          "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.20/wasmtime-v36.0.20-x86_64-linux.tar.xz"
+        },
+        "windows-x86_64": {
+          "archive": "zip",
+          "asset_re": "^wasmtime-v{version}-x86_64-windows\\.zip$",
+          "entry": "wasmtime.exe",
+          "files": {
+            "LICENSE": {
+              "sha256": "TODO-PIN"
+            },
+            "wasmtime.exe": {
+              "exec": true,
+              "sha256": "TODO-PIN"
+            }
+          },
+          "keep": [
+            "wasmtime.exe",
+            "LICENSE"
+          ],
+          "sha256": "c91d51a18b7642600a03c7e60966123ad4eca5893f2e1bc8474ecd1c03e32f90",
+          "size": 11374048,
+          "strip": "wasmtime-v{version}-x86_64-windows",
+          "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.20/wasmtime-v36.0.20-x86_64-windows.zip"
+        }
+      },
+      "provenance": "api-digest",
+      "published_at": "2026-10-29T17:48:02Z",
+      "release": "https://github.com/bytecodealliance/wasmtime/releases/tag/v36.0.20",
+      "runtime_mounts": [],
+      "s10": "remediation:GHSA-j366-h8gg-77pm,GHSA-gqmc-89g8-p25r,GHSA-96f6-r43r-8c24,GHSA-m9f7-9w4p-gv38,GHSA-q554-3cjc-rx7p,GHSA-5qpp-g3j2-8frx,GHSA-mghf-wjfp-p5xm,GHSA-897f-g5gm-fmxm,GHSA-r8xh-cgf7-392j,GHSA-6fr9-xmw9-5352,GHSA-h4wp-g4x3-7398 (D9; @security cooldown waiver review-pending)",
+      "source": {
+        "repo": "bytecodealliance/wasmtime",
+        "tag": "v{version}"
+      },
+      "version": "36.0.20"
+    }
+  },
+  "policy": "S-10: a release is adopted only when it is >=14 days old and the newest stable release on its major line that has cleared the cooldown, unless a recorded @security remediation decision names the GHSA ids it fixes.",
+  "rule5": "Archive size and sha256 are the GitHub release API 'size' and 'digest' fields (read 2026-10-31). Extracted-file and tree hashes stay TODO-PIN until `agentteams --wasm-pin-update` fills them from a verified download; a component holding any TODO-PIN is refused by install and resolve (fail closed).",
+  "schema": "agentteams-wasm-runtime-pins/v1",
+  "updated": "2026-10-31"
+}

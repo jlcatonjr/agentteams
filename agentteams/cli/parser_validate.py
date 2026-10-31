@@ -71,6 +71,9 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         ("--prune-backups", getattr(args, "prune_backups", None) is not None),
         ("--stale-check", bool(getattr(args, "stale_check", False))),
         ("--stale-restore", getattr(args, "stale_restore", None) is not None),
+        ("--wasm-install", getattr(args, "wasm_install", None) is not None),
+        ("--wasm-status", getattr(args, "wasm_status", None) is not None),
+        ("--wasm-pin-update", getattr(args, "wasm_pin_update", None) is not None),
     ]
     _active_ops = [flag for flag, on in _standalone_ops if on]
     if len(_active_ops) > 1:
@@ -78,6 +81,25 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
             f"{' and '.join(_active_ops)} are mutually exclusive "
             "(each is a standalone, dispatch-shadowing integrity/retention operation)"
         )
+
+    # P03 (D4): the WASM provisioning commands are standalone operator acts; they never ride along with
+    # a render, so combining one with a generation flag is refused rather than silently ignored.
+    _wasm_ops = [f for f in ("--wasm-install", "--wasm-status", "--wasm-pin-update") if f in _active_ops]
+    if _wasm_ops:
+        _wasm_generation = [flag for flag, on in (
+            ("--description", bool(getattr(args, "description", None))),
+            ("--self", bool(getattr(args, "self_update", False))),
+            ("--update", bool(getattr(args, "update", False))),
+            ("--output", bool(getattr(args, "output", None))),
+        ) if on]
+        if _wasm_generation:
+            parser.error(f"{_wasm_ops[0]} cannot be combined with {', '.join(_wasm_generation)} "
+                         "(WASM provisioning is a standalone operator command, never part of a render)")
+    for _flag, _on in (("--remediation", getattr(args, "remediation", None) is not None),
+                       ("--tofu", bool(getattr(args, "tofu", False))),
+                       ("--pins-out", getattr(args, "pins_out", None) is not None)):
+        if _on and getattr(args, "wasm_pin_update", None) is None:
+            parser.error(f"{_flag} requires --wasm-pin-update")
 
     # --stale-remediate / --stale-no-git are modifiers for --stale-check.
     if getattr(args, "stale_remediate", False) and not getattr(args, "stale_check", False):
