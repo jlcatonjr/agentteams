@@ -62,6 +62,9 @@ IMAGE_PRODUCTS: dict[str, str] = {
 }
 #: ``mcr.microsoft.com`` repositories -> kind.
 MCR_PRODUCTS: dict[str, str] = {"dotnet/runtime": "dotnet", "dotnet/aspnet": "dotnet", "dotnet/sdk": "dotnet"}
+#: Kinds whose image tags name a release line in more parts than endoflife.date does (.NET line ``8`` is
+#: tagged ``8.0`` on MCR, which has no ``8`` tag): a tag of up to this many parts is a release-line tag.
+TAG_LINE_PARTS: dict[str, int] = {"dotnet": 2}
 #: Official OS images -> :data:`runtimes.OS_PRODUCTS` key.
 OS_IMAGES: dict[str, str] = {"ubuntu": "ubuntu", "debian": "debian", "alpine": "alpine",
                              "amazonlinux": "amazonlinux"}
@@ -427,17 +430,20 @@ def _judge_product(kind: str, ref: ImageRef, rel: str, target: str, out: Judgeme
         return
     v = runtimes.evaluate(kind, version, manager="image", today=today)
     out.checked += 1
-    line = runtimes.cycle_of(kind, version)
+    parts = TAG_LINE_PARTS.get(kind, 0)
+    def tag_line(ver: str) -> str:   # the release line as the registry tags it
+        return ".".join(ver.split(".")[:parts]) if parts else runtimes.cycle_of(kind, ver)
+    line_tag = version == runtimes.cycle_of(kind, version) or (parts > 0 and len(version.split(".")) <= parts)
     if v.verdict == "unchecked":
         _unchecked(v, ref, rel, out)
     elif v.verdict == "eol":
-        newest = runtimes.cycle_of(kind, v.upgrade_to) if v.upgrade_to else ""
+        newest = tag_line(v.upgrade_to) if v.upgrade_to else ""
         fix = f"{ref.display()}:{newest}{suffix}" if newest else ""
         out.findings.append(_finding(ref, rel, target, 3, f"{v.detail}; change FROM to a supported line", fix))
-    elif version != line and v.verdict == "security-release-missing":   # a full-patch tag is never rebuilt
+    elif not line_tag and v.verdict == "security-release-missing":   # a full-patch tag is never rebuilt
         out.findings.append(_finding(ref, rel, target, 3, f"pinned patch tag: {v.detail}",
                                      f"{ref.display()}:{v.upgrade_to}{suffix}"))
-    elif version != line and v.verdict == "behind-patch":
+    elif not line_tag and v.verdict == "behind-patch":
         out.findings.append(_finding(ref, rel, target, 2, f"pinned patch tag behind {v.upgrade_to}",
                                      f"{ref.display()}:{v.upgrade_to}{suffix}"))
     # a release-line tag: only eol counts (a rebuild takes the line's newest patch)

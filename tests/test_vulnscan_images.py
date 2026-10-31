@@ -39,8 +39,8 @@ CYCLES: dict[str, list[dict]] = {
     "amazon-corretto": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.472"}],
     "amazon-linux": [{"cycle": "2023", "eol": False, "is_eol": False, "latest": "2023.9"},
                      {"cycle": "2", "eol": "2026-06-30", "is_eol": True, "latest": "2.0.2025"}],
-    "dotnet": [{"cycle": "8.0", "eol": False, "is_eol": False, "latest": "8.0.11"},
-               {"cycle": "6.0", "eol": "2024-11-12", "is_eol": True, "latest": "6.0.36"}],
+    "dotnet": [{"cycle": "8", "eol": False, "is_eol": False, "latest": "8.0.11"},
+               {"cycle": "6", "eol": "2024-11-12", "is_eol": True, "latest": "6.0.36"}],
     "redis": [{"cycle": "7.4", "eol": False, "is_eol": False, "latest": "7.4.1"}],
 }
 
@@ -229,6 +229,14 @@ def test_openjdk_deprecated_and_corretto_and_dotnet(tmp_path: Path, eol: list[st
         ("mcr.microsoft.com/dotnet/aspnet", 3, "mcr.microsoft.com/dotnet/aspnet:8.0"),
         ("openjdk", 1, "eclipse-temurin:17")]
     assert {"eclipse-temurin", "amazon-corretto", "amazon-linux", "dotnet"} <= set(eol)
+
+
+def test_dotnet_tags_name_the_line_in_two_parts(tmp_path: Path, eol: list[str]) -> None:
+    """MCR tags .NET line 8 as ``8.0`` (endoflife.date calls it ``8``): that is a line tag, not a pinned patch."""
+    rep = _scan(tmp_path, "FROM mcr.microsoft.com/dotnet/aspnet:8.0\nFROM mcr.microsoft.com/dotnet/sdk:8\n"
+                "FROM mcr.microsoft.com/dotnet/runtime:8.0.6\n")
+    assert sorted((f.name, f.severity, f.fix) for f in rep.findings) == [
+        ("mcr.microsoft.com/dotnet/runtime", 2, "mcr.microsoft.com/dotnet/runtime:8.0.11")]
 
 
 def test_private_and_local_images_are_never_named_or_sent(tmp_path: Path, eol: list[str]) -> None:
