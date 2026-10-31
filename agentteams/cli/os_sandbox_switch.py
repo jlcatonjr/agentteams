@@ -274,10 +274,13 @@ def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, 
     old = previous_sandbox_state(agents_dir, root, framework_id)
     if not gate_engaged(manifest or {}, state, old, recorded=False, wasm=False):
         return None
-    if old is not None:
-        # The projection derives the OS half and the model-substrate switch, not the agent-WASM half, so that half is
-        # the previous one: sync never changes it, and comparing against an empty one would plan a spurious
-        # sandbox-wasm-off (refused in a governed workspace) for every WASM team whose OS half engages the gate.
+    from agentteams.frameworks._control_plane_protect import SYNC_PROTECT_KEY
+
+    if old is not None and (manifest or {}).get(SYNC_PROTECT_KEY) is True:
+        # The projection derives the OS half and the model-substrate switch, not the agent-WASM half. When it carries
+        # the team's R1 control-plane protection (SYNC_PROTECT_KEY), the WASM boundary it re-emits is unchanged, so
+        # that half is the previous one; comparing against an empty one would plan a spurious sandbox-wasm-off.
+        # Without the flag (an older pin), the re-emitted files drop R1, and the sandbox-wasm-off stays planned.
         state = dataclasses.replace(state, wasm=old.wasm, wasm_reason=old.wasm_reason,
                                     wasm_languages=old.wasm_languages, wasm_grants=old.wasm_grants)
     relaxations = gate.plan_relaxations(

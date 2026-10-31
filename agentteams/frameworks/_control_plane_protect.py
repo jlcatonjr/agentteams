@@ -34,6 +34,9 @@ LEDGER_DIR_REL = ".agentteams"
 STATUS_DIR_REL = ".agentteams-status"
 #: == ``sandbox_projection.PROJECTION_REL`` (test-locked).
 SUBSTRATE_FILE_REL = ".agentteams/sandbox-state.json"
+#: Transient manifest key set only by ``multi_sync._projected_privilege_manifest`` (never read from input): the pinned
+#: team had WASM on or ``write_policy: orchestrator-only``, so a sync re-emits the R1 control-plane protection too.
+SYNC_PROTECT_KEY = "_sync_control_plane_protect"
 
 
 def protect_control_plane(manifest: dict[str, Any]) -> bool:
@@ -52,6 +55,8 @@ def protect_control_plane(manifest: dict[str, Any]) -> bool:
 
     # The WASM switch alone (P01): the same value as ``effective_sandbox_state(manifest).wasm``, without building
     # grants, so R1 holds on every render path, including those with no CLI-set project root.
+    if manifest.get(SYNC_PROTECT_KEY) is True:   # a sync projection of a team that had R1 (WASM on / orchestrator-only)
+        return True
     return manifest.get("write_policy") == "orchestrator-only" or wasm_switch(manifest)[0]
 
 

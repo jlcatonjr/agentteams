@@ -231,6 +231,11 @@ def _read_brief_privilege(root: Path) -> dict[str, Any]:
                 "resolve_deny_read_abspath"):
         if brief.get(key) is not None:
             priv[key] = brief[key]
+    # R1 on sync (wave-4 @security P20 finding 1): a team with WASM on or orchestrator-only had its control plane
+    # write-protected; sync re-emits the boundary, so it must re-emit that protection too.
+    wblock = brief.get("wasm_sandbox")
+    if brief.get("write_policy") == "orchestrator-only" or (isinstance(wblock, dict) and wblock.get("enabled") is True):
+        priv["control_plane_protect"] = True
     # P20 D7: the projected model-substrate switch rides with the posture, so a sync keeps the file current.
     block = brief.get("wasm_sandbox")
     substrate = block.get("model_substrate") if isinstance(block, dict) else None
@@ -289,6 +294,10 @@ def _projected_privilege_manifest(root: Path, framework: str, privilege: dict[st
                 "resolve_deny_read_abspath"):
         if privilege.get(key) is not None:
             manifest[key] = privilege[key]
+    if privilege.get("control_plane_protect") is True:
+        from agentteams.frameworks._control_plane_protect import SYNC_PROTECT_KEY
+
+        manifest[SYNC_PROTECT_KEY] = True
     # P20 D7: the model-substrate switch (the WASM half stays off here, as before: enabled defaults to false), or the
     # floor a pipeline file holds when the brief no longer sets it (so the gate sees no change).
     from agentteams.wasm_config import WASM_SUBSTRATE_KEPT_KEY
