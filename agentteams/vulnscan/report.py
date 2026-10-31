@@ -20,6 +20,9 @@ from agentteams.vulnscan.osv import SEVERITY_NAME, SEVERITY_RANK, UNSCORED_AS
 from agentteams.vulnscan.versions import is_prerelease
 
 EXIT_CLEAN, EXIT_FINDINGS, EXIT_UNSCANNED, EXIT_COMPROMISE = 0, 1, 3, 4
+#: ``Finding.name`` of the OS release check (``kind="host"``, :mod:`.engine`); :mod:`.server_fixplan` gives it its
+#: own plan line.
+OS_RELEASE = "os-release"
 
 
 @dataclass

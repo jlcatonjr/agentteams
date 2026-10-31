@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -57,14 +58,16 @@ class Kit:
         self.bin = root / "bin"
         self.calls_dir = root / "calls"
         self.cwd = root / "cwd"
-        for d in (self.kit, self.conf, self.bin, self.calls_dir, self.cwd):
+        self.l1root = root / "l1root"   # L1's os-release / ESM files: never the runner's own (Ubuntu CI has them)
+        for d in (self.kit, self.conf, self.bin, self.calls_dir, self.cwd, self.l1root):
             d.mkdir()
         for f in KIT_SRC.glob("*.sh"):
             shutil.copy2(f, self.kit / f.name)
         self.tool("ssh", FAKE_SSH)
         self.env = {"PATH": f"{self.bin}{os.pathsep}/usr/bin{os.pathsep}/bin", "HOME": str(root),
                     "AGENTTEAMS_SERVER_KIT_CONFIG": str(self.conf), "AGENTTEAMS_SERVER_KIT_LOGS": str(root / "logs"),
-                    "AGENTTEAMS_VULNSCAN_NO_REPORT": "1", "FAKE_SSH_DIR": str(self.calls_dir), "LC_ALL": "C"}
+                    "AGENTTEAMS_VULNSCAN_NO_REPORT": "1", "FAKE_SSH_DIR": str(self.calls_dir), "LC_ALL": "C",
+                    "AGENTTEAMS_L1_ROOT": str(self.l1root)}
 
     def tool(self, name: str, body: str, where: Path | None = None) -> Path:
         p = (where or self.bin) / name
@@ -563,7 +566,8 @@ def test_g27_l1_strips_cr_from_indicator_data_itself(kit: Kit) -> None:
     marker = kit.root / "marker-file"
     marker.write_text("x")
     proc = subprocess.run([BASH, str(kit.kit / "L1-audit.sh")], capture_output=True, text=True, timeout=120,
-                          env={"PATH": str(hb), "AGENTTEAMS_IOC_DATA": f"file {marker}\r\nname x.pth\r\n"},
+                          env={"PATH": str(hb), "AGENTTEAMS_IOC_DATA": f"file {marker}\r\nname x.pth\r\n",
+                               "AGENTTEAMS_L1_ROOT": str(kit.l1root)},
                           check=False)
     assert f"IOC\tindicator path present: {marker}\n" in proc.stdout, (proc.stdout, proc.stderr)
     assert proc.returncode == 4
@@ -760,5 +764,184 @@ def test_l1_deep_checks_env_rules(kit: Kit) -> None:
 @pytest.mark.parametrize("bad", ["--apply", "deep", "--deep=1"])
 def test_l1_refuses_unknown_options(kit: Kit, bad: str) -> None:
     proc = subprocess.run([BASH, str(kit.kit / "L1-audit.sh"), bad], capture_output=True, text=True, timeout=60,
-                          env={"PATH": "/usr/bin:/bin"}, check=False)
+                          env={"PATH": "/usr/bin:/bin", "AGENTTEAMS_L1_ROOT": str(kit.l1root)}, check=False)
     assert proc.returncode == 2 and "L1 takes only --deep" in proc.stderr
+
+
+# ---------------------------------------------------------------- N5: server software probes, origin, OSREL / ESM
+
+# dpkg -S: the owning package by binary name. apt-cache policy: the installed version's `***` block per package —
+# a third-party repository (nginx.org), allowlisted Ubuntu archives (main, universe), and status-only (a local .deb).
+FAKE_DPKG = r"""#!/bin/bash
+[ "$1" = -S ] || exit 1
+case "$(basename "$2")" in
+  nginx) echo "nginx: $2";; openssl) echo "openssl: $2";; redis-server) echo "redis-server: $2";;
+  mysqld) echo "mariadb-server-core: $2";; *) exit 1;;
+esac
+"""
+FAKE_APT_CACHE = r"""#!/bin/bash
+# security R-s2: L1 must turn apt's binary caches off (it may run as root), or this fake answers nothing
+[ "$*" = "-o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy $6" ] || exit 1
+shift 4
+echo "$2:"; echo "  Installed: 1.0"; echo "  Candidate: 1.0"; echo "  Version table:"
+case "$2" in
+  nginx) printf ' *** 1.26.1-1~jammy 500\n        500 http://nginx.org/packages/ubuntu jammy/nginx amd64 Packages\n        100 /var/lib/dpkg/status\n     1.18.0-6ubuntu14 500\n        500 http://us-east-1.ec2.archive.ubuntu.com/ubuntu jammy/main amd64 Packages\n';;
+  openssl) printf ' *** 3.0.2-0ubuntu1.18 500\n        500 http://us-east-1.ec2.archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages\n        500 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages\n        100 /var/lib/dpkg/status\n';;
+  redis-server) printf ' *** 5:6.0.16-1ubuntu1 500\n        500 http://archive.ubuntu.com/ubuntu jammy/universe amd64 Packages\n        100 /var/lib/dpkg/status\n';;
+  mariadb-server-core) printf ' *** 1:10.6.18-local 100\n        100 /var/lib/dpkg/status\n     1:10.6.16-0ubuntu0.22.04.1 500\n        500 http://archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages\n';;
+esac
+"""
+SERVER_TOOLS = {
+    "dpkg": FAKE_DPKG, "apt-cache": FAKE_APT_CACHE,
+    "nginx": '#!/bin/sh\n[ "$1" = -v ] && echo "nginx version: nginx/1.26.1" >&2\n',
+    "openssl": '#!/bin/sh\n[ "$1" = version ] && echo "OpenSSL 3.0.2 15 Mar 2022 (Library: OpenSSL 3.0.2 15 Mar 2022)"\n',
+    "redis-server": '#!/bin/sh\necho "Redis server v=6.0.16 sha=00000000:0 malloc=jemalloc-5.2.1 bits=64 build=a3fd"\n',
+    "mysqld": '#!/bin/sh\necho "/usr/sbin/mysqld  Ver 10.6.18-MariaDB-local for debian-linux-gnu on x86_64"\n',
+    "docker": "#!/bin/sh\necho 'permission denied while trying to connect to the Docker daemon socket' >&2\nexit 1\n",
+    "java": '#!/bin/sh\necho \'openjdk version "1.8.0_412"\' >&2\necho "OpenJDK Runtime Environment Corretto-8.412" >&2\n',
+    "dotnet": '#!/bin/sh\nprintf "Microsoft.AspNetCore.App 8.0.11 [/x]\\nMicrosoft.NETCore.App 8.0.11 [/y]\\nMicrosoft.NETCore.App 6.0.36 [/z]\\n"\n',
+}
+OS_RELEASE = 'PRETTY_NAME="Ubuntu 20.04.6 LTS"\nNAME="Ubuntu"\nVERSION_ID="20.04"\nID=ubuntu\nID_LIKE=debian\n'
+UA_STATUS = {"attached": True, "services": [{"name": "esm-infra", "status": "enabled"},
+                                            {"name": "esm-apps", "status": "disabled"}]}
+
+
+def _server_host(kit: Kit, *, os_release: str | None = OS_RELEASE, ua: object = UA_STATUS,
+                 python: bool = True) -> tuple[Path, Path]:
+    import sys
+    extra = dict(SERVER_TOOLS)
+    if python:
+        extra["python3"] = f'#!/bin/sh\nexec "{sys.executable}" "$@"\n'
+    hb = _host(kit, extra=extra)
+    root = kit.root / "hostroot"
+    (root / "etc").mkdir(parents=True, exist_ok=True)
+    if os_release is not None:
+        (root / "etc" / "os-release").write_text(os_release)
+    if ua is not None:
+        (root / "var/lib/ubuntu-advantage").mkdir(parents=True, exist_ok=True)
+        (root / "var/lib/ubuntu-advantage/status.json").write_text(ua if isinstance(ua, str) else json.dumps(ua))
+    return hb, root
+
+
+def _l1(hb: Path, root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([BASH, str(KIT_SRC / "L1-audit.sh")], capture_output=True, text=True, timeout=120,
+                          env={"PATH": str(hb), "AGENTTEAMS_L1_ROOT": str(root)}, check=False)
+
+
+def test_n5_l1_probes_server_software_and_records_package_origin(kit: Kit) -> None:
+    hb, root = _server_host(kit)
+    proc = _l1(hb, root)
+    real = os.path.realpath(hb)
+    out = proc.stdout
+    assert "\nRESULT " in out, (out, proc.stderr)
+    for line in (f"RUNTIME\tnginx\t1.26.1\t{real}/nginx\trepo:nginx.org:nginx",            # third-party repository
+                 f"RUNTIME\topenssl\t3.0.2\t{real}/openssl\tpkg:openssl",                 # allowlisted archives only
+                 f"RUNTIME\tredis\t6.0.16\t{real}/redis-server\tpkg:redis-server:universe",
+                 f"RUNTIME\tmariadb\t10.6.18\t{real}/mysqld\trepo:unknown:mariadb-server-core",   # local .deb
+                 f"RUNTIME\tjava-corretto\t1.8.0_412\t{real}/java\ttarball",
+                 f"RUNTIME\tdotnet\t8.0.11\t{real}/dotnet\ttarball",
+                 f"RUNTIME\tdotnet\t6.0.36\t{real}/dotnet\ttarball",
+                 "OSREL\tubuntu\t20.04\tUbuntu 20.04.6 LTS", "ESM\tenabled\tdisabled",
+                 "INFO        docker present, server version unreadable (no socket access)"):
+        assert line + "\n" in out, (line, out)
+    assert out.count("RUNTIME\tdotnet\t8.0.11") == 1
+    # docker without the socket is information: no HOSTCHECK, no ACTION line (CA-3)
+    assert not [ln for ln in out.splitlines() if "docker" in ln and ln.startswith(("HOSTCHECK", "ACTION"))]
+
+
+def test_n5_l1_inventory_is_judged_by_the_engine(kit: Kit, monkeypatch: pytest.MonkeyPatch) -> None:
+    from agentteams.vulnscan import _http, engine, runtimes
+    cycles = {"ubuntu": [{"cycle": "20.04", "eol": "2025-05-31", "is_eol": True, "latest": "20.04.6",
+                          "eoes": "2030-04-01", "is_eoes": False},
+                         {"cycle": "24.04", "eol": False, "is_eol": False, "latest": "24.04.1"}],
+              "nginx": [{"cycle": "1.26", "eol": False, "is_eol": False, "latest": "1.26.2"}]}
+
+    def fake(slug: str) -> list[dict]:
+        if slug not in cycles:
+            raise _http.FeedError(slug)
+        return cycles[slug]
+    runtimes._CACHE.clear()
+    monkeypatch.setattr(runtimes, "_eol_cycles", fake)
+    hb, root = _server_host(kit)
+    rep = engine.scan_inventory(_l1(hb, root).stdout, "web1")
+    osf = [f for f in rep.findings if f.name == "os-release"]
+    assert len(osf) == 1 and osf[0].severity == 2, rep.findings      # ESM main only + universe redis, no esm-apps
+    assert "redis-server" in osf[0].detail
+    nginx = [f for f in rep.findings if f.name == "nginx"]
+    assert len(nginx) == 1 and nginx[0].fix == "1.26.2"              # repo: is judged upstream
+    assert not [f for f in rep.findings if f.name in ("openssl", "redis")]   # pkg: is left to distro updates
+
+
+@pytest.mark.parametrize(("ua", "python", "want"), [
+    (None, True, "ESM\tunknown\tunknown"),                                     # no status file
+    ("{not json", True, "ESM\tunknown\tunknown"),
+    (UA_STATUS, False, "ESM\tunknown\tunknown"),                                # no python3 to read it
+    ({"attached": False, "services": [{"name": "esm-infra", "status": "enabled"}]}, True, "ESM\tdisabled\tdisabled"),
+    ({"services": [{"name": "esm-infra", "status": "n/a"}, {"name": "esm-apps", "status": "enabled"}]}, True,
+     "ESM\tdisabled\tenabled"),
+])
+def test_n5_l1_esm_states(kit: Kit, ua: object, python: bool, want: str) -> None:
+    hb, root = _server_host(kit, ua=ua, python=python)
+    out = _l1(hb, root).stdout
+    assert want + "\n" in out and out.count("\nESM\t") == 1, out
+
+
+def test_n5_l1_osrel_without_os_release_and_off_ubuntu(kit: Kit) -> None:
+    hb, root = _server_host(kit, os_release=None)
+    out = _l1(hb, root).stdout
+    assert "OSREL\tunknown\t\tunknown\n" in out and "\nESM\t" not in out
+    (root / "etc" / "os-release").write_text("PRETTY_NAME='Debian GNU/Linux 12 (bookworm)'\nVERSION_ID=\"12\"\nID=debian\n"
+                                             "EVIL=$(touch /tmp/x)\n")
+    out = _l1(hb, root).stdout
+    assert "OSREL\tdebian\t12\tDebian GNU/Linux 12 (bookworm)\n" in out and "\nESM\t" not in out
+
+
+def _code_lines(text: str) -> list[str]:
+    """L1's shell lines without comment lines and trailing ` # ...` comments (heredoc Python included)."""
+    out = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        out.append(re.sub(r"\s#\s.*$", "", line))
+    return out
+
+
+FORBIDDEN = [
+    r"\bsystemctl\s+(start|stop|restart|reload|try-restart|enable|disable|mask|unmask|daemon-reload|kill)\b",
+    r"\bservice\s+\S+\s+(start|stop|restart|reload)\b",
+    r"\bapt-get\s+(?!-s\b)", r"\bapt\s+(install|upgrade|full-upgrade|update|remove|purge|autoremove)\b",
+    r"(?<![\w-])(dnf|yum|\$pm)\s+(-\S+\s+)*(install|upgrade|update|remove|erase|makecache|autoremove|distro-sync)\b",
+    r"\brpm\s+-(i|U|F|e)\b", r"\bdpkg\s+(-i|-r|-P|--install|--remove|--purge|--configure)\b",
+    r"\bpro\s+(attach|detach|enable|disable|status|refresh|fix|security-status)\b", r"\bua\s+(attach|status)\b",
+    r"\bpip3?\s+install\b", r"\bnpm\s+(install|ci|update)\b",
+    r"\bdocker\s+(run|start|stop|restart|pull|rm|rmi|exec|kill)\b",
+    r"\bnginx\s+-s\b", r"(^|[;&|(]\s*)(sudo\s+)?(reboot|shutdown|poweroff)\b", r"\bkill\s+-?\w",
+    r">>?\s*/etc", r"\btee\s+(-a\s+)?/", r"\bsed\s+-i\b", r"\b(rm|mv|cp|chmod|chown|ln|truncate|install)\s+-",
+    r"\b(curl|wget|nc|ncat)\s", r"\btouch\s",
+]
+
+
+def test_n5_l1_stays_read_only() -> None:
+    """C-5: L1 is the audit level. No line starts/stops a service, installs, writes under /etc or fetches."""
+    code = _code_lines((KIT_SRC / "L1-audit.sh").read_text())
+    hits = [(pat, ln) for ln in code for pat in FORBIDDEN if re.search(pat, ln)]
+    hits = [(p, ln) for p, ln in hits if not re.search(r"command -v (apt-get|dnf|yum)\b", ln) or "-s" in ln]
+    assert hits == [], hits
+    text = "\n".join(code)
+    assert "timeout 10" in text and "DOCKER_HOST=unix:///var/run/docker.sock" in text and "GOTOOLCHAIN=local" in text
+    assert "/var/lib/ubuntu-advantage/status.json" in text and ". /etc/os-release" not in text
+    assert "apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy" in text   # R-s2: no cache write
+    header = (KIT_SRC / "L1-audit.sh").read_text().split("\n\n", 1)[0]
+    assert "dnf's own log" in header   # R-s2: the one write a root run may still make is stated
+
+
+def test_n5_forbidden_patterns_catch_write_verbs() -> None:
+    """The grep is live: each pattern family matches a write the audit must never contain."""
+    for bad in ("systemctl restart nginx", "apt-get install -y nginx", "$pm -y install x", "pro status", "reboot",
+                "x && shutdown -r now",
+                "echo x > /etc/hosts", "docker pull nginx", "nginx -s reload", "curl https://x", "sed -i s/a/b/ f"):
+        assert any(re.search(p, ln) for ln in _code_lines(bad) for p in FORBIDDEN), bad
+    for fine in ("apt-get -s -o Debug::NoLocking=1 upgrade", "systemctl is-enabled apt-daily-upgrade.timer",
+                 "tmo apt-cache -o Dir::Cache::pkgcache= -o Dir::Cache::srcpkgcache= policy \"$1\"",
+                 "nginx -T 2>/dev/null"):
+        assert not any(re.search(p, fine) for p in FORBIDDEN), fine

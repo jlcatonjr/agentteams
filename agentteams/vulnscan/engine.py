@@ -4,16 +4,28 @@ The engine has three entry points over one analysis path:
 
 - :func:`scan_path`: manifests under a directory (repositories);
 - :func:`scan_inventory`: the tab-separated lines a server-kit audit prints;
-- :func:`local_runtimes`: Node/PHP/Python found on the machine running the scan.
+- :func:`local_runtimes`: the :data:`runtimes.PRODUCTS` found on the machine running the scan.
 
 Server inventory line formats (one per line; anything else is ignored):
 
 | Prefix | Fields (tab-separated) |
 |---|---|
 | ``INV`` | ecosystem, name, version, location |
-| ``RUNTIME`` | kind, version, path, manager |
+| ``RUNTIME`` | kind (a ``runtimes.PRODUCTS`` key; any other is unscannable), version, path, manager |
+| ``OSREL`` | os-release ``ID``, ``VERSION_ID``, ``PRETTY_NAME`` (an ``ID`` not in ``runtimes.OS_PRODUCTS`` is unscannable) |
+| ``ESM`` | esm-infra, esm-apps: ``enabled``, ``disabled`` or ``unknown`` (Ubuntu Pro, from its status file) |
 | ``HOSTCHECK`` | severity, message |
 | ``IOC`` | message |
+
+A ``RUNTIME`` manager of ``pkg:<name>`` (or ``pkg:<name>:universe``) is a package from an allowlisted
+distribution archive; ``repo:<host>:<name>`` and ``repo:unknown:<name>`` come from anywhere else and are
+judged against upstream versions (:func:`runtimes.evaluate`).
+
+An end-of-life OS release is a HIGH ``host`` finding named ``os-release``. Ubuntu's endoflife.date ``eol``
+is the end of *standard* support, so an Ubuntu release past it whose ESM has not ended is judged on the
+``ESM`` line: esm-infra not enabled (or no line) is HIGH; esm-infra enabled is LOW, or MODERATE when a
+universe package (``pkg:<name>:universe``) runtime is present without esm-apps. When whether its ESM still runs is
+unknown (no extended-support data), it is HIGH, "ESM state unknown", whatever the ``ESM`` line says.
 """
 
 from __future__ import annotations
@@ -29,7 +41,7 @@ from pathlib import Path
 
 from agentteams.vulnscan import _http, osv, project_policy, runtimes
 from agentteams.vulnscan.manifests import Dep, discover, parse
-from agentteams.vulnscan.report import Finding, Report
+from agentteams.vulnscan.report import OS_RELEASE, Finding, Report
 
 #: Python package locations owned by the OS package manager (dpkg / rpm).
 DISTRO_LOCATION = re.compile(r"^/usr/lib(64)?/python3[^/]*/(dist|site)-packages/?$|^/usr/lib/python3/dist-packages/?$")
@@ -195,7 +207,9 @@ def scan_path(root: Path, *, include_worktrees: bool = False, exclude: Iterable[
 
 def _runtime_findings(target: str, items: list[tuple[str, str, str, str]], report: Report) -> None:
     for kind, version, path, manager in items:
-        if kind not in runtimes.EOL_PRODUCT:
+        if kind not in runtimes.PRODUCTS:
+            # Reported, never dropped: a kind the server kit emits but this version cannot judge (Rule 12).
+            report.unscannable.append((path, f"runtime kind {kind} not judged by this vulnscan version"))
             continue
         v = runtimes.evaluate(kind, version, path, manager)
         report.checked += 1
@@ -207,19 +221,75 @@ def _runtime_findings(target: str, items: list[tuple[str, str, str, str]], repor
                                            detail=f"{v.verdict}: {v.detail} [{manager or 'unknown install'}]"))
 
 
+#: ``ESM`` line values (anything else reads as ``unknown``).
+ESM_STATES = ("enabled", "disabled", "unknown")
+
+
+def _os_findings(target: str, osrel: tuple[str, str, str] | None, esm: tuple[str, str] | None,
+                 managers: list[str], report: Report) -> None:
+    """Judge the ``OSREL`` line (plan N5): end-of-life, Ubuntu past standard support (per ``ESM``), or fine."""
+    if osrel is None:
+        return   # an audit from a kit older than OSREL: nothing to judge, and not a gap of this scan
+    os_id, version_id, pretty = (x.strip() for x in osrel)
+    key = os_id.lower()
+    if key not in runtimes.OS_PRODUCTS:
+        report.unscannable.append((OS_RELEASE, f"OS {os_id or 'unknown'} not judged by this vulnscan version"))
+        return
+    if not version_id:
+        report.unscannable.append((OS_RELEASE, f"OS {os_id} reports no VERSION_ID: its release was not judged"))
+        return
+    v = runtimes.evaluate_os(key, version_id)
+    if v.verdict == "unchecked":
+        if v.detail.startswith("release data unavailable"):
+            report.feed_errors.append(f"{target}: OS {os_id} {version_id}: {v.detail}")
+        else:
+            report.unscannable.append((OS_RELEASE, f"OS {os_id} {version_id}: {v.detail}"))
+        return
+    report.checked += 1
+    if v.verdict != "eol":
+        return
+    label = pretty or f"{os_id} {version_id}"
+    extended = runtimes.os_extended_support(key, version_id) if key == "ubuntu" else False
+    if extended is None:   # whether ESM still runs is unknown: never graded as covered (fail closed)
+        sev, verdict = 3, "standard-support-ended"
+        detail = f"OS release {label}: standard support ended; ESM state unknown (extended-support data unavailable)"
+    elif extended:
+        infra, apps = esm or ("unknown", "unknown")
+        verdict = "standard-support-ended"
+        if infra != "enabled":
+            sev = 3
+            detail = (f"OS release {label}: standard support ended; ESM/Pro required for security updates "
+                      f"(esm-infra {infra})")
+        elif apps == "enabled":
+            sev, detail = 1, f"OS release {label}: standard support ended; on ESM (esm-infra and esm-apps enabled)"
+        else:
+            universe = sorted({m.split(":")[1] for m in managers if m.startswith("pkg:") and m.endswith(":universe")})
+            sev = 2 if universe else 1
+            detail = f"OS release {label}: standard support ended; on ESM (main only); universe packages need esm-apps"
+            if universe:
+                detail += f" (universe runtime packages without esm-apps: {', '.join(universe)})"
+    else:
+        sev, verdict = 3, "eol"
+        detail = f"OS release {label} is end-of-life: distro security updates have stopped"
+    report.findings.append(Finding(kind="host", target=target, name=OS_RELEASE, version=v.version, severity=sev,
+                                   fix=v.upgrade_to, locations=["/etc/os-release"], detail=f"{verdict}: {detail}"))
+
+
 def scan_inventory(text: str, target: str) -> Report:
     """Analyze the inventory lines a server-kit audit printed.
 
     Args:
-        text: The audit log.
+        text: The audit log (line formats in this module's docstring).
         target: Host label for the report.
 
     Returns:
-        The report.
+        The report: package, runtime, host (including the ``os-release`` check) and indicator findings.
     """
     report = Report(target=target)
     deps: list[tuple[str, Dep]] = []
     rts: list[tuple[str, str, str, str]] = []
+    osrel: tuple[str, str, str] | None = None
+    esm: tuple[str, str] | None = None
     for line in text.splitlines():
         parts = line.rstrip("\r").split("\t")
         tag = parts[0]
@@ -228,6 +298,10 @@ def scan_inventory(text: str, target: str) -> Report:
             deps.append((target, Dep(eco, name, ver, "runtime", loc)))
         elif tag == "RUNTIME" and len(parts) == 5:
             rts.append((parts[1], parts[2], parts[3], parts[4]))
+        elif tag == "OSREL" and len(parts) == 4:
+            osrel = (parts[1], parts[2], parts[3])
+        elif tag == "ESM" and len(parts) == 3:
+            esm = tuple(p if p in ESM_STATES else "unknown" for p in parts[1:3])  # type: ignore[assignment]
         elif tag == "HOSTCHECK" and len(parts) == 3:
             sev = osv.SEVERITY_RANK.get(parts[1].upper(), 2)
             report.findings.append(Finding(kind="host", target=target, name="host", severity=sev, detail=parts[2]))
@@ -236,16 +310,65 @@ def scan_inventory(text: str, target: str) -> Report:
                                            severity=4, detail=parts[1]))
     analyze(deps, report, distro_check=True)
     _runtime_findings(target, rts, report)
+    _os_findings(target, osrel, esm, [m for _k, _v, _p, m in rts], report)
     return report
+
+
+#: Environment pinned for every local version probe (security review R-s1, as ``L1-audit.sh`` does on a host):
+#: ``go`` never fetches a toolchain or reads the scan's ``GOFLAGS``; ``docker`` reads the local socket only.
+PROBE_ENV_PIN = {"GOTOOLCHAIN": "local", "GOFLAGS": "", "DOCKER_HOST": "unix:///var/run/docker.sock"}
+#: Dropped from the probe environment: it would point ``docker`` at another (possibly remote) daemon.
+PROBE_ENV_DROP = ("DOCKER_CONTEXT",)
+
+
+def _probe_env() -> dict[str, str]:
+    """Return the probe environment: this one (PATH kept), :data:`PROBE_ENV_PIN` set, :data:`PROBE_ENV_DROP` gone."""
+    env = {k: v for k, v in os.environ.items() if k not in PROBE_ENV_DROP}
+    env.update(PROBE_ENV_PIN)
+    return env
 
 
 def _version_of(binary: str, args: list[str]) -> str:
     try:
-        out = subprocess.run([binary, *args], capture_output=True, text=True, timeout=20, check=False).stdout
+        out = subprocess.run([binary, *args], capture_output=True, text=True, timeout=20, check=False,
+                             cwd="/", env=_probe_env()).stdout
     except (OSError, subprocess.TimeoutExpired):
         return ""
     m = re.search(r"\d+\.\d+\.\d+", out)
     return m.group(0) if m else ""
+
+
+#: Seconds one version probe may run (``docker version`` waits on the daemon socket).
+PROBE_TIMEOUT = 20
+#: :func:`_run_probe` problem meaning "this binary belongs to another product's probe": skip it silently.
+_OTHER_PRODUCT = "other product"
+
+
+def _run_probe(path: str, probe: runtimes.Probe) -> tuple[list[str], str]:
+    """Run one :class:`runtimes.Probe` with ``path`` as its binary.
+
+    Args:
+        path: The binary found on PATH for ``probe.argv[0]``.
+        probe: The probe: arguments, stream to read and version regex.
+
+    Returns:
+        (versions, problem): the versions read (several only for an ``each`` probe), and ``""``, or
+        :data:`_OTHER_PRODUCT`, or why the version could not be judged (versions then empty).
+    """
+    try:
+        res = subprocess.run([path, *probe.argv[1:]], capture_output=True, text=True,   # from /: no repo config
+                             timeout=PROBE_TIMEOUT, check=False, cwd="/", env=_probe_env())
+    except (OSError, subprocess.TimeoutExpired):
+        return [], ""
+    out = {"stdout": res.stdout, "stderr": res.stderr}.get(probe.stream, f"{res.stdout}\n{res.stderr}")
+    if (probe.reject and probe.reject in out) or (probe.only_if and probe.only_if not in out):
+        return [], _OTHER_PRODUCT
+    if probe.require and probe.require not in out:
+        first = out.strip().splitlines()[0][:80] if out.strip() else "no output"
+        return [], f"not {probe.require} ({first}): not judged by this vulnscan version"
+    found = [m.group(1) for m in re.finditer(probe.regex, out, re.M)]
+    versions = list(dict.fromkeys(found if probe.each else found[:1]))
+    return versions, ""
 
 
 def _manager_of(path: str) -> str:
@@ -274,7 +397,11 @@ LOCAL_TARGET = "this-machine"
 
 
 def local_runtimes(target: str = LOCAL_TARGET) -> Report:
-    """Evaluate Node.js, PHP and Python found on PATH of the machine running this.
+    """Evaluate every :data:`runtimes.PRODUCTS` probe's binary found on PATH of the machine running this.
+
+    A binary that is not on PATH is skipped; one found but whose version cannot be read (or that is not
+    the product, such as LibreSSL's ``openssl``) is unscannable. Each probe runs for at most
+    :data:`PROBE_TIMEOUT` seconds; the same binary is probed once per product.
 
     Args:
         target: Label for the report.
@@ -284,18 +411,20 @@ def local_runtimes(target: str = LOCAL_TARGET) -> Report:
     """
     report = Report(target=target)
     items: list[tuple[str, str, str, str]] = []
-    seen: set[str] = set()
-    for kind, names, args in (("node", ("node",), ["-v"]), ("php", ("php",), ["-v"]),
-                              ("python", ("python3",), ["--version"])):
-        for name in names:
-            path = shutil.which(name)
-            if not path or os.path.realpath(path) in seen:
+    seen: set[tuple[str, str]] = set()
+    for kind, product in runtimes.PRODUCTS.items():
+        for probe in product.probes:
+            path = shutil.which(probe.argv[0])
+            if not path or (kind, os.path.realpath(path)) in seen:
                 continue
-            seen.add(os.path.realpath(path))
-            ver = _version_of(path, args)
-            if ver:
-                items.append((kind, ver, path, _manager_of(path)))
-            else:
-                report.unscannable.append((path, f"could not read the {kind} version"))
+            seen.add((kind, os.path.realpath(path)))
+            versions, problem = _run_probe(path, probe)
+            if problem == _OTHER_PRODUCT:
+                continue
+            if not versions:
+                report.unscannable.append((path, problem or f"could not read the {kind} version"))
+                continue
+            manager = _manager_of(path)
+            items += [(kind, ver, path, manager) for ver in versions]
     _runtime_findings(target, items, report)
     return report

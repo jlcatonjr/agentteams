@@ -1,0 +1,8 @@
+{
+  "patch_id": "fe381898d0355c8857e6d8ffb6a1a5136b2c53f4",
+  "commit": "473f941a4be9c796b25492e343d3013704668777",
+  "subject": "feat(vulnscan): server kit \u2014 more runtime probes, package origin, OS release and ESM check",
+  "impact": "1 symbols added",
+  "note": "N5: runtimes.os_extended_support added and documented in api-reference/vulnscan.md (runtimes section); engine.scan_inventory OSREL/ESM formats and fixplan os-release line documented; CHANGELOG updated",
+  "recorded_at": "2026-10-30T16:36:29Z"
+}

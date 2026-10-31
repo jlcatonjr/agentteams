@@ -6,6 +6,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### vulnscan (a runtime product table: more runtimes, OS releases, unknown kinds reported)
+
+- **`runtimes.PRODUCTS`** replaces the hard-coded Node.js/PHP/Python list. Each row is a frozen `Product`: the
+  endoflife.date slug, the release-line rule (a part count, or a `cycle_fn` override), the security-release feed
+  and the local `Probe`s. New kinds: `ruby`, `go`, `java` (judged on Eclipse Temurin's support dates and labelled
+  so; `1.8.0_x` is line `8`), `java-corretto` (`amazon-corretto`, chosen by image name), `dotnet` (one item per
+  installed runtime), `nginx`, `openssl` (`1.1.1` is its own line), `postgresql`, `mysql`, `mariadb`, `redis` and
+  `docker` (`docker-engine`, server version only). Products without a security feed get `eol` and MODERATE
+  `behind-patch` only, and their detail says "no upstream security-release feed; judged on end-of-life and latest
+  patch only". `EOL_PRODUCT` stays as a derived dict; new public `cycle_of(kind, version)`.
+- **`runtimes.OS_PRODUCTS`, `OS_CODENAMES` and `evaluate_os(os_id, version_id, today=None)`** judge an OS release
+  (os-release `ID` or image name; Debian and Ubuntu codenames) on its release line alone.
+- **`engine.local_runtimes`** runs every `PRODUCTS` probe found on `PATH` (stdout, stderr or both; 20 s timeout,
+  `engine.PROBE_TIMEOUT`). `_version_of` is unchanged for its callers. A binary that is not the product
+  (LibreSSL's `openssl`) or whose version cannot be read is unscannable; `mysqld` is judged as MariaDB or MySQL
+  from its output.
+- **An unknown `RUNTIME` kind is reported** under `unscannable` ("runtime kind <kind> not judged by this vulnscan
+  version") instead of being dropped silently. An unknown release line or slug stays `unchecked`, never `ok`.
+- **Fleet-wide effect:** the next `daily` and `runtimes` run judge every new product found on this machine, so new
+  runtime findings can appear. A slug or release-line format endoflife.date does not use leaves that product
+  `unchecked` (a feed error, exit 3) until the table row is corrected; the operator's verification script checks
+  every slug before merge.
+- Docs: `api-reference/vulnscan.md` (`runtimes` section with the product table, `local_runtimes`, the config and
+  command tables).
+
+### vulnscan (server kit: more runtime and server-software probes, package origin, OS release and ESM check)
+
+- **`L1-audit.sh`** emits `RUNTIME` lines for `nginx`, `openssl` (LibreSSL is emitted as `libressl` and reported
+  as not judged), `postgresql` (the server binary; `psql` only when none is found), `mysql`/`mariadb` (from
+  `mysqld`/`mariadbd` output), `redis`, `ruby`, `go` (`GOTOOLCHAIN=local`), `java`/`java-corretto`, `dotnet` (one
+  line per runtime version) and `docker` (server version over the local socket only; no socket access is a plain
+  `INFO` line, never a `HOSTCHECK`). Each probe only prints a version, runs under `timeout 10` where `timeout`
+  exists, and reads `/dev/null` as stdin; a binary is run by its found path and reported by its resolved one.
+- **Package origin.** A dpkg- or rpm-owned binary's manager is `pkg:<package>` only when the installed version
+  comes from an allowlisted distro archive host (`apt-cache policy`'s `***` block; `dnf -C repoquery --installed
+  --qf '%{from_repo}'` or `yumdb`, resolved through `/etc/yum.repos.d`). Anything else, including a status-only
+  version such as a local `.deb`, is `repo:<host>:<package>` or `repo:unknown:<package>` and is judged against
+  upstream versions. Ubuntu universe/multiverse packages are `pkg:<package>:universe`. This also applies to the
+  existing php/node/python lines.
+- **`OSREL`** (`ID`, `VERSION_ID`, `PRETTY_NAME`; `/etc/os-release` is now parsed, never sourced) and, on Ubuntu,
+  **`ESM`** (esm-infra, esm-apps from `/var/lib/ubuntu-advantage/status.json`; `pro status` is never run).
+  `engine.scan_inventory` judges them: an end-of-life release is a HIGH `host` finding named `os-release`; an
+  Ubuntu release past standard support is HIGH without esm-infra, LOW with it, and MODERATE with it when a
+  universe runtime is present without esm-apps; an unknown `ID` is unscannable. An audit from an older kit has no
+  `OSREL` line and no OS result. New `runtimes.os_extended_support()`; endoflife.date's extended-support dates are
+  now read with each release line.
+- **`server_fixplan`**: an `os-release` finding gets its own section before the commands, "plan an OS release
+  upgrade; no kit lever applies"; non-Node runtimes in the L3 section say "upgrade through the package manager or
+  the vendor (no kit lever)". The kit's `--apply` paths are unchanged.
+- **Fleet-wide effect:** after the kit is re-staged, the next audit of each host can add OS release findings and
+  judge third-party-repository installs (nginx.org, PGDG, NodeSource, docker-ce, PPAs) that were `distro` before.
+- Workstation version probes run from `/` with `GOTOOLCHAIN=local`, an empty `GOFLAGS`, `DOCKER_HOST` pinned to the
+  local socket and `DOCKER_CONTEXT` dropped, as `L1-audit.sh` does on a host (security review R-s1).
+- `L1-audit.sh` runs `apt-cache policy` with its binary caches off, and its header states the one write a root run
+  may still make: `dnf -C repoquery` may append to dnf's own log (security review R-s2).
+- An Ubuntu release past standard support whose extended-support (ESM) data is unknown is HIGH, "ESM state
+  unknown", whatever its `ESM` line says: unknown never grades as covered (code-hygiene R3).
+- Tests: fake-binary L1 harness for the new probes, origins, `OSREL`/`ESM`; a read-only grep over `L1-audit.sh`
+  (no service, install, `/etc` write, `pro` or network verb). Docs: `api-reference/vulnscan.md`, the remediation
+  guide's kit table. The integrity manifest is re-recorded; the kit's own sha256s are computed at staging time.
+
 ### security (research hardening, follow-up to the briefing PR)
 
 - **`fetch_text` / `fetch_text_and_date` close the DNS-rebinding window.** The host is resolved once, every

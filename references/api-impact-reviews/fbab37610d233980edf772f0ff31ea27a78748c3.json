@@ -1,0 +1,8 @@
+{
+  "patch_id": "fbab37610d233980edf772f0ff31ea27a78748c3",
+  "commit": "adca561273789f96829617d8f41c848ad804101d",
+  "subject": "feat(vulnscan): server kit \u2014 more runtime probes, package origin, OS release and ESM check",
+  "impact": "1 symbols added",
+  "note": "feat/vulnscan-runtime-table rebased onto origin/main 81080e72; API-visible: runtimes.Probe, Product, cycle_of, evaluate_os, os_extended_support added (no removals)",
+  "recorded_at": "2026-10-30T20:19:52Z"
+}

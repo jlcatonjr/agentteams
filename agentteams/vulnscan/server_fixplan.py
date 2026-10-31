@@ -5,10 +5,13 @@ Server changes stay a person running the kit's ``run-host.sh --apply``. This mod
 what it would not:
 
 - **compromise indicators** first: the kit refuses to patch such a host in place (exit 4); nothing else applies;
+- **the OS release** next, when it is end-of-life or past standard support (the ``os-release`` host finding): its
+  own line, "plan an OS release upgrade; no kit lever applies";
 - **L2 OS security updates** for OS-managed packages (``distro``), with the dry-run and apply commands;
 - **L3 Node runtime** for stale runtimes. When the scan found Node missing a security release, the apply command
   carries ``--allow-fresh``: Rule S-10's remediation carve-out, so the kit's 14-day release cooldown does not hold
-  the fix;
+  the fix. Other runtimes and server software (nginx, OpenSSL, PostgreSQL, ...) are listed in the same section as
+  upgrades through the package manager or the vendor: no kit level changes them;
 - **L4 Python apps** per ``apps.conf`` entry of the host whose app directory holds the vulnerable packages, with
   candidate ``--pin`` values (the minimal fixed versions; prefer the versions of the reviewed repository fix);
 - **Python packages with no apps.conf entry**: ``run-host.sh`` never updates them; add an entry or fix them by hand;
@@ -27,7 +30,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentteams.vulnscan.report import SEVERITY_NAME, Finding, Report
+from agentteams.vulnscan.report import OS_RELEASE, SEVERITY_NAME, Finding, Report
+
+#: The plan line of an OS release finding: no kit level upgrades an OS release.
+OS_UPGRADE = "plan an OS release upgrade; no kit lever applies"
+#: Suffix of a non-Node runtime line: L3 updates Node.js only.
+NOT_KIT = "upgrade through the package manager or the vendor (no kit lever)"
 
 PLAN_GLOB = "server-fixplan-*.md"
 _HOST_FILE = re.compile(r"[^A-Za-z0-9._-]")
@@ -119,6 +127,13 @@ def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = 
                 "The kit refuses to patch this host in place (exit 4). Isolate it, investigate, rebuild from a known-good",
                 "image and rotate its credentials; do not run the steps below.", ""]
         out += [f"- {f.name} {f.version} {f.detail}".rstrip() for f in iocs] + [""]
+    osrel = [f for f in findings if f.kind == "host" and f.name == OS_RELEASE]
+    if osrel:
+        out += ["## OS release", ""]
+        for f in osrel:
+            to = f" (newest supported release: {f.fix})" if f.fix else ""
+            out.append(f"- **{OS_UPGRADE}**: {f.detail}{to}")
+        out.append("")
     distro = sorted((f for f in findings if f.kind == "package" and f.distro), key=lambda f: (-f.severity, f.name))
     runtimes = [f for f in findings if f.kind == "runtime"]
     py_apps: dict[App, list[Finding]] = defaultdict(list)
@@ -149,7 +164,9 @@ def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = 
                 "`run-host.sh --apply` installs the distribution's security updates for these.", "", *_TABLE,
                 *(_row(f) for f in distro), ""]
     if runtimes:
-        out += ["## L3 — runtimes", ""] + [f"- {f.name} {f.version}: {f.detail or 'update it'}" for f in runtimes]
+        out += ["## L3 — runtimes", ""]
+        out += [f"- {f.name} {f.version}: {f.detail or 'update it'}" if "node" in f.name.lower()
+                else f"- {f.name} {f.version}: {f.detail or 'update it'} — {NOT_KIT}" for f in runtimes]
         out.append("")
         if any("node" in f.name.lower() for f in runtimes):
             out += [f"Node: `{kit}/run-host.sh {host} --apply --node-major <N>` moves to a supported major.", ""]
@@ -172,7 +189,7 @@ def markdown(host: str, findings: list[Finding], apps: list[App], *, kit: str = 
                 "does not change npm trees.", ""]
         for where, items in sorted(npm.items()):
             out += [f"### `{where}`", "", *_TABLE, *(_row(f) for f in items), ""]
-    hosts = [f for f in findings if f.kind == "host"]
+    hosts = [f for f in findings if f.kind == "host" and f.name != OS_RELEASE]
     if hosts:
         out += ["## Host checks (by hand)", ""] + [f"- {f.detail or f.name}" for f in hosts] + [""]
     return "\n".join(out)
