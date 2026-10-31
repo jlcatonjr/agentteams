@@ -20,7 +20,7 @@ from typing import Any
 
 from agentteams import model_providers as MP
 from agentteams import wasm_exec as W
-from agentteams.wasm_agent import protocol as P
+import agentteams.wasm_agent.protocol as P
 from agentteams.wasm_agent.broker import PipeBroker
 from agentteams.wasm_agent.budget import Budget
 from agentteams.wasm_agent.host import AgentSpec, Revocation, RunOptions, grant_from_dict, run_agent

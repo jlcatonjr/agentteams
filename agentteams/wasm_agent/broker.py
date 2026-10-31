@@ -18,6 +18,7 @@ Stdlib only.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import secrets as _secrets
 import time
@@ -320,9 +321,7 @@ class PipeBroker:
             res = execute(launch, stdin, stdout_cap=stdout_cap, stderr_cap=stderr_cap, executor=self.executor)
         except self.executor.WasmExecError as exc:
             raise BrokerError(str(exc)) from exc
-        finally:
-            try:
+        finally:   # a lost release is backstopped: Stage 0 releases every ticket at run end (release_all)
+            with contextlib.suppress(OSError, ProtocolError):
                 self._control.call({"op": "release", "ticket": str(reply.get("ticket", ""))})
-            except (OSError, ProtocolError):
-                pass
         return GuestRun(res, prep, round(time.monotonic() - started, 4))

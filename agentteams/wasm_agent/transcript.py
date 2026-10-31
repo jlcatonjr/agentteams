@@ -18,11 +18,13 @@ Stdlib only.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import hmac
 import os
 import re
 import stat
+import sys
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -136,10 +138,8 @@ def ensure_dir(root: str, parts: Iterable[str]) -> str:
     for part in parts:
         path = os.path.join(path, part)
         if not os.path.lexists(path):
-            try:
+            with contextlib.suppress(FileExistsError):   # a concurrent run created it first; lstat checks it
                 os.mkdir(path, 0o700)
-            except FileExistsError:
-                pass
         st = os.lstat(path)
         if not stat.S_ISDIR(st.st_mode):
             raise JournalError(f"{path} is not a real directory (symlink?); refused")
@@ -299,8 +299,8 @@ class FileJournal:
         if not self.ended and self._fd >= 0:
             try:
                 self.append("run-end", {"status": "failed", "reason": "host-exited"})
-            except JournalError:
-                pass
+            except JournalError as exc:
+                print(f"WASM AGENT: transcript left incomplete ({exc})", file=sys.stderr)
         if self._fd >= 0:
             os.close(self._fd)
             self._fd = -1

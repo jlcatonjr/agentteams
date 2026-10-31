@@ -2,7 +2,7 @@
 
 ``FnBroker`` implements the host's ``ExecBroker`` protocol in pure Python: an agent step calls a Python function on the
 decoded event instead of running a WASM guest. It exists only here (tests); production code has no such broker.
-``reference_guest`` mirrors ``tests/fixtures/wasm_agent/test_guest.py`` over an in-memory file map.
+``reference_guest`` mirrors ``tests/fixtures/wasm_agent/agent_guest.py`` over an in-memory file map.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from agentteams.wasm_agent.budget import Budget
 from agentteams.wasm_agent.host import AgentSpec, RunOptions
 from agentteams.wasm_agent.transcript import FileJournal
 
-GUEST = Path(__file__).with_name("fixtures") / "wasm_agent" / "test_guest.py"
+GUEST = Path(__file__).with_name("fixtures") / "wasm_agent" / "agent_guest.py"
 GUEST_SRC = GUEST.read_bytes()
 GUEST_SHA = hashlib.sha256(GUEST_SRC).hexdigest()
 KEY = "sk-ant-api03-" + "Zq7" * 12 + "-not-real"

@@ -26,8 +26,8 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import model_providers as MP
-from agentteams.wasm_agent import protocol as P
-from agentteams.wasm_agent import tools as T
+import agentteams.wasm_agent.protocol as P
+import agentteams.wasm_agent.tools as T
 from agentteams.wasm_agent.broker import BrokerError, ExecBroker
 from agentteams.wasm_agent.budget import Budget, BudgetExceeded, BudgetLedger
 from agentteams.wasm_agent.mediation import (
