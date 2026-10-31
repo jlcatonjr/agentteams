@@ -127,6 +127,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`wasm_pins`](wasm-pins.md) | Pure re-hash of an installed WASM runtime against its pins; `TODO-PIN` fails closed |
 | [`wasm_guests`](wasm-guests.md) | Python / JavaScript / core-module guests on the pinned grant, with per-language deny probes (WASM P04) |
 | [`wasm_config`](wasm-config.md) | The brief's `wasm_sandbox` block, `--wasm-sandbox`, per-agent grants as `Grant(mounts, limits)`, and `wasm_eligible` (WASM P01) |
+| [`wasm_mcp`](wasm-mcp.md) | The `agentteams_wasm` MCP server: `run_wasm` for vendor-CLI agents, its hash-checked bundle and the per-agent launch flags that carry each grant (WASM P10) |
 | [`proposal_policy`](proposal-policy.md) | Orchestrator-only-writes pilot: the registered policy (brief validation and lint), re-exported by `proposals` |
 | [`mcp_direct_grants`](mcp-direct-grants.md) | Operator-signed direct-write grants: the only way an agent's MCP writes skip the orchestrator's approval (R5) |
 | [`interop_write_policy`](interop-write-policy.md) | `--interop-from --description`: an import carries the brief's `write_policy` and `mcp_grants`, so adopted bespoke agents get the runner (M6) |
