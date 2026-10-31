@@ -1352,6 +1352,10 @@ exclude or withhold everything.
 
 The refresh job's record for `day` (`YYYY-MM-DD`): `<state>/scan-mirrors/<day>.json`.
 
+#### `scan_mirror.valid_name(name)`
+
+Whether a `scan_mirror` value is usable: `""` (off) or one path component (no `/` or `\`, not `.` or `..`).
+
 #### `scan_mirror.mirror_for(cfg, root, day)`
 
 The mirror to scan for the checkout `root` on `day`, or `None` to scan the checkout: `<root>.worktrees/<scan_mirror>`
