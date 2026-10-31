@@ -428,3 +428,78 @@ def test_real_ed25519_signature_clears_os_off(tmp_path):
     _log(team, _row("sandbox-os-off:claude", sign=lambda values: sl.ed25519_sign(pem, values)))
     [rec] = gate.authorize(team, _os_off(), consume=True, now=_T0)
     assert rec["authorization"] == "ed25519-decision"
+
+
+# --- S1: a carried-over relaxation needs a present expiry and a re-verified decision binding ---------------------
+
+
+def _registered_os_off(tmp_path: Path) -> tuple[Path, dict, list[gate.Relaxation]]:
+    team = _team(tmp_path)
+    _log(team, _row("sandbox-os-off:claude"))
+    gate.authorize(team, _os_off(), consume=True, now=_T0)
+    [entry] = _registry(team)
+    later = gate.plan_relaxations(_st(os=False), _st(os=False), framework_id="claude", profile_would_emit=True)
+    return team, entry, later
+
+
+def _mutate_entry(team: Path, **changes) -> None:
+    registry = er.load_registry(team)
+    for key, value in changes.items():
+        if value is None:
+            registry["exceptions"][0].pop(key, None)
+        else:
+            registry["exceptions"][0][key] = value
+    er.write_registry(team, registry)
+
+
+def test_registered_entry_is_bound_to_its_decision_row(tmp_path, stub_ed25519):
+    team, entry, later = _registered_os_off(tmp_path)
+    log_rows = list(csv.DictReader((team / "references" / "security-decisions.log.csv").open(newline="")))
+    assert entry["decision_sha256"] == gate._decision_binding(log_rows[-1])   # consumed cell excluded
+    assert gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))[0]["authorization"] == \
+        "active-exception"
+
+
+@pytest.mark.parametrize("changes,why", [
+    ({"expires": None}, "records no expiry"),
+    ({"expires": ""}, "records no expiry"),
+    ({"decision_sha256": None}, "is not bound to a decision row"),
+    ({"decision_sha256": "ab" * 32}, "no longer in the decisions log"),
+])
+def test_carry_over_refuses_without_expiry_or_binding(tmp_path, stub_ed25519, capsys, changes, why):
+    team, entry, later = _registered_os_off(tmp_path)
+    _mutate_entry(team, **changes)
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert why in capsys.readouterr().err
+    assert _registry(team)[0]["status"] == "active"   # a refusal writes nothing
+
+
+def test_carry_over_refuses_when_the_bound_row_no_longer_verifies(tmp_path, stub_ed25519, capsys, monkeypatch):
+    team, entry, later = _registered_os_off(tmp_path)
+    # The row is still there and the binding still matches, but its signature no longer verifies (key rotated
+    # out / forged row): re-verification through the decision log refuses it.
+    monkeypatch.setattr(dl, "verify_by_scheme", lambda *a, **k: False)
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert "no longer verifies" in capsys.readouterr().err
+
+
+def test_carry_over_refuses_when_the_bound_row_was_rewritten(tmp_path, stub_ed25519, capsys):
+    team, entry, later = _registered_os_off(tmp_path)
+    path = team / "references" / "security-decisions.log.csv"
+    text = path.read_text()
+    path.write_text(text.replace("sandbox-os-off:claude,PASS", "sandbox-os-off:claude,CONDITIONAL PASS"))
+    with pytest.raises(gate.SandboxRelaxationError, match="has lapsed"):
+        gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert "no longer in the decisions log" in capsys.readouterr().err
+
+
+def test_unbound_entry_is_replaced_by_a_fresh_signed_decision(tmp_path, stub_ed25519):
+    team, entry, later = _registered_os_off(tmp_path)
+    _mutate_entry(team, decision_sha256=None)
+    _log(team, _row("sandbox-os-off:claude", stamp="2026-11-02"))
+    [rec] = gate.authorize(team, later, consume=True, now=_T0 + timedelta(days=1))
+    assert rec["authorization"] == "ed25519-decision" and rec["exception_id"] != entry["id"]
+    statuses = {e["id"]: e["status"] for e in _registry(team)}
+    assert statuses == {entry["id"]: "sunset", rec["exception_id"]: "active"}

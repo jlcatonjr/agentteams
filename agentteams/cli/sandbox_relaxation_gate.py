@@ -13,8 +13,12 @@ tokens), and that clears the destructive-action gate, whose elevated path demand
 (an HMAC signature is valid but insufficient) and a traceable ``derives_from`` lineage. An unretracted HALT on the
 instance, on any lineage ancestor or on the whole family blocks it (C-2). A standing relaxation (os-off, widening,
 native-exec keep, runner switch) is registered in the exception registry under the aggregate cap with a
-:data:`SANDBOX_EXCEPTION_TTL_DAYS` sunset, and every later render that keeps it checks the entry is still active
-(fail-closed sunset). All checks run before anything is consumed: a refusal consumes nothing.
+:data:`SANDBOX_EXCEPTION_TTL_DAYS` sunset and a ``decision_sha256`` binding it to the decision row that cleared it.
+Every later render that keeps it carries it over only on an entry that is active, has a present, unexpired
+``expires``, and whose bound decision row is still in the log and re-verifies through the decision log's own
+authenticity path (approved author, Ed25519 signature, lineage, hash chain); anything else is treated as lapsed
+(fail-closed sunset; a freshly signed decision replaces it). All checks run before anything is consumed: a refusal
+consumes nothing.
 
 **Ungoverned workspace:** never refuses; the caller prints the ``SANDBOX RELAXATION`` notice
 (``write_root_policy.warn_sandbox_relaxation``) and the records say ``notice-only``.
@@ -28,6 +32,7 @@ siblings, because the family check matches every instance id (over-blocking only
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sys
 from dataclasses import dataclass
@@ -35,7 +40,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from agentteams.cli import security_gate
-from agentteams.cli.decision_log import _enforce_decision_signing
+from agentteams.cli.decision_log import (
+    _assert_authorizing_row_is_authentic,
+    _assert_decision_chain_intact,
+    _decision_signature_values,
+    _decision_signing_active,
+    _enforce_decision_signing,
+    _read_decision_rows,
+)
 from agentteams.cli.effect_classifier import EffectClassifierError, requires_operator_signature
 from agentteams.cli.exception_registry import (
     ExceptionRegistryError,
@@ -65,6 +77,8 @@ SANDBOX_EXCEPTION_TTL_DAYS = 90
 #: The OS-off reasons that mean the operator's brief or argv turned the boundary off (not a profile default).
 _OPERATOR_OFF_REASONS = frozenset({"brief", "cli"})
 _ACTIVE = "active"
+_HEX64 = re.compile(r"[0-9a-f]{64}")
+_AUTHORIZING = frozenset({"PASS", "CONDITIONAL PASS"})
 
 
 class SandboxRelaxationError(RuntimeError):
@@ -199,6 +213,54 @@ def _check_new(team_dir: Path, r: Relaxation) -> dict[str, str]:
     return row
 
 
+def _decision_binding(row: dict[str, str]) -> str:
+    """The sha256 that binds a registry entry to the decision row that cleared it: the row's signed payload plus its
+    signature (the unsigned ``consumed`` cell is excluded, so spending the row does not break the binding)."""
+    payload = "|".join(_decision_signature_values(row)) + "|signature=" + (row.get("signature") or "").strip()
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _unbound_reason(team_dir: Path, entry: dict) -> str | None:
+    """Why an active registry entry may NOT carry its relaxation over (S1), or None when it may.
+
+    It may only when its ``expires`` is present (an expiry-less entry never lapses, so it is refused) and its
+    ``decision_sha256`` names a row still in the decisions log that re-verifies now through
+    :func:`~agentteams.cli.decision_log._assert_authorizing_row_is_authentic` (approved author, the operator's
+    Ed25519 signature, traceable lineage) with the log's hash chain intact. Raises when the log is unreadable or its
+    chain is broken (fail-closed).
+    """
+    if not str(entry.get("expires") or "").strip():
+        return "records no expiry"
+    binding = str(entry.get("decision_sha256") or "").strip().lower()
+    if not _HEX64.fullmatch(binding):
+        return "is not bound to a decision row"
+    read = _read_decision_rows(team_dir)
+    if read is None:
+        return "is bound to a decision row, but the decisions log is gone"
+    rows, fieldnames = read
+    _assert_decision_chain_intact(rows, fieldnames)
+    matches = []
+    for row in rows:
+        try:
+            if _decision_binding(row) == binding:
+                matches.append(row)
+        except RuntimeError:   # a row with a '|' in a signed field cannot be the bound one
+            continue
+    if not matches:
+        return "is bound to a decision row that is no longer in the decisions log"
+    row = matches[-1]
+    verdict = (row.get("verdict") or row.get("status") or "").strip().upper()
+    if verdict not in _AUTHORIZING or (verdict == "CONDITIONAL PASS" and
+                                       (row.get("conditions_verified") or "").strip().lower() != "verified"):
+        return f"is bound to a decision row whose verdict is {verdict or 'empty'}"
+    try:
+        _assert_authorizing_row_is_authentic(row, output_dir=team_dir, signing_active=_decision_signing_active(
+            fieldnames), action=str(entry.get("action") or ""))
+    except RuntimeError as exc:
+        return f"is bound to a decision row that no longer verifies ({exc})"
+    return None
+
+
 def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object]:
     """Classify a continuing relaxation against the registry.
 
@@ -207,6 +269,14 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
     """
     entries = entries_for(team_dir, r.action)
     active = active_relaxing_exceptions({"exceptions": entries}, now=now)
+    unbound = {}
+    for e in active:
+        why = _unbound_reason(team_dir, e)
+        if why is not None:
+            unbound[e.get("id")] = why
+            print(f"  !  sandbox exception {e.get('id')} for {r.action} {why}; it cannot carry the relaxation over",
+                  file=sys.stderr)
+    active = [e for e in active if e.get("id") not in unbound]   # unbound counts as lapsed (S1)
     open_ids = [e.get("id") for e in entries if (e.get("status") or _ACTIVE).strip().lower() == _ACTIVE]
     lapsed = [i for i in open_ids if i not in {e.get("id") for e in active}]
     if r.grants:
@@ -315,6 +385,7 @@ def _authorize(team_dir: Path, relaxations: list[Relaxation], *, consume: bool,
                     "issued": now.isoformat(),
                     "expires": (now + timedelta(days=SANDBOX_EXCEPTION_TTL_DAYS)).isoformat(),
                     "decision_key_id": (row.get("key_id") or "").strip(),
+                    "decision_sha256": _decision_binding(row),
                 }, now=now)
         records[i] = _record(r, "ed25519-decision", exception_id=entry_id,
                              decision_date=(row.get("timestamp") or row.get("date") or "").strip(),
