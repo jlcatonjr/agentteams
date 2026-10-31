@@ -65,9 +65,13 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # --sign-decision body into the integrity-pinned cli/operator_signing.py (now 1092).
     # artifacts.py was 1229 before the P00 os_sandbox switch (2026-10-31) took it to 1336; the wave-2
     # @code-hygiene H1 carve moved the switch resolution and the relaxation-gate engagement into the
-    # integrity-pinned cli/os_sandbox_switch.py (now 1253: the remaining delta is P00's
+    # integrity-pinned cli/os_sandbox_switch.py (1253: the remaining delta is P00's
     # PRIVILEGE_WIRING_ERRORS tuple, the write_policy refusal and docstrings, which belong beside
-    # finalize_privilege_wiring).
+    # finalize_privilege_wiring). WASM wave 3 (P01 --wasm-sandbox, P12 brief_confined_programs) took it to
+    # 1268: two finalize_privilege_wiring kwargs + their docstrings, the three-line apply_wasm_switch /
+    # advise_wasm calls and the gate-exceptions hand-off to the notice (wave-3 S2), which are the
+    # wiring itself (the logic lives in cli/wasm_sandbox_switch.py and cli/os_sandbox_switch.py);
+    # the per-topic CH-07 carve above remains the genuine fix.
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the
