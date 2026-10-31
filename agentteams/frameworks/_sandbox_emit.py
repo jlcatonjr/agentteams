@@ -787,6 +787,7 @@ def _build_sandbox_block(
     protect_prompt_roots: bool = False,
     protect_ledger: bool = False,
     control_plane_protect: tuple[str, ...] | None = None,
+    substrate_protect: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build the Claude Code ``sandbox`` settings block for workspace confinement.
 
@@ -812,6 +813,8 @@ def _build_sandbox_block(
             ``denyWrite`` (follow-up #8 phase 2, opt-in).
         control_plane_protect: METAPLAN R1 (``_control_plane_protect.control_plane_for``): None, or the extra MCP config
             paths to deny beside ``.agentteams`` whenever WASM is on.
+        substrate_protect: P20 D5 (``_control_plane_protect.substrate_protect_paths``): the projected
+            model-substrate file, denied on its own when the control plane is not protected.
 
     Returns:
         The ``sandbox`` settings object: OS-level enforcement on, writes confined to
@@ -848,7 +851,8 @@ def _build_sandbox_block(
     # write_policy "orchestrator-only" (P4a): only the out-of-session runner writes the ledger and its status; R1:
     # .agentteams (and the agentteams_wasm configs) whenever WASM is on too.
     deny_write = filesystem["denyWrite"]
-    deny_write += [p for p in cp_write_denies(protect_ledger, control_plane_protect) if p not in deny_write]
+    deny_write += [p for p in cp_write_denies(protect_ledger, control_plane_protect, substrate_protect)
+                   if p not in deny_write]
     denied = list(deny_read or [])
     for path in signing_key_deny_read(resolve_abspath=resolve_abspath):
         if path not in denied:
@@ -877,6 +881,7 @@ def _inject_sandbox_block(
     protect_prompt_roots: bool = False,
     protect_ledger: bool = False,
     control_plane_protect: tuple[str, ...] | None = None,
+    substrate_protect: tuple[str, ...] = (),
 ) -> str:
     """Return the settings example JSON with a ``sandbox`` block merged in.
 
@@ -906,6 +911,8 @@ def _inject_sandbox_block(
             comment (follow-up #8 phase 2, opt-in; off leaves the output unchanged).
         control_plane_protect: METAPLAN R1: the ``.agentteams`` / agent-file ``Edit`` rules (see
             :mod:`._control_plane_protect`); None leaves the output unchanged.
+        substrate_protect: P20 D5: the projected model-substrate file's denyWrite + ``Edit`` rule; ``()`` leaves
+            the output unchanged.
 
     Returns:
         The settings example JSON text with the sandbox block merged in.
@@ -931,7 +938,7 @@ def _inject_sandbox_block(
         write_roots, deny_read, resolve_abspath=deny_read_resolved_abspath,
         sibling_deny_dirs=sibling_deny_dirs, project_root=project_root,
         protect_prompt_roots=protect_prompt_roots, protect_ledger=protect_ledger,
-        control_plane_protect=control_plane_protect,
+        control_plane_protect=control_plane_protect, substrate_protect=substrate_protect,
     )
     # Same branch as the sandbox block, never one without the other (R11): the built-in tools
     # are bound by permissions, not by the sandbox.
@@ -943,7 +950,7 @@ def _inject_sandbox_block(
     # Under the switch the control plane (ledger, dispatch records, queue results, the installed read-only file
     # server Goose launches) is the runner's alone; R1: .agentteams whenever WASM is on too. Rule rationale (R1 C4,
     # R7 C11, the Claude Code 2.1.246 Read-deny measurement) lives in _control_plane_protect.permission_rules.
-    rules += cp_permission_rules(protect_ledger, control_plane_protect)
+    rules += cp_permission_rules(protect_ledger, control_plane_protect, substrate_protect)
     for rule in rules:
         if rule not in deny:
             deny.append(rule)

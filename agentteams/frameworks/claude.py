@@ -58,7 +58,7 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     _sandbox_feature_enabled,
     sibling_deny_dirs,
 )
-from ._control_plane_protect import control_plane_for
+from ._control_plane_protect import control_plane_for, substrate_protect_paths
 from ._sandbox_drift import verify_control_plane_merged  # noqa: F401  (re-export: P13 reads it from here)
 from ._prompt_root_protect import prompt_roots_enabled
 from ._write_roots import project_root_of
@@ -325,6 +325,7 @@ class ClaudeAdapter(FrameworkAdapter):
                     protect_prompt_roots=prompt_roots_enabled(manifest),  # #8 phase 2, opt-in
                     protect_ledger=manifest.get("write_policy") == "orchestrator-only",  # P4a
                     control_plane_protect=control_plane_for(manifest),  # METAPLAN R1: protect_ledger or wasm
+                    substrate_protect=substrate_protect_paths(manifest),  # P20 D5: the projected floor alone
                 )
                 # The denyWrite names the verify-key store DIRECTORY (bwrap cannot start on a
                 # missing deny path). Its frozen sentinel is emitted for every team by
