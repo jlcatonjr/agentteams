@@ -272,6 +272,9 @@ the brief key goes away (it stays as the floor), write-protects it in the emitte
 `.agentteams` control plane is not already protected, and treats on to off as constraint-relaxing
 (`sandbox-wasm-off:model-substrate`: baseAgent is governed, so the operator's Ed25519-signed decision is required).
 `agentteams --verify-integrity` exits 1 when the file shows a lower floor than the last render recorded.
+**Residual:** the Copilot surfaces (copilot-cli, copilot-vscode) emit no session sandbox, so they do not
+write-protect the file. There, as with the OS sandbox off, an edit to `off` is caught only by `--verify-integrity`,
+and a deletion also by item 8 of §4.3.
 
 ### 4.3 Request B — one `--wasm` switch in the battery (one atomic unit; apply together or not at all)
 
@@ -321,8 +324,16 @@ the brief key goes away (it stays as the floor), write-protects it in the emitte
    vendor the schema file and pin its sha256, as Request A does for the grant.
 7. **Tests (zero spend, stub backends: `BATTERY_STUB_BACKEND`):** the refusal matrix (unsupported language, `--runner
    node`, in-guest under `on`, a native key under `on`, `BA_WASM=off` / manifest `off` against a projected `on`, each
-   malformed-file case of item 6), the resolution table, the stamps on accept and refuse rows, and the 2x2
-   OS x WASM matrix (report Part 4 B.5) on macOS and Linux before any "both on" claim.
+   malformed-file case of item 6, absence after `on` per item 8), the resolution table, the stamps on accept and
+   refuse rows, and the 2x2 OS x WASM matrix (report Part 4 B.5) on macOS and Linux before any "both on" claim.
+8. **Absence after `on` refuses (fail closed).** A deleted file must not read as "no projection" when the floor was
+   `on`. Refuse every WASM-switch-dependent run (exit 2; only argv `--wasm off` lowers it, as in item 2) when the
+   file is absent and either (a) the agentteams team's build-log (`<agents dir>/references/build-log.json`, for a
+   Claude team `.claude/agents/`) records `sandbox_state.model_substrate: "on"`, or (b) baseAgent's own git-tracked
+   marker (for example `experiments/battery/.wasm-floor.json`, `{"seen_on": true}`, written the first time item 6
+   reads a valid `on`) says a projected `on` was seen. Clearing the marker is an operator commit, never a run.
+   Otherwise deletion is caught only by `agentteams --verify-integrity` (exit 1 when the file is absent but the
+   build-log recorded `on`); with the build-log and the marker both gone, nothing catches it.
 
 **Honesty ceiling.** Until Request B lands, the projected file has no effect in baseAgent: nothing there reads it, and
 the `paid_cell.mjs:73` `node` default stays unsafe (plan risk R2).
