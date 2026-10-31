@@ -26,7 +26,7 @@ _CHUNK = 1 << 20
 _DRIVE = re.compile(r"^[A-Za-z]:")
 
 
-class WasmRuntimeError(Exception):
+class WasmRuntimeError(RuntimeError):
     """Provisioning or verification refused; the message names the operator fix."""
 
 

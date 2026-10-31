@@ -651,7 +651,7 @@ def test_resolve_rehashes_every_call(env):
     os.chmod(p.parent, 0o755)
     os.chmod(p, 0o755)
     p.write_bytes(TOOL + b"!")
-    with pytest.raises(wr.WasmRuntimeError, match="sha256 mismatch"):
+    with pytest.raises(wr.WasmRuntimeError, match="does not match its pin"):
         wr.resolve(env.project, "wasmtime")
 
 

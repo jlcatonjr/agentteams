@@ -314,64 +314,22 @@ def _strip_for(pe: Mapping[str, Any], version: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# The pure entry-file hash check (R10)
-#
-# MERGE-NOTE (orchestrator, P02/P03 reconciliation): METAPLAN R10 puts
-# ``pinned_resolver(install_dir, pins) -> Callable`` in P02's ``wasm_exec.py`` so the standalone bundle can
-# verify without importing agentteams, and says ``resolve()`` wraps it. P02 is built in parallel, so this
-# module imports it when present and otherwise uses the equivalent ``_local_pinned_resolver`` below. Once
-# P02 is merged, collapse to the ``wasm_exec`` implementation (delete ``_local_pinned_resolver``) after
-# confirming its signature/semantics match: it receives the install dir (``<project>/.agentteams/wasm``)
-# and the whole pins document; the returned callable maps a component name to the verified entry Path and
-# raises on a symlink, a non-regular file, a size or sha256 mismatch, or a TODO-PIN.
+# The pure entry-file hash check (R10): one implementation, in the bundle-shared ``wasm_pins``
 # ---------------------------------------------------------------------------
-
-def _local_pinned_resolver(install_dir: Path, pins: Mapping[str, Any], *,
-                           platform: str | None = None) -> Callable[[str], Path]:
-    """Return ``resolve(component) -> Path`` that re-hashes the entry file against ``pins`` on every call.
-
-    Args:
-        install_dir: ``<project>/.agentteams/wasm`` (not followed if a symlink; checked by the caller).
-        pins: The decoded pins document.
-        platform: Platform key; ``None`` uses :func:`host_platform`.
-
-    Returns:
-        The resolving callable.
-    """
-    def _resolve(component: str) -> Path:
-        _check_component(component)
-        entry = pins["components"][component]
-        version = str(entry["version"])
-        pe = _platform_entry(entry, platform or host_platform())
-        _refuse_incomplete(component, version, pe)
-        rel = [component, version, *str(pe["entry"]).split("/")]
-        path = _lstat_walk(install_dir, rel)
-        want = pe["files"][pe["entry"]]["sha256"]
-        got, _ = _hash_file_nofollow(path)
-        if got != want:
-            raise WasmRuntimeError(f"{component} {version}: {path.name} sha256 mismatch (have {got}, pinned {want})")
-        return path
-    return _resolve
-
 
 def _pinned_resolver(install_dir: Path, pins: Mapping[str, Any], *,
                      platform: str | None) -> Callable[[str], Path]:
-    import importlib
-    import importlib.util
+    from agentteams import wasm_pins
 
-    # MERGE-NOTE: prefer P02's bundle-shared implementation once it exists (R10).
-    p02 = importlib.import_module("agentteams.wasm_exec") if importlib.util.find_spec("agentteams.wasm_exec") else None
-    if p02 is None or not hasattr(p02, "pinned_resolver") or platform is not None:
-        return _local_pinned_resolver(install_dir, pins, platform=platform)
-    inner = p02.pinned_resolver(install_dir, pins)
-    p02_error = getattr(p02, "WasmExecError", WasmRuntimeError)
+    inner = wasm_pins.pinned_resolver(install_dir, pins, platform=platform or host_platform())
 
-    def _wrapped(component: str) -> Path:
+    def _resolve(component: str) -> Path:
+        _check_component(component)
         try:
-            return Path(inner(component))
-        except p02_error as exc:   # P02's refusal type becomes ours (one error type for callers)
+            return inner.resolve(component)
+        except wasm_pins.WasmPinError as exc:   # one error type for this module's callers
             raise WasmRuntimeError(str(exc)) from exc
-    return _wrapped
+    return _resolve
 
 
 # ---------------------------------------------------------------------------
