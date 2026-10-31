@@ -2,8 +2,10 @@
 template's Invariant Core fence, its verdict row and cross-references are wired up, and the
 prevention playbook carries the matching baseline lines.
 
-See tmp/by-week/2026-W33/npm-release-cooldown-security-default.plan.md. The release cooldown itself is
-deprecated (operator ruling 2026-10-26); the vulnerability search it sat beside stays mandatory.
+See tmp/by-week/2026-W33/npm-release-cooldown-security-default.plan.md. The release cooldown was
+deprecated on 2026-10-26 and restored on 2026-10-29 (operator ruling), together with a latest-stable-only
+rule and a carve-out: neither ever blocks remediating a vulnerability a scan detected
+(tmp/by-week/2026-W44/s10-cooldown-latest-stable-carveout.plan.md).
 """
 from __future__ import annotations
 
@@ -40,7 +42,14 @@ def test_rule_s10_exists_inside_the_invariant_fence():
     assert begin < rule_pos < end
 
 
-def test_rule_s10_names_the_vetting_sources():
+def _s10_body() -> str:
+    text = _template_text()
+    rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
+    next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
+    return text[rule_start:next_section].replace("\n  ", " ")
+
+
+def test_rule_s10_names_the_vetting_sources_and_cooldown():
     text = _template_text()
     rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
     next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
@@ -50,25 +59,43 @@ def test_rule_s10_names_the_vetting_sources():
         "https://docs.npmjs.com/auditing-package-dependencies-for-security-vulnerabilities",
         "OSV.dev",
         "`npm audit`",
-        "cooldown is deprecated",
+        "default 14 days",
     ):
         assert marker in body, f"Rule S-10 is missing {marker!r}"
 
 
 def test_rule_s10_never_delays_remediation():
-    """Remediating a known-vulnerable installed version is never delayed (KEV patch urgency)."""
-    text = _template_text()
-    rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
-    next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
-    assert "is never delayed" in text[rule_start:next_section].replace("\n  ", " ")
+    """Remediating a vulnerability a scan named in the carve-out detected is never delayed (KEV patch urgency)."""
+    assert "Remediating a vulnerability a scan named in the carve-out detected is never delayed" in _s10_body()
+
+
+def test_rule_s10_requires_the_latest_stable_release():
+    body = _s10_body()
+    assert "**Latest stable release only:**" in body
+    for marker in ("pre-release", "yanked or deprecated release", "an older release when a newer stable"):
+        assert marker in body, f"the latest-stable rule is missing {marker!r}"
+
+
+def test_scan_remediation_carve_out_lifts_both_rules_and_only_those():
+    """The carve-out exempts a scan-detected vulnerability's fix from the cooldown and the latest-stable
+    rule, never from the vulnerability search or S-9 identity, and covers only the flagged packages."""
+    body = _s10_body()
+    start = body.index("**Vulnerability-scan remediation carve-out")
+    carve = body[start: body.index("- ✅ Pin exact versions", start)]
+    assert "the cooldown and the latest-stable rule never block remediation" in carve
+    assert "may be adopted inside the cooldown window" in carve and "need not be the latest stable release" in carve
+    assert "must still pass the vulnerability search" in carve and "Rule S-9" in carve
+    assert "covers only the packages the scan flagged" in carve
+    assert "(outside the remediation carve-out) the cooldown or the latest-stable rule" in body
 
 
 def test_verdict_table_has_a_rule_s10_row():
     text, begin, end = _fence()
-    row_pos = text.index("complete the S-10 vulnerability search")
+    row_pos = text.index("younger than the Rule S-10 cooldown")
     assert begin < row_pos < end
     row_line = text[text.rfind("\n", 0, row_pos): text.index("\n", row_pos)]
     assert "CONDITIONAL PASS" in row_line
+    assert "not the latest stable release" in row_line and "remediates a vulnerability a scan named in the S-10 carve-out detected" in row_line
 
 
 def test_rule_s10_is_cross_referenced_not_restated():
@@ -85,8 +112,9 @@ def test_rule_s10_is_cross_referenced_not_restated():
 def test_playbook_carries_dependency_vetting_baseline_lines():
     playbook = _format_prevention_playbook([])
     assert "Before any package/module install" in playbook
-    assert "package-release cooldown is deprecated" in playbook
-    assert "never delay remediating" in playbook
+    assert "package-release cooldown (default 14 days)" in playbook
+    assert "latest stable release" in playbook
+    assert "ever blocks remediating a vulnerability a scan named in the S-10 carve-out" in playbook
 
 
 def test_static_source_entries_include_snyk_and_npm_audit():
@@ -164,16 +192,25 @@ def test_merge_static_sources_restores_missing_entries_without_duplicating():
     assert len(_merge_static_sources(restored)) == len(restored)
 
 
-def test_cooldown_is_deprecated_but_vetting_still_binds():
-    """The release cooldown is deprecated in every ecosystem (operator ruling 2026-10-26): no
-    waiting period, no exemption needed. The vulnerability search still gates every install."""
-    text = _template_text()
-    rule_start = text.index("**Rule S-10: Dependency Vetting Before Install**")
-    next_section = text.index("### HALT vs. CONDITIONAL PASS Escalation Criteria")
-    body = text[rule_start:next_section]
-    flat = body.replace("\n  ", " ")
-    assert "wait before installing" not in flat and "default 14 days" not in flat
-    assert "no release-age waiting period in any ecosystem" in flat
+def test_cooldown_is_unconditional_across_ecosystems():
+    """The cooldown applies to every update/installation in every ecosystem — a future edit must not
+    quietly re-narrow it to npm (generalized 2026-08-17; restored 2026-10-29 by operator ruling)."""
+    flat = _s10_body()
+    assert "wait before installing" in flat
+    assert "all ecosystems" in flat
+    assert "cooldown is deprecated" not in flat
+    # Distro-curated security updates of installed packages are remediation, not adoption.
+    assert "remediation, not adoption" in flat
     assert "Never install a release that fails the vulnerability search" in flat
-    playbook = _format_prevention_playbook([])
-    assert "known-vulnerability search" in playbook
+    assert "not only npm" in _format_prevention_playbook([])
+
+
+def test_one_zero_carve_out_names_its_scans_and_demands_evidence():
+    """1.0 has no vulnscan: the carve-out names its scans (the audit tools S-10 lists, or an OSV
+    query) and requires the tool, advisory id and installed version as evidence (@security,
+    2026-10-31), so it cannot be read as covering any scanner's report."""
+    body = _s10_body()
+    assert "`npm audit`, `pip-audit`, `cargo audit`" in body and "OSV.dev query" in body
+    assert "cite the tool, the advisory id and the installed version" in body
+    assert "only once one of those tools confirms it" in body
+    assert "such a scan" not in body
