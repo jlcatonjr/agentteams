@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the MCP `request` description): request `stage-major` only for a repository whose fix plan shows `major-held`
   rows and whose `stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix. The
   MCP server refuses a `stage-major` for a repository with a staged fix, as for `stage-fix`.
+
 ### fixed (fleet: the pre-update snapshot goes to a ref, never onto the checked-out branch)
 
 - **`fleet._git_snapshot`** no longer runs `git commit` on the workspace's current branch. Run weekly against
