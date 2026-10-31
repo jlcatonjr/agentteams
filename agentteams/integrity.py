@@ -371,6 +371,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/wasm_agent/stage1.py",
     "agentteams/wasm_agent/tools.py",
     "agentteams/wasm_agent/transcript.py",
+    # The WASM agent guest (P07): the program inside every agent's guest, plus the module that loads it only after
+    # re-hashing it against its pin. The guest decides which in-guest tool paths it touches and which host ops it
+    # asks for; a silent edit makes it read outside the grant it reports, forge results, or drop the R8
+    # instruction-file refusal, without tripping --verify-integrity.
+    "agentteams/wasm_agent/guest_source.py",
+    "agentteams/data/wasm_agent_guest.py",
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude
