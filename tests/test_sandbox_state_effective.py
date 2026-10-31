@@ -176,3 +176,108 @@ def test_matrix_profile_by_switch_by_token_never_raises():
             manifest["os_sandbox"] = switch
         state = effective_sandbox_state(manifest)
         assert state.os is (switch == "on" if switch else _legacy_twin(manifest, None))
+
+
+# --- P01: the WASM half ----------------------------------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY  # noqa: E402
+from agentteams.wasm_config import WASM_SANDBOX_CLI_KEY, normalize_wasm_sandbox  # noqa: E402
+from agentteams.wasm_exec import DEFAULT_LIMITS, Grant, Limits, Mount  # noqa: E402
+
+_SLUGS = ["orchestrator", "primary-producer", "navigator"]
+
+
+def _wasm_manifest(block: dict | None, root: Path | None, cli: str | None = None) -> dict:
+    m: dict = {"privilege_profile": "confined", "agent_slug_list": list(_SLUGS)}
+    if block is not None:
+        m["wasm_sandbox"] = normalize_wasm_sandbox(block, agent_slugs=_SLUGS).to_record()
+    if root is not None:
+        m[PROJECT_ROOT_KEY] = Path(root).resolve()
+    if cli is not None:
+        m[WASM_SANDBOX_CLI_KEY] = cli
+    return m
+
+
+_GRANT = {"agents": {"primary-producer": {"read_paths": ["docs", "src/app"], "scratch": True}}}
+
+
+def test_wasm_defaults_off_without_block_or_flag():
+    s = effective_sandbox_state({"privilege_profile": "confined"})
+    assert (s.wasm, s.wasm_reason, s.wasm_languages, dict(s.wasm_grants)) == (False, "default-off", (), {})
+
+
+def test_cli_beats_the_brief_both_ways(tmp_path):
+    assert effective_sandbox_state(_wasm_manifest({"enabled": False}, tmp_path, "on")).wasm_reason == "cli"
+    assert effective_sandbox_state(_wasm_manifest({"enabled": False}, tmp_path, "on")).wasm is True
+    off = effective_sandbox_state(_wasm_manifest({"enabled": True, **_GRANT}, tmp_path, "off"))
+    assert (off.wasm, off.wasm_reason, dict(off.wasm_grants)) == (False, "cli", {})
+    on = effective_sandbox_state(_wasm_manifest(None, tmp_path, "on"))
+    assert (on.wasm, on.wasm_languages, dict(on.wasm_grants)) == (True, ("module", "python", "javascript"), {})
+
+
+def test_grants_are_inert_while_off(tmp_path):
+    s = effective_sandbox_state(_wasm_manifest({"enabled": False, **_GRANT}, tmp_path))
+    assert (s.wasm, s.wasm_reason, s.wasm_languages, dict(s.wasm_grants)) == (False, "brief", (), {})
+
+
+def test_on_grants_have_the_exact_r9_mounts(tmp_path):
+    root = tmp_path.resolve()
+    s = effective_sandbox_state(_wasm_manifest({"enabled": True, "languages": ["python"], **_GRANT}, tmp_path))
+    assert (s.wasm, s.wasm_reason, s.wasm_languages) == (True, "brief", ("python",))
+    assert set(s.wasm_grants) == {"primary-producer"}
+    assert s.wasm_grants["primary-producer"] == Grant(mounts=(
+        Mount(str(root / "docs"), "/project/docs", "ro"),
+        Mount(str(root / "src/app"), "/project/src/app", "ro"),
+        Mount(str(root / ".agentteams/wasm/scratch/primary-producer"), "/scratch", "rw"),
+    ), limits=DEFAULT_LIMITS)
+
+
+def test_non_default_limits_give_every_slug_an_entry_without_tokens(tmp_path):
+    block = {"enabled": True, "limits": {"memory_mib": 128, "timeout_s": 30}, **_GRANT}
+    s = effective_sandbox_state(_wasm_manifest(block, tmp_path))
+    limits = Limits(DEFAULT_LIMITS.fuel, 128 << 20, 30)
+    assert set(s.wasm_grants) == set(_SLUGS)
+    assert s.wasm_grants["navigator"] == Grant(mounts=(), limits=limits)
+    assert all(g.limits == limits for g in s.wasm_grants.values())
+    assert ss.state_tokens(s) == {"wasm:primary-producer:read:docs", "wasm:primary-producer:read:src/app",
+                                  "wasm:primary-producer:scratch"}
+
+
+def test_unknown_project_root_with_a_mount_fails_closed():
+    with pytest.raises(ValueError, match="project root is unknown"):
+        effective_sandbox_state(_wasm_manifest({"enabled": True, **_GRANT}, None))
+    # Limits only (no mount) need no root.
+    s = effective_sandbox_state(_wasm_manifest({"enabled": True, "limits": {"timeout_s": 9}}, None))
+    assert all(not g.mounts for g in s.wasm_grants.values())
+
+
+def test_symlink_escape_is_rechecked_under_the_real_root(tmp_path):
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "docs").symlink_to(tmp_path / "outside")
+    with pytest.raises(ValueError, match="symlink"):
+        effective_sandbox_state(_wasm_manifest({"enabled": True, **_GRANT}, tmp_path / "p"))
+
+
+def test_os_half_needs_no_project_root_even_with_wasm_grants():
+    m = _wasm_manifest({"enabled": True, **_GRANT}, None)
+    assert ss.os_switch_state(m) == (True, "profile:confined")
+    assert os_sandbox_requested(m, "claude:sandbox") is True
+
+
+def test_wasm_record_round_trip(tmp_path):
+    s = effective_sandbox_state(_wasm_manifest({"enabled": True, "limits": {"fuel": 5}, **_GRANT}, tmp_path))
+    rec = s.to_record(project_root=tmp_path)
+    assert rec["wasm"] == "on" and rec["wasm_grants"]["primary-producer"]["tokens"] == [
+        "wasm:primary-producer:read:docs", "wasm:primary-producer:read:src/app", "wasm:primary-producer:scratch"]
+    assert rec["wasm_grants"]["navigator"] == {"tokens": [], "limits": {
+        "fuel": 5, "max_memory_bytes": DEFAULT_LIMITS.max_memory_bytes, "timeout_s": DEFAULT_LIMITS.timeout_s}}
+    assert ss.SandboxState.from_record(rec, project_root=tmp_path) == s
+
+
+@pytest.mark.parametrize("bad", ["ON", True, 1])
+def test_bad_wasm_cli_value_fails_closed(bad, tmp_path):
+    with pytest.raises(ValueError, match="--wasm-sandbox"):
+        effective_sandbox_state(_wasm_manifest(None, tmp_path, bad))
