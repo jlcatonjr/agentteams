@@ -61,6 +61,15 @@ from typing import Any
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
 from agentteams.vulnscan import executor_pr, executor_supersede, npm_major, report_store, repo_alias, retry_guard
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
+from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
+    GIT_IDENTITY,
+    ExecError,
+    gh_cwd,
+    gh_env,  # noqa: F401  (re-exported: publish, notes, effectiveness)
+    gh_push_env,
+)
+from agentteams.vulnscan.executor_env import clean_git_env as _clean_git_env
+from agentteams.vulnscan.executor_env import git_env as _git_env
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
 from agentteams.vulnscan.ops import REPO_OPS, STAGE_OPS   # repo-targeted ops: executor_guard applies
 
@@ -77,11 +86,6 @@ MAX_REPORT_REQUEST_BYTES = 256 * 1024        # a `report` request carries the ag
 MAX_REQUESTS_PER_PASS = 200                  # more in the spool at once opens an escalation-flood (S-VM review)
 INTERNAL_OPS = ("report", "escalate")        # grant-free: they only record (R6)
 AGENT_ESCALATION_KINDS = escalations.AGENT_KINDS     # never "escalation-flood"
-GIT_IDENTITY = ("agentteams-vulnscan", "vulnscan@agentteams.invalid")
-
-
-class ExecError(RuntimeError):
-    """An action was refused or failed; the message goes to the ledger and the review."""
 
 
 # ---------------------------------------------------------------- locations
@@ -145,26 +149,6 @@ def _unsafe_origin(repo: Path, env: dict[str, str]) -> str:
             if proc.returncode or "::" in url or not _SAFE_URL.fullmatch(url):
                 return f"origin URL {url[:80]!r} is not an https, ssh or local path URL; refusing to contact it"
     return ""
-
-
-def _clean_git_env(global_config: str) -> dict[str, str]:
-    """Return the environment without ``GIT_*`` variables, system config off and ``global_config`` as global config."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    # GIT_LFS_SKIP_SMUDGE: git-lfs (fix.LFS_FILTER, plan C2) writes pointer files on checkout and downloads nothing
-    env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": global_config, "GIT_TERMINAL_PROMPT": "0",
-                "GIT_LFS_SKIP_SMUDGE": "1"})
-    return env
-
-
-def _git_env() -> dict[str, str]:
-    gcfg = paths.state_dir() / "executor.gitconfig"
-    gcfg.parent.mkdir(parents=True, exist_ok=True)
-    gcfg.write_text(f"[user]\n\tname = {GIT_IDENTITY[0]}\n\temail = {GIT_IDENTITY[1]}\n", encoding="utf-8")
-    env = _clean_git_env(str(gcfg))
-    # repository config cannot rename the executor's commits (its branches are recognised by this identity)
-    env.update({"GIT_AUTHOR_NAME": GIT_IDENTITY[0], "GIT_AUTHOR_EMAIL": GIT_IDENTITY[1],
-                "GIT_COMMITTER_NAME": GIT_IDENTITY[0], "GIT_COMMITTER_EMAIL": GIT_IDENTITY[1]})
-    return env
 
 
 def git_proc(repo: Path, *args: str, push: bool = False, timeout: int = 600,
@@ -640,34 +624,6 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
                              open_url=lambda: _open_pr_url(wt, target_repo, branch))
     _finish_open_pr(repo, wt, staged)
     return {"repo": str(repo), "branch": branch, "pr": url, **({"major": True} if major else {})}
-
-
-def gh_env() -> dict[str, str]:
-    """Return the environment for a read-only ``gh`` call made outside a repository operation.
-
-    Inherited ``GIT_*`` variables are dropped, system and global git config are off, and ``gh`` never prompts.
-    Shared by publish and notes (read-only API calls). The executor's own ``gh pr`` calls use
-    :func:`gh_push_env`, which adds the hardened git environment.
-
-    Returns:
-        The environment.
-    """
-    return _clean_git_env(os.devnull) | {"GH_PROMPT_DISABLED": "1", "NO_COLOR": "1"}
-
-
-def gh_push_env() -> dict[str, str]:
-    """Return the hardened git environment for gh, with no global git config and no repository above its cwd.
-
-    Public for ``executor_supersede``, which runs ``gh pr view`` / ``gh pr close`` under a grant."""
-    return _git_env() | {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CEILING_DIRECTORIES": str(paths.state_dir())}
-
-
-def gh_cwd() -> Path:
-    """Return gh's working directory: empty, so gh (given ``--repo``) never reads or runs a checkout's config (W1).
-
-    Public for the other modules that run ``gh`` (effectiveness, executor_supersede)."""
-    (d := paths.state_dir() / "gh-cwd").mkdir(parents=True, exist_ok=True)
-    return d
 
 
 def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:

@@ -55,7 +55,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from agentteams.vulnscan import _http, images, lockfiles, npm_major, osv, private_sources, project_policy, subproc_confine
-from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, parse
+from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
+from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
@@ -702,8 +703,15 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
 
     Each such package's spec becomes ``^<fixed version>`` in the section that already lists it
     (:func:`npm_major.rewrite_specs`, every other byte kept), then npm re-resolves the lockfile
-    (:func:`npm_fix` with ``install``). A package ``package.json`` does not list (transitive only), and every
-    package of an npm workspace, stays ``major-held`` with a note saying why.
+    (:func:`npm_fix` with ``install``). A package ``package.json`` does not list (transitive only), every
+    package of an npm workspace, and every package when ``package.json`` cannot be read, stays ``major-held``
+    with a note saying why.
+
+    Fail closed (S1, H1): before anything is written, ``npm install`` is refused unless the tools container is
+    active (:func:`subproc_confine.active`; never on the host, never when confinement is opted out) and the base
+    ``package.json`` and lockfile name only registry sources (:func:`manifests.npm_off_registry`). After it, a
+    reported npm error or an unchanged lockfile refuses the whole stage, so a raised spec is never committed
+    beside a stale lockfile.
 
     Args:
         lockfile: package-lock.json or npm-shrinkwrap.json (``package.json`` beside it is never a symlink here).
@@ -717,6 +725,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
     Raises:
         FeedError: OSV could not be read.
         OSError: ``package.json`` could not be written.
+        ExecError: npm install would run unconfined or against a non-registry source, or it failed.
     """
     rows = [c for c in plan_npm_lock(lockfile, cooldown_days=cooldown_days, label=label, private=private)[0]
             if c.action == "major-held"]
@@ -729,12 +738,18 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
     pkg = lockfile.parent / "package.json"
     try:
         text = pkg.read_text(encoding="utf-8")
-        manifest = json.loads(text)
-    except (OSError, ValueError):   # missing or malformed: npm reports that; nothing here is rewritten
-        manifest, text = None, ""
+        manifest, unread = json.loads(text), ""
+    except (OSError, ValueError) as exc:   # missing or malformed: nothing here is rewritten, and the rows say why
+        manifest, text, unread = None, "", f"package.json cannot be read ({type(exc).__name__})"
+    if manifest is not None and not isinstance(manifest, dict):
+        unread = "package.json is not an object"
+    if unread:
+        for c in rows:
+            c.note += f"; {unread}: stays held — fix by hand"
+        return rows, ""
     specs: dict[str, tuple[str, str]] = {}
     for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
-        section = npm_major.direct_section(manifest, c.name) if isinstance(manifest, dict) else ""
+        section = npm_major.direct_section(manifest, c.name)
         if section:
             specs[c.name] = (section, f"^{c.new.lstrip('vV')}")
     if specs:
@@ -744,6 +759,12 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
             for c in rows:
                 c.note += f"; package.json not rewritten ({exc}): fix by hand"
             return rows, ""
+        if subproc_confine.active() is None:   # S1: npm install resolves every spec; only ever in the container
+            raise ExecError(f"{label}: stage-major refuses npm install outside the tools container (confinement is "
+                            "off or opted out)")
+        lock_before = lockfile.read_bytes()
+        if problem := npm_off_registry(label, text, lock_before.decode("utf-8", "replace")):
+            raise ExecError(f"stage-major refuses npm install: {problem}")
         with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
             fh.write(new_text)
     pkg_label = str(Path(label).parent / "package.json")
@@ -754,7 +775,14 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0,
             c.note = f"MAJOR upgrade: package.json {section}.{c.name} → {spec} (lockfile re-resolved by npm install)"
         else:
             c.note += "; transitive only (package.json does not list it): stays held — its parent must move first"
-    out = npm_fix(lockfile.parent, cooldown_days=cooldown_days, apply=True, install=True) if specs else ""
+    if not specs:
+        return rows, ""
+    out = npm_fix(lockfile.parent, cooldown_days=cooldown_days, apply=True, install=True)
+    failed = next((ln for ln in out.splitlines() if ln.startswith(("npm error", "npm ERR!"))), "")
+    if failed or lockfile.read_bytes() == lock_before:   # H1: never package.json without its re-resolved lockfile
+        why = failed or (out.strip().splitlines() or ["no output"])[-1]
+        raise ExecError(f"{label}: npm install did not re-resolve the lockfile after package.json was raised "
+                        f"({why[:200]}); nothing is staged")
     return rows, out
 
 

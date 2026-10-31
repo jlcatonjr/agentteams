@@ -61,6 +61,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import lockfiles
+from agentteams.vulnscan.npm_major import DEP_SECTIONS   # npm_major imports nothing from this package
 from agentteams.vulnscan.versions import is_final, version_key
 
 SKIP_DIRS: frozenset[str] = frozenset({
@@ -600,7 +601,7 @@ def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | 
     root_before, before = lock_entries(rel, old)
     root_after, entries = lock_entries(rel, new)
     for key in _LOCK_ROOT_KEYS:
-        mirrored = manifest is not None and key in ("dependencies", "devDependencies") and \
+        mirrored = manifest is not None and key in DEP_SECTIONS and \
             root_after.get(key) == manifest.get(key)
         if root_before.get(key) != root_after.get(key) and not mirrored:
             raise ValueError(f"{rel}: root package {key} changed")
@@ -617,3 +618,50 @@ def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | 
         host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
         if not isinstance(url, str) or not url.startswith("https://") or host not in REGISTRY_HOSTS:
             raise ValueError(f"{rel}: {name or '(root)'} resolves outside the registry allowlist: {str(url)[:120]}")
+
+
+#: A package.json spec that fetches from somewhere other than the registry (git, URL, path, link, alias, workspace).
+_OFF_REGISTRY_SPEC = re.compile(r"[:/]|^(file|link|git|npm|workspace|github|portal)\b", re.I)
+
+
+def npm_off_registry(rel: str, manifest_text: str, lock_text: str) -> str:
+    """Return why a base ``package.json`` / lockfile pair names a non-registry source, or "" (``stage-major``).
+
+    ``stage-major`` runs ``npm install`` (not only ``npm audit fix``), which resolves every spec in
+    ``package.json``; so before it runs, every dependency spec there must be a registry range (no git, URL,
+    ``file:``, ``link:``, ``npm:`` alias or path) and every lockfile entry must resolve over ``https://`` to
+    :data:`REGISTRY_HOSTS`, with no ``link`` entry and no ``file:`` / ``link:`` / ``npm:`` / URL version.
+
+    Args:
+        rel: The lockfile's path, for messages.
+        manifest_text: The base ``package.json`` text.
+        lock_text: The base lockfile text.
+
+    Returns:
+        The problem, or "".
+    """
+    try:
+        manifest = json.loads(manifest_text)
+        _root, entries = lock_entries(rel, lock_text)
+    except ValueError as exc:
+        return f"{rel}: package.json or the lockfile cannot be read ({str(exc)[:120]})"
+    if not isinstance(manifest, dict):
+        return f"{rel}: package.json is not an object"
+    for section in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+        deps = manifest.get(section) or {}
+        if not isinstance(deps, dict):
+            return f"{rel}: package.json {section} is not an object"
+        for name, spec in deps.items():
+            if not isinstance(spec, str) or _OFF_REGISTRY_SPEC.search(spec.strip()):
+                return f"{rel}: package.json {section}.{str(name)[:60]} is not a registry spec ({str(spec)[:60]})"
+    for name, info in entries:
+        if not name:
+            continue   # the root package itself
+        url, version = info.get("resolved"), info.get("version")
+        if info.get("link") is True or (isinstance(version, str) and _OFF_REGISTRY_SPEC.search(version)):
+            return f"{rel}: {name[:80]} is not a registry package ({str(version or url)[:80]})"
+        host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
+        if url not in (None, "") and (not isinstance(url, str) or not url.startswith("https://")
+                                      or host not in REGISTRY_HOSTS):
+            return f"{rel}: {name[:80]} resolves outside the registry allowlist ({str(url)[:80]})"
+    return ""

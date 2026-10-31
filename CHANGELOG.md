@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   labels it `vulnscan-major` (created when missing; a label that still cannot be applied never fails the PR). The
   PR text and `gh pr create` moved to the new `agentteams.vulnscan.executor_pr`. Branches stay
   `vulnscan/<YYYYMMDD>-<digest>`.
+- **Fail closed (security review):** `npm install` under `stage-major` is refused unless the tools container is
+  active and the base `package.json` / lockfile name only registry sources (`manifests.npm_off_registry`); an npm
+  error or unchanged lockfile after the `package.json` raise refuses the whole stage. Every executor PR body now
+  says it may be merged automatically once every check, a test check included, passes (the operator's auto-merge
+  job), so CI must cover it. `ExecError`, the git identity and the gh environments moved to the leaf module
+  `agentteams.vulnscan.executor_env` (re-exported by `executor`), ending the `executor` ↔ `executor_pr` import
+  cycle.
 - **`retry_guard`:** the futile-retry hold is keyed on the op, so a held `stage-major` never holds `stage-fix` and
   vice versa; `stage-major` records `nothing fixable even with a major upgrade` (`MAJOR_FUTILE_DETAIL`), never
   "nothing fixable without a major jump". The `stage-fix` hold now points at `stage-major`.

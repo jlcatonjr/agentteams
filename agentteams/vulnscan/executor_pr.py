@@ -6,7 +6,12 @@ known-vulnerable dependencies (<digest>)`` with a body listing each package ``ol
 CHANGE`` footer, and its staged state records ``"major": true``. ``open-pr`` then titles that PR ``security(deps)!:
 MAJOR upgrade ...``, says in the body that it may need code changes and that CI must cover it, and labels it
 :data:`MAJOR_LABEL`. The label is created when missing; when it still cannot be applied, the PR is opened without
-it: a missing label never fails the PR.
+it: a missing label never fails the PR (only gh's own "label not found" error falls back, :func:`label_refused`).
+
+The operator's auto-merge job merges a green ``vulnscan/*`` PR, majors included, so every PR body says it may be
+merged automatically once every check, a test check included, passes: CI must cover the change.
+
+Imports only :mod:`.executor_env` (a leaf) at load time; :mod:`.publish` (which imports the executor) lazily.
 """
 
 from __future__ import annotations
@@ -17,9 +22,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from agentteams.vulnscan.executor_env import ExecError, gh_cwd, gh_push_env
+
 MAJOR_LABEL = "vulnscan-major"
 _LABEL_COLOR = "B60205"
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+#: gh's errors for a label the repository does not have (``could not add label: 'x' not found``), and nothing else.
+_LABEL_ERROR = re.compile(r"could not add label|label[^\n]{0,80}\bnot found", re.I)
 
 
 def sanitize(text: str, limit: int = 2000) -> str:
@@ -31,7 +40,15 @@ def sanitize(text: str, limit: int = 2000) -> str:
 
     Returns:
         The quoted text, or ``> (none)``.
+
+    Raises:
+        TypeError: ``text`` is not a string or ``limit`` not an int.
+        ValueError: ``limit`` is negative.
     """
+    if not isinstance(text, str) or not isinstance(limit, int) or isinstance(limit, bool):
+        raise TypeError("sanitize takes a string and an int limit")
+    if limit < 0:
+        raise ValueError("limit must be >= 0")
     text = text[:limit].replace("@", "@​").replace("```", "'''")
     return "\n".join("> " + ln for ln in text.splitlines()) or "> (none)"
 
@@ -45,7 +62,7 @@ def major_changes(changes: list[Any]) -> list[Any]:
     Returns:
         The major rows.
     """
-    return [c for c in changes if c.action == "fix" and getattr(c, "major", False)]
+    return [c for c in changes if c.action == "fix" and c.major]
 
 
 def commit_args(digest: str, changes: list[Any], *, major: bool) -> list[str]:
@@ -58,7 +75,15 @@ def commit_args(digest: str, changes: list[Any], *, major: bool) -> list[str]:
 
     Returns:
         The arguments.
+
+    Raises:
+        TypeError: ``digest`` is not a string or ``changes`` not a list.
+        ValueError: ``digest`` is empty or not plain hex/word characters.
     """
+    if not isinstance(digest, str) or not isinstance(changes, list):
+        raise TypeError("commit_args takes a string digest and a list of changes")
+    if not re.fullmatch(r"\w{1,64}", digest):
+        raise ValueError(f"malformed digest {digest[:80]!r}")
     if not major:
         return ["-m", f"security(deps): fix known-vulnerable dependency versions ({digest})",
                 "-m", "Staged by the agentteams vulnscan executor (deterministic fix; lockfile/pin changes only)."]
@@ -105,7 +130,8 @@ def body(plan: str, rationale: str, *, major: bool) -> str:
     text = (f"{head}Automated security fix staged by the agentteams **vulnscan executor** "
             f"(deterministic; dependency {'manifests' if major else 'pins'} and lockfiles only).\n\n{plan}\n\n"
             f"### Agent rationale (untrusted text, quoted)\n\n{sanitize(rationale)}\n\n"
-            "Tests run in CI. This PR is never merged automatically.\n")
+            "Tests run in CI. This PR may be merged automatically once every check, a test check included, "
+            "passes, so CI must cover the change.\n")
     return publish.rewrite_paths(text)
 
 
@@ -131,10 +157,8 @@ def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, 
     Raises:
         ExecError: ``gh pr create`` failed.
     """
-    from agentteams.vulnscan import executor as ex   # lazy: the executor imports this module
-
     def gh(argv: list[str]) -> subprocess.CompletedProcess:
-        return subprocess.run(["gh", *argv], cwd=ex.gh_cwd(), capture_output=True, text=True, env=ex.gh_push_env(),
+        return subprocess.run(["gh", *argv], cwd=gh_cwd(), capture_output=True, text=True, env=gh_push_env(),
                               timeout=300, check=False)
 
     argv = ["pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
@@ -143,7 +167,7 @@ def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, 
         gh(["label", "create", MAJOR_LABEL, "--repo", target_repo, "--color", _LABEL_COLOR,
             "--description", "vulnscan: semver-major dependency upgrade (may need code changes)"])
         proc = gh([*argv, "--label", MAJOR_LABEL])
-        if proc.returncode and "label" in (proc.stderr + proc.stdout).lower():
+        if proc.returncode and label_refused(proc.stderr + proc.stdout):
             url = open_url()   # gh may have opened the PR before the label failed
             if url:
                 return url
@@ -151,5 +175,17 @@ def create(target_repo: str, base_branch: str, branch: str, body_file: Path, *, 
     else:
         proc = gh(argv)
     if proc.returncode:
-        raise ex.ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
+        raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
     return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+
+
+def label_refused(output: str) -> bool:
+    """Return whether ``gh pr create`` output is gh's error for a missing label (the one case retried without it).
+
+    Args:
+        output: gh's stderr and stdout.
+
+    Returns:
+        True for ``could not add label`` / ``... not found`` errors; False for any other failure (it stands).
+    """
+    return bool(_LABEL_ERROR.search(output))

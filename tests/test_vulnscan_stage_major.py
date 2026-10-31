@@ -259,9 +259,14 @@ def test_pip_majors_are_taken_only_with_allow_major(tmp_path: Path, monkeypatch:
 
 # ---------------------------------------------------------------- fix_path: npm majors
 
-def _npm_world(tmp: Path, monkeypatch: pytest.MonkeyPatch, *, pkg: str = PKG, transitive: bool = False) -> list:
-    """express 4.17.1 (direct) needs 5.0.1; with ``transitive``, qs 6.5.0 (not in package.json) needs 7.0.0."""
-    lock = json.loads(_lock("4.17.1"))
+def _npm_world(tmp: Path, monkeypatch: pytest.MonkeyPatch, *, pkg: str = PKG, transitive: bool = False,
+               confined: bool = True, install: str = "ok", lock: dict | None = None) -> list:
+    """express 4.17.1 (direct) needs 5.0.1; with ``transitive``, qs 6.5.0 (not in package.json) needs 7.0.0.
+
+    npm runs "in the tools container" (``subproc_confine.run_npm`` faked) unless ``confined`` is False.
+    ``install``: ``ok`` re-resolves the lockfile, ``noop`` leaves it, ``error`` reports an npm error.
+    """
+    lock = lock or json.loads(_lock("4.17.1"))
     if transitive:
         lock["packages"]["node_modules/qs"] = {"version": "6.5.0",
                                                "resolved": "https://registry.npmjs.org/qs/-/qs-6.5.0.tgz"}
@@ -271,25 +276,30 @@ def _npm_world(tmp: Path, monkeypatch: pytest.MonkeyPatch, *, pkg: str = PKG, tr
     monkeypatch.setattr(osv, "vulnerable_ids", lambda items: {
         k: [f"GHSA-{k[1]}"] for k in set(items) if (k[1], k[2]) in (("express", "4.17.1"), ("qs", "6.5.0"))})
     monkeypatch.setattr(osv, "minimal_fix", lambda ids, eco, name, ver: (fixed[name], 0))
-    real_which, real_run = fix.shutil.which, subprocess.run
-    monkeypatch.setattr(fix.shutil, "which", lambda name, *a, **k: "/usr/bin/npm" if name == "npm" else
-                        real_which(name, *a, **k))
+    monkeypatch.setattr(fix, "git_config_problem", lambda directory: "")   # no git: the tree is not a repository
+    monkeypatch.setattr(fix, "_dirty", lambda path: False)
+    scratch_root = tmp.parent / f"{tmp.name}-npm-scratch"
+    scratch_root.mkdir(exist_ok=True)
+    monkeypatch.setattr(fix.subproc_confine, "active",
+                        lambda: fix.subproc_confine.Confined(image="tools:test") if confined else None)
+    monkeypatch.setattr(fix.subproc_confine, "scratch_parent", lambda: scratch_root)
+    monkeypatch.setattr(fix.shutil, "which", lambda name, *a, **k: "/usr/bin/npm" if name == "npm" else None)
     calls: list = []
 
-    def run(cmd: list, **kw: object) -> subprocess.CompletedProcess:
-        if cmd[0] != "/usr/bin/npm":
-            return real_run(cmd, **kw)   # type: ignore[call-overload]
-        calls.append(cmd)
-        scratch = Path(str(kw["cwd"]))
-        if cmd[1] == "install":   # npm re-resolves the lockfile from the rewritten package.json
-            spec = json.loads((scratch / "package.json").read_text())["dependencies"]["express"]
+    def run_npm(args: list, *, workdir: Path, scratch_root: Path, env: dict, timeout: float = 600) -> object:
+        calls.append(["npm", *args])
+        out = "ok\n"
+        if args[0] == "install" and install == "ok":   # npm re-resolves the lockfile from the rewritten package.json
+            spec = json.loads((workdir / "package.json").read_text())["dependencies"]["express"]
             new = json.loads(_lock("5.0.1", spec))
             if transitive:
                 new["packages"]["node_modules/qs"] = lock["packages"]["node_modules/qs"]
-            (scratch / "package-lock.json").write_text(json.dumps(new, indent=2) + "\n")
-        return subprocess.CompletedProcess(cmd, 0, "ok\n", "")
+            (workdir / "package-lock.json").write_text(json.dumps(new, indent=2) + "\n")
+        elif args[0] == "install" and install == "error":
+            out = "npm error code ETARGET\nnpm error notarget No matching version found for express@^5.0.1.\n"
+        return subprocess.CompletedProcess(args, 0 if out == "ok\n" else 1, out, "")
 
-    monkeypatch.setattr(fix.subprocess, "run", run)
+    monkeypatch.setattr(fix.subproc_confine, "run_npm", run_npm)
     return calls
 
 
@@ -397,3 +407,169 @@ def test_mcp_offers_stage_major_and_refuses_it_for_a_staged_repository(tmp_path:
         srv.call("request", {"op": "stage-major", "target": "/repos/app", "rationale": "GHSA-x"})
     rid = srv.call("request", {"op": "stage-major", "target": "/repos/other", "rationale": "GHSA-y"})["id"]
     assert json.loads((d["requests"] / f"{rid}.json").read_text())["op"] == "stage-major"
+
+
+# ---------------------------------------------------------------- npm install fails closed (S1, H1)
+
+def test_npm_install_is_refused_outside_the_tools_container(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _npm_world(tmp_path, monkeypatch, confined=False)
+    with pytest.raises(executor.ExecError, match="outside the tools container"):
+        fix.fix_path(tmp_path, apply=True, allow_major=True, allow_dirty=True)
+    assert (tmp_path / "package.json").read_text() == PKG and calls == []
+
+
+def _off_registry(change: str) -> tuple[str, dict]:
+    lock = json.loads(_lock("4.17.1"))
+    pkg = PKG
+    if change == "git-spec":
+        pkg = PKG.replace('"lodash": "^4.17.21"', '"lodash": "git+https://github.com/lodash/lodash.git"')
+    elif change == "alias-spec":
+        pkg = PKG.replace('"lodash": "^4.17.21"', '"lodash": "npm:underscore@^1"')
+    elif change == "file-spec":
+        pkg = PKG.replace('"vite": "^4.5.0"', '"vite": "file:../vite"')
+    elif change == "url-resolved":
+        lock["packages"]["node_modules/lodash"] = {"version": "4.17.21",
+                                                   "resolved": "https://evil.example.com/lodash.tgz"}
+    elif change == "http-resolved":
+        lock["packages"]["node_modules/lodash"] = {"version": "4.17.21",
+                                                   "resolved": "http://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz"}
+    elif change == "link-entry":
+        lock["packages"]["node_modules/local"] = {"resolved": "packages/local", "link": True}
+    elif change == "file-version":
+        lock["packages"]["node_modules/local"] = {"version": "file:../local"}
+    return pkg, lock
+
+
+@pytest.mark.parametrize("change", ["git-spec", "alias-spec", "file-spec", "url-resolved", "http-resolved",
+                                    "link-entry", "file-version"])
+def test_npm_install_is_refused_on_a_non_registry_base(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                       change: str) -> None:
+    pkg, lock = _off_registry(change)
+    calls = _npm_world(tmp_path, monkeypatch, pkg=pkg, lock=lock)
+    with pytest.raises(executor.ExecError, match="refuses npm install"):
+        fix.fix_path(tmp_path, apply=True, allow_major=True, allow_dirty=True)
+    assert (tmp_path / "package.json").read_text() == pkg and calls == []
+
+
+def test_a_registry_only_base_passes_the_check() -> None:
+    assert manifests.npm_off_registry("package-lock.json", PKG, _lock("4.17.1")) == ""
+
+
+@pytest.mark.parametrize("install", ["noop", "error"])
+def test_a_failed_npm_install_refuses_the_whole_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                      install: str) -> None:
+    calls = _npm_world(tmp_path, monkeypatch, install=install)
+    with pytest.raises(executor.ExecError, match="did not re-resolve the lockfile"):
+        fix.fix_path(tmp_path, apply=True, allow_major=True, allow_dirty=True)
+    assert [c[1] for c in calls] == ["install"]   # the audit fix never runs on a half-made change
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_stage_major_fails_cleanly_when_npm_install_fails(env: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo_with_remote(env["tmp"], {"package.json": PKG, "package-lock.json": _lock("4.17.1")})
+    _install(env, ops=["stage-major"], hosts=[])
+
+    def half_made(root: Path, **kw: object) -> fix.FixResult:   # what fix_path does when npm fails after the raise
+        (root / "package.json").write_text(PKG.replace('"^4.17.1"', '"^5.0.1"'))
+        raise executor.ExecError("package-lock.json: npm install did not re-resolve the lockfile")
+
+    monkeypatch.setattr(fix, "fix_path", half_made)
+    res = executor.act("stage-major", str(repo), env["cfg"], request_id="5" * 32)
+    assert res["status"] == "failed" and "did not re-resolve" in res["detail"]
+    _assert_refused_cleanly(repo, "5" * 32)
+
+
+def test_an_unreadable_package_json_is_named_not_called_transitive(tmp_path: Path,
+                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _npm_world(tmp_path, monkeypatch, pkg="{not json")
+    res = fix.fix_path(tmp_path, apply=True, allow_major=True, allow_dirty=True)
+    [row] = [c for c in res.changes if c.name == "express"]
+    assert row.action == "major-held" and "package.json cannot be read" in row.note
+    assert "transitive" not in row.note and "install" not in [c[1] for c in calls]
+
+
+# ---------------------------------------------------------------- input checks (H3)
+
+def test_the_new_public_functions_check_their_inputs() -> None:
+    with pytest.raises(TypeError):
+        executor_pr.sanitize(None)   # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        executor_pr.sanitize("x", -1)
+    with pytest.raises(TypeError):
+        executor_pr.commit_args(1, [], major=True)   # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        executor_pr.commit_args("abc\nInjected: yes", [], major=True)
+    with pytest.raises(TypeError):
+        npm_major.rewrite_specs(PKG, {"express": "^5.0.1"})   # type: ignore[dict-item]
+    with pytest.raises(ValueError):
+        npm_major.rewrite_specs(PKG, {"express": ("dependencies", "git+https://evil")})
+    with pytest.raises(ValueError):
+        npm_major.rewrite_specs(PKG, {"express": ("scripts", "^5.0.1")})
+    with pytest.raises(TypeError):
+        npm_major.direct_section([], "express")   # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------- the label fallback (H4)
+
+_GH_LABEL_AFTER_CREATE = """#!/bin/sh
+d="$(dirname "$0")"
+echo "$@" >> "$d/gh.log"
+case "$1 $2" in
+  "label create") exit 1 ;;
+  "pr list") case "$*" in
+               *"--state closed"*) echo "[]" ;;
+               *) if [ -f "$d/open.json" ]; then cat "$d/open.json"; else echo "[]"; fi ;;
+             esac ;;
+  "pr create") echo '[{"url": "https://github.example.com/o/svc/pull/12", "isCrossRepository": false}]' > "$d/open.json"
+               if [ -f "$d/fail502" ]; then echo "HTTP 502: Bad Gateway" >&2; exit 1; fi
+               echo "could not add label: 'vulnscan-major' not found" >&2; exit 1 ;;
+  *) exit 2 ;;
+esac
+"""
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_a_pr_opened_before_its_label_failed_is_claimed_not_opened_twice(env: dict,
+                                                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-major", "open-pr"], hosts=[])
+    monkeypatch.setattr(fix, "fix_path", _pip_major)
+    assert executor.act("stage-major", str(repo), env["cfg"])["status"] == "done"
+    bindir = _gh(env, monkeypatch)
+    (bindir / "gh").write_text(_GH_LABEL_AFTER_CREATE)
+    pr = executor.act("open-pr", str(repo), env["cfg"])
+    assert pr["status"] == "done" and pr["pr"].endswith("/pull/12"), pr
+    calls = (bindir / "gh.log").read_text().splitlines()
+    assert len([c for c in calls if c.startswith("pr create ")]) == 1
+    assert calls[-1].startswith("pr list --repo github.com/o/svc --head ")   # found by its branch and claimed
+
+
+@pytest.mark.skipif(not GIT, reason="git not available")
+def test_any_other_pr_create_failure_is_not_retried_without_the_label(env: dict,
+                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _repo_with_remote(env["tmp"])
+    _install(env, ops=["stage-major", "open-pr"], hosts=[])
+    monkeypatch.setattr(fix, "fix_path", _pip_major)
+    executor.act("stage-major", str(repo), env["cfg"])
+    bindir = _gh(env, monkeypatch)
+    (bindir / "gh").write_text(_GH_LABEL_AFTER_CREATE)
+    (bindir / "fail502").write_text("")
+    pr = executor.act("open-pr", str(repo), env["cfg"])
+    assert pr["status"] == "failed" and "HTTP 502" in pr["detail"]
+    assert len([c for c in (bindir / "gh.log").read_text().splitlines() if c.startswith("pr create ")]) == 1
+
+
+def test_label_refused_matches_only_gh_label_errors() -> None:
+    assert executor_pr.label_refused("could not add label: 'vulnscan-major' not found")
+    assert executor_pr.label_refused("GraphQL: label 'vulnscan-major' not found")
+    for other in ("HTTP 502: Bad Gateway", "a pull request for branch already exists",
+                  "base branch 'main' not found", "label"):
+        assert not executor_pr.label_refused(other), other
+
+
+def test_pr_bodies_say_they_may_be_merged_automatically() -> None:
+    for major in (False, True):
+        text = executor_pr.body("plan", "why", major=major)
+        assert "never merged automatically" not in text
+        assert "may be merged automatically once every check, a test check included, passes" in text
+        assert "CI must cover" in text

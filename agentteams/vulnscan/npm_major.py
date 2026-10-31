@@ -91,7 +91,12 @@ def direct_section(manifest: dict[str, Any], name: str) -> str:
 
     Returns:
         The section name, or "".
+
+    Raises:
+        TypeError: ``manifest`` is not a dict or ``name`` not a string.
     """
+    if not isinstance(manifest, dict) or not isinstance(name, str):
+        raise TypeError("direct_section takes a dict manifest and a string name")
     for section in DEP_SECTIONS:
         deps = manifest.get(section)
         spec = deps.get(name) if isinstance(deps, dict) else None
@@ -111,9 +116,17 @@ def rewrite_specs(text: str, specs: dict[str, tuple[str, str]]) -> str:
         The new text.
 
     Raises:
-        ValueError: The text is not a JSON object, a member is not where :func:`direct_section` put it, or the
-            result does not parse to exactly the expected manifest.
+        TypeError: ``text`` is not a string or ``specs`` not a ``{str: (str, str)}`` dict.
+        ValueError: The text is not a JSON object, a member is not where :func:`direct_section` put it, a new spec is
+            not ``^X.Y.Z``, or the result does not parse to exactly the expected manifest.
     """
+    if not isinstance(text, str) or not isinstance(specs, dict) or not all(
+            isinstance(k, str) and isinstance(v, tuple) and len(v) == 2 and all(isinstance(x, str) for x in v)
+            for k, v in specs.items()):
+        raise TypeError("rewrite_specs takes a string and a {name: (section, spec)} dict of strings")
+    for name, (section, spec) in specs.items():
+        if section not in DEP_SECTIONS or not _SPEC.match(spec):
+            raise ValueError(f"{name}: only a {'/'.join(DEP_SECTIONS)} spec of the form ^X.Y.Z is written")
     expected = json.loads(text)
     if not isinstance(expected, dict):
         raise ValueError("package.json is not an object")

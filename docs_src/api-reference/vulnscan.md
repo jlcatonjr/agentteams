@@ -925,7 +925,13 @@ included, delivered as PRs that CI must pass; this op is how. It differs from `s
   re-resolves the lockfile with `npm install --package-lock-only --ignore-scripts` (same scratch copy, registry,
   `--strict-ssl` and cooldown handling as the audit fix), before `npm audit fix` runs as usual. A package only
   some other package depends on stays `major-held` ("transitive only"): its parent must move first. npm
-  workspaces stay refused. A spec that is a URL, path, git or `npm:` alias is never rewritten.
+  workspaces stay refused. A spec that is a URL, path, git or `npm:` alias is never rewritten. `npm install`
+  fails closed: it is refused (the stage fails, nothing is written) unless the tools container is active
+  (never on the host, never with `confine.subprocesses: false`), and unless the base `package.json` and lockfile
+  name only registry sources: no git, URL, `file:`, `link:` or `npm:` spec, and every lockfile entry resolved
+  over `https://` to the registry allowlist (`manifests.npm_off_registry`). If npm then reports an error or leaves
+  the lockfile unchanged, the whole stage is refused, so a raised spec is never committed beside a stale
+  lockfile. A `package.json` that cannot be read leaves every row `major-held`, saying so.
 - **`validate_diff(..., major=True)`** also accepts a `package.json` change, but only raises of existing
   `dependencies` / `devDependencies` specs to `^X.Y.Z` above the old one, with every other member unchanged
   (`npm_major.check_package_json_edit`); the lockfile's root `dependencies` / `devDependencies` may then change
@@ -940,8 +946,13 @@ included, delivered as PRs that CI must pass; this op is how. It differs from `s
   `old → new` and a `BREAKING CHANGE:` footer; the staged state and the result carry `"major": true`. `open-pr`
   titles the PR `security(deps)!: MAJOR upgrade of known-vulnerable dependencies (<digest>)`, opens its body
   saying that it is a major upgrade that may need code changes and that CI must cover it, and labels it
-  `vulnscan-major` (`executor_pr`). The label is created when missing; if it still cannot be applied the PR is
-  opened without it: a missing label never fails the PR.
+  `vulnscan-major` (`executor_pr`). The label is created when missing; if gh still reports it missing
+  (`could not add label` / `label ... not found`, `executor_pr.label_refused`) an open PR for the branch is
+  claimed (gh may have opened it before the label failed), else the PR is opened without the label: a missing
+  label never fails the PR. Any other `gh pr create` failure stands.
+
+Every executor PR body (majors and not) says it may be merged automatically once every check, a test check
+included, passes, so CI must cover the change: the operator's auto-merge job merges green `vulnscan/*` PRs.
 
 The agent requests `stage-major` only for a repository whose fix plan shows `major-held` rows and whose
 `stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix.
@@ -2077,7 +2088,9 @@ Push the staged `vulnscan/*` branch as a new ref and open the pull request; call
 - Once the pull request exists, the executor's worktree and staged state are removed; the local
   branch is kept. A second call then raises `no staged fix`.
 - The body (fix plan plus the agent's quoted rationale) passes `publish.rewrite_paths` before it is
-  written: home paths, this host's name and private IPv4 addresses are scrubbed. The title, body and
+  written: home paths, this host's name and private IPv4 addresses are scrubbed. `ExecError`, the executor's git
+  identity and its hardened git / gh environments (`gh_env`, `gh_push_env`, `gh_cwd`) live in the leaf module
+  `executor_env` and are re-exported here. The title, body and
   `gh pr create` call live in `executor_pr`; a staged `stage-major` change gets the MAJOR title, body and
   `vulnscan-major` label ([Major upgrades](#major-upgrades-stage-major)), and the result carries `major: true`.
 

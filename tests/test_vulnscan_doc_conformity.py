@@ -50,6 +50,7 @@ _DOCUMENTED_IN: dict[str, str] = {
     "registry": "## Project registry",
     "project_cli": "## Project registry",
     "executor_serve": "### `agentteams.vulnscan.executor`",
+    "executor_env": "### `agentteams.vulnscan.executor`",   # leaf: ExecError, git identity, gh environments
     "executor_pr": "### `agentteams.vulnscan.executor`",   # split from executor.py: commit and PR text
     "npm_major": "### `agentteams.vulnscan.fix`",          # stage-major's package.json raise (fix.npm_majors)
     "infra_retry": "### `agentteams.vulnscan.daily`",

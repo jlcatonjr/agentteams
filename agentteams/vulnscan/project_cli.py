@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from agentteams import launcher_lineage
-from agentteams.vulnscan import coverage, paths, project_policy, registry
+from agentteams.vulnscan import coverage, ops, paths, project_policy, registry
 from agentteams.vulnscan.report import Report
 
 COMMANDS = ("enroll", "roots", "status")
@@ -250,7 +250,7 @@ def _recorded_fixes(checkouts: list[str]) -> tuple[list[dict[str, str]], str]:
             return [], f"ledger unreadable: {again}"
     out = []
     for r in rows:
-        if r.get("kind") != "done" or r.get("op") not in ("stage-fix", "stage-major", "open-pr"):
+        if r.get("kind") != "done" or r.get("op") not in (*ops.STAGE_OPS, "open-pr"):
             continue
         target = str(r.get("target", ""))
         if not Path(target).is_absolute() or not any(coverage.within(target, c) for c in checkouts):
