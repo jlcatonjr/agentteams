@@ -81,24 +81,11 @@ def _sandbox_confinement_requested(manifest: dict[str, Any]) -> bool:
     host-feature token, as before; ``os_sandbox: off`` turns it off, ``on`` turns it on. This is
     the REQUEST gate only — platform enforceability is the separate ``linux`` guard in
     :func:`linux_sandbox_output_files`. The control-plane stubs do NOT use it
-    (:func:`_profile_confinement_requested`).
+    (``sandbox_state.legacy_os_requested``).
     """
     from agentteams.sandbox_state import os_sandbox_requested
 
     return os_sandbox_requested(manifest)
-
-
-def _profile_confinement_requested(manifest: dict[str, Any]) -> bool:
-    """Return the pre-``os_sandbox`` request test, ignoring the dedicated switch (METAPLAN R9).
-
-    A ``confined``/``exclusive`` ``privilege_profile`` OR any ``*:sandbox`` host-feature token.
-    Used only by ``control_plane_io.stubs_enabled``: a sibling confined team's launcher needs
-    the stubs whatever THIS team's switch says, so turning the OS sandbox off must never remove
-    them (Rule 12: the rewiring of :func:`_sandbox_confinement_requested` would otherwise do so).
-    """
-    from agentteams.sandbox_state import legacy_os_requested
-
-    return legacy_os_requested(manifest)
 
 
 def _read_sandbox_asset(asset_rel: str) -> str:

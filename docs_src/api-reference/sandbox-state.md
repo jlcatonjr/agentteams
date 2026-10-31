@@ -36,8 +36,10 @@ off; when on, True for `token=None`, for a token in `host_features`, or when the
 never fall below what they were before the switch existed.
 
 Turning the OS sandbox off is constraint-relaxing (Rule 15): `cli/artifacts.finalize_privilege_wiring` runs the
-P15 gate (`cli/sandbox_relaxation_gate`) whenever the switch is set or the previous render recorded a
-`sandbox_state`, and records `manifest["sandbox_state"]` for the build-log.
+P15 gate (`cli/sandbox_relaxation_gate`, engaged by `cli/os_sandbox_switch`) whenever the switch is set, the
+previous render recorded a `sandbox_state`, or the previous state had the OS sandbox on and the new one has it off
+for any reason (so `confined` -> `cooperative` over an on-disk boundary is a `sandbox-os-off:<framework>` too), and
+records `manifest["sandbox_state"]` for the build-log. A team with no record and no on-disk evidence is not engaged.
 
 ## Public surface — state and record (P15)
 
@@ -61,7 +63,9 @@ keep_tokens(state, exceptions) -> frozenset[str]
 ```
 
 `previous_sandbox_state` fails toward "was on": a malformed record yields `SandboxState.conservative()`, and
-on-disk boundary evidence can only turn a switch on.
+on-disk boundary evidence can only turn a switch on. OS evidence: the framework's boundary files, the neutral
+launcher, and for claude a live `.claude/settings.json` or an emitted `.claude/settings.hooks.example.json` whose
+`sandbox.enabled` is `true` (an example that was emitted but never merged still counts).
 
 ## See also
 

@@ -398,19 +398,14 @@ def _exclusive_read_deny_paths(manifest: dict[str, Any]) -> list[str] | None:
 def _sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is requested on this manifest.
 
-    Reads BOTH sources of truth so the emitter is self-sufficient on every code path,
-    not only the CLI generate path:
-
-    * ``"claude:sandbox" in host_features`` — the token, set from --target-host-features
-      and from privilege_profile expansion (the established gate convention, ``bridge.py``).
-    * ``privilege_profile in {confined, exclusive}`` — the source field itself. This
-      matters because ``extra_output_files`` is also invoked from ``convert.py`` and
-      ``render_pipeline.py``, which do NOT run the profile→host_features union that
-      ``cli/generate.py`` does; without this a confined manifest would silently emit no
-      sandbox there.
-
-    P00: a delegate to ``sandbox_state.os_sandbox_requested(token="claude:sandbox")``, which also reads the
-    dedicated ``os_sandbox`` switch (``off`` emits nothing; ``on`` emits under cooperative).
+    A delegate to ``sandbox_state.os_sandbox_requested(token="claude:sandbox")`` (P00), which reads the
+    effective OS-sandbox state: the dedicated ``os_sandbox`` switch (``--os-sandbox`` / the brief; ``off`` emits
+    nothing, ``on`` emits even under ``cooperative``), then the ``claude:sandbox`` host-feature token, then a
+    ``confined``/``exclusive`` ``privilege_profile``. The profile still counts on its own because
+    ``extra_output_files`` is also invoked from ``convert.py`` and ``render_pipeline.py``, which do NOT run the
+    profile->host_features union that ``cli/generate.py`` does; without it a confined manifest would silently emit
+    no sandbox there. A boundary that is on only because of ANOTHER framework's ``*:sandbox`` token is not
+    Claude's.
 
     Args:
         manifest: The team manifest.

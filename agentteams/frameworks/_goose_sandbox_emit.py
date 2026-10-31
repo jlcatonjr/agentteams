@@ -49,7 +49,7 @@ from typing import Any
 from agentteams.host_features import is_sandbox_capable
 from agentteams.frameworks._control_plane_protect import control_plane_for, runner_protect_block, seatbelt_denies
 from agentteams.frameworks._sandbox_drift import GOOSE_USER_GLOBAL_NOTE, goose_control_plane_ok, goose_off_drift
-from agentteams.frameworks._sandbox_drift import switched_off
+from agentteams.frameworks._sandbox_drift import previous_boundary_recorded, switched_off
 from agentteams.sandbox_state import effective_sandbox_state
 from agentteams.frameworks._sandbox_emit import (
     _DEFAULT_PROTECTED_READ_PATHS,
@@ -83,12 +83,11 @@ GOOSE_SANDBOX_PROFILE_PROJECT_PATH = ".goose/sandbox.sb"
 def _goose_sandbox_feature_enabled(manifest: dict[str, Any]) -> bool:
     """Return True iff workspace write-confinement is REQUESTED on this goose manifest.
 
-    Reads both sources of truth (mirrors ``_sandbox_emit._sandbox_feature_enabled``): the
-    ``goose:sandbox`` host-feature token (set from ``--target-host-features`` and from the
-    privilege_profile expansion) and the ``privilege_profile`` field itself (so a confined
-    manifest emits even on the ``convert``/``render`` paths that do not run the
-    profile→host_features union). This is the REQUEST test — platform enforceability is a
-    separate gate applied in :func:`goose_sandbox_output_files`. P00: via ``sandbox_state.os_sandbox_requested``.
+    A delegate to ``sandbox_state.os_sandbox_requested(token="goose:sandbox")`` (P00; mirrors the claude twin in
+    ``_sandbox_emit``): the effective state, so the ``os_sandbox`` switch wins (``off`` emits nothing, ``on``
+    emits under ``cooperative``), then the ``goose:sandbox`` token, then a ``confined``/``exclusive`` profile (so a
+    confined manifest emits even on the ``convert``/``render`` paths without the profile→host_features union). The
+    REQUEST test only: platform enforceability is a separate gate in :func:`goose_sandbox_output_files`.
     """
     from agentteams.sandbox_state import os_sandbox_requested
 
@@ -836,7 +835,8 @@ def verify_goose_sandbox_wiring(
     """
     state = effective_sandbox_state(manifest) if manifest is not None else None
     cfg = live_config_path or (Path.home() / ".config" / "goose" / "config.yaml")
-    if switched_off(state):  # DRIFT while the live, user-global GOOSE_SANDBOX is still on
+    recorded = previous_boundary_recorded(project_root / ".goose" / "recipes")  # S2: a profile off after a boundary
+    if switched_off(state, previous_boundary=recorded):  # DRIFT while the live, user-global GOOSE_SANDBOX is on
         return goose_off_drift(state, _live_goose_sandbox_enabled(cfg))
     requested = manifest is not None and _goose_sandbox_feature_enabled(manifest)
     plat = sys.platform

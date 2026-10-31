@@ -168,3 +168,18 @@ def test_a_switch_only_flip_names_the_switch_in_the_crash_reason():
     hook = switch["../hooks/constitutional-gate.py"]
     assert _SWITCH_CRASH_REASON in hook and _PROFILE_CRASH_REASON not in hook
     assert _PROFILE_CRASH_REASON in profile["../hooks/constitutional-gate.py"]
+
+
+@pytest.mark.parametrize("framework", _FRAMEWORKS)
+@pytest.mark.parametrize("profile", ["confined", "cooperative", "exclusive"])
+def test_no_record_and_no_evidence_records_nothing_on_any_profile_change(framework, profile, platform, tmp_path):
+    """Wave-2 S1 keeps the byte-identity carve-out exactly: with no ``sandbox_state`` recorded and no boundary on
+    disk, no profile (including a move to ``cooperative``) engages the gate or writes a record."""
+    from agentteams.cli.artifacts import finalize_privilege_wiring
+
+    brief = {**json.loads(BRIEF.read_text(encoding="utf-8")), "privilege_profile": profile}
+    manifest = analyze.build_manifest(brief, framework=framework)
+    team = tmp_path / "team"
+    (team / "references").mkdir(parents=True)
+    finalize_privilege_wiring(manifest, [], framework, tmp_path, team_dir=team)
+    assert "sandbox_state" not in manifest and "sandbox_relaxations" not in manifest

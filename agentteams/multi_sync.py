@@ -280,24 +280,30 @@ def _projected_privilege_manifest(root: Path, framework: str, privilege: dict[st
     return manifest
 
 
-def _check_projected_relaxation(root: Path, framework: str, manifest: dict[str, Any], state: Any) -> None:
-    """Check (never consume) the P15 gate for a projection that changes the OS boundary (P00 D7).
+def _check_projected_relaxation(root: Path, framework: str, manifest: dict[str, Any], state: Any,
+                                *, notice: bool = False) -> None:
+    """Check (never consume) the P15 gate for a projection that changes the OS boundary (P00 D7, wave-2 S1).
+
+    Engaged when a switch is in play or the previous state (record OR on-disk evidence) had the OS
+    sandbox on and the projected state has it off, whatever the reason
+    (``cli.os_sandbox_switch.check_projected_relaxation``). ``notice`` prints the ``SANDBOX RELAXATION``
+    lines (the sync path records no ``sandbox_state``: the next generate does).
 
     Raises:
         ValueError: The relaxation is refused (governed workspace, no signed decision or active exception).
     """
     from agentteams.cli import sandbox_relaxation_gate as gate
-    from agentteams.sandbox_state import previous_sandbox_state
+    from agentteams.cli.os_sandbox_switch import check_projected_relaxation
 
-    agents_dir = framework_agents_dir(root, framework)
-    old = previous_sandbox_state(agents_dir, root, framework)
-    relaxations = gate.plan_relaxations(
-        old, state, framework_id=framework,
-        profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"})
     try:
-        gate.authorize(agents_dir, relaxations, consume=False)
+        states = check_projected_relaxation(framework_agents_dir(root, framework), root, framework, manifest, state)
     except gate.SandboxRelaxationError as exc:
         raise ValueError(f"[{framework}] sync refused: {exc}") from exc
+    if notice and states is not None:
+        from agentteams.cli.write_root_policy import warn_sandbox_relaxation
+
+        warn_sandbox_relaxation(states[0], states[1], framework_id=framework,
+                                profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"})
 
 
 def _emit_privilege_artifacts(
@@ -315,18 +321,19 @@ def _emit_privilege_artifacts(
     P00: the projected manifest carries the brief's ``os_sandbox``; its effective state decides
     whether a boundary is projected. ``off`` projects none (but keeps the sentinel and, for a
     confined/exclusive profile, the control-plane stubs a sibling launcher needs). A governed
-    workspace refuses a sync that would drop a boundary with no active exception: the P15 gate is
-    checked with ``consume=False`` (sync never consumes a clearance).
+    workspace refuses a sync that would drop a boundary (the switch, or any on -> off over the
+    previous state, wave-2 S1) with no active exception: the P15 gate is checked with
+    ``consume=False`` (sync never consumes a clearance); ungoverned, the non-dry pass prints the notice.
 
     Raises:
         ValueError: A refused sandbox relaxation (governed workspace), or an emitter refusal.
     """
     manifest = _projected_privilege_manifest(root, framework, privilege) if privilege else None
-    from agentteams.sandbox_state import effective_sandbox_state, os_switch_set
+    from agentteams.sandbox_state import effective_sandbox_state
 
     state = effective_sandbox_state(manifest) if manifest is not None else None
-    if manifest is not None and os_switch_set(manifest):
-        _check_projected_relaxation(root, framework, manifest, state)
+    if manifest is not None:  # no privilege block projects nothing (and removes nothing): no relaxation to gate
+        _check_projected_relaxation(root, framework, manifest, state, notice=not dry_run)
     if state is None or not state.os:
         written = _write_store_sentinel(root, framework, dry_run=dry_run)
         if manifest is not None and manifest.get("privilege_profile") in {"confined", "exclusive"}:
