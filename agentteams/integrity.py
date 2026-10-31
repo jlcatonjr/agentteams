@@ -301,6 +301,9 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/governance_targets.py",     # the single shared trust-root vocabulary both paths use
     "agentteams/cli/frozen_surfaces.py",        # Rule 15: frozen-surface owned paths + unfreeze vocabulary
     "agentteams/cli/exception_registry.py",     # WS-C: the aggregate/proliferation guard + declined-terminal
+    "agentteams/cli/sandbox_effects.py",        # Rule 15/D7: the five sandbox-relaxation kinds + token vocabulary
+    "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
+    "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude
