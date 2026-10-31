@@ -21,6 +21,10 @@ Operations (v1):
   open, is refused before any fetch (:func:`agentteams.vulnscan.fix.git_config_problem`); the check is repeated
   in the new worktree, created without a checkout, before its files are checked out. Finally it commits locally. The agent cannot
   influence the content.
+- ``stage-major REPO``: ``stage-fix`` with semver-major upgrades allowed (constraint-relaxing, Rule 15: only a grant
+  naming it covers it). Requirements pins may jump a major; a direct npm dependency's ``package.json`` spec is raised
+  (:mod:`.npm_major`, the only ``package.json`` change ``validate_diff`` accepts). Its commit, PR title and label say
+  MAJOR (:mod:`.executor_pr`).
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
   removes the executor's worktree. It never merges.
@@ -55,10 +59,10 @@ from pathlib import Path
 from typing import Any
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
-from agentteams.vulnscan import executor_supersede, report_store, repo_alias, retry_guard, subproc_confine
-from agentteams.vulnscan import subproc_confine_ssh
+from agentteams.vulnscan import executor_pr, executor_supersede, npm_major, report_store, repo_alias, retry_guard
+from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.manifests import REQ_NAME, check_lock_edit, check_pin_edit
-from agentteams.vulnscan.ops import REPO_OPS   # repo-targeted ops: executor_guard applies
+from agentteams.vulnscan.ops import REPO_OPS, STAGE_OPS   # repo-targeted ops: executor_guard applies
 
 ACTION_ID = "vulnscan-remediation"           # decision-log action id a HALT would name
 REMEDIATION_COOLDOWN_DAYS = 0                # S-10's carve-out: a fix for a scanned vulnerability is never age-gated
@@ -438,17 +442,20 @@ def _refuse_filtered(wt: Path, changed: list[str]) -> None:
             raise ExecError(f"refusing change: {rel} has filter={value} (git-lfs or another filter); fix it by hand")
 
 
-def validate_diff(wt: Path, base: str) -> list[str]:
+def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
     """Check that a staged change touches only what fix.py may touch (B1, X1, M1).
 
     Tracked changes are listed with ``--no-renames`` (a rename is a deletion plus an addition, and a
     deletion is refused). Every changed or new path must be a requirements file or npm lockfile that
     is still a regular, non-executable file (never read through a symlink) with an unchanged mode.
     Content is judged byte for byte by :func:`manifests.check_pin_edit` and :func:`manifests.check_lock_edit`.
+    With ``major`` (``stage-major``) a ``package.json`` may change too (:func:`npm_major.check_package_json_edit`),
+    and its lockfile's root dependencies then only to mirror it.
 
     Args:
         wt: Worktree.
         base: Base commit.
+        major: Accept a ``stage-major`` change.
 
     Returns:
         The changed paths.
@@ -468,7 +475,7 @@ def validate_diff(wt: Path, base: str) -> list[str]:
         changed.append(rel)
     changed += [p for p in git(wt, "ls-files", "-z", "--others", "--exclude-standard").split("\0") if p]
     for rel in changed:
-        if not ALLOWED_CHANGED.search(rel):
+        if not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
             raise ExecError(f"refusing change outside dependency pins/lockfiles: {rel}")
         st = os.lstat(wt / rel)
         if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111:
@@ -479,19 +486,24 @@ def validate_diff(wt: Path, base: str) -> list[str]:
         try:
             if REQ_NAME.search(Path(rel).name):
                 check_pin_edit(rel, old, new)
+            elif npm_major.PACKAGE_JSON.search(rel):
+                npm_major.check_package_json_edit(rel, old, new)
             else:
-                check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"))
+                check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"),
+                                manifest=npm_major.changed_manifest(wt, rel, changed) if major else None)
         except ValueError as exc:
             raise ExecError(str(exc)) from exc
     return changed
 
 
-def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
+def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[str, Any]:
     """Create an executor-owned worktree, apply deterministic fixes, validate, commit locally.
 
     Args:
         repo: Repository root.
         cfg: Daily config.
+        major: ``stage-major``: semver-major upgrades allowed; refused unless the change takes one (the result,
+            and the staged state, then carry ``"major": true``).
 
     Returns:
         Result with worktree, branch, base and the fix plan markdown.
@@ -522,25 +534,26 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
             raise ExecError(f"{repo}: in the executor's worktree, {unsafe}")
         git(wt, "reset", "-q", "--hard", base)
         cooldown = REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
-        res = fix.fix_path(wt, apply=True, allow_major=False, cooldown_days=cooldown)
+        res = fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
-        changed = validate_diff(wt, base)
+        changed = validate_diff(wt, base, major=major)
         if not changed:   # an npm that failed to run must not read as "nothing fixable"
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
-                            retry_guard.zero_change_detail(wt, head, refused=bool(res.refused)))
+                            retry_guard.zero_change_detail(wt, head, refused=bool(res.refused), major=major))
         _refuse_filtered(wt, changed)   # C2: a filtered file's commit would not hold what validate_diff checked
         if res.resolved == 0:   # npm moved packages within their ranges to releases that are still affected
-            raise ExecError(f"{retry_guard.FUTILE_DETAIL}: the change resolves no advisory")
+            raise ExecError(f"{retry_guard.futile_detail(major)}: the change resolves no advisory")
+        if major and not executor_pr.major_changes(res.changes):   # never a non-major change labelled MAJOR
+            raise ExecError("stage-major staged no major upgrade: request stage-fix for this repository")
         digest = hashlib.sha256(change_diff(wt, base).encode()).hexdigest()[:10]   # names the branch
         name = f"vulnscan/{datetime.now(UTC):%Y%m%d}-{digest}"
         _release_own_branch(repo, name)   # the branch is absent from here on, or this raised
         git(wt, "checkout", "-q", "-b", name)
         branch = name   # only now is the branch this attempt's own (cleanup may delete it)
         _stage_changed(wt, base, changed)
-        git(wt, "commit", "-q", "-m", f"security(deps): fix known-vulnerable dependency versions ({digest})",
-            "-m", "Staged by the agentteams vulnscan executor (deterministic fix; lockfile/pin changes only).")
+        git(wt, "commit", "-q", *executor_pr.commit_args(digest, res.changes, major=major))
         staged = True
     except OSError as exc:
         raise ExecError(str(exc)) from exc
@@ -551,14 +564,9 @@ def stage_fix(repo: Path, cfg: dict[str, Any]) -> dict[str, Any]:
                 with contextlib.suppress(ExecError, OSError, subprocess.SubprocessError):
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
-              "changed": changed, "resolved": res.resolved, "plan": res.markdown()}
+              "changed": changed, "resolved": res.resolved, "plan": res.markdown(), **({"major": True} if major else {})}
     _write_json(staged_file(repo), result)
     return result
-
-
-def _sanitize(text: str, limit: int = 2000) -> str:
-    text = text[:limit].replace("@", "@​").replace("```", "'''")
-    return "\n".join("> " + ln for ln in text.splitlines()) or "> (none)"
 
 
 def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
@@ -587,7 +595,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     """
     staged = staged_file(repo)
     if not staged.is_file():
-        raise ExecError("no staged fix for this repo — request stage-fix first")
+        raise ExecError("no staged fix for this repo — request stage-fix (or stage-major) first")
     st = json.loads(staged.read_text(encoding="utf-8"))
     wt, branch = Path(st["worktree"]), st["branch"]
     if not branch.startswith("vulnscan/") or not wt.is_dir() or not wt.resolve().is_relative_to(
@@ -625,24 +633,13 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         return {"repo": str(repo), "branch": branch, "pr": "", "closed_unmerged": closed, "detail": "not re-opened"}
     if not remote_sha:
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
-    body = (f"Automated security fix staged by the agentteams **vulnscan executor** "
-            f"(deterministic; dependency pins and lockfiles only).\n\n{st['plan']}\n\n"
-            f"### Agent rationale (untrusted text, quoted)\n\n{_sanitize(rationale)}\n\n"
-            "Tests run in CI. This PR is never merged automatically.\n")
-    from agentteams.vulnscan import publish   # lazy: publish imports this module
-
-    body = publish.rewrite_paths(body)   # the same scrubber as published reports (home, host name, private IPs)
+    major = st.get("major") is True   # stage-major: MAJOR title, body and label (executor_pr)
     body_file = wt.parent / f"{wt.name}.pr.md"
-    body_file.write_text(body, encoding="utf-8")
-    proc = subprocess.run(["gh", "pr", "create", "--repo", target_repo, "--base", base_branch, "--head", branch,
-                           "--title", f"security(deps): fix known-vulnerable dependencies ({branch.rsplit('-', 1)[-1]})",
-                           "--body-file", str(body_file)], cwd=gh_cwd(), capture_output=True, text=True,
-                          env=gh_push_env(), timeout=300, check=False)
-    if proc.returncode:
-        raise ExecError(f"gh pr create failed: {(proc.stderr or proc.stdout).strip()[:400]}")
-    url = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+    body_file.write_text(executor_pr.body(st["plan"], rationale, major=major), encoding="utf-8")
+    url = executor_pr.create(target_repo, base_branch, branch, body_file, major=major,
+                             open_url=lambda: _open_pr_url(wt, target_repo, branch))
     _finish_open_pr(repo, wt, staged)
-    return {"repo": str(repo), "branch": branch, "pr": url}
+    return {"repo": str(repo), "branch": branch, "pr": url, **({"major": True} if major else {})}
 
 
 def gh_env() -> dict[str, str]:
@@ -924,8 +921,8 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
         ledger.append("refused", op=op, target=target, request_id=request_id, detail=str(exc)[:1000])
         return {"status": "refused", "detail": str(exc)}
     try:
-        if op == "stage-fix":
-            result = stage_fix(Path(canonical), cfg)
+        if op in STAGE_OPS:
+            result = stage_fix(Path(canonical), cfg, major=op == "stage-major")
         elif op == "open-pr":
             result = open_pr(Path(canonical), rationale)
         elif op == "close-superseded":

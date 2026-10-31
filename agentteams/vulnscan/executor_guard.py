@@ -1,4 +1,4 @@
-"""Which repositories the executor's repo operations (``stage-fix``, ``open-pr``) may never touch, or not yet.
+"""Which repositories the executor's repo operations (``stage-fix``/``stage-major``, ``open-pr``) may never touch, or not yet.
 
 Every check here only *narrows* what a grant allows; none can widen it. They run inside
 :func:`agentteams.vulnscan.executor.authorize`, before a grant is looked up.
@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import agentteams
-from agentteams.vulnscan import grant, mcp, registry, repo_alias
+from agentteams.vulnscan import grant, mcp, ops, registry, repo_alias
 
 #: Identity kinds that are paths on this machine, not an origin (never matched across clones).
 _PATH_KINDS = ("local", "file", "dir")
@@ -364,7 +364,7 @@ def refuse_plan_only(op: str, target: str, editable: re.Pattern[str]) -> None:
     Raises:
         ExecError: ``op`` is ``stage-fix`` and every manifest the scan reads there is a plan-only lockfile.
     """
-    if op != "stage-fix":
+    if op not in ops.STAGE_OPS:   # stage-major too: it edits the same files (and package.json)
         return
     from agentteams.vulnscan import manifests, project_policy   # lazy: only stage-fix walks the repository
 
@@ -399,7 +399,8 @@ def refuse_by_brief(op: str, target: str) -> None:
     """Refuse what the project's own brief does not ask for (narrowing only: a brief never widens a grant).
 
     Args:
-        op: ``stage-fix``, ``open-pr`` or ``close-superseded`` (a plan-only brief does not refuse closing).
+        op: ``stage-fix``, ``stage-major``, ``open-pr`` or ``close-superseded`` (a plan-only brief does not refuse
+            closing).
         target: Canonical repository path.
 
     Raises:

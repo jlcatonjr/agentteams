@@ -13,14 +13,16 @@ Tools:
 - ``get_fix_plans``: the deterministic fix plans, one per git repository, each headed by the
   repository alias that ``stage-fix`` takes as its target. A plan for a repository enrolled below
   ``remediate`` is headed "scan only" instead (the executor refuses ``stage-fix``/``open-pr`` there).
-- ``request``: queue ``stage-fix`` / ``open-pr`` / ``close-superseded`` / ``server-audit`` / ``server-dryrun`` on a
-  target, with a rationale.
+- ``request``: queue ``stage-fix`` / ``stage-major`` / ``open-pr`` / ``close-superseded`` / ``server-audit`` /
+  ``server-dryrun`` on a target, with a rationale. ``stage-major`` is ``stage-fix`` with semver-major upgrades
+  allowed (only a grant naming it covers it): for a repository whose plan shows ``major-held`` rows once
+  ``stage-fix`` found nothing fixable, staged on its own, never mixed with a non-major fix.
 - ``request_status`` / ``list_requests``: the executor's results. A pending request gets an instruction not to
   poll (the executor serves requests on its own schedule); after :data:`MAX_PENDING_POLLS` pending answers for
   one id, further polls of it are refused, so a polling loop cannot burn the run's token cap.
 - A repository listed in ``staged-fixes.json`` (written by the host before the run) already has a staged fix with
-  no PR: ``get_fix_plans`` lists it first and ``request`` refuses a second ``stage-fix`` for it (request
-  ``open-pr``).
+  no PR: ``get_fix_plans`` lists it first and ``request`` refuses a second ``stage-fix`` or a ``stage-major`` for it
+  (request ``open-pr``).
 - ``escalate``: report a stop condition (malicious package, compromise indicator, suspected
   injection, integrity problem). Needs no grant. The executor records it and blocks remediation for
   the scope **it** decides, and the operator is notified.
@@ -54,7 +56,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from agentteams.vulnscan import repo_alias   # stdlib-only: safe in the agent container
-from agentteams.vulnscan.ops import REPO_OPS   # stdlib-only: safe in the agent container
+from agentteams.vulnscan.ops import REPO_OPS, STAGE_OPS   # stdlib-only: safe in the agent container
 from agentteams.vulnscan.report_store import REPORT_MAX_BYTES   # one cap: tool and store agree
 
 PROTOCOL_VERSION = "2024-11-05"
@@ -91,7 +93,10 @@ SCHEMAS: dict[str, dict[str, Any]] = {
                       "inputSchema": {"type": "object", "properties": {}}},
     "request": {"description": ("Queue a remediation action for the host executor. It runs only if the "
                                 "operator's signed grant covers it. Do not wait for it: queue everything, "
-                                "then check request_status once near the end of the run."),
+                                "then check request_status once near the end of the run. stage-fix stages the "
+                                "plan's `fix` rows (never a semver-major jump); stage-major is stage-fix with "
+                                "major upgrades allowed: request it only for a repository whose plan has "
+                                "major-held rows and whose stage-fix found nothing fixable (held), on its own."),
                 "inputSchema": {"type": "object", "required": ["op", "target", "rationale"], "properties": {
                     "op": {"type": "string", "enum": list(OPS)},
                     "target": {"type": "string", "description": ("repository alias from get_fix_plans or "
@@ -168,7 +173,7 @@ class Server:
             plans = sorted(self.run_dir.glob("fixplan-*.md")) + sorted(self.run_dir.glob("fix-*.md"))
             levels = self._plan_levels()
             staged = sorted(self._staged())
-            head = ("## Already staged: request open-pr for these, not stage-fix\n\n"
+            head = ("## Already staged: request open-pr for these, not stage-fix or stage-major\n\n"
                     + "".join(f"- `{r}`\n" for r in staged) + "\n") if staged else ""
             if not plans:
                 return repo_alias.hide_paths(head + "no fix plans", self._aliases()) if head else "no fix plans"
@@ -280,9 +285,9 @@ class Server:
                 target = repo_alias.resolve(target, self._aliases())
             except KeyError:
                 raise ToolError("unknown repository alias: use one from get_fix_plans or list_findings") from None
-        if op == "stage-fix" and target.rstrip("/") in self._staged():
+        if op in STAGE_OPS and target.rstrip("/") in self._staged():
             raise ToolError("a fix is already staged for this repository and has no PR yet: request open-pr for it, "
-                            "not stage-fix")
+                            f"not {op}")
         return self._write(op, target, rationale[:4000], None)
 
     def _write(self, op: str, target: str, rationale: str, payload: dict[str, Any] | None) -> dict[str, Any]:

@@ -579,7 +579,7 @@ def _kept_local(name: str, info: dict[str, Any], before: set[str]) -> bool:
     return _local_path(path) and _entry_key(name, info) in before
 
 
-def check_lock_edit(rel: str, old: str, new: str) -> None:
+def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | None = None) -> None:
     """Refuse root-package edits and any entry that would fetch from off the registry allowlist (B1, A4, X4).
 
     Every entry must resolve to ``https://`` on :data:`REGISTRY_HOSTS`, or have no ``resolved`` and a
@@ -590,6 +590,9 @@ def check_lock_edit(rel: str, old: str, new: str) -> None:
         rel: Path for messages.
         old: Lockfile text at the base commit (``"{}"`` for a new file).
         new: Lockfile text now.
+        manifest: ``stage-major`` only: the ``package.json`` the same change edits (already checked by
+            :func:`.npm_major.check_package_json_edit`). The root package's ``dependencies`` and ``devDependencies``
+            may then change, but only to exactly that manifest's.
 
     Raises:
         ValueError: Any of these is found, or a lockfile is malformed.
@@ -597,7 +600,9 @@ def check_lock_edit(rel: str, old: str, new: str) -> None:
     root_before, before = lock_entries(rel, old)
     root_after, entries = lock_entries(rel, new)
     for key in _LOCK_ROOT_KEYS:
-        if root_before.get(key) != root_after.get(key):
+        mirrored = manifest is not None and key in ("dependencies", "devDependencies") and \
+            root_after.get(key) == manifest.get(key)
+        if root_before.get(key) != root_after.get(key) and not mirrored:
             raise ValueError(f"{rel}: root package {key} changed")
     kept = {_entry_key(name, info) for name, info in before}
     for name, info in entries:

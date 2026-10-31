@@ -14,6 +14,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fix plans and the checkout-freshness row stay named after the checkout (new *Scanned* column). New module
   `agentteams.vulnscan.scan_mirror`.
 
+### added (vulnscan: `stage-major`, automatic semver-major upgrades delivered as PRs)
+
+- **`stage-major REPO`** (new executor op, `grant.OPS_V1`, `ops.REPO_OPS`): `stage-fix` with semver-major upgrades
+  allowed (operator decision 2026-10-31: remediation is automatic, majors included, as PRs CI must pass). It is
+  **constraint-relaxing** (Rule 15): only a grant that names it covers it; existing grants, and any grant naming
+  only `stage-fix`, do not. `executor.stage_fix(repo, cfg, *, major=False)` serves both ops.
+- **pip:** a vulnerable `==` pin may move to the smallest clean release on a new major (`fix_path(...,
+  allow_major=True)`, `PinChange.major`). **npm:** a `major-held` package `package.json` lists directly has its
+  `dependencies` / `devDependencies` spec raised to `^<fixed version>` in place (`agentteams.vulnscan.npm_major`,
+  formatting kept) and the lockfile re-resolved by `npm install --package-lock-only --ignore-scripts`
+  (`fix.npm_majors`, `npm_fix(..., install=True)`; same isolation and cooldown handling as the audit fix).
+  Transitive-only majors stay held with a note; npm workspaces stay refused.
+- **`validate_diff(..., major=True)`** accepts a `package.json` change only as raises of existing direct specs to
+  `^X.Y.Z` (`npm_major.check_package_json_edit`), and the lockfile root's dependencies only mirroring it
+  (`manifests.check_lock_edit(..., manifest=)`); `stage-fix` still refuses any `package.json` change. A
+  `stage-major` change with no major upgrade in it is refused (request `stage-fix`).
+- **Commit and PR:** `security(deps)!: major upgrade of known-vulnerable dependencies (<digest>)` with each
+  package `old → new` and a `BREAKING CHANGE:` footer; the staged state records `"major": true`. `open-pr` titles
+  it `security(deps)!: MAJOR upgrade ...`, says the upgrade may need code changes and that CI must cover it, and
+  labels it `vulnscan-major` (created when missing; a label that still cannot be applied never fails the PR). The
+  PR text and `gh pr create` moved to the new `agentteams.vulnscan.executor_pr`. Branches stay
+  `vulnscan/<YYYYMMDD>-<digest>`.
+- **`retry_guard`:** the futile-retry hold is keyed on the op, so a held `stage-major` never holds `stage-fix` and
+  vice versa; `stage-major` records `nothing fixable even with a major upgrade` (`MAJOR_FUTILE_DETAIL`), never
+  "nothing fixable without a major jump". The `stage-fix` hold now points at `stage-major`.
+- **Agent guidance** (`vuln-remediation.template.md` `invariant_core` v4, `daily_remediation` v6; the run task;
+  the MCP `request` description): request `stage-major` only for a repository whose fix plan shows `major-held`
+  rows and whose `stage-fix` found nothing fixable, and always on its own, never mixed with a non-major fix. The
+  MCP server refuses a `stage-major` for a repository with a staged fix, as for `stage-fix`.
+
 ### added (vulnscan: unpinned Python requirements are checked by range, off by default)
 
 - **`agentteams.vulnscan.specifiers`** (new, stdlib): a minimal PEP 440 specifier set as version intervals

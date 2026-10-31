@@ -250,7 +250,7 @@ def _recorded_fixes(checkouts: list[str]) -> tuple[list[dict[str, str]], str]:
             return [], f"ledger unreadable: {again}"
     out = []
     for r in rows:
-        if r.get("kind") != "done" or r.get("op") not in ("stage-fix", "open-pr"):
+        if r.get("kind") != "done" or r.get("op") not in ("stage-fix", "stage-major", "open-pr"):
             continue
         target = str(r.get("target", ""))
         if not Path(target).is_absolute() or not any(coverage.within(target, c) for c in checkouts):
