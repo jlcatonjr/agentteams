@@ -50,7 +50,7 @@ GOOSE_TIMEOUT = 300
 #: Largest grant timeout a launch may carry (I5); the server enforces the same bound.
 MAX_TIMEOUT_S = 240
 #: sha256 of the shipped server; ``tests/test_wasm_mcp.py`` keeps it current.
-SHA256 = "aff8a116fafe205132bd966670664e2dddf87fc6f582fe7627ce2166dfc6caac"
+SHA256 = "b9157ae42750cd42c3c7cb80480ec8980b9b89e88061d22fc53ab5dd1f88396b"
 
 #: The bundle: ``(installed path, packaged source)``; modules first, in the server's load order.
 BUNDLE: tuple[tuple[str, str], ...] = (
@@ -456,14 +456,16 @@ def write_bundle(project_root: str | Path, files: Sequence[tuple[str, bytes]] | 
             raise ValueError(f"{rel} is not a file directly under {BIN_DIR}")
         tmp = cur / f".{os.path.basename(rel)}.{secrets.token_hex(6)}.tmp"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
+        done = False
         try:
             with os.fdopen(fd, "wb") as fh:
                 fh.write(data)
             os.replace(tmp, root / rel)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+            done = True
+        finally:
+            if not done:
+                with contextlib.suppress(OSError):
+                    os.unlink(tmp)
         written.append(rel)
     return written
 

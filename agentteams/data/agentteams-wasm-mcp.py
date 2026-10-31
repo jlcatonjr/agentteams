@@ -509,7 +509,7 @@ class Server:
         """
         try:
             runtime = {"wasmtime": resolver.pinned_version("wasmtime")}
-        except Exception:  # noqa: BLE001 - informational only
+        except (OSError, ValueError, LookupError, RuntimeError):   # informational only
             runtime = {"wasmtime": None}
         streams = {"stdout": res.stdout[:OUTPUT_CAP], "stderr": res.stderr[:OUTPUT_CAP]}
         cut = {k: res.truncated and len(v) >= OUTPUT_CAP or len(getattr(res, k)) > OUTPUT_CAP

@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 
+from agentteams import _sandbox_profiles as SP
 from agentteams import wasm_exec as W
 from agentteams import wasm_mcp as M
 from tests import _wasm_mcp_helpers as H
@@ -432,3 +433,13 @@ def test_live_server_never_writes_the_project_and_no_tmpdir_copies(live: Any) ->
     assert not [p for p in live.root.iterdir() if p.name.startswith(".agentteams-wasm-probe-")]
     assert list(live.tmpdir.iterdir()) == []
     assert not (live.root / M.BIN_DIR / "__pycache__").exists()
+
+
+@needs_dev_python
+@pytest.mark.skipif(SP.available() is None,
+                    reason="no nestable OS sandbox here (Seatbelt cannot nest inside a sandboxed session)")
+def test_live_nested_when_the_host_can_nest(live: Any) -> None:
+    """Operator spike (outside every agent session): the server nests wasmtime and reports it honestly."""
+    err, out = live.client.call({"language": "python", "source": "print(open('/project/data/f.txt').read())"})
+    assert not err, out
+    assert out["os_confinement"] == "nested" and out["read_only_mode"] == "os" and out["stdout"] == "project data\n\n"
