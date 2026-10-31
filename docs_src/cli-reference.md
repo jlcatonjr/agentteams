@@ -623,6 +623,18 @@ default) it needs an operator Ed25519-signed decision for `sandbox-os-off:<frame
 an explicit `--target-host-features <fw>:sandbox`. It never changes live settings, the launcher, or the runner's
 `confined_programs` sandbox. `--check-wiring --os-sandbox off` reports live config that still enables a sandbox.
 
+### `--wasm-sandbox {on,off}`
+
+Overrides the brief's `wasm_sandbox.enabled` for this run (WASM confinement is opt-in: off unless the brief or this
+flag turns it on). `on` uses the brief's `languages`, `limits` and per-agent grants, or the compute-only defaults
+when the block is absent, and write-protects the `.agentteams` control plane in the emitted session sandbox
+(METAPLAN R1). `off` after WASM was on is constraint-relaxing (Rule 15): in a governed workspace it needs an operator
+Ed25519-signed decision for `sandbox-wasm-off:<framework>`; elsewhere generation prints a `SANDBOX RELAXATION` notice.
+Grants, native-exec exceptions and network are never set from argv. With WASM on, generation also prints the D6
+composition notes (`wasm-without-os-sandbox` when the OS sandbox is off, `wasm-only-host` on a host with no OS
+sandbox) and records them in the team manifest's `advisories`; it never claims enforcement.
+`--check-wiring --wasm-sandbox on` checks the control-plane denies too.
+
 ### `--allow-unenforced-confinement`
 
 Permit `generate` to proceed when the OS sandbox (a `confined`/`exclusive` `privilege_profile`, or `os_sandbox: on`) is requested on a target with no OS-level sandbox to enforce it (native Windows and other hosts with no emittable boundary; Linux and macOS have the neutral launcher). Without this flag, generation **fails closed** (non-zero exit) rather than emit a boundary that silently does not take effect; with it, the request degrades to the advisory notice.

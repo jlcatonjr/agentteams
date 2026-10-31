@@ -500,6 +500,7 @@ def finalize_privilege_wiring(
     manifest: dict, explicit_tokens: list[str], framework_id: str, project_root: Path,
     *, allow_unenforced: bool = True, team_dir: Path | None = None,
     accepted_write_roots: list[str] | None = None, dry_run: bool = False, os_sandbox_cli: str | None = None,
+    wasm_sandbox_cli: str | None = None,
 ) -> None:
     """Resolve host features + advisory, then widen the sandbox by held grants (P1+P2).
 
@@ -522,14 +523,17 @@ def finalize_privilege_wiring(
             registering an exception or retiring one.
         os_sandbox_cli: ``--os-sandbox`` (operator argv), carried as the transient
             ``sandbox_state.OS_SANDBOX_CLI_KEY`` (never read from input, never persisted).
+        wasm_sandbox_cli: ``--wasm-sandbox`` (operator argv), carried as the transient
+            ``wasm_config.WASM_SANDBOX_CLI_KEY`` (P01; ``cli/wasm_sandbox_switch.py``).
 
     Raises:
         PrivilegeConfinementError: Unenforceable confinement (P1-2), an invalid ``os_sandbox``
-            value, or ``--os-sandbox off`` with an explicit ``*:sandbox`` token.
+            value, ``--os-sandbox off`` with an explicit ``*:sandbox`` token, or an invalid
+            ``wasm_sandbox`` / ``--wasm-sandbox`` value or WASM grant (P01).
         WriteRootPolicyError: A refused or unaccepted write root (follow-up #2), or
             ``write_policy: orchestrator-only`` with the OS sandbox switched off.
-        SandboxRelaxationError: Turning the OS sandbox off in a governed workspace without the
-            operator's Ed25519-signed decision (Rule 15, P15 gate).
+        SandboxRelaxationError: Turning the OS sandbox or WASM off, or widening a WASM grant, in a
+            governed workspace without the operator's Ed25519-signed decision (Rule 15, P15 gate).
         ValueError: An unknown MCP catalogue id (the catalogue expansion also adds the selected catalogue
             servers to ``manifest["mcp_servers"]``; see ``agentteams.mcp_catalog.expand``).
     """
@@ -547,6 +551,12 @@ def finalize_privilege_wiring(
             f"mcp_grants need the agents directory to be the project's {'/'.join(canonical)}; this --output would "
             "install the agentteams_runner server outside the project")
     brief_roots = write_root_policy.begin(manifest, project_root)
+    from agentteams.cli.wasm_sandbox_switch import WasmSwitchError, advise_wasm, apply_wasm_switch
+
+    try:  # P01: --wasm-sandbox and the WASM half, validated before anything reads the state (needs the root)
+        apply_wasm_switch(manifest, wasm_sandbox_cli)
+    except WasmSwitchError as exc:
+        raise PrivilegeConfinementError(str(exc)) from exc
     resolve_host_features_and_advise(
         manifest, explicit_tokens, framework_id, allow_unenforced=allow_unenforced
     )
@@ -563,6 +573,7 @@ def finalize_privilege_wiring(
         # P00 D6 (Rule 12): the brief case is refused in write_policy.resolve; this catches --os-sandbox off.
         raise write_root_policy.WriteRootPolicyError(
             'write_policy "orchestrator-only" needs the session sandbox: --os-sandbox off turns it off')
+    advise_wasm(manifest, state, framework_id)  # P01 D6: composition notices (never an enforcement claim)
     from agentteams.cli.os_sandbox_switch import engage_relaxation_gate
 
     sandbox_states = engage_relaxation_gate(manifest, state, framework_id, project_root,

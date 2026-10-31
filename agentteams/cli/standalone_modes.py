@@ -259,6 +259,10 @@ def run_standalone_modes(
 
         if getattr(args, "os_sandbox", None) is not None:
             manifest[OS_SANDBOX_CLI_KEY] = args.os_sandbox
+        from agentteams.wasm_config import WASM_SANDBOX_CLI_KEY
+
+        if getattr(args, "wasm_sandbox", None) is not None:  # P01: WASM on means the control plane is checked too
+            manifest[WASM_SANDBOX_CLI_KEY] = args.wasm_sandbox
         # The verifiers read <project>/.claude/... and <project>/.goose/...; --output names the
         # team's agents dir, so map a default agents dir back to its project root (a non-default
         # layout is passed through unchanged). Before this, the default layout always reported
@@ -270,6 +274,11 @@ def run_standalone_modes(
         wiring_root = output_dir
         if sub and output_dir.resolve().as_posix().endswith("/" + sub):
             wiring_root = output_dir.resolve().parents[sub.count("/")]
+        from agentteams.frameworks._write_roots import PROJECT_ROOT_KEY
+
+        # P01: the WASM half builds host mounts under the CLI's project root (never a brief-supplied one).
+        if not isinstance(manifest.get(PROJECT_ROOT_KEY), Path):
+            manifest[PROJECT_ROOT_KEY] = Path(wiring_root).resolve()
         if framework == "goose":
             # P1-1: goose has its own Seatbelt/GOOSE_SANDBOX wiring verifier (macOS-enforced;
             # honest exit-neutral "not enforceable here" notice on Linux/Windows).
