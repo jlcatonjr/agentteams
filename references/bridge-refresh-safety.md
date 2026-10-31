@@ -185,36 +185,33 @@ If a future bridge-refresh causes information loss, the audit MUST link back to 
 
 ---
 
-## VIII. Fleet Snapshot Commits and Pre-Commit Hooks
+## VIII. Fleet Snapshots (refs, not commits) and Hooks
 
-The fleet update (`agentteams --fleet … --yes`) creates a
-`chore(fleet): pre-update snapshot` commit in each git workspace before
-writing any changes. This snapshot is the rollback target and diff base.
+The fleet update (`agentteams --fleet … --yes`) records each dirty git workspace's agent-infra state as a
+`chore(fleet): pre-update snapshot` commit kept under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace
+hash>` before writing any changes. It is the rollback target and diff base. Since 2026-10-31 it is never
+committed onto the checked-out branch: it is built in a temporary index, so the branch, `HEAD`, the index and
+the working tree are untouched and a live checkout keeps fast-forwarding from its remote. (Before, the snapshot
+was a branch commit, and weekly runs left local-only commits that made live default branches diverge.)
 
-**Default behavior (no special flag):** the snapshot commit runs with your
-workspace's pre-commit hooks active (no `--no-verify`). If a hook blocks
-the commit, fleet prints a warning to stderr, skips the snapshot (falls back
-to HEAD as the ref), and continues with the update. The fallback means dirty
-state is not captured in a dedicated commit, so `git diff HEAD` after the
-run may be noisier than usual.
+**Hooks:** no `git commit` runs, so no commit hook runs. `update-ref` still fires a `reference-transaction`
+hook if one is installed. Because a pre-commit secret scanner no longer sees the snapshot, the fleet checks the
+files it would add or change itself (`agentteams.scan`, credential category, high severity) and records no
+snapshot for a workspace that has one: it warns, falls back to `HEAD` as the diff base, and continues.
 
-**`--fleet-allow-no-verify` (explicit opt-in):** passes `--no-verify` and
-`-c core.hooksPath=/dev/null` to the snapshot commit, bypassing all
-pre-commit hooks. Use this only when:
-- Workspace hooks are known to reject well-formed internal commits (e.g., a
-  commit-signing hook that requires a GPG key not available in the fleet
-  run's environment).
-- You have verified that no security-gate hook (PII scan, branch-protection
-  check) is active in the workspace.
+**`--fleet-allow-no-verify`** has no effect any more; it is accepted so existing invocations keep working.
 
-**Risk:** `--fleet-allow-no-verify` silently evades any security gate encoded
-in pre-commit hooks. Treat it as a privileged flag: require explicit operator
-authorization before use, and record the workspace names and justification in
-the closeout work summary.
+**What a snapshot keeps:** the agent paths as they are on disk, untracked files included (ignored files are
+not). The refs are local and never pushed, but they survive `gc` and `clone --mirror` / `push --mirror` copy
+them. List and delete them with:
 
-**Audit anchor:** any fleet run that passes `--fleet-allow-no-verify` should
-be logged. If a security incident is later traced to a snapshot commit, this
-section is the starting point for the audit trail.
+```bash
+git for-each-ref refs/agentteams/fleet-snapshots/
+git update-ref -d refs/agentteams/fleet-snapshots/<name>
+```
+
+**Rollback:** `git restore --source=<snapshot> --worktree -- <agent paths>` (each path must exist in the
+snapshot), then remove the files the update added. Never `reset --hard`.
 
 ## Privilege scoping is NOT propagated by a bridge (explicit non-goal)
 

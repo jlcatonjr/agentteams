@@ -64,8 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (data-quality-monitor 10, traffic-file-enrichment-app 17, colorado-collectors 4, …) while the real updates
   arrived upstream as merged PRs, so the branches diverged and could no longer fast-forward. The snapshot is now
   a commit built in a temporary index and kept under `refs/agentteams/fleet-snapshots/<UTC time>-<workspace
-  hash>`: the branch, `HEAD`, the index and the working tree are untouched, no hook runs, a repository with no
-  commit yet is handled, and two workspaces in one repository get two refs. Snapshot commits already on
+  hash>`: the branch, `HEAD`, the index and the working tree are untouched, no commit hook runs, a repository with no
+  commit yet is handled, and two workspaces in one repository get two refs. Since no pre-commit secret scanner
+  sees a ref, a workspace whose changed agent files hold a high-severity credential finding (`agentteams.scan`)
+  gets no snapshot (warn, fall back to `HEAD`). A post-update tree that cannot be built marks the target REVIEW. Snapshot commits already on
   branches are not rewritten; each repository cleans those up on its own.
 - **Diff analysis is tree to tree** (`fleet._worktree_tree`; `_git_diff`, `_user_editable_deletions` and
   `_classify` take the post-update tree): a file untracked before the update no longer counts as deleted, and a

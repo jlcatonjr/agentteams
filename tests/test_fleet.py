@@ -108,7 +108,7 @@ def test_discover_prunes_own_fleet_output_tree(tmp_path):
 
 def test_discover_skips_linked_worktrees(tmp_path):
     # 2026-09-08 @security HALT finding 4: a git LINKED worktree must not be
-    # discovered as its own workspace — a snapshot commit there lands on the
+    # discovered as its own workspace — an update there rewrites files on the
     # worktree's checked-out feature branch and writes the main repo's shared
     # object store. Its agent infra is already covered via the main working tree.
     main = tmp_path / "repo"
@@ -377,28 +377,30 @@ def test_a_scan_mirror_worktree_is_never_a_fleet_workspace(tmp_path):
     assert found == [repo.resolve()] and skipped == []
 
 
-def test_run_fleet_passes_allow_no_verify_to_snapshot(tmp_path, monkeypatch):
-    """The --fleet-allow-no-verify flag is forwarded from args to _git_snapshot."""
+def test_allow_no_verify_is_accepted_and_changes_nothing(tmp_path, monkeypatch):
+    """--fleet-allow-no-verify still parses into a run; the snapshot is a ref either way."""
     ws = tmp_path / "ws"
     _mk_agent(ws / ".github" / "agents", "_build-description.json", "{}")
     _mk_agent(ws / ".github" / "agents", "a.agent.md", "x\n")
     _init_repo(ws)
-    # Dirty the workspace so snapshot tries to commit.
     (ws / ".github" / "agents" / "a.agent.md").write_text("changed\n", encoding="utf-8")
-
-    captured = {}
-
-    def fake_snapshot(path, *, allow_no_verify=False):
-        captured["allow_no_verify"] = allow_no_verify
-        # Behave as if the commit succeeded.
-        head = _git(path, "rev-parse", "HEAD").stdout.strip()
-        return head, False
-
-    monkeypatch.setattr(fleet, "_git_snapshot", fake_snapshot)
+    head = _git(ws, "rev-parse", "HEAD").stdout
     monkeypatch.setattr(fleet, "_run_main", lambda argv: (0, "ok"))
-
     fleet.run_fleet(_Args(fleet=str(tmp_path), yes=True, fleet_allow_no_verify=True), parser=None)
-    assert captured.get("allow_no_verify") is True
+    assert _git(ws, "rev-parse", "HEAD").stdout == head and len(_snapshot_refs(ws)) == 1
+
+
+def test_a_credential_in_an_agent_file_is_never_kept_in_a_snapshot_ref(tmp_path, capsys):
+    """No pre-commit secret scanner sees a ref, so the fleet checks the changed files itself."""
+    repo = tmp_path / "r"
+    _mk_agent(repo / ".github" / "agents", "x.agent.md")
+    _init_repo(repo)
+    key = "AKIA" + "ABCDEFGHIJKLMNOP"
+    (repo / ".github" / "agents" / "x.agent.md").write_text(f"aws_access_key_id = {key}\n", encoding="utf-8")
+    ref, committed = fleet._git_snapshot(repo)
+    assert committed is False and ref == _git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert _snapshot_refs(repo) == []
+    assert "credential-like content in .github/agents/x.agent.md" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

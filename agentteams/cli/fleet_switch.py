@@ -52,6 +52,6 @@ def add_fleet_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "No effect (kept so existing invocations work): fleet snapshots are "
             "written to refs/agentteams/fleet-snapshots/ without git commit, so no "
-            "hook runs and nothing lands on the checked-out branch."
+            "commit hook runs and nothing lands on the checked-out branch."
         ),
     )

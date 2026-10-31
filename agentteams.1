@@ -481,7 +481,7 @@ Which infrastructures to update per workspace (default: both). `both` = copilot\
 Directory for the fleet report (default: <DIR>/.agentteams\-fleet/<run\-id>/).
 .TP
 .B \-\-fleet\-allow\-no\-verify
-No effect (kept so existing invocations work): fleet snapshots are written to refs/agentteams/fleet\-snapshots/ without git commit, so no hook runs and nothing lands on the checked\-out branch.
+No effect (kept so existing invocations work): fleet snapshots are written to refs/agentteams/fleet\-snapshots/ without git commit, so no commit hook runs and nothing lands on the checked\-out branch.
 .TP
 .B \-\-sync\-init
 Bootstrap pinned multi\-framework sync: seed the canonical hub from the \-\-pin framework, project it to every framework in the sync set, and record per\-framework baselines. Writes .agentteams/pin.json. The project root is \-\-project (default: CWD); \-\-output is refused.

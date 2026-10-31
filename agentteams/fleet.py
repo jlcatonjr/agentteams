@@ -179,9 +179,9 @@ def _is_linked_worktree(path: Path) -> bool:
     standalone main working tree.
 
     Excluded from fleet discovery (2026-09-08 @security HALT, finding 4): a
-    snapshot commit inside a linked worktree lands on whatever feature branch
-    that worktree has checked out and writes into the MAIN repo's shared object
-    store — branch contamination with no clean per-worktree rollback. A linked
+    linked worktree shares the main repository's object store and refs, so a run
+    there writes into the MAIN repository and updates the files of whatever branch
+    that worktree has checked out, with no clean per-worktree rollback. A linked
     worktree's agent infrastructure is already reachable through its main
     working tree (the same .github/agents, .claude, etc.), so skipping it loses
     no coverage.
@@ -339,8 +339,8 @@ def discover_workspaces(
         except (PermissionError, OSError):
             continue  # unreadable dir (e.g. mode 000) — skip, never fatal
         # Never treat a git LINKED worktree (or submodule) as its own workspace:
-        # its agent infra is already covered via the main working tree, and a
-        # snapshot commit here would contaminate the worktree's feature branch
+        # its agent infra is already covered via the main working tree, and an
+        # update here would rewrite files on the worktree's feature branch
         # (2026-09-08 @security HALT, finding 4). The parent itself is exempt —
         # the operator pointed the run at it deliberately.
         if dirpath != parent and _is_linked_worktree(dirpath):
@@ -719,8 +719,8 @@ def run_fleet(args, parser) -> int:
         wr.targets.append(TargetResult(
             workspace=str(wt), target="(linked-worktree)", status="SKIP",
             detail="git linked worktree — excluded from fleet update; its agent infra is "
-                   "covered via the main working tree, and a snapshot commit here would "
-                   "contaminate the worktree's checked-out branch",
+                   "covered via the main working tree, and an update here would rewrite "
+                   "files on the worktree's checked-out branch",
         ))
         results.append(wr)
         rel = wt.relative_to(parent) if wt != parent else Path(".")
@@ -814,6 +814,7 @@ def run_fleet(args, parser) -> int:
                 # working tree would show them as deleted and miss files the update created.
                 paths_now = _agent_paths(ws)
                 new_tree = _worktree_tree(ws, paths_now)
+                tree_note = "" if new_tree else "post-update tree unavailable: diffed against the working tree"
                 diff_text = _git_diff(ws, snap_ref, paths_now, new_tree)
                 cls = _classify(ws, snap_ref, diff_text, out, new_tree)
                 tr.files_changed = len(cls["files"])
@@ -859,6 +860,9 @@ def run_fleet(args, parser) -> int:
                                  + ", ".join(cls["volatile_tracked"]))
                 else:
                     tr.status = "OK"
+                if tree_note:   # the fallback diff can miss files the update created: never a silent OK
+                    tr.status = "REVIEW" if tr.status == "OK" else tr.status
+                    tr.detail = "; ".join(filter(None, (tr.detail, tree_note)))
                 switch_reason = _switch_reason(cls["signing_switch"])  # also on FAIL / fence imbalance
                 if switch_reason and switch_reason not in tr.detail:
                     tr.detail = "; ".join(filter(None, (tr.detail, switch_reason)))

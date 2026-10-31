@@ -82,7 +82,8 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None
     If the agent paths are already clean, the current HEAD is the snapshot. If dirty, a snapshot
     commit of HEAD plus the agent paths as they are on disk is written and kept under
     :data:`SNAPSHOT_REF_PREFIX`. The checked-out branch, HEAD, the index and the working tree are
-    never changed, and no hook runs.
+    never changed, and no commit hook runs (``update-ref`` still fires a ``reference-transaction``
+    hook, if one is installed). Content with a high-severity credential finding is not recorded.
 
     Args:
         ws: The workspace.
@@ -99,9 +100,17 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None
         return (head, False)
     # Are any agent paths dirty (modified/untracked)?
     status = run_git(ws, "status", "--porcelain", "--", *paths)
+    if status.returncode != 0:
+        print(f"    [WARN] snapshot: git status failed in {ws}; falling back to HEAD.", file=sys.stderr)
+        return (head, False)
     if not status.stdout.strip():
         return (head, False)
     tree = worktree_tree(ws, paths)
+    if tree and (secrets := credential_files(ws, head, tree, paths)):
+        # A ref would keep these past gc and carry them in a --mirror clone or push.
+        print(f"    [WARN] snapshot: not recorded in {ws}: credential-like content in "
+              f"{', '.join(secrets)}; falling back to HEAD. Remove it, then re-run.", file=sys.stderr)
+        return (head, False)
     parent = ("-p", head) if head else ()
     commit = run_git(ws, "commit-tree", tree, *parent, "-m", "chore(fleet): pre-update snapshot") if tree else None
     sha = commit.stdout.strip() if commit is not None and commit.returncode == 0 else ""
@@ -113,6 +122,39 @@ def git_snapshot(ws: Path, *, allow_no_verify: bool = False) -> tuple[str | None
               "falling back to HEAD (dirty state not captured).", file=sys.stderr)
         return (head, False)
     return (sha, True)
+
+
+def credential_files(ws: Path, head: str | None, tree: str, paths: list[str]) -> list[str]:
+    """Agent files the snapshot would add or change that hold a high-severity credential finding.
+
+    A pre-commit secret scanner used to see the snapshot commit; a snapshot ref runs no hook, so the
+    fleet runs :func:`agentteams.scan.scan_content` itself (credential category only) on what changed.
+
+    Args:
+        ws: The workspace.
+        head: HEAD's commit, or None in a repository with no commit.
+        tree: The snapshot tree from :func:`worktree_tree`.
+        paths: The agent paths.
+
+    Returns:
+        The paths whose new content has a high-severity credential finding.
+    """
+    from agentteams.scan import scan_content   # deferred: scan pulls in more than the fleet needs here
+
+    if head:
+        changed = run_git(ws, "diff", "--name-only", "--no-renames", "--diff-filter=AM", head, tree, "--", *paths)
+    else:
+        changed = run_git(ws, "ls-tree", "-r", "--name-only", tree, "--", *paths)
+    out = []
+    for rel in changed.stdout.splitlines():
+        blob = run_git(ws, "cat-file", "blob", f"{tree}:{rel}", text=False)
+        data = blob.stdout if blob.returncode == 0 else b""
+        if not data or len(data) > 1_000_000 or b"\0" in data[:8000]:   # unreadable, huge or binary
+            continue
+        text = data.decode("utf-8", "replace")
+        if any(f.category == "credential" and f.severity == "high" for f in scan_content(text, rel)):
+            out.append(rel)
+    return out
 
 
 def git_diff(ws: Path, ref: str, paths: list[str], new: str | None = None) -> str:
