@@ -18,6 +18,11 @@ Three parameters exist only for the WASM nesting, and each is a Rule-12 exclusio
   the guest scratch (R8, R11). The builders refuse any path outside ``.agentteams/wasm/scratch/<agent>`` or
   ``.agentteams/wasm/exec/<run-id>/scratch``, so the allow cannot widen to the rest of the control plane.
 
+It also holds the one credential-name deny list (:func:`credential_name`, :func:`credential_scan`) that
+``wasm_config`` (brief read paths), ``runner_wasm`` (runner jails) and ``wasm_exec`` (materialize, through
+``profiles=``) share, so the three can never drift (wave-3 @security S1). ``.env*`` is decided once: every segment
+starting ``.env`` is credential material except the literal ``.env.example`` / ``.env.sample`` / ``.env.template``.
+
 Stdlib only.
 """
 
@@ -44,6 +49,108 @@ _LATE_ALLOW_SHAPES = (
 
 class ConfinementError(Exception):
     """A path can't be expressed safely, or no sandbox is usable."""
+
+
+# --- the shared credential-name deny list (wave-3 @security S1/S3) -------------------------------------------------
+
+#: Directory names that hold credentials (compared lowercased).
+CREDENTIAL_PARTS = (".ssh", ".aws", ".gnupg", ".kube", ".docker")
+#: Exact credential file names.
+CREDENTIAL_NAMES = (".netrc", ".npmrc", ".pypirc", ".pgpass", ".htpasswd", ".git-credentials")
+#: Credential name prefixes: every ``.env*`` (``.env``, ``.envrc``, ``.env.local``), SSH keys (``id_*``), and
+#: ``credentials*``.
+CREDENTIAL_PREFIXES = (".env", "id_", "credentials")
+#: Credential name suffixes (keys, keystores, Terraform state and variables, ``*.env``).
+CREDENTIAL_SUFFIXES = (".key", ".pem", ".p12", ".pfx", ".jks", ".keystore", ".kdbx", ".tfstate", ".tfvars", ".env")
+#: Infixes: ``*.tfstate.*`` backups.
+CREDENTIAL_INFIXES = (".tfstate.",)
+#: The ``.env`` templates that carry no secret (the one allowance, decided here once).
+CREDENTIAL_ALLOWED = (".env.example", ".env.sample", ".env.template")
+#: Caps of :func:`credential_scan`; reaching either refuses (a tree too big to check is not granted).
+CREDENTIAL_SCAN_MAX_ENTRIES = 20_000
+CREDENTIAL_SCAN_MAX_DEPTH = 32
+
+
+def credential_name(segment: str) -> bool:
+    """Whether one path segment names credential material no WASM guest may see.
+
+    Args:
+        segment: One path component (compared lowercased, so ``.SSH`` matches on any filesystem).
+
+    Returns:
+        True when it matches the parts, names, prefixes, suffixes or infixes and is not an allowed ``.env`` template.
+
+    Raises:
+        Nothing.
+    """
+    low = segment.lower()
+    if low in CREDENTIAL_ALLOWED:
+        return False
+    return (low in CREDENTIAL_PARTS or low in CREDENTIAL_NAMES or low.startswith(CREDENTIAL_PREFIXES)
+            or low.endswith(CREDENTIAL_SUFFIXES) or any(i in low for i in CREDENTIAL_INFIXES))
+
+
+def credential_scan(top: str, *, max_entries: int = CREDENTIAL_SCAN_MAX_ENTRIES,
+                    max_depth: int = CREDENTIAL_SCAN_MAX_DEPTH) -> list[str]:
+    """Return every credential-named entry under the directory *top* (a bounded walk; symlinks are not followed).
+
+    Every entry's own name is checked, symlinks included (a link named ``.env`` is refused whatever it points to).
+
+    Args:
+        top: The real directory a grant would mount.
+        max_entries: The entry cap.
+        max_depth: The directory-depth cap (``top`` is depth 0).
+
+    Returns:
+        The matching paths relative to *top* (POSIX, sorted); empty when the tree is clean.
+
+    Raises:
+        ConfinementError: A cap is reached or a directory cannot be listed (fail closed: an unchecked tree is
+            never granted).
+    """
+    hits: list[str] = []
+    seen = 0
+    stack: list[tuple[str, int]] = [("", 0)]
+    while stack:
+        rel, depth = stack.pop()
+        try:
+            with os.scandir(os.path.join(top, rel) if rel else top) as it:
+                entries = list(it)
+        except OSError as exc:
+            raise ConfinementError(f"credential scan cannot list {rel or '.'} ({exc.strerror}); refused") from exc
+        for e in entries:
+            seen += 1
+            if seen > max_entries:
+                raise ConfinementError(f"credential scan stopped at {max_entries} entries; a mount this large "
+                                       "cannot be checked and is refused")
+            child = f"{rel}/{e.name}" if rel else e.name
+            if credential_name(e.name):
+                hits.append(child)
+            elif e.is_dir(follow_symlinks=False):
+                if depth + 1 > max_depth:
+                    raise ConfinementError(f"credential scan stopped at depth {max_depth} ({child}); refused")
+                stack.append((child, depth + 1))
+    return sorted(hits)
+
+
+def refuse_credentials(top: str, what: str) -> None:
+    """Raise unless :func:`credential_scan` finds nothing under *top*.
+
+    Args:
+        top: The directory a grant mounts.
+        what: The grant entry for the message (``/project/docs``, ``wasm_sandbox.agents.a.read_paths``).
+
+    Returns:
+        None.
+
+    Raises:
+        ConfinementError: Credential-named entries were found (the first few are named), or the scan hit a cap.
+    """
+    hits = credential_scan(top)
+    if hits:
+        more = f" and {len(hits) - 5} more" if len(hits) > 5 else ""
+        raise ConfinementError(f"{what} holds credential-named entries ({', '.join(hits[:5])}{more}); a WASM grant "
+                               "never mounts them: move them out or grant a narrower directory")
 
 
 def kind() -> str | None:

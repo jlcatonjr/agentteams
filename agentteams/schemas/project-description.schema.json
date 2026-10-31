@@ -424,12 +424,15 @@
         "native_exec_keep": {
           "type": "array",
           "uniqueItems": true,
-          "default": [],
+          "default": [
+            "git-operations",
+            "navigator"
+          ],
           "items": {
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9-]*$"
           },
-          "description": "Agents that keep native execution while WASM is on. Default empty. Each entry is constraint-relaxing (native-exec-keep): in a governed workspace it needs an operator Ed25519-signed decision. The orchestrator and the team builder are exempt by design and may not be listed."
+          "description": "Agents that keep native execution while WASM is on (every agent holding an execute-class tool is otherwise WASM-eligible and loses native exec). When the key is absent the default is navigator and git-operations (they need git), restricted to the agents in this team. An explicit list replaces the default: list navigator and git-operations too to extend it, or [] to keep none. Each entry is constraint-relaxing (native-exec-keep): in a governed workspace it needs the operator's Ed25519-signed decision once (the default entries included); elsewhere a SANDBOX RELAXATION notice is printed and the keep is recorded. The orchestrator and the team builder are exempt by design and may not be listed."
         },
         "model_substrate": {
           "type": "string",

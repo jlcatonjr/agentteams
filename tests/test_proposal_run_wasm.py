@@ -27,7 +27,7 @@ from agentteams import proposals as P
 from agentteams import runner_wasm as RW
 from agentteams import wasm_exec as W
 from tests._wasm_helpers import PROBE, dev_wasmtime
-from tests.test_sandbox_relaxation_gate import stub_ed25519  # noqa: F401  (fixture)
+from tests._sandbox_gate_helpers import _log, _row, _team
 
 PY = os.path.realpath(sys.executable)
 CORE = b"\0asm\x01\0\0\0" + b"\0" * 24
@@ -176,8 +176,8 @@ def test_load_confined_wasm_defaults_to_pinned_limits_and_no_scratch():
     ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"fuel": 0}}}, "limits"),
     ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"timeout_s": 10**9}}}, "limits"),
     ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"memory_mib": 10**6}}}, "limits"),
-    ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"fuel": True}}}, "integers"),
-    ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"cpu": 1}}}, "takes only"),
+    ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"fuel": True}}}, "must be an integer"),
+    ({"sandbox": "wasm", "wasm": {"languages": ["python"], "limits": {"cpu": 1}}}, "unknown key"),
     ({"sandbox": "wasm", "wasm": {"languages": ["python"], "net": True}}, "must be an object"),
     ({"sandbox": "wasm"}, "must be an object"),
     ({"sandbox": "vm", "exec": ["/usr/bin"]}, "sandbox must be one of"),
@@ -207,13 +207,47 @@ def test_load_confined_os_entries_unchanged():
     assert _load({"exec": ["/usr/bin"]}) == {"x": {"exec": ["/usr/bin"], "write": []}}
 
 
-def test_deny_lists_match_the_runner_mcp_server():
+def test_deny_lists_cover_the_runner_mcp_server():
+    """The runner's wasm deny (the shared credential list + VCS parts) is at least as strict as the agentteams_runner
+    server's read deny (a separate, sha-pinned copy that imports nothing), and both allow the same .env templates."""
     import ast
     src = (Path(RW.__file__).parent / "data" / "agentteams-runner-mcp.py").read_text()
     consts = {t.id: ast.literal_eval(n.value) for n in ast.parse(src).body if isinstance(n, ast.Assign)
               for t in n.targets if isinstance(t, ast.Name) and t.id.startswith("DENY_")}
-    for name in ("DENY_PARTS", "DENY_SUFFIXES", "DENY_NAMES", "DENY_PREFIXES", "DENY_INFIXES", "DENY_ALLOWED"):
-        assert getattr(RW, name) == consts[name], name
+    samples = [*consts["DENY_PARTS"], *consts["DENY_NAMES"], *(p + "x" for p in consts["DENY_PREFIXES"]),
+               *("x" + s for s in consts["DENY_SUFFIXES"]), *("a" + i + "b" for i in consts["DENY_INFIXES"])]
+    assert [n for n in samples if not RW.denied_name(n)] == []
+    assert [n for n in samples if not RW.denied_name(n.upper())] == []
+    assert RW.DENY_ALLOWED == consts["DENY_ALLOWED"]
+    assert not any(RW.denied_name(n) for n in consts["DENY_ALLOWED"])
+    assert set(consts["DENY_PARTS"]) <= set(RW.DENY_PARTS) and RW.VCS_PARTS == consts["DENY_PARTS"][:5]
+
+
+def test_argv0_and_limits_derive_from_the_single_sources():
+    """Wave-3 @code-hygiene H2/H4: argv[0] names come from wasm_guests.LANGUAGES; MiB -> bytes from wasm_config."""
+    from agentteams.wasm_config import limits_of
+    from agentteams.wasm_guests import LANGUAGES
+    assert RW.WASM_ARGV0 == {f"wasm:{lang}": lang for lang in LANGUAGES}
+    raw = {"fuel": 5, "memory_mib": 64, "timeout_s": 7}
+    lim = limits_of(raw, "p")
+    assert RW._limits("a", raw) == {"fuel": lim.fuel, "max_memory_bytes": lim.max_memory_bytes, "timeout_s": 7}
+    assert lim.max_memory_bytes == 64 << 20
+
+
+def test_build_grant_is_grant_from_tokens(tmp_path):
+    """Wave-3 @code-hygiene H2: the runner's grant is sandbox_state.grant_from_tokens of the jail's tokens."""
+    from agentteams.sandbox_state import grant_from_tokens
+    root = Path(os.path.realpath(tmp_path))
+    for d in ("tools", "data"):
+        (root / d).mkdir()
+    jail = RW.validate_entry("x", {"sandbox": "wasm", "wasm": {"languages": ["python"], "read": ["tools", "data"],
+                                                               "scratch": True}},
+                             lambda rel: None, protected_rel=C.PROTECTED_REL)
+    lim = jail["wasm"]["limits"]
+    expected = grant_from_tokens("x", ["wasm:x:read:tools", "wasm:x:read:data", "wasm:x:scratch"],
+                                 W.Limits(fuel=lim["fuel"], max_memory_bytes=lim["max_memory_bytes"], timeout_s=30),
+                                 project_root=root)
+    assert RW.build_grant(root, "x", jail, timeout_s=30) == expected
 
 
 def test_scratch_rel_matches_sandbox_state():
@@ -267,7 +301,7 @@ def test_argv_shape_asserted_no_env_no_network_no_extra_dir(project, runtime, sp
     assert argv[0] == "run" and argv[1:3] == ["-C", "cache=n"]
     assert "inherit-env=n" in argv[6] and "inherit-network=n" in argv[6] and "--env" not in argv
     dirs = [argv[i + 1].split("::")[1] for i, a in enumerate(argv) if a == "--dir"]
-    assert dirs == ["/lib", "/src", "/project/tools", "/project/data"]
+    assert dirs == ["/lib", "/src", "/project/data", "/project/tools"]   # grant_from_tokens: read mounts sorted
     assert argv[-5:] == ["-I", "-S", "-B", "/src/main.py", "data.csv"]
     assert not any(a.startswith("-S") and "inherit-network=y" in a for a in argv)
 
@@ -479,7 +513,6 @@ def test_switch_without_a_team_dir_refuses(tmp_path):
 
 
 def test_wasm_to_os_switch_calls_the_p15_gate(tmp_path, capsys):
-    from tests.test_sandbox_relaxation_gate import _team
     from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError  # noqa: F401
     governed = _team(tmp_path / "g")
     with pytest.raises(RW.RunnerWasmError, match="wasm-to-os-switch:a"):
@@ -490,10 +523,10 @@ def test_wasm_to_os_switch_calls_the_p15_gate(tmp_path, capsys):
     assert "SANDBOX RELAXATION: wasm-to-os-switch:a" in capsys.readouterr().err
 
 
-def _render(team, root, brief_confined):
+def _render(team, root, brief_confined, *, write_policy="orchestrator-only"):
     from agentteams.cli.os_sandbox_switch import engage_relaxation_gate
     from agentteams.sandbox_state import effective_sandbox_state
-    m = {"write_policy": "orchestrator-only", "privilege_profile": "confined"}
+    m = {"write_policy": write_policy, "privilege_profile": "confined"}
     engage_relaxation_gate(m, effective_sandbox_state(m), "claude", root, team_dir=team, dry_run=False,
                            brief_confined_programs=brief_confined)
     return m
@@ -506,7 +539,6 @@ def _record_build_log(team, m):
 
 def test_render_records_runner_programs_and_gates_the_switch(tmp_path, monkeypatch, stub_ed25519):
     from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError
-    from tests.test_sandbox_relaxation_gate import _log, _row, _team
     monkeypatch.setattr(C, "read_confined_file", lambda root: None)
     team = _team(tmp_path)
     m = _render(team, tmp_path, {"a": _jail(), "b": {"exec": ["/usr/bin"]}})
@@ -522,8 +554,32 @@ def test_render_records_runner_programs_and_gates_the_switch(tmp_path, monkeypat
     assert [r["authorization"] for r in m3["sandbox_relaxations"]] == ["active-exception"]
 
 
+def test_leaving_orchestrator_only_still_gates_the_switch(tmp_path, monkeypatch, stub_ed25519, capsys):
+    """Wave-3 @security S5: the runner stops serving once write_policy leaves orchestrator-only, so every recorded
+    sandbox: wasm agent has switched; the gate still sees wasm-to-os-switch (the brief's confined_programs is ignored)."""
+    from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError
+    monkeypatch.setattr(C, "read_confined_file", lambda root: None)
+    team = _team(tmp_path)
+    m = _render(team, tmp_path, {"a": _jail(), "b": {"exec": ["/usr/bin"]}})
+    _record_build_log(team, m)
+    for policy in ("default", None):
+        with pytest.raises(SandboxRelaxationError, match="wasm-to-os-switch:a"):
+            _render(team, tmp_path, {"a": _jail()}, write_policy=policy)
+    _log(team, _row("wasm-to-os-switch:a"))
+    m2 = _render(team, tmp_path, {"a": _jail()}, write_policy="default")
+    assert [r["action"] for r in m2["sandbox_relaxations"]] == ["wasm-to-os-switch:a"]
+    assert m2["sandbox_exceptions"] == {"native_exec_keep": [], "wasm_programs": [], "os_programs": ["a", "b"]}
+    _record_build_log(team, m2)   # later renders keep re-checking the standing exception
+    m3 = _render(team, tmp_path, {}, write_policy="default")
+    assert [r["authorization"] for r in m3["sandbox_relaxations"]] == ["active-exception"]
+    ungoverned = _team(tmp_path / "u", governed=False)
+    _record_build_log(ungoverned, m)
+    m4 = _render(ungoverned, tmp_path, {}, write_policy="default")
+    assert [(r["action"], r["authorization"]) for r in m4["sandbox_relaxations"]] == [
+        ("wasm-to-os-switch:a", "notice-only")]
+
+
 def test_render_without_wasm_programs_is_not_engaged(tmp_path, monkeypatch):
-    from tests.test_sandbox_relaxation_gate import _team
     monkeypatch.setattr(C, "read_confined_file", lambda root: None)
     m = _render(_team(tmp_path), tmp_path, {"b": {"exec": ["/usr/bin"]}})
     assert "sandbox_exceptions" not in m and "sandbox_state" not in m   # byte-identical build-log (Rule 12)

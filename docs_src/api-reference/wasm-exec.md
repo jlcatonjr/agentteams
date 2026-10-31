@@ -32,6 +32,9 @@ bundle can load the same file. Provisioning and nesting are injected (`resolver=
   by the nested OS profile, or by a hardened per-run snapshot copy.
 - Verified copies live in `<project>/.agentteams/wasm/exec/<run-id>/`, never TMPDIR. A run executes in place from the
   install area only when the caller passes `control_plane_protected=True`.
+- Before a run, `materialize` refuses a `/project` mount that overlaps a protected path (compared case-folded, so
+  `.GITHUB` is `.github`) or holds a credential-named entry anywhere below it: the bounded scan
+  `profiles.refuse_credentials` from the injected `_sandbox_profiles` module (the one shared credential list).
 
 ## See also
 

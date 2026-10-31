@@ -33,13 +33,15 @@ def _refused(raw, match, root=None):
 
 def test_absent_block_is_the_off_default():
     cfg = _norm(None)
-    assert cfg == wc.default_wasm_config()
+    assert cfg == wc.default_wasm_config(SLUGS)
     assert (cfg.enabled, cfg.languages, cfg.limits, dict(cfg.agents)) == (False, LANGUAGES, DEFAULT_LIMITS, {})
-    assert (cfg.native_exec, cfg.native_exec_keep, cfg.model_substrate) == ("replace", (), None)
+    # D12: the default keep (navigator, git-operations) restricted to the team (no git-operations in SLUGS).
+    assert (cfg.native_exec, cfg.native_exec_keep, cfg.model_substrate) == ("replace", ("navigator",), None)
+    assert wc.default_wasm_config().native_exec_keep == ()
 
 
 def test_empty_block_is_the_same_defaults():
-    assert _norm({}) == wc.default_wasm_config()
+    assert _norm({}) == wc.default_wasm_config(SLUGS)
 
 
 def test_languages_mirror_is_the_p04_tuple():

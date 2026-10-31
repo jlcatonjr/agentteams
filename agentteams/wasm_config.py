@@ -24,8 +24,12 @@ trust root, or resolves through a symlink.
 Rule-12 carve-outs (audit targets): (1) grants are carried while WASM is off but are inert (no mount, no token) — the
 moment WASM turns on the gate sees them as a widening over compute-only; (2) block limits differing from the defaults
 give every agent a grant entry, but limits mint no token (raising them within ``LIMIT_BOUNDS`` is not a widening);
-(3) :func:`wasm_eligible` excludes agents without ``edit``, so read-only agents that hold ``execute`` (``navigator``)
-are never offered ``run_wasm`` and keep native shell (METAPLAN §7 accepted limitation).
+(3) the default :data:`NATIVE_EXEC_KEEP_DEFAULT` (``navigator``, ``git-operations``: they need git) keeps native exec
+for two eligible agents (D12) — each entry is a ``native-exec-keep`` effect through the P15 gate (governed: the
+operator's signed decision once; ungoverned: notice + record), never a silent keep.
+
+Credential names come from the one shared list in :mod:`agentteams._sandbox_profiles` (``credential_name``), and a
+granted read directory is scanned for them (bounded) when the grant is built (wave-3 @security S1/S3).
 
 Integrity-pinned (it decides what a guest may read and write).
 """
@@ -58,15 +62,18 @@ NATIVE_EXEC_DEFAULT = "replace"
 #: Agents exempt by design from native-exec removal (P13); they may not be listed in ``native_exec_keep``.
 NATIVE_EXEC_EXEMPT: tuple[str, ...] = ("orchestrator", "team-builder")
 
+#: The ``native_exec_keep`` used when the brief block omits the key (operator decision D12): these agents need git,
+#: so they keep native exec while WASM is on. Only slugs in the team are kept. An explicit brief list replaces it
+#: (list these too to extend it; ``[]`` keeps none). Each kept agent is a ``native-exec-keep`` gate effect.
+NATIVE_EXEC_KEEP_DEFAULT: tuple[str, ...] = ("git-operations", "navigator")
+
 _TOP_KEYS = ("enabled", "languages", "limits", "agents", "native_exec", "native_exec_keep", "model_substrate")
 _GRANT_KEYS = ("read_paths", "scratch")
 _BRIEF_LIMIT_KEYS = ("fuel", "memory_mib", "timeout_s")
-_MIB = 1 << 20
+#: Bytes per MiB: the brief's ``memory_mib`` unit (shared with ``runner_wasm``'s jail limits).
+MIB = 1 << 20
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-#: Credential-looking path segments (compared lowercased): never readable by a guest, whatever their directory.
-_SECRET_SEGMENT_RE = re.compile(r"^(\.env.*|.*\.pem|.*\.key|.*\.p12|.*\.pfx|id_.*|\.ssh|\.gnupg|\.aws|\.netrc|"
-                                r"\.npmrc|\.pypirc|\.git-credentials)$")
 _SUBSTRATE_VALUES = (None, "on", "off")
 
 
@@ -142,8 +149,27 @@ class WasmConfig:
         }
 
 
-def default_wasm_config() -> WasmConfig:
+def default_keep(agent_slugs: Iterable[str]) -> tuple[str, ...]:
+    """Return :data:`NATIVE_EXEC_KEEP_DEFAULT` restricted to the team's agents (D12).
+
+    Args:
+        agent_slugs: The team's agent slugs.
+
+    Returns:
+        The sorted default keep entries that are agents of this team.
+
+    Raises:
+        Nothing.
+    """
+    slugs = frozenset(agent_slugs)
+    return tuple(sorted(s for s in NATIVE_EXEC_KEEP_DEFAULT if s in slugs))
+
+
+def default_wasm_config(agent_slugs: Iterable[str] = ()) -> WasmConfig:
     """Return the configuration of an absent block (WASM off, all languages, default limits, no grants).
+
+    Args:
+        agent_slugs: The team's agent slugs; the default ``native_exec_keep`` (D12) names those among them.
 
     Returns:
         The default :class:`WasmConfig`.
@@ -151,7 +177,8 @@ def default_wasm_config() -> WasmConfig:
     Raises:
         ImportError: :mod:`agentteams.wasm_exec` is not importable (fail closed).
     """
-    return WasmConfig(enabled=False, languages=_languages(), limits=_wasm_exec().DEFAULT_LIMITS)
+    return WasmConfig(enabled=False, languages=_languages(), limits=_wasm_exec().DEFAULT_LIMITS,
+                      native_exec_keep=default_keep(agent_slugs))
 
 
 # --- validation helpers ------------------------------------------------------------------------------------------
@@ -186,10 +213,25 @@ def _brief_limit_bounds() -> dict[str, tuple[int, int]]:
     """Return the brief's limit bounds: ``LIMIT_BOUNDS`` in whole MiB / seconds, rounded inward."""
     b = _wasm_exec().LIMIT_BOUNDS
     mem_lo, mem_hi = b["max_memory_bytes"]
-    return {"fuel": b["fuel"], "memory_mib": (-(-mem_lo // _MIB), mem_hi // _MIB), "timeout_s": b["timeout_s"]}
+    return {"fuel": b["fuel"], "memory_mib": (-(-mem_lo // MIB), mem_hi // MIB), "timeout_s": b["timeout_s"]}
 
 
-def _limits_of(raw: object, path: str) -> Limits:
+def limits_of(raw: object, path: str) -> Limits:
+    """Return the :class:`~agentteams.wasm_exec.Limits` of a brief-shaped ``limits`` object (MiB -> bytes).
+
+    The one ``{fuel, memory_mib, timeout_s}`` -> ``Limits`` conversion (``runner_wasm``'s jail limits use it too).
+
+    Args:
+        raw: ``{"fuel"?, "memory_mib"?, "timeout_s"?}`` (integers), or None for the defaults.
+        path: The key path for messages.
+
+    Returns:
+        The limits; absent keys take ``wasm_exec.DEFAULT_LIMITS``.
+
+    Raises:
+        ValueError: An unknown key, a non-integer, or a value outside the brief bounds (never clamped).
+        ImportError: :mod:`agentteams.wasm_exec` is not importable (fail closed).
+    """
     wx = _wasm_exec()
     if raw is None:
         return wx.DEFAULT_LIMITS
@@ -206,7 +248,7 @@ def _limits_of(raw: object, path: str) -> Limits:
     d = wx.DEFAULT_LIMITS
     try:
         return wx.Limits(fuel=raw.get("fuel", d.fuel),
-                         max_memory_bytes=raw["memory_mib"] * _MIB if "memory_mib" in raw else d.max_memory_bytes,
+                         max_memory_bytes=raw["memory_mib"] * MIB if "memory_mib" in raw else d.max_memory_bytes,
                          timeout_s=raw.get("timeout_s", d.timeout_s))
     except wx.WasmExecError as exc:  # defence in depth: the executor's own bounds
         raise ValueError(f"{path}: {exc}") from exc
@@ -266,7 +308,9 @@ def validate_read_path(raw: object, path: str, *, project_root: Path | None) -> 
     entry = control_plane_of(rel, platform="darwin") or _ancestor_of_control_plane(rel)  # case-folded: over-refuse
     if entry is not None:
         raise ValueError(f"{path} = {raw!r} reaches the project control plane ({entry}); refused")
-    secret = next((s for s in rel.split("/") if _SECRET_SEGMENT_RE.match(s.lower())), None)
+    from agentteams._sandbox_profiles import credential_name
+
+    secret = next((s for s in rel.split("/") if credential_name(s)), None)
     if secret is not None:
         raise ValueError(f"{path} = {raw!r} names credential material ({secret!r}); refused")
     if target_is_governance_root(rel):
@@ -321,7 +365,7 @@ def _agents_of(raw: object, path: str, agent_slugs: frozenset[str],
 
 def _keep_of(raw: object, path: str, agent_slugs: frozenset[str]) -> tuple[str, ...]:
     if raw is None:
-        return ()
+        return default_keep(agent_slugs)
     if not isinstance(raw, list):
         raise ValueError(f"{path} must be a list of agent slugs")
     for i, slug in enumerate(raw):
@@ -340,7 +384,8 @@ def normalize_wasm_sandbox(raw: object, *, agent_slugs: Iterable[str],
     Args:
         raw: The brief value; ``None`` means the block is absent (:func:`default_wasm_config`).
         agent_slugs: The team's agent slugs (the manifest's ``agent_slug_list``); ``agents`` keys and
-            ``native_exec_keep`` entries must be among them.
+            ``native_exec_keep`` entries must be among them. An absent ``native_exec_keep`` takes
+            :func:`default_keep` of them (D12).
         project_root: The project root for the read-path symlink check, or None to skip it (the effective state
             repeats it with the CLI's real root).
 
@@ -352,7 +397,7 @@ def normalize_wasm_sandbox(raw: object, *, agent_slugs: Iterable[str],
         ImportError: :mod:`agentteams.wasm_exec` is not importable (fail closed).
     """
     if raw is None:
-        return default_wasm_config()
+        return default_wasm_config(agent_slugs)
     raw = _require_dict(raw, "wasm_sandbox")
     _refuse_unknown(raw, _TOP_KEYS, "wasm_sandbox")
     slugs = frozenset(agent_slugs)
@@ -369,7 +414,7 @@ def normalize_wasm_sandbox(raw: object, *, agent_slugs: Iterable[str],
     return WasmConfig(
         enabled=enabled,
         languages=_languages_of(raw.get("languages"), "wasm_sandbox.languages"),
-        limits=_limits_of(raw.get("limits"), "wasm_sandbox.limits"),
+        limits=limits_of(raw.get("limits"), "wasm_sandbox.limits"),
         agents=_agents_of(raw.get("agents"), "wasm_sandbox.agents", slugs, project_root),
         native_exec=native_exec,
         native_exec_keep=_keep_of(raw.get("native_exec_keep"), "wasm_sandbox.native_exec_keep", slugs),
@@ -399,9 +444,9 @@ def config_from_record(rec: object, *, agent_slugs: Iterable[str]) -> WasmConfig
     raw: dict[str, Any] = {k: v for k, v in rec.items() if k != "limits" and v is not None}
     if isinstance(limits, dict) and set(limits) == {"fuel", "max_memory_bytes", "timeout_s"}:
         mem = limits["max_memory_bytes"]
-        if type(mem) is not int or mem % _MIB:
+        if type(mem) is not int or mem % MIB:
             raise ValueError("manifest wasm_sandbox.limits.max_memory_bytes must be a whole number of MiB")
-        raw["limits"] = {"fuel": limits["fuel"], "memory_mib": mem // _MIB, "timeout_s": limits["timeout_s"]}
+        raw["limits"] = {"fuel": limits["fuel"], "memory_mib": mem // MIB, "timeout_s": limits["timeout_s"]}
     elif limits is not None:
         raise ValueError("manifest wasm_sandbox.limits must be {fuel, max_memory_bytes, timeout_s}")
     cfg = normalize_wasm_sandbox(raw, agent_slugs=agent_slugs)
@@ -450,7 +495,7 @@ def manifest_wasm_config(manifest: Mapping[str, Any]) -> WasmConfig:
     """
     rec = manifest.get("wasm_sandbox")
     if rec is None:
-        return default_wasm_config()
+        return default_wasm_config(_slugs_of(manifest))
     slugs = set(_slugs_of(manifest))
     if not slugs and isinstance(rec, dict):
         # A manifest without a roster (a direct library call): analyze already checked the slugs against it.
@@ -519,7 +564,8 @@ def wasm_state_fields(manifest: Mapping[str, Any]
 
     Raises:
         ValueError: A malformed block or CLI value, a mount needed while the project root is unknown (fail
-            closed), or a read path that resolves through a symlink under the real root.
+            closed), or a read path that resolves through a symlink under the real root or holds credential-named
+            entries (or is too large to scan).
         ImportError: :mod:`agentteams.wasm_exec` is not importable (fail closed).
     """
     on, reason = wasm_switch(manifest)
@@ -544,9 +590,11 @@ def wasm_state_fields(manifest: Mapping[str, Any]
         if root is None:
             raise ValueError(f"wasm_sandbox.agents.{slug} needs host mounts but the project root is unknown; "
                              "run through the CLI (fail closed)")
-        for p in entry.read_paths:
-            check_inside_project(p, root, f"wasm_sandbox.agents.{slug}.read_paths")
-        grants[slug] = grant_from_tokens(slug, tokens, cfg.limits, project_root=root)
+        # grant_from_tokens is the one symlink + credential check (wave-3 H3/S3); this only adds the key path.
+        try:
+            grants[slug] = grant_from_tokens(slug, tokens, cfg.limits, project_root=root)
+        except ValueError as exc:
+            raise ValueError(f"wasm_sandbox.agents.{slug}.read_paths: {exc}") from exc
     return True, reason, cfg.languages, grants
 
 
@@ -566,18 +614,21 @@ def _canonical_tools(tools: object) -> frozenset[str] | None:
 def wasm_eligible(agent_meta: Mapping[str, object]) -> bool:
     """Return whether an agent is offered ``run_wasm`` (and narrowed by P13) while WASM is on (R9).
 
-    True iff the agent's tools include the execute class (canonical ``execute``, Claude ``Bash``) and it is not a
-    read-only auditor. A read-only auditor is defined by tools, not by a slug list: no ``edit`` scope. So a new auditor
-    template is covered without a code change; read-only agents that hold ``execute`` (``navigator``) are not
-    eligible and keep native shell (METAPLAN §7 accepted limitation). Pure; no I/O.
+    True iff the agent's tools include the execute class (canonical ``execute``, Claude ``Bash``), whatever else it
+    holds (operator decision D12: the earlier ``edit`` requirement is dropped). Defined by tools, not by a slug list,
+    so a new template is covered without a code change. C-3: for a shell holder, moving to compute-only ``run_wasm``
+    (P13 removes native exec) is a *narrowing* of its declared grant, not a widening, so read-only agents that hold
+    ``execute`` (``navigator``) are eligible too; the agents that need native exec keep it only through
+    ``native_exec_keep`` (default :data:`NATIVE_EXEC_KEEP_DEFAULT`, each a gated ``native-exec-keep`` effect) or the
+    fixed :data:`NATIVE_EXEC_EXEMPT`. Pure; no I/O.
 
     Args:
         agent_meta: ``{"slug": str, "tools": list[str]}`` with canonical scopes (``capability_map.
             CANONICAL_TOOL_SCOPES``); Claude tool names are mapped to canonical ones.
 
     Returns:
-        Whether the agent is eligible. Unknown or missing ``tools`` -> False (fail toward not offering a tool: C-3,
-        offering ``run_wasm`` is a grant).
+        Whether the agent is eligible. Unknown or missing ``tools`` -> False (fail toward not offering a tool: for
+        an agent without a shell, offering ``run_wasm`` would be a grant).
 
     Raises:
         Nothing.
@@ -585,7 +636,7 @@ def wasm_eligible(agent_meta: Mapping[str, object]) -> bool:
     if not isinstance(agent_meta, Mapping):
         return False
     canonical = _canonical_tools(agent_meta.get("tools"))
-    return canonical is not None and "execute" in canonical and "edit" in canonical
+    return canonical is not None and "execute" in canonical
 
 
 # --- composition notices (D6) -------------------------------------------------------------------------------------
@@ -631,7 +682,9 @@ def composition_advisories(state: Any, framework_id: str, *, platform: str | Non
 
 __all__ = [
     "NATIVE_EXEC_DEFAULT",
+    "MIB",
     "NATIVE_EXEC_EXEMPT",
+    "NATIVE_EXEC_KEEP_DEFAULT",
     "NATIVE_EXEC_VALUES",
     "WASM_SANDBOX_CLI_KEY",
     "WASM_SANDBOX_VALUES",
@@ -640,7 +693,9 @@ __all__ = [
     "check_inside_project",
     "composition_advisories",
     "config_from_record",
+    "default_keep",
     "default_wasm_config",
+    "limits_of",
     "manifest_wasm_config",
     "normalize_wasm_sandbox",
     "validate_read_path",

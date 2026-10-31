@@ -579,15 +579,15 @@ def finalize_privilege_wiring(
     advise_wasm(manifest, state, framework_id)  # P01 D6: composition notices (never an enforcement claim)
     from agentteams.cli.os_sandbox_switch import engage_relaxation_gate
 
-    sandbox_states = engage_relaxation_gate(manifest, state, framework_id, project_root,
-                                            team_dir=team_dir, dry_run=dry_run,
-                                            brief_confined_programs=brief_confined_programs)
+    gated = engage_relaxation_gate(manifest, state, framework_id, project_root, team_dir=team_dir, dry_run=dry_run,
+                                   brief_confined_programs=brief_confined_programs)
     grant_roots = apply_held_grants_to_write_roots(manifest, project_root, team_dir=team_dir)
     coordination_roots = apply_coordination_roots_to_write_roots(manifest)
     write_root_policy.enforce(
         manifest, framework_id=framework_id, brief_roots=brief_roots, grant_roots=grant_roots,
         coordination_roots=coordination_roots, accepted=accepted_write_roots,
-        confined=_confinement_active(manifest), sandbox_states=sandbox_states,
+        confined=_confinement_active(manifest), sandbox_states=gated[:2] if gated else None,
+        sandbox_exceptions=gated[2] if gated else None,
         sandbox_profile_would_emit=manifest.get("privilege_profile") in {"confined", "exclusive"},
     )
     _advise_exclusive_inbound_hardening(manifest, framework_id)

@@ -179,7 +179,7 @@ def test_composition_advisories():
 def test_advisories_are_printed_and_recorded_by_finalize(tmp_path, monkeypatch, capsys):
     from agentteams import host_features
     from agentteams.cli.artifacts import finalize_privilege_wiring
-    from tests.test_sandbox_relaxation_gate import _team
+    from tests._sandbox_gate_helpers import _team
 
     monkeypatch.setattr(host_features, "os_sandbox_mechanism_available", lambda platform=None: True)
     team = _team(tmp_path, governed=False)

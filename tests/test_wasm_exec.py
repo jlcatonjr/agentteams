@@ -39,7 +39,7 @@ def _fake_wasmtime(tmp_path: Path) -> str:
 def _profiles(kind: str | None) -> types.ModuleType:
     """A stand-in profiles module: the real builders, a fixed ``available()``."""
     mod = types.ModuleType("fake_profiles")
-    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "ConfinementError"):
+    for name in ("seatbelt_profile", "bwrap_argv", "snapshot_tree", "refuse_credentials", "ConfinementError"):
         setattr(mod, name, getattr(SP, name))
     mod.available = lambda: kind  # type: ignore[attr-defined]
     return mod

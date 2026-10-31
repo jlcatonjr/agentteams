@@ -10,7 +10,9 @@ executes) a baseAgent checkout:
   each with baseAgent's own verdict, for both profiles.
 
 Every place where agentteams deliberately differs from baseAgent is listed in :data:`INTENTIONAL_DIFFERENCES` with
-its reason, and each listed difference has a test proving it is real and that agentteams is the stricter side. A
+its reason, and each listed difference has a test proving it is real and that agentteams is the stricter side —
+except ``agentteams-mounts``, the one deliberate *widening* (per-agent ``--dir`` mounts), whose test instead proves
+it is covered by the ``wasm-grant-widen`` relaxation gate (Rule 15) and that parity mode still refuses it. A
 difference that is not listed fails. When a baseAgent checkout exists (``AGENTTEAMS_BASEAGENT_DIR``, else
 ``~/githubrepositories/baseAgent``), the fixtures are also checked against the live files; otherwise those tests skip.
 """
@@ -46,9 +48,12 @@ METADATA_ONLY_KEYS = {
 
 #: Every deliberate divergence from baseAgent, with its reason. Each key has a test below.
 INTENTIONAL_DIFFERENCES = {
-    "agentteams-mounts": "In grant mode agentteams may append '--dir host::guest' pairs derived from Grant.mounts "
-                         "(D5 per-agent widening, P02 §5.2). baseAgent never passes --dir. Parity mode "
-                         "(assert_grant_shape(argv, None)) refuses every --dir exactly as baseAgent does.",
+    "agentteams-mounts": "A deliberate WIDENING (not a stricter side): in grant mode agentteams may append "
+                         "'--dir host::guest' pairs derived from Grant.mounts (D5 per-agent widening, P02 §5.2). "
+                         "baseAgent never passes --dir. Every mount token beyond compute-only is a "
+                         "wasm-grant-widen:<framework> effect through the P15 relaxation gate (governed: the "
+                         "operator's Ed25519-signed decision). Parity mode (assert_grant_shape(argv, None)) refuses "
+                         "every --dir exactly as baseAgent does.",
     "argv-tail": "agentteams checks the whole argv and requires '--argv0 <name> -- <absolute module>'; baseAgent "
                  "checks only the six flags and passes '--argv0 <name> <module> args' with no '--' and no "
                  "absoluteness check. agentteams refuses more.",
@@ -302,7 +307,7 @@ def test_corpus_divergences_are_live() -> None:
     assert set(CORPUS_DIVERGENCES) <= names
 
 
-# --- each intentional difference is real, and agentteams is the stricter side --------------------------------------
+# --- each intentional difference is real; agentteams is the stricter side (agentteams-mounts: gated widening) -----
 
 def test_difference_agentteams_mounts(tmp_path: Path) -> None:
     """INTENTIONAL_DIFFERENCES['agentteams-mounts']."""
@@ -315,6 +320,26 @@ def test_difference_agentteams_mounts(tmp_path: Path) -> None:
     # baseAgent's six-element check would refuse the same flags with a --dir appended (corpus "+ --dir /").
     by = {(c["name"], c["profile"]): c["ba_verdict"] for c in _corpus()["cases"]}
     assert by[("+ --dir /", "module")] == "refuse" == by[("+ --dir H::.::readonly", "module")]
+
+
+def test_difference_agentteams_mounts_is_a_gated_widening(tmp_path: Path) -> None:
+    """INTENTIONAL_DIFFERENCES['agentteams-mounts']: the widening is the wasm-grant-widen gate's to clear."""
+    from agentteams.cli import sandbox_relaxation_gate as gate
+    from agentteams.cli.sandbox_effects import WASM_GRANT_WIDEN, relaxation_kind_of
+    from agentteams.sandbox_state import SandboxState, grant_from_tokens
+
+    assert relaxation_kind_of(f"{WASM_GRANT_WIDEN}:claude") == WASM_GRANT_WIDEN
+    (tmp_path / "data").mkdir()
+    grant = grant_from_tokens("a", ["wasm:a:read:data"], W.DEFAULT_LIMITS, project_root=tmp_path)
+    assert [m.guest for m in grant.mounts] == ["/project/data"]
+
+    def state(grants: dict) -> SandboxState:
+        return SandboxState(os=True, os_reason="brief", wasm=True, wasm_reason="brief", wasm_languages=("module",),
+                            wasm_grants=grants)
+
+    planned = gate.plan_relaxations(state({}), state({"a": grant}), framework_id="claude", profile_would_emit=True)
+    assert [(r.action, r.grants, r.continuing) for r in planned] == [
+        ("wasm-grant-widen:claude", ("wasm:a:read:data",), False)]
 
 
 def test_difference_argv_tail() -> None:

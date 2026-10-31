@@ -25,7 +25,7 @@ from agentteams.cli.artifacts import PrivilegeConfinementError, finalize_privile
 from agentteams.cli.os_sandbox_switch import gate_engaged
 from agentteams.cli.sandbox_relaxation_gate import SandboxRelaxationError
 from agentteams.sandbox_state import SandboxState
-from tests.test_sandbox_relaxation_gate import _log, _row, _team, stub_ed25519  # noqa: F401  (fixture)
+from tests._sandbox_gate_helpers import _log, _row, _team
 
 REPO = Path(__file__).resolve().parent.parent
 BRIEF = REPO / "examples" / "software-project" / "brief.json"
@@ -60,7 +60,8 @@ def _record(team: Path, manifest: dict) -> None:
 
 
 def _on(**agent) -> dict:
-    return {"enabled": True, **({"agents": {_AGENT: agent}} if agent else {})}
+    """WASM on with no native-exec keep (the D12 default keep has its own tests below)."""
+    return {"enabled": True, "native_exec_keep": [], **({"agents": {_AGENT: agent}} if agent else {})}
 
 
 def test_off_to_on_without_grants_is_free_and_recorded(tmp_path):
@@ -193,3 +194,64 @@ def test_no_wasm_key_does_not_engage_the_gate(tmp_path):
     team = _team(tmp_path)
     m = _wire(_manifest(None), tmp_path, team)
     assert "sandbox_state" not in m and "sandbox_relaxations" not in m
+
+
+# --- D12 / wave-3 @security S2: the default native_exec_keep reaches the gate under any write_policy -------------
+
+_KEEP = "native-exec:git-operations;native-exec:navigator"
+
+
+def _record_all(team: Path, manifest: dict) -> None:
+    (team / "references" / "build-log.json").write_text(json.dumps(
+        {k: manifest[k] for k in ("sandbox_state", "sandbox_exceptions") if k in manifest}))
+
+
+def test_default_keep_is_navigator_and_git_operations():
+    m = _manifest({"enabled": True})
+    assert m["wasm_sandbox"]["native_exec_keep"] == ["git-operations", "navigator"]
+    assert _manifest({"enabled": True, "native_exec_keep": ["navigator"]})["wasm_sandbox"]["native_exec_keep"] == [
+        "navigator"]   # an explicit list replaces the default
+
+
+def test_governed_default_keep_needs_the_operators_signed_decision_once(tmp_path, stub_ed25519):
+    team = _team(tmp_path)
+    assert _manifest({"enabled": True}).get("write_policy") != "orchestrator-only"   # S2: not runner-only
+    with pytest.raises(SandboxRelaxationError, match=f"native-exec-keep:claude.*effect_grants={_KEEP}"):
+        _wire(_manifest({"enabled": True}), tmp_path, team)
+    _log(team, _row("native-exec-keep:claude", grants=_KEEP))
+    m = _wire(_manifest({"enabled": True}), tmp_path, team)
+    assert [(r["action"], r["authorization"]) for r in m["sandbox_relaxations"]] == [
+        ("native-exec-keep:claude", "ed25519-decision")]
+    assert m["sandbox_exceptions"]["native_exec_keep"] == ["git-operations", "navigator"]
+    _record_all(team, m)
+    m = _wire(_manifest({"enabled": True}), tmp_path, team)   # signed once: later renders carry it over
+    assert [r["authorization"] for r in m["sandbox_relaxations"]] == ["active-exception"]
+
+
+def test_cli_on_without_a_block_uses_the_default_keep(tmp_path, stub_ed25519):
+    team = _team(tmp_path)
+    with pytest.raises(SandboxRelaxationError, match="native-exec-keep:claude"):
+        _wire(_manifest(None), tmp_path, team, cli="on")
+
+
+def test_explicit_keep_overrides_the_default(tmp_path, stub_ed25519):
+    team = _team(tmp_path)
+    with pytest.raises(SandboxRelaxationError, match="effect_grants=native-exec:navigator,"):
+        _wire(_manifest({"enabled": True, "native_exec_keep": ["navigator"]}), tmp_path, team)
+    m = _wire(_manifest({"enabled": True, "native_exec_keep": []}), tmp_path, team)
+    assert m["sandbox_relaxations"] == [] and "sandbox_exceptions" not in m
+
+
+def test_ungoverned_default_keep_prints_the_notice_and_records(tmp_path, capsys):
+    team = _team(tmp_path, governed=False)
+    m = _wire(_manifest({"enabled": True}), tmp_path, team)
+    assert [(r["action"], r["authorization"]) for r in m["sandbox_relaxations"]] == [
+        ("native-exec-keep:claude", "notice-only")]
+    assert m["sandbox_exceptions"]["native_exec_keep"] == ["git-operations", "navigator"]
+    assert "SANDBOX RELAXATION" in capsys.readouterr().err
+
+
+def test_wasm_off_keeps_nothing_and_records_no_exceptions(tmp_path):
+    team = _team(tmp_path)
+    m = _wire(_manifest({"enabled": False}), tmp_path, team)
+    assert m["sandbox_relaxations"] == [] and "sandbox_exceptions" not in m

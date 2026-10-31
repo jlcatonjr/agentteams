@@ -16,6 +16,12 @@ sandbox on and the new state has it off, whatever ``os_reason`` says. So ``confi
 boundary on disk is a ``sandbox-os-off:<fw>`` relaxation: refused in a governed workspace without the operator's
 Ed25519-signed decision, a ``SANDBOX RELAXATION`` notice otherwise. A team with no record and no evidence is not
 engaged and keeps a byte-identical build-log (the P00 carve-out now covers only that case).
+
+**Gate inputs** (:func:`gate_exceptions`, wave-3 @security S2/S5): the ``native_exec_keep`` set (D12: the default
+``navigator`` / ``git-operations`` unless the brief lists its own) reaches the gate whenever WASM is on, whatever
+``write_policy`` says; the runner program modes come from ``confined_programs`` under ``orchestrator-only``. Leaving
+``orchestrator-only`` after runner programs were recorded counts every recorded ``sandbox: wasm`` agent as switched
+(the runner no longer serves it), so ``wasm-to-os-switch`` is still gated.
 """
 
 from __future__ import annotations
@@ -25,7 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from agentteams.sandbox_state import SandboxState
+    from agentteams.sandbox_state import SandboxExceptions, SandboxState
 
 _CONFINING = frozenset({"confined", "exclusive"})
 
@@ -135,7 +141,7 @@ def gate_engaged(manifest: dict, state: SandboxState, previous: SandboxState | N
 def engage_relaxation_gate(
     manifest: dict, state: SandboxState, framework_id: str, project_root: Path, *, team_dir: Path | None,
     dry_run: bool, brief_confined_programs: Any = None,
-) -> tuple[SandboxState | None, SandboxState] | None:
+) -> tuple[SandboxState | None, SandboxState, tuple[SandboxExceptions | None, SandboxExceptions] | None] | None:
     """Run the P15 sandbox-relaxation gate for this render and record the state (P00 D7, wave-2 S1).
 
     Engaged per :func:`gate_engaged`. A team with no record and no on-disk boundary evidence that never used the
@@ -148,13 +154,14 @@ def engage_relaxation_gate(
         project_root: The project root (evidence files, record paths).
         team_dir: The team dir (build-log, decisions log, exception registry); the project root when None.
         dry_run: Check only: consume nothing, register and retire nothing.
-        brief_confined_programs: The brief's ``confined_programs``. Under ``write_policy: orchestrator-only`` the
-            runner programs' modes (operator file, else this) become the gate's ``SandboxExceptions``
-            (``wasm-to-os-switch``, WASM plan P12) and are recorded as ``sandbox_exceptions``; the gate is then
-            engaged too, so a switch cannot step around it.
+        brief_confined_programs: The brief's ``confined_programs``. With the ``native_exec_keep`` set they become
+            the gate's ``SandboxExceptions`` (:func:`gate_exceptions`: ``native-exec-keep``, ``wasm-to-os-switch``)
+            and are recorded as ``sandbox_exceptions``; the gate is then engaged too, so neither can step around it.
 
     Returns:
-        ``(previous, new)`` states for the ``SANDBOX RELAXATION`` notice, or None when not engaged.
+        ``(previous, new, exceptions)`` for the ``SANDBOX RELAXATION`` notice (``exceptions`` is
+        :func:`gate_exceptions`, so native-exec keeps and runner switches are noticed too), or None when not
+        engaged.
 
     Raises:
         SandboxRelaxationError: A relaxation is refused in a governed workspace (nothing consumed).
@@ -165,22 +172,8 @@ def engage_relaxation_gate(
     from agentteams.sandbox_state import has_recorded_state, previous_sandbox_exceptions, previous_sandbox_state
 
     team = Path(team_dir) if team_dir is not None else Path(project_root)
-    exceptions = None
-    if manifest.get("write_policy") == "orchestrator-only":
-        from agentteams import runner_wasm
-        from agentteams._sandbox_profiles import ConfinementError
-        from agentteams.cli.write_root_policy import WriteRootPolicyError
-
-        try:
-            new_exc = runner_wasm.runner_exceptions(runner_wasm.effective_raw(Path(project_root),
-                                                                              brief_confined_programs))
-        except ConfinementError as exc:   # an unreadable operator file: the runner refuses it too
-            raise WriteRootPolicyError(f"the operator confined_programs file: {exc}") from exc
-        previous_exc = previous_sandbox_exceptions(team)
-        # Engaged once any runner program is (or was recorded) on sandbox: wasm; a team that never used it keeps a
-        # byte-identical build-log. Once recorded, every later render re-checks the switch's standing exception.
-        if new_exc.wasm_programs or previous_exc is not None:
-            exceptions = (previous_exc, new_exc)
+    exceptions = gate_exceptions(manifest, state, project_root, previous_sandbox_exceptions(team),
+                                 brief_confined_programs)
     old = previous_sandbox_state(team, project_root, framework_id)
     if not (gate_engaged(manifest, state, old, recorded=has_recorded_state(team)) or exceptions):
         return None
@@ -192,7 +185,59 @@ def engage_relaxation_gate(
     manifest["sandbox_state"] = state.to_record(project_root=Path(project_root))
     if exceptions is not None:
         manifest["sandbox_exceptions"] = exceptions[1].to_record()
-    return old, state
+    return old, state, exceptions
+
+
+def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, previous_exc: SandboxExceptions | None,
+                    brief_confined_programs: Any = None
+                    ) -> tuple[SandboxExceptions | None, SandboxExceptions] | None:
+    """Return the gate's ``(previous, new)`` :class:`~agentteams.sandbox_state.SandboxExceptions`, or None.
+
+    * ``native_exec_keep`` (S2): the effective keep set (``wasm_config.manifest_wasm_config``; D12 default
+      ``navigator`` / ``git-operations``) whenever WASM is on, under any ``write_policy``.
+    * Runner programs: under ``write_policy: orchestrator-only``, the modes of the ``confined_programs`` the runner
+      would load (operator file, else the brief). Otherwise the runner serves nothing (S5): every previously recorded
+      ``sandbox: wasm`` or ``os`` agent is carried as ``os_programs``, so a recorded wasm agent is a fresh
+      ``wasm-to-os-switch`` and a switched one keeps being re-checked against its standing exception.
+
+    Args:
+        manifest: The team manifest (``write_policy``, ``wasm_sandbox``, ``agent_slug_list``).
+        state: The new effective state.
+        project_root: The project root (the operator ``confined_programs`` file).
+        previous_exc: :func:`~agentteams.sandbox_state.previous_sandbox_exceptions` of the team.
+        brief_confined_programs: The brief's ``confined_programs``.
+
+    Returns:
+        None when nothing is or was recorded (a team that never kept native exec or used the runner's WASM keeps a
+        byte-identical build-log), else ``(previous_exc, new)``.
+
+    Raises:
+        WriteRootPolicyError: The operator ``confined_programs`` file fails its custody checks.
+        ValueError: A malformed ``wasm_sandbox`` block.
+    """
+    from agentteams.sandbox_state import SandboxExceptions
+    from agentteams.wasm_config import manifest_wasm_config
+
+    keep = frozenset(manifest_wasm_config(manifest).native_exec_keep) if state.wasm else frozenset()
+    if manifest.get("write_policy") == "orchestrator-only":
+        from agentteams import runner_wasm
+        from agentteams._sandbox_profiles import ConfinementError
+        from agentteams.cli.write_root_policy import WriteRootPolicyError
+
+        try:
+            new_exc = runner_wasm.runner_exceptions(runner_wasm.effective_raw(Path(project_root),
+                                                                              brief_confined_programs),
+                                                    native_exec_keep=keep)
+        except ConfinementError as exc:   # an unreadable operator file: the runner refuses it too
+            raise WriteRootPolicyError(f"the operator confined_programs file: {exc}") from exc
+    else:
+        carried = previous_exc.wasm_programs | previous_exc.os_programs if previous_exc is not None else frozenset()
+        new_exc = SandboxExceptions(native_exec_keep=keep, os_programs=carried)
+    # Engaged once a keep or a runner wasm program is (or was recorded); once recorded, every later render re-checks
+    # the standing exceptions.
+    if new_exc.wasm_programs or new_exc.native_exec_keep or previous_exc is not None:
+        return previous_exc, new_exc
+    return None
 
 
 def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, manifest: dict | None,
@@ -230,4 +275,5 @@ def check_projected_relaxation(agents_dir: Path, root: Path, framework_id: str, 
     return old, state
 
 
-__all__ = ["OsSwitchError", "check_projected_relaxation", "engage_relaxation_gate", "gate_engaged", "resolve_os_switch"]
+__all__ = ["OsSwitchError", "check_projected_relaxation", "engage_relaxation_gate", "gate_engaged", "gate_exceptions",
+           "resolve_os_switch"]

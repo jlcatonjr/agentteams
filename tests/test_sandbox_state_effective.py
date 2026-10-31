@@ -122,6 +122,25 @@ def test_switch_set_and_recorded_state(tmp_path):
     assert ss.verifier_sandbox_state({"os_sandbox": "on"}, tmp_path, tmp_path).os is True
 
 
+def test_verifier_state_fails_closed_without_the_executor(tmp_path, monkeypatch):
+    """Wave-3 @code-hygiene H6: a recorded WASM grant with no importable wasm_exec raises, never "no state"."""
+    import json
+
+    (tmp_path / "references").mkdir()
+    rec = {"os": "on", "os_reason": "brief", "wasm": "on", "wasm_reason": "brief", "wasm_languages": ["python"],
+           "wasm_grants": {"a": {"tokens": ["wasm:a:scratch"],
+                                 "limits": {"fuel": 1, "max_memory_bytes": 65536, "timeout_s": 1}}},
+           "model_substrate": None}
+    (tmp_path / "references" / "build-log.json").write_text(json.dumps({"sandbox_state": rec}))
+    assert ss.verifier_sandbox_state(None, tmp_path, tmp_path).wasm_grants["a"].mounts[0].guest == "/scratch"
+
+    def missing():
+        raise ImportError("no wasm_exec")
+    monkeypatch.setattr(ss, "_wasm_exec", missing)
+    with pytest.raises(ImportError, match="no wasm_exec"):
+        ss.verifier_sandbox_state(None, tmp_path, tmp_path)
+
+
 # --- merge_profile_features (D3) ---------------------------------------------------------------
 
 
