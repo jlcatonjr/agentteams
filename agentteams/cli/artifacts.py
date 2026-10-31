@@ -557,7 +557,7 @@ def finalize_privilege_wiring(
     from agentteams.cli.wasm_sandbox_switch import WasmSwitchError, advise_wasm, apply_wasm_switch
 
     try:  # P01: --wasm-sandbox and the WASM half, validated before anything reads the state (needs the root)
-        apply_wasm_switch(manifest, wasm_sandbox_cli)
+        apply_wasm_switch(manifest, wasm_sandbox_cli, project_root=project_root)
     except WasmSwitchError as exc:
         raise PrivilegeConfinementError(str(exc)) from exc
     resolve_host_features_and_advise(

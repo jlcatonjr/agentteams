@@ -563,7 +563,11 @@ def effective_sandbox_state(manifest: dict[str, Any]) -> SandboxState:
     WASM (P01, :func:`agentteams.wasm_config.wasm_state_fields`): ``--wasm-sandbox`` > the brief's
     ``wasm_sandbox.enabled`` > off. Off: no languages, no grants (an inert grant is not a relaxation). On: the
     block's languages and a ``Grant(mounts, limits)`` per agent whose grant is not compute-only, host paths under
-    the CLI-set project root. ``model_substrate`` stays None until P20 derives it.
+    the CLI-set project root.
+
+    Model substrate (P20 D1a, :func:`agentteams.wasm_config.substrate_switch`): ``--wasm-substrate`` > the brief's
+    ``wasm_sandbox.model_substrate`` > the value of a pipeline-owned projection the CLI kept in place > None.
+    Independent of the WASM switch: neither one changes the other.
 
     Args:
         manifest: The team manifest (``privilege_profile``, ``host_features``, ``os_sandbox``, ``wasm_sandbox``,
@@ -574,16 +578,16 @@ def effective_sandbox_state(manifest: dict[str, Any]) -> SandboxState:
 
     Raises:
         ValueError: An ``os_sandbox`` value other than on/off, ``--os-sandbox off`` together with an explicit
-            ``--target-host-features <fw>:sandbox``, a malformed ``wasm_sandbox`` / ``--wasm-sandbox`` value, or a
-            WASM mount needed while the project root is unknown (fail closed).
+            ``--target-host-features <fw>:sandbox``, a malformed ``wasm_sandbox`` / ``--wasm-sandbox`` /
+            ``--wasm-substrate`` value, or a WASM mount needed while the project root is unknown (fail closed).
         ImportError: WASM is on and :mod:`agentteams.wasm_exec` is not importable (fail closed).
     """
-    from agentteams.wasm_config import wasm_state_fields
+    from agentteams.wasm_config import substrate_switch, wasm_state_fields
 
     os_on, os_reason = _os_switch(manifest)
     wasm, wasm_reason, languages, grants = wasm_state_fields(manifest)
     return SandboxState(os=os_on, os_reason=os_reason, wasm=wasm, wasm_reason=wasm_reason, wasm_languages=languages,
-                        wasm_grants=grants, model_substrate=None)
+                        wasm_grants=grants, model_substrate=substrate_switch(manifest)[0])
 
 
 def wasm_grant_for(state: SandboxState, agent: str) -> Grant | None:

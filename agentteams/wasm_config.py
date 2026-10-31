@@ -2,7 +2,7 @@
 
 METAPLAN §2.1 / R9: one validated, fail-closed place to turn WASM confinement on and shape it. The brief block
 ``wasm_sandbox`` (``enabled``, ``languages``, ``limits``, per-agent ``agents`` grants, ``native_exec``,
-``native_exec_keep``, the reserved ``model_substrate``) is normalised by :func:`normalize_wasm_sandbox` into a
+``native_exec_keep``, the projected ``model_substrate``) is normalised by :func:`normalize_wasm_sandbox` into a
 :class:`WasmConfig`; ``analyze.build_manifest`` carries :meth:`WasmConfig.to_record` as ``manifest["wasm_sandbox"]``
 only when the brief has the block (every other manifest stays byte-identical). ``--wasm-sandbox on|off`` is the
 transient :data:`WASM_SANDBOX_CLI_KEY` and beats the brief's ``enabled``.
@@ -48,8 +48,17 @@ if TYPE_CHECKING:
 #: :data:`WASM_SANDBOX_VALUES`. The team manifest is never persisted whole, so it never reaches disk.
 WASM_SANDBOX_CLI_KEY = "_wasm_sandbox_cli"
 
-#: The two values of ``--wasm-sandbox``.
+#: The two values of ``--wasm-sandbox`` and of ``--wasm-substrate`` / ``wasm_sandbox.model_substrate``.
 WASM_SANDBOX_VALUES: tuple[str, ...] = ("on", "off")
+
+#: Transient manifest key carrying ``--wasm-substrate`` (operator argv; P20 D3). Set only by ``cli/generate.py`` and
+#: the ``--check-wiring`` path, never read from input; validated by :func:`validate_wasm_substrate_cli`.
+WASM_SUBSTRATE_CLI_KEY = "_wasm_substrate_cli"
+
+#: Transient manifest key carrying the value of a pipeline-owned ``.agentteams/sandbox-state.json`` left in place
+#: when neither the brief nor argv sets the substrate switch (P20 D4: the floor is kept, never silently dropped).
+#: Set only by ``cli.wasm_sandbox_switch.apply_wasm_switch`` from disk, never from input.
+WASM_SUBSTRATE_KEPT_KEY = "_wasm_substrate_kept"
 
 #: ``native_exec`` policies (applied per provider by P13; validated and carried here).
 NATIVE_EXEC_VALUES: tuple[str, ...] = ("replace", "deny", "keep")
@@ -108,7 +117,8 @@ class WasmConfig:
         agents: Agent slug -> :class:`AgentWasmGrant` (sorted by slug; read-only mapping).
         native_exec: One of :data:`NATIVE_EXEC_VALUES`.
         native_exec_keep: Agents keeping native execution while WASM is on (sorted; default empty).
-        model_substrate: ``None`` | ``"on"`` | ``"off"`` (reserved; P20 owns its behaviour).
+        model_substrate: ``None`` | ``"on"`` | ``"off"``: the projected model-substrate switch (P20,
+            :func:`substrate_switch`); independent of ``enabled``.
     """
 
     enabled: bool
@@ -431,6 +441,57 @@ def validate_wasm_sandbox_cli(value: object) -> str | None:
     raise ValueError(f"--wasm-sandbox must be \"on\" or \"off\" (got {value!r})")
 
 
+def validate_wasm_substrate_cli(value: object) -> str | None:
+    """Return the validated ``--wasm-substrate`` value (fail closed on anything but on/off).
+
+    Args:
+        value: The argv value (or the transient manifest key).
+
+    Returns:
+        ``None`` when absent, else ``"on"`` or ``"off"``.
+
+    Raises:
+        ValueError: Any other value.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and value in WASM_SANDBOX_VALUES:
+        return value
+    raise ValueError(f"--wasm-substrate must be \"on\" or \"off\" (got {value!r})")
+
+
+def substrate_switch(manifest: Mapping[str, Any]) -> tuple[str | None, str | None]:
+    """Return ``(model_substrate, source)``: ``--wasm-substrate`` > ``wasm_sandbox.model_substrate`` > a kept file.
+
+    The model-substrate switch (P20 D1/D1a) is independent of ``wasm_sandbox.enabled``: it projects a floor to a
+    consumer that runs model code (baseAgent's battery) and never changes how agent code runs here.
+
+    Args:
+        manifest: The team manifest (the transient :data:`WASM_SUBSTRATE_CLI_KEY` /
+            :data:`WASM_SUBSTRATE_KEPT_KEY` and ``wasm_sandbox``).
+
+    Returns:
+        ``(None, None)`` when nothing sets it, else ``("on"|"off", "cli"|"brief"|"kept")``. Only ``"cli"`` and
+        ``"brief"`` are projected; ``"kept"`` holds the floor a previous render left for the gate.
+
+    Raises:
+        ValueError: A bad ``--wasm-substrate`` value, a malformed ``wasm_sandbox`` record, or a kept value other
+            than on/off.
+    """
+    cli = validate_wasm_substrate_cli(manifest.get(WASM_SUBSTRATE_CLI_KEY))
+    if cli is not None:
+        return cli, "cli"
+    brief = manifest_wasm_config(manifest).model_substrate if manifest.get("wasm_sandbox") is not None else None
+    if brief is not None:
+        return brief, "brief"
+    kept = manifest.get(WASM_SUBSTRATE_KEPT_KEY)
+    if kept is None:
+        return None, None
+    if kept not in WASM_SANDBOX_VALUES:
+        raise ValueError(f"the kept model-substrate value must be \"on\" or \"off\" (got {kept!r})")
+    return kept, "kept"
+
+
 def _slugs_of(manifest: Mapping[str, Any]) -> list[str]:
     slugs = manifest.get("agent_slug_list") or []
     return [s for s in slugs if isinstance(s, str)]
@@ -635,6 +696,8 @@ __all__ = [
     "NATIVE_EXEC_VALUES",
     "WASM_SANDBOX_CLI_KEY",
     "WASM_SANDBOX_VALUES",
+    "WASM_SUBSTRATE_CLI_KEY",
+    "WASM_SUBSTRATE_KEPT_KEY",
     "AgentWasmGrant",
     "WasmConfig",
     "check_inside_project",
@@ -643,8 +706,10 @@ __all__ = [
     "default_wasm_config",
     "manifest_wasm_config",
     "normalize_wasm_sandbox",
+    "substrate_switch",
     "validate_read_path",
     "validate_wasm_sandbox_cli",
+    "validate_wasm_substrate_cli",
     "wasm_eligible",
     "wasm_state_fields",
     "wasm_switch",

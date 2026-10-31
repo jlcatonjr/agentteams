@@ -117,8 +117,9 @@ def gate_engaged(manifest: dict, state: SandboxState, previous: SandboxState | N
             projects no WASM half: a WASM on -> off there would be an artefact of the projection, not a change).
 
     Returns:
-        True when an OS or WASM switch is in play, WASM is on, a state was recorded, or the OS sandbox (or, with
-        ``wasm``, WASM: a runtime or the ``agentteams_wasm`` server on disk) goes from on to off.
+        True when an OS or WASM switch is in play, WASM is on, a state was recorded, the OS sandbox (or, with
+        ``wasm``, WASM: a runtime or the ``agentteams_wasm`` server on disk) goes from on to off, or (P20) the
+        model-substrate switch is set or goes from on to off/unset.
 
     Raises:
         Nothing.
@@ -128,8 +129,12 @@ def gate_engaged(manifest: dict, state: SandboxState, previous: SandboxState | N
 
     os_off = previous is not None and previous.os and not state.os
     wasm_off = wasm and previous is not None and previous.wasm and not state.wasm
+    # P20: a set model-substrate switch engages the full render (so its state is recorded); an on -> off/unset change
+    # engages both paths, even with no record (the projected file alone is the evidence).
+    substrate = (wasm and state.model_substrate is not None) or (
+        previous is not None and previous.model_substrate == "on" and state.model_substrate != "on")
     switch = os_switch_set(manifest) or (wasm and wasm_switch_set(manifest))
-    return switch or state.wasm or recorded or os_off or wasm_off
+    return switch or state.wasm or recorded or os_off or wasm_off or substrate
 
 
 def engage_relaxation_gate(
