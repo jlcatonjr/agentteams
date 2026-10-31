@@ -196,6 +196,45 @@ that still enables a sandbox. Never touches live settings or the runner's `confi
 
 ---
 
+### `wasm_sandbox`
+
+**Type:** object · **Default:** absent (WASM confinement off)
+**Purpose:** Opt-in WASM confinement of agent code execution. Agents run prebuilt `.wasm` modules, Python and
+JavaScript inside a pinned wasmtime grant: stdio only, no preopened directory, no environment, no network, with
+fuel / memory / timeout limits. When an OS sandbox is available the host process still runs inside it.
+
+```json
+"wasm_sandbox": {
+  "enabled": true,
+  "languages": ["module", "python"],
+  "limits": {"fuel": 10000000000, "memory_mib": 64, "timeout_s": 120},
+  "agents": {"primary-producer": {"read_paths": ["docs", "src"], "scratch": true}},
+  "native_exec": "replace",
+  "native_exec_keep": []
+}
+```
+
+- `enabled` (boolean, default `false`); `--wasm-sandbox on|off` overrides it for one run.
+- `languages`: a non-empty subset of `module`, `python`, `javascript` (default: all three).
+- `limits`: `fuel` 1..10^15, `memory_mib` 1..4096, `timeout_s` 1..3600. Out-of-range values are refused, never clamped.
+- `agents`: per-agent widening beyond compute-only. `read_paths` are project-relative and mounted read-only at
+  `/project/<path>`; `scratch: true` gives one private writable `/scratch` at `.agentteams/wasm/scratch/<agent>/`
+  (agentteams picks the location). Read paths may not be absolute or `~`, contain `..`, name the whole project, reach
+  the control plane (`.git`, `.agentteams`, `.claude`, `.goose`, `.codex`, `.grok`, `.github/agents`,
+  `.github/hooks`, `sandbox`, or an ancestor of one), credential material (`.env*`, `*.pem`, `*.key`, `id_*`, ...), a
+  governance / trust root, or anything that resolves through a symlink. There is no network key.
+- `native_exec`: `replace` (default), `deny` or `keep`; `native_exec_keep`: agents that keep native execution while
+  WASM is on (default empty; the orchestrator and the team builder are exempt by design and may not be listed).
+- `model_substrate`: reserved (`on` / `off`) for the model-substrate projection.
+
+Every unknown key, wrong type or unknown agent slug refuses the render, naming the key path. Widening a grant and
+keeping native execution are constraint-relaxing (`wasm-grant-widen:<framework>`, `native-exec-keep`), and so is
+turning WASM off after it was on (`sandbox-wasm-off:<framework>`): in a governed workspace each needs an operator
+Ed25519-signed decision; elsewhere generation prints a `SANDBOX RELAXATION` notice. Grants are carried but inert while
+WASM is off. See [`wasm_config`](api-reference/wasm-config.md).
+
+---
+
 ### `write_policy`
 
 **Type:** `"default"` or `"orchestrator-only"` · **Default:** absent (off)

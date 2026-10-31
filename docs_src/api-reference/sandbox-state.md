@@ -2,8 +2,8 @@
 
 The effective sandbox state of a render, its build-log record, and the previous state (WASM-sandbox program,
 METAPLAN §2.1). Every consumer that asks "is an OS boundary emitted?" reads this module, never
-`privilege_profile` directly. P15 owns the dataclass and the record; P00 derives the OS half; P01 extends it
-for WASM (until then the WASM fields stay at their off defaults). The fuller guide is written by P18.
+`privilege_profile` directly. P15 owns the dataclass and the record; P00 derives the OS half; P01 derives the
+WASM half through [`wasm_config`](wasm-config.md). The fuller guide is written by P18.
 
 ## Public surface — the OS switch (P00)
 
@@ -14,6 +14,7 @@ EXPLICIT_SANDBOX_TOKENS_KEY = "_explicit_sandbox_tokens"  # transient: explicit 
 
 validate_os_sandbox(value: object) -> str | None
 effective_sandbox_state(manifest: dict) -> SandboxState
+os_switch_state(manifest: dict) -> tuple[bool, str]     # the OS half only (no WASM grant, no project root)
 os_sandbox_requested(manifest: dict, token: str | None = None) -> bool
 legacy_os_requested(manifest: dict) -> bool
 os_switch_set(manifest: dict) -> bool
@@ -40,6 +41,20 @@ P15 gate (`cli/sandbox_relaxation_gate`, engaged by `cli/os_sandbox_switch`) whe
 previous render recorded a `sandbox_state`, or the previous state had the OS sandbox on and the new one has it off
 for any reason (so `confined` -> `cooperative` over an on-disk boundary is a `sandbox-os-off:<framework>` too), and
 records `manifest["sandbox_state"]` for the build-log. A team with no record and no on-disk evidence is not engaged.
+
+## Public surface — the WASM half (P01)
+
+```python
+wasm_grant_for(state: SandboxState, agent: str) -> Grant | None
+wasm_eligible(agent_meta: Mapping[str, object]) -> bool   # delegates to wasm_config.wasm_eligible
+```
+
+`effective_sandbox_state` fills `wasm`, `wasm_reason` (`cli` | `brief` | `default-off`), `wasm_languages` and
+`wasm_grants` from `wasm_config.wasm_state_fields`: `--wasm-sandbox` beats the brief's `wasm_sandbox.enabled`. Off:
+no languages and no grants. On: a `Grant(mounts, limits)` per agent whose grant is not compute-only, its host paths
+under the CLI-set project root (a mount with no known root raises `ValueError`). `wasm_grant_for` returns `None` iff
+WASM is off, else the agent's grant or `wasm_exec.COMPUTE_ONLY`. The gate also engages when the brief block or
+`--wasm-sandbox` is present, and when WASM evidence on disk meets a WASM-off render (`sandbox-wasm-off:<framework>`).
 
 ## Public surface — state and record (P15)
 
@@ -71,3 +86,4 @@ launcher, and for claude a live `.claude/settings.json` or an emitted `.claude/s
 
 - [`host_features`](host-features.md) — `merge_profile_features(..., os_sandbox=)`.
 - [`--os-sandbox`](../cli-reference.md) and the brief key `os_sandbox` (`DESCRIPTION-FORMAT.md`).
+- [`wasm_config`](wasm-config.md) — the brief key `wasm_sandbox` and `--wasm-sandbox`.
