@@ -93,6 +93,9 @@ def write_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None) ->
 
     Returns:
         The entries, in emission order.
+
+    Raises:
+        Nothing.
     """
     out: tuple[str, ...] = ()
     if protect_ledger or control_plane is not None:
@@ -116,6 +119,9 @@ def permission_rules(protect_ledger: bool, control_plane: tuple[str, ...] | None
 
     Returns:
         The rules, in emission order (unchanged order under ``protect_ledger`` alone).
+
+    Raises:
+        Nothing.
     """
     rules: list[str] = []
     if protect_ledger or control_plane is not None:
@@ -139,6 +145,9 @@ def seatbelt_denies(protect_ledger: bool, control_plane: tuple[str, ...] | None)
 
     Returns:
         The paths, in emission order (unchanged order under ``protect_ledger`` alone).
+
+    Raises:
+        Nothing.
     """
     if not (protect_ledger or control_plane is not None):
         return ()
@@ -158,6 +167,9 @@ def runner_protect_block(control_plane: tuple[str, ...] | None, root_var: str) -
 
     Returns:
         ``("", "")`` when off.
+
+    Raises:
+        Nothing.
     """
     if control_plane is None:
         return "", ""
