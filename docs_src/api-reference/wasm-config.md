@@ -28,6 +28,10 @@ normalised block as `manifest["wasm_sandbox"]` only when the brief has it, so ev
 - `composition_advisories(state, framework_id, *, platform=None, mechanism=None)`: the D6 notes
   `wasm-without-os-sandbox` and `wasm-only-host`.
 - `NATIVE_EXEC_VALUES`, `NATIVE_EXEC_DEFAULT`, `NATIVE_EXEC_EXEMPT` (`orchestrator`, `team-builder`).
+- `WASM_SUBSTRATE_CLI_KEY = "_wasm_substrate_cli"`, `WASM_SUBSTRATE_KEPT_KEY = "_wasm_substrate_kept"` (transient,
+  never from input), `validate_wasm_substrate_cli(value)`, and `substrate_switch(manifest) -> (value, source)`:
+  `--wasm-substrate` > `wasm_sandbox.model_substrate` > a kept projection file > `(None, None)` (P20; see
+  [`sandbox_projection`](sandbox-projection.md)).
 
 ## Notes
 

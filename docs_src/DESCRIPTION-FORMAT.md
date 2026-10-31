@@ -225,7 +225,13 @@ fuel / memory / timeout limits. When an OS sandbox is available the host process
   governance / trust root, or anything that resolves through a symlink. There is no network key.
 - `native_exec`: `replace` (default), `deny` or `keep`; `native_exec_keep`: agents that keep native execution while
   WASM is on (default empty; the orchestrator and the team builder are exempt by design and may not be listed).
-- `model_substrate`: reserved (`on` / `off`) for the model-substrate projection.
+- `model_substrate` (`on` / `off`; absent: nothing is projected): a model-substrate WASM switch projected to consumers
+  that run model code (for example baseAgent's battery), written to `.agentteams/sandbox-state.json` (schema
+  `agentteams-sandbox-state/v1`). `on`: the consumer must run model code WASM-confined under an enforcing runner and
+  refuse rather than fall back to native or to an unenforced runner; `off`: native substrates by default. Independent
+  of `enabled` (which confines agent code). `--wasm-substrate on|off` overrides it for one run. Turning it from `on` to
+  `off` is constraint-relaxing (`sandbox-wasm-off:model-substrate`). Removing the key leaves the file in place as the
+  consumer's floor (a notice says so). See [`sandbox_projection`](api-reference/sandbox-projection.md).
 
 Every unknown key, wrong type or unknown agent slug refuses the render, naming the key path. Widening a grant and
 keeping native execution are constraint-relaxing (`wasm-grant-widen:<framework>`, `native-exec-keep`), and so is

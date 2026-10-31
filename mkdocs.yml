@@ -295,6 +295,7 @@ nav:
               - wasm_pins: api-reference/wasm-pins.md
               - wasm_guests: api-reference/wasm-guests.md
               - wasm_config: api-reference/wasm-config.md
+              - sandbox_projection: api-reference/sandbox-projection.md
               - proposal_policy: api-reference/proposal-policy.md
               - mcp_direct_grants: api-reference/mcp-direct-grants.md
               - interop_write_policy: api-reference/interop-write-policy.md
