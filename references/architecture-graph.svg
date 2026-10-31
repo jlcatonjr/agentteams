@@ -5,34 +5,36 @@
       <polygon points="0,0 10,5 0,10" fill="#8a8a8a"/>
     </marker>
   </defs>
-  <path d="M200,77 L280,77 C316,77 316,117 352,117 L584,117 C620,117 620,79 656,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,77 L280,77 C316,77 316,31 352,31 L388,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,77 L280,77 C316,77 316,145 352,145 L584,145 C620,145 620,117 656,117 L792,117 C828,117 828,101 864,101 L1040,101 C1076,101 1076,125 1112,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,77 L280,77 C316,77 316,79 352,79 L368,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,77 L280,77 C316,77 316,239 352,239" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,77 L280,77 C316,77 316,201 352,201 L584,201 C620,201 620,173 656,173 L792,173 C828,173 828,225 864,225 L1040,225 C1076,225 1076,173 1112,173 L1120,173" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <path d="M200,77 L280,77 C316,77 316,173 352,173 L584,173 C620,173 620,145 656,145 L792,145 C828,145 828,187 864,187" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,117 352,117 L584,117 C620,117 620,79 656,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,31 352,31 L388,31" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,145 352,145 L584,145 C620,145 620,117 656,117 L792,117 C828,117 828,101 864,101 L1040,101 C1076,101 1076,125 1112,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,79 352,79 L368,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,239 352,239" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,201 352,201 L584,201 C620,201 620,173 656,173 L792,173 C828,173 828,225 864,225 L1040,225 C1076,225 1076,173 1112,173 L1120,173" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <path d="M200,53 L280,53 C316,53 316,173 352,173 L584,173 C620,173 620,145 656,145 L792,145 C828,145 828,187 864,187" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
   <path d="M792,79 C828,79 828,73 864,73 L1040,73 C1076,73 1076,125 1112,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M792,79 C828,79 828,139 864,139 L868,139" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M792,79 C828,79 828,187 864,187" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
   <path d="M568,79 L584,79 L656,79" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M584,239 C620,239 620,201 656,201 L792,201 C828,201 828,187 864,187" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <path d="M868,139 L864,139 C828,139 828,229 792,229 L656,229 C620,229 620,277 584,277 L352,277 C316,277 316,77 280,77 L200,77" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <path d="M868,139 L864,139 C828,139 828,229 792,229 L656,229 C620,229 620,277 584,277 L352,277 C316,277 316,53 280,53 L200,53" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
   <path d="M1036,139 L1040,139 C1076,139 1076,125 1112,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M1036,139 L1040,139 C1076,139 1076,173 1112,173 L1120,173" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
   <path d="M1040,187 C1076,187 1076,125 1112,125" fill="none" stroke="#8a8a8a" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <rect x="96" y="62" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
-  <text x="148" y="82" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
+  <rect x="96" y="38" width="104" height="30" rx="6" fill="#e8eefb" stroke="#1b3fa0" stroke-width="1.5"/>
+  <text x="148" y="58" font-size="13" text-anchor="middle" fill="#000000">agentteams</text>
   <rect x="656" y="64" width="136" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="724" y="84" font-size="13" text-anchor="middle" fill="#000000">agentteams.cli</text>
-  <rect x="76" y="110" width="144" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="148" y="130" font-size="13" text-anchor="middle" fill="#000000">agentteams.data</text>
-  <rect x="16" y="158" width="264" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="148" y="178" font-size="13" text-anchor="middle" fill="#000000">agentteams.data.vulnscan_tools</text>
+  <rect x="76" y="86" width="144" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="148" y="106" font-size="13" text-anchor="middle" fill="#000000">agentteams.data</text>
+  <rect x="16" y="134" width="264" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="148" y="154" font-size="13" text-anchor="middle" fill="#000000">agentteams.data.vulnscan_tools</text>
+  <rect x="28" y="182" width="240" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="148" y="202" font-size="13" text-anchor="middle" fill="#000000">agentteams.data.wasm_probes</text>
   <rect x="388" y="16" width="160" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="468" y="36" font-size="13" text-anchor="middle" fill="#000000">agentteams.enrich</text>
-  <rect x="40" y="206" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
-  <text x="148" y="226" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
+  <rect x="40" y="230" width="216" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
+  <text x="148" y="250" font-size="13" text-anchor="middle" fill="#000000">agentteams.eval_adapters</text>
   <rect x="1112" y="110" width="192" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>
   <text x="1208" y="130" font-size="13" text-anchor="middle" fill="#000000">agentteams.frameworks</text>
   <rect x="368" y="64" width="200" height="30" rx="6" fill="#eef6ee" stroke="#3f8f4f" stroke-width="1.5"/>

@@ -177,7 +177,7 @@
     "agentteams/vulnscan/tools_image.py": "dd0fb10e2c4680f09de5e55611098a4f05f8c9da2428ca718475a46ea84e9e89",
     "agentteams/vulnscan/versions.py": "fb672008dfffa128f66aff9c698e1906398707b1085ad2e300a60964bc390b7b",
     "agentteams/vulnscan/worktree_fixes.py": "ab724f52ca3fd9222bb226e5200f7b8647b80bab75a992166a8be6bef69c3766",
-    "agentteams/wasm_exec.py": "37bab5a380441aca49e9cef20e5921da52ff82c9851c304e271837c50db3af5b",
+    "agentteams/wasm_exec.py": "edefde3611282a71fab7f3fe504ca9e4077397087a65a5e356b4577130174390",
     "agentteams/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
     "agentteams/wasm_runtime.py": "b70019b822466cbda1ecfeab6df02514cffdb821ea44c4d3b2ac698b955d6e90",
     "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",
