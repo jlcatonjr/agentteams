@@ -71,7 +71,9 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # 1268: two finalize_privilege_wiring kwargs + their docstrings, the three-line apply_wasm_switch /
     # advise_wasm calls and the gate-exceptions hand-off to the notice (wave-3 S2), which are the
     # wiring itself (the logic lives in cli/wasm_sandbox_switch.py and cli/os_sandbox_switch.py);
-    # the per-topic CH-07 carve above remains the genuine fix.
+    # the per-topic CH-07 carve above remains the genuine fix. WASM P11 took it to 1280: the Codex
+    # first_party_tables hand-off and gate, the [WASM-WIRING] report call and the binary-bundle install call
+    # (the logic lives in frameworks/_wasm_wiring.py and cli/wasm_sandbox_switch.py).
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the
