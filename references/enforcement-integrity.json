@@ -87,7 +87,7 @@
     "agentteams/front_matter_reconcile.py": "e07758e1606ea49553959009d22698933fd9e0d0c3069a64d64096bb838140fe",
     "agentteams/git_exec.py": "4ddf3486c7d54369907f2af17ad630d858fd6ab3dd2e6f8b0eeb402a965f7742",
     "agentteams/grok_config_emit.py": "6c1ec7f28fef63cce5eb275dec530e6757702d5375aa554fa6bcf968aa35ab9f",
-    "agentteams/integrity.py": "9c646784f15c325acc3dd02a810cc44184820762b98f23403ea5bd05fcd93150",
+    "agentteams/integrity.py": "0c14f68dc2cc4f2020145af2e12eab6614552ede3241c26cf8a0d8ce029d5435",
     "agentteams/launcher_lineage.py": "0b0e9015ee9787244adb534197d81cb81f3e1bebfc7d5cc403c29ec8345b5bc3",
     "agentteams/learned_blocks.py": "2df7c5432bfd85e3eefc19f51561a38c04fc29d6e07d484a25c2e82a08eae1fb",
     "agentteams/mcp_direct_grants.py": "99fc3804eeed4b92214242c63a8463a9f99ab681e038bc82bb90db0bdf89a895",
