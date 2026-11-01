@@ -27,6 +27,7 @@ import io
 import json
 import re
 import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -151,7 +152,7 @@ _ALL = [pytest.param(c, o, w, id=f"{c}-os{o}-wasm{w}") for c in CELLS for o, w i
 #: that profile says it is "INERT until you wire it in" (operator merge of ``config.yaml.agentteams.example`` /
 #: a ``sandbox-exec`` wrapper, neither checked), so a narrowed agent's recipe is not proven write-protected. Claude
 #: needs the live ``settings.json``; Codex says ``conditional`` ("not verifiable at render").
-_GOOSE_ENFORCED_UNMERGED = pytest.mark.xfail(strict=True, reason=(
+_GOOSE_ENFORCED_UNMERGED = pytest.mark.xfail(sys.platform == "darwin", strict=True, reason=(
     "P13/R1: fresh goose grant render claims subagents ENFORCED while .goose/sandbox.sb is inert (not wired into "
     "the live Goose config); control_plane_advisory treats the emitted profile as merged"))
 _WASM_ON = [pytest.param(c, o, id=f"{c}-os{o}",
@@ -267,6 +268,7 @@ def test_claude_r1_denies_follow_wasm_and_cover_every_launching_config(matrix, o
         assert rel in deny_write and f"Edit(/{rel})" in deny, rel
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="the Goose Seatbelt profile is emitted on macOS only")
 @pytest.mark.parametrize("cell", ["goose", "goose-grant"])
 @pytest.mark.parametrize("wasm", ["on", "off"])
 def test_goose_seatbelt_denies_the_control_plane_iff_wasm_on(matrix, cell, wasm):
