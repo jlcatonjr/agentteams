@@ -350,6 +350,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # the on-disk value equals this module's baseline, and its handoff guard decides which handoffs a write
     # may drop. An unpinned edit could make a project's value look agentteams-authored again.
     "agentteams/front_matter_baseline.py",
+    # Fence baseline (2026-11-01, vfail F1-D). fences.py (pinned) releases a shrink-preserved fence when its
+    # on-disk block hashes to this module's recorded render; an unpinned edit could make a person's edit look
+    # unedited and let a template update overwrite it.
+    "agentteams/fence_baseline.py",
     # Acknowledgement review (2026-10-11). _fleet_twin_acks decides which acknowledged twins fleet still
     # reports as REVIEW (one not shown to the operator by an earlier run); an unpinned edit could drop that flag.
     "agentteams/_fleet_twin_acks.py",
