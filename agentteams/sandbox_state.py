@@ -213,7 +213,8 @@ class SandboxState:
         os: Whether the OS boundary is emitted.
         os_reason: ``"brief"`` | ``"cli"`` | ``"profile:<p>"`` | ``"host-feature:<tok>"`` | ``"unknown"``.
         wasm: Whether WASM confinement is on.
-        wasm_reason: ``"brief"`` | ``"cli"`` | ``"default-off"`` | ``"unknown"``.
+        wasm_reason: ``"brief"`` | ``"cli"`` | ``"framework"`` (``--framework wasm``, P08) | ``"default-off"`` |
+            ``"unknown"``.
         wasm_languages: A subset of :data:`WASM_LANGUAGES`, in that order; ``()`` when WASM is off.
         wasm_grants: Agent slug -> grant, only for agents whose grant is not compute-only; ``{}`` when off.
         model_substrate: ``None`` | ``"on"`` | ``"off"`` (P20).

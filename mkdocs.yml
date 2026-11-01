@@ -84,6 +84,7 @@ nav:
               - Per-user runtime pattern (Goose): goose-runtime-pattern-guide.md
           - Grok Build:
               - Privileges (Grok Build): grok-privileges.md
+          - WASM agent runtime: wasm-agent-runtime.md
   - Why agentteams:
       - Why agentteams: why/index.md
       - Constitutional design: why/constitutional-design.md

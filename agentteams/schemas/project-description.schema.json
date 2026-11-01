@@ -444,6 +444,51 @@
         }
       }
     },
+    "wasm_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "P08: configuration of agentteams' own WASM agent runtime (--framework wasm), rendered into .agentteams-wasm/runtime.json. Provider keys are never configured here: Stage 0 reads them from the launcher's environment only. No model id is built in: a tier with no model (here or AGENTTEAMS_WASM_MODEL_<TIER>) refuses the run, except for the offline stub provider. Every unknown key or invalid value refuses the render.",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["anthropic", "openai", "openrouter", "xai", "ollama", "lmstudio", "openai-compatible", "gemini", "stub"],
+          "description": "Provider preset (model_providers.PROVIDERS). --wasm-provider overrides it for one run."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Optional base-URL override, vetted by the provider URL policy (https, or http to loopback; no userinfo, query or fragment). Not valid for the stub."
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Tier -> model id. Absent tiers stay null in runtime.json.",
+          "properties": {
+            "primary": {"type": "string"},
+            "cheap": {"type": "string"}
+          }
+        },
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-run caps (wasm_agent.budget.Budget); omitted fields keep agentteams' defaults.",
+          "properties": {
+            "max_model_calls": {"type": "integer", "minimum": 0},
+            "max_total_tokens": {"type": "integer", "minimum": 0},
+            "max_output_tokens_per_call": {"type": "integer", "minimum": 1},
+            "max_steps": {"type": "integer", "minimum": 0},
+            "max_tool_calls": {"type": "integer", "minimum": 0},
+            "wall_clock_s": {"type": "number", "exclusiveMinimum": 0},
+            "max_usd": {"type": ["number", "null"], "minimum": 0},
+            "max_delegation_depth": {"type": "integer", "minimum": 0},
+            "max_child_runs": {"type": "integer", "minimum": 0}
+          }
+        },
+        "prices_file": {
+          "type": "string",
+          "description": "Project-relative operator price table (vulnscan gateway_dialects.load_prices format) for the USD cap."
+        }
+      }
+    },
     "goose_egress_proxy": {
       "type": "string",
       "description": "Sanctioned single egress endpoint for an `exclusive` (network-isolated) goose team, as `host[:port]`. Apple Seatbelt's `remote ip` accepts ONLY `localhost` or `*` as the host (an IP/DNS literal makes sandbox-exec refuse to load the whole profile), so this must be a LOOPBACK proxy — e.g. `localhost:8888` for the goose route-proxy. Only meaningful with privilege_profile: exclusive on a goose (macOS) target; the default `confined` profile leaves egress open. HONEST RESIDUAL: the endpoint is a bidirectional channel; agentteams cannot close exfiltration through it.",
@@ -714,7 +759,7 @@
     "frozen_surfaces": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok"]},
+      "items": {"type": "string", "enum": ["codex", "goose", "agents-md", "claude", "copilot-vscode", "copilot-cli", "grok", "wasm"]},
       "description": "Layer-2 key (Rule 15): the agent surfaces (framework ids) the project keeps frozen; updates leave the paths each one owns (agentteams.cli.frozen_surfaces.FROZEN_SURFACE_PATHS) to the project. The working brief is not the freeze baseline: the effect classifier takes the recorded freeze state. [] or absent freezes nothing."
     },
     "researchteam_notes": {

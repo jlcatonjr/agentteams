@@ -392,6 +392,15 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # instruction-file refusal, without tripping --verify-integrity.
     "agentteams/wasm_agent/guest_source.py",
     "agentteams/data/wasm_agent_guest.py",
+    # --framework wasm (P08). _wasm_tool_scoping decides what a WASM agent may do (C-3: fail closed, no widening
+    # default); wasm_agent/team is the lock writer and the strict loader every run goes through (drift, planted or
+    # symlinked files, tools beyond the grant, non-canonical mounts); frameworks/wasm renders the grants and the
+    # runtime config; cli/wasm_agent_commands is the launcher and the only chooser of the inherited guest confinement (R5).
+    "agentteams/frameworks/_wasm_tool_scoping.py",
+    "agentteams/frameworks/_wasm_team_docs.py",
+    "agentteams/frameworks/wasm.py",
+    "agentteams/wasm_agent/team.py",
+    "agentteams/cli/wasm_agent_commands.py",
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude

@@ -23,6 +23,7 @@ _EXPECTED = {
     "agents-md": (".agents",),
     "codex": (".codex", "agents"),
     "grok": (".grok", "agents"),
+    "wasm": (".agentteams-wasm", "agents"),
 }
 
 

@@ -211,6 +211,30 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
                     f"path (`--interop-from`), which supports {fw} targets."
                 )
 
+    # The WASM agent launcher (P08): --task/--task-file/--wasm-provider only with --run-wasm-agent, which needs
+    # exactly one task source; --reason only with --revoke-wasm-run; one launcher action per invocation.
+    _wasm_actions = [f for a, f in (("run_wasm_agent", "--run-wasm-agent"), ("revoke_wasm_run", "--revoke-wasm-run"),
+                                    ("verify_wasm_run", "--verify-wasm-run")) if getattr(args, a, None) is not None]
+    if len(_wasm_actions) > 1:
+        parser.error(f"{' and '.join(_wasm_actions)} are mutually exclusive")
+    _tasks = [getattr(args, a, None) is not None for a in ("wasm_task", "wasm_task_file")]
+    if getattr(args, "run_wasm_agent", None) is not None and sum(_tasks) != 1:
+        parser.error("--run-wasm-agent needs exactly one of --task TEXT or --task-file PATH")
+    if getattr(args, "run_wasm_agent", None) is None and (any(_tasks) or getattr(args, "wasm_provider", None)):
+        parser.error("--task, --task-file and --wasm-provider require --run-wasm-agent")
+    if getattr(args, "wasm_reason", None) is not None and getattr(args, "revoke_wasm_run", None) is None:
+        parser.error("--reason requires --revoke-wasm-run")
+
+    # wasm (plan P08): agentteams' own runtime format is generate-only in v1. No convert, bridge, interop (either
+    # direction) or absorb: those paths would need CAI mappings for `delegates` and grants (plan Q-2).
+    _wasm_uses = (getattr(args, "framework", None) == "wasm" and any(
+        getattr(args, a, None) for a in ("convert_from", "bridge_from", "interop_from", "absorb_from")))
+    if _wasm_uses or "wasm" in (getattr(args, "interop_source_framework", None),
+                                getattr(args, "absorb_source_framework", None)):
+        parser.error("--framework wasm is generate-only in v1: it cannot be a --convert-from / --bridge-from / "
+                     "--interop-from / --absorb-from target or source. Render it with "
+                     "`--framework wasm --description …`.")
+
     # F.2: interop-to-goose is now supported — the old refusal predates C.3
     # (CAI captures handoffs and the goose adapter renders sub_recipes from
     # them natively), so the "disconnected pile of recipes" failure mode no

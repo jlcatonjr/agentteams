@@ -63,8 +63,15 @@ def test_spec_emitted_keys_match_the_adapter():
 
 
 def test_framework_registry_is_derived_from_specs():
-    """framework_research.FRAMEWORK_REGISTRY must agree with FORMAT_SPECS exactly."""
-    assert list(fr.FRAMEWORK_REGISTRY.keys()) == list(FORMAT_SPECS.keys())
+    """framework_research.FRAMEWORK_REGISTRY must agree with the upstream FORMAT_SPECS exactly.
+
+    The docs-watch exemption (METAPLAN §2.5): agentteams' own runtime format (``wasm``) has no published docs,
+    so it is the one spec the watcher skips (``upstream=False``, empty ``source_url``).
+    """
+    upstream = [rid for rid, spec in FORMAT_SPECS.items() if spec.upstream]
+    assert list(fr.FRAMEWORK_REGISTRY.keys()) == upstream
+    assert [rid for rid, spec in FORMAT_SPECS.items() if not spec.upstream] == ["wasm"]
+    assert FORMAT_SPECS["wasm"].source_url == "" and not FORMAT_SPECS["wasm"].expected_doc_tokens
     for rid, entry in fr.FRAMEWORK_REGISTRY.items():
         spec = FORMAT_SPECS[rid]
         assert entry["label"] == spec.label

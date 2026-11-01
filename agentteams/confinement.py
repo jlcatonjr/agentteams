@@ -58,7 +58,7 @@ from agentteams._sandbox_profiles import (  # noqa: F401  re-exported: one sourc
 from agentteams.atomicio import read_regular_nofollow, write_new_atomic
 
 #: Project paths a confined command may never write, even inside a declared write root.
-PROTECTED_REL = (".agentteams", ".agentteams-queue", ".agentteams-status", ".git", ".claude", ".goose", ".codex", ".grok", ".github")
+PROTECTED_REL = (".agentteams", ".agentteams-queue", ".agentteams-status", ".git", ".claude", ".goose", ".codex", ".grok", ".github", ".agentteams-wasm")
 #: Read-denied to every confined command: the ledger key and the operator signing keys (one source of truth).
 from agentteams.frameworks._sandbox_emit import SIGNING_KEY_DIR as KEY_DIR  # noqa: E402
 

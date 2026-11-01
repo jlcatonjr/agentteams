@@ -665,6 +665,9 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
         manifest["mcp_candidates"] = [c.to_manifest_entry() for c in mcp_candidates]
     if "wasm_sandbox" in description:  # P01: carried only when the brief has the block (else byte-identical)
         manifest["wasm_sandbox"] = _wasm_sandbox_record(description, all_slugs)
+    if "wasm_runtime" in description:  # P08 (--framework wasm runtime.json): carried only when present
+        from agentteams.wasm_agent.team import normalize_wasm_runtime
+        manifest["wasm_runtime"] = normalize_wasm_runtime(description["wasm_runtime"])
     # Specified-server automation (report §5.4/§6): copy operator-DECLARED server
     # definitions through to the manifest verbatim. Populated solely when the
     # description declares mcp_servers, so manifests without specified servers are

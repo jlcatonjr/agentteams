@@ -40,8 +40,12 @@ def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_r
     file the previous render left as the *kept* floor (``WASM_SUBSTRATE_KEPT_KEY``), so the relaxation gate sees no
     change while the floor stays.
 
+    ``--framework wasm`` (P08 §4.6) is itself the opt-in: when neither the brief nor ``--wasm-sandbox`` names the
+    switch, the transient :data:`~agentteams.wasm_config.WASM_FRAMEWORK_KEY` turns WASM on (reason ``framework``).
+    An explicit off (brief ``enabled: false`` or ``--wasm-sandbox off``) refuses: the runtime has no non-WASM mode.
+
     Args:
-        manifest: The team manifest (mutated: the transient CLI key when the flag is given; the kept key). The
+        manifest: The team manifest (mutated: the transient CLI / framework key; the kept key). The
             CLI-set project root must already be on it (``write_root_policy.begin``) for grants with mounts.
         wasm_sandbox_cli: ``--wasm-sandbox`` (operator argv), or None.
         project_root: The project root (P20 projection checks), or None to skip them.
@@ -49,21 +53,31 @@ def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_r
             projection's ``team`` field (the project root when None).
 
     Raises:
-        WasmSwitchError: A bad value, a malformed block, a refused read path, a mount with no project root, or a
-            projection that cannot be written safely.
+        WasmSwitchError: A bad value, a malformed block, a refused read path, a mount with no project root, a
+            projection that cannot be written safely, or WASM explicitly off for ``--framework wasm``.
         ImportError: WASM is on and ``agentteams.wasm_exec`` is not importable (fail closed).
     """
     from agentteams.wasm_config import (
+        WASM_FRAMEWORK_KEY,
         WASM_SANDBOX_CLI_KEY,
         WASM_SUBSTRATE_KEPT_KEY,
         substrate_switch,
         validate_wasm_sandbox_cli,
         wasm_state_fields,
+        wasm_switch,
     )
 
     try:
         if wasm_sandbox_cli is not None:
             manifest[WASM_SANDBOX_CLI_KEY] = validate_wasm_sandbox_cli(wasm_sandbox_cli)
+        if manifest.get("framework") == "wasm":
+            on, reason = wasm_switch(manifest)
+            if not on and reason != "default-off":
+                raise WasmSwitchError(f"--framework wasm needs WASM confinement, but it is switched off ({reason}): "
+                                      "the WASM agent runtime has no non-WASM mode. Remove the off switch.")
+            if not on:
+                manifest[WASM_FRAMEWORK_KEY] = True
+                print("  🧩 --framework wasm turns WASM confinement on for this team (reason: framework).")
         wasm_state_fields(manifest)
         manifest.pop(WASM_SUBSTRATE_KEPT_KEY, None)  # only ever derived from disk, here
         _value, source = substrate_switch(manifest)

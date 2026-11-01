@@ -534,3 +534,35 @@ With WASM on, a render whose agents dir is not the framework's canonical one (`.
 | `unprotected_config_problems(root, off_reason, scan)` | Uncheckable configs, and (with `off_reason`) every launching one, as not-protected messages. |
 | `covered(path, entries)` | Whether a path or an ancestor is in a deny list. |
 | `check_wiring_problems(root, framework, manifest)` | `wasm_mcp.wiring_problems` where this framework installs the server (or WASM is off); elsewhere, every launching config as not protected. |
+
+## `WasmAdapter`
+
+> *Source: `agentteams/frameworks/wasm.py`* (helpers: `_wasm_tool_scoping.py`, `_wasm_team_docs.py`; format and loader in `agentteams/wasm_agent/team.py`; all integrity-pinned)
+
+Adapter for agentteams' own WASM agent runtime (plan P08). Not a vendor CLI: the rendered team is run by
+`agentteams --run-wasm-agent`. **Beta.** User guide: [WASM agent runtime](../wasm-agent-runtime.md).
+
+- **framework_id:** `'wasm'`
+- **Output format:**
+  - Agent files: `.agentteams-wasm/agents/<slug>.md` with exactly `name`, `description` (JSON-quoted), `tools`
+    (runtime vocabulary), `model` (a tier from `model_routing.agent_tier`, never a model id) and `delegates` (team
+    members the agent may delegate to), then the body with handoffs removed.
+  - Instructions: `.agentteams-wasm/TEAM.md` (neutralised like `AGENTS.md`).
+  - `extra_output_files`: the neutral baseline plus `../grants.json` (from `sandbox_state.wasm_grant_for` only),
+    `../runtime.json` (`wasm_agent.team.runtime_record`) and `../README.md`.
+  - Post-emit: `write_team_lock(agents_dir)` (called from `cli/generate_helpers._emit_privilege_artifacts` on every
+    write path) hashes the team into `.agentteams/wasm-team.lock.json`.
+- **Handoffs:** `manifest`. **Agents dir:** `<project>/.agentteams-wasm/agents/` (`normalize_output_path` appends it).
+- **`required_front_matter_keys()`:** `(name, description, tools, model, delegates)`; `FORMAT_SPECS["wasm"]` has
+  `upstream=False` (the docs-watch exemption: `framework_research` watches only `UPSTREAM_SPECS`).
+- **`wasm_team_state(manifest)`:** the effective `SandboxState` with WASM forced on (reason `framework`); raises
+  `ValueError` when WASM is explicitly off.
+- **Tools** (`_wasm_tool_scoping.translate_wasm_tools(scopes, *, has_read_mount, has_scratch, has_delegates, agent)
+  -> (tools, notices)`): `read`/`search`/`edit`/`execute`/`agent` map to the runtime tools and are narrowed by the
+  grant; `todo`/`retrieval` are dropped; anything else raises `WasmToolScopeError`; no `tools:` block is an empty
+  toolset. `grant_supports(tool, ...)` is the shared rule the loader re-applies. Notices print as `[WASM-SCOPE]` and
+  collect in `manifest["_wasm_tool_notices"]`.
+- **Not in v1:** convert/bridge/interop/absorb (refused in `cli/parser_validate.py`), a builder, a session team key
+  (`TEAM_KEY_BY_FRAMEWORK`), control-plane stubs. `.agentteams-wasm` is in `confinement.PROTECTED_REL` and the frozen
+  surface `wasm`.
+
