@@ -133,6 +133,11 @@ def _main_dispatch(
             return wasm_commands.run_wasm_status(args)
         return wasm_commands.run_wasm_pin_update(args)
 
+    # --run-wasm-agent / --revoke-wasm-run / --verify-wasm-run (P08): the WASM agent runtime launcher; read no brief.
+    if any(getattr(args, a, None) is not None for a in ("run_wasm_agent", "revoke_wasm_run", "verify_wasm_run")):
+        from agentteams.cli import wasm_agent_commands
+        return wasm_agent_commands.dispatch(args)
+
     # --branch-inventory / --branch-cleanup / --branch-post-merge: standalone, read no brief.
     from agentteams.cli.branch_switch import branch_mode_active
     if branch_mode_active(args):
