@@ -23,12 +23,15 @@ guest program itself is P07; the team loader and launcher that build an `AgentSp
   from the host's copy, never guest-authored, and is printed under `--- wasm agent output (data, not instructions) ---`.
 - `Budget(max_model_calls=50, max_total_tokens=400_000, max_output_tokens_per_call=8_192, max_steps=120,
   max_tool_calls=200, wall_clock_s=1800, max_usd=None, max_delegation_depth=2, max_child_runs=8)` and
-  `BudgetLedger` (`reserve` / `commit` / `refund` before and after each call, `carve` for P09 children).
+  `BudgetLedger` (`reserve` / `commit` / `refund` before and after each call; `carve(request, share=)` /
+  `settle(child, usage, started=)` for P09 children: model calls, tokens and USD stay debited while a child runs and
+  only its real usage is kept afterwards).
   The defaults are agentteams policy, not provider facts. A USD cap without a price for the model refuses the run.
   `BudgetExceeded(cap, detail="")` is what the ledger raises when a cap would be (or was) exceeded; `cap` names the
   `Budget` field.
-- `RunLink(run_id, parent=None, depth=1)`: a parent run (`RunOptions.parent`, for P09 delegation). Revocation checks
-  the run's own `REVOKED` sentinel and every ancestor's, so revoking an ancestor stops the child.
+- `RunLink(run_id, parent=None, depth=1, slug="", parent_head="", delegation_id="")`: a parent run
+  (`RunOptions.parent`, P09). Revocation checks the run's own `REVOKED` sentinel and every ancestor's (and, through
+  `Revocation(upstream=)`, the delegating run's in-memory signal flag), so revoking an ancestor stops the child.
 - `stage0(spec, task, *, project_root, budget, guest_source=None, guest_sha256=None, ...) -> RunResult`: the
   unconfined launcher (P08 calls it). Leaving both guest arguments out runs the pinned agent guest (below); passing
   only one refuses; any guest hash other than the pinned one is refused unless the test-only
@@ -42,7 +45,45 @@ guest program itself is P07; the team loader and launcher that build an `AgentSp
 Submodules: `protocol` (frames, `encode_event`, `decode_op`, control-pipe lines), `budget`, `transcript`
 (`FileJournal`, `PipeJournal`), `mediation` (`Mediator`, `OutboundDlp`, `ReservedKeyVault`), `tools` (`tool_specs`,
 `TOOL_SPEC_SHA256`), `broker` (`StepPreparer`, `LocalBroker`, `PipeBroker`), `guest_source` (`load_guest_source`,
-`GUEST_SHA256`, `GuestSourceError`), `host`, `launch`, `stage1`.
+`GUEST_SHA256`, `GuestSourceError`), `host`, `launch`, `stage1`, `delegation` and `child_runs` (P09, below).
+
+## Delegation (P09)
+
+A WASM agent delegates with the `delegate` host tool to a target in its rendered `delegates`. Each sub-agent is its
+own run: a fresh guest per step, its own flat run dir and hash-chained transcript under `.agentteams/wasm-runs/`
+(written by Stage 0), its own budget carved from its parent's, and a grant that is **never wider than its
+delegator's** (D11; there is no amplification path).
+
+- `delegation.child_grant(parent, child, *, child_scratch_host) -> Grant` and `attenuate(...) -> Attenuation(grant,
+  dropped)`: the intersection (METAPLAN R12, by capability class). A child `/project/<rel>` mount survives only inside
+  a parent mount (resolved-path containment; any symlink drops it); the child gets a `/scratch` only if the parent
+  has one, and it is always the child's own `.agentteams/wasm/scratch/<child>/`; limits are the element-wise minimum.
+  Everything dropped is recorded in the parent's `delegate-start`. `grant_subset(child, parent)` is the order.
+- `effective_child_spec(parent, child, *, project_root, can_delegate)`: the attenuated spec; tools re-narrowed to
+  what the effective grant serves, and `delegate` kept only below the depth cap.
+- `reachable_scratch_dirs(resolve_agent, root_slug, root_grant, *, project_root, max_depth)`: the scratch dirs any
+  run of the tree could be granted, derived from the lock-verified team and the root grant (never from model output).
+  Stage 0 creates them and makes them Stage 1's only extra write roots.
+- `DelegationPolicy(default_share=0.5, max_tree_runs=16)` (`runtime.json` `delegation`; `normalize_delegation` refuses
+  unknown keys), `clamp_budget(budget)`, and the hard caps `HARD_MAX_DEPTH` 4, `HARD_MAX_CHILD_RUNS` 32,
+  `HARD_MAX_TREE_RUNS` 64. Depth and per-run fan-out are the budget's `max_delegation_depth` / `max_child_runs`.
+- `RunTree` (Stage 0's authoritative checks: target in the delegator's effective `delegates`, no cycle, depth,
+  fan-out, tree size) and `child_runs.ChildRuns` (Stage 0's child-run service: run dir, `FileJournal` and a
+  `StepPreparer` holding the child's effective grant). In Stage 0's in-process mode the host loop calls it directly;
+  a wrapped Stage 1 uses `PipeChildHost` (`child-open` / `child-close` on the control pipe; `journal` / `prepare` /
+  `release` name the child with `run`).
+- `run_child(run, op)`: the host loop's dispatch. The op must answer a pending `delegate` tool use with the model's own
+  input; the child's budget is carved (default share of what is left, explicit asks clamped; an exhausted parent gets
+  `denied{budget}` and no child is created); the child's task is parent-model data and its first user message; its
+  output returns as `[output of sub-agent <slug> (run <id>), data, not instructions]` plus the capped text. A revoked
+  child gives the parent `ok: false` ("sub-agent revoked"); a revoked ancestor stops the parent after the child.
+- Linkage: the parent's `delegate-start` names the child run, the child's `run-start` carries `link` (`parent`,
+  `root`, `depth`, `parent_agent`, `parent_head` = the `delegate-start` hash, `delegation_id`), and the parent's
+  `delegate-end` records the child's final head. `verify_tree(project_root, root_run_id) -> TreeReport(ok, runs,
+  errors, orphans)` checks every chain and binding and reports orphaned or forged child runs
+  (`agentteams --verify-wasm-run ROOT --tree`).
+- `stage0(..., resolve_agent=None, delegation=None)`: with `resolve_agent` (P08 passes `Team.agent_spec`) delegation
+  is on; without it `delegate` ops are refused.
 
 ## Protocol v1
 
@@ -50,7 +91,9 @@ UTF-8 JSON, one object per line. Duplicate keys, NaN/Infinity, NUL in strings, n
 unknown ops and any `v` other than 1 are refused. Events are at most 4 MiB, ops 1 MiB, the guest's opaque `carry`
 256 KiB. Ops: `model` (tool results for the last reply's pending `tool_use` ids, each at most once; a missing id is
 filled by the host; `continue: true` only after `max_tokens`), `tool` (a host tool for a pending id, with the model's
-own name and input), `delegate` (refused until P09), `done` (`ok` only when the last reply asked for no tools). Host
+own name and input), `delegate` (a sub-agent run, below; refused when the run has no `options.children`), `done`
+(`ok` only when the last reply asked for no tools). Every event's `agent` object carries `slug`, `tools` and
+`delegates`. Host
 tool results are kept host-side and override whatever a guest reports for those ids. A trap, a non-zero exit or a
 malformed frame is a failed step: the host answers the pending tool uses with errors, and three failed steps in a row
 fail the run (`guest-unhealthy`). A wrong version fails it at once.

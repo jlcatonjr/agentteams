@@ -1921,6 +1921,13 @@ With `--revoke-wasm-run`: the reason recorded in the sentinel (at most 200 chara
 
 Re-walk the run's hash-chained transcript (read-only) and print the record count, completeness, status and head.
 
+### `--tree`
+
+With `--verify-wasm-run`: treat the run as the root of a delegation tree and verify every sub-agent run below it:
+each transcript chain, each parent `delegate-start` / child `run-start` / parent `delegate-end` binding, and the
+child budgets. A run dir naming a run of the tree as its parent without being referenced (an orphan or a forged
+link) fails it. Exit 0 when the whole tree verifies, 1 otherwise.
+
 ## Exit Codes
 
 | Code | Meaning |

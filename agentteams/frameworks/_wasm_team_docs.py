@@ -154,7 +154,8 @@ loopback host.
 - Host OS confinement: {host}. OS switch: {'on' if state.os else 'off'} ({state.os_reason}).
 - Read-only mounts are always enforced, never mounted writable: `os` = a nested OS profile, `snapshot` = a per-run
   copy (size-capped: a read path larger than the cap refuses the run).
-- Delegation (`delegate`) is refused by the host until the delegation runtime (P09) lands.
+- Delegation (`delegate`) runs a listed sub-agent in its own WASM guest with a grant never wider than its
+  delegator's (the intersection of both); `--verify-wasm-run <root> --tree` checks the whole run tree.
 
 | Agent | Mounts | Fuel / memory bytes / timeout | Read-only via |
 |---|---|---|---|

@@ -4,7 +4,8 @@ One agent runs as a sequence of step-mode WASM guest invocations (:mod:`.protoco
 key, calls the model (:mod:`.mediation`), runs host tools (:mod:`.tools`), enforces budgets (:mod:`.budget`) and
 revocation, applies DLP to every outbound prompt, and has Stage 0 write a hash-chained transcript
 (:mod:`.transcript`). :mod:`.launch` is the unconfined Stage 0 that owns ``.agentteams/``; :mod:`.stage1` is the
-OS-confined host process.
+OS-confined host process. :mod:`.delegation` (with Stage 0's :mod:`.child_runs`) runs sub-agents for the ``delegate``
+tool (P09), each with a grant never wider than its delegator's.
 
 Public entry points (P08, P09, P17): :func:`run_agent`, :class:`AgentSpec`, :class:`RunOptions`,
 :class:`RunResult`, :class:`Budget`, :class:`BudgetLedger`, :class:`BudgetExceeded` (a cap would be or was

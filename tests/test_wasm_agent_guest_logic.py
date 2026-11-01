@@ -107,6 +107,15 @@ def test_delegate_result_moves_on(guest: Any) -> None:
     assert op == {"v": 1, "op": "model", "tool_results": [], "continue": False, "carry": None}
 
 
+def test_delegate_target_outside_the_events_delegates_is_answered_not_sent(guest: Any) -> None:
+    """P09 (P07 deviation 7): the event carries ``agent.delegates``; the guest answers an unlisted target itself."""
+    op = step(guest, frame(reply(("d1", "delegate", {"agent": "security", "task": "t"})), delegates=["reviewer"]))
+    assert op["op"] == "model" and op["tool_results"][0]["ok"] is False
+    assert "delegate target not allowed: security" in op["tool_results"][0]["content"]
+    op = step(guest, frame(reply(("d1", "delegate", {"agent": "x", "task": "t"})), delegates=[]))
+    assert op["op"] == "model" and op["tool_results"][0]["ok"] is False
+
+
 def test_malformed_delegate_input_is_answered_not_sent(guest: Any) -> None:
     op = step(guest, frame(reply(("d1", "delegate", {"agent": "a"}))))
     assert op["op"] == "model" and op["tool_results"][0]["ok"] is False

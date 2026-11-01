@@ -4,7 +4,8 @@
 budget, builds the event (secret-checked, S-3), has the guest run through ``options.exec_broker``, journals a
 ``guest-step`` record (with the guest's ``os_confinement``), decodes the op against the agent's toolset and delegates,
 and dispatches it: ``model`` -> :class:`~agentteams.wasm_agent.mediation.Mediator`, ``tool`` -> a host tool,
-``delegate`` -> refused until P09, ``done`` -> finish.
+``delegate`` -> :func:`agentteams.wasm_agent.delegation.run_child` (P09; refused when the run has no
+``options.children``), ``done`` -> finish.
 
 The host owns the conversation. Results of host tools are kept host-side and override whatever a guest reports for
 those ids; a ``tool`` op must name a pending ``tool_use`` id with the model's own name and input. The run's output is
@@ -108,29 +109,78 @@ def grant_from_dict(data: Mapping[str, Any], executor: Any) -> Any:
 
 @dataclass
 class RunLink:
-    """A parent run (P09): its run id and its own link, so revoking an ancestor stops this run."""
+    """A parent run (P09): its run id and its own link, so revoking an ancestor stops this run.
+
+    ``depth`` is the depth of the run this link is attached to (root = 0, its children 1). ``slug`` is the parent's
+    agent (the cycle check walks it), ``parent_head`` the parent's transcript head at spawn (its ``delegate-start``
+    record) and ``delegation_id`` the parent's ``tool_use`` id for this delegation.
+    """
 
     run_id: str
     parent: RunLink | None = None
     depth: int = 1
+    slug: str = ""
+    parent_head: str = ""
+    delegation_id: str = ""
+
+    def chain(self) -> list[RunLink]:
+        """This link and every ancestor link, nearest first.
+
+        Returns:
+            The links.
+
+        Raises:
+            Nothing.
+        """
+        out, link = [], self
+        while link is not None:
+            out.append(link)
+            link = link.parent
+        return out
+
+    def root_run_id(self) -> str:
+        """The run id at the top of the chain (the tree's root run).
+
+        Returns:
+            The run id.
+
+        Raises:
+            Nothing.
+        """
+        return self.chain()[-1].run_id
+
+    def to_dict(self) -> dict[str, Any]:
+        """The link as recorded in a child's ``run-start`` (``parent`` = the parent run id).
+
+        Returns:
+            ``{parent, root, depth, parent_agent, parent_head, delegation_id}``.
+
+        Raises:
+            Nothing.
+        """
+        return {"parent": self.run_id, "root": self.root_run_id(), "depth": self.depth, "parent_agent": self.slug,
+                "parent_head": self.parent_head, "delegation_id": self.delegation_id}
 
 
 class Revocation:
     """Revocation checkpoints: an in-memory flag (signals) and the operator's ``REVOKED`` sentinel files."""
 
-    def __init__(self, project_root: str | Path, run_id: str, parent: RunLink | None = None) -> None:
+    def __init__(self, project_root: str | Path, run_id: str, parent: RunLink | None = None,
+                 upstream: Revocation | None = None) -> None:
         """Bind the checkpoints of one run.
 
         Args:
             project_root: The project root (sentinels are only read here, never written).
             run_id: This run.
             parent: Its ancestors (P09).
+            upstream: The delegating run's checkpoints (P09): its in-memory flag (a signal) stops this run too.
 
         Raises:
             Nothing.
         """
         self.flag = threading.Event()
         self.reason = ""
+        self.upstream = upstream
         ids, link = [run_id], parent
         while link is not None:
             ids.append(link.run_id)
@@ -163,6 +213,9 @@ class Revocation:
         """
         if self.flag.is_set():
             return True
+        if self.upstream is not None and self.upstream.revoked():
+            self.reason = self.reason or "ancestor-revoked"
+            return True
         for path in self._paths:
             if os.path.lexists(path):
                 self.reason = self.reason or ("revoked" if path == self._paths[0] else "ancestor-revoked")
@@ -190,6 +243,8 @@ class RunOptions:
     max_tool_output_bytes: int = T.MAX_TOOL_OUTPUT_BYTES
     dlp: OutboundDlp | None = None
     clock: Callable[[], float] | None = None
+    children: Any = None
+    delegation: Any = None
 
 
 @dataclass
@@ -299,7 +354,8 @@ class _Run:
             self.record("denied", {"code": "budget", "cap": exc.cap})
             raise _End("budget-exhausted", exc.cap) from exc
         frame = P.encode_event({"run_id": self.o.run_id, "step": n, "carry": carry, "event": event,
-                                "agent": {"slug": self.spec.slug, "tools": sorted(self.spec.tools)},
+                                "agent": {"slug": self.spec.slug, "tools": sorted(self.spec.tools),
+                                          "delegates": sorted(self.spec.delegates)},
                                 "mounts": _event_mounts(self.spec.grant),
                                 "limits": {"max_tool_output_bytes": self.o.max_tool_output_bytes,
                                            "max_read_bytes": T.MAX_READ_BYTES}})
@@ -417,6 +473,15 @@ class _Run:
                                   hashlib.sha256(text.encode()).hexdigest(), **detail})
         return {"kind": "tool_result", "id": op.id, "ok": ok, "output": text}
 
+    def delegate(self, op: P.DelegateOp) -> dict[str, Any]:
+        """Run one sub-agent for a pending ``delegate`` tool use (P09); return the event for the guest."""
+        if self.o.children is None:
+            self.record("denied", {"code": "refused", "id": op.id, "why": "delegation is not configured for this run"})
+            return {"kind": "denied", "id": op.id, "code": "refused", "message": "delegation is not available"}
+        from agentteams.wasm_agent.delegation import run_child
+
+        return run_child(self, op)
+
 
 def run_agent(spec: AgentSpec, task: str, options: RunOptions) -> RunResult:
     """Run one agent to completion (see the module docstring).
@@ -439,6 +504,7 @@ def run_agent(spec: AgentSpec, task: str, options: RunOptions) -> RunResult:
             spec.system_prompt.encode()).hexdigest(), "system_prompt": None}, "budget": options.budget.to_dict(),
             "task_sha256": hashlib.sha256(task.encode()).hexdigest(), "task": task, "notices": list(r.notices),
             "parent": options.parent.run_id if options.parent else None,
+            **({"link": options.parent.to_dict()} if options.parent else {}),
             "protocol": P.PROTOCOL_VERSION, "tool_spec_sha256": T.TOOL_SPEC_SHA256})
         refusal = usd_cap_refusal(options.budget.max_usd, options.prices, spec.model)
         if refusal:
@@ -452,7 +518,7 @@ def run_agent(spec: AgentSpec, task: str, options: RunOptions) -> RunResult:
         if counts:
             r.record("dlp", {"scope": "start", "redactions": counts, "blocked": []})
         med = Mediator(provider=options.provider, model=spec.model, system=system, max_tokens=spec.max_tokens,
-                       tools=T.tool_specs(spec.tools), ledger=r.ledger, journal=r.journal, dlp=dlp,
+                       tools=T.tool_specs(spec.tools, delegates=spec.delegates), ledger=r.ledger, journal=r.journal, dlp=dlp,
                        vault=ReservedKeyVault(options.mac_key), secrets=r.secrets, prices=options.prices,
                        call_timeout_s=options.call_timeout_s)
         med.start(task_text)
@@ -517,5 +583,4 @@ def _loop(r: _Run, med: Mediator) -> tuple[str, str]:
         elif isinstance(op, P.ToolOp):
             event = r.host_tool(op)
         else:   # DelegateOp: P09
-            r.record("denied", {"code": "refused", "id": op.id, "why": "delegation is not available yet (P09)"})
-            event = {"kind": "denied", "id": op.id, "code": "refused", "message": "delegation is not available"}
+            event = r.delegate(op)

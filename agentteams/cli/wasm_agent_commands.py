@@ -1,5 +1,5 @@
 """wasm_agent_commands.py — the WASM agent runtime launcher: ``--run-wasm-agent``, ``--revoke-wasm-run``,
-``--verify-wasm-run`` (plan P08 §4.8).
+``--verify-wasm-run [--tree]`` (plan P08 §4.8, P09 §4.6).
 
 ``--run-wasm-agent SLUG (--wasm-task TEXT | --wasm-task-file PATH) [--project DIR] [--wasm-provider NAME]
 [--wasm-base-url URL] [--json]`` loads the lock-verified ``--framework wasm`` team
@@ -13,6 +13,10 @@ hash-chained transcript.
 ``--wasm-base-url`` or ``AGENTTEAMS_WASM_BASE_URL``. A rendered ``runtime.json`` URL (the brief's, allowed only for a
 keyless preset on a loopback host) is kept only while that rule holds for the run's effective preset
 (:func:`agentteams.wasm_agent.team.resolve_base_url`).
+
+**Delegation (P09).** ``agent_spec`` is also handed to
+Stage 0 as ``resolve_agent`` (P09), so the agent may delegate to its rendered ``delegates``, each sub-agent with a grant
+never wider than its delegator's.
 
 **The only chooser of ``os_confine="inherited"`` (METAPLAN R5).** When the team's ``host_os_confine`` is ``auto``
 this module asks Stage 0 to run the guests with ``guest_os_confine="inherited"``: inside the host's own OS profile.
@@ -242,10 +246,13 @@ def run_wasm_agent(args: argparse.Namespace, *, environ: Mapping[str, str] | Non
     print(f"WASM agent {spec.slug}: provider {spec.provider}, model {spec.model}, tools "
           f"{', '.join(sorted(spec.tools)) or 'none'}; read-only via {entry['read_only_via']}; host_os_confine "
           f"{host} ({_GUEST_CONFINE_NOTE[host]})" + (f"; base URL {base_url}" if base_url else ""), file=stream)
+    provider = getattr(args, "wasm_provider", None)
     result = stage0(spec, task, project_root=root, budget=team.budget(), environ=env, base_url=base_url,
                     host_confine="auto" if host == "auto" else "off",
                     guest_os_confine="inherited" if host == "auto" else "auto",
-                    resolver=runtime_resolver(root), prices=prices)
+                    resolver=runtime_resolver(root), prices=prices,
+                    resolve_agent=lambda slug: team.agent_spec(slug, provider=provider, environ=env),
+                    delegation=team.runtime["delegation"])
     guests = guest_confinement(result.transcript_path)
     if getattr(args, "json", False):
         json.dump({"run": result.to_dict(), "guest_os_confinement": guests}, stream, indent=2, sort_keys=True)
@@ -286,13 +293,16 @@ def revoke_wasm_run(args: argparse.Namespace) -> int:
 
 
 def verify_wasm_run(args: argparse.Namespace) -> int:
-    """``agentteams --verify-wasm-run RUN_ID [--project DIR]``: re-walk the run's transcript hash chain (read-only).
+    """``agentteams --verify-wasm-run RUN_ID [--tree] [--project DIR]``: re-walk a run's transcript (read-only).
+
+    With ``--tree`` (P09), walk the whole delegation tree from that root run
+    (:func:`agentteams.wasm_agent.delegation.verify_tree`).
 
     Args:
         args: The parsed arguments.
 
     Returns:
-        0 when the chain verifies, 1 when it does not, 2 for a malformed run id.
+        0 when the chain (or tree) verifies, 1 when it does not, 2 for a malformed run id.
 
     Raises:
         Nothing.
@@ -304,6 +314,17 @@ def verify_wasm_run(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return EXIT_USAGE
+    if getattr(args, "wasm_tree", False):
+        from agentteams.wasm_agent.delegation import verify_tree
+
+        tree = verify_tree(_root(args), args.verify_wasm_run)
+        print(f"wasm run tree {args.verify_wasm_run}: {'verified' if tree.ok else 'NOT VERIFIED'}; "
+              f"{len(tree.runs)} run(s)")
+        for err in tree.errors:
+            print(f"  error: {err}")
+        for orphan in tree.orphans:
+            print(f"  orphan: {orphan} names a run of this tree as its parent but no parent references it")
+        return EXIT_OK if tree.ok else EXIT_FAILED
     rep = verify_transcript(path)
     state = "verified" if rep.ok else "NOT VERIFIED"
     print(f"wasm run {args.verify_wasm_run}: {state}; {rep.records} record(s); "

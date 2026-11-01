@@ -22,7 +22,7 @@ from tests.test_wasm_agent_launch import NativePreparer, _fake_profiles, _stage0
 PKG = Path(L.__file__).parent
 REPO = PKG.parent.parent
 #: The modules whose code runs in Stage 1 (broker.py and transcript.py hold both sides and are checked by class).
-STAGE1_MODULES = ("host.py", "mediation.py", "tools.py", "stage1.py", "protocol.py", "budget.py")
+STAGE1_MODULES = ("host.py", "mediation.py", "tools.py", "stage1.py", "protocol.py", "budget.py", "delegation.py")
 _WRITE_CALLS = {"mkdir", "makedirs", "write_text", "write_bytes", "touch", "rename", "replace", "remove", "unlink",
                 "rmdir", "rmtree", "chmod", "symlink", "link", "truncate", "write_new_atomic", "copy", "copyfile",
                 "copytree", "mkdtemp", "mkstemp", "NamedTemporaryFile", "ensure_dir"}
@@ -83,13 +83,17 @@ def test_test_only_stand_ins_are_unreachable_from_production() -> None:
     """Rule 12 (S-9): the test brokers/preparers exist only under tests/; nothing in agentteams/ names them."""
     for path in (REPO / "agentteams").rglob("*.py"):
         text = path.read_text(encoding="utf-8", errors="replace")
-        for name in ("FnBroker", "NativePreparer", "_wasm_agent_helpers", "GuestRunner", "NativeGuestRunner"):
+        for name in ("FnBroker", "NativePreparer", "_wasm_agent_helpers", "GuestRunner", "NativeGuestRunner",
+                     "GuestPreparer", "_wasm_delegation_helpers"):
             assert name not in text, f"{path} mentions the test-only {name}"
     tree = ast.parse((PKG / "launch.py").read_text())
     built = {_name(c) for c in _calls(tree)} & {"LocalBroker", "PipeBroker", "StepPreparer"}
     assert built == {"LocalBroker", "StepPreparer"}            # Stage 1 builds the PipeBroker itself
     tree = ast.parse((PKG / "stage1.py").read_text())
     assert {_name(c) for c in _calls(tree)} & {"LocalBroker", "PipeBroker", "StepPreparer"} == {"PipeBroker"}
+    tree = ast.parse((PKG / "delegation.py").read_text())     # P09: children reach Stage 0 only over the pipe
+    assert {_name(c) for c in _calls(tree)} & {"LocalBroker", "PipeBroker", "StepPreparer", "FileJournal"} == {
+        "PipeBroker"}
 
 
 _HOOK = r"""

@@ -12,8 +12,9 @@ key; this program sees only model replies and host-tool outcomes, and decides th
 * ``model_reply`` (no tools) -> ``done`` (``end_turn`` / ``other``), a fixed ``continue`` after ``max_tokens`` (twice
   at most), else ``done failed``.
 * ``model_reply`` (tools)    -> run the in-guest tools here, in the order the model asked; ask the host for each
-  host tool (``run_code`` runs in a FRESH sandbox the host prepares, never in this guest; ``delegate`` is P09) one
-  op at a time, keeping the rest in the opaque ``carry``; then ``model`` with every result.
+  host tool (``run_code`` runs in a FRESH sandbox the host prepares, never in this guest; ``delegate`` runs a
+  sub-agent, P09, only to a target in the event's ``agent.delegates``) one op at a time, keeping the rest in the
+  opaque ``carry``; then ``model`` with every result.
 
 In-guest tools (``read_file``, ``list_dir``, ``search_files``, ``write_file``) accept only ``/project/<rel>``
 (read-only) and ``/scratch`` (read-write) paths that the event's ``mounts`` list; ``/src`` and ``/lib`` are refused.
@@ -496,7 +497,7 @@ def _valid_id(value: str) -> bool:
 
 
 def _on_model_reply(ev: dict[str, Any], carry: Any, tools: frozenset[str], mounts: list[Any],
-                    limits: dict[str, int]) -> dict[str, Any]:
+                    limits: dict[str, int], delegates: frozenset[str] = frozenset()) -> dict[str, Any]:
     """Answer a model reply: finish, continue, or start working through its tool uses in order."""
     uses, stop = _uses(ev.get("content")), ev.get("stop")
     continues = carry.get("continues", 0) if isinstance(carry, dict) else 0
@@ -517,6 +518,8 @@ def _on_model_reply(ev: dict[str, Any], carry: Any, tools: frozenset[str], mount
         elif use["name"] in IN_GUEST_TOOLS:
             ok, text = run_tool(use, mounts, limits)
             results.append(_result(use["id"], ok, text))
+        elif use["name"] == "delegate" and _delegate_input(use["input"]) and use["input"]["agent"] not in delegates:
+            results.append(_result(use["id"], False, f"delegate target not allowed: {use['input']['agent'][:64]}"))
         elif use["name"] in HOST_TOOLS:
             pending.append(use)
         else:
@@ -586,10 +589,12 @@ def decide(frame: dict[str, Any]) -> dict[str, Any]:
     ev, carry = frame["event"], frame["carry"]
     kind = ev.get("kind")
     tools = frozenset(t for t in frame["agent"]["tools"] if isinstance(t, str))
+    raw = frame["agent"].get("delegates")
+    delegates = frozenset(d for d in raw if isinstance(d, str)) if isinstance(raw, list) else frozenset()
     if kind == "start":
         return _model_op([])
     if kind == "model_reply":
-        return _on_model_reply(ev, carry, tools, frame["mounts"], _limits(frame["limits"]))
+        return _on_model_reply(ev, carry, tools, frame["mounts"], _limits(frame["limits"]), delegates)
     if kind in ("tool_result", "delegate_result", "denied"):
         return _on_host_outcome(ev, carry)
     raise BadEvent("bad-event", "unknown event kind")

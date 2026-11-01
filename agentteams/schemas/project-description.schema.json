@@ -486,6 +486,15 @@
         "prices_file": {
           "type": "string",
           "description": "Project-relative operator price table (vulnscan gateway_dialects.load_prices format) for the USD cap."
+        },
+        "delegation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "P09: multi-agent delegation settings. A sub-agent's grant is always the intersection of its own rendered grant and its delegator's (never wider, D11); no field can change that. Depth and per-run fan-out caps are budget.max_delegation_depth and budget.max_child_runs (hard caps 4 and 32).",
+          "properties": {
+            "default_share": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Fraction of the delegator's remaining model calls, tokens, wall clock and USD a sub-agent gets by default (0.5)."},
+            "max_tree_runs": {"type": "integer", "minimum": 1, "description": "Runs in one delegation tree, the root included (default 16; clamped to the hard cap 64)."}
+          }
         }
       }
     },

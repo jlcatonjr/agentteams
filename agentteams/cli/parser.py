@@ -612,6 +612,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Verify a WASM agent run's hash-chained transcript in --project (read-only). Exit 0 when it verifies.",
     )
     parser.add_argument(
+        "--tree",
+        action="store_true",
+        default=False,
+        dest="wasm_tree",
+        help="With --verify-wasm-run: verify the whole delegation tree under that root run (every sub-agent's "
+        "transcript and each parent/child binding; orphaned or forged child runs fail it).",
+    )
+    parser.add_argument(
         "--revoke-reason",
         metavar="TEXT",
         default=None,
