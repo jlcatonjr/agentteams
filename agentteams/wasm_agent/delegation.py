@@ -30,6 +30,15 @@ The ``delegate`` op comes from the parent guest, which the model drives: the tar
 becomes the child's first user message (DLP-checked like any prompt), and the child's output returns to the parent
 capped and labelled as data.
 
+**Per-run counters and revocation latency.** A child's budget is carved (``Budget.carve``) from what its parent
+has left of model calls, tokens, USD and wall clock; the carved calls, tokens and USD are debited from the parent
+(held until settled). ``max_steps`` and ``max_tool_calls`` are **per run**, not shared across the tree: a child's
+are clamped to what its parent has left but not debited from it, so a tree's total steps are bounded by those caps
+times its run count (capped by ``max_tree_runs`` and :data:`HARD_MAX_TREE_RUNS`). Revocation (the run's own, or an
+ancestor's through ``Revocation(upstream=)``) is checked **between** steps: before each guest step, model call and
+host tool, after each model reply and when a child returns, never inside one. A guest step already running
+finishes or is killed at its grant's ``timeout_s``.
+
 Stdlib only.
 """
 
@@ -247,6 +256,10 @@ def attenuate(parent: Any, child: Any, *, child_scratch_host: str | None) -> Att
 
 def child_grant(parent: Any, child: Any, *, child_scratch_host: str | None) -> Any:
     """The child's effective grant: never wider than *parent* (D11). No parameter can widen it.
+
+    Public API (``docs_src/api-reference/wasm-agent.md``): the grant half of :func:`attenuate`, for a caller that
+    needs the effective grant without the drop list. The runtime itself calls :func:`attenuate` (through
+    :func:`effective_child_spec`) because ``delegate-start`` records the drops.
 
     Args:
         parent: The delegator's effective ``Grant``.
@@ -799,20 +812,40 @@ class TreeReport:
 
 
 def _read_records(path: Path) -> list[dict[str, Any]]:
+    """A transcript's records, in order.
+
+    Raises:
+        FileNotFoundError: No transcript at *path*.
+        ValueError: The file is unreadable, or a line is not a JSON object (never silently dropped).
+    """
     try:
         lines = path.read_bytes().split(b"\n")
-    except OSError:
-        return []
+    except FileNotFoundError:
+        raise
+    except OSError as exc:
+        raise ValueError(f"unreadable ({exc.strerror or exc})") from exc
     out = []
-    for line in lines:
+    for n, line in enumerate(lines):
         if line:
             try:
                 rec = json.loads(line)
             except ValueError:
-                return []
-            if isinstance(rec, dict):
-                out.append(rec)
+                rec = None
+            if not isinstance(rec, dict):
+                raise ValueError(f"line {n + 1} is not a JSON object")
+            out.append(rec)
     return out
+
+
+def _grant_of(start: Mapping[str, Any]) -> Any | None:
+    """The ``agent.grant`` a ``run-start`` record names, rebuilt as a ``Grant``; None when absent or malformed."""
+    from agentteams.wasm_agent.host import grant_from_dict
+
+    agent = start.get("agent")
+    try:
+        return grant_from_dict(agent["grant"], W) if isinstance(agent, dict) else None
+    except (KeyError, TypeError, ValueError, W.WasmExecError):
+        return None
 
 
 def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
@@ -820,7 +853,8 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
 
     Per run: its transcript chain verifies (P05 ``verify_transcript``). Per ``delegate-start``: the child's run dir
     exists, its ``run-start`` names this parent, this delegation id and a ``parent_head`` that is the hash of that
-    ``delegate-start`` record; a matching ``delegate-end`` follows it, records the child's final head, and the child's
+    ``delegate-start`` record; its ``agent.grant`` hashes to the ``delegate-start``'s ``grant_sha256`` and is within
+    (:func:`grant_subset`) the parent's own ``run-start`` grant; a matching ``delegate-end`` follows it, records the child's final head, and the child's
     own ``run-end`` totals stay within its budget; each child budget is within its parent's. Every other run dir whose
     ``run-start`` names a run of this tree as its parent is an orphan (or a forged link).
 
@@ -839,7 +873,9 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
     run_dir_path(project_root, root_run_id)
     errors: list[str] = []
     runs: list[str] = []
-    expected: dict[str, tuple[str, str, str, dict[str, Any]]] = {root_run_id: ("", "", "", {})}
+    # run id -> (parent, delegation id, parent_head, parent budget, delegate-start grant_sha256, parent's grant)
+    expected: dict[str, tuple[str, str, str, dict[str, Any], str, Any]] = {
+        root_run_id: ("", "", "", {}, "", None)}
     queue = [root_run_id]
     while queue:
         rid = queue.pop(0)
@@ -852,9 +888,14 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
         if not rep.ok:
             errors.append(f"{rid}: transcript does not verify ({rep.error})")
             continue
-        recs = _read_records(path)
+        try:
+            recs = _read_records(path)
+        except (FileNotFoundError, ValueError) as exc:
+            errors.append(f"{rid}: transcript does not parse ({exc})")
+            continue
         start = recs[0] if recs and recs[0].get("kind") == "run-start" else {}
-        parent, delegation_id, parent_head, parent_budget = expected[rid]
+        parent, delegation_id, parent_head, parent_budget, grant_digest, parent_grant = expected[rid]
+        own_grant = _grant_of(start)
         link = start.get("link") if isinstance(start.get("link"), dict) else None
         if rid == root_run_id:
             if start.get("parent") is not None:
@@ -863,6 +904,11 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
                 link.get("delegation_id") != delegation_id or link.get("parent_head") != parent_head or \
                 link.get("root") != root_run_id:
             errors.append(f"{rid}: run-start does not bind to its parent's delegate-start")
+        if rid != root_run_id:
+            if own_grant is None or grant_sha256(own_grant) != grant_digest:
+                errors.append(f"{rid}: run-start grant differs from its parent's delegate-start grant_sha256")
+            elif parent_grant is None or not grant_subset(own_grant, parent_grant):
+                errors.append(f"{rid}: run-start grant is not within its parent's grant")
         budget = start.get("budget") if isinstance(start.get("budget"), dict) else {}
         for key in ("max_model_calls", "max_total_tokens"):
             if parent_budget and isinstance(budget.get(key), int) and budget[key] > parent_budget.get(key, 0):
@@ -881,7 +927,8 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
                     continue
                 starts[child] = rec
                 expected[child] = (rid, str(rec.get("id")), str(rec.get("hash")),
-                                   rec.get("budget") if isinstance(rec.get("budget"), dict) else {})
+                                   rec.get("budget") if isinstance(rec.get("budget"), dict) else {},
+                                   str(rec.get("grant_sha256")), own_grant)
                 queue.append(child)
             elif rec.get("kind") == "delegate-end":
                 child = rec.get("child_run_id")
@@ -899,12 +946,20 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
     base = Path(os.path.realpath(str(project_root))).joinpath(*RUNS_REL)
     try:
         names = sorted(os.listdir(base))
-    except OSError:
+    except OSError as exc:
+        # The root's transcript verified, so the runs dir existed a moment ago: orphans cannot be ruled out.
+        errors.append(f"cannot list the runs dir for orphans ({exc.strerror or exc})")
         names = []
     for name in names:
         if name in tree or not P.RUN_ID_RE.match(name):
             continue
-        recs = _read_records(base / name / TRANSCRIPT_NAME)[:1]
+        try:
+            recs = _read_records(base / name / TRANSCRIPT_NAME)[:1]
+        except FileNotFoundError:
+            continue        # a run dir without a transcript names no parent
+        except ValueError as exc:
+            errors.append(f"{name}: transcript does not parse, so it cannot be ruled out as an orphan ({exc})")
+            continue
         if recs and recs[0].get("kind") == "run-start" and recs[0].get("parent") in tree:
             orphans.append(name)
     return TreeReport(not errors and not orphans, tuple(runs), tuple(errors), tuple(orphans))

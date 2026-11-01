@@ -2,8 +2,8 @@
 
 The parent's ``delegate-start`` names the child run, the child's ``run-start`` binds to that record's hash, and the
 parent's ``delegate-end`` records the child's final head. ``verify_tree`` detects a tampered child head, a missing
-``delegate-end``, an orphan child and a forged parent. The wrapped Stage 1 (control pipe) path produces the same
-linkage; ``--verify-wasm-run --tree`` exposes the check.
+``delegate-end``, an orphan child, a forged parent, a forged child grant and an unparseable transcript line. The
+wrapped Stage 1 (control pipe) path produces the same linkage; ``--verify-wasm-run --tree`` exposes the check.
 """
 
 from __future__ import annotations
@@ -17,8 +17,10 @@ from typing import Any
 import pytest
 
 import build_team
+from agentteams import wasm_exec as W
 from agentteams.wasm_agent import launch as L
-from agentteams.wasm_agent.delegation import RESULT_LABEL, verify_tree
+from agentteams.wasm_agent.delegation import RESULT_LABEL, grant_sha256, verify_tree
+from agentteams.wasm_agent.host import grant_from_dict
 from agentteams.wasm_agent.protocol import canonical
 from agentteams.wasm_agent.transcript import GENESIS, verify_transcript
 from tests._wasm_delegation_helpers import (
@@ -129,6 +131,49 @@ def test_forged_parent_is_detected(tree: tuple[Path, str, str]) -> None:
     _rechain(_path(root, cid), recs)
     rep = verify_tree(root, rid)
     assert not rep.ok and any("does not bind" in e for e in rep.errors)
+
+
+def _widen(grant: dict[str, Any], root: Path) -> dict[str, Any]:
+    """*grant* plus a read-only mount of the whole project (outside every mount the parent holds)."""
+    return grant | {"mounts": [*grant["mounts"], {"host": str(root), "guest": "/project/all", "mode": "ro"}]}
+
+
+def test_forged_child_grant_is_detected(tree: tuple[Path, str, str]) -> None:
+    root, rid, cid = tree
+    recs = run_records(root, cid)
+    recs[0]["agent"]["grant"] = _widen(recs[0]["agent"]["grant"], root)
+    _rechain(_path(root, cid), recs)
+    rep = verify_tree(root, rid)
+    assert not rep.ok and any("differs from its parent's delegate-start grant_sha256" in e for e in rep.errors)
+
+
+def test_forged_child_grant_with_a_matching_digest_is_still_not_within_the_parent(
+        tree: tuple[Path, str, str]) -> None:
+    """Both transcripts rewritten consistently (digest, link, final head): the subset check still refuses it."""
+    root, rid, cid = tree
+    child = run_records(root, cid)
+    child[0]["agent"]["grant"] = _widen(child[0]["agent"]["grant"], root)
+    digest = grant_sha256(grant_from_dict(child[0]["agent"]["grant"], W))
+    parent = run_records(root, rid)
+    next(r for r in parent if r["kind"] == "delegate-start")["grant_sha256"] = digest
+    _rechain(_path(root, rid), parent)
+    child[0]["link"]["parent_head"] = next(r for r in run_records(root, rid) if r["kind"] == "delegate-start")["hash"]
+    _rechain(_path(root, cid), child)
+    parent = run_records(root, rid)
+    next(r for r in parent if r["kind"] == "delegate-end")["child_head"] = run_records(root, cid)[-1]["hash"]
+    _rechain(_path(root, rid), parent)
+    rep = verify_tree(root, rid)
+    assert not rep.ok and rep.errors == (f"{cid}: run-start grant is not within its parent's grant",)
+
+
+def test_an_unparseable_transcript_line_is_an_error_not_an_empty_run(tree: tuple[Path, str, str]) -> None:
+    root, rid, cid = tree
+    fake = secrets.token_hex(16)
+    (root / ".agentteams" / "wasm-runs" / fake).mkdir()
+    _path(root, fake).write_bytes(b'{"kind": "run-start", "parent": "' + rid.encode() + b'"}\n{not json\n')
+    rep = verify_tree(root, rid)
+    assert not rep.ok and rep.orphans == ()
+    assert any(e.startswith(f"{fake}: transcript does not parse") and "line 2" in e for e in rep.errors)
 
 
 def test_cli_verify_tree(tree: tuple[Path, str, str], capsys: pytest.CaptureFixture[str]) -> None:
