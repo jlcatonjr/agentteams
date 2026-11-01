@@ -952,7 +952,7 @@ def verify_tree(project_root: str | Path, root_run_id: str) -> TreeReport:
         try:
             recs = _read_records(base / name / TRANSCRIPT_NAME)[:1]
         except FileNotFoundError:
-            continue        # a run dir without a transcript names no parent
+            recs = []       # a run dir without a transcript names no parent
         except ValueError as exc:
             errors.append(f"{name}: transcript does not parse, so it cannot be ruled out as an orphan ({exc})")
             continue

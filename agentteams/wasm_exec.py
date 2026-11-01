@@ -506,22 +506,8 @@ def _control_dir(root: str, *parts: str, what: str = "verified copies") -> str:
 
 
 def path_inside(child: str, parent: str) -> bool:
-    """Whether path *child* is *parent* or lies below it, by whole components (never a bare string prefix).
-
-    The one containment test the WASM modules share: ``wasm_guests`` reaches it through the injected executor (both
-    stay import-free for the bundle), the package modules import it. Paths are compared as given; callers pass
-    resolved or normalized paths and fold case themselves where they need to.
-
-    Args:
-        child: The candidate path.
-        parent: The containing path (normalized; a trailing separator only matters for equality).
-
-    Returns:
-        True when *child* equals *parent* or starts with *parent* followed by a separator.
-
-    Raises:
-        Nothing.
-    """
+    """Whether *child* is *parent* or below it by whole components (the WASM modules' one containment test).
+    Args: child, parent (normalized or resolved by the caller). Returns: the containment. Raises: nothing."""
     return child == parent or child.startswith(parent.rstrip(os.sep) + os.sep)
 
 
