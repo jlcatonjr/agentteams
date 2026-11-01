@@ -314,6 +314,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/cli/sandbox_relaxation_gate.py",  # Rule 15/D7: the Ed25519 gate for turning a sandbox off / widening
     "agentteams/cli/os_sandbox_switch.py",      # D7/S1: decides WHEN that gate engages (an edit could step around it)
     "agentteams/sandbox_state.py",              # D7: SandboxState, its record, and the fail-toward-on previous state
+    # P16 (2026-11-01, @security review-pending): host_features holds DEFAULT_PRIVILEGE_PROFILE ("confined") and the
+    # profile -> *:sandbox token expansion every emitter reads, and since P00 the os_sandbox="off" token strip and the
+    # advisory's requested= override. A silent edit drops a framework's sandbox token, or strips them when the switch
+    # is absent, turning the OS boundary off without the relaxation gate seeing an "off".
+    "agentteams/host_features.py",
     # WASM configuration (P01). wasm_config is the one validator between the agent-writable brief's wasm_sandbox
     # block and a guest's mounts: its read-path bans (control plane, credentials, trust roots, symlinks), the fixed
     # scratch location, the WASM switch R1's control-plane protection reads, and wasm_eligible (offering run_wasm is
@@ -345,6 +350,11 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/wasm_guests.py",
     "agentteams/data/wasm_probes/probe.py",
     "agentteams/data/wasm_probes/probe.mjs",
+    # P16 (2026-11-01, @security review-pending): the core-module deny probe wasm_exec.available() runs before it
+    # trusts a wasmtime, shipped as binary (the .wat is test source only). wasm_mcp.BUNDLE_SHA256 checks the
+    # installed copy, but nothing pinned the package bytes: a swapped probe that never attempts the denied access
+    # reports every widened runtime as confined.
+    "agentteams/data/wasm_deny_probe.wasm",
     # The trust anchor of every WASM resolve: the pinned versions, URLs and sha256s. An unpinned edit swaps in
     # another binary's hash and resolve() then vouches for it (wasm_runtime.PINS_SHA256 is computed from this file
     # at import, so it cannot pin itself; the manifest does).
@@ -359,6 +369,14 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # given run_wasm (C-3), and the list of launching configs R1 write-protects. A silent edit hands the tool to an
     # auditor or drops a config from the session denyWrite.
     "agentteams/frameworks/_wasm_wiring.py",
+    # P16 (2026-11-01, @security review-pending): the two emitters that carry _wasm_wiring's decision into a config.
+    # codex_mcp_emit's first_party_tables carve-out (P11) is the one path that writes a non-read-only server into
+    # .codex/config.toml without codex:mcp, bounded by _first_party_problems to the compute-only agentteams_wasm
+    # session table; goose_recipe_grants picks each recipe's managed extensions (runner, agentteams_wasm) and drops
+    # operator servers from restricted recipes, and holds P13's delegation-row execute carve-out. A silent edit
+    # wires a widened server, hands a recipe an extension its agent was not granted, or loosens either carve-out.
+    "agentteams/codex_mcp_emit.py",
+    "agentteams/frameworks/goose_recipe_grants.py",
     # The native-exec policy and its per-provider verdict (WASM P13): which agents lose native exec (C-3 narrowing,
     # and the pre-narrowing tools P11 grants run_wasm on), the gate keep set (native-exec-keep effects), and the one
     # place enforcement is claimed. _codex_wasm_gate decides when the Codex role gate runs in WASM mode and carries
