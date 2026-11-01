@@ -98,7 +98,13 @@ Provider keys are read from the environment only, by the launcher, and handed to
   switch is constraint-relaxing (`sandbox-os-off`) and needs a signed decision in a governed workspace.
 - **Read-only mounts** are never mounted writable: `snapshot` is a size-capped copy per run (a read path over the cap
   refuses the run); `os` is a nested OS profile.
-- **Delegation** (`delegate`) is refused by the host until the delegation runtime lands.
+- **Delegation** (`delegate`) runs a sub-agent of the team listed in the agent's `delegates`. A sub-agent's grant
+  is the intersection of its own rendered grant and its delegator's, never wider: an orchestrator with a
+  compute-only grant has compute-only sub-agents. To give an agent its own wider grant, run it directly
+  (`--run-wasm-agent <slug>`). Each sub-agent has its own transcript; `--verify-wasm-run <root> --tree` checks the
+  whole tree, and `--revoke-wasm-run <root>` stops every run below it. Caps: `wasm_runtime.budget.max_delegation_depth`
+  (default 2, at most 4), `max_child_runs` (8, at most 32) and `wasm_runtime.delegation.max_tree_runs` (16, at most
+  64); `wasm_runtime.delegation.default_share` (0.5) is the share of the remaining budget a sub-agent gets.
 
 ## Limits of v1
 

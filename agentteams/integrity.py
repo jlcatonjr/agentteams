@@ -401,6 +401,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/frameworks/wasm.py",
     "agentteams/wasm_agent/team.py",
     "agentteams/cli/wasm_agent_commands.py",
+    # WASM delegation (P09, D11). delegation holds the grant algebra (a sub-agent's grant is never wider than its
+    # delegator's), the depth/fan-out/tree caps, cycle refusal, budget carving and the tree verifier; child_runs is
+    # Stage 0's child-run service (it alone builds a child's attenuated grant, run dir and preparer). A silent edit
+    # widens a child's grant, lifts a cap, or lets a child run escape the tree's transcript linkage.
+    "agentteams/wasm_agent/delegation.py",
+    "agentteams/wasm_agent/child_runs.py",
     # The learned-block doc sync (self-updating-agents PR-A, 2026-10-01). It runs OUTSIDE every
     # agent sandbox (an operator systemd unit) and writes agent files, so its gates — scan,
     # fence-token refusal, byte-identity outside the block, O_NOFOLLOW/realpath checks, the Claude
