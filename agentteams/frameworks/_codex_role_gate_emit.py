@@ -36,7 +36,7 @@ CODEX_ROLE_GATE_PROJECT_PATH = ".agentteams/bin/codex-role-gate.py"
 CODEX_HOOKS_PROJECT_PATH = ".codex/hooks.json"
 #: sha256 of the shipped gate (``agentteams/data/codex-role-gate.py``). This module is integrity-pinned, so the
 #: runner checks the installed copy against it; ``tests/test_codex_role_gate.py`` keeps it current.
-CODEX_ROLE_GATE_SHA256 = "8e2a3bea7a3b0022c85db521431699506641859bcc7577360bb82031e9f874c1"
+CODEX_ROLE_GATE_SHA256 = "163ef4dc89d99e747fbe78e40fea3998019bf0bb0e8bc4a23ec008485aad623c"
 #: The hook's timeout. Codex lets a call through when a hook times out (probed live), so this is generous and
 #: the gate is kept fast; it is stated so the bound is visible rather than Codex's unstated default.
 HOOK_TIMEOUT_SECONDS = 60

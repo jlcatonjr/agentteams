@@ -1218,6 +1218,106 @@
           }
         }
       }
+    },
+    "wasm_enforcement": {
+      "type": "object",
+      "description": "WASM plan P13: per-provider verdict on denying native code execution to WASM-eligible agents (wasm_enforcement.py), keyed by framework id. Present only while WASM is on.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subagents",
+          "top_level",
+          "mechanism",
+          "evidence",
+          "reason",
+          "os_sandbox",
+          "control_plane_merged",
+          "exempt",
+          "kept_native",
+          "fallback",
+          "changed_agents"
+        ],
+        "properties": {
+          "subagents": {
+            "type": "string",
+            "enum": [
+              "enforced",
+              "conditional",
+              "declared",
+              "advisory"
+            ],
+            "description": "Native-exec denial for sub-agents. enforced/conditional only when the OS sandbox is on and the METAPLAN R1 control-plane rules are merged; otherwise advisory with the reason."
+          },
+          "top_level": {
+            "type": "string",
+            "enum": [
+              "advisory"
+            ],
+            "description": "The top-level session (orchestrator / operator) is always advisory."
+          },
+          "delegates": {
+            "type": "string",
+            "enum": [
+              "advisory"
+            ],
+            "description": "Goose only: a delegate inherits the orchestrator's extensions (native exec kept, no run_wasm)."
+          },
+          "mechanism": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string",
+            "enum": [
+              "in-repo",
+              "spike",
+              "unverified"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why the cell is advisory, declared or conditional (empty when enforced)."
+          },
+          "os_sandbox": {
+            "type": "boolean"
+          },
+          "control_plane_merged": {
+            "type": "boolean"
+          },
+          "exempt": {
+            "type": "array",
+            "description": "Fixed exempt roles (orchestrator, team builder).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "kept_native": {
+            "type": "array",
+            "description": "Eligible agents keeping native exec by native_exec_keep or native_exec: keep (each a native-exec-keep effect).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "fallback": {
+            "type": "array",
+            "description": "Eligible agents keeping native exec because run_wasm is not available on this host (replace fallback; not an operator relaxation).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
+          "changed_agents": {
+            "type": "array",
+            "description": "Agents whose native exec (canonical execute) was removed.",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

@@ -347,6 +347,11 @@ def run_standalone_modes(
         wasm_line = _wasm_wiring.report_line(manifest, framework)
         wasm_problems = _wasm_wiring.check_wiring_problems(wiring_root, framework, manifest)
         messages = [*messages, *([wasm_line] if wasm_line else []), *(f"ERROR: {p}" for p in wasm_problems)]
+        from agentteams import wasm_enforcement  # P13: the verdict re-computed against the live config
+
+        messages += wasm_enforcement.notices(framework, wasm_enforcement.enforcement_report(
+            manifest, framework, project_root=Path(wiring_root),
+            acts=wasm_enforcement.planned_actions(manifest, framework)))
         ok = ok and not wasm_problems
         # mathAgents M6-F4: an unresolved xcrun launcher fails every confined call (exit 71); advisory, exit-neutral.
         messages = [*messages, *xcrun_launcher_lines(wiring_root, description)]

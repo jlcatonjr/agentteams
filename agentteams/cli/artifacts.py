@@ -807,6 +807,9 @@ def _emit_host_mcp_artifacts_if_enabled(manifest: dict, project_root: Path) -> N
     from agentteams.cli.wasm_sandbox_switch import install_wasm_binary
 
     install_wasm_binary(manifest, project_root)  # WASM plan P11: the bundle's binary file (emit writes text only)
+    from agentteams.cli.wasm_sandbox_switch import report_wasm_enforcement
+
+    report_wasm_enforcement(manifest, project_root)  # WASM plan P13: per-provider verdict + [WASM-ENFORCEMENT]
 
 
 def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:

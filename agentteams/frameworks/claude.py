@@ -158,7 +158,10 @@ class ClaudeAdapter(FrameworkAdapter):
             allowed_tools = ", ".join([allowed_tools, *runner_mcp.tool_names(grant["tools"])])
             mcp_block = runner_mcp.claude_block(agent_slug, grant["tools"], "staged",
                                                 runner_mcp.interpreter())
-        wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "claude", agent_slug, allowed_tools.split(", "))
+        from agentteams.wasm_enforcement import wiring_tools  # P13: the pre-narrowing tools decide eligibility
+
+        wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "claude", agent_slug,
+                                                  wiring_tools(manifest, agent_slug, allowed_tools.split(", ")))
         if wasm_args is not None:
             # P11: an eligible agent's own agentteams_wasm copy (its grant in the launch flags), after the runner.
             from agentteams import wasm_mcp
