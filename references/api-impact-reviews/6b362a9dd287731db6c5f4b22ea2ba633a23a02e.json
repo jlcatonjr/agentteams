@@ -1,0 +1,8 @@
+{
+  "patch_id": "6b362a9dd287731db6c5f4b22ea2ba633a23a02e",
+  "commit": "a1b1473e9d8e03e1010be4577ccbf8e61a4d0350",
+  "subject": "fix(vulnscan): npm moves fail closed and live in npm_ops (security + hygiene review)",
+  "impact": "1 modules added, 5 symbols added, 3 symbols removed",
+  "note": "Re-recorded after stacking fix/vfail-f1d-unedited-fence, fix/vfail-f2-offregistry-base, fix/vfail-f3-peer-groups and fix/vfail-f1c-same-run-major onto main a9cecfbc: CHANGELOG conflicts changed the patch-ids; code as reviewed on each branch (@security PASS after conditions, @code-hygiene no blocking findings), plus one consolidation (npm_ops.has_workspaces removed in favour of the identical npm_major.in_workspaces).",
+  "recorded_at": "2026-11-01T22:40:05Z"
+}
