@@ -64,6 +64,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `npm_groups.py` and `npm_ops.py` join the enforcement integrity set; `semver_line` / `has_workspaces` move to
   `npm_ops`, and `manifests.npm_packages` / `npm_entry_name` are the one `packages` walk both readers use.
 
+### fixed (vulnscan: `stage-major` is requested in the run that can use it)
+
+- **`get_fix_plans` marks a plan whose next step is `stage-major`.** The executor serves requests after the agent's
+  run, so the agent never saw, in its own run, the held `stage-fix` ("nothing fixable without a major jump") that
+  makes `stage-major` applicable; it wrote "stage-major next run", and the next run requested `stage-fix` again
+  (held), every day. `executor_guard.write_plan_levels` now also records `major_next` in `plan-levels.json`: a
+  remediate-level repository whose last `stage-fix` failed that way and is still held at the current fix plan
+  (`retry_guard.major_next_since`; no `stage-major` row since), with no staged fix, no `fix` row, and `major-held`
+  rows `stage-major` can take (`executor_guard.stage_major_packages`: requirements pins, and npm packages
+  `package.json` lists directly outside npm workspaces; transitive-only rows never mark). The MCP server heads
+  such a plan with `stage-fix held since <date>: nothing fixable without a major jump → request stage-major`.
+  The `daily_remediation` fence (v=7) has the agent request `stage-major` for it in the same run, with every
+  existing guard kept. The executor still enforces every `stage-major` precondition itself.
+
 ### added (vulnscan: scan mirrors)
 
 - **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a

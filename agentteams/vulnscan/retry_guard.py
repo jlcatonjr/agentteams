@@ -122,6 +122,32 @@ def futile_reason(op: str, target: str, rows: list[dict[str, Any]]) -> str:
             "rows, if the grant allows it)")
 
 
+def major_next_since(target: str, rows: list[dict[str, Any]]) -> str:
+    """Return the day ``target``'s ``stage-fix`` was held for :data:`FUTILE_DETAIL`, when ``stage-major`` is next.
+
+    That is: its last ``stage-fix`` outcome failed "nothing fixable without a major jump" (never the upstream
+    variant), :func:`futile_reason` still holds it (the current fix plan is the one of that day), and no
+    ``stage-major`` row of any kind follows that outcome (a later ``stage-major`` result, refusal included, is
+    the agent's to read, not a reason to ask again). The caller still checks the plan for major rows
+    ``stage-major`` can take; the executor re-checks everything either way.
+
+    Args:
+        target: Canonical repository path.
+        rows: Ledger rows, in ledger order.
+
+    Returns:
+        The local date (``YYYY-MM-DD``) of that ``stage-fix`` result, or "".
+    """
+    found = _last_futile(target, rows, "stage-fix")
+    if found is None or found[1] != FUTILE_DETAIL or not futile_reason("stage-fix", target, rows):
+        return ""
+    last = max(i for i, r in enumerate(rows) if r.get("op") == "stage-fix" and r.get("target") == target
+               and r.get("kind") in ("done", "failed"))
+    if any(r.get("op") == "stage-major" and r.get("target") == target for r in rows[last + 1:]):
+        return ""
+    return found[0]
+
+
 def _read_held() -> dict[str, str]:
     try:
         data = json.loads(_held_file().read_text(encoding="utf-8"))

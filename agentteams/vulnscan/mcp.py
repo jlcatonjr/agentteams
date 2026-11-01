@@ -12,7 +12,8 @@ Tools:
 - ``list_findings``: findings as compact JSON, optionally filtered by minimum severity or target.
 - ``get_fix_plans``: the deterministic fix plans, one per git repository, each headed by the
   repository alias that ``stage-fix`` takes as its target. A plan for a repository enrolled below
-  ``remediate`` is headed "scan only" instead (the executor refuses ``stage-fix``/``open-pr`` there).
+  ``remediate`` is headed "scan only" instead (the executor refuses ``stage-fix``/``open-pr`` there). A plan
+  whose ``stage-fix`` is held for "nothing fixable without a major jump" says ``stage-major`` is next.
 - ``request``: queue ``stage-fix`` / ``stage-major`` / ``open-pr`` / ``close-superseded`` / ``server-audit`` /
   ``server-dryrun`` on a target, with a rationale. ``stage-major`` is ``stage-fix`` with semver-major upgrades
   allowed (only a grant naming it covers it): for a repository whose plan shows ``major-held`` rows once
@@ -238,7 +239,10 @@ class Server:
         """Return one plan under a heading naming its ``stage-fix`` target (the file name when the plan has none).
 
         A plan whose repository is enrolled below ``remediate`` (or every plan, when the host could not read
-        the registry) is headed "scan only" instead, without a target: the executor refuses it.
+        the registry) is headed "scan only" instead, without a target: the executor refuses it. A plan the host
+        listed under ``major_next`` (:func:`agentteams.vulnscan.executor_guard.write_plan_levels`) and with no
+        staged fix gets a line saying ``stage-major`` is its next step: the agent never sees, in its own run, the
+        held ``stage-fix`` that says so. The executor re-checks every precondition when it stages.
         """
         text = self._read(path)
         lines = text.splitlines()   # the target line is the plan's third line; nothing further down counts
@@ -249,7 +253,15 @@ class Server:
             why = (f"enrolled at {scan_only[target.group(1)]}" if target.group(1) in scan_only
                    else "the host could not read the project registry")
             return f"## scan only — do not request stage-fix ({why}) ({path.name})\n\n{text}"
-        return f"## {'stage-fix target `' + target.group(1) + '`' if target else path.name} ({path.name})\n\n{text}"
+        head = f"## {'stage-fix target `' + target.group(1) + '`' if target else path.name} ({path.name})\n\n"
+        nxt = levels.get("major_next") if isinstance(levels.get("major_next"), dict) else {}
+        mark = nxt.get(target.group(1)) if target and target.group(1) not in self._staged() else None
+        if isinstance(mark, dict) and isinstance(mark.get("packages"), list) and mark["packages"]:
+            names = ", ".join(str(n) for n in mark["packages"][:50])
+            head += (f"**stage-fix held since {str(mark.get('since', ''))[:10]}: nothing fixable without a major jump "
+                     f"→ request `stage-major` for this repository now** (no `stage-fix` first; major-held rows "
+                     f"stage-major can take: {names})\n\n")
+        return head + text
 
     def _findings(self, args: dict[str, Any]) -> dict[str, Any]:
         """Filter today's findings, most urgent first (malicious, then by severity), capped at MAX_FINDINGS.

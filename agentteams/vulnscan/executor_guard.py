@@ -461,6 +461,79 @@ def require_remote_branch(wt: Path, branch: str) -> None:
         raise _exec_error(f"base branch {branch!r} does not exist on origin; refusing to open the PR")
 
 
+_PLAN_NPM = re.compile(r"^## npm: `([^`\n]+)`$")
+
+
+def stage_major_packages(plan: str, repo: Path) -> list[str]:
+    """Return the ``major-held`` packages of a fix plan that ``stage-major`` could take, or [] when it has a ``fix`` row.
+
+    The rules are :func:`agentteams.vulnscan.fix.fix_path`'s with ``allow_major``: a requirements pin (the plan's
+    top table) is taken; an npm package is taken only when the ``package.json`` beside its lockfile lists it
+    directly (:func:`.npm_major.direct_section`) and the lockfile is not in npm workspaces. A transitive-only or
+    workspace row stays held, as does every row of a symlinked or unreadable ``package.json``. Any ``fix`` row
+    returns [] (the non-major fix is staged first). The executor re-checks all of it when it stages.
+
+    Args:
+        plan: The fix plan's Markdown (:meth:`agentteams.vulnscan.fix.FixResult.markdown`).
+        repo: The plan's repository (its ``stage-fix`` target).
+
+    Returns:
+        Package names, in plan order, without duplicates.
+    """
+    from agentteams.vulnscan import fix, npm_major   # lazy: only the host's plan marking reads manifests
+
+    found: list[str] = []
+    section: str | None = ""   # "": the requirements table; a lockfile path: an npm section; None: anything else
+    root = repo.resolve()
+    for line in plan.splitlines():
+        if line.startswith("## "):
+            m = _PLAN_NPM.fullmatch(line)
+            section = m.group(1) if m else None
+            continue
+        cells = [c.strip() for c in line.split("|")[1:]] if line.startswith("|") and section is not None else []
+        name_at, action_at = (1, 4) if section == "" else (0, 3)   # File | Package | ... vs Package | ...
+        if len(cells) <= action_at:
+            continue
+        name, action = cells[name_at], cells[action_at]
+        if action == "fix":
+            return []
+        if action != "major-held":
+            continue
+        if section:
+            lock = (root / section).resolve()
+            pkg = lock.parent / "package.json"
+            if not lock.is_relative_to(root) or pkg.is_symlink() or fix._npm_workspaces(lock):
+                continue
+            try:
+                manifest = json.loads(pkg.read_text(encoding="utf-8"))
+                direct = npm_major.direct_section(manifest, name) if isinstance(manifest, dict) else ""
+            except (OSError, ValueError):
+                direct = ""
+            if not direct:
+                continue
+        if name not in found:
+            found.append(name)
+    return found
+
+
+def _major_next(plans: list[tuple[str, str]]) -> dict[str, dict[str, Any]]:
+    """Return ``{target: {"since", "packages"}}`` for the plans whose next step is ``stage-major`` (see the caller)."""
+    from agentteams.vulnscan import executor, ledger, retry_guard   # lazy: the executor imports this module
+
+    try:
+        rows = ledger.read()
+    except (OSError, ValueError):   # an untrusted ledger marks nothing; the executor refuses on it anyway
+        return {}
+    staged = {r.rstrip("/") for rec in executor.staged_records() if isinstance(r := rec.get("repo"), str)}
+    out: dict[str, dict[str, Any]] = {}
+    for target, text in plans:
+        since = "" if target.rstrip("/") in staged else retry_guard.major_next_since(target, rows)
+        packages = stage_major_packages(text, Path(target)) if since else []
+        if packages:
+            out[target] = {"since": since, "packages": packages}
+    return out
+
+
 def write_plan_levels(run_dir: Path) -> Path:
     """Record which of the run's fix plans name a repository the executor will refuse as scan-only.
 
@@ -470,8 +543,15 @@ def write_plan_levels(run_dir: Path) -> Path:
     Args:
         run_dir: The run directory (host side, before the agent starts).
 
+    It also records (``major_next``) each remediate-level plan whose next step is ``stage-major``, because the
+    agent never sees in its own run the result of a ``stage-fix`` it requested (the executor serves requests
+    after it): the repository's last ``stage-fix`` found nothing fixable without a major jump and is held at
+    this plan (:func:`.retry_guard.major_next_since`), no ``stage-major`` followed, no fix is staged for it, and
+    the plan has no ``fix`` row but has ``major-held`` rows ``stage-major`` can take (:func:`stage_major_packages`).
+
     Returns:
-        The file written: ``{"scan_only": {target: level}, "registry_problem": str}``.
+        The file written: ``{"scan_only": {target: level}, "registry_problem": str,
+        "major_next": {target: {"since": date, "packages": [name, ...]}}}``.
     """
     try:
         entries = registry.load()
@@ -479,12 +559,18 @@ def write_plan_levels(run_dir: Path) -> Path:
     except (OSError, ValueError) as exc:
         entries, problem = [], str(exc)[:300]
     scan_only: dict[str, str] = {}
+    remediate: list[tuple[str, str]] = []
     for plan in sorted([*run_dir.glob("fixplan-*.md"), *run_dir.glob("fix-*.md")]):
-        lines = plan.read_text(encoding="utf-8", errors="replace").splitlines()
+        text = plan.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
         m = repo_alias.PLAN_TARGET.fullmatch(lines[2]) if len(lines) > 2 else None
         entry = registry.find(entries, Path(m.group(1))) if m else None
         if m and entry is not None and entry.level != "remediate":
             scan_only[m.group(1)] = entry.level
+        elif m:
+            remediate.append((m.group(1), text))
+    major_next = {} if problem else _major_next(remediate)
     path = run_dir / mcp.PLAN_LEVELS_FILE
-    path.write_text(json.dumps({"scan_only": scan_only, "registry_problem": problem}, indent=2), encoding="utf-8")
+    path.write_text(json.dumps({"scan_only": scan_only, "registry_problem": problem, "major_next": major_next},
+                               indent=2), encoding="utf-8")
     return path
