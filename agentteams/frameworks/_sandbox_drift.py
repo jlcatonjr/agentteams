@@ -28,11 +28,15 @@ GOOSE_USER_GLOBAL_NOTE = ("This file is user-global (~/.config/goose/config.yaml
                           "project on this machine, not only this one.")
 
 #: The control-plane rules (METAPLAN R1) the live Claude settings must carry while WASM is on:
-#: ``(label, section, value)``; ``section`` is ``denyWrite`` (sandbox.filesystem) or ``deny`` (permissions).
-_CLAUDE_CONTROL_PLANE_RULES: tuple[tuple[str, str, str], ...] = (
-    ("sandbox.filesystem.denyWrite .agentteams", "denyWrite", ".agentteams"),
-    ("permissions.deny Edit(/.agentteams/**)", "deny", "Edit(/.agentteams/**)"),
-    ("permissions.deny Edit(/.claude/agents/**)", "deny", "Edit(/.claude/agents/**)"),
+#: ``(label, section, accepted values)``; ``section`` is ``denyWrite`` (sandbox.filesystem) or ``deny``
+#: (permissions); the rule holds when any accepted value is present. The ``.claude`` shell denyWrite (the emitted
+#: block's framework config dir, or at least ``.claude/agents``) is what stops a sandboxed shell from re-adding
+#: ``Bash`` to a narrowed subagent's ``tools:``; ``permissions.deny Edit`` covers only the built-in tools.
+_CLAUDE_CONTROL_PLANE_RULES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("sandbox.filesystem.denyWrite .agentteams", "denyWrite", (".agentteams",)),
+    ("sandbox.filesystem.denyWrite .claude", "denyWrite", (".claude", ".claude/agents")),
+    ("permissions.deny Edit(/.agentteams/**)", "deny", ("Edit(/.agentteams/**)",)),
+    ("permissions.deny Edit(/.claude/agents/**)", "deny", ("Edit(/.claude/agents/**)",)),
 )
 
 
@@ -176,9 +180,9 @@ def verify_control_plane_merged(project_root: Path,
             "deny": {v for v in (perms.get("deny") or []) if isinstance(v, str)}}
     rules = list(_CLAUDE_CONTROL_PLANE_RULES)
     for p in extra_protected:
-        rules += [(f"sandbox.filesystem.denyWrite {p}", "denyWrite", p),
-                  (f"permissions.deny Edit(/{p})", "deny", f"Edit(/{p})")]
-    missing = [label for label, section, value in rules if value not in have[section]]
+        rules += [(f"sandbox.filesystem.denyWrite {p}", "denyWrite", (p,)),
+                  (f"permissions.deny Edit(/{p})", "deny", (f"Edit(/{p})",))]
+    missing = [label for label, section, values in rules if not have[section].intersection(values)]
     return not missing, missing
 
 

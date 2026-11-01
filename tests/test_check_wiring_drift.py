@@ -83,10 +83,21 @@ def test_control_plane_merged(tmp_path):
                      "permissions": {"deny": ["Edit(/.agentteams/**)"]}})
     merged, missing = verify_control_plane_merged(tmp_path, (".mcp.json",))
     assert not merged
-    assert missing == ["permissions.deny Edit(/.claude/agents/**)", "sandbox.filesystem.denyWrite .mcp.json",
-                       "permissions.deny Edit(/.mcp.json)"]
-    _live(tmp_path, {"sandbox": {"filesystem": {"denyWrite": [".agentteams"]}},
+    assert missing == ["sandbox.filesystem.denyWrite .claude", "permissions.deny Edit(/.claude/agents/**)",
+                       "sandbox.filesystem.denyWrite .mcp.json", "permissions.deny Edit(/.mcp.json)"]
+    _live(tmp_path, {"sandbox": {"filesystem": {"denyWrite": [".agentteams", ".claude"]}},
                      "permissions": {"deny": ["Edit(/.agentteams/**)", "Edit(/.claude/agents/**)"]}})
+    assert verify_control_plane_merged(tmp_path) == (True, [])
+
+
+@pytest.mark.parametrize("shell_deny", [".claude", ".claude/agents"])
+def test_control_plane_needs_the_claude_shell_denywrite(tmp_path, shell_deny):
+    """P13 C1: the Edit deny covers only the built-in tools; the shell must be write-denied `.claude` (or its
+    `agents/` dir) too, or a sandboxed Bash re-adds a narrowed subagent's shell."""
+    perms = {"deny": ["Edit(/.agentteams/**)", "Edit(/.claude/agents/**)"]}
+    _live(tmp_path, {"sandbox": {"filesystem": {"denyWrite": [".agentteams"]}}, "permissions": perms})
+    assert verify_control_plane_merged(tmp_path) == (False, ["sandbox.filesystem.denyWrite .claude"])
+    _live(tmp_path, {"sandbox": {"filesystem": {"denyWrite": [".agentteams", shell_deny]}}, "permissions": perms})
     assert verify_control_plane_merged(tmp_path) == (True, [])
 
 
