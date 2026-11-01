@@ -179,7 +179,7 @@ def _render_in(root: Path) -> tuple[Any, str]:
         try:
             rc: Any = build_team.main(["--description", str(brief), "--framework", "claude", "--project", str(root),
                                        "--yes", "--no-scan", *extra])
-        except Exception as exc:   # noqa: BLE001 - the outcome under test
+        except W.WasmExecError as exc:   # today's outcome (the xfail below); anything else errors the test
             rc = exc
     return rc, err.getvalue()
 
