@@ -224,6 +224,8 @@ def _validate_option_combinations(parser: argparse.ArgumentParser, args: argpars
         parser.error("--task, --task-file and --wasm-provider require --run-wasm-agent")
     if getattr(args, "wasm_reason", None) is not None and getattr(args, "revoke_wasm_run", None) is None:
         parser.error("--reason requires --revoke-wasm-run")
+    if getattr(args, "wasm_tree", False) and getattr(args, "verify_wasm_run", None) is None:
+        parser.error("--tree requires --verify-wasm-run")
 
     # wasm (plan P08): agentteams' own runtime format is generate-only in v1. No convert, bridge, interop (either
     # direction) or absorb: those paths would need CAI mappings for `delegates` and grants (plan Q-2).

@@ -7,7 +7,7 @@
 ``.agentteams-wasm/TEAM.md``           team instructions, prepended to every agent's system prompt
 ``.agentteams-wasm/grants.json``       per-agent ``Grant(mounts, limits)`` (project-relative hosts) + ``read_only_via``
 ``.agentteams-wasm/runtime.json``      provider preset, tier -> model map (``null`` unless the brief sets one),
-                                       budget, prices file, ``host_os_confine``
+                                       budget, prices file, delegation settings (P09), ``host_os_confine``
 ``.agentteams-wasm/README.md``         how to run it, enforcement status (documentation; locked, never loaded)
 ``.agentteams/wasm-team.lock.json``    sha256 of every file above (control plane; written by :func:`write_lock`)
 =====================================  ==========================================================================
@@ -65,7 +65,7 @@ TIERS = ("primary", "cheap")
 PROVIDER_NAMES = ("anthropic", "openai", "openrouter", "xai", "ollama", "lmstudio", "openai-compatible", "gemini",
                   "stub")
 #: The brief's ``wasm_runtime`` keys (``project-description.schema.json``).
-BRIEF_RUNTIME_KEYS = ("provider", "base_url", "models", "budget", "prices_file")
+BRIEF_RUNTIME_KEYS = ("provider", "base_url", "models", "budget", "prices_file", "delegation")
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _LIST_RE = re.compile(r"^\[((?:[a-z0-9_-]+(?:, [a-z0-9_-]+)*)?)\]$")
 _REL_RE = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
@@ -198,16 +198,19 @@ def normalize_wasm_runtime(raw: object) -> dict[str, Any]:
         raw: The brief value.
 
     Returns:
-        ``{"provider", "base_url", "models": {"primary", "cheap"}, "budget", "prices_file"}`` with ``None`` for
-        anything unset and the budget filled with the ``Budget`` defaults.
+        ``{"provider", "base_url", "models": {"primary", "cheap"}, "budget", "prices_file", "delegation"}`` with
+        ``None`` for anything unset, the budget filled with the ``Budget`` defaults and ``delegation``
+        (``default_share``, ``max_tree_runs``; P09) with its defaults, clamped to the hard caps.
 
     Raises:
         ValueError: Unknown keys, wrong types, an unknown provider, a base URL that fails P06's URL policy (or is set
-            for the stub), an invalid budget, or a prices file that is not a project-relative path.
+            for the stub), an invalid budget or delegation block, or a prices file that is not a project-relative
+            path.
     """
     from agentteams.model_providers._config import _check_base_url
     from agentteams.model_providers import ModelProviderError
     from agentteams.wasm_agent.budget import Budget
+    from agentteams.wasm_agent.delegation import normalize_delegation
 
     if not isinstance(raw, dict):
         raise ValueError("wasm_runtime must be an object")
@@ -242,7 +245,9 @@ def normalize_wasm_runtime(raw: object) -> dict[str, Any]:
     prices = raw.get("prices_file")
     if prices is not None:
         prices = _rel_path(prices, "wasm_runtime.prices_file")
-    return {"provider": provider, "base_url": base_url, "models": models, "budget": budget, "prices_file": prices}
+    delegation = normalize_delegation(raw.get("delegation"))
+    return {"provider": provider, "base_url": base_url, "models": models, "budget": budget, "prices_file": prices,
+            "delegation": delegation}
 
 
 def runtime_record(brief_block: Mapping[str, Any] | None, *, os_on: bool) -> dict[str, Any]:
