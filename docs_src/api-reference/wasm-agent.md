@@ -121,13 +121,27 @@ are data (C-4): it passes them along and never acts on what they say.
 - `Team.agent_spec(slug, *, provider=None, environ=None) -> AgentSpec`: `system_prompt` = `TEAM.md` + the body + a
   generated "Your WASM runtime" section (tools and mounts, no host paths); the model from
   `AGENTTEAMS_WASM_MODEL_<TIER>` > `runtime.json` > refuse (`stub` needs none); `spec_sha256` over the agent file,
-  `TEAM.md` and the grant entry. `Team.budget()` returns the run `Budget`. P09 uses `agent_spec` as `resolve_agent`.
-- `write_lock(project_root)`: the post-emit lock writer. `normalize_wasm_runtime(raw)`: the brief's `wasm_runtime`
-  validator (analyze). `runtime_record`, `check_runtime`, `grant_entry`, `render_front_matter`, `dumps`.
+  `TEAM.md` and the grant entry. `Team.budget()` returns the run `Budget`; `Team.prices()` parses the lock-verified
+  bytes of `runtime.json`'s `prices_file` (`gateway_dialects.parse_prices`), or None. P09 uses `agent_spec` as
+  `resolve_agent`. `grant_from_entry` re-runs the credential scan (`_sandbox_profiles.refuse_credentials`) on every
+  read directory at each load and refuses a credential-named read path.
+- `write_lock(project_root)`: the post-emit lock writer; the lock also records `prices: {path, sha256}` of
+  `runtime.json`'s prices file (or null), so an edited price table refuses the run. `normalize_wasm_runtime(raw)`: the
+  brief's `wasm_runtime` validator (analyze); its `base_url` is accepted only for a keyless preset
+  (`model_providers.preset_needs_key` False) on a loopback host. `runtime_record`, `check_runtime`, `grant_entry`,
+  `render_front_matter`, `dumps`.
+- `resolve_base_url(runtime, provider, *, operator_url) -> (url | None, notice | None)`: the run's base URL. The
+  operator's (`--wasm-base-url`, else `BASE_URL_ENV` = `AGENTTEAMS_WASM_BASE_URL`) wins, shape-checked by
+  `model_providers.check_base_url`; a rendered URL is kept only while the keyless-loopback rule holds for the run's
+  effective preset, else dropped with a notice (the preset's own URL applies).
 
 The launcher, `cli/wasm_agent_commands.py` (`--run-wasm-agent`, `--revoke-wasm-run`, `--verify-wasm-run`), calls
 `stage0(..., host_confine=..., guest_os_confine=...)`: `"inherited"` when `runtime.json` says
-`host_os_confine: auto`, else `"auto"`. It is the only module that passes `"inherited"` (R5, AST-tested).
+`host_os_confine: auto`, else `"auto"`. It is the only module that passes `"inherited"` (R5, AST-tested). Before the
+run, `authorize_grant(team, slug)` re-checks the agent's grant read-only: in a governed workspace every grant token
+must be covered by an active `wasm-grant-widen:wasm` exception whose bound Ed25519 decision still re-verifies
+(`sandbox_relaxation_gate.standing_authorization`), and limits above `DEFAULT_LIMITS` must equal the build-log's
+recorded `sandbox_state`; ungoverned, it prints a `SANDBOX RELAXATION` notice.
 
 ## Notes
 

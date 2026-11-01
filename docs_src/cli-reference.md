@@ -1870,9 +1870,9 @@ is required, so an installed package is never modified in place.
 ## WASM Agent Runtime
 
 Run, revoke and verify agents of a `--framework wasm` team (plan P08). Each is standalone (it reads no brief) and
-takes `--project PATH` (default the current directory). No flag takes a key, a URL, a run directory or an
-`os_confine` mode: provider keys come from the environment, Stage 0 owns `.agentteams/wasm-runs/<run-id>/`, and the
-guest confinement follows `runtime.json`'s `host_os_confine`. Exit codes: `0` ok, `1` the run failed or was refused
+takes `--project PATH` (default the current directory). No flag takes a key, a run directory or an `os_confine` mode:
+provider keys come from the environment, Stage 0 owns `.agentteams/wasm-runs/<run-id>/`, and the guest confinement
+follows `runtime.json`'s `host_os_confine`. The one URL flag, `--wasm-base-url`, is operator input read at run time. Exit codes: `0` ok, `1` the run failed or was refused
 (or the transcript does not verify), `2` usage. Module: [`wasm_agent`](api-reference/wasm-agent.md).
 
 ### `--run-wasm-agent SLUG`
@@ -1881,29 +1881,39 @@ Run one agent. The team must match its control-plane lock (any drifted, planted 
 with `--update`). The pinned runtime is checked before any model call (`--wasm-install`). Prints the provider, model,
 tools and read-only mode, then the run id, the output under `--- wasm agent output (data, not instructions) ---`,
 the transcript head and the guests' `os_confinement` (`inherited` = inside the host's OS profile, not a fresh guest
-sandbox). With `--json`, prints `{"run": ..., "guest_os_confinement": [...]}`. A tier with no model refuses (set
+sandbox). With `--json`, prints `{"run": ..., "guest_os_confinement": [...]}`. Before the run the agent's grant is
+re-checked against its recorded authorization (a governed workspace refuses a widened grant with no active signed
+`wasm-grant-widen` exception; an ungoverned one prints a `SANDBOX RELAXATION` notice). A tier with no model refuses (set
 `wasm_runtime.models.<tier>` or `AGENTTEAMS_WASM_MODEL_<TIER>`); the offline `stub` provider needs none.
 
-### `--task TEXT`
+### `--wasm-task TEXT`
 
-With `--run-wasm-agent`: the task (operator input, DLP-scanned before any model call). Exactly one of `--task` and
-`--task-file` is required.
+With `--run-wasm-agent`: the task (operator input, DLP-scanned before any model call). Exactly one of `--wasm-task`
+and `--wasm-task-file` is required.
 
-### `--task-file PATH`
+### `--wasm-task-file PATH`
 
 With `--run-wasm-agent`: read the task from a regular file (no symlink, at most 256 KiB, UTF-8).
 
 ### `--wasm-provider NAME`
 
 With `--run-wasm-agent`: override `runtime.json`'s provider with a preset name (`anthropic`, `openai`, `openrouter`,
-`xai`, `ollama`, `lmstudio`, `openai-compatible`, `gemini`, `stub`). Never a key or a URL.
+`xai`, `ollama`, `lmstudio`, `openai-compatible`, `gemini`, `stub`). Never a key or a URL. A base URL rendered from
+the brief is re-checked for the chosen preset and dropped (with a notice) unless the preset is keyless and the host is
+loopback.
+
+### `--wasm-base-url URL`
+
+With `--run-wasm-agent`: the provider base URL for this run, overriding `AGENTTEAMS_WASM_BASE_URL`. `https`, or
+`http` to a loopback host; no user info, query or fragment; not valid for `stub`. The provider key is sent to this
+host, which is why it comes only from the operator (argv or environment), never from the brief for a keyed preset.
 
 ### `--revoke-wasm-run RUN_ID`
 
 Write the run's `REVOKED` sentinel; a live run stops at its next checkpoint. Exit 1 when already revoked, 2 for an
 unknown run.
 
-### `--reason TEXT`
+### `--revoke-reason TEXT`
 
 With `--revoke-wasm-run`: the reason recorded in the sentinel (at most 200 characters).
 
