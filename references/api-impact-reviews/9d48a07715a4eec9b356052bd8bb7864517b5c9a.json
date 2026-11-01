@@ -1,0 +1,8 @@
+{
+  "patch_id": "9d48a07715a4eec9b356052bd8bb7864517b5c9a",
+  "commit": "66eb7f9440398ecef3714296f9c016040359702f",
+  "subject": "fix(merge): a fence unedited since generation is never shrink-preserved",
+  "impact": "1 modules added, 7 symbols added",
+  "note": "vfail F1-D: new module fence_baseline (build-log fence_baseline key) documented in docs_src/api-reference/fence-baseline.md; @security PASS, @code-hygiene no blocking findings (H1-H5 fixed in 84ca2173).",
+  "recorded_at": "2026-11-01T21:57:53Z"
+}
