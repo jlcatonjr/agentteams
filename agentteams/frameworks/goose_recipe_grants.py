@@ -187,7 +187,10 @@ def recipe_extras(manifest: dict[str, Any], agent_slug: str, tools: frozenset[st
     if tools is not None and grant_mode(manifest):
         from agentteams.frameworks import _wasm_wiring
 
-        wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "goose", agent_slug, sorted(tools))
+        from agentteams.wasm_enforcement import wiring_tools  # P13: the pre-narrowing tools decide eligibility
+
+        wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "goose", agent_slug,
+                                                  wiring_tools(manifest, agent_slug, sorted(tools)))
         if wasm_args is not None:
             from agentteams import wasm_mcp
 
@@ -250,7 +253,12 @@ def member_declared_tools(manifest: dict[str, Any], slug: str, templates_dir: Pa
             recipe = None  # no deployed recipe: the template's tools stand
         on_disk = declared_from_marker(recipe) if recipe is not None else None
         if on_disk is not None:
-            tools = tools & on_disk
+            # WASM plan P13 (Rule-12 carve-out): a recipe narrowed by the WASM native-exec policy lost `execute`
+            # from its marker, but a delegate cannot get run_wasm, so its row keeps the template's shell.
+            from agentteams.wasm_enforcement import NARROW, agent_action
+
+            wasm_narrowed = "execute" in tools and agent_action(manifest, slug, "goose", tools) == NARROW
+            tools = tools & (on_disk | {"execute"} if wasm_narrowed else on_disk)
     return tools
 
 

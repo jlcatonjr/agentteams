@@ -151,6 +151,26 @@ def report_wasm_wiring(manifest: dict, state: SandboxState, framework_id: str, *
     print_report(manifest, framework_id, state)
 
 
+def report_wasm_enforcement(manifest: dict, project_root: Path) -> None:
+    """Record ``manifest["wasm_enforcement"]`` and print the ``[WASM-ENFORCEMENT]`` lines (P13), after the emit.
+
+    Runs after the files are written, so the R1 merge check reads what this render emitted. Nothing while WASM is
+    off.
+
+    Args:
+        manifest: The team manifest (mutated: ``wasm_enforcement``, ``advisories``).
+        project_root: Where the host artifacts were emitted.
+
+    Raises:
+        ValueError: A malformed ``wasm_sandbox`` record.
+    """
+    from agentteams import wasm_enforcement
+
+    framework = str(manifest.get("framework") or "")
+    if framework:
+        wasm_enforcement.report(manifest, framework, project_root=Path(project_root))
+
+
 def install_wasm_binary(manifest: dict, project_root: Path) -> None:
     """Write the ``agentteams_wasm`` bundle's binary file beside the emitted text bundle (P11).
 

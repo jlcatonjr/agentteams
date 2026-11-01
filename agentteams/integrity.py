@@ -358,6 +358,12 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # given run_wasm (C-3), and the list of launching configs R1 write-protects. A silent edit hands the tool to an
     # auditor or drops a config from the session denyWrite.
     "agentteams/frameworks/_wasm_wiring.py",
+    # The native-exec policy and its per-provider verdict (WASM P13): which agents lose native exec (C-3 narrowing,
+    # and the pre-narrowing tools P11 grants run_wasm on), the gate keep set (native-exec-keep effects), and the one
+    # place enforcement is claimed. _codex_wasm_gate decides when the Codex role gate runs in WASM mode and carries
+    # its keep list. A silent edit claims enforcement without R1, drops an effect, or keeps a shell unannounced.
+    "agentteams/wasm_enforcement.py",
+    "agentteams/frameworks/_codex_wasm_gate.py",
     # Host-mediated model access (WASM P06). The provider key travels only to the vetted base URL, and the
     # request/reply validation bounds what crosses the wire (C-4); a silent edit leaks the key or widens what a reply
     # may carry.

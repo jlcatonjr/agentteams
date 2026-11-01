@@ -130,6 +130,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`wasm_config`](wasm-config.md) | The brief's `wasm_sandbox` block, `--wasm-sandbox`, per-agent grants as `Grant(mounts, limits)`, and `wasm_eligible` (WASM P01) |
 | [`wasm_agent`](wasm-agent.md) | The WASM agent host: step-mode protocol, Stage 0/1 split, budgets, DLP, key custody, hash-chained transcript (WASM P05) |
 | [`wasm_mcp`](wasm-mcp.md) | The `agentteams_wasm` MCP server: `run_wasm` for vendor-CLI agents, its hash-checked bundle and the per-agent launch flags that carry each grant (WASM P10) |
+| [`wasm_enforcement`](wasm-enforcement.md) | Per-provider native-exec denial for WASM-eligible agents (`native_exec`), the Codex WASM-mode gate, and the honest `wasm_enforcement` verdict (WASM P13) |
 | [`proposal_policy`](proposal-policy.md) | Orchestrator-only-writes pilot: the registered policy (brief validation and lint), re-exported by `proposals` |
 | [`mcp_direct_grants`](mcp-direct-grants.md) | Operator-signed direct-write grants: the only way an agent's MCP writes skip the orchestrator's approval (R5) |
 | [`interop_write_policy`](interop-write-policy.md) | `--interop-from --description`: an import carries the brief's `write_policy` and `mcp_grants`, so adopted bespoke agents get the runner (M6) |

@@ -199,8 +199,9 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
                     ) -> tuple[SandboxExceptions | None, SandboxExceptions] | None:
     """Return the gate's ``(previous, new)`` :class:`~agentteams.sandbox_state.SandboxExceptions`, or None.
 
-    * ``native_exec_keep`` (S2): the effective keep set (``wasm_config.manifest_wasm_config``; D12 default
-      ``navigator`` / ``git-operations``) whenever WASM is on, under any ``write_policy``.
+    * ``native_exec_keep`` (S2): the effective keep set (``wasm_enforcement.gate_keep_set``: the brief list, D12
+      default ``navigator`` / ``git-operations``, plus every eligible agent under ``native_exec: keep``; P13)
+      whenever WASM is on, under any ``write_policy``.
     * Runner programs: under ``write_policy: orchestrator-only``, the modes of the ``confined_programs`` the runner
       would load (operator file, else the brief). Otherwise the runner serves nothing (S5): every previously recorded
       ``sandbox: wasm`` or ``os`` agent is carried as ``os_programs``, so a recorded wasm agent is a fresh
@@ -222,11 +223,11 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
         ValueError: A malformed ``wasm_sandbox`` block.
     """
     from agentteams.sandbox_state import SandboxExceptions
-    from agentteams.wasm_config import manifest_wasm_config
+    from agentteams.wasm_enforcement import gate_keep_set
 
+    # P13: native_exec_keep, plus every eligible non-exempt agent under `native_exec: keep` (one effect each).
     # --framework wasm (P08): the runtime has no native execution at all, so nothing can keep it (not a carve-out).
-    keep = (frozenset(manifest_wasm_config(manifest).native_exec_keep) if state.wasm
-            and manifest.get("framework") != "wasm" else frozenset())
+    keep = gate_keep_set(manifest) if state.wasm and manifest.get("framework") != "wasm" else frozenset()
     if manifest.get("write_policy") == "orchestrator-only":
         from agentteams import runner_wasm
         from agentteams._sandbox_profiles import ConfinementError

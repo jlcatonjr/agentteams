@@ -173,8 +173,10 @@ def _build_final_rendered(
     """
     from agentteams import graph as _graph
     from agentteams import mcp_need as _mcp_need
+    from agentteams import wasm_enforcement as _wasm_enforcement
     from agentteams import write_policy as _write_policy
 
+    _wasm_enforcement.begin(manifest)  # WASM plan P13: this render's native-exec action record starts empty
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
     final: list[tuple[str, str]] = []
     runtime_handoff_agents: list[dict[str, object]] = []
@@ -185,6 +187,8 @@ def _build_final_rendered(
             # write_policy "orchestrator-only": narrow tools and add the proposal sections before any adapter
             # reads `tools:` (identity without the switch, so default teams stay byte-identical).
             content = _write_policy.apply(content, slug, manifest)
+            # WASM plan P13: remove native exec where run_wasm replaces it (identity while WASM is off).
+            content = _wasm_enforcement.apply_canonical(content, slug, manifest, adapter.framework_id)
             if adapter.handoff_delivery_mode() == "manifest":
                 handoffs = adapter.extract_handoffs(content)
                 if handoffs:
