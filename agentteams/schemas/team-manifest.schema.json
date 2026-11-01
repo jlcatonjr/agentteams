@@ -1143,6 +1143,81 @@
           }
         }
       }
+    },
+    "wasm_wiring": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "WASM plan P11: where agentteams_wasm is launched for the framework rendered (frameworks/_wasm_wiring.py). Present only while WASM is on. Never an enforcement claim (P13 owns wasm_enforcement).",
+      "required": [
+        "protected_config_paths",
+        "frameworks"
+      ],
+      "properties": {
+        "protected_config_paths": {
+          "type": "array",
+          "description": "Every emitted file that launches agentteams_wasm (project-relative); METAPLAN R1 write-protects each (session denyWrite + Edit deny).",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
+          }
+        },
+        "frameworks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "agents",
+              "grant_scope",
+              "reason",
+              "verified",
+              "config_paths"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "wired-per-agent",
+                  "wired-shared",
+                  "example-only",
+                  "not-wired",
+                  "unverified-format",
+                  "instructions-only"
+                ]
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                }
+              },
+              "grant_scope": {
+                "type": "string",
+                "enum": [
+                  "per-agent",
+                  "session-compute-only",
+                  "none"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "verified": {
+                "type": "boolean",
+                "description": "False wherever the host format or behaviour is unverified; such a row never says wired."
+              },
+              "config_paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

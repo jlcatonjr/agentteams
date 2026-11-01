@@ -333,6 +333,12 @@ def run_standalone_modes(
         runner_problems = runner_mcp.wiring_problems(wiring_root, framework, manifest)
         if runner_problems:
             ok, messages = False, [*messages, *(f"ERROR: {p}" for p in runner_problems)]
+        from agentteams.frameworks import _wasm_wiring  # P11: the agentteams_wasm wiring line and live checks
+
+        wasm_line = _wasm_wiring.report_line(manifest, framework)
+        wasm_problems = _wasm_wiring.check_wiring_problems(wiring_root, framework, manifest)
+        messages = [*messages, *([wasm_line] if wasm_line else []), *(f"ERROR: {p}" for p in wasm_problems)]
+        ok = ok and not wasm_problems
         # mathAgents M6-F4: an unresolved xcrun launcher fails every confined call (exit 71); advisory, exit-neutral.
         messages = [*messages, *xcrun_launcher_lines(wiring_root, description)]
         print(f"Sandbox wiring check ({framework}): {output_dir}")

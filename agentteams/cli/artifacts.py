@@ -554,7 +554,8 @@ def finalize_privilege_wiring(
             f"mcp_grants need the agents directory to be the project's {'/'.join(canonical)}; this --output would "
             "install the agentteams_runner server outside the project")
     brief_roots = write_root_policy.begin(manifest, project_root)
-    from agentteams.cli.wasm_sandbox_switch import WasmSwitchError, advise_wasm, apply_wasm_switch
+    from agentteams.cli.wasm_sandbox_switch import (WasmSwitchError, advise_wasm, apply_wasm_switch,
+                                                    report_wasm_wiring)
 
     try:  # P01: --wasm-sandbox and the WASM half, validated before anything reads the state (needs the root)
         apply_wasm_switch(manifest, wasm_sandbox_cli)
@@ -577,6 +578,10 @@ def finalize_privilege_wiring(
         raise write_root_policy.WriteRootPolicyError(
             'write_policy "orchestrator-only" needs the session sandbox: --os-sandbox off turns it off')
     advise_wasm(manifest, state, framework_id)  # P01 D6: composition notices (never an enforcement claim)
+    try:  # P11: [WASM-WIRING] line + wasm_wiring record; widened grants refused on shared-copy hosts
+        report_wasm_wiring(manifest, state, framework_id)
+    except ValueError as exc:
+        raise PrivilegeConfinementError(str(exc)) from exc
     from agentteams.cli.os_sandbox_switch import engage_relaxation_gate
 
     gated = engage_relaxation_gate(manifest, state, framework_id, project_root, team_dir=team_dir, dry_run=dry_run,
@@ -778,11 +783,13 @@ def _write_codex_mcp_servers(manifest: dict, project_root: Path) -> "CodexMCPEmi
     data loss if not.
     """
     from agentteams.codex_mcp_emit import emit_codex_mcp_config
+    from agentteams.frameworks._wasm_wiring import codex_first_party_tables
 
     return emit_codex_mcp_config(
         servers=manifest.get("mcp_servers", []) or [],
         features=manifest.get("host_features", []) or [],
         output_root=project_root,
+        first_party_tables=codex_first_party_tables(manifest),  # WASM plan P11: the shared agentteams_wasm copy
     )
 
 
@@ -793,6 +800,9 @@ def _emit_host_mcp_artifacts_if_enabled(manifest: dict, project_root: Path) -> N
     _emit_mcp_servers_if_enabled(manifest, project_root)
     _emit_codex_mcp_if_enabled(manifest, project_root)
     _emit_grok_config_if_enabled(manifest, project_root)
+    from agentteams.cli.wasm_sandbox_switch import install_wasm_binary
+
+    install_wasm_binary(manifest, project_root)  # WASM plan P11: the bundle's binary file (emit writes text only)
 
 
 def _emit_grok_config_if_enabled(manifest: dict, project_root: Path) -> None:
@@ -840,8 +850,10 @@ def _emit_codex_mcp_if_enabled(manifest: dict, project_root: Path) -> None:
     """
     from agentteams.codex_mcp_emit import codex_mcp_enabled
 
+    from agentteams.frameworks._wasm_wiring import codex_first_party_tables
+
     features = manifest.get("host_features", []) or []
-    if not codex_mcp_enabled(features) or not manifest.get("mcp_servers"):
+    if not (codex_mcp_enabled(features) and manifest.get("mcp_servers")) and not codex_first_party_tables(manifest):
         return
     try:
         res = _write_codex_mcp_servers(manifest, project_root)
