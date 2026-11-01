@@ -20,7 +20,7 @@ Contract (every rule fails closed):
   its value is carried as the *kept* floor (``wasm_config.WASM_SUBSTRATE_KEPT_KEY``) so the relaxation gate sees no
   change. Retiring the floor (deleting the file) or lowering it to ``off`` is ``sandbox-wasm-off:model-substrate``.
 * **No-follow writes.** ``.agentteams`` must be a real directory and the file a regular file (or absent); the write
-  is temp-then-``os.replace`` relative to the directory fd (``signing_switch._replace_no_follow``).
+  is temp-then-``os.replace`` relative to the directory fd (``atomicio.replace_no_follow``).
 
 Rule-12 residuals (audit targets): the kept floor can only hold a stricter value longer, never a looser one; the
 file is session-write-protected only where an OS sandbox is emitted, and with the OS sandbox off its integrity rests
@@ -39,6 +39,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from agentteams.atomicio import read_regular_nofollow, replace_no_follow
+from agentteams.wasm_config import ON_OFF_VALUES
 
 #: The projected file, relative to the project root.
 PROJECTION_REL = ".agentteams/sandbox-state.json"
@@ -59,7 +62,7 @@ _IDENTITY_FIELDS = frozenset({"team"})
 #: Fields ``--check-wiring`` does not compare: how the value was produced, not what the consumer enforces.
 _PROVENANCE_FIELDS = frozenset({"agentteams_version", "model_substrate_wasm_source", "os_sandbox_reason",
                                 "wasm_sandbox_reason"})
-_ON_OFF = ("on", "off")
+_ON_OFF = ON_OFF_VALUES
 _SOURCES = ("brief", "cli")
 #: ``SandboxState.os_reason`` / ``wasm_reason`` vocabulary (``<p>`` / ``<tok>`` are slugs / host-feature tokens).
 _REASON_CHARS = frozenset(string.ascii_lowercase + string.digits + "-:")
@@ -215,18 +218,19 @@ def preflight(project_root: Path) -> None:
 
 def _read_raw(project_root: Path) -> object | None:
     """The decoded file, None when absent; raise ProjectionError when it cannot be read safely or is not JSON."""
-    path = _path(project_root)
     _check_no_follow(project_root)
+    return _decode(project_root)
+
+
+def _decode(project_root: Path) -> object | None:
+    """:func:`_read_raw` after the caller's :func:`_check_no_follow`: a bounded ``O_NOFOLLOW`` read, then JSON."""
+    path = _path(project_root)
     if not os.path.lexists(path):
         return None
-    from agentteams.signing_switch import _read_regular_text
-
     try:
-        text = _read_regular_text(path)
-    except ValueError as exc:
-        raise ProjectionError(str(exc)) from exc
-    if len(text) > _MAX_TEXT:
-        raise ProjectionError(f"{path} is larger than {_MAX_TEXT} bytes")
+        text = read_regular_nofollow(path, _MAX_TEXT).decode("utf-8")
+    except (OSError, ValueError) as exc:  # a link / non-regular / oversized / unreadable / non-UTF-8 file
+        raise ProjectionError(f"{path} is unusable: {exc}") from exc
     try:
         return json.loads(text)
     except ValueError as exc:
@@ -295,7 +299,7 @@ def write_projection(project_root: Path, record: dict[str, Any], *, dry_run: boo
     outcome = ProjectionOutcome(status="written", path=path)
     _check_no_follow(project_root)
     try:
-        current = _read_raw(project_root)
+        current = _decode(project_root)
     except ProjectionError:
         current = "unreadable"  # a regular file in a real dir that is not JSON: ownership unclear, so it is kept
     if current is not None and (not isinstance(current, dict) or current.get("producer") != PRODUCER):
@@ -317,9 +321,7 @@ def write_projection(project_root: Path, record: dict[str, Any], *, dry_run: boo
     if dry_run:
         outcome.status = "dry-run"
         return outcome
-    from agentteams.signing_switch import _replace_no_follow
-
-    _replace_no_follow(path, text)
+    replace_no_follow(path, text)
     return outcome
 
 
@@ -417,13 +419,9 @@ def verify_projection(team_dir: Path, project_root: Path) -> tuple[int, list[str
     Raises:
         Nothing.
     """
-    from agentteams.sandbox_state import verifier_sandbox_state
+    from agentteams.sandbox_state import recorded_model_substrate
 
-    try:
-        recorded = verifier_sandbox_state(None, team_dir, project_root)
-    except (ValueError, ImportError):
-        recorded = None
-    expected = recorded.model_substrate if recorded is not None else None
+    expected = recorded_model_substrate(team_dir)  # the one field: never builds grants, so never skipped
     if expected is None:
         return 0, []
     try:

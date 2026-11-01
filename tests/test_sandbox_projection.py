@@ -230,6 +230,43 @@ def test_verify_projection_flags_a_lowered_floor(tmp_path):
     assert rc == 0 and "OK" in lines[0]
 
 
+def test_verify_projection_never_skips_the_floor_when_grants_cannot_be_rebuilt(tmp_path, monkeypatch):
+    # W6R F1: a record with WASM grants used to raise ImportError (no wasm_exec) and was silently treated as "no
+    # record"; the floor check now reads only model_substrate, so a missing executor or a bad grant cannot hide it.
+    from agentteams import sandbox_state as ss
+
+    def _no_wasm_exec():
+        raise ImportError("wasm_exec unavailable")
+
+    monkeypatch.setattr(ss, "_wasm_exec", _no_wasm_exec)
+    team = tmp_path / ".claude" / "agents"
+    (team / "references").mkdir(parents=True)
+    limits = {"fuel": 1_000_000, "max_memory_bytes": 64 * 1024 * 1024, "timeout_s": 5}
+    rec = {"os": "on", "os_reason": "brief", "wasm": "on", "wasm_reason": "brief", "wasm_languages": [],
+           "wasm_grants": {"primary-producer": {"tokens": [], "limits": limits}}, "model_substrate": "on"}
+    (team / "references" / "build-log.json").write_text(json.dumps({"sandbox_state": rec}))
+    with pytest.raises(ImportError):                   # the full parse still fails closed on the missing executor
+        ss.verifier_sandbox_state(None, team, tmp_path)
+    rc, lines = sp.verify_projection(team, tmp_path)
+    assert rc == 1 and "LOWERED" in lines[0] and "absent" in lines[0]
+    assert ss.recorded_model_substrate(team) == "on"
+    (team / "references" / "build-log.json").write_text("not json")
+    assert ss.recorded_model_substrate(team) is None and sp.verify_projection(team, tmp_path) == (0, [])
+
+
+def test_an_oversized_or_non_utf8_file_is_unusable_and_kept(tmp_path):
+    # W6R F3: the read is atomicio.read_regular_nofollow, bounded at 4 KiB (never reads the whole file).
+    _file(tmp_path).parent.mkdir(parents=True)
+    _file(tmp_path).write_text(json.dumps({"producer": "agentteams", "pad": "x" * 5000}))
+    with pytest.raises(sp.ProjectionError, match="larger than 4096"):
+        sp.read_projection(tmp_path)
+    assert sp.kept_value(tmp_path) == "on"
+    assert sp.write_projection(tmp_path, _record("on"), dry_run=False).status == "kept-foreign"
+    _file(tmp_path).write_bytes(b"\xff\xfe{}")
+    with pytest.raises(sp.ProjectionError, match="unusable"):
+        sp.read_projection(tmp_path)
+
+
 def test_project_root_for_strips_a_default_agents_dir(tmp_path):
     assert sp.project_root_for(tmp_path / ".claude" / "agents") == tmp_path.resolve()
     assert sp.project_root_for(tmp_path / ".goose" / "recipes") == tmp_path.resolve()
