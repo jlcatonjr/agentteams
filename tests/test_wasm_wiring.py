@@ -156,9 +156,10 @@ def test_goose_advisory_counts_launching_recipes(tmp_path):
     recipes.mkdir(parents=True)
     (recipes / "nav.yaml").write_text(f"args: [\"{wasm_mcp.PROTECTED_PATH}\"]\n")
     denies = cpp.seatbelt_denies(False, cpp.control_plane_for(manifest))
-    (tmp_path / ".goose" / "sandbox.sb").write_text("\n".join(f'(subpath "/r/{p}")' for p in denies))
+    (tmp_path / ".goose" / "sandbox.sb").write_text(
+        "(deny file-write*\n" + "\n".join(f'    (subpath "/r/{p}")' for p in denies) + ")\n")
     assert wasm_mcp.control_plane_advisory(tmp_path, "goose", manifest) is None  # under the denied recipes dir
-    (tmp_path / ".mcp.json").write_text(f"[\"{wasm_mcp.PROTECTED_PATH}\"]")
+    (tmp_path / ".mcp.json").write_text(json.dumps({"mcpServers": {"x": {"args": [wasm_mcp.PROTECTED_PATH]}}}))
     assert ".mcp.json" in (wasm_mcp.control_plane_advisory(tmp_path, "goose", manifest) or "")
 
 
@@ -185,8 +186,9 @@ def test_wasm_wiring_imports_no_p13_or_p14_module():
     tree = ast.parse((REPO / "agentteams" / "frameworks" / "_wasm_wiring.py").read_text(encoding="utf-8"))
     names = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
     names |= {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
-    allowed = {"__future__", "json", "sys", "collections.abc", "pathlib", "typing", "agentteams",
-               "agentteams.wasm_config", "agentteams.sandbox_state", "agentteams.frameworks.goose_tool_scoping"}
+    allowed = {"__future__", "json", "os", "re", "stat", "sys", "tomllib", "collections.abc", "pathlib", "typing",
+               "agentteams", "agentteams.wasm_config", "agentteams.sandbox_state",
+               "agentteams.frameworks.goose_tool_scoping", "agentteams.frameworks._sandbox_emit"}
     assert names <= allowed, names - allowed
 
 

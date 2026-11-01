@@ -210,7 +210,11 @@ def test_binary_probe_is_installed_where_the_server_was_emitted(tmp_path):
     (tmp_path / wasm_mcp.PROTECTED_PATH).write_text(wasm_mcp.server_content(), encoding="utf-8")
     agents = tmp_path / ".claude" / "agents"
     agents.mkdir(parents=True)
-    assert ww.install_binary(manifest, agents) == list(wasm_mcp.BINARY_FILES)  # --output named the agents dir
+    with pytest.raises(ValueError, match="not found under"):
+        ww.install_binary(manifest, agents)  # never searches a parent directory (@security low)
+    assert ww.install_root("claude", agents) == tmp_path  # --output named the canonical agents dir
+    assert ww.install_root("claude", tmp_path) == tmp_path
+    assert ww.install_binary(manifest, ww.install_root("claude", agents)) == list(wasm_mcp.BINARY_FILES)
     data = (tmp_path / wasm_mcp.BINARY_FILES[0]).read_bytes()
     assert data == wasm_mcp.bundle_content(wasm_mcp.BINARY_FILES[0]) and data[:4] == b"\0asm"
     assert ww.install_binary(_manifest("grok"), tmp_path) == []

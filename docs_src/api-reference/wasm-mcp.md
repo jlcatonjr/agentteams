@@ -86,7 +86,9 @@ Only passes are cached, so a runtime installed later is picked up without a rest
 - **Grant integrity rests on the control plane (R1, S2).** The flags live in agent files and MCP configs, and the
   bundle lives in `.agentteams/bin/`. They are session-write-denied only when the OS sandbox is on and R1's rules
   are emitted and merged into the live host config. `control_plane_advisory` reports anything less as
-  `WASM grant integrity: advisory (control plane is agent-writable: <reason>)`, never a silent pass.
+  `WASM grant integrity: advisory (control plane is agent-writable: <reason>)`, never a silent pass. The disk scan of
+  launching configs (`frameworks._wasm_wiring.scan_launching_configs`) runs whatever the WASM switch: an uncheckable
+  config (symlinked, unparseable) and, with WASM off, any launching config are always reported.
 - **Read grants exclude secrets (S4).** `--read` paths and `path` arguments use the bundled shared credential list
   (`_sandbox_profiles.credential_name`, which covers everything the runner server denies) plus VCS and every
   agent-config dir. A granted directory that holds a denied name or a symlink, or that passes the shared scan caps
@@ -113,4 +115,4 @@ Only passes are cached, so a runtime installed later is picked up without a rest
 | `install_files(manifest)`, `install_binary_files(manifest)` | The text and binary install files (`../../.agentteams/bin/...`) when WASM is on, else `[]`. |
 | `write_bundle(project_root, files=None) -> list[str]` | Writes the server and bundle byte-exactly (atomic replace, symlinked dirs refused). |
 | `control_plane_advisory(root, framework, manifest) -> str \| None` | The R1 check. P13 records the same answer as `wasm_enforcement`. |
-| `wiring_problems(root, framework, manifest, *, home=None) -> list[str]` | Install hashes, stray bytecode, runtime status, shadowing (`runner_mcp._shadowing(..., name)`), and the R1 advisory. |
+| `wiring_problems(root, framework, manifest, *, home=None) -> list[str]` | Install hashes, stray bytecode, runtime status, shadowing (`runner_mcp._shadowing(..., name)`), and the R1 advisory. With WASM off: every launching or uncheckable config on disk. |
