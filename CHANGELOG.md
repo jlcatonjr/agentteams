@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (merge: a fence unedited since generation is never shrink-preserved)
+
+- **`--update --merge` no longer keeps a stale template body just because the new one "shrinks" it.** ops-team's
+  `vuln-remediation` `daily_remediation` fence was byte-identical to the 2026-10-23 render, yet every later update
+  preserved it (`lost concrete refs: failed, refused`: the old body backticked them, the v=6 body discusses them in
+  prose), so the agent ran a nine-day-old workflow until an operator passed `--shrink-allow`.
+- `build-log.json` now records **`fence_baseline`**: per file and fence, the SHA-256 of the fenced block agentteams
+  *authored* (the written block when it equals this run's render, else the previous record; never a preserved
+  hand edit). New module `agentteams.fence_baseline`. A shrinking fence whose on-disk block matches its record is
+  replaced, its old body still goes to the `.lost` sidecar, and the notice reads `replaced: unedited since
+  generation` (the dry-run plan reads `replaced`; `MergeResult.shrink_unedited`).
+- **Unchanged, by design (Rule 12):** an edited fence, a fence with no record (every build log before this
+  release, so the first update after upgrading still preserves), an interop projection marker, and any run with
+  no backup dir (`--no-backup`: no sidecar) keep today's preserve behaviour.
+
 ### added (vulnscan: scan mirrors)
 
 - **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a

@@ -700,6 +700,11 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
     _previous_baseline = _fm_baseline.load_for(output_dir, version_2_only=True)
     # None (no render recorded, e.g. a result built outside emit_all) falls back to the as-written baseline.
     _template_fm = getattr(result, "template_front_matter", None) or None
+    from agentteams import fence_baseline as _fence_baseline
+
+    # Read before this run overwrites it, like the front-matter baseline: a preserved fence keeps its record.
+    _previous_fences = _fence_baseline.load_for(output_dir)
+    _template_fences = getattr(result, "template_fence_digests", None) or None
 
     # Convert absolute paths to project-relative paths for portability
     project_root = output_dir.parent.parent  # output_dir is .github/agents/
@@ -757,6 +762,11 @@ def _write_run_log(manifest: dict, result: emit.EmitResult, output_dir: Path, te
         # Version 2 (2026-10-11): the baseline records what agentteams AUTHORED, not what was written —
         # see agentteams/front_matter_baseline.py for the handoff loss the as-written baseline caused.
         **({_fm_baseline.VERSION_KEY: _fm_baseline.BASELINE_VERSION} if _template_fm is not None else {}),
+        # 2026-11-01: per-fence digest of the block agentteams AUTHORED (never as written), so a merge can release
+        # an unedited fence from shrink-preserve — see agentteams/fence_baseline.py. Absent = unknown = preserve.
+        **({_fence_baseline.BUILD_LOG_KEY: _fence_baseline.compute(
+            result.written + result.merged + result.unchanged, output_dir,
+            _template_fences, _previous_fences)} if _template_fences is not None else {}),
         # Under the switch only, so every other team's build-log is unchanged. --convert-from and --bridge-from read
         # it to refuse writing agents the policy doesn't cover (interop_write_policy.refuse_outside_interop).
         **({"write_policy": manifest["write_policy"]} if manifest.get("write_policy") else {}),

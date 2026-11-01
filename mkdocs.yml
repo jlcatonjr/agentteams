@@ -210,6 +210,7 @@ nav:
               - render: api-reference/render.md
               - emit: api-reference/emit.md
               - fences: api-reference/fences.md
+              - fence-baseline: api-reference/fence-baseline.md
               - fence-twins: api-reference/fence-twins.md
               - fence-twin-acks: api-reference/fence-twin-acks.md
               - whole-body-migration: api-reference/whole-body-migration.md
