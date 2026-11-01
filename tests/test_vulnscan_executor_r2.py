@@ -62,7 +62,7 @@ def test_x1_a_pin_edit_may_change_only_its_version_upwards(env: dict, tmp_path: 
     repo, base = _committed(tmp_path / "r", {"requirements.txt": REQ_BASE})
     (repo / "requirements.txt").write_bytes(new)
     if refusal is None:
-        assert executor.validate_diff(repo, base) == ["requirements.txt"]
+        assert executor.validate_diff(repo, base) == (["requirements.txt"], [])
     else:
         with pytest.raises(executor.ExecError, match=refusal):
             executor.validate_diff(repo, base)
@@ -164,7 +164,7 @@ def test_x4_workspace_link_policy(env: dict, tmp_path: Path, base_links: dict, n
     repo, base = _committed(tmp_path / "r", {"package-lock.json": _ws_lock(base_links)})
     (repo / "package-lock.json").write_bytes(_ws_lock(new_links, a_version="1.0.1"))
     if ok:
-        assert executor.validate_diff(repo, base) == ["package-lock.json"]
+        assert executor.validate_diff(repo, base) == (["package-lock.json"], [])
     else:
         with pytest.raises(executor.ExecError, match="registry allowlist"):
             executor.validate_diff(repo, base)

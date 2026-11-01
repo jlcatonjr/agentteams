@@ -214,6 +214,8 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     "agentteams/vulnscan/executor_pr.py",
     "agentteams/vulnscan/open_prs.py",         # D1: packages another open PR updates are left to it      # stage-*'s commit and open-pr's PR text, label and gh pr create
     "agentteams/vulnscan/npm_major.py",        # stage-major: the package.json raise and validate_diff's check of it
+    "agentteams/vulnscan/npm_groups.py",       # stage-fix: which packages npm update moves together (selection)
+    "agentteams/vulnscan/npm_ops.py",          # stage-fix: npm_ops.npm_moves runs those moves (fail-closed checks)
     "agentteams/vulnscan/ops.py",              # REPO_OPS: which ops get executor_guard and a repo-root grant
     "agentteams/vulnscan/merge_digest.py",     # the operator-run merge script: validated, shlex-quoted fields only
     "agentteams/vulnscan/handoff.py",          # H3: open-pr waits for the repository orchestrator's approval
@@ -350,6 +352,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # the on-disk value equals this module's baseline, and its handoff guard decides which handoffs a write
     # may drop. An unpinned edit could make a project's value look agentteams-authored again.
     "agentteams/front_matter_baseline.py",
+    # Fence baseline (2026-11-01, vfail F1-D). fences.py (pinned) releases a shrink-preserved fence when its
+    # on-disk block hashes to this module's recorded render; an unpinned edit could make a person's edit look
+    # unedited and let a template update overwrite it.
+    "agentteams/fence_baseline.py",
     # Acknowledgement review (2026-10-11). _fleet_twin_acks decides which acknowledged twins fleet still
     # reports as REVIEW (one not shown to the operator by an earlier run); an unpinned edit could drop that flag.
     "agentteams/_fleet_twin_acks.py",

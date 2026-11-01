@@ -1,0 +1,8 @@
+{
+  "patch_id": "a8e8dbb4a8dc5b154378718adef6cb88411def70",
+  "commit": "fd805456061a0b69309ba4cb9a8e930cae2aa29d",
+  "subject": "fix(vulnscan): list kept off-registry entries in the PR body; validate_diff returns them (security, H5-H7)",
+  "impact": "1 symbols added, 2 symbols changed",
+  "note": "validate_diff now returns DiffCheck(changed, kept_off_registry) instead of the changed-path list (callers: stage_fix unpacks it; worktree_fixes ignores the return; tests updated). check_lock_edit returns a list of notes (one per unchanged off-registry entry kept) instead of None; executor_pr.body gains kept=None. Docs (api-reference/vulnscan.md) and CHANGELOG updated.",
+  "recorded_at": "2026-11-01T22:21:05Z"
+}

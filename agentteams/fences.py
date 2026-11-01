@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import re
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agentteams import fence_baseline as _fence_baseline
 from agentteams.atomicio import _atomic_write_text
 
 # The unfenced view of a file lives in unfenced.py (CH-07 carve): fences.py merges managed
@@ -101,6 +103,9 @@ class MergeResult:
     migrated: bool = False
     #: Sections whose shrink suppression an operator override (``--shrink-allow``) lifted.
     shrink_overridden: list[str] = field(default_factory=list)
+    #: Sections whose shrink suppression was lifted because the on-disk block is byte-identical to a render
+    #: agentteams recorded authoring (:mod:`agentteams.fence_baseline`): nobody's edit, so nothing to preserve.
+    shrink_unedited: list[str] = field(default_factory=list)
     #: Sections kept on shrink: sid -> (on-disk region kept, template region suppressed). Feeds
     #: the ``AGENTTEAMS_SHRINK_REPORT`` review (:mod:`agentteams.shrink_allow`).
     shrink_pinned: dict[str, tuple[str, str]] = field(default_factory=dict)
@@ -999,6 +1004,7 @@ def _merge_fenced_content(
     shrink_allow: frozenset[str] = frozenset(),
     twin_source: Any = None,
     twin_drop: bool = False,
+    fence_baseline: Mapping[str, str] | None = None,
 ) -> MergeResult:
     """Merge fenced sections from *new_rendered* into *existing_on_disk*.
 
@@ -1026,6 +1032,10 @@ def _merge_fenced_content(
             values), or None. Lets an unfenced pre-fencing twin be proved template text.
         twin_drop: Allow a provable twin to be dropped. False (the default, and any run without a
             backup dir) keeps and reports every twin.
+        fence_baseline: This file's ``{section_id: digest}`` of fence blocks agentteams authored
+            (:mod:`agentteams.fence_baseline`), or None. A shrinking fence whose on-disk block matches its
+            recorded digest is unedited since generation and takes the replace path (old body to the
+            ``.lost`` sidecar) instead of being preserved. None or a mismatch keeps today's behaviour.
 
     Returns:
         MergeResult describing what changed.  ``merged_content`` is empty on
@@ -1059,7 +1069,7 @@ def _merge_fenced_content(
                 new_rendered, mig.content, preserve_on_shrink,
                 additive_on_shrink=additive_on_shrink, file_is_unmodified=file_is_unmodified,
                 rel_path=rel_path, brief_derived_files=brief_derived_files, shrink_allow=shrink_allow,
-                twin_source=twin_source, twin_drop=twin_drop,
+                twin_source=twin_source, twin_drop=twin_drop, fence_baseline=fence_baseline,
             )
             inner.sections_added = mig.added + [s for s in inner.sections_added if s not in mig.added]
             inner.sections_orphaned = [_WHOLE_BODY_FENCE] + inner.sections_orphaned
@@ -1163,10 +1173,22 @@ def _merge_fenced_content(
                         rel_path, sid, existing_regions.get(sid, "")) in shrink_allow
                     if overridden:
                         result.shrink_overridden.append(sid)
+                    # Unedited since generation: the on-disk block is exactly a render agentteams recorded
+                    # authoring, so the shrink guard has no enrichment to protect (ops-team, 2026-11-01).
+                    # Only where a shrink would otherwise be kept (preserve/additive); halt and warn are unchanged,
+                    # and a template-authoritative fence keeps its own path (and notice): it is never preserved.
+                    unedited = bool(notice and not overridden and fence_baseline
+                                    and (preserve_on_shrink or additive_on_shrink)
+                                    and not _is_template_authoritative(sid, rel_path, brief_derived_files)
+                                    ) and _fence_baseline.is_unedited(
+                        fence_baseline, sid, existing_regions.get(sid, ""))
+                    if unedited:
+                        result.shrink_unedited.append(sid)
+                    released = overridden or unedited
                     if (
                         notice
                         and additive_on_shrink
-                        and not overridden
+                        and not released
                         and not _is_template_authoritative(sid, rel_path, brief_derived_files)
                     ):
                         # Additive update: splice the template's NEW heading-delimited
@@ -1196,7 +1218,7 @@ def _merge_fenced_content(
                     elif (
                         notice
                         and preserve_on_shrink
-                        and not overridden
+                        and not released
                         and not _is_template_authoritative(sid, rel_path, brief_derived_files)
                     ):
                         # Respectful update: the new render would drop enriched
@@ -1215,6 +1237,8 @@ def _merge_fenced_content(
                                 notice + (" (operator override --shrink-allow: template update "
                                           "applied; old body saved to the .lost sidecar)"
                                           if overridden else ""))
+                            # The sidecar is written for an unedited release too: the release is
+                            # never silent and never unrecoverable (Rule 12, fence_baseline).
                             # W22 data-loss recovery: capture the pre-merge body
                             # so emit_all can write a .lost.<sid>.md.agentteams-bak sidecar.
                             result.lost_fence_bodies[sid] = _fence_body(
@@ -1338,6 +1362,25 @@ def _write_lost_fence_sidecars(
     return written
 
 
+def _release_reason(merge_result: MergeResult, sid: str | None) -> str:
+    """Why a shrinking fence is replaced under ``--shrink-policy=preserve`` (the dry-run plan's wording).
+
+    Args:
+        merge_result: The file's :class:`MergeResult`.
+        sid: The fence's section id (from :func:`_shrink_notice_sid`).
+
+    Returns:
+        A short reason: structural migration, operator override, unedited since generation, or authoritative.
+    """
+    if merge_result.migrated and sid == _WHOLE_BODY_FENCE:
+        return "structural migration"
+    if sid in merge_result.shrink_overridden:
+        return "operator --shrink-allow"
+    if sid in merge_result.shrink_unedited:
+        return "replaced: unedited since generation"
+    return "template-/brief-authoritative fence"
+
+
 def _shrink_notice_lines(
     rel_path: str,
     merge_result: MergeResult,
@@ -1382,6 +1425,9 @@ def _shrink_notice_lines(
             line += " — replaced (structural migration)"
         elif shrink_policy == "preserve" and sid in merge_result.shrink_overridden:
             line += " — replaced (operator --shrink-allow, reviewed-body digest matched)"
+        elif sid in merge_result.shrink_unedited:
+            line += (" — replaced: unedited since generation (on-disk body matches the render agentteams "
+                     "recorded in build-log.json)")
         elif shrink_policy == "preserve":
             line += " — replaced: this fence is template-/brief-authoritative and never preserved on shrink"
         sidecar = sidecar_paths.get(sid) if sid else None

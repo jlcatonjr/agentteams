@@ -54,6 +54,8 @@ _DOCUMENTED_IN: dict[str, str] = {
     "executor_pr": "### `agentteams.vulnscan.executor`",
     "open_prs": "### `agentteams.vulnscan.executor`",   # D1: open PRs of others (stage-fix / open-pr)   # split from executor.py: commit and PR text
     "npm_major": "### `agentteams.vulnscan.fix`",          # stage-major's package.json raise (fix.npm_majors)
+    "npm_groups": "### `agentteams.vulnscan.fix`",         # stage-fix's exact-peer / direct-parent selection
+    "npm_ops": "### `agentteams.vulnscan.fix`",            # npm_ops.npm_moves runs those moves (fail closed)
     "infra_retry": "### `agentteams.vulnscan.daily`",
     "gateway_context": "### `agentteams.vulnscan.gateway`",
     "gateway_dialects": "### `agentteams.vulnscan.gateway`",

@@ -56,7 +56,7 @@ import subprocess
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
 from agentteams.vulnscan import executor_pr, executor_supersede, npm_major, open_prs, report_store, repo_alias
@@ -427,7 +427,14 @@ def _refuse_filtered(wt: Path, changed: list[str]) -> None:
             raise ExecError(f"refusing change: {rel} has filter={value} (git-lfs or another filter); fix it by hand")
 
 
-def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
+class DiffCheck(NamedTuple):
+    """What :func:`validate_diff` accepted."""
+
+    changed: list[str]              # the changed paths
+    kept_off_registry: list[str]    # :func:`manifests.check_lock_edit` notes: unchanged off-registry entries kept
+
+
+def validate_diff(wt: Path, base: str, *, major: bool = False) -> DiffCheck:
     """Check that a staged change touches only what fix.py may touch (B1, X1, M1).
 
     Tracked changes are listed with ``--no-renames`` (a rename is a deletion plus an addition, and a
@@ -443,13 +450,15 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
         major: Accept a ``stage-major`` change.
 
     Returns:
-        The changed paths.
+        The changed paths, and one note per unchanged off-registry lockfile entry that was kept
+        (:func:`manifests.check_lock_edit`).
 
     Raises:
         ExecError: Any disallowed change.
     """
     raw = git(wt, "diff", "--raw", "-z", "--no-renames", "--no-abbrev", base).split("\0")
     changed: list[str] = []
+    kept: list[str] = []
     for meta, rel in zip(raw[0::2], raw[1::2]):
         fields = meta.lstrip(":").split()
         old_mode, new_mode, status = (fields[0], fields[1], fields[-1]) if len(fields) >= 5 else ("?", "?", "?")
@@ -474,11 +483,11 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
             elif npm_major.PACKAGE_JSON.search(rel):
                 npm_major.check_package_json_edit(rel, old, new)
             else:
-                check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"),
-                                manifest=npm_major.changed_manifest(wt, rel, changed) if major else None)
+                kept += check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"),
+                                        manifest=npm_major.changed_manifest(wt, rel, changed) if major else None)
         except ValueError as exc:
             raise ExecError(str(exc)) from exc
-    return changed
+    return DiffCheck(changed, kept)
 
 
 def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[str, Any]:
@@ -523,7 +532,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
         res = fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
-        changed = validate_diff(wt, base, major=major)
+        changed, kept_notes = validate_diff(wt, base, major=major)
         left = open_prs.left_to_prs(res.changes, claims)
         if left and (not changed or major and not executor_pr.major_changes(res.changes)):
             raise ExecError(open_prs.duplicate_detail(left))   # not futile: it lifts once those PRs close
@@ -554,7 +563,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
               "changed": changed, "resolved": res.resolved, "plan": res.markdown(), **({"major": True} if major else {}),
-              "packages": sorted({c.name for c in res.changes if c.action == "fix"}), **({"left_to_prs": left} if left else {})}
+              "packages": sorted({c.name for c in res.changes if c.action == "fix"}), **({"left_to_prs": left} if left else {}),
+              **({"kept_off_registry": kept_notes} if kept_notes else {})}
     _write_json(staged_file(repo), result)
     return result
 
@@ -628,8 +638,8 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
     major = st.get("major") is True   # stage-major: MAJOR title, body and label (executor_pr)
     body_file = wt.parent / f"{wt.name}.pr.md"
-    body_file.write_text(executor_pr.body(st["plan"], rationale, major=major, left=st.get("left_to_prs")),
-                         encoding="utf-8")
+    body_file.write_text(executor_pr.body(st["plan"], rationale, major=major, left=st.get("left_to_prs"),
+                                          kept=st.get("kept_off_registry")), encoding="utf-8")
     url = executor_pr.create(target_repo, base_branch, branch, body_file, major=major,
                              open_url=lambda: _open_pr_url(wt, target_repo, branch))
     _finish_open_pr(repo, wt, staged)

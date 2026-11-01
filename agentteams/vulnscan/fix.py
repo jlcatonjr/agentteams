@@ -14,7 +14,8 @@
   are never forced (no ``--force``); with ``allow_major`` (the executor's ``stage-major``) a ``major-held`` package that
   is a direct dependency has its ``package.json`` spec raised to ``^<fixed version>`` and the lockfile re-resolved with
   ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; transitive-only majors and npm
-  workspaces stay held). It runs on a
+  workspaces stay held). What the audit fix leaves vulnerable inside its range is retried by moving its exact-peer
+  group or direct parent (``npm update --no-save``, :func:`.npm_ops.npm_moves`). It runs on a
   scratch copy with the public registry and TLS verification fixed, never reading the
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
@@ -43,7 +44,6 @@ config runs nothing).
 from __future__ import annotations
 
 import datetime as _dt
-import json
 import os
 import re
 import shutil
@@ -54,9 +54,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, lockfiles, npm_major, open_prs, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan import _http, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
+from agentteams.vulnscan.npm_ops import semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
@@ -432,28 +433,6 @@ def _npm_available() -> bool:
     return bool(shutil.which("npm"))
 
 
-def _semver_line(version: str) -> tuple[int, ...]:
-    """Return what a caret range holds fixed: the major, or ``0.minor``, or ``0.0.patch``."""
-    core = version.strip().lstrip("vV").split("-", 1)[0].split("+", 1)[0]
-    nums = [int(n) for n in re.findall(r"\d+", core)[:3]]
-    nums += [0] * (3 - len(nums))
-    return (nums[0],) if nums[0] else (0, nums[1]) if nums[1] else (0, 0, nums[2])
-
-
-def _npm_workspaces(lockfile: Path) -> bool:
-    """Return whether the lockfile's root package, or the ``package.json`` beside it, declares workspaces."""
-    for path, root_of in ((lockfile, lambda d: d["packages"].get("") if isinstance(d.get("packages"), dict) else None),
-                          (lockfile.parent / "package.json", lambda d: d)):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):   # missing or malformed: npm reports that, not the plan
-            data = None
-        root = root_of(data) if isinstance(data, dict) else None
-        if isinstance(root, dict) and root.get("workspaces"):
-            return True
-    return False
-
-
 def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
                   private: tuple[str, ...] = ()) -> tuple[list[PinChange], str]:
     """List what ``stage-fix``'s ``npm audit fix`` is there to fix in one lockfile (dry run; npm is not run).
@@ -489,7 +468,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
         if scopes.get((d.name, d.version)) != "runtime":
             scopes[(d.name, d.version)] = d.scope
     hits = osv.vulnerable_ids(("npm", n, v) for n, v in scopes)
-    workspaces, have_npm = _npm_workspaces(path), _npm_available()
+    workspaces, have_npm = npm_major.in_workspaces(path), _npm_available()
     changes: list[PinChange] = []
     for (name, ver), scope in sorted(scopes.items()):
         ids = hits.get(("npm", name, ver))
@@ -522,7 +501,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
             "row's version or fix fewer rows. \"≥\" is the smallest version the advisories call fixed.")
     if workspaces:
         note += " This lockfile belongs to npm workspaces, which `stage-fix` refuses (fails closed)."
-    return changes, note
+    return changes, note + npm_groups.annotate_plan(path, changes)   # retried moves (and a new plan digest)
 
 
 def plan_cargo_lock(path: Path, *, label: str = "", private: tuple[str, ...] = ()) -> list[PinChange]:
@@ -635,8 +614,9 @@ def plan_lockfile(path: Path, *, label: str = "", private: tuple[str, ...] = (),
     return changes
 
 
-def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, install: bool = False) -> str:
-    """Run npm's lockfile-only, script-free audit fix (or, with ``install``, lockfile-only install) for ``directory``.
+def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, install: bool = False,
+            update: tuple[str, ...] = ()) -> str:
+    """Run npm's lockfile-only, script-free audit fix (or lockfile-only ``install`` / ``update``) for ``directory``.
 
     npm runs on a scratch copy holding only ``package.json`` and the lockfile, with its user and
     global config pointed at an empty file, inherited ``npm_config_*`` variables dropped, and the
@@ -652,13 +632,23 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, ins
         apply: Write the lockfile; otherwise ``--dry-run``.
         install: Run ``npm install --package-lock-only --ignore-scripts`` instead (``stage-major``: re-resolve the
             lockfile after :func:`npm_majors` raised a ``package.json`` spec), with the same cooldown and isolation.
+        update: Run ``npm update --no-save <names> --package-lock-only --ignore-scripts`` instead
+            (:func:`.npm_ops.npm_moves`: an exact-peer group or a direct parent, within the declared ranges);
+            each name must be a plain package name (:data:`npm_groups.NPM_NAME`), so none can read as an option.
 
     Returns:
-        npm's output, or a note when npm is unavailable or a manifest is a symlink.
+        npm's output, or a note when npm is unavailable, a manifest is a symlink or a name is not a package name.
+
+    Raises:
+        ValueError: Both ``install`` and ``update`` were given (a caller's mistake).
     """
     confined = subproc_confine.active() is not None
     npm = "npm" if confined else shutil.which("npm")
-    verb = ["install", "--no-audit"] if install else ["audit", "fix"]
+    verb = ["install", "--no-audit"] if install else ["update", "--no-save", *update] if update else ["audit", "fix"]
+    if install and update:
+        raise ValueError("npm_fix: install and update are exclusive")
+    if update and not all(npm_groups.NPM_NAME.fullmatch(n) for n in update):
+        return "npm update not run: a name is not a plain package name"
     if not npm:
         return f"npm not installed — run `npm {verb[0]} ... --package-lock-only --ignore-scripts` where it is"
     names = [n for n in ("package.json", *NPM_LOCKFILES) if (directory / n).is_symlink() or (directory / n).exists()]
@@ -743,29 +733,16 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
     _leave_to_prs(rows, skip)
     if not [c for c in rows if c.action == "major-held"]:
         return rows, ""
-    if _npm_workspaces(lockfile):
+    direct, text, problem = npm_major.direct_majors(lockfile, [c.name for c in rows if c.action == "major-held"])
+    if problem:   # workspaces, or a package.json that cannot be read: nothing here is rewritten, and the rows say why
         for c in rows:
-            c.note += "; npm workspaces: stage-major fails closed here"
-        return rows, ""
-    pkg = lockfile.parent / "package.json"
-    try:
-        text = pkg.read_text(encoding="utf-8")
-        manifest, unread = json.loads(text), ""
-    except (OSError, ValueError) as exc:   # missing or malformed: nothing here is rewritten, and the rows say why
-        manifest, text, unread = None, "", f"package.json cannot be read ({type(exc).__name__})"
-    if manifest is not None and not isinstance(manifest, dict):
-        unread = "package.json is not an object"
-    if unread:
-        for c in rows:
-            c.note += f"; {unread}: stays held — fix by hand"
+            c.note += ("; npm workspaces: stage-major fails closed here" if problem == npm_major.WORKSPACES
+                       else f"; {problem}: stays held — fix by hand")
         return rows, ""
     specs: dict[str, tuple[str, str]] = {}
     for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
-        if c.action == "pr-held":
-            continue
-        section = npm_major.direct_section(manifest, c.name)
-        if section:
-            specs[c.name] = (section, f"^{c.new.lstrip('vV')}")
+        if c.action != "pr-held" and c.name in direct:
+            specs[c.name] = (direct[c.name], f"^{c.new.lstrip('vV')}")
     if specs:
         try:
             new_text = npm_major.rewrite_specs(text, specs)
@@ -777,8 +754,13 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             raise ExecError(f"{label}: stage-major refuses npm install outside the tools container (confinement is "
                             "off or opted out)")
         lock_before = lockfile.read_bytes()
+        # S1 stays strict: an off-registry base is refused here even though stage-fix's validate_diff keeps an
+        # entry identical to the base (manifests._kept_off_registry, e.g. SheetJS's CDN-only xlsx), because npm
+        # install re-resolves every package.json spec. Tracked as agentteams-remediation-log:
+        # stage-major-offregistry-base; any relaxation needs its own @security review.
         if problem := npm_off_registry(label, text, lock_before.decode("utf-8", "replace")):
             raise ExecError(f"stage-major refuses npm install: {problem}")
+        pkg = lockfile.parent / "package.json"
         with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
             fh.write(new_text)
     pkg_label = str(Path(label).parent / "package.json")
@@ -939,6 +921,14 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
                 res.changes += majors
                 res.npm += [(where, out)] if out else []
             res.npm.append((where, npm_fix(path.parent, cooldown_days=cooldown_days, apply=apply)))
+            if apply:   # what the audit fix left inside its range: exact-peer groups and direct parents
+                try:
+                    res.npm += [(where, o) for o in npm_ops.npm_moves(path, run=npm_fix, counts=advisory_counts,
+                                                                      base_lock=old, cooldown_days=cooldown_days,
+                                                                      private=private)]
+                except _http.FeedError as exc:
+                    res.feed_errors.append(f"{rel}: {exc}")
+                    continue
             _add_resolved(res, path, old, rel, private)
         elif path.name == "composer.lock":
             res.composer.append(f"`{rel}`: composer update <pkg> --no-install --no-scripts --no-plugins "

@@ -105,7 +105,7 @@ replace an escalation or a stop condition, and they cannot widen the grant. When
 with a stop condition, escalate anyway and mention the note in the evidence.
 <!-- AGENTTEAMS:END invariant_core -->
 
-<!-- AGENTTEAMS:BEGIN daily_remediation v=6 -->
+<!-- AGENTTEAMS:BEGIN daily_remediation v=7 -->
 ## Daily Remediation workflow
 
 1. **Read.** `get_summary`, then `list_findings` (`min_severity: "moderate"` first) and
@@ -133,7 +133,9 @@ with a stop condition, escalate anyway and mention the note in the evidence.
    - **Major upgrades.** Request `stage-major` (same alias) only for a repository whose fix plan shows
      `major-held` rows **and** whose `stage-fix` found nothing fixable (its `request_status` failed with
      `nothing fixable without a major jump`, or it was refused `held: stage-fix found nothing fixable ...`).
-     Always stage majors separately: never request `stage-major` while that repository has a `fix` row
+     A plan `get_fix_plans` marks `stage-fix held since <date>: nothing fixable without a major jump` is
+     that case already (an earlier run's result): request `stage-major` for it in this run, no `stage-fix`
+     first. Always stage majors separately: never request `stage-major` while that repository has a `fix` row
      to stage, a `stage-fix` pending, or a fix *Already staged*; open-pr the non-major fix first. When
      `stage-major` is `done`, request `open-pr` (its PR is marked MAJOR) and then `close-superseded`. A
      `major-held` row the plan calls transitive only, or in npm workspaces, stays held under

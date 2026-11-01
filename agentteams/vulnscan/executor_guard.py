@@ -461,17 +461,93 @@ def require_remote_branch(wt: Path, branch: str) -> None:
         raise _exec_error(f"base branch {branch!r} does not exist on origin; refusing to open the PR")
 
 
+_PLAN_NPM = re.compile(r"^## npm: `([^`\n]+)`$")
+
+
+def stage_major_packages(plan: str, repo: Path) -> list[str]:
+    """Return the ``major-held`` packages of a fix plan that ``stage-major`` could take, or [] when it has a ``fix`` row.
+
+    The rules are :func:`agentteams.vulnscan.fix.fix_path`'s with ``allow_major``: a requirements pin (the plan's
+    top table) is taken; an npm package only when :func:`.npm_major.direct_majors` (the rule
+    :func:`agentteams.vulnscan.fix.npm_majors` applies) places it: listed directly in the ``package.json`` beside
+    its lockfile, outside npm workspaces, the file neither a symlink nor unreadable. A lockfile path outside
+    ``repo`` takes nothing. Any ``fix`` row returns [] (the non-major fix is staged first). Only names
+    :func:`.mcp.package_name_ok` accepts are returned: they go into host-authored text the agent reads (C-4).
+    The executor re-checks all of it when it stages.
+
+    Args:
+        plan: The fix plan's Markdown (:meth:`agentteams.vulnscan.fix.FixResult.markdown`).
+        repo: The plan's repository (its ``stage-fix`` target).
+
+    Returns:
+        Package names, in plan order, without duplicates.
+    """
+    from agentteams.vulnscan import npm_major   # lazy: only the host's plan marking reads manifests
+
+    pins: list[str] = []
+    npm: dict[str, list[str]] = {}
+    section: str | None = ""   # "": the requirements table; a lockfile path: an npm section; None: anything else
+    for line in plan.splitlines():
+        if line.startswith("## "):
+            m = _PLAN_NPM.fullmatch(line)
+            section = m.group(1) if m else None
+            continue
+        cells = [c.strip() for c in line.split("|")[1:]] if line.startswith("|") and section is not None else []
+        name_at, action_at = (1, 4) if section == "" else (0, 3)   # File | Package | ... vs Package | ...
+        if len(cells) <= action_at:
+            continue
+        name, action = cells[name_at], cells[action_at]
+        if action == "fix":
+            return []
+        if action == "major-held" and section == "" and mcp.package_name_ok(name, "pypi"):
+            pins.append(name)
+        elif action == "major-held" and section and mcp.package_name_ok(name, "npm"):
+            npm.setdefault(section, []).append(name)
+    root = repo.resolve()
+    found = list(pins)
+    for rel, names in npm.items():
+        lock = (root / rel).resolve()
+        if lock.is_relative_to(root):
+            found += list(npm_major.direct_majors(lock, names)[0])
+    return list(dict.fromkeys(found))
+
+
+def _major_next(plans: list[tuple[str, str]]) -> dict[str, dict[str, Any]]:
+    """Return ``{target: {"since", "packages"}}`` for the plans whose next step is ``stage-major`` (see the caller)."""
+    from agentteams.vulnscan import executor, ledger, retry_guard   # lazy: the executor imports this module
+
+    try:
+        rows = ledger.read()
+    except (OSError, ValueError):   # an untrusted ledger marks nothing; the executor refuses on it anyway
+        return {}
+    staged = {r.rstrip("/") for rec in executor.staged_records() if isinstance(r := rec.get("repo"), str)}
+    out: dict[str, dict[str, Any]] = {}
+    for target, text in plans:
+        since = "" if target.rstrip("/") in staged else retry_guard.major_next_since(target, rows)
+        packages = stage_major_packages(text, Path(target)) if since else []
+        if packages:
+            out[target] = {"since": since, "packages": packages}
+    return out
+
+
 def write_plan_levels(run_dir: Path) -> Path:
     """Record which of the run's fix plans name a repository the executor will refuse as scan-only.
 
     The MCP server runs in the agent container without the registry; it reads this file to mark those
     plans (:func:`agentteams.vulnscan.mcp.Server`). The executor enforces the level either way.
 
+    It also records (``major_next``) each remediate-level plan whose next step is ``stage-major``, because the
+    agent never sees in its own run the result of a ``stage-fix`` it requested (the executor serves requests
+    after it): the repository's last ``stage-fix`` found nothing fixable without a major jump and is held at
+    this plan (:func:`.retry_guard.major_next_since`), no ``stage-major`` followed, no fix is staged for it, and
+    the plan has no ``fix`` row but has ``major-held`` rows ``stage-major`` can take (:func:`stage_major_packages`).
+
     Args:
         run_dir: The run directory (host side, before the agent starts).
 
     Returns:
-        The file written: ``{"scan_only": {target: level}, "registry_problem": str}``.
+        The file written: ``{"scan_only": {target: level}, "registry_problem": str,
+        "major_next": {target: {"since": date, "packages": [name, ...]}}}``.
     """
     try:
         entries = registry.load()
@@ -479,12 +555,18 @@ def write_plan_levels(run_dir: Path) -> Path:
     except (OSError, ValueError) as exc:
         entries, problem = [], str(exc)[:300]
     scan_only: dict[str, str] = {}
+    remediate: list[tuple[str, str]] = []
     for plan in sorted([*run_dir.glob("fixplan-*.md"), *run_dir.glob("fix-*.md")]):
-        lines = plan.read_text(encoding="utf-8", errors="replace").splitlines()
+        text = plan.read_text(encoding="utf-8", errors="replace")
+        lines = text.splitlines()
         m = repo_alias.PLAN_TARGET.fullmatch(lines[2]) if len(lines) > 2 else None
         entry = registry.find(entries, Path(m.group(1))) if m else None
         if m and entry is not None and entry.level != "remediate":
             scan_only[m.group(1)] = entry.level
+        elif m:
+            remediate.append((m.group(1), text))
+    major_next = {} if problem else _major_next(remediate)
     path = run_dir / mcp.PLAN_LEVELS_FILE
-    path.write_text(json.dumps({"scan_only": scan_only, "registry_problem": problem}, indent=2), encoding="utf-8")
+    path.write_text(json.dumps({"scan_only": scan_only, "registry_problem": problem, "major_next": major_next},
+                               indent=2), encoding="utf-8")
     return path

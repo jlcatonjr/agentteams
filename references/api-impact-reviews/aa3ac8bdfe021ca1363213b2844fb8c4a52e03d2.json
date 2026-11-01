@@ -1,0 +1,8 @@
+{
+  "patch_id": "aa3ac8bdfe021ca1363213b2844fb8c4a52e03d2",
+  "commit": "9a66bc74073657d8d772e688f8a8bfea8069b350",
+  "subject": "fix(vulnscan): get_fix_plans marks a plan whose next step is stage-major",
+  "impact": "2 symbols added",
+  "note": "Additive only: retry_guard.major_next_since, executor_guard.stage_major_packages, npm_major.direct_majors/in_workspaces/WORKSPACES, mcp.package_name_ok/MAX_PACKAGE_NAME; plan-levels.json gains a major_next key (old readers ignore it). Private fix._npm_workspaces removed (no external callers). Documented in docs_src/api-reference/vulnscan.md.",
+  "recorded_at": "2026-11-01T22:30:31Z"
+}

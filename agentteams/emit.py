@@ -50,6 +50,7 @@ from agentteams.fences import (  # noqa: E402,F401  (carved for CH-07; re-export
     _is_machine_managed_merge_overwrite_path,
     _kept_fenced_sections,
     _merge_fenced_content,
+    _release_reason,
     _shrink_notice_lines,
     _shrink_notice_sid,
     _write_lost_fence_sidecars,
@@ -60,6 +61,7 @@ from agentteams.project_notes import _ensure_project_notes_section, _is_agent_do
 from agentteams.frameworks.structural_merge import post_merge_structural
 from agentteams.frameworks.codex import write_checked
 from agentteams.learned_blocks import carry_learned_block
+from agentteams.fence_baseline import block_digests as _fence_digests, for_run as _fence_baseline_for_run
 from agentteams.fence_twins import persist_dropped as _persist_twins
 from agentteams.front_matter_baseline import (
     keep_disk_front_matter, load_for as _front_matter_baseline, restore_dropped_handoffs)
@@ -147,6 +149,7 @@ class EmitResult:
     shrink_blocked: list[str] = field(default_factory=list)
     # Each file's front matter in this run's template render: the baseline records what agentteams authored.
     template_front_matter: dict[str, dict[str, str]] = field(default_factory=dict)
+    template_fence_digests: dict[str, dict[str, str]] = field(default_factory=dict)  # same, per fence (fence_baseline)
 
     @property
     def success(self) -> bool:
@@ -350,12 +353,14 @@ def emit_all(
     # prose on the template.
     _unmodified = _unmodified_since_build(output_dir)
     _fm_baseline = _front_matter_baseline(output_dir)
+    _fence_bl = _fence_baseline_for_run(output_dir, merge=merge, dry_run=dry_run, twin_drop=twin_drop, backup_path=backup_path)
 
     # Write files
     for rel_path, content in rendered_files:
         target = _resolve_path(output_dir, rel_path)
         normalized_content = _normalize_generated_content(rel_path, content)
         result.template_front_matter[rel_path] = _front_matter_keys(normalized_content)
+        result.template_fence_digests[rel_path] = _fence_digests(normalized_content)
         normalized_content = _ensure_project_notes_section(rel_path, normalized_content)
         normalized_content, _lb_n = carry_learned_block(rel_path, normalized_content, target)  # every path
         result.notices.extend(f"{rel_path}: {n}" for n in _lb_n)
@@ -434,7 +439,7 @@ def emit_all(
                     brief_derived_files=brief_derived_files,
                     shrink_allow=_allow,
                     twin_source=(twin_sources or {}).get(rel_path), twin_drop=bool(twin_drop),
-                )
+                    fence_baseline=_fence_bl.get(rel_path))
                 _sa.track(_allow_used, _pinned, rel_path, existing_text, mr)
                 # Plan 3: dry-run preview also surfaces the notices that the
                 # real run would emit (D-4 from update-dry-run plan).
@@ -442,9 +447,7 @@ def emit_all(
                 # with each shrink — preserve in place, or sidecar+write.
                 for notice in mr.shrink_notices:
                     if shrink_policy == "preserve" and _shrink_notice_sid(notice) in mr.lost_fence_bodies:
-                        why = ("structural migration" if mr.migrated and _shrink_notice_sid(notice) == "content" else "operator --shrink-allow"
-                               if _shrink_notice_sid(notice) in mr.shrink_overridden
-                               else "template-/brief-authoritative fence")
+                        why = _release_reason(mr, _shrink_notice_sid(notice))
                         suffix = f" ({why}: the real run will replace it and keep the prior body in a .lost.<sid>.md.agentteams-bak sidecar in the backup dir)"
                     elif shrink_policy == "preserve":
                         suffix = " (existing enriched body will be retained; template update suppressed for this fence — use --shrink-policy=allow to force)"
@@ -635,7 +638,7 @@ def emit_all(
                 brief_derived_files=brief_derived_files,
                 shrink_allow=_allow,
                 twin_source=(twin_sources or {}).get(rel_path), twin_drop=twin_drop is not False and backup_path is not None,
-            )
+                fence_baseline=_fence_bl.get(rel_path))
             _sa.track(_allow_used, _pinned, rel_path, existing_text, merge_result)
             # Front-matter drift: the template's front matter moved on while this file kept its
             # own. Merge cannot fix it — front matter lies outside every fence and is preserved

@@ -6,6 +6,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### fixed (merge: a fence unedited since generation is never shrink-preserved)
+
+- **`--update --merge` no longer keeps a stale template body just because the new one "shrinks" it.** ops-team's
+  `vuln-remediation` `daily_remediation` fence was byte-identical to the 2026-10-23 render, yet every later update
+  preserved it (`lost concrete refs: failed, refused`: the old body backticked them, the v=6 body discusses them in
+  prose), so the agent ran a nine-day-old workflow until an operator passed `--shrink-allow`.
+- `build-log.json` now records **`fence_baseline`**: per file and fence, the SHA-256 of the fenced block agentteams
+  *authored* (the written block when it equals this run's render, else the previous record; never a preserved
+  hand edit). New module `agentteams.fence_baseline`. A shrinking fence whose on-disk block matches its record is
+  replaced, its old body still goes to the `.lost` sidecar, and the notice reads `replaced: unedited since
+  generation` (the dry-run plan reads `replaced`; `MergeResult.shrink_unedited`).
+- **Unchanged, by design (Rule 12):** an edited fence, a fence with no record (every build log before this
+  release, so the first update after upgrading still preserves), an interop projection marker, and any run with
+  no backup dir (`--no-backup`: no sidecar) keep today's preserve behaviour.
+
+### fixed (vulnscan: an unchanged off-registry lockfile entry no longer blocks `stage-fix`)
+
+- **`manifests.check_lock_edit`** refused every lockfile entry resolved off the registry allowlist, even one the
+  base already held unchanged, so after portal moved `xlsx` to 0.20.3 from `cdn.sheetjs.com` (the only fixed
+  release, published only there) every `stage-fix` for portal was refused. An `https://` off-registry entry with
+  a `sha512-` integrity now passes when it is identical to the base in every field (`resolved`, `integrity`,
+  `version`, dependency maps, `bin`, `hasInstallScript`, …), in the same section and under the same path key. A
+  new, moved, copied or changed off-registry entry, one without a `sha512-` integrity, and a plain-`http` or git
+  one stay refused, and the edited lockfile may no longer repeat a JSON key anywhere (`json.loads` keeps the
+  last copy; another reader might keep the first). npm `--package-lock-only` leaves such an entry alone without
+  fetching it (checked with npm 11.19 against a local mock registry, the CDN unreachable).
+- `check_lock_edit` now returns one note per kept entry (`"<rel>: unchanged off-registry entry kept: <key>
+  <url> (sha512-…)"`). `executor.validate_diff` now returns `DiffCheck(changed, kept_off_registry)` (was the
+  changed paths); `stage-fix` records the notes as `kept_off_registry` in its result and ledger row, and the
+  `open-pr` body lists each under *Off-registry sources kept unchanged*, so such a PR never reads as
+  registry-only.
+- **`stage-major` is unchanged:** it still refuses an off-registry base outright (S1, `npm_off_registry`), since
+  `npm install` re-resolves every `package.json` spec; tracked as `agentteams-remediation-log: stage-major-offregistry-base`
+  (any relaxation needs its own `@security` review).
+
+### fixed (vulnscan: `stage-fix` moves exact-peer groups and direct parents the audit fix leaves behind)
+
+- On 2026-11-01 `stage-fix` found "nothing fixable without a major jump" for data-quality-monitor and
+  traffic-file-enrichment-app although every fix was inside the declared ranges: `@vitest/coverage-v8` and `vitest`
+  pin each other's exact version as peers (so `vitest` and `@vitest/mocker` could not move alone), and `express
+  4.22.1` requires `qs ~6.14.0` (the fixed `qs` needs `express 4.22.3`, inside `^4.19.2`). `npm audit fix` without
+  `--force` takes neither.
+- **`npm_ops.npm_moves`** (new module `agentteams.vulnscan.npm_ops`; run by `fix_path` with `apply` after the audit
+  fix, with `fix.npm_fix` / `fix.advisory_counts` passed in): for each package still vulnerable whose fix is inside its caret range, the new `agentteams.vulnscan.npm_groups` (`LockGraph`, read from the
+  lockfile's own `dependencies` and exact `peerDependencies`, no built-in package list) names the packages to move
+  together: the exact-peer group, or each direct parent with its group. Each runs as `npm update --no-save <names>
+  --package-lock-only --ignore-scripts` (`npm_fix(..., update=)`, the audit fix's isolation, registry and cooldown;
+  names must be plain package names; `install` with `update` raises `ValueError`), so `package.json` and its ranges
+  never change. **Fail closed (security review):** no move runs outside the tools container, or when
+  `manifests.npm_off_registry` finds a non-registry source in `package.json` or the base or current lockfile
+  (`npm update <parent>` re-resolves that parent's spec). A move is kept
+  only when it removes an advisory occurrence and adds none, else the lockfile is restored byte for byte;
+  `manifests.check_lock_edit` still judges the result. Out-of-range fixes stay `major-held`.
+- **Retry guard:** the dry-run fix plan names each such move in the row's note (and the section note says the step
+  runs), so the plan digest `retry_guard` keys its hold on changes and the held repositories are retried once.
+  `npm_groups.py` and `npm_ops.py` join the enforcement integrity set; `semver_line` moves to `npm_ops` (the workspaces
+  check is `npm_major.in_workspaces`), and `manifests.npm_packages` / `npm_entry_name` are the one `packages` walk both readers use.
+
+### fixed (vulnscan: `stage-major` is requested in the run that can use it)
+
+- **`get_fix_plans` marks a plan whose next step is `stage-major`.** The executor serves requests after the agent's
+  run, so the agent never saw, in its own run, the held `stage-fix` ("nothing fixable without a major jump") that
+  makes `stage-major` applicable; it wrote "stage-major next run", and the next run requested `stage-fix` again
+  (held), every day. `executor_guard.write_plan_levels` now also records `major_next` in `plan-levels.json`: a
+  remediate-level repository whose last `stage-fix` failed that way and is still held at the current fix plan
+  (`retry_guard.major_next_since`; no `stage-major` row since), with no staged fix, no `fix` row, and `major-held`
+  rows `stage-major` can take (`executor_guard.stage_major_packages`: requirements pins, and npm packages
+  `package.json` lists directly outside npm workspaces; transitive-only rows never mark). The MCP server heads
+  such a plan with `stage-fix held since <date>: nothing fixable without a major jump → request stage-major`.
+  The `daily_remediation` fence (v=7) has the agent request `stage-major` for it in the same run, with every
+  existing guard kept. The executor still enforces every `stage-major` precondition itself.
+
 ### added (vulnscan: scan mirrors)
 
 - **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a

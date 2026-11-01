@@ -25,6 +25,8 @@ DEP_SECTIONS = ("dependencies", "devDependencies")
 PACKAGE_JSON = re.compile(r"(^|/)package\.json$")
 _SPEC = re.compile(r"^\^(\d+)\.(\d+)\.(\d+)$")   # the only spec stage-major writes
 _COLON = re.compile(r"\s*:\s*")
+#: :func:`direct_majors`'s problem for a lockfile in npm workspaces (``stage-major`` fails closed there).
+WORKSPACES = "npm workspaces"
 
 
 def _string_end(text: str, i: int) -> int:
@@ -209,3 +211,55 @@ def changed_manifest(wt: Path, lock_rel: str, changed: list[str]) -> dict[str, A
     except (OSError, ValueError):   # unreadable: no root change is allowed
         return None
     return data if isinstance(data, dict) else None
+
+
+def in_workspaces(lockfile: Path) -> bool:
+    """Return whether the lockfile's root package, or the ``package.json`` beside it, declares workspaces.
+
+    Args:
+        lockfile: package-lock.json or npm-shrinkwrap.json.
+
+    Returns:
+        True when either declares ``workspaces``; a missing or malformed file declares none (npm reports that).
+    """
+    for path, root_of in ((lockfile, lambda d: d["packages"].get("") if isinstance(d.get("packages"), dict) else None),
+                          (lockfile.parent / "package.json", lambda d: d)):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):   # missing or malformed: npm reports that, not the plan
+            data = None
+        root = root_of(data) if isinstance(data, dict) else None
+        if isinstance(root, dict) and root.get("workspaces"):
+            return True
+    return False
+
+
+def direct_majors(lockfile: Path, names: list[str]) -> tuple[dict[str, str], str, str]:
+    """Return which of ``names`` ``stage-major`` may raise in the ``package.json`` beside ``lockfile``.
+
+    The one rule for :func:`agentteams.vulnscan.fix.npm_majors` (which raises them) and
+    :func:`agentteams.vulnscan.executor_guard.stage_major_packages` (which tells the agent ``stage-major`` is next):
+    nothing in npm workspaces (:func:`in_workspaces`) or beside a symlinked, unreadable or non-object
+    ``package.json``; otherwise each name :func:`direct_section` places. A transitive-only name is left out.
+
+    Args:
+        lockfile: package-lock.json or npm-shrinkwrap.json.
+        names: The lockfile's ``major-held`` package names.
+
+    Returns:
+        ``({name: section}, package.json text, problem)``: ``problem`` is :data:`WORKSPACES`, why ``package.json``
+        cannot be used, or "" (then the dict holds the direct names and the text is the file's).
+    """
+    if in_workspaces(lockfile):
+        return {}, "", WORKSPACES
+    pkg = lockfile.parent / "package.json"
+    if pkg.is_symlink():
+        return {}, "", "package.json is a symlink"
+    try:
+        text = pkg.read_text(encoding="utf-8")
+        manifest = json.loads(text)
+    except (OSError, ValueError) as exc:   # missing or malformed
+        return {}, "", f"package.json cannot be read ({type(exc).__name__})"
+    if not isinstance(manifest, dict):
+        return {}, text, "package.json is not an object"
+    return {n: sec for n in names if (sec := direct_section(manifest, n))}, text, ""
