@@ -156,6 +156,8 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         "os_sandbox",
         # P01: the normalised wasm_sandbox block, carried only when the brief has it.
         "wasm_sandbox",
+        # P11: the agentteams_wasm wiring record, written at render time and only while WASM is on.
+        "wasm_wiring",
         # R6: carried only under the switch and only when the brief grants agentteams_runner.
         "mcp_grants",
         # MCP catalogue: carried from the brief only when non-empty, so a team that opts into nothing

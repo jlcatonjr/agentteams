@@ -114,4 +114,40 @@ def advise_wasm(manifest: dict, state: SandboxState, framework_id: str, *, mecha
         manifest.setdefault("advisories", []).append(advisory)
 
 
-__all__ = ["WasmSwitchError", "advise_wasm", "apply_wasm_switch"]
+def report_wasm_wiring(manifest: dict, state: SandboxState, framework_id: str) -> None:
+    """Record ``manifest["wasm_wiring"]`` for the target framework and print its ``[WASM-WIRING]`` line (P11).
+
+    Args:
+        manifest: The team manifest (mutated: ``wasm_wiring``, ``advisories``). Untouched when WASM is off.
+        state: The effective sandbox state.
+        framework_id: The target framework.
+
+    Raises:
+        ValueError: A widened WASM grant on a framework that takes one shared compute-only copy (I3).
+    """
+    from agentteams.frameworks._wasm_wiring import print_report
+
+    print_report(manifest, framework_id, state)
+
+
+def install_wasm_binary(manifest: dict, project_root: Path) -> None:
+    """Write the ``agentteams_wasm`` bundle's binary file beside the emitted text bundle (P11; best effort, loud).
+
+    Args:
+        manifest: The team manifest.
+        project_root: The project root.
+
+    Raises:
+        Nothing: a failure is printed (``--check-wiring`` then reports the missing file).
+    """
+    from agentteams.frameworks._wasm_wiring import install_binary
+
+    try:
+        for rel in install_binary(manifest, project_root):
+            print(f"  ✓  Installed agentteams_wasm bundle file: {rel}")
+    except (OSError, ValueError) as exc:
+        print(f"  !  agentteams_wasm bundle install failed ({exc}); the server refuses to start until it is "
+              "re-rendered", file=sys.stderr)
+
+
+__all__ = ["WasmSwitchError", "advise_wasm", "apply_wasm_switch", "install_wasm_binary", "report_wasm_wiring"]

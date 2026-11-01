@@ -219,6 +219,11 @@ class FrameworkAdapter(ABC):
         fid = self.framework_id
         if fid in TEAM_KEY_BY_FRAMEWORK:
             files.append((VERIFY_KEY_STORE_SENTINEL_REL, VERIFY_KEY_STORE_SENTINEL_TEXT))
+        # WASM plan P11: the agentteams_wasm server, its text bundle and any inert example, only while WASM is on
+        # and only where this framework launches it (_wasm_wiring decides; empty otherwise).
+        from agentteams.frameworks import _wasm_wiring
+
+        files.extend(_wasm_wiring.output_files(manifest, fid))
         return files
 
     def vscode_tasks_rel_path(self) -> str | None:

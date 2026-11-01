@@ -486,8 +486,10 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
     """Why grant integrity is only advisory here (R1, S2), or None when the control plane is session-protected.
 
     Protected means: the OS sandbox is on, R1's rules are emitted (``protect_control_plane``), and they are merged
-    into the live host config (Claude ``settings.json``; the Goose Seatbelt profile). P13 records the same answer as
-    ``wasm_enforcement``.
+    into the live host config (Claude ``settings.json``; the Goose Seatbelt profile). Every config file on disk that
+    launches the server (``frameworks._wasm_wiring.launching_config_paths``) must be in the live denyWrite (itself or
+    a denied ancestor) and, on Claude, behind an ``Edit`` deny, whether or not the manifest lists it (P11). P13
+    records the same answer as ``wasm_enforcement``.
 
     Args:
         root: The project root.
@@ -513,6 +515,12 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
         return advisory("the R1 control-plane rules are not emitted")
     protect_ledger = manifest.get("write_policy") == "orchestrator-only"
     root = Path(root)
+    from agentteams.frameworks._wasm_wiring import covered, launching_config_paths
+
+    # P11 (@security, P10 review): every config on disk that launches this server must be write-denied to the
+    # session's shell too (an Edit rule alone leaves Bash free to rewrite the launch flags), whatever the manifest
+    # lists; a file already under a denied directory counts as protected.
+    launching = launching_config_paths(root)
     if framework == "claude":
         missing: list[str] = []
         try:
@@ -525,8 +533,11 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
             missing.append("sandbox.enabled true without unsandboxed commands")
         deny_write = (sandbox.get("filesystem") or {}).get("denyWrite") or []
         missing += [f"denyWrite {p}" for p in cpp.write_denies(protect_ledger, control) if p not in deny_write]
+        missing += [f"denyWrite {p}" for p in launching
+                    if not covered(p, [d for d in deny_write if isinstance(d, str)]) and p not in control]
         deny = (data.get("permissions") or {}).get("deny") or []
         missing += [r for r in cpp.permission_rules(protect_ledger, control) if r not in deny]
+        missing += [f"Edit(/{p})" for p in launching if p not in control and not _edit_denied(p, deny)]
         try:
             local = json.loads((root / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
         except FileNotFoundError:
@@ -544,12 +555,20 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
             text = (root / ".goose" / "sandbox.sb").read_text(encoding="utf-8")
         except OSError:
             return advisory(".goose/sandbox.sb is missing; re-render with the OS sandbox on")
-        missing = [p for p in cpp.seatbelt_denies(protect_ledger, control)
-                   if f'"{p}"' not in text and f'/{p}"' not in text]
+        denied = [p for p in cpp.seatbelt_denies(protect_ledger, control) if f'"{p}"' in text or f'/{p}"' in text]
+        missing = [p for p in cpp.seatbelt_denies(protect_ledger, control) if p not in denied]
+        missing += [p for p in launching if not covered(p, denied) and p not in missing]
         return advisory(".goose/sandbox.sb does not deny writes to " + ", ".join(missing)) if missing else None
     if framework == "grok":
         return advisory("grok's sandbox profile cannot deny a write without denying the read")
     return advisory(f"no verified control-plane write protection for {framework}")
+
+
+def _edit_denied(path: str, deny: Sequence[Any]) -> bool:
+    """Whether a Claude ``permissions.deny`` list holds ``Edit(/<path>)`` or ``Edit(/<ancestor>/**)``."""
+    rules = {r for r in deny if isinstance(r, str)}
+    parts = path.split("/")
+    return f"Edit(/{path})" in rules or any(f"Edit(/{'/'.join(parts[:i])}/**)" in rules for i in range(1, len(parts)))
 
 
 def wiring_problems(root: str | Path, framework: str, manifest: dict, *, home: str | Path | None = None

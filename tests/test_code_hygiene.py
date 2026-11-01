@@ -74,6 +74,8 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # P20 (wave 4) took it to 1271: the three-line emit_projection call in _emit_host_mcp_artifacts_if_enabled
     # (the logic lives in the integrity-pinned sandbox_projection.py). The per-topic CH-07 carve above remains
     # the genuine fix.
+    # WASM P11 (wave 5) added the Codex first_party_tables hand-off and gate, the [WASM-WIRING] report call
+    # and the binary-bundle install call (logic in frameworks/_wasm_wiring.py, cli/wasm_sandbox_switch.py): 1284.
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the

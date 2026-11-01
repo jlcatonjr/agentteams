@@ -59,6 +59,7 @@ from ._sandbox_emit import (  # re-exported so existing importers keep resolving
     sibling_deny_dirs,
 )
 from ._control_plane_protect import control_plane_for, substrate_protect_paths
+from . import _wasm_wiring
 from ._sandbox_drift import verify_control_plane_merged  # noqa: F401  (re-export: P13 reads it from here)
 from ._prompt_root_protect import prompt_roots_enabled
 from ._write_roots import project_root_of
@@ -157,6 +158,13 @@ class ClaudeAdapter(FrameworkAdapter):
             allowed_tools = ", ".join([allowed_tools, *runner_mcp.tool_names(grant["tools"])])
             mcp_block = runner_mcp.claude_block(agent_slug, grant["tools"], "staged",
                                                 runner_mcp.interpreter())
+        wasm_args = _wasm_wiring.wasm_agent_entry(manifest, "claude", agent_slug, allowed_tools.split(", "))
+        if wasm_args is not None:
+            # P11: an eligible agent's own agentteams_wasm copy (its grant in the launch flags), after the runner.
+            from agentteams import wasm_mcp
+
+            allowed_tools = ", ".join([allowed_tools, *wasm_mcp.tool_names()])
+            mcp_block = (mcp_block or "mcpServers:\n") + wasm_mcp.claude_entry(wasm_args, wasm_mcp.interpreter())
         # A.5: Extract optional Claude-specific keys before stripping front matter.
         model, disallowed_tools, permission_mode = _extract_claude_optional_keys(content)
         content = self._strip_yaml_front_matter(content)
@@ -669,10 +677,11 @@ def verify_sandbox_wiring(project_root: Path,
         return claude_off_drift(project_root, state)
     ok, msgs = _verify_emitted_sandbox_merged(project_root)
     if state is not None and state.wasm:
-        # TODO(P11): source the MCP protected_config_paths from the build-log when no manifest is given (S4), so a
-        # manifest-less --check-wiring checks the agentteams_wasm MCP config denies too.
-        merged, missing = verify_control_plane_merged(
-            project_root, wasm_protected_config_paths(manifest) if manifest is not None else ())
+        # P11 (S4): the manifest's protected_config_paths plus every config on disk that launches agentteams_wasm,
+        # so a manifest-less --check-wiring (or a hand-merged .mcp.json) checks those denies too.
+        listed = wasm_protected_config_paths(manifest) if manifest is not None else ()
+        extra = tuple(dict.fromkeys([*listed, *_wasm_wiring.launching_config_paths(project_root)]))
+        merged, missing = verify_control_plane_merged(project_root, extra)
         if not merged:
             ok, msgs = False, [*msgs, f"WASM CONTROL PLANE NOT MERGED: {', '.join(missing)}"]
     return ok, msgs
