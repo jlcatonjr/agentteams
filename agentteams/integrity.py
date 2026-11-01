@@ -349,6 +349,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # A silent edit widens a grant, swaps the executor the server runs, or blinds its deny probes.
     "agentteams/wasm_mcp.py",
     "agentteams/data/agentteams-wasm-mcp.py",
+    # Who gets an agentteams_wasm copy and where it is written (WASM P11): the one place an execute-class agent is
+    # given run_wasm (C-3), and the list of launching configs R1 write-protects. A silent edit hands the tool to an
+    # auditor or drops a config from the session denyWrite.
+    "agentteams/frameworks/_wasm_wiring.py",
     # Host-mediated model access (WASM P06). The provider key travels only to the vetted base URL, and the
     # request/reply validation bounds what crosses the wire (C-4); a silent edit leaks the key or widens what a reply
     # may carry.
