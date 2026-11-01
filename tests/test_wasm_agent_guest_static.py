@@ -118,6 +118,33 @@ def test_tool_schemas_match_the_host() -> None:
     assert set(g.TOOL_INPUTS) == set(T.IN_GUEST_TOOLS)
 
 
+# --- the host's closed tool-input checks (F-1 sensitivity / negative control) ---------------------------------------
+
+@pytest.mark.parametrize("data", [None, [], {"language": "python"}, {"source": "x"},
+                                  {"language": "python", "source": "x", "cwd": "/"},
+                                  {"language": "ruby", "source": "x"}, {"language": "module", "source": "x"},
+                                  {"language": "python", "source": 7}, {"language": "python", "source": "x", "stdin": 1}])
+def test_check_run_code_input_refuses_any_other_shape(data: object) -> None:
+    with pytest.raises(ValueError, match="run_code"):
+        T.check_run_code_input(data)  # type: ignore[arg-type]
+
+
+def test_check_run_code_input_accepts_the_closed_shape() -> None:
+    assert T.check_run_code_input({"language": "python", "source": "print(1)"}) == ("python", "print(1)", b"")
+    assert T.check_run_code_input({"language": "javascript", "source": "x", "stdin": "é"}) == (
+        "javascript", "x", "é".encode())
+
+
+def test_check_toolset_refuses_an_unknown_tool() -> None:
+    with pytest.raises(ValueError, match=r"unknown wasm agent tools \['shell'\]"):
+        T.check_toolset(["read_file", "shell"])
+
+
+def test_check_toolset_accepts_every_known_tool() -> None:
+    assert T.check_toolset(T.known_tools()) == frozenset(T.known_tools())
+    assert T.check_toolset([]) == frozenset()
+
+
 @pytest.mark.parametrize("name", ["CLAUDE.md", "claude.MD", "AGENTS.md", "GEMINI.md", ".cursorrules", "a.agent.md",
                                   "A.AGENT.MD", "notes.md", "agent.md", "x/CLAUDE.md", "CLAUDE.md.bak", "readme"])
 def test_r8_names_match_the_executor(name: str) -> None:

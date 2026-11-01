@@ -208,3 +208,10 @@ def test_materialize_refuses_an_uppercase_protected_mount(tmp_path: Path) -> Non
     sub.mkdir()
     with pytest.raises(W.WasmExecError, match="overlaps the protected"):
         W._check_mount_host(str(root), W.Mount(str(sub), "/project/q", "ro"), None)
+
+
+def test_runner_check_rel_accepts_and_normalises_an_ordinary_path() -> None:
+    from agentteams.confinement import PROTECTED_REL
+
+    assert RW._check_rel("a", "wasm.read", "data/in/", PROTECTED_REL, control_plane_of) == "data/in"
+    assert RW._check_rel("a", "wasm.read", "tools/s.py", PROTECTED_REL, control_plane_of) == "tools/s.py"

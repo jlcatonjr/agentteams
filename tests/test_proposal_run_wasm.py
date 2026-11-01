@@ -485,6 +485,11 @@ def test_check_runtimes_refuses_when_a_wasm_jail_runtime_is_absent(project):
         R.check_wasm_runtimes(project, policy)
 
 
+def test_check_wasm_runtimes_passes_when_every_runtime_resolves(project, runtime):
+    from agentteams import proposal_runner as R
+    assert R.check_wasm_runtimes(project, _policy(["wasm:python", "tools/s.py"])) is None
+
+
 def test_check_runtimes_passes_with_the_runtime_and_ignores_os_jails(project, runtime):
     RW.check_runtimes(project, C.load_confined({"x": _jail(), "y": {"exec": ["/usr/bin"]}}, {}, lambda r: None),
                       resolver=runtime)
