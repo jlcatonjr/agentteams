@@ -24,6 +24,9 @@
   what is not closed (SB20–SB21).
 - **[Part VIII — Synthesis & reference matter](part-viii-synthesis-and-reference.md)** — the end-to-end
   flow and the quick-reference tables (SB22–SB23). *Carries the synthesis graph G6.*
+- **[Part IX — Switching sandboxes and WASM](part-ix-switching-sandboxes-and-wasm.md)** — the OS and WASM switches and the 2×2
+  matrix, governance of turning a sandbox off, `run_wasm` and the per-provider verdict, WASM-native agents
+  and delegation, downloads and pins, and the WASM layer's ceilings (SB25–SB30).
 
 ## The four load-bearing ceilings (carried in every part they touch)
 

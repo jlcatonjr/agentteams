@@ -168,6 +168,7 @@ nav:
               - VI. Integrity and drift (sandboxing, reference): agentteams-sandboxing-guide/reference/part-vi-integrity-and-drift.md
               - VII. Ceilings and red-team (sandboxing, reference): agentteams-sandboxing-guide/reference/part-vii-ceilings-and-red-team.md
               - VIII. Synthesis and reference (sandboxing, reference): agentteams-sandboxing-guide/reference/part-viii-synthesis-and-reference.md
+              - IX. Switching sandboxes and WASM (sandboxing, reference): agentteams-sandboxing-guide/reference/part-ix-switching-sandboxes-and-wasm.md
           - Developers edition:
               - "Sandboxing guide: developers edition": agentteams-sandboxing-guide/for-developers/README.md
               - I. What it is and why (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-i-what-it-is-and-why.md
@@ -178,6 +179,7 @@ nav:
               - VI. Integrity and drift (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-vi-integrity-and-drift.md
               - VII. Ceilings and red-team (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-vii-ceilings-and-red-team.md
               - VIII. Synthesis and reference (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-viii-synthesis-and-reference.md
+              - IX. Switching sandboxes and WASM (sandboxing, developers): agentteams-sandboxing-guide/for-developers/part-ix-switching-sandboxes-and-wasm.md
           - Researchers edition:
               - "Sandboxing guide: researchers edition": agentteams-sandboxing-guide/for-researchers/README.md
               - I. What it is and why (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-i-what-it-is-and-why.md
@@ -188,6 +190,7 @@ nav:
               - VI. Integrity and drift (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-vi-integrity-and-drift.md
               - VII. Ceilings and red-team (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-vii-ceilings-and-red-team.md
               - VIII. Synthesis and reference (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-viii-synthesis-and-reference.md
+              - IX. Switching sandboxes and WASM (sandboxing, researchers): agentteams-sandboxing-guide/for-researchers/part-ix-switching-sandboxes-and-wasm.md
           - Everyone edition:
               - "Sandboxing guide: everyone edition": agentteams-sandboxing-guide/for-everyone/README.md
               - I. What it is and why (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-i-what-it-is-and-why.md
@@ -198,6 +201,7 @@ nav:
               - VI. Integrity and drift (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-vi-integrity-and-drift.md
               - VII. Ceilings and red-team (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-vii-ceilings-and-red-team.md
               - VIII. Synthesis and reference (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-viii-synthesis-and-reference.md
+              - IX. Switching sandboxes and WASM (sandboxing, everyone): agentteams-sandboxing-guide/for-everyone/part-ix-switching-sandboxes-and-wasm.md
   - Reference:
       - CLI reference: cli-reference.md
       - API reference:
@@ -298,6 +302,7 @@ nav:
               - wasm_guests: api-reference/wasm-guests.md
               - wasm_config: api-reference/wasm-config.md
               - wasm_agent: api-reference/wasm-agent.md
+              - model_providers: api-reference/model-providers.md
               - wasm_mcp: api-reference/wasm-mcp.md
               - wasm_enforcement: api-reference/wasm-enforcement.md
               - wasm_policy: api-reference/wasm-policy.md

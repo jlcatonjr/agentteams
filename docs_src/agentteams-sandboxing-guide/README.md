@@ -5,7 +5,10 @@ workspace write-confinement, read-exclusion, egress control, and the runtime den
 **requested, decided, emitted, wired, enforced, tamper-tracked, and honestly bounded**.
 It also covers the opt-in **orchestrator-only write policy** and its `agentteams_runner` MCP server
 (SB24, Part V), the layer that rides on that confinement so only the orchestrator — via an
-out-of-session runner — writes.
+out-of-session runner — writes. Part IX (SB25–SB30) covers the two independent switches: the OS
+sandbox (`os_sandbox`, which confines the agent process) and the opt-in WASM sandbox
+(`wasm_sandbox`, which confines the code an agent runs), WASM tools for vendor CLIs with an honest
+per-provider verdict, and agentteams' WASM-native agents.
 
 This guide is a focused elaboration of **Part VI (OS confinement)** of the broader
 [Security Guide](../agentteams-security-guide/README.md). It follows the same single-source method: a
