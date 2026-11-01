@@ -579,7 +579,7 @@ def finalize_privilege_wiring(
             'write_policy "orchestrator-only" needs the session sandbox: --os-sandbox off turns it off')
     advise_wasm(manifest, state, framework_id)  # P01 D6: composition notices (never an enforcement claim)
     try:  # P11: [WASM-WIRING] line + wasm_wiring record; widened grants refused on shared-copy hosts
-        report_wasm_wiring(manifest, state, framework_id)
+        report_wasm_wiring(manifest, state, framework_id, team_dir=team_dir)
     except ValueError as exc:
         raise PrivilegeConfinementError(str(exc)) from exc
     from agentteams.cli.os_sandbox_switch import engage_relaxation_gate

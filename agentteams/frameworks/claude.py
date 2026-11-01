@@ -646,6 +646,9 @@ def verify_sandbox_wiring(project_root: Path,
     live ``settings.json`` is ``UNREADABLE`` (``ok=False``). While WASM
     is on, the live settings must also carry the control-plane rules
     (:func:`verify_control_plane_merged`); missing ones are ``WASM CONTROL PLANE NOT MERGED``.
+    Whatever the WASM switch, a config on disk that launches ``agentteams_wasm`` while WASM is off, or
+    that the scan cannot check (symlinked, unparseable), is ``WASM LAUNCH CONFIG NOT PROTECTED``
+    (``ok=False``).
 
     Args:
         project_root: The generated project root (holds ``.claude/``).
@@ -655,9 +658,9 @@ def verify_sandbox_wiring(project_root: Path,
         ``(ok, messages)``. ``ok`` is ``False`` only when a confinement WAS emitted but the
         live settings do not enable it (or leave the unsandboxed-command escape hatch open,
         or carry different write roots) — the "unmerged/ineffective boundary" case — or on
-        brief/live drift, or an unmerged WASM control plane. When no confinement was
-        requested, or the example is absent, ``ok`` is ``True`` with an explanatory message
-        (nothing to enforce).
+        brief/live drift, an unmerged WASM control plane, or an unprotected launching
+        config. When no confinement was requested, or the example is absent, ``ok`` is
+        ``True`` with an explanatory message (nothing to enforce).
 
     Raises:
         ValueError: An invalid ``os_sandbox`` value in ``manifest``.
@@ -671,16 +674,25 @@ def verify_sandbox_wiring(project_root: Path,
 
     team_dir = project_root / ".claude" / "agents"
     state = verifier_sandbox_state(manifest, team_dir, project_root)
+    # P11 (@security C1/C2): the disk scan runs whatever the WASM switch (and the OS one); an uncheckable config, or
+    # (WASM off) any config that launches agentteams_wasm, is never protected.
+    scan = _wasm_wiring.scan_launching_configs(project_root)
+    wasm = state is not None and state.wasm
+    unprotected = [f"WASM LAUNCH CONFIG NOT PROTECTED: {u}" for u in _wasm_wiring.unprotected_config_problems(
+        project_root, None if wasm else "WASM is off for this team", scan)]
     # S2: a profile-derived off (cooperative) is reported too once a previous boundary existed (recorded state);
     # a cooperative team that never had one keeps today's check below.
     if switched_off(state, previous_boundary=previous_boundary_recorded(team_dir)):
-        return claude_off_drift(project_root, state)
+        ok, msgs = claude_off_drift(project_root, state)
+        return (ok and not unprotected), [*msgs, *unprotected]
     ok, msgs = _verify_emitted_sandbox_merged(project_root)
-    if state is not None and state.wasm:
+    if unprotected:
+        ok, msgs = False, [*msgs, *unprotected]
+    if wasm:
         # P11 (S4): the manifest's protected_config_paths plus every config on disk that launches agentteams_wasm,
         # so a manifest-less --check-wiring (or a hand-merged .mcp.json) checks those denies too.
         listed = wasm_protected_config_paths(manifest) if manifest is not None else ()
-        extra = tuple(dict.fromkeys([*listed, *_wasm_wiring.launching_config_paths(project_root)]))
+        extra = tuple(dict.fromkeys([*listed, *scan.launching]))
         merged, missing = verify_control_plane_merged(project_root, extra)
         if not merged:
             ok, msgs = False, [*msgs, f"WASM CONTROL PLANE NOT MERGED: {', '.join(missing)}"]
