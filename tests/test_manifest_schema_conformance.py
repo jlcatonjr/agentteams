@@ -158,6 +158,8 @@ def test_declared_but_unemitted_fields_are_conditional_not_dead(schema):
         "wasm_sandbox",
         # P11: the agentteams_wasm wiring record, written at render time and only while WASM is on.
         "wasm_wiring",
+        # P13: the per-provider native-exec verdict, recorded after the emit and only while WASM is on.
+        "wasm_enforcement",
         # R6: carried only under the switch and only when the brief grants agentteams_runner.
         "mcp_grants",
         # MCP catalogue: carried from the brief only when non-empty, so a team that opts into nothing
