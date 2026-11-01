@@ -176,28 +176,24 @@ def _render_in(root: Path) -> tuple[Any, str]:
     extra = seed_offline_intel(root / ".claude" / "agents", "claude")
     err = io.StringIO()
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
-        try:
-            rc: Any = build_team.main(["--description", str(brief), "--framework", "claude", "--project", str(root),
-                                       "--yes", "--no-scan", *extra])
-        except W.WasmExecError as exc:   # today's outcome (the xfail below); anything else errors the test
-            rc = exc
+        # An uncaught WasmExecError (the P17 bug: a traceback, not a refusal) errors the test.
+        rc: Any = build_team.main(["--description", str(brief), "--framework", "claude", "--project", str(root),
+                                   "--yes", "--no-scan", *extra])
     return rc, err.getvalue()
 
 
 def test_colon_in_the_project_path_refuses_the_render_and_writes_no_agents(tmp_path: Path) -> None:
     root = _project(tmp_path / "a::b")
-    rc, _ = _render_in(root)
-    assert isinstance(rc, W.WasmExecError) and "without ':'" in str(rc)   # fail closed (the xfail below: not clean)
+    rc, err = _render_in(root)
+    assert rc == 1 and "without ':'" in err   # fail closed, before anything is emitted
     assert not list((root / ".claude" / "agents").glob("*.md"))
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "P01/P02: a grant in a project whose path contains ':' escapes generate as an uncaught WasmExecError traceback "
-    "(sandbox_state.grant_from_tokens -> wasm_exec.Mount) instead of an 'Error:' line and exit 1"))
 def test_colon_in_the_project_path_is_a_clean_cli_refusal(tmp_path: Path) -> None:
     root = _project(tmp_path / "a::b")
     rc, err = _render_in(root)
     assert rc == 1 and "Error:" in err and "':'" in err
+    assert str(root) in err and "--dir HOST::GUEST" in err   # names the path and why
 
 
 # --- live matrix -----------------------------------------------------------------------------------------------------

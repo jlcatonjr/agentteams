@@ -18,6 +18,7 @@ with exactly the added tokens).
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -78,7 +79,10 @@ def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_r
             if not on:
                 manifest[WASM_FRAMEWORK_KEY] = True
                 print("  🧩 --framework wasm turns WASM confinement on for this team (reason: framework).")
-        wasm_state_fields(manifest)
+        try:
+            wasm_state_fields(manifest)
+        except _mount_error() as exc:   # wasm_exec refuses the mount host itself (e.g. a ':' in the path)
+            raise WasmSwitchError(_mount_refusal(exc, project_root)) from exc
         manifest.pop(WASM_SUBSTRATE_KEPT_KEY, None)  # only ever derived from disk, here
         _value, source = substrate_switch(manifest)
         if project_root is not None:
@@ -93,6 +97,34 @@ def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None, *, project_r
                 sandbox_projection.preflight(Path(project_root))
     except ValueError as exc:
         raise WasmSwitchError(str(exc)) from exc
+
+
+def _mount_error() -> type[Exception]:
+    """``wasm_exec.WasmExecError``, imported only once a grant has raised (an ImportError still fails closed)."""
+    from agentteams.wasm_exec import WasmExecError
+
+    return WasmExecError
+
+
+def _mount_refusal(exc: Exception, project_root: Path | None) -> str:
+    """The refusal for a grant whose host path ``wasm_exec`` will not mount, naming the path and why.
+
+    Args:
+        exc: The ``WasmExecError`` (its message names the refused mount host).
+        project_root: The project root, or None.
+
+    Returns:
+        The message: the refused path and, for a ':' in it, wasmtime's ``--dir HOST::GUEST`` split.
+
+    Raises:
+        Nothing.
+    """
+    msg = f"a WASM grant cannot be built: {exc}"
+    if project_root is not None and ":" in os.path.splitdrive(str(project_root))[1]:
+        msg += (f". The project path {str(project_root)!r} contains ':', and wasmtime's --dir HOST::GUEST mount "
+                "syntax splits on ':', so no path under it can be mounted into a WASM guest; move the project to a "
+                "path without ':' or drop the agent's read_paths / scratch grant (fail closed, nothing emitted)")
+    return msg
 
 
 def advise_wasm(manifest: dict, state: SandboxState, framework_id: str, *, mechanism: bool | None = None) -> None:
