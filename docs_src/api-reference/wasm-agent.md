@@ -6,7 +6,8 @@ and exits. The host owns the conversation. It alone holds the model-provider key
 (`model_providers`, P06), runs host tools, enforces budgets and revocation, applies DLP to
 every outbound prompt, and has the unconfined launcher write a hash-chained transcript. Everything a guest or a model
 emits is data (C-4): only a validated op frame causes a host action, and only within the agent's grant (C-3). The
-guest program itself is P07; the CLI that builds an `AgentSpec` from a rendered team is P08.
+guest program itself is P07; the team loader and launcher that build an `AgentSpec` from a rendered
+`--framework wasm` team are P08 (`team`, below, and `cli/wasm_agent_commands`).
 
 ## Public Surface
 
@@ -92,6 +93,27 @@ are data (C-4): it passes them along and never acts on what they say.
 - Guest `os_confine`: `"inherited"` is forwarded only from the P08 launcher and only when Stage 1 was wrapped
   (otherwise downgraded to `"auto"`). Under a wrapped Stage 1 a fresh Seatbelt profile cannot nest, so `"auto"` becomes
   `"off"` (reported `"none"`) and `"require"` refuses. Only `"nested"` counts as enforced.
+
+## The rendered team (`team`)
+
+`agentteams.wasm_agent.team` owns the on-disk format of a `--framework wasm` team (P08) and is the only reader of it.
+
+- `load_team(project_root) -> Team`: verifies `.agentteams/wasm-team.lock.json` (`verify_lock`), then parses every
+  agent file strictly (`parse_agent_file`: exactly `FRONT_MATTER_KEYS`), rebuilds each grant through
+  `grant_from_entry` (only canonical mounts: `/project/<rel>` ro at `<root>/<rel>`, `/scratch` rw at
+  `<root>/.agentteams/wasm/scratch/<slug>`, through `sandbox_state.grant_from_tokens`), and re-applies
+  `_wasm_tool_scoping.grant_supports`. It raises `TeamError` naming each drifted, missing, extra (`not in the lock`)
+  or symlinked path; `SETUP-REQUIRED.md` is never loaded or locked.
+- `Team.agent_spec(slug, *, provider=None, environ=None) -> AgentSpec`: `system_prompt` = `TEAM.md` + the body + a
+  generated "Your WASM runtime" section (tools and mounts, no host paths); the model from
+  `AGENTTEAMS_WASM_MODEL_<TIER>` > `runtime.json` > refuse (`stub` needs none); `spec_sha256` over the agent file,
+  `TEAM.md` and the grant entry. `Team.budget()` returns the run `Budget`. P09 uses `agent_spec` as `resolve_agent`.
+- `write_lock(project_root)`: the post-emit lock writer. `normalize_wasm_runtime(raw)`: the brief's `wasm_runtime`
+  validator (analyze). `runtime_record`, `check_runtime`, `grant_entry`, `render_front_matter`, `dumps`.
+
+The launcher, `cli/wasm_agent_commands.py` (`--run-wasm-agent`, `--revoke-wasm-run`, `--verify-wasm-run`), calls
+`stage0(..., host_confine=..., guest_os_confine=...)`: `"inherited"` when `runtime.json` says
+`host_os_confine: auto`, else `"auto"`. It is the only module that passes `"inherited"` (R5, AST-tested).
 
 ## Notes
 

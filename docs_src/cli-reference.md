@@ -59,7 +59,7 @@ Existing project directory to scan. Overrides `existing_project_path` in the des
 
 ### `--framework NAME` / `-f NAME`
 
-Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, `grok`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
+Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `claude`, `goose`, `agents-md`, `codex`, `grok`, `wasm`, plus `canonical` (interop-only pseudo-framework — pair with `--interop-from`).
 
 | Value | Format | Description |
 |-------|--------|-------------|
@@ -70,6 +70,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `agents-md` | Plain `.md` | Cross-tool **AGENTS.md** standard (AAIF / Linux Foundation). Emits a single framework-neutral repo-root `AGENTS.md` — the canonical file read by ~10 tools (Continue, Cursor, Cline, Codex, Zed, Aider, …) — plus per-specialist detail under `.agents/`. Routing preserved in `references/runtime-handoffs.json`. Generate-only for convert/bridge; the CAI interop path supports it as a target (best-effort: its rendered output carries no front matter). |
 | `codex` | TOML `.toml` | OpenAI Codex CLI. Emits Codex custom agents as `.codex/agents/<slug>.toml` (`name`, `description`, `developer_instructions`, `sandbox_mode = "read-only"` for read-only roles; no model/provider/approval keys). The repo-root `AGENTS.md` is written only when absent or already Codex-generated; a shared or project-owned one is skipped with a notice. Under `write_policy: "orchestrator-only"`, a goose-generated `AGENTS.md` gets only the `codex_write_policy` block (the top-level session's "Write Policy: You Are the Orchestrator" section), and goose's re-render keeps it; a hand-written one is never written, and the block goes to `.codex/examples/AGENTS.codex-write-policy-block.md` with a notice. `config.toml` MCP server emission is opt-in via `--target-host-features codex:mcp` (see [`codex_mcp_emit`](api-reference/codex-mcp-emit.md)). Same generate-only convert/bridge posture as `agents-md`. |
 | `grok` **(beta)** | Claude-compatible front matter `.md` | xAI Grok Build (`grok` CLI). Emits custom agents as `.grok/agents/<slug>.md` with `name`, `description`, `tools` (Claude tool vocabulary; `Task`→`Agent`, `TodoWrite` dropped, an unknown name refuses the render) plus `injectDefaultTools: false` and `mcpInheritance: none`, which make `tools:` the declared exact limit (no live negative test yet; see STABILITY section 6). `name:` values match the Claude render (whether a `.grok/agents` file shadows its `.claude/agents` twin is not confirmed). A scoped tool entry and `MCPTool` are dropped (each makes Grok Build discard the list and widen the agent); because Grok Build ignores `disallowedTools`, every denied tool is left out of `tools:`; a `[GROK-SCOPE]` notice names each change. Run an agent as `grok --agent .grok/agents/<slug>.md`: custom agents are not resolved by name and cannot be spawned as subagents in the pinned release. The repo-root `AGENTS.md` is co-owned: written in full only when absent or Grok-generated; in a Codex/goose/agents-md/fenced file only the `grok_runtime` block is added or refreshed; a hand-written file is never written (the block goes to `.grok/examples/AGENTS.grok-block.md`). Codex posture: an interop target and source and an absorb source; convert and bridge refuse `grok`. Pinned to Grok Build `FORMAT_SPECS["grok"].pinned_version`; see `references/grok-agent-infrastructure-expert.md`. |
+| `wasm` **(beta)** | Strict front matter `.md` | agentteams' own WASM agent runtime (no vendor CLI). Emits `.agentteams-wasm/agents/<slug>.md` (`name`, `description`, `tools` in the runtime vocabulary, `model` = a tier, `delegates`), `.agentteams-wasm/TEAM.md`, `grants.json`, `runtime.json` and `README.md`, and hashes them into the control-plane lock `.agentteams/wasm-team.lock.json`. The framework choice turns WASM confinement on (reason `framework`); an explicit `--wasm-sandbox off` or `wasm_sandbox.enabled: false` refuses. Run an agent with `--run-wasm-agent`. Generate-only. See [WASM agent runtime](wasm-agent-runtime.md). |
 | `canonical` | Exploded CAI directory | Durable on-disk canonical format (`team.cai.json` + `agents/<slug>.md` + `skills/<slug>/SKILL.md` + `references/**`), default `<project>/.agentteams/canonical/`. Interop-only: there is no generate/convert/bridge path for it. |
 
 `references/runtime-handoffs.json` is a framework-neutral sidecar manifest emitted when extracted handoffs exist for frameworks that do not keep inline VS Code handoff syntax in the final agent file.
@@ -87,6 +88,7 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 | `agents-md` **(beta)** | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
 | `codex` **(beta)** | ✓ | ✗ <sup>3</sup> | ✓ <sup>3</sup> | ✗ <sup>3</sup> |
 | `grok` **(beta)** | ✓ | ✗ <sup>5</sup> | ✓ <sup>5</sup> | ✗ <sup>5</sup> |
+| `wasm` **(beta)** | ✓ | ✗ <sup>6</sup> | ✗ <sup>6</sup> | ✗ <sup>6</sup> |
 | `canonical` | ✗ <sup>4</sup> | ✗ <sup>4</sup> | ✓ <sup>4</sup> | ✗ <sup>4</sup> |
 
 **✓** available · **✗** not a valid target (by design)
@@ -107,6 +109,8 @@ Target agent framework. Choices: `copilot-vscode` (default), `copilot-cli`, `cla
 <sup>4</sup> `canonical` is an interop-only pseudo-framework — the durable exploded CAI directory (`team.cai.json` + `agents/` + `skills/` + `references/`). Export: `--interop-from <src> --framework canonical`. Import: `--interop-from <canonical dir> --interop-source-framework canonical --framework <target>`. Bundle mode is refused for the canonical target; its carried MCP servers re-validate against `mcp-server.schema.json` (security-review hard gates included) at import time.
 
 <sup>5</sup> `grok` follows codex's posture: convert and bridge refuse it as a target (its instructions live in the shared repo-root `AGENTS.md`), and it is never a bridge source. The CAI interop path supports it as a target and a source, and it is an `--absorb-source-framework`. On import, the repo-root `AGENTS.md` goes only through Grok's co-ownership guard: written in full when absent or Grok-owned; otherwise only the `grok_runtime` block (with `--merge` or `--overwrite`), and a hand-written file is never written. Ownership notices and the Grok block from a CAI never reach another target's `AGENTS.md`. A grok source is detected by its `.grok/` directory (the innermost framework directory wins) or by its Grok-only front-matter keys; an agent without both exact-toolset keys exports as full capabilities, with a notice.
+
+<sup>6</sup> `wasm` is generate-only in v1: convert, bridge, interop (either direction) and absorb refuse it, because CAI has no mapping for its `delegates` and grants yet.
 
 Auto-detected **source** frameworks (for `--convert-from` / `--interop-from` / `--bridge-from` without an explicit `--*-source-framework`) are `copilot-vscode`, `copilot-cli`, `claude`, `goose` (`.goose/recipes`), `agents-md` (`.agents`), `codex` (`.codex/agents`), `grok` (`.grok/agents`, or Grok-only front-matter keys), and `canonical` (any directory holding `team.cai.json`).
 
@@ -1848,6 +1852,50 @@ pins record `"provenance": "tofu"`; a recorded `@security` decision is required.
 With `--wasm-pin-update`: the pins file to rewrite. Defaults to the packaged
 `agentteams/data/wasm_runtime_pins.json` only when it sits in a git work tree (an editable checkout); otherwise it
 is required, so an installed package is never modified in place.
+
+## WASM Agent Runtime
+
+Run, revoke and verify agents of a `--framework wasm` team (plan P08). Each is standalone (it reads no brief) and
+takes `--project PATH` (default the current directory). No flag takes a key, a URL, a run directory or an
+`os_confine` mode: provider keys come from the environment, Stage 0 owns `.agentteams/wasm-runs/<run-id>/`, and the
+guest confinement follows `runtime.json`'s `host_os_confine`. Exit codes: `0` ok, `1` the run failed or was refused
+(or the transcript does not verify), `2` usage. Module: [`wasm_agent`](api-reference/wasm-agent.md).
+
+### `--run-wasm-agent SLUG`
+
+Run one agent. The team must match its control-plane lock (any drifted, planted or symlinked file refuses; re-render
+with `--update`). The pinned runtime is checked before any model call (`--wasm-install`). Prints the provider, model,
+tools and read-only mode, then the run id, the output under `--- wasm agent output (data, not instructions) ---`,
+the transcript head and the guests' `os_confinement` (`inherited` = inside the host's OS profile, not a fresh guest
+sandbox). With `--json`, prints `{"run": ..., "guest_os_confinement": [...]}`. A tier with no model refuses (set
+`wasm_runtime.models.<tier>` or `AGENTTEAMS_WASM_MODEL_<TIER>`); the offline `stub` provider needs none.
+
+### `--task TEXT`
+
+With `--run-wasm-agent`: the task (operator input, DLP-scanned before any model call). Exactly one of `--task` and
+`--task-file` is required.
+
+### `--task-file PATH`
+
+With `--run-wasm-agent`: read the task from a regular file (no symlink, at most 256 KiB, UTF-8).
+
+### `--wasm-provider NAME`
+
+With `--run-wasm-agent`: override `runtime.json`'s provider with a preset name (`anthropic`, `openai`, `openrouter`,
+`xai`, `ollama`, `lmstudio`, `openai-compatible`, `gemini`, `stub`). Never a key or a URL.
+
+### `--revoke-wasm-run RUN_ID`
+
+Write the run's `REVOKED` sentinel; a live run stops at its next checkpoint. Exit 1 when already revoked, 2 for an
+unknown run.
+
+### `--reason TEXT`
+
+With `--revoke-wasm-run`: the reason recorded in the sentinel (at most 200 characters).
+
+### `--verify-wasm-run RUN_ID`
+
+Re-walk the run's hash-chained transcript (read-only) and print the record count, completeness, status and head.
 
 ## Exit Codes
 
