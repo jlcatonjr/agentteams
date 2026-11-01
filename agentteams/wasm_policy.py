@@ -32,6 +32,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from agentteams.frameworks._wasm_wiring import NOT_WIRED, WIRED_PER_AGENT, WIRED_SHARED
+
 #: The two template placeholders (``PLACEHOLDER-CONVENTIONS.md``); ``""`` unless WASM is on.
 SECURITY_ROWS_PLACEHOLDER = "WASM_SECURITY_TRIGGER_ROWS"
 ROUTING_ROWS_PLACEHOLDER = "WASM_ROUTING_ROWS"
@@ -50,7 +52,6 @@ _ANY_FENCE_RE = re.compile(r"<!-- AGENTTEAMS:BEGIN ")
 _FRONT_RE = re.compile(r"\A---[ \t]*\n(.*?\n)---[ \t]*(?:\n|\Z)", re.DOTALL)
 _TOOLS_RE = re.compile(r"^(?:tools|[\"']?allowed-tools[\"']?)[ \t]*:[ \t]*(.*)$", re.MULTILINE)
 _LANGUAGE_NAMES = {"module": "prebuilt `.wasm` modules", "python": "Python", "javascript": "JavaScript"}
-_WIRED_PER_AGENT, _WIRED_SHARED = "wired-per-agent", "wired-shared"
 
 
 class _Claims(dict):
@@ -121,7 +122,7 @@ def _row(manifest: dict[str, Any], framework: str) -> dict[str, Any]:
     from agentteams.frameworks._wasm_wiring import wiring_row
 
     row = wiring_row(manifest, framework)
-    return row if row is not None else {"status": "not-wired", "reason": "WASM is off"}
+    return row if row is not None else {"status": NOT_WIRED, "reason": "WASM is off"}
 
 
 def _claims(manifest: dict[str, Any]) -> _Claims:
@@ -191,13 +192,13 @@ def _host_summary(manifest: dict[str, Any], framework: str) -> str:
     """One sentence: how ``run_wasm`` reaches agents on this framework (from P11's row)."""
     row = _row(manifest, framework)
     status = row.get("status")
-    if status == _WIRED_PER_AGENT:
+    if status == WIRED_PER_AGENT:
         out = f"On {framework}, `run_wasm` is wired per agent, each instance carrying that agent's grant"
         if framework == "goose":
             out += (" (on a direct `goose run --recipe` only: a delegate inherits the orchestrator's extensions and "
                     "has no `run_wasm`)")
         return out + "."
-    if status == _WIRED_SHARED:
+    if status == WIRED_SHARED:
         return f"On {framework}, `run_wasm` comes from one shared compute-only instance for the session."
     return f"On {framework}, no agent has `run_wasm` (`{status}`: {row.get('reason', '')})."
 
@@ -228,13 +229,13 @@ def _agent_section(manifest: dict[str, Any], framework: str, slug: str, *, narro
     cfg = _cfg(manifest)
     row = _row(manifest, framework)
     status = row.get("status")
-    per_agent = status == _WIRED_PER_AGENT and not builder
-    available = per_agent or status == _WIRED_SHARED
+    per_agent = status == WIRED_PER_AGENT and not builder
+    available = per_agent or status == WIRED_SHARED
     _claims(manifest)[slug] = per_agent
     shell = _shell_line(narrowed=narrowed, builder=builder, slug=slug, cfg=cfg, available=available)
     if not available:
         why = (f"the team builder gets no per-agent `agentteams_wasm` copy on {framework}" if builder
-               and status == _WIRED_PER_AGENT else f"`{status}`: {row.get('reason', '')}")
+               and status == WIRED_PER_AGENT else f"`{status}`: {row.get('reason', '')}")
         return (
             "\n## WASM Sandbox: You Have No `run_wasm`\n\n"
             f"This team runs with the WASM sandbox on, but on {framework} you have no `run_wasm` tool ({why}). "
@@ -261,7 +262,7 @@ def _agent_section(manifest: dict[str, Any], framework: str, slug: str, *, narro
         "JavaScript as `source`, or, with a read grant, a `path` under a granted read path (a `.wasm` module or a "
         "script). It cannot run Bash, git, npm, pip or any other host program, and it has no network and no "
         "environment variables.\n\n"
-        f"- **Your grant:** {_grant_line(cfg, slug, status == _WIRED_SHARED)}. Limits: {_limits(cfg)}.\n"
+        f"- **Your grant:** {_grant_line(cfg, slug, status == WIRED_SHARED)}. Limits: {_limits(cfg)}.\n"
         "- **Asking for more** (a read path, a scratch dir, higher limits) is a capability change (C-3): route it "
         "to `@security` through the orchestrator. Never edit the server's launch arguments, your agent file's tools "
         "or MCP entries, or anything under `.agentteams/`.\n"
@@ -290,13 +291,13 @@ def _orchestrator_section(manifest: dict[str, Any], framework: str, slug: str, *
     row = _row(manifest, framework)
     status = row.get("status")
     if not top_level:
-        _claims(manifest)[slug] = status == _WIRED_PER_AGENT
+        _claims(manifest)[slug] = status == WIRED_PER_AGENT
     keep = ", ".join(f"`@{s}`" for s in cfg.native_exec_keep) or "none"
     own = ("You keep your native shell (fixed exemption)" if not top_level else
            "The top-level session keeps its native shell")
     session = ""
     example = _session_example(framework)
-    if top_level and example and status != _WIRED_SHARED:
+    if top_level and example and status != WIRED_SHARED:
         session = (f" The top-level session has `run_wasm` only once the operator merges the inert `{example}` "
                    "into the live MCP config.")
     return (
@@ -430,7 +431,7 @@ def verify_claims(manifest: dict[str, Any], framework: str) -> None:
         return
     claimed = {s for s, c in _claims(manifest).items() if c}
     row = _row(manifest, framework)
-    wired = set(row.get("agents") or []) if row.get("status") == _WIRED_PER_AGENT else set()
+    wired = set(row.get("agents") or []) if row.get("status") == WIRED_PER_AGENT else set()
     if claimed != wired:
         raise ValueError(f"WASM text and wiring disagree on {framework}: run_wasm stated for "
                          f"{sorted(claimed - wired)} but not wired; wired for {sorted(wired - claimed)} without its "

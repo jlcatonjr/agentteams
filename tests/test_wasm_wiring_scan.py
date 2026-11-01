@@ -289,3 +289,14 @@ def test_an_agent_body_naming_the_server_is_not_a_launching_config():
     unclosed = f"---\nname: x\nargs: [{marker}]\nbody without a closing fence\n"
     assert ww._launches(".claude/agents/x.md", unclosed)   # fail closed
     assert not ww._launches(".claude/agents/x.md", f"no front matter, mentions {marker}\n")
+
+
+def test_front_matter_ends_only_at_an_exact_fence_line():
+    """A ``---x`` line inside a quoted multi-line scalar does not close the front matter (@security, S1)."""
+    marker = ww.LAUNCH_MARKER
+    front = (f'---\nname: x\ndescription: "first line\n---x still the scalar"\nmcpServers:\n  agentteams_wasm:\n'
+             f'    command: python3\n    args: ["{marker}"]\n--- \r\nbody\n')
+    assert ww._launches(".claude/agents/x.md", front)
+    assert ww._launches(".claude/agents/x.md", front.replace("\n", "\r\n"))
+    closed = f"---\nname: x\n---\t\nmcpServers: [{marker}]\n"
+    assert not ww._launches(".claude/agents/x.md", closed)   # the body after an exact fence is prose
