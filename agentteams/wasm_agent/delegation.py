@@ -182,10 +182,6 @@ def _real(host: str) -> str | None:
     return os.path.normcase(real) if real == absolute else None
 
 
-def _inside(child: str, parent: str) -> bool:
-    return child == parent or child.startswith(parent.rstrip(os.sep) + os.sep)
-
-
 def _is_scratch(m: Any) -> bool:
     return m.guest == "/scratch" and m.mode == "rw"
 
@@ -236,7 +232,7 @@ def attenuate(parent: Any, child: Any, *, child_scratch_host: str | None) -> Att
             real = _real(m.host)
             if real is None:
                 dropped.append(f"{m.guest}: a symlink in its host path")
-            elif not any(_inside(real, p) for p in parent_hosts):
+            elif not any(W.path_inside(real, p) for p in parent_hosts):
                 dropped.append(f"{m.guest}: outside every delegator mount")
             else:
                 kept.append(W.Mount(m.host, m.guest, "ro"))
@@ -297,7 +293,7 @@ def grant_subset(child: Any, parent: Any) -> bool:
                 return False
         elif _is_project(m):
             real = _real(m.host)
-            if real is None or not any(_inside(real, p) for p in parent_hosts):
+            if real is None or not any(W.path_inside(real, p) for p in parent_hosts):
                 return False
         else:
             return False

@@ -505,7 +505,23 @@ def _control_dir(root: str, *parts: str, what: str = "verified copies") -> str:
     return path
 
 
-def _within(child: str, parent: str) -> bool:
+def path_inside(child: str, parent: str) -> bool:
+    """Whether path *child* is *parent* or lies below it, by whole components (never a bare string prefix).
+
+    The one containment test the WASM modules share: ``wasm_guests`` reaches it through the injected executor (both
+    stay import-free for the bundle), the package modules import it. Paths are compared as given; callers pass
+    resolved or normalized paths and fold case themselves where they need to.
+
+    Args:
+        child: The candidate path.
+        parent: The containing path (normalized; a trailing separator only matters for equality).
+
+    Returns:
+        True when *child* equals *parent* or starts with *parent* followed by a separator.
+
+    Raises:
+        Nothing.
+    """
     return child == parent or child.startswith(parent.rstrip(os.sep) + os.sep)
 
 
@@ -548,17 +564,17 @@ def _check_mount_host(root: str, m: Mount, scratch: str | None, inside: str | No
     real = os.path.realpath(m.host)
     if real != os.path.normpath(m.host) or not os.path.isdir(real):
         raise WasmExecError(f"{m.guest}: host {m.host} must be an existing real directory (no symlinks)")
-    if inside is not None and not _within(real, inside):
+    if inside is not None and not path_inside(real, inside):
         raise WasmExecError(f"runtime mount {m.host} must lie inside {inside}")
     if inside is None:
         keys = os.path.realpath(os.path.expanduser(NEST_KEY_DIR))
-        if not _within(real, root) or real == root:
+        if not path_inside(real, root) or real == root:
             raise WasmExecError(f"{m.guest}: host {m.host} must be inside the project, not its root")
         low = real.lower()  # case-folded everywhere (S4): .GITHUB is .github on darwin; elsewhere it over-refuses
         for prot in [os.path.join(root, p) for p in NEST_PROTECTED_REL] + [keys]:
-            if _within(low, prot.lower()) or _within(prot.lower(), low):
+            if path_inside(low, prot.lower()) or path_inside(prot.lower(), low):
                 raise WasmExecError(f"{m.guest}: host {m.host} overlaps the protected {prot}; refused")
-    if scratch and (_within(real, scratch) or _within(scratch, real)):
+    if scratch and (path_inside(real, scratch) or path_inside(scratch, real)):
         raise WasmExecError(f"{m.guest}: a read mount may not overlap the scratch directory")
 
 

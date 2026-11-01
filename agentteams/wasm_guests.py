@@ -116,10 +116,6 @@ def js_source_name(source: str | bytes) -> str:
     return "main.mjs" if _ESM_RE.search(_source_bytes(source).decode("utf-8")) else "main.js"
 
 
-def _within(child: str, parent: str) -> bool:
-    return child == parent or child.startswith(parent.rstrip(os.sep) + os.sep)
-
-
 def check_module_path(module_path: str | Path, project_root: str | Path, *, executor: ModuleType) -> str:
     """Validate a ``language="module"`` path: a regular, non-symlinked file inside the project, clear of the
     protected control-plane paths and the signing-key dir, at most ``executor.MAX_MODULE_BYTES``.
@@ -127,7 +123,8 @@ def check_module_path(module_path: str | Path, project_root: str | Path, *, exec
     Args:
         module_path: Project-relative or absolute path of the core module.
         project_root: The project root.
-        executor: The ``wasm_exec`` module (supplies ``NEST_PROTECTED_REL``, ``NEST_KEY_DIR``, ``MAX_MODULE_BYTES``).
+        executor: The ``wasm_exec`` module (supplies ``NEST_PROTECTED_REL``, ``NEST_KEY_DIR``, ``MAX_MODULE_BYTES``,
+            ``path_inside``).
 
     Returns:
         The absolute real path.
@@ -142,11 +139,11 @@ def check_module_path(module_path: str | Path, project_root: str | Path, *, exec
     real = os.path.realpath(path)
     if real != path:
         raise WasmGuestError(f"module {module_path!r} is or passes through a symlink; refused")
-    if not _within(real, root) or real == root:
+    if not executor.path_inside(real, root) or real == root:
         raise WasmGuestError(f"module {module_path!r} must lie inside the project {root}")
     protected = [os.path.join(root, p) for p in executor.NEST_PROTECTED_REL]
     protected.append(os.path.realpath(os.path.expanduser(executor.NEST_KEY_DIR)))
-    if any(_within(real, p) for p in protected):
+    if any(executor.path_inside(real, p) for p in protected):
         raise WasmGuestError(f"module {module_path!r} lies under a protected path; refused")
     try:
         st = os.lstat(real)

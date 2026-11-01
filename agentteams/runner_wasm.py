@@ -372,10 +372,6 @@ class WasmCommand:
     meta: dict[str, Any]
 
 
-def _within(child: str, parent: str) -> bool:
-    return child == parent or child.startswith(parent.rstrip(os.sep) + os.sep)
-
-
 def _guest_path(root: str, rel: object, reads: list[str], language: str) -> tuple[str, str]:
     """Check ``argv[1]``: a project-relative regular file under a ``wasm.read`` path; return ``(rel, real)``."""
     if not isinstance(rel, str) or not rel or rel.startswith(("/", "~")) or "\\" in rel:
@@ -389,7 +385,7 @@ def _guest_path(root: str, rel: object, reads: list[str], language: str) -> tupl
         raise RunnerWasmError(f"argv[1] {rel!r} is outside this agent's wasm.read paths")
     path = os.path.join(root, *parts)
     real = os.path.realpath(path)
-    if real != path or not _within(real, root):
+    if real != path or not _wx.path_inside(real, root):
         raise RunnerWasmError(f"argv[1] {rel!r} is or passes through a symlink; refused")
     try:
         st = os.lstat(real)
