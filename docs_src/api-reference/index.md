@@ -116,6 +116,7 @@ This reference defines the **supported public API surface** (documented modules 
 |--------|------|
 | [`host_features`](host-features.md) | Parse / validate `<ns>:<feature>` opt-in subselector tokens for emission gating |
 | [`sandbox_state`](sandbox-state.md) | Effective OS/WASM sandbox state (`os_sandbox` switch precedence), its build-log record, the previous state |
+| [`sandbox_tokens`](sandbox-tokens.md) | The WASM grant-token spelling and read-path grammar (stdlib-only leaf; re-exported by `cli/sandbox_effects`) |
 | [Workspace Privilege Scoping](workspace-privilege-scoping.md) | Opt-in `privilege_profile` / `claude:sandbox` — emit Claude Code's OS-level write-confinement sandbox (feature page) |
 | [`rank_conformance`](rank-conformance.md) | AP-2 rank-conformance validator — an agent's declared `tools:` must not exceed what its taxonomy rank (orchestrator / governance / domain / expert) permits (C-3) |
 | [`baseline`](baseline.md) | Deterministic SHA-256 emission baselines (capture / diff) used by regression tests |
