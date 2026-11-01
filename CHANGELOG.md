@@ -33,11 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   last copy; another reader might keep the first). npm `--package-lock-only` leaves such an entry alone without
   fetching it (checked with npm 11.19 against a local mock registry, the CDN unreachable).
 - `check_lock_edit` now returns one note per kept entry (`"<rel>: unchanged off-registry entry kept: <key>
-  <url>"`); `executor.validate_diff(..., notes=list)` collects them and `stage-fix` records them as
-  `kept_off_registry` in its result.
+  <url> (sha512-…)"`). `executor.validate_diff` now returns `DiffCheck(changed, kept_off_registry)` (was the
+  changed paths); `stage-fix` records the notes as `kept_off_registry` in its result and ledger row, and the
+  `open-pr` body lists each under *Off-registry sources kept unchanged*, so such a PR never reads as
+  registry-only.
 - **`stage-major` is unchanged:** it still refuses an off-registry base outright (S1, `npm_off_registry`), since
-  `npm install` re-resolves every `package.json` spec; a note in `fix.npm_majors` leaves relaxing it to
-  `@security`.
+  `npm install` re-resolves every `package.json` spec; tracked as `agentteams-remediation-log: stage-major-offregistry-base`
+  (any relaxation needs its own `@security` review).
 
 ### added (vulnscan: scan mirrors)
 

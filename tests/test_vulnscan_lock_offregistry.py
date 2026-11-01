@@ -20,6 +20,7 @@ from tests._vulnscan_helpers import operator_env
 CDN = "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
 SHA = "sha512-" + "A" * 86 + "=="   # shape of an npm sha512 integrity (placeholder digest)
 REL = "package-lock.json"
+NOTE = f"{REL}: unchanged off-registry entry kept: node_modules/xlsx {CDN} ({SHA[:23]}…)"
 
 
 def _base() -> dict[str, Any]:
@@ -45,8 +46,7 @@ def _check(old: dict[str, Any], new: dict[str, Any]) -> list[str]:
 
 
 def test_an_identical_off_registry_entry_is_kept_and_reported() -> None:
-    notes = _check(_base(), _bump_a(_base()))
-    assert notes == [f"{REL}: unchanged off-registry entry kept: node_modules/xlsx {CDN}"]
+    assert _check(_base(), _bump_a(_base())) == [NOTE]
 
 
 def test_a_registry_only_edit_reports_nothing() -> None:
@@ -204,11 +204,53 @@ def test_validate_diff_passes_and_reports_the_kept_entry(tmp_path: Path, monkeyp
     sh("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "i")
     base = sh("rev-parse", "HEAD").strip()
     (repo / REL).write_text(json.dumps(_bump_a(_base()), indent=2))
-    notes: list[str] = []
-    assert executor.validate_diff(repo, base, notes=notes) == [REL]
-    assert notes == [f"{REL}: unchanged off-registry entry kept: node_modules/xlsx {CDN}"]
+    assert executor.validate_diff(repo, base) == ([REL], [NOTE])
     new = _bump_a(_base())
     new["packages"]["node_modules/xlsx"]["resolved"] = "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"
     (repo / REL).write_text(json.dumps(new, indent=2))
     with pytest.raises(executor.ExecError, match="registry allowlist"):
         executor.validate_diff(repo, base)
+
+
+def test_the_pr_body_lists_each_kept_entry_neutralised() -> None:
+    from agentteams.vulnscan import executor_pr
+
+    body = executor_pr.body("plan", "r", major=False, kept=[NOTE, "x`y\n## injected @someone"])
+    assert "### Off-registry sources kept unchanged" in body and f"- `{NOTE}`" in body
+    assert "x?y?## injected" in body and "\n## injected" not in body
+    assert "Off-registry" not in executor_pr.body("plan", "r", major=False)
+    assert "Off-registry" not in executor_pr.body("plan", "r", major=False, kept="not a list")  # type: ignore[arg-type]
+
+
+@pytest.mark.skipif(not shutil.which("git"), reason="git not available")
+def test_stage_fix_records_kept_entries_and_open_pr_lists_them(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """H6: the note reaches the stage-fix result, its ledger row, and the PR body (@security)."""
+    pytest.importorskip("cryptography")
+    from agentteams.vulnscan import fix, ledger, open_prs
+    from tests.test_vulnscan_executor import _install, _repo_with_remote
+    from tests._vulnscan_helpers import operator_home
+
+    world = operator_home(tmp_path, monkeypatch)
+    monkeypatch.setattr(open_prs, "list_open", lambda target_repo: [])
+    env = {**world, "cfg": {"governance_dir": str(world["gov"]), "cooldown_days": 14}}
+    repo = _repo_with_remote(env["tmp"], {REL: json.dumps(_base(), indent=2), "app.py": "print('hi')\n"})
+    _install(env, ops=["stage-fix", "open-pr"], hosts=[])
+
+    def fake_fix(root: Path, **kw: object) -> fix.FixResult:
+        (root / REL).write_text(json.dumps(_bump_a(_base()), indent=2))
+        return fix.FixResult(changes=[fix.PinChange(REL, "a", "1.0.0", "1.0.1")], applied=True)
+
+    monkeypatch.setattr(fix, "fix_path", fake_fix)
+    staged = executor.act("stage-fix", str(repo), env["cfg"], rationale="a")
+    assert staged["status"] == "done", staged
+    assert staged["kept_off_registry"] == [NOTE]
+    row = next(r for r in reversed(ledger.read()) if r.get("op") == "stage-fix" and r.get("kind") == "done")
+    assert json.loads(row["detail"])["kept_off_registry"] == [NOTE]
+    bindir = env["tmp"] / "bin"
+    bindir.mkdir()
+    (bindir / "gh").write_text("#!/bin/sh\necho https://github.example.com/o/svc/pull/7\n")
+    (bindir / "gh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{__import__('os').environ['PATH']}")
+    assert executor.act("open-pr", str(repo), env["cfg"], rationale="a")["status"] == "done"
+    body = next(Path(staged["worktree"]).parent.glob("*.pr.md")).read_text()
+    assert "### Off-registry sources kept unchanged" in body and "node_modules/xlsx" in body and CDN in body

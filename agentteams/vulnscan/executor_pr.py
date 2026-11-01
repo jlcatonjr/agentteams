@@ -111,7 +111,8 @@ def title(branch: str, *, major: bool) -> str:
     return f"security(deps): fix known-vulnerable dependencies ({digest})"
 
 
-def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] | None = None) -> str:
+def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] | None = None,
+         kept: list[str] | None = None) -> str:
     """Return the PR body, passed through the publish scrubber (home paths, host name, private IPs).
 
     Args:
@@ -119,6 +120,8 @@ def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] |
         rationale: The agent's rationale (untrusted; quoted by :func:`sanitize`).
         major: The staged change is a ``stage-major`` one.
         left: ``{package: [PR numbers]}`` the change left to other open PRs (D1), listed as "left to #N".
+        kept: The staged result's ``kept_off_registry`` notes: lockfile entries resolved off the npm registry that
+            the change kept unchanged. Each is listed, so the PR never reads as registry-only.
 
     Returns:
         The body.
@@ -130,11 +133,21 @@ def body(plan: str, rationale: str, *, major: bool, left: dict[str, list[int]] |
             "affected code paths before this is merged.\n\n") if major else ""
     text = (f"{head}Automated security fix staged by the agentteams **vulnscan executor** "
             f"(deterministic; dependency {'manifests' if major else 'pins'} and lockfiles only).\n\n{plan}\n\n"
-            f"{_left_section(left)}"
+            f"{_kept_section(kept)}{_left_section(left)}"
             f"### Agent rationale (untrusted text, quoted)\n\n{sanitize(rationale)}\n\n"
             "Tests run in CI. This PR may be merged automatically once every check, a test check included, "
             "passes, so CI must cover the change.\n")
     return publish.rewrite_paths(text)
+
+
+def _kept_section(kept: list[str] | None) -> str:
+    """The PR body's list of off-registry lockfile entries kept unchanged from the base, or ""."""
+    rows = [f"- `{_CONTROL.sub('?', note).replace('`', '?')[:400]}`" for note in (kept if isinstance(kept, list) else [])
+            if isinstance(note, str)]
+    return ("### Off-registry sources kept unchanged (not from the npm registry)\n\n"
+            "The lockfile still installs these from outside the registry allowlist. The change left each entry "
+            "byte for byte as on the base branch (same URL, integrity and dependencies).\n\n"
+            + "\n".join(rows) + "\n\n") if rows else ""
 
 
 def _left_section(left: dict[str, list[int]] | None) -> str:

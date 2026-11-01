@@ -48,7 +48,7 @@ and only within what you signed.
   operation, target and remaining use count; no `@security` HALT is open on `vulnscan-remediation`
   in the decision log named **inside the grant**; and no open escalation blocks the target.
 - The executor computes every change itself. `stage-fix` may only raise dependency pins and change
-  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base-majorfalse-notesnone). Before any fetch it
+  lockfiles within the rules of [`validate_diff`](#validate_diffwt-base-majorfalse). Before any fetch it
   refuses a repository that git refuses to open (ledgered `refused`), or whose own git config
   defines a filter driver (ledgered `failed`) (`fix.git_config_problem`). The one exception is git-lfs's standard
   filter config, value for value (`fix.LFS_FILTER`: `filter.lfs.clean = git-lfs clean -- %f`, `smudge = git-lfs
@@ -243,7 +243,7 @@ Every `agent.*` key is checked at load too (`agent_run.validate_agent`), not onl
 | `unpinned_ranges` | `false` | Also check the ranges of Python requirements without exact pins, sending their names (no versions) to OSV ([Unpinned Python requirements](#unpinned-python-requirements)) |
 | `cooldown_days` | `0` | Ignored: every fix release the scanner adopts remediates a vulnerability the scan detected, which Rule S-10's remediation carve-out exempts from the release cooldown. A configured value prints a note; remove the key |
 | `local_runtimes` | `true` | Check the runtimes in `runtimes.PRODUCTS` found on this machine |
-| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base-majorfalse-notesnone) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
+| `fix_mode` | `"plan"` | `plan` writes a fix plan per git repository with fixable findings, `fixplan-<name>-<8 hex of its path>.md`, naming the repository as the `stage-fix` target (a `repo_roots` folder holding several repositories gets one plan each; a nested repository is left out of its parent's plan; a nested clone whose `origin` owner differs from the enclosing repository's, such as a local checkout of a third-party tool, gets a plan with no target that says to update or remove it locally, since a PR would go to the upstream project; see `daily.foreign_clone`); `apply-worktree` stages fixes in a worktree per repo (without agents), off `origin/HEAD` (nothing is staged without it), with no release-age cooldown (`executor.REMEDIATION_COOLDOWN_DAYS` is 0: Rule S-10's remediation carve-out). The result must pass [`validate_diff`](#validate_diffwt-base-majorfalse) or the worktree is removed; a same-day worktree is reused only when it is a worktree of that repository on its `vulnscan/<date>` branch with no other commits or changes |
 | `allow_major` | `false` | Allow major-version upgrades in fix plans |
 | `scan_workers` | `4` | How many scan roots, and then how many fix plans, are looked up at once (1–8; `1` = one after another; each scan already sends up to 8 OSV requests at once). The lookups are network-bound (OSV, the package registries); results are merged in root order, so the report and the fix plans do not depend on it. Each worker runs in a copy of the caller's context, so a confinement scope applies as it would serially. `apply-worktree` staging, servers and local runtimes stay serial |
 | `notify` | `"desktop"` | `none`, `desktop`, or `command:<program and args>` (the program gets the fixed message as its last argument) |
@@ -1437,7 +1437,7 @@ when the key names a worktree (no `/`), the directory is real, and the day's rec
 
 Finds dependency manifests and reads exact versions from them; the formats are listed under
 [Supported manifests](#supported-manifests). It also holds the two edit checks the executor's
-[`validate_diff`](#validate_diffwt-base-majorfalse-notesnone) applies to a staged fix.
+[`validate_diff`](#validate_diffwt-base-majorfalse) applies to a staged fix.
 
 #### `Dep` / `Manifest`
 
@@ -1491,7 +1491,7 @@ entry resolved over `https://` with a `sha512-` integrity that is identical in e
 `integrity`, `version`, its dependency maps, `bin`, …) in the same section under the same path key (for
 example SheetJS's CDN-only `xlsx`); a new, moved or changed off-registry entry is still refused, and so is an
 edited lockfile that repeats a JSON key anywhere. It returns one note per kept off-registry entry
-(`"<rel>: unchanged off-registry entry kept: <key> <url>"`), else `[]`. With `manifest` (`stage-major`: the
+(`"<rel>: unchanged off-registry entry kept: <key> <url> (sha512-<16 characters>…)"`), else `[]`. With `manifest` (`stage-major`: the
 `package.json` the same change edits) the root `dependencies` / `devDependencies` may change, only to exactly the
 manifest's. `lock_entries` parses the
 lockfile type-safely and returns `(root entry, [(name, entry), …])` from `packages` and, recursively,
@@ -2142,10 +2142,11 @@ the reason, in the result's `kept`. `gh pr close` posts a fixed comment naming t
 `publish.rewrite_paths`); the branch stays and nothing is merged. A grant must name the op; `authorize` and
 `executor_guard` apply as for `open-pr`. Returns `{"repo", "replacement", "closed", "kept"}`.
 
-#### `validate_diff(wt, base, *, major=False, notes=None)`
+#### `validate_diff(wt, base, *, major=False)`
 
 Check a staged change against `base` before `stage-fix` commits it, and before `daily` keeps an
-`apply-worktree` result (`notes`: a list that receives the lockfile check's notes). Returns the changed paths; raises `ExecError` on anything else. With `major`
+`apply-worktree` result. Returns a `DiffCheck(changed, kept_off_registry)` named tuple: the changed paths and the lockfile check's
+notes on unchanged off-registry entries it kept; raises `ExecError` on anything else. With `major`
 (`stage-major` only) a `package.json` may change too, within the rules in
 [Major upgrades](#major-upgrades-stage-major) (`npm_major.check_package_json_edit`):
 
@@ -2158,8 +2159,9 @@ Check a staged change against `base` before `stage-fix` commits it, and before `
   `resolved` and a plain version: an entry with a URL or path in `version` and no `resolved` (a v1
   lockfile form) is refused. A workspace `link` or `file:` entry passes only when it is inside the repository and
   unchanged from `base`, and an off-registry `https://` entry with a `sha512-` integrity only when identical to
-  `base` at the same path key (its note is appended to `notes` when that list is passed; `stage-fix` records them
-  as `kept_off_registry` in its result). A change to the root package's dependencies, `scripts` or `workspaces` is
+  `base` at the same path key (its note goes to
+  `kept_off_registry`; `stage-fix` records those in its result and ledger row, and `open-pr` lists each in the PR
+  body under *Off-registry sources kept unchanged*). A change to the root package's dependencies, `scripts` or `workspaces` is
   refused (`manifests.check_lock_edit`).
 
 #### `canonical_target(target)`

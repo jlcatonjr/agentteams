@@ -646,7 +646,8 @@ def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | 
             may then change, but only to exactly that manifest's.
 
     Returns:
-        One note per tolerated off-registry entry ("unchanged off-registry entry kept: <key> <url>"), else [].
+        One note per tolerated off-registry entry ("<rel>: unchanged off-registry entry kept: <key> <url>
+        (sha512-<first 16 characters>…)"), else [].
 
     Raises:
         ValueError: Any of these is found, or a lockfile is malformed.
@@ -673,7 +674,9 @@ def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | 
         host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
         if not isinstance(url, str) or not url.startswith("https://") or host not in REGISTRY_HOSTS:
             if _kept_off_registry(section, name, info, kept_strict):
-                notes.append(f"{rel}: unchanged off-registry entry kept: {name[:120]} {str(url)[:200]}")
+                integrity = str(info.get("integrity"))
+                notes.append(f"{rel}: unchanged off-registry entry kept: {name[:120]} {url[:200]} "
+                             f"({integrity[:23]}…)")
                 continue
             raise ValueError(f"{rel}: {name or '(root)'} resolves outside the registry allowlist: {str(url)[:120]}")
     return notes
