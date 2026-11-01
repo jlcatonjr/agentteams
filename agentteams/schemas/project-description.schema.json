@@ -456,7 +456,7 @@
         },
         "base_url": {
           "type": "string",
-          "description": "Optional base-URL override, vetted by the provider URL policy (https, or http to loopback; no userinfo, query or fragment). Not valid for the stub."
+          "description": "Base URL for a keyless local preset only (ollama, lmstudio) on a loopback host (127.0.0.1, ::1, localhost). The provider key is sent to the base URL, so for any preset that sends a key the render refuses it: the operator sets AGENTTEAMS_WASM_BASE_URL or --wasm-base-url at run time instead (@security S5)."
         },
         "models": {
           "type": "object",

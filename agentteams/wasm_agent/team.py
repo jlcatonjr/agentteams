@@ -9,7 +9,8 @@
 ``.agentteams-wasm/runtime.json``      provider preset, tier -> model map (``null`` unless the brief sets one),
                                        budget, prices file, ``host_os_confine``
 ``.agentteams-wasm/README.md``         how to run it, enforcement status (documentation; locked, never loaded)
-``.agentteams/wasm-team.lock.json``    sha256 of every file above (control plane; written by :func:`write_lock`)
+``.agentteams/wasm-team.lock.json``    sha256 of every file above and of ``runtime.json``'s prices file (control
+                                       plane; written by :func:`write_lock`)
 =====================================  ==========================================================================
 
 :func:`load_team` (the ``--run-wasm-agent`` launcher, P09's ``resolve_agent``) refuses any drift: a missing,
@@ -36,6 +37,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from agentteams.sandbox_state import SCRATCH_REL
+
 #: The rendered team's directory and files (project-relative, POSIX).
 TEAM_DIR_REL = ".agentteams-wasm"
 AGENTS_REL = f"{TEAM_DIR_REL}/agents"
@@ -46,7 +49,7 @@ README_REL = f"{TEAM_DIR_REL}/README.md"
 TEAM_FILES_REL: tuple[str, ...] = (TEAM_MD_REL, GRANTS_REL, RUNTIME_REL, README_REL)
 #: The control-plane lock (session-write-denied whenever WASM is on, R1).
 LOCK_REL = ".agentteams/wasm-team.lock.json"
-LOCK_VERSION = 1
+LOCK_VERSION = 2
 FILE_VERSION = 1
 #: Exact front-matter keys of an agent file, in order.
 FRONT_MATTER_KEYS: tuple[str, ...] = ("name", "description", "tools", "model", "delegates")
@@ -69,7 +72,9 @@ BRIEF_RUNTIME_KEYS = ("provider", "base_url", "models", "budget", "prices_file")
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _LIST_RE = re.compile(r"^\[((?:[a-z0-9_-]+(?:, [a-z0-9_-]+)*)?)\]$")
 _REL_RE = re.compile(r"^[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$")
-_SCRATCH_PREFIX = ".agentteams/wasm/scratch/"
+_SCRATCH_PREFIX = f"{SCRATCH_REL}/"
+#: The operator's run-time base URL (with ``--wasm-base-url``, the only path for a keyed preset; @security S5).
+BASE_URL_ENV = "AGENTTEAMS_WASM_BASE_URL"
 
 
 class TeamError(Exception):
@@ -191,6 +196,78 @@ def _rel_path(value: object, where: str) -> str:
     return value
 
 
+def _keyless_local(provider: str | None, url: str) -> str | None:
+    """Return why *url* may not serve *provider* without operator say-so, or None when it may.
+
+    It may only when the preset sends no key and is not the stub, and the URL passes P06's shape policy with a
+    loopback host: then no key can follow the URL, whoever wrote it.
+    """
+    from agentteams import model_providers as MP
+
+    if provider is None or provider == "stub" or MP.preset_needs_key(provider):
+        return (f"provider {provider or '(unset)'!r} sends an API key (or is the stub), so its base URL comes only "
+                f"from the operator at run time ({BASE_URL_ENV} or --wasm-base-url), never from the brief")
+    try:
+        MP.check_base_url(url)
+    except MP.ModelProviderError as exc:
+        return exc.message
+    if not MP.is_loopback_url(url):
+        return "a brief-set base URL must name a loopback host (127.0.0.1, ::1, localhost)"
+    return None
+
+
+def _brief_base_url(provider: str | None, url: object) -> str:
+    """Vet the brief's ``wasm_runtime.base_url``: only a keyless local preset on a loopback host (@security S5)."""
+    from agentteams import model_providers as MP
+
+    if not isinstance(url, str):
+        raise ValueError("wasm_runtime.base_url must be a string")
+    why = _keyless_local(provider, url)
+    if why is not None:
+        raise ValueError(f"wasm_runtime.base_url is refused: {why}. The provider key is sent to this host; a brief "
+                         "edit must never choose where it goes.")
+    return MP.check_base_url(url)
+
+
+def resolve_base_url(runtime: Mapping[str, Any], provider: str, *, operator_url: str | None) -> tuple[str | None,
+                                                                                                         str | None]:
+    """Return the base URL a run uses for *provider*, and a notice when the rendered one was dropped.
+
+    The operator's URL (``--wasm-base-url``, else :data:`BASE_URL_ENV`) wins and is shape-checked. Otherwise the
+    rendered ``runtime.json`` URL is kept only while the keyless local rule holds for the run's effective preset
+    (``--wasm-provider`` re-applies it): a keyed preset never inherits a rendered URL, so its key goes to its own
+    preset host. With neither, the preset's own URL applies (None).
+
+    Args:
+        runtime: The loaded ``runtime.json``.
+        provider: The run's effective preset.
+        operator_url: The operator's URL, or None.
+
+    Returns:
+        ``(base_url or None, notice or None)``.
+
+    Raises:
+        TeamError: The operator URL fails P06's policy, or is set for the stub.
+    """
+    from agentteams import model_providers as MP
+
+    if operator_url is not None:
+        if provider == "stub":
+            raise TeamError("an operator base URL is not valid for the stub provider")
+        try:
+            return MP.check_base_url(operator_url), None
+        except MP.ModelProviderError as exc:
+            raise TeamError(f"operator base URL ({BASE_URL_ENV} / --wasm-base-url): {exc.message}") from exc
+    rendered = runtime.get("base_url")
+    if rendered is None:
+        return None, None
+    why = _keyless_local(provider, rendered)
+    if why is None:
+        return MP.check_base_url(rendered), None
+    return None, (f"the rendered wasm_runtime.base_url is not used for provider {provider!r} ({why}); the preset's "
+                  f"own URL applies. Set {BASE_URL_ENV} or --wasm-base-url to choose another.")
+
+
 def normalize_wasm_runtime(raw: object) -> dict[str, Any]:
     """Validate the brief's ``wasm_runtime`` block (fail closed; names the key path).
 
@@ -202,11 +279,10 @@ def normalize_wasm_runtime(raw: object) -> dict[str, Any]:
         anything unset and the budget filled with the ``Budget`` defaults.
 
     Raises:
-        ValueError: Unknown keys, wrong types, an unknown provider, a base URL that fails P06's URL policy (or is set
-            for the stub), an invalid budget, or a prices file that is not a project-relative path.
+        ValueError: Unknown keys, wrong types, an unknown provider, a base URL that is not a keyless local preset's
+            loopback URL (a keyed preset's URL comes only from the operator: :data:`BASE_URL_ENV` /
+            ``--wasm-base-url``), an invalid budget, or a prices file that is not a project-relative path.
     """
-    from agentteams.model_providers._config import _check_base_url
-    from agentteams.model_providers import ModelProviderError
     from agentteams.wasm_agent.budget import Budget
 
     if not isinstance(raw, dict):
@@ -219,12 +295,7 @@ def normalize_wasm_runtime(raw: object) -> dict[str, Any]:
         raise ValueError(f"wasm_runtime.provider must be one of {', '.join(PROVIDER_NAMES)}")
     base_url = raw.get("base_url")
     if base_url is not None:
-        if not isinstance(base_url, str) or provider == "stub":
-            raise ValueError("wasm_runtime.base_url must be a string (and is not valid for the stub provider)")
-        try:
-            base_url = _check_base_url(base_url)
-        except ModelProviderError as exc:
-            raise ValueError(f"wasm_runtime.base_url: {exc.message}") from exc
+        base_url = _brief_base_url(provider, base_url)
     models_raw = raw.get("models", {})
     if not isinstance(models_raw, dict) or set(models_raw) - set(TIERS):
         raise ValueError(f"wasm_runtime.models must be an object with only {', '.join(TIERS)}")
@@ -321,7 +392,10 @@ def grant_from_entry(slug: str, entry: object, *, project_root: Path) -> Any:
 
     Only the canonical mounts are accepted: ``/project/<rel>`` read-only at ``<root>/<rel>`` and ``/scratch``
     read-write at ``<root>/.agentteams/wasm/scratch/<slug>``. They go through the one grant builder
-    (``sandbox_state.grant_from_tokens``: symlink and credential checks), and the limits through ``Limits``.
+    (``sandbox_state.grant_from_tokens``: symlink checks and, again at every load, the project's credential scan
+    ``_sandbox_profiles.refuse_credentials`` over each read directory), and the limits through ``Limits``. A read
+    path whose own segments are credential-named (``_sandbox_profiles.credential_name``) is refused too, so a
+    re-hashed ``grants.json`` cannot mount ``.ssh`` or a ``.env`` file directly.
 
     Args:
         slug: The agent.
@@ -332,15 +406,18 @@ def grant_from_entry(slug: str, entry: object, *, project_root: Path) -> Any:
         The ``wasm_exec.Grant``.
 
     Raises:
-        TeamError: A malformed entry or a mount the brief could never have granted.
+        TeamError: A malformed entry, a mount the brief could never have granted, or a credential hit.
     """
+    from agentteams import _sandbox_profiles as SP
     from agentteams import wasm_exec as W
-    from agentteams.cli.sandbox_effects import read_token, scratch_token
     from agentteams.sandbox_state import grant_from_tokens
+    from agentteams.sandbox_tokens import read_token, scratch_token
 
     if (not isinstance(entry, dict) or set(entry) != {"mounts", "limits", "read_only_via"}
             or not isinstance(entry["mounts"], list) or entry["read_only_via"] not in ("os", "snapshot", "none")):
         raise TeamError(f"{GRANTS_REL}: {slug}: entry must be {{mounts, limits, read_only_via}}")
+    if not isinstance(entry["limits"], dict):
+        raise TeamError(f"{GRANTS_REL}: {slug}: limits must be an object")
     tokens = []
     for m in entry["mounts"]:
         if not isinstance(m, dict) or set(m) != {"host", "guest", "mode"} or not all(
@@ -349,14 +426,17 @@ def grant_from_entry(slug: str, entry: object, *, project_root: Path) -> Any:
         if m["guest"] == "/scratch" and m["mode"] == "rw" and m["host"] == _SCRATCH_PREFIX + slug:
             tokens.append(scratch_token(slug))
         elif m["guest"] == f"/project/{m['host']}" and m["mode"] == "ro":
-            tokens.append(read_token(slug, m["host"]))
+            if any(SP.credential_name(part) for part in m["host"].split("/")):
+                raise TeamError(f"{GRANTS_REL}: {slug}: read path {m['host']!r} is credential-named; refused")
+            try:
+                tokens.append(read_token(slug, m["host"]))
+            except ValueError as exc:
+                raise TeamError(f"{GRANTS_REL}: {slug}: {exc}") from exc
         else:
             raise TeamError(f"{GRANTS_REL}: {slug}: mount {m['guest']!r} is not a canonical grant mount")
     try:
-        limits = W.Limits(**dict(entry["limits"])) if isinstance(entry["limits"], dict) else None
-        if limits is None:
-            raise TypeError("limits must be an object")
-        grant = grant_from_tokens(slug, tokens, limits, project_root=project_root)
+        grant = grant_from_tokens(slug, tokens, W.Limits(**entry["limits"]), project_root=project_root,
+                                  check_credentials=True)
     except (TypeError, ValueError, W.WasmExecError) as exc:
         raise TeamError(f"{GRANTS_REL}: {slug}: {exc}") from exc
     if len(grant.mounts) != len(entry["mounts"]):
@@ -432,6 +512,19 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _prices_rel(runtime_bytes: bytes) -> str | None:
+    """The ``prices_file`` a ``runtime.json`` names (None when unset); TeamError when the file is not a JSON object."""
+    try:
+        runtime = json.loads(runtime_bytes)
+    except ValueError as exc:
+        raise TeamError(f"{RUNTIME_REL}: not JSON") from exc
+    rel = runtime.get("prices_file") if isinstance(runtime, dict) else None
+    if rel is not None and (not isinstance(rel, str) or not _REL_RE.match(rel)
+                            or any(p in (".", "..") for p in rel.split("/"))):
+        raise TeamError(f"{RUNTIME_REL}: prices_file must be a plain project-relative path")
+    return rel
+
+
 def write_lock(project_root: str | Path) -> Path:
     """Hash the rendered team into the control-plane lock (after a successful emit).
 
@@ -442,7 +535,8 @@ def write_lock(project_root: str | Path) -> Path:
         The lock path.
 
     Raises:
-        TeamError: A team file is missing or fails a custody check, or an agent file name is not a slug.
+        TeamError: A team file (or ``runtime.json``'s prices file) is missing or fails a custody check, or an agent
+            file name is not a slug.
         OSError: The lock cannot be written.
     """
     from agentteams.atomicio import write_new_atomic
@@ -456,14 +550,37 @@ def write_lock(project_root: str | Path) -> Path:
     bad = [s for s in slugs if not _SLUG_RE.match(s)]
     if bad:
         raise TeamError(f"{AGENTS_REL}: agent file names must be slugs: {bad}")
-    files = {rel: _sha(read_locked(root, rel, _cap(rel))) for rel in [*rels, *TEAM_FILES_REL]}
-    lock = {"version": LOCK_VERSION, "agents": slugs, "files": files, "guest_sha256": GUEST_SHA256,
-            "tool_spec_sha256": TOOL_SPEC_SHA256}
+    data = {rel: read_locked(root, rel, _cap(rel)) for rel in [*rels, *TEAM_FILES_REL]}
+    prices_rel = _prices_rel(data[RUNTIME_REL])
+    prices = None if prices_rel is None else {"path": prices_rel,
+                                              "sha256": _sha(read_locked(root, prices_rel, MAX_JSON_BYTES))}
+    lock = {"version": LOCK_VERSION, "agents": slugs, "files": {rel: _sha(b) for rel, b in data.items()},
+            "prices": prices, "guest_sha256": GUEST_SHA256, "tool_spec_sha256": TOOL_SPEC_SHA256}
     try:
         lock_dir = ensure_dir(root, (".agentteams",))
     except JournalError as exc:
         raise TeamError(str(exc)) from exc
     return write_new_atomic(Path(lock_dir), Path(LOCK_REL).name, dumps(lock).encode("utf-8"), mode=0o644)
+
+
+def _verify_prices(root: str, locked: Mapping[str, Any] | None, out: dict[str, bytes]) -> list[str]:
+    """Check ``runtime.json``'s prices file against the lock (C3); add its bytes to *out*; return the drift."""
+    try:
+        rel = _prices_rel(out[RUNTIME_REL]) if RUNTIME_REL in out else None
+    except TeamError as exc:
+        return [str(exc)]
+    if rel is None:
+        return [] if locked is None else [f"{RUNTIME_REL} (names no prices file, the lock does)"]
+    if locked is None or locked["path"] != rel:
+        return [f"{rel} (the prices file is not the locked one)"]
+    try:
+        data = read_locked(root, rel, MAX_JSON_BYTES)
+    except TeamError as exc:
+        return [f"{rel} ({str(exc).split(': ', 1)[-1][:80]})"]
+    if _sha(data) != locked["sha256"]:
+        return [f"{rel} (prices changed)"]
+    out[rel] = data
+    return []
 
 
 def verify_lock(project_root: str | Path) -> dict[str, bytes]:
@@ -473,7 +590,7 @@ def verify_lock(project_root: str | Path) -> dict[str, bytes]:
         project_root: The project root.
 
     Returns:
-        ``{rel: bytes}`` for every locked file.
+        ``{rel: bytes}`` for every locked file (the prices file, when ``runtime.json`` names one, included).
 
     Raises:
         TeamError: No lock, a malformed lock, or any drift (listed by path).
@@ -488,9 +605,11 @@ def verify_lock(project_root: str | Path) -> dict[str, bytes]:
         raise TeamError(f"no usable team lock ({exc}); render the team with --framework wasm first") from exc
     except ValueError as exc:
         raise TeamError(f"{LOCK_REL}: not JSON") from exc
-    if (not isinstance(lock, dict) or set(lock) != {"version", "agents", "files", "guest_sha256", "tool_spec_sha256"}
+    if (not isinstance(lock, dict)
+            or set(lock) != {"version", "agents", "files", "prices", "guest_sha256", "tool_spec_sha256"}
             or lock["version"] != LOCK_VERSION or not isinstance(lock["files"], dict)
-            or not isinstance(lock["agents"], list)):
+            or not isinstance(lock["agents"], list) or not (lock["prices"] is None or (
+                isinstance(lock["prices"], dict) and set(lock["prices"]) == {"path", "sha256"}))):
         raise TeamError(f"{LOCK_REL}: malformed lock; re-render the team")
     if lock["guest_sha256"] != GUEST_SHA256 or lock["tool_spec_sha256"] != TOOL_SPEC_SHA256:
         raise TeamError("the team was rendered for a different agentteams guest/tool version; re-render (--update)")
@@ -510,6 +629,7 @@ def verify_lock(project_root: str | Path) -> dict[str, bytes]:
         if _sha(data) != digest:
             drift.append(f"{rel} (changed)")
         out[rel] = data
+    drift += _verify_prices(root, lock["prices"], out)
     if drift:
         raise TeamError("the WASM team drifted from its lock: " + "; ".join(drift)
                         + ". Re-render it (--framework wasm --update) and review the change.")
@@ -529,6 +649,7 @@ class Team:
     grant_entries: Mapping[str, Mapping[str, Any]]
     runtime: Mapping[str, Any]
     agent_bytes: Mapping[str, bytes]
+    prices_bytes: bytes | None = None
 
     def model_for(self, slug: str, provider: str, environ: Mapping[str, str] | None = None) -> str:
         """Resolve *slug*'s model: ``AGENTTEAMS_WASM_MODEL_<TIER>`` > ``runtime.json`` > refuse (no default ids).
@@ -592,6 +713,24 @@ class Team:
                          max_tokens=Budget.from_dict(self.runtime["budget"]).max_output_tokens_per_call,
                          spec_sha256=digest)
 
+    def prices(self) -> dict[str, dict[str, float]] | None:
+        """The run's price table: the lock-verified bytes of ``runtime.json``'s ``prices_file`` (C3), parsed.
+
+        Returns:
+            The ``gateway_dialects`` table, or None when no prices file is configured.
+
+        Raises:
+            TeamError: The file is not a valid price table.
+        """
+        from agentteams.vulnscan.gateway_dialects import parse_prices
+
+        if self.prices_bytes is None:
+            return None
+        try:
+            return parse_prices(self.prices_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise TeamError(f"wasm_runtime.prices_file: {exc}") from exc
+
     def budget(self) -> Any:
         """The run budget from ``runtime.json``.
 
@@ -650,7 +789,8 @@ def load_team(project_root: str | Path) -> Team:
         team_md = files[TEAM_MD_REL].decode("utf-8")
     except (ValueError, UnicodeDecodeError) as exc:
         raise TeamError(f"team files malformed: {exc}") from exc
-    agent_rels = sorted(r for r in files if r.startswith(AGENTS_REL + "/"))
+    prices_rel = runtime["prices_file"]
+    agent_rels = sorted(r for r in files if r.startswith(AGENTS_REL + "/") and r != prices_rel)
     slugs = {Path(r).stem for r in agent_rels}
     if (not isinstance(grants_doc, dict) or set(grants_doc) != {"version", "agents"}
             or grants_doc["version"] != FILE_VERSION or not isinstance(grants_doc["agents"], dict)
@@ -678,13 +818,14 @@ def load_team(project_root: str | Path) -> Team:
         agents[slug], grants[slug] = agent, grant
     return Team(project_root=Path(root), agents=agents, team_md=team_md, grants=grants,
                 grant_entries=dict(grants_doc["agents"]), runtime=runtime,
-                agent_bytes={Path(r).stem: files[r] for r in agent_rels})
+                agent_bytes={Path(r).stem: files[r] for r in agent_rels},
+                prices_bytes=files.get(prices_rel) if prices_rel is not None else None)
 
 
 __all__ = [
-    "AGENTS_REL", "FRONT_MATTER_KEYS", "GRANTS_REL", "HOST_OS_CONFINE", "LOCK_REL", "NON_AGENT_FILES",
+    "AGENTS_REL", "BASE_URL_ENV", "FRONT_MATTER_KEYS", "GRANTS_REL", "HOST_OS_CONFINE", "LOCK_REL", "NON_AGENT_FILES",
     "PROVIDER_NAMES", "README_REL", "RUNTIME_REL", "TEAM_DIR_REL", "TEAM_FILES_REL", "TEAM_MD_REL", "TIERS",
     "AgentFile", "Team", "TeamError", "agent_files_on_disk", "check_runtime", "dumps", "grant_entry",
     "grant_from_entry", "load_team", "normalize_wasm_runtime", "parse_agent_file", "read_locked",
-    "render_front_matter", "runtime_record", "runtime_section", "verify_lock", "write_lock",
+    "render_front_matter", "resolve_base_url", "runtime_record", "runtime_section", "verify_lock", "write_lock",
 ]

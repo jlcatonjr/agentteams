@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-_RUN = "agentteams --run-wasm-agent <slug> --task \"...\" --project ."
+_RUN = "agentteams --run-wasm-agent <slug> --wasm-task \"...\" --project ."
 
 
 def team_slugs(manifest: dict[str, Any]) -> list[str]:
@@ -129,7 +129,7 @@ re-render (`--update`) instead of editing these files.
 ```
 {_RUN}
 agentteams --verify-wasm-run <run-id> --project .
-agentteams --revoke-wasm-run <run-id> --project . --reason "..."
+agentteams --revoke-wasm-run <run-id> --project . --revoke-reason "..."
 ```
 
 Install the pinned runtime first (`agentteams --wasm-install all --project .`). The provider is
@@ -142,6 +142,10 @@ Provider keys are read only from the launcher's environment (never from these fi
 | Provider | Key variable |
 |---|---|
 {keys}
+
+The key goes to the preset's own base URL unless the operator sets `AGENTTEAMS_WASM_BASE_URL` or `--wasm-base-url`
+for the run. A `base_url` in this team's `runtime.json` (from the brief) is used only for a keyless local preset on a
+loopback host.
 
 ## Enforcement status
 

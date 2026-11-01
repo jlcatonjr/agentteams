@@ -9,7 +9,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentteams.model_providers._common import LOOPBACK_HOSTS, TIER_ENV_PREFIX, TIERS, ModelProviderError
+from agentteams.model_providers._common import (
+    LOOPBACK_HOSTS, TIER_ENV_PREFIX, TIERS, ModelProviderError, _is_loopback,
+)
 from agentteams.model_providers._stub import StubProvider, _load_stub_script
 
 @dataclass(frozen=True)
@@ -57,7 +59,7 @@ class Provider:
 
         Args:
             preset: The preset.
-            base_url: A base URL that already passed :func:`_check_base_url` (``None`` for the stub).
+            base_url: A base URL that already passed :func:`check_base_url` (``None`` for the stub).
             key: The API key, or ``""`` for a keyless preset.
             stub: The stub backend (``stub`` family only).
 
@@ -65,7 +67,7 @@ class Provider:
             ModelProviderError: ``config`` for a base URL or key that fails the same checks as :func:`get_provider`.
         """
         if base_url is not None:
-            base_url = _check_base_url(base_url)
+            base_url = check_base_url(base_url)
         _check_key_shape(key, preset.name)
         self.preset = preset
         self.base_url = base_url
@@ -145,7 +147,7 @@ def _preset(name: str) -> Preset:
 
 
 
-def _check_base_url(url: str) -> str:
+def check_base_url(url: str) -> str:
     """Return ``url`` without a trailing slash when it is an allowed base URL.
 
     Allowed: ``https://`` to any host, or ``http://`` to a loopback host; no userinfo, query or fragment.
@@ -153,8 +155,18 @@ def _check_base_url(url: str) -> str:
     Rule (C-4, @security S5): a base URL comes only from operator configuration — a preset, the operator's
     environment, or an explicit operator argument. It is never taken from read content (a brief field an agent
     can write, guest or model output, a fetched page, an adjacent repository): the provider key is sent to this
-    host, so a content-chosen URL would exfiltrate it. These checks bound the URL's shape, not its trust. As of
-    the wave-1 review no caller outside ``model_providers`` passes ``base_url`` at all.
+    host, so a content-chosen URL would exfiltrate it. These checks bound the URL's shape, not its trust. The one
+    caller outside ``model_providers`` is the ``--run-wasm-agent`` launcher (``cli/wasm_agent_commands.py`` via
+    ``wasm_agent.team.resolve_base_url``): its operator path is ``AGENTTEAMS_WASM_BASE_URL`` or
+    ``--wasm-base-url``, read at run time. The brief (``wasm_runtime.base_url``) may name one only for a keyless
+    preset (:func:`preset_needs_key` False) on a loopback host, so no key can follow it; the launcher re-applies
+    that rule to the run's effective preset (``--wasm-provider``).
+
+    Args:
+        url: The candidate base URL.
+
+    Returns:
+        The URL without a trailing slash.
 
     Raises:
         ModelProviderError: ``config`` otherwise.
@@ -181,11 +193,43 @@ def _check_base_url(url: str) -> str:
 
 
 
+def is_loopback_url(url: str | None) -> bool:
+    """Return whether *url*'s host is a loopback host (``127.0.0.1``, ``::1``, ``localhost``).
+
+    Args:
+        url: A URL, or None.
+
+    Returns:
+        True for a loopback host.
+
+    Raises:
+        Nothing.
+    """
+    return _is_loopback(url)
+
+
+def preset_needs_key(name: str) -> bool:
+    """Return whether the preset *name* sends an API key (its ``key_env`` is not empty).
+
+    Args:
+        name: A preset name in :data:`PROVIDERS`.
+
+    Returns:
+        True when a key goes to the preset's base URL; False for a keyless preset (``ollama``, ``lmstudio``,
+        ``stub``).
+
+    Raises:
+        ModelProviderError: ``config`` for an unknown preset.
+    """
+    return bool(_preset(name).key_env)
+
+
+
 def _resolve_base_url(preset: Preset, override: str | None) -> str:
     url = override if override is not None else preset.base_url
     if url is None:
         raise ModelProviderError("config", f"{preset.name}: a base_url must be configured", provider=preset.name)
-    return _check_base_url(url)
+    return check_base_url(url)
 
 
 
