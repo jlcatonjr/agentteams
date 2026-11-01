@@ -88,7 +88,7 @@
     "agentteams/front_matter_reconcile.py": "e07758e1606ea49553959009d22698933fd9e0d0c3069a64d64096bb838140fe",
     "agentteams/git_exec.py": "4ddf3486c7d54369907f2af17ad630d858fd6ab3dd2e6f8b0eeb402a965f7742",
     "agentteams/grok_config_emit.py": "6c1ec7f28fef63cce5eb275dec530e6757702d5375aa554fa6bcf968aa35ab9f",
-    "agentteams/integrity.py": "7109042053d2c2689d43fbcc6cd0397c3d272ca5d8a59ec2b83874ae0e7c3c39",
+    "agentteams/integrity.py": "e93857d5c24b4c0fae1bc9e68e9d10cda21101a889b480ac4effa891dad895d1",
     "agentteams/launcher_lineage.py": "0b0e9015ee9787244adb534197d81cb81f3e1bebfc7d5cc403c29ec8345b5bc3",
     "agentteams/learned_blocks.py": "2df7c5432bfd85e3eefc19f51561a38c04fc29d6e07d484a25c2e82a08eae1fb",
     "agentteams/mcp_direct_grants.py": "99fc3804eeed4b92214242c63a8463a9f99ab681e038bc82bb90db0bdf89a895",
@@ -210,6 +210,7 @@
     "agentteams/wasm_guests.py": "a3b23dd61bd3ea924f47c37debec44ff7442d2c5af32475d6de18e34c7c7ba5c",
     "agentteams/wasm_mcp.py": "32a368838cdcad935f2c1765a63d2cd037ae475861434e34beaf5b98c8076afd",
     "agentteams/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
+    "agentteams/wasm_policy.py": "1de17b9db66d03e79505f75b0b175b6d21b4ef186bc39bce1bf78a19446649f6",
     "agentteams/wasm_runtime.py": "b70019b822466cbda1ecfeab6df02514cffdb821ea44c4d3b2ac698b955d6e90",
     "agentteams/whole_body_migration.py": "37ba265cbacd5ca198c9989a92a3087587771bdaff90ad722d752818c405b72d",
     "agentteams/write_policy.py": "8fa129e0bca9d1d10fcfec433c3da831512d0b08ec5772998a1a8aa4a5ea64e8"

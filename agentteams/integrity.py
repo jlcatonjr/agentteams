@@ -358,6 +358,10 @@ ENFORCEMENT_MODULES: tuple[str, ...] = (
     # given run_wasm (C-3), and the list of launching configs R1 write-protects. A silent edit hands the tool to an
     # auditor or drops a config from the session denyWrite.
     "agentteams/frameworks/_wasm_wiring.py",
+    # The WASM text each generated agent reads (P14): what run_wasm runs, the agent's grant, what happened to its
+    # shell, and @security's review rows. It grants nothing, but its claims must match the grant (verify_claims); a
+    # silent edit tells an agent it holds a wider grant than it does, or drops the laundering rule.
+    "agentteams/wasm_policy.py",
     # Host-mediated model access (WASM P06). The provider key travels only to the vetted base URL, and the
     # request/reply validation bounds what crosses the wire (C-4); a silent edit leaks the key or widens what a reply
     # may carry.

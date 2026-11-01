@@ -338,6 +338,18 @@ Reference-tier tools generate a lightweight reference file (no YAML front matter
 > Legacy `tool-{tool}.agent.md` files from earlier generations are migrated away
 > on `--update` (deleted under `--overwrite`, notice-only under `--merge`).
 
+### Opt-in features that add tools or sections
+
+An opt-in feature that changes an agent's tools or adds instructions only when the operator switches it on is
+**injected at render time**, not written into the templates: `agentteams/write_policy.py` (`apply`,
+`apply_instructions`) for `write_policy: "orchestrator-only"`, and `agentteams/wasm_policy.py` for the WASM
+sandbox. Each is the identity while its switch is off, so default teams stay byte-identical, and it appends its
+section in its own fence when the body already has fences. A template may carry only an empty-by-default
+placeholder at the end of an existing table row (`{ADOPTED_AGENT_ROUTING_ROWS}`, `{WASM_ROUTING_ROWS}`,
+`{WASM_SECURITY_TRIGGER_ROWS}`), not a conditional block. Text that names a tool must follow the module that
+grants it (C-3): `wasm_policy` reads P01's `wasm_eligible` and P11's wiring record and refuses a render whose text
+and wiring disagree.
+
 ---
 
 ## 6. Per-Framework Agent File Format
