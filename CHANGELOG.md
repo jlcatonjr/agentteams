@@ -21,6 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release, so the first update after upgrading still preserves), an interop projection marker, and any run with
   no backup dir (`--no-backup`: no sidecar) keep today's preserve behaviour.
 
+### fixed (vulnscan: an unchanged off-registry lockfile entry no longer blocks `stage-fix`)
+
+- **`manifests.check_lock_edit`** refused every lockfile entry resolved off the registry allowlist, even one the
+  base already held unchanged, so after portal moved `xlsx` to 0.20.3 from `cdn.sheetjs.com` (the only fixed
+  release, published only there) every `stage-fix` for portal was refused. An `https://` off-registry entry with
+  a `sha512-` integrity now passes when it is identical to the base in every field (`resolved`, `integrity`,
+  `version`, dependency maps, `bin`, `hasInstallScript`, …), in the same section and under the same path key. A
+  new, moved, copied or changed off-registry entry, one without a `sha512-` integrity, and a plain-`http` or git
+  one stay refused, and the edited lockfile may no longer repeat a JSON key anywhere (`json.loads` keeps the
+  last copy; another reader might keep the first). npm `--package-lock-only` leaves such an entry alone without
+  fetching it (checked with npm 11.19 against a local mock registry, the CDN unreachable).
+- `check_lock_edit` now returns one note per kept entry (`"<rel>: unchanged off-registry entry kept: <key>
+  <url>"`); `executor.validate_diff(..., notes=list)` collects them and `stage-fix` records them as
+  `kept_off_registry` in its result.
+- **`stage-major` is unchanged:** it still refuses an off-registry base outright (S1, `npm_off_registry`), since
+  `npm install` re-resolves every `package.json` spec; a note in `fix.npm_majors` leaves relaxing it to
+  `@security`.
+
 ### added (vulnscan: scan mirrors)
 
 - **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a

@@ -529,13 +529,31 @@ def lock_entries(rel: str, text: str) -> tuple[dict[str, Any], list[tuple[str, d
     Raises:
         ValueError: Not JSON, or a level that must be an object is not one.
     """
+    root, entries = _walk_lock(rel, text)
+    return root, [(name, info) for _section, name, info in entries]
+
+
+def _walk_lock(rel: str, text: str, *, unique: bool = False) -> tuple[dict[str, Any], list[tuple[str, str, dict[str, Any]]]]:
+    """Do :func:`lock_entries`' work, keeping each entry's section (``packages`` or ``dependencies``).
+
+    With ``unique`` a JSON object anywhere in ``text`` that repeats a key is refused: ``json.loads`` keeps the
+    last copy silently, so a reader that kept the first would see another lockfile than the one judged here.
+    """
+    def no_dupes(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        seen: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in seen:
+                raise ValueError(f"{rel}: malformed lockfile: duplicate key {key[:120]!r}")
+            seen[key] = value
+        return seen
+
     try:
-        lock = json.loads(text)
+        lock = json.loads(text, object_pairs_hook=no_dupes if unique else None)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{rel}: not valid JSON: {exc}") from exc
     if not isinstance(lock, dict):
         raise ValueError(f"{rel}: malformed lockfile: the top level is not an object")
-    entries: list[tuple[str, dict[str, Any]]] = []
+    entries: list[tuple[str, str, dict[str, Any]]] = []
     todo: list[tuple[str, str, Any]] = [("packages", "", lock.get("packages")),
                                         ("dependencies", "", lock.get("dependencies"))]
     while todo:
@@ -547,10 +565,10 @@ def lock_entries(rel: str, text: str) -> tuple[dict[str, Any], list[tuple[str, d
         for name, info in sec.items():
             if not isinstance(info, dict):
                 raise ValueError(f"{rel}: malformed lockfile: {section} entry {prefix}{name!r} is not an object")
-            entries.append((f"{prefix}{name}", info))
+            entries.append((section, f"{prefix}{name}", info))
             if section == "dependencies":
                 todo.append((section, f"{prefix}{name} > ", info.get("dependencies")))
-    root = next((info for name, info in entries if name == ""), {})
+    root = next((info for _section, name, info in entries if name == ""), {})
     return root, entries
 
 
@@ -580,12 +598,44 @@ def _kept_local(name: str, info: dict[str, Any], before: set[str]) -> bool:
     return _local_path(path) and _entry_key(name, info) in before
 
 
-def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | None = None) -> None:
+def _strict_key(section: str, name: str, info: dict[str, Any]) -> str:
+    """Return a comparable form of one lockfile entry that keeps its section and every field.
+
+    Unlike :func:`_entry_key`, a ``packages`` entry's ``dependencies`` map is kept (there it is the package's own
+    dependency ranges); only a v1 ``dependencies`` entry drops its nested ``dependencies``, which are entries of
+    their own and are judged one by one.
+    """
+    kept = {k: v for k, v in info.items() if not (section == "dependencies" and k == "dependencies")}
+    return "\0".join((section, name, json.dumps(kept, sort_keys=True)))
+
+
+def _kept_off_registry(section: str, name: str, info: dict[str, Any], before: set[str]) -> bool:
+    """Off-registry policy: a URL-resolved entry passes only byte-for-byte identical to the base, at the same path key.
+
+    "Identical" is the whole entry (:func:`_strict_key`): ``resolved``, ``integrity``, ``version``, its
+    dependency maps, ``bin``, ``hasInstallScript`` and every other field, in the same section under the same key.
+    It must resolve over ``https://`` and carry a ``sha512-`` integrity, so npm can leave it as it is in the base
+    (``--package-lock-only`` fetches nothing for it) and any later install verifies the very same tarball. A new,
+    moved or changed off-registry entry is still refused.
+
+    Note for @security: ``stage-major`` still refuses such a base outright (:func:`npm_off_registry`, S1), because
+    ``npm install`` re-resolves every ``package.json`` spec; this exception covers only the edit check.
+    """
+    url, version, integrity = info.get("resolved"), info.get("version"), info.get("integrity")
+    return (bool(name) and isinstance(url, str) and url.startswith("https://") and isinstance(version, str)
+            and bool(version) and isinstance(integrity, str) and integrity.startswith("sha512-")
+            and _strict_key(section, name, info) in before)
+
+
+def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | None = None) -> list[str]:
     """Refuse root-package edits and any entry that would fetch from off the registry allowlist (B1, A4, X4).
 
     Every entry must resolve to ``https://`` on :data:`REGISTRY_HOSTS`, or have no ``resolved`` and a
-    plain version (a URL or git spec in ``version`` with no ``resolved`` is refused). The one exception
-    is a workspace link or ``file:`` entry kept unchanged from the base lockfile, inside the repository.
+    plain version (a URL or git spec in ``version`` with no ``resolved`` is refused). Two exceptions, both only
+    for an entry kept unchanged from the base lockfile: a workspace link or ``file:`` entry inside the repository
+    (:func:`_kept_local`), and an ``https://`` off-registry entry with a ``sha512-`` integrity that is identical in
+    every field at the same path key (:func:`_kept_off_registry`; e.g. SheetJS's CDN-only ``xlsx``). The edited
+    lockfile may not repeat a JSON key anywhere.
 
     Args:
         rel: Path for messages.
@@ -595,18 +645,23 @@ def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | 
             :func:`.npm_major.check_package_json_edit`). The root package's ``dependencies`` and ``devDependencies``
             may then change, but only to exactly that manifest's.
 
+    Returns:
+        One note per tolerated off-registry entry ("unchanged off-registry entry kept: <key> <url>"), else [].
+
     Raises:
         ValueError: Any of these is found, or a lockfile is malformed.
     """
-    root_before, before = lock_entries(rel, old)
-    root_after, entries = lock_entries(rel, new)
+    root_before, before = _walk_lock(rel, old)
+    root_after, entries = _walk_lock(rel, new, unique=True)
     for key in _LOCK_ROOT_KEYS:
         mirrored = manifest is not None and key in DEP_SECTIONS and \
             root_after.get(key) == manifest.get(key)
         if root_before.get(key) != root_after.get(key) and not mirrored:
             raise ValueError(f"{rel}: root package {key} changed")
-    kept = {_entry_key(name, info) for name, info in before}
-    for name, info in entries:
+    kept = {_entry_key(name, info) for _section, name, info in before}
+    kept_strict = {_strict_key(section, name, info) for section, name, info in before}
+    notes: list[str] = []
+    for section, name, info in entries:
         if _kept_local(name, info, kept):
             continue
         url, version = info.get("resolved"), info.get("version")
@@ -617,7 +672,11 @@ def check_lock_edit(rel: str, old: str, new: str, *, manifest: dict[str, Any] | 
             continue
         host = re.sub(r"^https://([^/]+)/.*$", r"\1", url) if isinstance(url, str) else ""
         if not isinstance(url, str) or not url.startswith("https://") or host not in REGISTRY_HOSTS:
+            if _kept_off_registry(section, name, info, kept_strict):
+                notes.append(f"{rel}: unchanged off-registry entry kept: {name[:120]} {str(url)[:200]}")
+                continue
             raise ValueError(f"{rel}: {name or '(root)'} resolves outside the registry allowlist: {str(url)[:120]}")
+    return notes
 
 
 #: A package.json spec that fetches from somewhere other than the registry (git, URL, path, link, alias, workspace).

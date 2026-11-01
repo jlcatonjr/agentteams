@@ -427,7 +427,7 @@ def _refuse_filtered(wt: Path, changed: list[str]) -> None:
             raise ExecError(f"refusing change: {rel} has filter={value} (git-lfs or another filter); fix it by hand")
 
 
-def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
+def validate_diff(wt: Path, base: str, *, major: bool = False, notes: list[str] | None = None) -> list[str]:
     """Check that a staged change touches only what fix.py may touch (B1, X1, M1).
 
     Tracked changes are listed with ``--no-renames`` (a rename is a deletion plus an addition, and a
@@ -441,6 +441,8 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
         wt: Worktree.
         base: Base commit.
         major: Accept a ``stage-major`` change.
+        notes: When given, :func:`manifests.check_lock_edit`'s notes are appended to it (each unchanged
+            off-registry lockfile entry that was tolerated).
 
     Returns:
         The changed paths.
@@ -474,8 +476,10 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> list[str]:
             elif npm_major.PACKAGE_JSON.search(rel):
                 npm_major.check_package_json_edit(rel, old, new)
             else:
-                check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"),
-                                manifest=npm_major.changed_manifest(wt, rel, changed) if major else None)
+                kept = check_lock_edit(rel, old.decode("utf-8", "replace") or "{}", new.decode("utf-8", "replace"),
+                                       manifest=npm_major.changed_manifest(wt, rel, changed) if major else None)
+                if notes is not None:
+                    notes.extend(kept)
         except ValueError as exc:
             raise ExecError(str(exc)) from exc
     return changed
@@ -523,7 +527,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
         res = fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
-        changed = validate_diff(wt, base, major=major)
+        kept_notes: list[str] = []
+        changed = validate_diff(wt, base, major=major, notes=kept_notes)
         left = open_prs.left_to_prs(res.changes, claims)
         if left and (not changed or major and not executor_pr.major_changes(res.changes)):
             raise ExecError(open_prs.duplicate_detail(left))   # not futile: it lifts once those PRs close
@@ -554,7 +559,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
               "changed": changed, "resolved": res.resolved, "plan": res.markdown(), **({"major": True} if major else {}),
-              "packages": sorted({c.name for c in res.changes if c.action == "fix"}), **({"left_to_prs": left} if left else {})}
+              "packages": sorted({c.name for c in res.changes if c.action == "fix"}), **({"left_to_prs": left} if left else {}),
+              **({"kept_off_registry": kept_notes} if kept_notes else {})}
     _write_json(staged_file(repo), result)
     return result
 

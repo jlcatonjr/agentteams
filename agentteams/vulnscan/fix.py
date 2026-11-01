@@ -777,6 +777,9 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
             raise ExecError(f"{label}: stage-major refuses npm install outside the tools container (confinement is "
                             "off or opted out)")
         lock_before = lockfile.read_bytes()
+        # TODO(@security): S1 stays strict. stage-fix's validate_diff now keeps an off-registry lockfile entry that
+        # is identical to the base (manifests._kept_off_registry, e.g. SheetJS's CDN-only xlsx), but npm install
+        # here re-resolves every package.json spec, so relaxing this refusal needs its own @security review.
         if problem := npm_off_registry(label, text, lock_before.decode("utf-8", "replace")):
             raise ExecError(f"stage-major refuses npm install: {problem}")
         with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
