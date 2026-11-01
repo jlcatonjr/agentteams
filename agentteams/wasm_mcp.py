@@ -486,10 +486,12 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
     """Why grant integrity is only advisory here (R1, S2), or None when the control plane is session-protected.
 
     Protected means: the OS sandbox is on, R1's rules are emitted (``protect_control_plane``), and they are merged
-    into the live host config (Claude ``settings.json``; the Goose Seatbelt profile). Every config file on disk that
-    launches the server (``frameworks._wasm_wiring.launching_config_paths``) must be in the live denyWrite (itself or
-    a denied ancestor) and, on Claude, behind an ``Edit`` deny, whether or not the manifest lists it (P11). P13
-    records the same answer as ``wasm_enforcement``.
+    into the live host config (Claude ``settings.json``; the deny rules of the Goose Seatbelt profile, parsed). Every
+    config file on disk that launches the server (``frameworks._wasm_wiring.scan_launching_configs``) must be in the
+    live denyWrite (itself or a denied ancestor) and, on Claude, behind an ``Edit`` deny, whether or not the manifest
+    lists it (P11). The disk scan runs whatever the WASM switch: a config it cannot check (symlinked, unparseable),
+    or, with WASM off, any launching config, is never protected (@security C1/C2). P13 records the same answer as
+    ``wasm_enforcement``.
 
     Args:
         root: The project root.
@@ -508,19 +510,23 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
     def advisory(reason: str) -> str:
         return f"WASM grant integrity: advisory (control plane is agent-writable: {reason})"
 
+    from agentteams.frameworks._wasm_wiring import covered, scan_launching_configs, unprotected_config_problems
+
+    root = Path(root)
+    scan = scan_launching_configs(root)
+    unprotected = unprotected_config_problems(root, None if _wasm_on(manifest) else "WASM is off for this team", scan)
+    if unprotected:
+        return advisory("; ".join(unprotected))
     if not os_switch_state(manifest)[0]:
         return advisory("the OS sandbox is off")
     control = cpp.control_plane_for(manifest)
     if control is None:
         return advisory("the R1 control-plane rules are not emitted")
     protect_ledger = manifest.get("write_policy") == "orchestrator-only"
-    root = Path(root)
-    from agentteams.frameworks._wasm_wiring import covered, launching_config_paths
-
     # P11 (@security, P10 review): every config on disk that launches this server must be write-denied to the
     # session's shell too (an Edit rule alone leaves Bash free to rewrite the launch flags), whatever the manifest
     # lists; a file already under a denied directory counts as protected.
-    launching = launching_config_paths(root)
+    launching = scan.launching
     if framework == "claude":
         missing: list[str] = []
         try:
@@ -555,13 +561,121 @@ def control_plane_advisory(root: str | Path, framework: str, manifest: dict) -> 
             text = (root / ".goose" / "sandbox.sb").read_text(encoding="utf-8")
         except OSError:
             return advisory(".goose/sandbox.sb is missing; re-render with the OS sandbox on")
-        denied = [p for p in cpp.seatbelt_denies(protect_ledger, control) if f'"{p}"' in text or f'/{p}"' in text]
-        missing = [p for p in cpp.seatbelt_denies(protect_ledger, control) if p not in denied]
-        missing += [p for p in launching if not covered(p, denied) and p not in missing]
+        try:
+            rules = _seatbelt_write_rules(text)
+        except ValueError as exc:
+            return advisory(f".goose/sandbox.sb does not parse ({exc})")
+        missing = [p for p in (*cpp.seatbelt_denies(protect_ledger, control), *launching)
+                   if not _seatbelt_write_denied(p, rules)]
+        missing = list(dict.fromkeys(missing))
         return advisory(".goose/sandbox.sb does not deny writes to " + ", ".join(missing)) if missing else None
     if framework == "grok":
         return advisory("grok's sandbox profile cannot deny a write without denying the read")
     return advisory(f"no verified control-plane write protection for {framework}")
+
+
+_SB_TOKEN = re.compile(r'\s+|;[^\n]*|#"(?:[^"\\]|\\.)*"|"(?:[^"\\]|\\.)*"|[()]|[^\s()";]+')
+
+
+def _seatbelt_forms(text: str) -> list[Any]:
+    """Parse a Seatbelt (SBPL) profile into its top-level forms: lists of atoms, ``("str", value)`` and sub-lists.
+
+    Comments (``;`` to end of line) are dropped; strings stay distinct from atoms.
+
+    Raises:
+        ValueError: Unbalanced parentheses or an unterminated string.
+    """
+    stack: list[list[Any]] = [[]]
+    pos = 0
+    for m in _SB_TOKEN.finditer(text):
+        if m.start() != pos:
+            raise ValueError("unterminated string")
+        pos = m.end()
+        tok = m.group(0)
+        if tok.isspace() or tok.startswith(";"):
+            continue
+        if tok == "(":
+            stack.append([])
+        elif tok == ")":
+            if len(stack) == 1:
+                raise ValueError("unbalanced ')'")
+            done = stack.pop()
+            stack[-1].append(done)
+        elif tok.startswith('"'):
+            stack[-1].append(("str", tok[1:-1]))
+        else:
+            stack[-1].append(tok)
+    if pos != len(text) or len(stack) != 1:
+        raise ValueError("unbalanced '('" if len(stack) != 1 else "unterminated string")
+    return stack[0]
+
+
+def _seatbelt_filter(node: Any) -> tuple[str, str] | None:
+    """``("subpath"|"literal", project-relative or absolute path)`` for a path filter, None for any other filter.
+
+    ``(param "WORKSPACE_ROOT")`` is the project root (``""``); ``(string-append (param "WORKSPACE_ROOT") "/x")`` is
+    ``x``; a plain string is absolute. Anything else (regex, other params, home paths) is not a project path.
+    """
+    if not (isinstance(node, list) and len(node) == 2 and node[0] in ("subpath", "literal")):
+        return None
+    arg = node[1]
+    root = ["param", ("str", "WORKSPACE_ROOT")]
+    if isinstance(arg, tuple):
+        return node[0], arg[1]
+    if arg == root:
+        return node[0], ""
+    if (isinstance(arg, list) and len(arg) == 3 and arg[0] == "string-append" and arg[1] == root
+            and isinstance(arg[2], tuple) and arg[2][1].startswith("/")):
+        return node[0], arg[2][1].strip("/")
+    return None
+
+
+def _seatbelt_write_rules(text: str) -> list[tuple[str, list[tuple[str, str]] | None]]:
+    """The profile's ``file-write*`` rules in order: ``(action, filters)``; ``filters`` None means "every path".
+
+    Only ``deny`` / ``allow`` forms whose operations include ``file-write*`` (or ``default``, for an allow) count;
+    comments never do. An allow with a filter this reader cannot place matches every path (fail closed); a deny
+    with one matches none.
+
+    Raises:
+        ValueError: The profile does not parse.
+    """
+    rules: list[tuple[str, list[tuple[str, str]] | None]] = []
+    for form in _seatbelt_forms(text):
+        if not (isinstance(form, list) and form and form[0] in ("deny", "allow")):
+            continue
+        ops = [x for x in form[1:] if isinstance(x, str)]
+        if "file-write*" not in ops and not (form[0] == "allow" and "default" in ops):
+            continue
+        subs = [x for x in form[1:] if isinstance(x, list)]
+        filters = [f for f in (_seatbelt_filter(x) for x in subs) if f is not None]
+        if not subs or (form[0] == "allow" and len(filters) != len(subs)):
+            rules.append((form[0], None))
+        else:
+            rules.append((form[0], filters))
+    return rules
+
+
+def _seatbelt_write_denied(path: str, rules: Sequence[tuple[str, list[tuple[str, str]] | None]]) -> bool:
+    """Whether the last ``file-write*`` rule matching project-relative ``path`` is a deny (SBPL: last match wins).
+
+    A ``subpath`` covers the path or an ancestor; a ``literal`` only the path itself. An absolute filter counts when it
+    ends in ``/<that path>`` (the profile is rendered for one project root).
+    """
+    parts = path.strip("/").split("/")
+    ancestors = {"/".join(parts[:i]) for i in range(0, len(parts) + 1)}
+
+    def hits(kind: str, target: str) -> bool:
+        if target.startswith("/"):
+            names = {path.strip("/")} if kind == "literal" else ancestors - {""}
+            return any(target.rstrip("/").endswith("/" + n) for n in names)
+        return target == path.strip("/") if kind == "literal" else target in ancestors
+
+    verdict = False
+    for action, filters in rules:
+        if filters is None or any(hits(k, t) for k, t in filters):
+            verdict = action == "deny"
+    return verdict
 
 
 def _edit_denied(path: str, deny: Sequence[Any]) -> bool:
@@ -573,7 +687,10 @@ def _edit_denied(path: str, deny: Sequence[Any]) -> bool:
 
 def wiring_problems(root: str | Path, framework: str, manifest: dict, *, home: str | Path | None = None
                     ) -> list[str]:
-    """Live-wiring problems for a team with WASM on (``--check-wiring``; P11, P13). Empty when WASM is off.
+    """Live-wiring problems for the ``agentteams_wasm`` wiring (``--check-wiring``; P11, P13).
+
+    With WASM off nothing should launch the server, so every config on disk that does (or that cannot be checked:
+    ``frameworks._wasm_wiring.unprotected_config_problems``) is reported as not protected (@security C1). With WASM on:
 
     * The installed server matches :data:`SHA256` and every bundle file its pin; no ``.pyc``/``__pycache__`` in
       :data:`BIN_DIR`.
@@ -594,7 +711,9 @@ def wiring_problems(root: str | Path, framework: str, manifest: dict, *, home: s
         ValueError: A malformed ``wasm_sandbox`` record.
     """
     if not _wasm_on(manifest):
-        return []
+        from agentteams.frameworks._wasm_wiring import unprotected_config_problems
+
+        return unprotected_config_problems(root, "WASM is off for this team")
     from agentteams import runner_mcp, wasm_runtime
     from agentteams.wasm_config import manifest_wasm_config
 

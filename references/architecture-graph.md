@@ -5,7 +5,7 @@
 
 - Modules mapped: **387**
 - Packages: **14**
-- Internal import edges: **1306**
+- Internal import edges: **1307**
 - Distinct external dependencies: **11**
 
 ---
@@ -198,8 +198,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks._linux_sandbox_emit` | `agentteams.sandbox_state` | `agentteams.cli.generate_helpers`, `agentteams.frameworks.base`, `agentteams.frameworks.codex`, `agentteams.launcher_lineage` |
 | `agentteams.frameworks._prompt_root_protect` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude` |
 | `agentteams.frameworks._sandbox_drift` | `agentteams.sandbox_state` | `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.claude` |
-| `agentteams.frameworks._sandbox_emit` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots`, `agentteams.sandbox_state` | `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.standalone_modes`, `agentteams.confinement`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.grok_config_emit`, `agentteams.mcp_direct_grants`, `agentteams.multi_sync`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.signing_switch` |
-| `agentteams.frameworks._wasm_wiring` | `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_mcp` |
+| `agentteams.frameworks._sandbox_emit` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots`, `agentteams.sandbox_state` | `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.standalone_modes`, `agentteams.confinement`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.grok_config_emit`, `agentteams.mcp_direct_grants`, `agentteams.multi_sync`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.signing_switch` |
+| `agentteams.frameworks._wasm_wiring` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_mcp` |
 | `agentteams.frameworks._write_roots` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.claude`, `agentteams.multi_sync`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.sandbox_state`, `agentteams.vulnscan.team_dir`, `agentteams.wasm_config` |
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry` |
 | `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.interop`, `agentteams.output_plan` |
@@ -2441,6 +2441,7 @@ digraph "agentteams architecture" {
       "path": "agentteams/frameworks/_wasm_wiring.py",
       "is_package": false,
       "imports_internal": [
+        "agentteams.frameworks._sandbox_emit",
         "agentteams.frameworks.goose_tool_scoping",
         "agentteams.sandbox_state",
         "agentteams.wasm_config",
@@ -7620,6 +7621,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.frameworks._sandbox_emit",
       "target": "agentteams.sandbox_state"
+    },
+    {
+      "source": "agentteams.frameworks._wasm_wiring",
+      "target": "agentteams.frameworks._sandbox_emit"
     },
     {
       "source": "agentteams.frameworks._wasm_wiring",

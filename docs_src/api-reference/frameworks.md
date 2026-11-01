@@ -458,7 +458,7 @@ never gets `run_wasm`. With WASM off nothing is recorded or emitted, so renders 
 |---|---|---|
 | claude | `wired-per-agent` | Each eligible subagent's front matter gains its own `agentteams_wasm` entry in `mcpServers:` (after `agentteams_runner` when both are present) and `mcp__agentteams_wasm__run_wasm` in `tools:`. The top-level session is not wired: `.claude/mcp.agentteams-wasm.example.json` is an inert example the operator merges into `.mcp.json`. |
 | goose | `wired-per-agent` with `goose_tool_scoping: grant`; `not-wired` under legacy scoping | The recipe's `extensions:` gains the exact `agentteams_wasm` stdio extension (`available_tools: [run_wasm]`). Honoured on a direct `goose run --recipe`; a `delegate` cannot add it. Legacy scoping has no per-recipe allowlist to rely on. |
-| codex | `wired-shared` | One compute-only `--agent _session` table in `.codex/config.toml`, with `default_tools_approval_mode = "prompt"`, through `codex_mcp_emit`'s `first_party_tables` hook. No `codex:mcp` token is needed (turning WASM on is the opt-in); without it, an existing config's other `[mcp_servers.*]` tables refuse the write instead of being dropped. |
+| codex | `wired-shared` | One compute-only `--agent _session` table in `.codex/config.toml`, configured with `default_tools_approval_mode = "prompt"` (a default the host applies; agentteams does not verify it is enforced), through `codex_mcp_emit`'s `first_party_tables` hook. No `codex:mcp` token is needed (turning WASM on is the opt-in); without it, an existing config's other `[mcp_servers.*]` tables refuse the write instead of being dropped. |
 | copilot-vscode | `example-only` | Inert `.vscode/mcp.agentteams-wasm.example.json` (`servers` / `stdio`). `run_wasm` is not added to agent `tools:`; the custom-agent MCP tool spelling is unverified. |
 | copilot-cli | `example-only` | Inert `.github/mcp.agentteams-wasm.example.json` (`mcpServers` / `local`). Per-agent `mcp-servers` in CLI agent profiles is unverified. |
 | grok | `unverified-format` | Nothing. Whether a custom agent with `mcpInheritance: none` sees project MCP servers, or launches front-matter `mcpServers`, is unverified on the pinned Grok Build. |
@@ -497,11 +497,23 @@ generator prints one `[WASM-WIRING]` line per render; unverified and not-wired r
 
 ### The R1 check
 
-`launching_config_paths(root)` scans the known MCP config locations on disk for the server's install path.
-`wasm_mcp.control_plane_advisory` and `claude.verify_sandbox_wiring` (`--check-wiring`) union it with the manifest's
-list, so a launching file the manifest does not name (a hand-merged `.mcp.json`, a manifest-less check) still has to
-be in the live `denyWrite` (itself or a denied ancestor directory) and, on Claude, behind an `Edit` deny. Otherwise the
-control plane is reported as agent-writable.
+`scan_launching_configs(root)` scans the known MCP config locations on disk (Goose recipes recursively, `*.yaml`,
+`*.yml` and `*.json`, within a depth and file-count bound) for files that launch the server. JSON (JSONC comments
+allowed) and TOML are parsed and matched by the strings under their `command` / `cmd` / `args` keys; YAML and agent
+front matter are searched with their `\x` / `\u` / `\U` escapes and escaped line breaks decoded, so no escape hides
+the server's path. Nothing is skipped: a symlinked file or directory, a non-regular, unparseable or oversized file
+and a tree past the bounds are returned as `unsafe` and always reported as not protected.
+
+The scan runs whatever the WASM switch. With WASM off (or on a framework that wires nothing), every launching config
+is reported as not protected, since no deny was emitted for it (`unprotected_config_problems`). With WASM on,
+`wasm_mcp.control_plane_advisory` and `claude.verify_sandbox_wiring` (`--check-wiring`) union the launching files with
+the manifest's list, so a file the manifest does not name (a hand-merged `.mcp.json`, a manifest-less check) still has
+to be in the live `denyWrite` (itself or a denied ancestor directory) and, on Claude, behind an `Edit` deny; on Goose
+the Seatbelt profile's `file-write*` rules are parsed (last match wins; comments and allow rules never count as a
+deny). Otherwise the control plane is reported as agent-writable.
+
+With WASM on, a render whose agents dir is not the framework's canonical one (`.claude/agents`, `.goose/recipes`,
+`.codex/agents`, `.github/agents`) is refused (`agents_dir_problem`): the protected paths would miss the real files.
 
 ### Functions
 
@@ -512,9 +524,13 @@ control plane is reported as agent-writable.
 | `wasm_agent_entry(manifest, framework, slug, tools)` | Launch args for an eligible agent's own copy (claude, goose), recording it as wired and protected. |
 | `output_files(manifest, framework)` | The server, text bundle and inert example for `extra_output_files`. |
 | `codex_first_party_tables(manifest)` | The Codex `first_party_tables` argument. |
-| `install_binary(manifest, project_root)` | Writes the bundle's binary deny probe beside the emitted server. |
+| `install_root(framework, path)` | The root the emit installed the server under (the grandparent of a canonical agents dir passed as `--output`). |
+| `agents_dir_problem(manifest, framework, team_dir)` | Why a non-canonical agents dir cannot carry the WASM wiring, or None. |
+| `install_binary(manifest, project_root)` | Writes the bundle's binary deny probe beside the server installed at `project_root`; refuses when it is not there (never searches a parent). |
 | `unhonoured_grants(manifest, framework, state)` | Widened grants a shared-copy host cannot honour. |
 | `report_line` / `print_report` | The `[WASM-WIRING]` line; `print_report` also refuses unhonoured grants. |
-| `launching_config_paths(root)` | Every launching config on disk (the R1 truth source). |
+| `scan_launching_configs(root)` | The disk scan: a `ConfigScan` of launching and unsafe (uncheckable) paths. |
+| `launching_config_paths(root)` | Every launching or uncheckable config on disk (the R1 truth source; fail closed). |
+| `unprotected_config_problems(root, off_reason, scan)` | Uncheckable configs, and (with `off_reason`) every launching one, as not-protected messages. |
 | `covered(path, entries)` | Whether a path or an ancestor is in a deny list. |
-| `check_wiring_problems(root, framework, manifest)` | `wasm_mcp.wiring_problems` where this framework installs the server. |
+| `check_wiring_problems(root, framework, manifest)` | `wasm_mcp.wiring_problems` where this framework installs the server (or WASM is off); elsewhere, every launching config as not protected. |

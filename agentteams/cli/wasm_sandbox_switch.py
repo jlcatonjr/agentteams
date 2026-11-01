@@ -114,38 +114,51 @@ def advise_wasm(manifest: dict, state: SandboxState, framework_id: str, *, mecha
         manifest.setdefault("advisories", []).append(advisory)
 
 
-def report_wasm_wiring(manifest: dict, state: SandboxState, framework_id: str) -> None:
+def report_wasm_wiring(manifest: dict, state: SandboxState, framework_id: str, *,
+                       team_dir: Path | None = None) -> None:
     """Record ``manifest["wasm_wiring"]`` for the target framework and print its ``[WASM-WIRING]`` line (P11).
 
     Args:
         manifest: The team manifest (mutated: ``wasm_wiring``, ``advisories``). Untouched when WASM is off.
         state: The effective sandbox state.
         framework_id: The target framework.
+        team_dir: This render's agents dir; with WASM on it must be the framework's canonical one, or the files that
+            launch ``agentteams_wasm`` would land where no control-plane deny names them (None skips the check).
 
     Raises:
-        ValueError: A widened WASM grant on a framework that takes one shared compute-only copy (I3).
+        ValueError: A widened WASM grant on a framework that takes one shared compute-only copy (I3), or WASM on with
+            a non-canonical agents dir.
     """
-    from agentteams.frameworks._wasm_wiring import print_report
+    from agentteams.frameworks._wasm_wiring import agents_dir_problem, print_report
 
+    problem = agents_dir_problem(manifest, framework_id, team_dir)
+    if problem:
+        raise ValueError(problem)
     print_report(manifest, framework_id, state)
 
 
 def install_wasm_binary(manifest: dict, project_root: Path) -> None:
-    """Write the ``agentteams_wasm`` bundle's binary file beside the emitted text bundle (P11; best effort, loud).
+    """Write the ``agentteams_wasm`` bundle's binary file beside the emitted text bundle (P11).
+
+    The install root is derived, never searched for (``_wasm_wiring.install_root``: the CLI's project root, or the
+    grandparent of the framework's canonical agents dir when ``--output`` named it). A write failure (``OSError``)
+    is printed, not raised (``--check-wiring`` then reports the missing file); anything else stops the render.
 
     Args:
         manifest: The team manifest.
-        project_root: The project root.
+        project_root: The CLI's project root (the pre-normalisation ``--output`` path).
 
     Raises:
-        Nothing: a failure is printed (``--check-wiring`` then reports the missing file).
+        ValueError: The server is not installed at the derived root, a bundle pin mismatch, or a symlinked
+            ``.agentteams`` / ``bin`` (fail closed: never downgraded to a warning).
     """
-    from agentteams.frameworks._wasm_wiring import install_binary
+    from agentteams.frameworks._wasm_wiring import install_binary, install_root
 
+    root = install_root(str(manifest.get("framework") or ""), Path(project_root).resolve())
     try:
-        for rel in install_binary(manifest, project_root):
+        for rel in install_binary(manifest, root):
             print(f"  ✓  Installed agentteams_wasm bundle file: {rel}")
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
         print(f"  !  agentteams_wasm bundle install failed ({exc}); the server refuses to start until it is "
               "re-rendered", file=sys.stderr)
 

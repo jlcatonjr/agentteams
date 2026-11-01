@@ -23,10 +23,17 @@ P13 or P14 module. Integrity-pinned: it decides which agents receive a tool (C-3
 from __future__ import annotations
 
 import json
+import os
+import re
+import stat
 import sys
+import tomllib
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, NamedTuple
+
+if TYPE_CHECKING:
+    from agentteams.sandbox_state import SandboxState
 
 #: The manifest key P11 owns (team-manifest.schema.json ``wasm_wiring``).
 WIRING_KEY = "wasm_wiring"
@@ -42,12 +49,20 @@ PER_AGENT_DIRS: Mapping[str, tuple[str, str]] = {"claude": (".claude/agents", ".
 _INSTALL_FRAMEWORKS = frozenset({"claude", "goose", "codex", "copilot-vscode", "copilot-cli"})
 #: The text every file that launches the server carries (its install path), used by :func:`launching_config_paths`.
 LAUNCH_MARKER = "agentteams-wasm-mcp.py"
-#: Where a launching config can live (``(dir, glob)``, project-relative), for the disk scan.
-_SCAN: tuple[tuple[str, str], ...] = (
-    (".claude/agents", "*.md"), (".claude", "*.json"), (".", ".mcp.json"), (".goose/recipes", "*.yaml"),
-    (".codex", "config.toml"), (".grok", "config.toml"), (".grok/agents", "*.md"), (".vscode", "*.json"),
-    (".github", "mcp*.json"), (".github/agents", "*.md"),
+#: Where a launching config can live (``(dir, globs, recursive)``, project-relative), for the disk scan.
+_SCAN: tuple[tuple[str, tuple[str, ...], bool], ...] = (
+    (".claude/agents", ("*.md",), False), (".claude", ("*.json",), False), (".", (".mcp.json",), False),
+    (".goose/recipes", ("*.yaml", "*.yml", "*.json"), True), (".codex", ("config.toml",), False),
+    (".grok", ("config.toml",), False), (".grok/agents", ("*.md",), False), (".vscode", ("*.json",), False),
+    (".github", ("mcp*.json",), False), (".github/agents", ("*.md",), False),
 )
+#: Bounds of the scan (fail closed: a file or tree past a bound is reported as unscanned, never half-read).
+SCAN_MAX_DEPTH = 4
+SCAN_MAX_FILES = 2000
+SCAN_MAX_BYTES = 8 * 1024 * 1024
+#: Keys whose (parsed) values are a launch command line in JSON / TOML MCP configs (Claude, VS Code, Copilot,
+#: Codex, Grok: ``command``/``args``; Goose: ``cmd``/``args``).
+_LAUNCH_KEYS = frozenset({"command", "cmd", "args", "argv"})
 _MERGE_NOTE = ("Inert example written by agentteams (WASM plan P11): agentteams never writes a live MCP config. "
                "Merge the agentteams_wasm entry by hand into {target}; the instance is compute-only (--agent "
                "_session). Once merged, keep {target} write-protected (METAPLAN R1).")
@@ -107,8 +122,9 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
                    f"a delegate cannot add agentteams_wasm (route that work to a direct run); {_HOST_NOTE}", True)
     if framework == "codex":
         return row("wired-shared", "session-compute-only", "one compute-only instance in .codex/config.toml (loaded "
-                   "only for a trusted project); every call prompts (default_tools_approval_mode = prompt); spawned "
-                   "agents under the codex:sandbox role gate reach only agentteams_readfs until P13", True,
+                   "only for a trusted project), configured with default_tools_approval_mode = \"prompt\" (a default "
+                   "the host applies, not enforcement agentteams verifies); spawned agents under the codex:sandbox "
+                   "role gate reach only agentteams_readfs until P13", True,
                    [CODEX_CONFIG])
     if framework == "copilot-vscode":
         return row("example-only", "session-compute-only", f"inert {VSCODE_EXAMPLE} (servers/stdio, VS Code docs "
@@ -153,6 +169,16 @@ def wiring_row(manifest: dict[str, Any], framework: str) -> dict[str, Any] | Non
         rows[framework] = _static_row(manifest, framework)
         _protect(record, rows[framework]["config_paths"])
     return rows[framework]
+
+
+def _installs(row: Mapping[str, Any] | None, framework: str) -> bool:
+    """Whether ``framework`` installs the server (WASM on, an install host, and a row that is not ``not-wired``)."""
+    return row is not None and framework in _INSTALL_FRAMEWORKS and row["status"] != "not-wired"
+
+
+def _widened(state: SandboxState) -> list[str]:
+    """The agents whose WASM grant carries mounts (a widening past compute-only), sorted."""
+    return sorted(a for a, g in state.wasm_grants.items() if g.mounts)
 
 
 def _protect(record: dict[str, Any], paths: Iterable[str]) -> None:
@@ -246,7 +272,7 @@ def output_files(manifest: dict[str, Any], framework: str) -> list[tuple[str, st
         ImportError: As :func:`wasm_agent_entry`.
     """
     row = wiring_row(manifest, framework)
-    if row is None or framework not in _INSTALL_FRAMEWORKS or row["status"] == "not-wired":
+    if not _installs(row, framework):
         return []
     from agentteams import wasm_mcp
 
@@ -292,38 +318,98 @@ def codex_first_party_tables(manifest: dict[str, Any]) -> dict[str, dict[str, An
     return {f"mcp_servers.{wasm_mcp.SERVER_NAME}": {**entry, "default_tools_approval_mode": "prompt"}}
 
 
-def install_binary(manifest: dict[str, Any], project_root: Path) -> list[str]:
-    """Write the bundle's binary file(s) (the deny probe) byte-exactly, where the server is installed.
+def install_root(framework: str, path: str | Path) -> Path:
+    """The project root the emit installed the server under, for ``path`` (the CLI's pre-normalisation output).
 
-    The emit phase writes text only (P10 note), so this runs beside the host MCP artifacts after the emit. The
-    bundle goes where the emit just installed the server: ``project_root`` itself, or two levels above it when the
-    CLI's ``--output`` named the agents dir (the CLI then hands that dir over as ``project_root``).
+    Deterministic, never a probe: the emit writes the server two levels above the agents dir, so when ``path`` *is*
+    the framework's canonical agents dir (``--output`` named it, e.g. ``.claude/agents``) the root is its grandparent;
+    otherwise ``path`` is the root. A non-canonical agents dir is refused before anything is emitted
+    (:func:`agents_dir_problem`).
+
+    Args:
+        framework: The framework id.
+        path: The CLI's project root (the ``--output`` value, resolved).
+
+    Returns:
+        The install root.
+
+    Raises:
+        Nothing.
+    """
+    from agentteams.frameworks._sandbox_emit import TEAM_KEY_BY_FRAMEWORK, team_agents_dir
+
+    base = Path(path)
+    key = TEAM_KEY_BY_FRAMEWORK.get(framework)
+    sub = team_agents_dir(key) if key else ""
+    if sub and base.as_posix().endswith("/" + sub):
+        return base.parents[sub.count("/")]
+    return base
+
+
+def agents_dir_problem(manifest: Mapping[str, Any], framework: str, team_dir: str | Path | None) -> str | None:
+    """Why this render's agents dir cannot carry the WASM wiring, or None.
+
+    The protected paths (``.claude/agents/<slug>.md``, ``.goose/recipes/<slug>.yaml``) and the server's install
+    (two levels above the agents dir) assume the framework's canonical agents dir. A custom ``--output`` elsewhere
+    would write the launching files where no deny names them, so with WASM on it is refused.
+
+    Args:
+        manifest: The team manifest.
+        framework: The framework id.
+        team_dir: The run's agents dir, or None (nothing to check).
+
+    Returns:
+        The refusal text, or None (WASM off, a framework that installs nothing, or the canonical dir).
+
+    Raises:
+        ValueError: As :func:`wasm_on`.
+    """
+    if team_dir is None or framework not in _INSTALL_FRAMEWORKS or not wasm_on(manifest):
+        return None
+    from agentteams.frameworks._sandbox_emit import TEAM_KEY_BY_FRAMEWORK, team_agents_dir
+
+    key = TEAM_KEY_BY_FRAMEWORK.get(framework)
+    if key is None:
+        return None
+    sub = team_agents_dir(key)
+    if Path(team_dir).resolve().as_posix().endswith("/" + sub):
+        return None
+    return (f"WASM is on, so the {framework} agents must be written to the project's {sub} (this --output writes "
+            f"them to {Path(team_dir).name}/, where the control-plane denies of the files that launch "
+            "agentteams_wasm would not reach them); render into the project root or its " + sub)
+
+
+def install_binary(manifest: dict[str, Any], project_root: Path) -> list[str]:
+    """Write the bundle's binary file(s) (the deny probe) byte-exactly beside the server installed at ``project_root``.
+
+    The emit phase writes text only (P10 note), so this runs beside the host MCP artifacts after the emit. It never
+    searches another directory: the server must already be installed at ``project_root`` (the CLI passes
+    :func:`install_root`), else this refuses.
 
     Args:
         manifest: The team manifest (``framework``).
-        project_root: The project root (or the agents dir, as above).
+        project_root: The project root the server was installed under.
 
     Returns:
         The project-relative paths written (empty when nothing is installed).
 
     Raises:
-        ValueError: A pin mismatch or a symlinked ``.agentteams`` / ``bin`` (``wasm_mcp.write_bundle``).
+        ValueError: The server is not installed at ``project_root``, a pin mismatch, or a symlinked ``.agentteams``
+            / ``bin`` (``wasm_mcp.write_bundle``).
         OSError: The write failed.
     """
     framework = str(manifest.get("framework") or "")
-    row = wiring_row(manifest, framework)
-    if row is None or framework not in _INSTALL_FRAMEWORKS or row["status"] == "not-wired":
+    if not _installs(wiring_row(manifest, framework), framework):
         return []
     from agentteams import wasm_mcp
 
-    base = Path(project_root)
-    root = next((r for r in (base, base.parent.parent) if (r / wasm_mcp.PROTECTED_PATH).is_file()), None)
-    if root is None:
-        raise ValueError(f"the emitted {wasm_mcp.PROTECTED_PATH} was not found beside {base}")
+    root = Path(project_root)
+    if not (root / wasm_mcp.PROTECTED_PATH).is_file():
+        raise ValueError(f"the emitted {wasm_mcp.PROTECTED_PATH} was not found under {root}")
     return wasm_mcp.write_bundle(root, [(p, wasm_mcp.bundle_content(p)) for p in wasm_mcp.BINARY_FILES])
 
 
-def unhonoured_grants(manifest: dict[str, Any], framework: str, state: Any) -> list[str]:
+def unhonoured_grants(manifest: dict[str, Any], framework: str, state: SandboxState) -> list[str]:
     """Agents whose widened WASM grant this framework cannot honour (I3): shared-copy hosts refuse them.
 
     Args:
@@ -340,7 +426,7 @@ def unhonoured_grants(manifest: dict[str, Any], framework: str, state: Any) -> l
     row = wiring_row(manifest, framework)
     if row is None or row["grant_scope"] != "session-compute-only":
         return []
-    return sorted(a for a, g in state.wasm_grants.items() if g.mounts)
+    return _widened(state)
 
 
 def report_line(manifest: dict[str, Any], framework: str) -> str | None:
@@ -363,7 +449,7 @@ def report_line(manifest: dict[str, Any], framework: str) -> str | None:
     return f"[WASM-WIRING] {framework}: {row['status']}{flag} ({row['reason']}); enforcement is P13's to claim"
 
 
-def print_report(manifest: dict[str, Any], framework: str, state: Any) -> None:
+def print_report(manifest: dict[str, Any], framework: str, state: SandboxState) -> None:
     """Print the ``[WASM-WIRING]`` line (stderr), its advisory, and refuse widened grants on shared hosts.
 
     Args:
@@ -385,7 +471,7 @@ def print_report(manifest: dict[str, Any], framework: str, state: Any) -> None:
     print(f"  {line}", file=sys.stderr)
     row = manifest[WIRING_KEY]["frameworks"][framework]
     if framework == "goose" and row["status"] == "wired-per-agent":
-        widened = sorted(a for a, g in state.wasm_grants.items() if g.mounts)
+        widened = _widened(state)
         if widened:
             print(f"  NOTE (WASM): widened grants for {', '.join(widened)} are honoured only on a direct "
                   "`goose run --recipe .goose/recipes/<slug>.yaml`", file=sys.stderr)
@@ -394,12 +480,187 @@ def print_report(manifest: dict[str, Any], framework: str, state: Any) -> None:
             {"code": f"wasm-wiring-{row['status']}", "message": line.removeprefix("[WASM-WIRING] ")})
 
 
-def launching_config_paths(root: str | Path) -> tuple[str, ...]:
-    """Project-relative paths of every config file on disk that launches ``agentteams_wasm`` (R1 truth source).
+class ConfigScan(NamedTuple):
+    """The disk scan's result: what launches the server, and what could not be checked (both are protection targets).
 
-    Scans the known MCP config locations for :data:`LAUNCH_MARKER` (the server's install path), regular files
-    only. A checker unions this with the manifest's ``protected_config_paths``, so a file the manifest does not
-    list (hand-merged ``.mcp.json``, a manifest-less ``--check-wiring``) still has to be write-protected.
+    Attributes:
+        launching: Project-relative regular files whose parsed launch command lines name the server.
+        unsafe: ``(path, reason)`` for every config location the scan could not read as a plain file: a symlinked
+            file or directory (a path deny does not pin what it points at), a non-regular, unparseable or oversized
+            file, or a tree past the walk bounds. Callers report each as not protected (fail closed).
+    """
+
+    launching: tuple[str, ...]
+    unsafe: tuple[tuple[str, str], ...]
+
+
+_JSONC_TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|//[^\n]*|/\*.*?\*/|,(?=\s*[}\]])', re.S)
+#: YAML double-quoted escapes that can spell a marker character, and the escaped line break that joins two lines.
+_YAML_HEX = re.compile(r"\\x([0-9A-Fa-f]{2})|\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})")
+_YAML_LINE_JOIN = re.compile(r"\\\r?\n[ \t]*")
+
+
+def _strip_jsonc(text: str) -> str:
+    """Drop ``//`` / ``/* */`` comments and trailing commas outside strings (VS Code's JSONC), keeping strings."""
+    return _JSONC_TOKEN.sub(lambda m: m.group(0) if m.group(0).startswith('"') else "", text)
+
+
+def _launch_strings(node: Any, under: bool = False) -> Iterable[str]:
+    """Every string under a :data:`_LAUNCH_KEYS` key of a parsed JSON/TOML node (duplicate JSON keys all kept)."""
+    if isinstance(node, str):
+        if under:
+            yield node
+    elif isinstance(node, Mapping):
+        for key, value in node.items():
+            yield from _launch_strings(value, under or str(key).lower() in _LAUNCH_KEYS)
+    elif isinstance(node, list):
+        for item in node:
+            if isinstance(item, tuple) and len(item) == 2:   # a JSON object kept as pairs
+                yield from _launch_strings(item[1], under or str(item[0]).lower() in _LAUNCH_KEYS)
+            else:
+                yield from _launch_strings(item, under)
+
+
+def _yaml_decoded(text: str) -> str:
+    """``text`` with every YAML escaped line break joined and every ``\\x``/``\\u``/``\\U`` escape decoded.
+
+    Applied to the whole file, quoted or not, so no quote-pairing trick can keep an escaped marker from being
+    decoded; decoding outside a double-quoted scalar can only add a match (fail closed), never remove one.
+    """
+    def hex_char(m: re.Match[str]) -> str:
+        code = int(next(g for g in m.groups() if g), 16)
+        return chr(code) if code <= 0x10FFFF else m.group(0)
+
+    return _YAML_HEX.sub(hex_char, _YAML_LINE_JOIN.sub("", text))
+
+
+def _launches(rel: str, text: str) -> bool:
+    """Whether a config's parsed launch command lines name the server.
+
+    Raises:
+        ValueError: A JSON or TOML file that does not parse (the caller reports it as unreadable).
+    """
+    text = text.removeprefix("\ufeff")
+    if rel.endswith(".json"):
+        data = json.loads(_strip_jsonc(text), object_pairs_hook=list)
+        return any(LAUNCH_MARKER in v for v in _launch_strings(data))
+    if rel.endswith(".toml"):
+        return any(LAUNCH_MARKER in v for v in _launch_strings(tomllib.loads(text)))  # TOMLDecodeError: ValueError
+    # YAML (Goose recipes, agent front matter), read without a YAML dependency like goose_recipe_read: the whole
+    # file, escapes decoded, is a superset of every cmd/args scalar that reader returns (it only strips quotes).
+    return LAUNCH_MARKER in text or LAUNCH_MARKER in _yaml_decoded(text)
+
+
+def _read_config(path: Path) -> str:
+    """A regular file's UTF-8 text, never following a symlink.
+
+    Raises:
+        ValueError: Not a regular file, larger than :data:`SCAN_MAX_BYTES`, or not UTF-8.
+        OSError: The open or read failed (a symlink swapped in: ``O_NOFOLLOW``).
+    """
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    with os.fdopen(fd, "rb") as fh:
+        info = os.fstat(fh.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("not a regular file")
+        if info.st_size > SCAN_MAX_BYTES:
+            raise ValueError(f"larger than {SCAN_MAX_BYTES} bytes")
+        return fh.read(SCAN_MAX_BYTES + 1).decode("utf-8")
+
+
+def _symlinked_component(base: Path, folder: str) -> str | None:
+    """The first symlinked component of ``folder`` under ``base`` (``base`` itself excepted), or None."""
+    current = base
+    for part in Path(folder).parts:
+        if part == ".":
+            continue
+        current = current / part
+        if current.is_symlink():
+            return current.relative_to(base).as_posix()
+    return None
+
+
+def _candidates(base: Path, folder: str, patterns: tuple[str, ...], recursive: bool,
+                unsafe: dict[str, str]) -> list[Path]:
+    """The non-symlink entries under ``folder`` matching ``patterns`` (a bounded walk when ``recursive``).
+
+    A matching symlink, a symlinked subdirectory of a walked tree, and a bound hit go to ``unsafe`` instead.
+    """
+    found: list[Path] = []
+    stack: list[tuple[Path, int]] = [(base / folder, 0)]
+    while stack:
+        current, depth = stack.pop()
+        try:
+            entries = sorted(current.iterdir())
+        except OSError:
+            unsafe[current.relative_to(base).as_posix()] = "is an unreadable directory"
+            continue
+        for entry in entries:
+            rel = entry.relative_to(base).as_posix()
+            matches = any(entry.match(p) for p in patterns)
+            if entry.is_symlink():
+                if matches or (recursive and entry.is_dir()):
+                    unsafe[rel] = "is a symlinked directory" if entry.is_dir() else "is a symlink"
+            elif entry.is_dir():
+                if recursive and depth + 1 >= SCAN_MAX_DEPTH:
+                    unsafe[rel] = f"is nested deeper than the {SCAN_MAX_DEPTH}-level scan bound"
+                elif recursive:
+                    stack.append((entry, depth + 1))
+            elif matches:
+                found.append(entry)
+                if len(found) > SCAN_MAX_FILES:
+                    unsafe[folder] = f"holds more than {SCAN_MAX_FILES} config files (the scan bound)"
+                    return found[:SCAN_MAX_FILES]
+    return found
+
+
+def scan_launching_configs(root: str | Path) -> ConfigScan:
+    """Scan every known MCP config location for files that launch ``agentteams_wasm`` (R1 truth source).
+
+    JSON (JSONC comments allowed) and TOML are parsed and matched by the strings under their ``command`` / ``cmd`` /
+    ``args`` keys, so an escape cannot hide the server's path; YAML (Goose recipes: ``*.yaml``/``*.yml``/``*.json`` in
+    nested dirs, a bounded walk) and Markdown front matter are decoded (escaped line breaks, ``\\x``/``\\u``/``\\U``)
+    and searched whole, a superset of their ``cmd``/``args`` scalars. Nothing is skipped silently: a
+    symlinked file or directory, a non-regular, unparseable, undecodable or oversized file, and a tree past the
+    bounds all land in ``unsafe``.
+
+    Args:
+        root: The project root.
+
+    Returns:
+        The :class:`ConfigScan`, each part sorted.
+
+    Raises:
+        Nothing.
+    """
+    base = Path(root)
+    launching: set[str] = set()
+    unsafe: dict[str, str] = {}
+    for folder, patterns, recursive in _SCAN:
+        linked = _symlinked_component(base, folder)
+        if linked is not None:
+            unsafe.setdefault(linked, "is a symlinked directory")
+            continue
+        if not (base / folder).is_dir():
+            continue
+        for path in _candidates(base, folder, patterns, recursive, unsafe):
+            rel = path.relative_to(base).as_posix()
+            try:
+                if _launches(rel, _read_config(path)):
+                    launching.add(rel)
+            except (OSError, ValueError) as exc:   # UnicodeDecodeError and JSON errors are ValueErrors
+                unsafe[rel] = f"is unreadable or does not parse ({type(exc).__name__})"
+    return ConfigScan(tuple(sorted(launching)), tuple(sorted(unsafe.items())))
+
+
+def launching_config_paths(root: str | Path) -> tuple[str, ...]:
+    """Project-relative paths of every config on disk that launches ``agentteams_wasm``, or could not be checked.
+
+    The union of :func:`scan_launching_configs`'s ``launching`` and ``unsafe`` paths (fail closed: an unreadable or
+    symlinked config is a protection target, never skipped). A checker unions this with the manifest's
+    ``protected_config_paths``, so a file the manifest does not list (hand-merged ``.mcp.json``, a manifest-less
+    ``--check-wiring``) still has to be write-protected; :func:`unprotected_config_problems` reports the ``unsafe``
+    ones whatever the denies say.
 
     Args:
         root: The project root.
@@ -408,24 +669,37 @@ def launching_config_paths(root: str | Path) -> tuple[str, ...]:
         The paths, sorted.
 
     Raises:
-        Nothing (unreadable files are skipped).
+        Nothing.
     """
-    base = Path(root)
-    found: set[str] = set()
-    for folder, pattern in _SCAN:
-        directory = base / folder
-        if directory.is_symlink() or not directory.is_dir():
-            continue
-        for path in directory.glob(pattern):
-            if path.is_symlink() or not path.is_file():
-                continue
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
-                text = ""
-            if LAUNCH_MARKER in text:
-                found.add(path.relative_to(base).as_posix())
-    return tuple(sorted(found))
+    scan = scan_launching_configs(root)
+    return tuple(sorted({*scan.launching, *(p for p, _ in scan.unsafe)}))
+
+
+def unprotected_config_problems(root: str | Path, off_reason: str | None = None,
+                                scan: ConfigScan | None = None) -> list[str]:
+    """The scan's hits that are not protected whatever the live denies say.
+
+    Every ``unsafe`` path (it cannot be checked); and, when ``off_reason`` is given (WASM is off, or this framework
+    wires nothing, so no R1 deny was emitted for it), every launching file.
+
+    Args:
+        root: The project root.
+        off_reason: Why nothing protects a launching file here, or None (WASM on: the denies are checked instead).
+        scan: A scan already taken of ``root``, or None to take one.
+
+    Returns:
+        One message per path.
+
+    Raises:
+        Nothing.
+    """
+    scan = scan if scan is not None else scan_launching_configs(root)
+    problems = [f"{p} {why}, so it may launch agentteams_wasm unchecked: not protected (R1); replace it with a "
+                "regular, parseable file" for p, why in scan.unsafe]
+    if off_reason:
+        problems += [f"{p} launches agentteams_wasm, but {off_reason}, so nothing write-protects it (R1); remove the "
+                     "entry or render the team with --wasm-sandbox on" for p in scan.launching]
+    return problems
 
 
 def covered(path: str, entries: Iterable[str]) -> bool:
@@ -447,7 +721,11 @@ def covered(path: str, entries: Iterable[str]) -> bool:
 
 
 def check_wiring_problems(root: str | Path, framework: str, manifest: dict[str, Any]) -> list[str]:
-    """``--check-wiring`` problems for the WASM wiring: P10's live checks where this framework installs the server.
+    """``--check-wiring`` problems for the WASM wiring, whatever the WASM switch.
+
+    Where this framework installs the server: P10's live checks (``wasm_mcp.wiring_problems``, which with WASM off
+    reports every launching config on disk). Elsewhere (WASM on but nothing installed here): every launching or
+    uncheckable config on disk, since no deny was emitted for it (@security C1).
 
     Args:
         root: The project root.
@@ -455,36 +733,44 @@ def check_wiring_problems(root: str | Path, framework: str, manifest: dict[str, 
         manifest: The team manifest.
 
     Returns:
-        One message per problem; empty when WASM is off or nothing is wired for this framework.
+        One message per problem; empty when nothing on disk launches the server and the wiring is sound.
 
     Raises:
         ValueError: As :func:`wasm_on`.
     """
-    row = wiring_row(manifest, framework)
-    if row is None or framework not in _INSTALL_FRAMEWORKS or row["status"] == "not-wired":
-        return []
     from agentteams import wasm_mcp
 
-    return wasm_mcp.wiring_problems(root, framework, manifest)
+    row = wiring_row(manifest, framework)
+    if row is None or _installs(row, framework):
+        return wasm_mcp.wiring_problems(root, framework, manifest)
+    return unprotected_config_problems(root, f"{framework} does not wire agentteams_wasm ({row['status']})")
 
 
 __all__ = [
     "CLAUDE_EXAMPLE",
     "CODEX_CONFIG",
     "COPILOT_CLI_EXAMPLE",
+    "ConfigScan",
     "LAUNCH_MARKER",
     "PER_AGENT_DIRS",
+    "SCAN_MAX_BYTES",
+    "SCAN_MAX_DEPTH",
+    "SCAN_MAX_FILES",
     "VSCODE_EXAMPLE",
     "WIRING_KEY",
+    "agents_dir_problem",
     "check_wiring_problems",
     "codex_first_party_tables",
     "covered",
     "install_binary",
+    "install_root",
     "launching_config_paths",
     "output_files",
     "print_report",
     "report_line",
+    "scan_launching_configs",
     "unhonoured_grants",
+    "unprotected_config_problems",
     "wasm_agent_entry",
     "wasm_on",
     "wiring_row",

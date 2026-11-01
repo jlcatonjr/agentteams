@@ -278,7 +278,8 @@ def test_control_plane_advisory_names_the_reason(tmp_path: Path) -> None:
     (root / ".claude" / "settings.local.json").write_text(json.dumps({"sandbox": {"enabled": False}}))
     assert "settings.local.json" in M.control_plane_advisory(root, "claude", os_on)
     (root / ".claude" / "settings.local.json").write_text("{not json")   # CH-24: malformed is not "absent"
-    assert "settings.local.json (it is unreadable or not JSON" in M.control_plane_advisory(root, "claude", os_on)
+    advisory = M.control_plane_advisory(root, "claude", os_on)   # the P11 disk scan names it first (C2)
+    assert ".claude/settings.local.json is unreadable" in advisory
     (root / ".claude" / "settings.local.json").unlink()
     assert M.control_plane_advisory(root, "claude", os_on) is None
     assert "grok" in M.control_plane_advisory(root, "grok", os_on)
