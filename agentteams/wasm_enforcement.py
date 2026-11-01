@@ -38,6 +38,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from agentteams.frameworks._wasm_wiring import WIRED_STATUSES
+
 #: The manifest key P13 owns (``team-manifest.schema.json`` ``wasm_enforcement``).
 KEY = "wasm_enforcement"
 #: Transient manifest key: this render's per-agent action record (a :class:`_Actions`, never JSON-loadable).
@@ -66,8 +68,6 @@ _MECHANISM: Mapping[str, tuple[str, str, str, bool]] = {
 }
 #: Frameworks with a per-agent tool channel the canonical narrowing reaches (derived from :data:`_MECHANISM`).
 _TOOL_CHANNEL = frozenset(fw for fw, (_b, _m, _e, channel) in _MECHANISM.items() if channel)
-#: Wiring statuses under which an eligible agent receives ``run_wasm`` (P11).
-_WIRED = frozenset({"wired-per-agent", "wired-shared"})
 _ORCHESTRATOR_TEMPLATE = "orchestrator.template.md"
 _FRONT_RE = re.compile(r"\A---[ \t]*\n(.*?\n)---[ \t]*(?:\n|\Z)", re.DOTALL)
 _FLOW_TOOLS_RE = re.compile(r"^tools:[ \t]*\[([^\]\n]*)\][ \t]*$", re.MULTILINE)
@@ -164,7 +164,7 @@ def run_wasm_available(manifest: dict[str, Any], framework: str) -> bool:
     from agentteams.frameworks._wasm_wiring import wiring_row
 
     row = wiring_row(manifest, framework)
-    return row is not None and row.get("status") in _WIRED
+    return row is not None and row.get("status") in WIRED_STATUSES
 
 
 def agent_action(manifest: dict[str, Any], slug: str, framework: str, tools: Iterable[str]) -> str | None:

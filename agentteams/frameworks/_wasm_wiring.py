@@ -37,6 +37,15 @@ if TYPE_CHECKING:
 
 #: The manifest key P11 owns (team-manifest.schema.json ``wasm_wiring``).
 WIRING_KEY = "wasm_wiring"
+#: Wiring statuses (team-manifest.schema.json ``wasm_wiring.frameworks.*.status``); every module compares against these.
+WIRED_PER_AGENT = "wired-per-agent"
+WIRED_SHARED = "wired-shared"
+EXAMPLE_ONLY = "example-only"
+NOT_WIRED = "not-wired"
+UNVERIFIED_FORMAT = "unverified-format"
+INSTRUCTIONS_ONLY = "instructions-only"
+#: Statuses under which an eligible agent receives ``run_wasm``.
+WIRED_STATUSES = frozenset({WIRED_PER_AGENT, WIRED_SHARED})
 #: Inert examples (never live configs); project-relative.
 CLAUDE_EXAMPLE = ".claude/mcp.agentteams-wasm.example.json"
 VSCODE_EXAMPLE = ".vscode/mcp.agentteams-wasm.example.json"
@@ -111,37 +120,37 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
                 "config_paths": list(paths)}
 
     if framework == "claude":
-        return row("wired-per-agent", "per-agent", "subagent front matter mcpServers; the top-level session is not "
+        return row(WIRED_PER_AGENT, "per-agent", "subagent front matter mcpServers; the top-level session is not "
                    f"wired until the operator merges {CLAUDE_EXAMPLE} into .mcp.json; {_HOST_NOTE}", True,
                    [CLAUDE_EXAMPLE])
     if framework == "goose":
         blocked = _goose_block(manifest)
         if blocked:
-            return row("not-wired", "none", blocked, False)
-        return row("wired-per-agent", "per-agent", "recipe extensions, honoured on a direct `goose run --recipe`; "
+            return row(NOT_WIRED, "none", blocked, False)
+        return row(WIRED_PER_AGENT, "per-agent", "recipe extensions, honoured on a direct `goose run --recipe`; "
                    f"a delegate cannot add agentteams_wasm (route that work to a direct run); {_HOST_NOTE}", True)
     if framework == "codex":
-        return row("wired-shared", "session-compute-only", "one compute-only instance in .codex/config.toml (loaded "
+        return row(WIRED_SHARED, "session-compute-only", "one compute-only instance in .codex/config.toml (loaded "
                    "only for a trusted project), configured with default_tools_approval_mode = \"prompt\" (a default "
                    "the host applies, not enforcement agentteams verifies); under the codex:sandbox role gate a "
                    "spawned agent outside the keep list is denied the shell and steered to run_wasm (WASM mode), or "
                    "reaches only agentteams_readfs (write_policy: orchestrator-only)", True,
                    [CODEX_CONFIG])
     if framework == "copilot-vscode":
-        return row("example-only", "session-compute-only", f"inert {VSCODE_EXAMPLE} (servers/stdio, VS Code docs "
+        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {VSCODE_EXAMPLE} (servers/stdio, VS Code docs "
                    "2026-10-31); merge into .vscode/mcp.json; run_wasm is not in agent tools (custom-agent MCP "
                    "tool spelling unverified)", True, [VSCODE_EXAMPLE])
     if framework == "copilot-cli":
-        return row("example-only", "session-compute-only", f"inert {COPILOT_CLI_EXAMPLE} (mcpServers/local, GitHub "
+        return row(EXAMPLE_ONLY, "session-compute-only", f"inert {COPILOT_CLI_EXAMPLE} (mcpServers/local, GitHub "
                    "docs 2026-10-31); merge into .github/mcp.json (loaded after folder trust); per-agent "
                    "mcp-servers in CLI agent profiles unverified", True, [COPILOT_CLI_EXAMPLE])
     if framework == "grok":
-        return row("unverified-format", "none", "not wired: whether a custom agent with mcpInheritance: none sees "
+        return row(UNVERIFIED_FORMAT, "none", "not wired: whether a custom agent with mcpInheritance: none sees "
                    "project MCP servers, or launches front-matter mcpServers, is unverified on the pinned Grok "
                    "Build (operator check pending)", False)
     if framework == "agents-md":
-        return row("instructions-only", "none", "AGENTS.md has no MCP channel; instructions only", True)
-    return row("not-wired", "none", f"no agentteams_wasm wiring for {framework}", False)
+        return row(INSTRUCTIONS_ONLY, "none", "AGENTS.md has no MCP channel; instructions only", True)
+    return row(NOT_WIRED, "none", f"no agentteams_wasm wiring for {framework}", False)
 
 
 def wiring_row(manifest: dict[str, Any], framework: str) -> dict[str, Any] | None:
@@ -174,7 +183,7 @@ def wiring_row(manifest: dict[str, Any], framework: str) -> dict[str, Any] | Non
 
 def _installs(row: Mapping[str, Any] | None, framework: str) -> bool:
     """Whether ``framework`` installs the server (WASM on, an install host, and a row that is not ``not-wired``)."""
-    return row is not None and framework in _INSTALL_FRAMEWORKS and row["status"] != "not-wired"
+    return row is not None and framework in _INSTALL_FRAMEWORKS and row["status"] != NOT_WIRED
 
 
 def _widened(state: SandboxState) -> list[str]:
@@ -220,7 +229,7 @@ def wasm_agent_entry(manifest: dict[str, Any], framework: str, slug: str,
     from agentteams.wasm_config import wasm_eligible
 
     row = wiring_row(manifest, framework)
-    if row is None or row["status"] != "wired-per-agent":
+    if row is None or row["status"] != WIRED_PER_AGENT:
         return None
     if not wasm_eligible({"slug": slug, "tools": list(tools) if tools is not None else None}):
         return None
@@ -471,12 +480,12 @@ def print_report(manifest: dict[str, Any], framework: str, state: SandboxState) 
                          "for claude/goose")
     print(f"  {line}", file=sys.stderr)
     row = manifest[WIRING_KEY]["frameworks"][framework]
-    if framework == "goose" and row["status"] == "wired-per-agent":
+    if framework == "goose" and row["status"] == WIRED_PER_AGENT:
         widened = _widened(state)
         if widened:
             print(f"  NOTE (WASM): widened grants for {', '.join(widened)} are honoured only on a direct "
                   "`goose run --recipe .goose/recipes/<slug>.yaml`", file=sys.stderr)
-    if row["status"] in ("unverified-format", "not-wired"):
+    if row["status"] in (UNVERIFIED_FORMAT, NOT_WIRED):
         manifest.setdefault("advisories", []).append(
             {"code": f"wasm-wiring-{row['status']}", "message": line.removeprefix("[WASM-WIRING] ")})
 
@@ -499,6 +508,8 @@ _JSONC_TOKEN = re.compile(r'"(?:[^"\\]|\\.)*"|//[^\n]*|/\*.*?\*/|,(?=\s*[}\]])',
 #: YAML double-quoted escapes that can spell a marker character, and the escaped line break that joins two lines.
 _YAML_HEX = re.compile(r"\\x([0-9A-Fa-f]{2})|\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})")
 _YAML_LINE_JOIN = re.compile(r"\\\r?\n[ \t]*")
+#: A Markdown front matter's closing fence: a whole line of exactly ``---`` (trailing blanks, CRLF allowed).
+_FRONT_MATTER_END = re.compile(r"^---[ \t]*\r?$", re.M)
 
 
 def _strip_jsonc(text: str) -> str:
@@ -551,10 +562,12 @@ def _launches(rel: str, text: str) -> bool:
         # An agent file declares MCP servers only in its front matter (`mcpServers:`); the body is prose an agent
         # reads (P14's @security rows name the server's path there). No front matter: nothing can be launched. An
         # opened but unclosed block is scanned whole (fail closed).
+        # The block ends at the first later line that is exactly a fence (``---`` plus trailing blanks), never at a
+        # line that merely starts with ``---`` (a ``---x`` line inside a quoted multi-line scalar).
         if not text.startswith("---"):
             return False
-        end = text.find("\n---", 3)
-        text = text if end < 0 else text[:end]
+        end = _FRONT_MATTER_END.search(text, text.find("\n") + 1 or len(text))
+        text = text if end is None else text[:end.start()]
     # YAML (Goose recipes, agent front matter), read without a YAML dependency like goose_recipe_read: the whole
     # file, escapes decoded, is a superset of every cmd/args scalar that reader returns (it only strips quotes).
     return LAUNCH_MARKER in text or LAUNCH_MARKER in _yaml_decoded(text)

@@ -131,10 +131,6 @@ def guest_os_confine_for(requested: str, *, wrapped: bool) -> tuple[str, str | N
     return requested, None
 
 
-def _within(child: str, parent: str) -> bool:
-    return child == parent or child.startswith(parent.rstrip(os.sep) + os.sep)
-
-
 def host_profile_argv(kind: str, *, project_root: str, tmp_dir: str, scratch: str | None,
                       exec_literals: Sequence[str], exec_paths: Sequence[str], profiles: ModuleType = SP,
                       child_scratch: Sequence[str] = ()) -> list[str]:
@@ -542,7 +538,7 @@ def _exec_allow(root: str, resolver: Any, control_plane_protected: bool) -> tupl
     literals, paths = [python], [ensure_dir(root, (".agentteams", "wasm", "exec"))]
     prefix = os.path.realpath(sys.base_prefix)
     home = os.path.realpath(os.path.expanduser("~"))
-    if prefix not in ("/", home) and not _within(root, prefix) and not _within(prefix, root):
+    if prefix not in ("/", home) and not W.path_inside(root, prefix) and not W.path_inside(prefix, root):
         paths.append(prefix)
     if control_plane_protected:
         literals.append(os.path.realpath(str(resolver.resolve("wasmtime"))))

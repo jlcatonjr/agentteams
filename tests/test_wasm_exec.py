@@ -655,3 +655,27 @@ def test_snapshot_caps_enforced_midcopy(tmp_path: Path) -> None:
         _snap(src, tmp_path / "o1", [2500, 100])
     with pytest.raises(SP.ConfinementError, match="too large"):
         _snap(src, tmp_path / "o2", [10**9, 3])
+
+
+# --- the one shared path-containment helper ----------------------------------------------------------------------
+
+_WASM_MODULES = ("wasm_exec.py", "wasm_guests.py", "runner_wasm.py", "wasm_agent/launch.py",
+                 "wasm_agent/delegation.py")
+
+
+def test_path_inside_is_component_wise_and_matches_confinement() -> None:
+    sep = os.sep
+    cases = [(f"{sep}a{sep}b", f"{sep}a"), (f"{sep}a", f"{sep}a"), (f"{sep}a", f"{sep}a{sep}"),
+             (f"{sep}ab", f"{sep}a"), (f"{sep}a", f"{sep}a{sep}b"), (f"{sep}a{sep}b{sep}c", f"{sep}a{sep}b{sep}")]
+    assert [W.path_inside(c, p) for c, p in cases] == [True, True, False, False, False, True]
+    assert all(W.path_inside(c, p) == C._within(c, p) for c, p in cases)   # confinement keeps its own copy
+
+
+def test_no_wasm_module_carries_its_own_containment_helper() -> None:
+    """Each WASM module uses ``wasm_exec.path_inside`` (``wasm_guests`` via the injected executor), never a copy."""
+    pkg = Path(W.__file__).resolve().parent
+    for rel in _WASM_MODULES:
+        tree = ast.parse((pkg / rel).read_text(encoding="utf-8"))
+        own = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name in ("_within", "_inside")]
+        assert own == [], f"{rel} defines {own}"
+    assert "executor.path_inside(" in (pkg / "wasm_guests.py").read_text(encoding="utf-8")

@@ -33,6 +33,7 @@ from agentteams.analyze_tools import (  # CH-07 carve; re-exported
     _REFERENCE_TOOLS,
 )
 from agentteams.mcp_detect import detect_mcp_candidates
+from agentteams.wasm_policy import ROUTING_ROWS_PLACEHOLDER, SECURITY_ROWS_PLACEHOLDER
 
 from agentteams.recipe_fields import (  # noqa: E402,F401 (carved CH-07; re-exported)
     _normalize_recipe_parameters,
@@ -539,7 +540,7 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # with no adopted agents renders its orchestrator routing table byte-identically.
     auto_resolved["ADOPTED_AGENT_ROUTING_ROWS"] = ""
     # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
-    auto_resolved["WASM_SECURITY_TRIGGER_ROWS"] = auto_resolved["WASM_ROUTING_ROWS"] = ""
+    auto_resolved[SECURITY_ROWS_PLACEHOLDER] = auto_resolved[ROUTING_ROWS_PLACEHOLDER] = ""
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)
