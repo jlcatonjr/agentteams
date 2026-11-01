@@ -312,7 +312,8 @@ def test_fix_plan_section_is_plan_only(tmp_path: Path, eol: list[str]) -> None:
     res = fix.fix_path(tmp_path, npm=False)
     md = res.markdown()
     assert "## base images: `Dockerfile` — plan-only (no staged edit)" in md
-    assert "| python | 3.9-slim | `python:3.14-slim` | plan-only |" in md and fix.IMAGE_NOTE in md
+    # an eligible end-of-life FROM is marked for stage-image (vfail F5); the section stays plan-only for stage-fix
+    assert "| python | 3.9-slim | `python:3.14-slim` | stage-image |" in md and fix.IMAGE_NOTE in md
     assert res.exit_code() == 1 and res.changes == []
     assert fix.fix_path(tmp_path, apply=True, npm=False).image_plan == []   # apply: never touched
 

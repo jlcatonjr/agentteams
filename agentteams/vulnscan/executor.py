@@ -25,6 +25,13 @@ Operations (v1):
   naming it covers it). Requirements pins may jump a major; a direct npm dependency's ``package.json`` spec is raised
   (:mod:`.npm_major`, the only ``package.json`` change ``validate_diff`` accepts). Its commit, PR title and label say
   MAJOR (:mod:`.executor_pr`).
+- ``stage-image REPO``: in the same kind of worktree, moves the ``FROM`` tag of each end-of-life official runtime
+  image (``python``, ``ruby``, ``golang``, ``php``) in a Dockerfile to the newest supported line of the same variant
+  (:mod:`.image_fix`; constraint-relaxing, Rule 15: only a grant naming it covers it). Digest-pinned, ``:latest``,
+  ARG-default, OS-tagged and private references are held for a person. ``validate_diff`` then accepts only those tag
+  edits and no dependency file, so a base-image change is never combined with a dependency fix. Its commit, PR title
+  and label say MAJOR, and its staged state and ``open-pr`` result record ``"image": true`` (``close-superseded``
+  closes only PRs of the same lane).
 - ``open-pr REPO``: pushes the staged branch as a *new* ``vulnscan/*`` ref (never force; an existing
   ref is reused only for its open PR or when it is exactly the staged commit) and opens a PR, then
   removes the executor's worktree. It never merges.
@@ -59,8 +66,8 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from agentteams.vulnscan import engine, escalations, executor_guard, fix, grant, handoff, ledger, notify, paths
-from agentteams.vulnscan import executor_pr, executor_supersede, npm_major, open_prs, report_store, repo_alias
-from agentteams.vulnscan import retry_guard
+from agentteams.vulnscan import executor_pr, executor_supersede, image_fix, npm_major, open_prs, report_store
+from agentteams.vulnscan import repo_alias, retry_guard
 from agentteams.vulnscan import subproc_confine, subproc_confine_ssh
 from agentteams.vulnscan.executor_env import (  # leaf: re-exported for callers and tests (H2)
     GIT_IDENTITY,
@@ -434,7 +441,7 @@ class DiffCheck(NamedTuple):
     kept_off_registry: list[str]    # :func:`manifests.check_lock_edit` notes: unchanged off-registry entries kept
 
 
-def validate_diff(wt: Path, base: str, *, major: bool = False) -> DiffCheck:
+def validate_diff(wt: Path, base: str, *, major: bool = False, image: bool = False) -> DiffCheck:
     """Check that a staged change touches only what fix.py may touch (B1, X1, M1).
 
     Tracked changes are listed with ``--no-renames`` (a rename is a deletion plus an addition, and a
@@ -442,12 +449,14 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> DiffCheck:
     is still a regular, non-executable file (never read through a symlink) with an unchanged mode.
     Content is judged byte for byte by :func:`manifests.check_pin_edit` and :func:`manifests.check_lock_edit`.
     With ``major`` (``stage-major``) a ``package.json`` may change too (:func:`npm_major.check_package_json_edit`),
-    and its lockfile's root dependencies then only to mirror it.
+    and its lockfile's root dependencies then only to mirror it. With ``image`` (``stage-image``) only Dockerfiles
+    may change, and only by :func:`image_fix.check_from_edit`'s ``FROM`` tag moves: never a dependency file too.
 
     Args:
         wt: Worktree.
         base: Base commit.
         major: Accept a ``stage-major`` change.
+        image: Accept a ``stage-image`` change (and nothing else).
 
     Returns:
         The changed paths, and one note per unchanged off-registry lockfile entry that was kept
@@ -469,7 +478,10 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> DiffCheck:
         changed.append(rel)
     changed += [p for p in git(wt, "ls-files", "-z", "--others", "--exclude-standard").split("\0") if p]
     for rel in changed:
-        if not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
+        if image:
+            if not image_fix.is_dockerfile(rel):
+                raise ExecError(f"refusing change outside Dockerfile FROM tags (stage-image): {rel}")
+        elif not (ALLOWED_CHANGED.search(rel) or major and npm_major.PACKAGE_JSON.search(rel)):
             raise ExecError(f"refusing change outside dependency pins/lockfiles: {rel}")
         st = os.lstat(wt / rel)
         if not stat.S_ISREG(st.st_mode) or st.st_mode & 0o111:
@@ -478,7 +490,9 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> DiffCheck:
         shown = git_proc(wt, "show", "--no-textconv", f"{base}:{rel}", text=False)   # never a diff.<driver>.textconv
         old = b"" if shown.returncode else shown.stdout
         try:
-            if REQ_NAME.search(Path(rel).name):
+            if image:
+                image_fix.check_from_edit(rel, old, new)
+            elif REQ_NAME.search(Path(rel).name):
                 check_pin_edit(rel, old, new)
             elif npm_major.PACKAGE_JSON.search(rel):
                 npm_major.check_package_json_edit(rel, old, new)
@@ -490,7 +504,7 @@ def validate_diff(wt: Path, base: str, *, major: bool = False) -> DiffCheck:
     return DiffCheck(changed, kept)
 
 
-def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[str, Any]:
+def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False, image: bool = False) -> dict[str, Any]:
     """Create an executor-owned worktree, apply deterministic fixes, validate, commit locally.
 
     Args:
@@ -498,6 +512,8 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
         cfg: Daily config.
         major: ``stage-major``: semver-major upgrades allowed; refused unless the change takes one (the result,
             and the staged state, then carry ``"major": true``).
+        image: ``stage-image``: move end-of-life base image ``FROM`` tags (:func:`image_fix.fix_result`) instead of fixing
+            dependencies; the result and the staged state carry ``"image": true``.
 
     Returns:
         Result with worktree, branch, base and the fix plan markdown.
@@ -529,13 +545,18 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
         git(wt, "reset", "-q", "--hard", base)
         cooldown = REMEDIATION_COOLDOWN_DAYS   # the config's cooldown_days is ignored (S-10 remediation carve-out)
         claims = open_prs.staging_claims(lambda: _origin_repo(wt))   # D1: never duplicate another open PR
-        res = fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
+        res = image_fix.fix_result(wt, claims) if image else \
+            fix.fix_path(wt, apply=True, allow_major=major, cooldown_days=cooldown, skip=claims)
         if res.feed_errors:
             raise ExecError("feeds unavailable: " + "; ".join(res.feed_errors))
-        changed, kept_notes = validate_diff(wt, base, major=major)
+        changed, kept_notes = validate_diff(wt, base, major=major, image=image)
         left = open_prs.left_to_prs(res.changes, claims)
         if left and (not changed or major and not executor_pr.major_changes(res.changes)):
             raise ExecError(open_prs.duplicate_detail(left))   # not futile: it lifts once those PRs close
+        if image and not changed:
+            held = sum(1 for c in res.changes if c.action == image_fix.HELD)
+            raise ExecError(f"{retry_guard.IMAGE_FUTILE_DETAIL} ({held} base image reference(s) held for a person; "
+                            "see the fix plan)")
         if not changed:   # an npm that failed to run must not read as "nothing fixable"
             npm_err = next((ln for _, out in res.npm for ln in out.splitlines() if ln.startswith("npm error")), "")
             raise ExecError(f"npm failed: {npm_err[:200]}" if npm_err else
@@ -551,7 +572,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
         git(wt, "checkout", "-q", "-b", name)
         branch = name   # only now is the branch this attempt's own (cleanup may delete it)
         _stage_changed(wt, base, changed)
-        git(wt, "commit", "-q", *executor_pr.commit_args(digest, res.changes, major=major))
+        git(wt, "commit", "-q", *executor_pr.commit_args(digest, res.changes, major=major, image=image))
         staged = True
     except OSError as exc:
         raise ExecError(str(exc)) from exc
@@ -563,6 +584,7 @@ def stage_fix(repo: Path, cfg: dict[str, Any], *, major: bool = False) -> dict[s
                     _drop_failed_branch(repo, branch, base)
     result = {"repo": str(repo), "worktree": str(wt), "branch": branch, "base": base, "base_ref": head,
               "changed": changed, "resolved": res.resolved, "plan": res.markdown(), **({"major": True} if major else {}),
+              **({"image": True} if image else {}),
               "packages": sorted({c.name for c in res.changes if c.action == "fix"}), **({"left_to_prs": left} if left else {}),
               **({"kept_off_registry": kept_notes} if kept_notes else {})}
     _write_json(staged_file(repo), result)
@@ -595,8 +617,9 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
     """
     staged = staged_file(repo)
     if not staged.is_file():
-        raise ExecError("no staged fix for this repo — request stage-fix (or stage-major) first")
+        raise ExecError("no staged fix for this repo — request stage-fix (or stage-major, stage-image) first")
     st = json.loads(staged.read_text(encoding="utf-8"))
+    lane = {"image": True} if st.get("image") is True else {}   # close-superseded's lane (ops.lane_of)
     wt, branch = Path(st["worktree"]), st["branch"]
     if not branch.startswith("vulnscan/") or not wt.is_dir() or not wt.resolve().is_relative_to(
             _worktrees_dir().resolve()):
@@ -619,7 +642,7 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
             if git(wt, "rev-parse", f"{remote_sha}^{{tree}}").strip() != git(wt, "rev-parse", "HEAD^{tree}").strip():
                 raise ExecError(f"open PR {url} on {branch} does not hold the staged change — not claiming it")
             _finish_open_pr(repo, wt, staged)
-            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True}
+            return {"repo": str(repo), "branch": branch, "pr": url, "existing": True, **lane}
         if remote_sha != git(wt, "rev-parse", "HEAD").strip():
             raise ExecError(f"remote branch {branch} already exists at another commit and has no open PR "
                             "— not overwriting")
@@ -630,20 +653,22 @@ def open_pr(repo: Path, rationale: str) -> dict[str, Any]:
         same = executor_supersede.open_pr_with_same_change(wt, target_repo, branch, st["base"])
         if same:   # the same change, staged on an earlier day, already has an open PR: claim it, open no duplicate
             _finish_open_pr(repo, wt, staged)
-            return {"repo": str(repo), "branch": branch, "pr": same[1], "existing": True, "same_change_as": same[0]}
+            return {"repo": str(repo), "branch": branch, "pr": same[1], "existing": True, "same_change_as": same[0],
+                    **lane}
     if closed := executor_supersede.closed_pr_for_change(wt, target_repo, branch, st["base"]):   # a person's call
         _finish_open_pr(repo, wt, staged)
         return {"repo": str(repo), "branch": branch, "pr": "", "closed_unmerged": closed, "detail": "not re-opened"}
     if not remote_sha:
         git(wt, "push", "origin", f"HEAD:{ref}", push=True)
     major = st.get("major") is True   # stage-major: MAJOR title, body and label (executor_pr)
+    image = bool(lane)                # stage-image: MAJOR base-image title, body and label
     body_file = wt.parent / f"{wt.name}.pr.md"
     body_file.write_text(executor_pr.body(st["plan"], rationale, major=major, left=st.get("left_to_prs"),
-                                          kept=st.get("kept_off_registry")), encoding="utf-8")
-    url = executor_pr.create(target_repo, base_branch, branch, body_file, major=major,
+                                          kept=st.get("kept_off_registry"), image=image), encoding="utf-8")
+    url = executor_pr.create(target_repo, base_branch, branch, body_file, major=major, image=image,
                              open_url=lambda: _open_pr_url(wt, target_repo, branch))
     _finish_open_pr(repo, wt, staged)
-    return {"repo": str(repo), "branch": branch, "pr": url, **({"major": True} if major else {})}
+    return {"repo": str(repo), "branch": branch, "pr": url, **({"major": True} if major else {}), **lane}
 
 
 def _open_pr_url(wt: Path, target_repo: str, branch: str) -> str:
@@ -898,7 +923,7 @@ def _granted_op(op: str, target: str, cfg: dict[str, Any], *, rationale: str, re
         return {"status": "refused", "detail": str(exc)}
     try:
         if op in STAGE_OPS:
-            result = stage_fix(Path(canonical), cfg, major=op == "stage-major")
+            result = stage_fix(Path(canonical), cfg, major=op == "stage-major", image=op == "stage-image")
         elif op == "open-pr":
             result = open_pr(Path(canonical), rationale)
         elif op == "close-superseded":

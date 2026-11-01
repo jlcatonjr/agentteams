@@ -18,6 +18,11 @@ action (Rule 15). Each grant is:
 (Rule 15): it relaxes the "no major jump" bound of ``stage-fix``, so only a grant that lists it explicitly covers it;
 a grant listing ``stage-fix`` never implies it.
 
+``stage-image`` (move an end-of-life official runtime image's Dockerfile ``FROM`` tag to the newest supported line,
+:mod:`.image_fix`) is constraint-relaxing the same way: it relaxes the "dependency pins and lockfiles only" bound, so
+only a grant that lists it covers it. No grant listing ``stage-fix`` or ``stage-major`` implies it, and nothing signs
+it by default: the operator signs a grant naming it.
+
 ``merge`` and ``server-apply`` are part of the schema for the planned full-automation stage, but
 version 1 refuses to sign or honour them. Every use also re-checks for an unretracted @security
 HALT (C-2), which no grant overrides.
@@ -42,8 +47,8 @@ from agentteams.vulnscan import paths
 from agentteams.vulnscan.ops import REPO_OPS
 
 PURPOSE_TAG = "agentteams-vulnscan-remediation-grant-v1"
-OPS_V1: frozenset[str] = frozenset({"stage-fix", "stage-major", "open-pr", "close-superseded", "server-audit",
-                                    "server-dryrun"})
+OPS_V1: frozenset[str] = frozenset({"stage-fix", "stage-major", "stage-image", "open-pr", "close-superseded",
+                                    "server-audit", "server-dryrun"})
 OPS_RESERVED: frozenset[str] = frozenset({"merge", "server-apply"})   # full-automation stage; refused in v1
 MAX_DAYS = 30
 MAX_USES = 500

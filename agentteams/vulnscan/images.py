@@ -356,10 +356,21 @@ class Judgement:
     checked: int = 0
 
 
-def _split_tag(tag: str) -> tuple[str, str]:
-    """``3.11-slim-bookworm`` -> (``3.11``, ``-slim-bookworm``); ``v1.57.0-jammy`` -> (``1.57.0``, ``-jammy``)."""
+def split_tag(tag: str) -> tuple[str, str]:
+    """Split an image tag into its leading version and the rest (the variant suffix).
+
+    Args:
+        tag: An image tag.
+
+    Returns:
+        ``3.11-slim-bookworm`` -> (``3.11``, ``-slim-bookworm``); ``v1.57.0-jammy`` -> (``1.57.0``, ``-jammy``);
+        a tag without a leading version -> (``""``, the tag).
+    """
     m = _LEAD.match(tag)
     return (m.group(1), tag[m.end():]) if m else ("", tag)
+
+
+_split_tag = split_tag
 
 
 def tag_os(tag: str) -> tuple[str, str] | None:
@@ -551,7 +562,8 @@ def plan(path: Path, rel: str, today: _dt.date | None = None) -> tuple[list[Find
         today: Date for EOL comparison (tests); defaults to today.
 
     Returns:
-        ``(findings, feed errors)``; every finding is plan-only (nothing edits a Dockerfile or compose file).
+        ``(findings, feed errors)``; every finding is plan-only here (the executor's ``stage-image``, under a grant
+        naming it, may move an end-of-life ``FROM`` tag: :mod:`.image_fix`).
     """
     rep = Report(target=rel)
     scan_manifest(path, rel, rel, rep, today)
