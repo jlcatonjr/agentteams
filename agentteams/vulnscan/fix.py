@@ -44,7 +44,6 @@ config runs nothing).
 from __future__ import annotations
 
 import datetime as _dt
-import json
 import os
 import re
 import shutil
@@ -58,7 +57,7 @@ from pathlib import Path
 from agentteams.vulnscan import _http, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
-from agentteams.vulnscan.npm_ops import has_workspaces as _npm_workspaces, semver_line as _semver_line
+from agentteams.vulnscan.npm_ops import semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
@@ -469,7 +468,7 @@ def plan_npm_lock(path: Path, *, cooldown_days: int = 0, label: str = "",
         if scopes.get((d.name, d.version)) != "runtime":
             scopes[(d.name, d.version)] = d.scope
     hits = osv.vulnerable_ids(("npm", n, v) for n, v in scopes)
-    workspaces, have_npm = _npm_workspaces(path), _npm_available()
+    workspaces, have_npm = npm_major.in_workspaces(path), _npm_available()
     changes: list[PinChange] = []
     for (name, ver), scope in sorted(scopes.items()):
         ids = hits.get(("npm", name, ver))
@@ -734,29 +733,16 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
     _leave_to_prs(rows, skip)
     if not [c for c in rows if c.action == "major-held"]:
         return rows, ""
-    if _npm_workspaces(lockfile):
+    direct, text, problem = npm_major.direct_majors(lockfile, [c.name for c in rows if c.action == "major-held"])
+    if problem:   # workspaces, or a package.json that cannot be read: nothing here is rewritten, and the rows say why
         for c in rows:
-            c.note += "; npm workspaces: stage-major fails closed here"
-        return rows, ""
-    pkg = lockfile.parent / "package.json"
-    try:
-        text = pkg.read_text(encoding="utf-8")
-        manifest, unread = json.loads(text), ""
-    except (OSError, ValueError) as exc:   # missing or malformed: nothing here is rewritten, and the rows say why
-        manifest, text, unread = None, "", f"package.json cannot be read ({type(exc).__name__})"
-    if manifest is not None and not isinstance(manifest, dict):
-        unread = "package.json is not an object"
-    if unread:
-        for c in rows:
-            c.note += f"; {unread}: stays held — fix by hand"
+            c.note += ("; npm workspaces: stage-major fails closed here" if problem == npm_major.WORKSPACES
+                       else f"; {problem}: stays held — fix by hand")
         return rows, ""
     specs: dict[str, tuple[str, str]] = {}
     for c in sorted(rows, key=lambda r: _semver_line(r.new)):   # the highest fixed version of a name wins
-        if c.action == "pr-held":
-            continue
-        section = npm_major.direct_section(manifest, c.name)
-        if section:
-            specs[c.name] = (section, f"^{c.new.lstrip('vV')}")
+        if c.action != "pr-held" and c.name in direct:
+            specs[c.name] = (direct[c.name], f"^{c.new.lstrip('vV')}")
     if specs:
         try:
             new_text = npm_major.rewrite_specs(text, specs)
@@ -774,6 +760,7 @@ def npm_majors(lockfile: Path, *, label: str, cooldown_days: int = 0, private: t
         # stage-major-offregistry-base; any relaxation needs its own @security review.
         if problem := npm_off_registry(label, text, lock_before.decode("utf-8", "replace")):
             raise ExecError(f"stage-major refuses npm install: {problem}")
+        pkg = lockfile.parent / "package.json"
         with open(os.open(pkg, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW), "w", encoding="utf-8", newline="") as fh:
             fh.write(new_text)
     pkg_label = str(Path(label).parent / "package.json")

@@ -61,8 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `manifests.check_lock_edit` still judges the result. Out-of-range fixes stay `major-held`.
 - **Retry guard:** the dry-run fix plan names each such move in the row's note (and the section note says the step
   runs), so the plan digest `retry_guard` keys its hold on changes and the held repositories are retried once.
-  `npm_groups.py` and `npm_ops.py` join the enforcement integrity set; `semver_line` / `has_workspaces` move to
-  `npm_ops`, and `manifests.npm_packages` / `npm_entry_name` are the one `packages` walk both readers use.
+  `npm_groups.py` and `npm_ops.py` join the enforcement integrity set; `semver_line` moves to `npm_ops` (the workspaces
+  check is `npm_major.in_workspaces`), and `manifests.npm_packages` / `npm_entry_name` are the one `packages` walk both readers use.
 
 ### fixed (vulnscan: `stage-major` is requested in the run that can use it)
 

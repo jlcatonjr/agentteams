@@ -4,7 +4,7 @@
 ``npm audit fix`` left vulnerable inside its range, and keeps a move only when it resolves an advisory and adds none.
 It runs npm and counts advisories through the callables ``fix.fix_path`` passes (``fix.npm_fix``,
 ``fix.advisory_counts``), so the dependency is one way: ``fix`` imports this module, never the reverse.
-:func:`semver_line` and :func:`has_workspaces` are the caret-line and workspaces checks both use.
+:func:`semver_line` is the caret-line check both use; the workspaces check is :func:`agentteams.vulnscan.npm_major.in_workspaces`.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from agentteams.vulnscan import _http, npm_groups, osv, project_policy, subproc_confine
+from agentteams.vulnscan.npm_major import in_workspaces
 from agentteams.vulnscan.manifests import npm_off_registry, parse
 
 #: What ``counts`` returns: (ecosystem, package, advisory) occurrences, or None when not measurable.
@@ -36,26 +37,6 @@ def semver_line(version: str) -> tuple[int, ...]:
     nums += [0] * (3 - len(nums))
     return (nums[0],) if nums[0] else (0, nums[1]) if nums[1] else (0, 0, nums[2])
 
-
-def has_workspaces(lockfile: Path) -> bool:
-    """Return whether the lockfile's root package, or the ``package.json`` beside it, declares workspaces.
-
-    Args:
-        lockfile: package-lock.json or npm-shrinkwrap.json.
-
-    Returns:
-        True when either declares a non-empty ``workspaces`` (``stage-fix`` and ``stage-major`` fail closed there).
-    """
-    for path, root_of in ((lockfile, lambda d: d["packages"].get("") if isinstance(d.get("packages"), dict) else None),
-                          (lockfile.parent / "package.json", lambda d: d)):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):   # missing or malformed: npm reports that, not the plan
-            data = None
-        root = root_of(data) if isinstance(data, dict) else None
-        if isinstance(root, dict) and root.get("workspaces"):
-            return True
-    return False
 
 
 #: Most ``npm update`` moves :func:`npm_moves` tries on one lockfile (each is one npm run).
@@ -101,7 +82,7 @@ def npm_moves(lockfile: Path, *, run: Callable[..., str], counts: Callable[..., 
     Raises:
         FeedError: OSV could not be read (the lockfile is restored first).
     """
-    if has_workspaces(lockfile) or (m := parse(lockfile)).unscannable:
+    if in_workspaces(lockfile) or (m := parse(lockfile)).unscannable:
         return []
     graph = npm_groups.LockGraph(npm_groups.load(lockfile))
     movable = {(d.name, d.version): found for d in m.deps

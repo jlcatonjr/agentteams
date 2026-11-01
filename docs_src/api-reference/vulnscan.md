@@ -798,7 +798,7 @@ container. Everything it returns that came from advisories or repositories is pr
 |---|---|---|
 | `get_summary` | — | Today's `summary.md` |
 | `list_findings` | `min_severity` (`critical`…`any`), `target` (an alias or a path) | Findings as JSON, malicious first, then by severity; at most 500 rows, with `total` (rows that matched) and `truncated`. A row's `target` is the repository's alias |
-| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix or stage-major* |
+| `get_fix_plans` | — | The deterministic fix plans, one per git repository, each headed by the repository alias to give `stage-fix` as `target`. A plan for a repository the registry enrols below `remediate` is headed `scan only — do not request stage-fix (enrolled at <level>)` and names no target; so is every plan when the host could not read the registry. The host writes `plan-levels.json` into the run directory before the agent starts (`executor_guard.write_plan_levels`); the executor enforces the level either way. Repositories in `staged-fixes.json` (written before the agent starts by `executor_serve.write_staged_index`: a fix is staged with no PR yet) are listed first, by alias, under *Already staged: request open-pr for these, not stage-fix or stage-major*. A plan listed under `plan-levels.json` `major_next` (and not staged) gets a line under its heading: **stage-fix held since `<date>`: nothing fixable without a major jump → request `stage-major` for this repository now** (no `stage-fix` first; with the package names). The line is host-authored: only a `YYYY-MM-DD` date and names `mcp.package_name_ok` accepts (npm: optional `@scope/` plus `[a-z0-9._-]`; PyPI: `[A-Za-z0-9._-]`; at most 214 characters) go in, other names are dropped, and with none left the line is too |
 | `request` | `op` (`stage-fix`, `stage-major`, `open-pr`, `close-superseded`, `server-audit`, `server-dryrun`), `target`, `rationale` | Queues a request; runs only if a grant covers it. A repo op's `target` is a known alias (mapped to the host path) or an absolute path; an unknown alias is refused. A `stage-fix` or `stage-major` for a repository in `staged-fixes.json` is refused (request `open-pr`). The description tells the agent to request `stage-major` only for a repository whose plan has `major-held` rows and whose `stage-fix` found nothing fixable, on its own ([Major upgrades](#major-upgrades-stage-major)) |
 | `escalate` | `target`, `kind` (`malicious`, `ioc`, `injection`, `integrity`, `other`), `evidence` | Queues an escalation; needs no grant. A known alias is mapped to the host path |
 | `submit_report` | `markdown` (≤ 200 000 UTF-8 bytes) | Queues the run report; needs no grant |
@@ -1676,7 +1676,10 @@ applied changes removed; `None` when not measured). `exit_code()`: 4 a malicious
 with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`, the lockfile re-resolved by
 `npm_fix(..., install=True)`), those `skip` names (another open PR updates them) `pr-held`, the rest still
 `major-held` with the reason (transitive only, workspaces, or a
-`package.json` that could not be rewritten). Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
+`package.json` that could not be rewritten). Which names are direct is `npm_major.direct_majors(lockfile, names)`
+(`({name: section}, package.json text, problem)`; `problem` is `npm_major.WORKSPACES` when
+`npm_major.in_workspaces(lockfile)`, or why `package.json` is a symlink, unreadable or not an object), the rule
+`executor_guard.stage_major_packages` shares. Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
 with it, it runs `npm install --no-audit --package-lock-only --ignore-scripts` with the audit fix's isolation.
 
 #### `npm_ops.npm_moves(lockfile, *, run, counts, base_lock=None, cooldown_days=0, private=())`
@@ -1701,7 +1704,7 @@ and the base lockfile; a refusal is one `npm update moves not run: ...` line and
 left it. A move is kept only when `counts` shows an advisory occurrence fewer and none new; otherwise, or on an npm
 error, the lockfile is restored byte for byte. `executor.validate_diff` still judges the result
 (`manifests.check_lock_edit`). Returns one summary per move, npm's output indented. Raises `FeedError`.
-`npm_ops.semver_line` and `npm_ops.has_workspaces` are the caret-line and workspaces checks `fix` shares. In a dry
+`npm_ops.semver_line` is the caret-line check `fix` shares; the workspaces check is `npm_major.in_workspaces`. In a dry
 run, `plan_npm_lock` names each such move in the row's note (`npm_groups.annotate_plan`; the section note gains
 `npm_groups.PLAN_NOTE`), so a repository held by `retry_guard` for "nothing fixable" gets a new fix-plan digest, and
 one retry, once the moves appear.
@@ -2226,7 +2229,8 @@ The executor's refusals that only narrow a grant, called by `authorize` for `sta
 | `protected_identities(cfg, extra=())` | `{origin identity: path}` of those (and `extra`); used by `grant sign --from-registry` |
 | `origin_of(path)` | `host/owner/name` of the checkout containing `path` (nearest `.git` upwards; git is not run), or `None` for a repository without a host origin |
 | `repo_identity(path)` | The git common dir of the repository containing `path`, or `None` |
-| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str}`) for the MCP server; called before the agent container starts |
+| `write_plan_levels(run_dir)` | Writes `plan-levels.json` (`{"scan_only": {target: level}, "registry_problem": str, "major_next": {target: {"since": date, "packages": [name, ...]}}}`) for the MCP server; called before the agent container starts. `major_next` lists each remediate-level plan whose next step is `stage-major` (the agent never sees, in its own run, the result of a `stage-fix` it requested): `retry_guard.major_next_since` gives a date, no fix is staged for it, and `stage_major_packages` returns names; empty when the registry or the ledger cannot be read |
+| `stage_major_packages(plan, repo)` | The `major-held` packages of a fix plan's Markdown that `stage-major` could take, in plan order: requirements pins, and npm packages `npm_major.direct_majors` places (direct, outside workspaces, `package.json` neither a symlink nor unreadable; a lockfile path outside `repo` takes nothing). `[]` when the plan has any `fix` row. Only names `mcp.package_name_ok` accepts for the row's ecosystem are returned |
 
 All raise `executor.ExecError` when they refuse.
 
@@ -3183,6 +3187,12 @@ or `""`. Held
 while the repository's newest `fixplan-<slug>.md` equals the plan of the day that result was recorded;
 a changed plan, a later successful `stage-fix`, or a missing plan lifts it. Reads the ledger and run
 directories only. Called by `executor.authorize`.
+
+#### `major_next_since(target, rows)`
+
+The local date (`YYYY-MM-DD`) of `target`'s last `stage-fix` result when it failed "nothing fixable without a
+major jump" (not the upstream variant), `futile_reason` still holds it at the current plan, and no `stage-major`
+row of any kind follows it in the ledger; else `""`. Read by `executor_guard.write_plan_levels` (`major_next`).
 
 #### `mark_held(target)` / `held_count()`
 
