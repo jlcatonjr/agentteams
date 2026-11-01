@@ -7,11 +7,12 @@ what the second render's gate reads:
 
 * governed (``enforce_decision_signing`` on disk before the render): ``--os-sandbox off`` / ``--wasm-sandbox off``
   after on exits 1 naming ``sandbox-os-off:<fw>`` / ``sandbox-wasm-off:<fw>`` and leaves the record on; an HMAC-signed
-  row is valid but insufficient; an operator Ed25519-signed row (stubbed, as in the per-plan tests: the ``signing``
+  row is valid but insufficient and an Ed25519 row that does not verify is refused; an operator Ed25519-signed row (stubbed, as in the per-plan tests: the ``signing``
   extra is not installed here) clears it, records ``ed25519-decision``, and registers the standing OS-off exception;
 * ungoverned: the same transition succeeds with the ``SANDBOX RELAXATION`` notices and ``notice-only`` records;
-* Rule-12 regression: ``confined`` + ``os_sandbox: off`` + ``write_policy: orchestrator-only`` refuses on every
-  framework that accepts the write policy, from the brief and from ``--os-sandbox off``.
+* Rule-12 regression: ``confined`` + ``os_sandbox: off`` + ``write_policy: orchestrator-only`` refuses with the
+  needs-the-session-sandbox message on the frameworks that support the write policy (claude, codex; goose as the suite opts it in), from the brief
+  and from ``--os-sandbox off``; every other framework refuses the write policy itself.
 """
 
 from __future__ import annotations
@@ -38,6 +39,9 @@ WASM_BRIEF = json.loads((REPO / "examples" / "software-project" / "wasm-runtime.
 VENDOR = ("claude", "goose", "codex", "grok", "copilot-vscode", "copilot-cli", "agents-md")
 #: WASM on with no native-exec keep, so the first render needs no signature (D12's default keep has its own tests).
 _WASM_ON = {"enabled": True, "native_exec_keep": []}
+#: Frameworks that take ``write_policy: orchestrator-only`` (claude; codex through its confined runner; goose only
+#: because the suite sets ``AGENTTEAMS_ALLOW_UNENFORCED_GOOSE_SWITCH=1``, ``tests/conftest.py``).
+_WRITE_POLICY_HOSTS = frozenset({"claude", "codex", "goose"})
 _GRANT_TOKENS = "wasm:primary-producer:read:docs;wasm:primary-producer:scratch"
 
 
@@ -127,9 +131,15 @@ def test_governed_on_to_off_refuses_unsigned_and_hmac_then_proceeds_with_the_ope
         assert rc == 1 and action in err, err[-800:]
         assert (team.state()["os"], team.state()["wasm"]) == ("on", "on")  # the refused render recorded nothing
 
-    team.sign(_row(f"sandbox-os-off:{framework}", scheme="hmac"))      # valid HMAC: insufficient (Rule 15b)
-    rc, err, _ = team.render("--os-sandbox", "off")
-    assert rc == 1 and f"sandbox-os-off:{framework}" in err
+    for kind, flag in (("os", "--os-sandbox"), ("wasm", "--wasm-sandbox")):
+        action = f"sandbox-{kind}-off:{framework}"
+        team.sign(_row(action, scheme="hmac"))                              # valid HMAC: insufficient (Rule 15b)
+        rc, err, _ = team.render("--os-sandbox", "on", flag, "off")
+        assert rc == 1 and action in err and "REQUIRES ed25519" in err, err[-800:]
+        team.sign(_row(action, sign=lambda values: "stub" + "0" * 64))      # an Ed25519 row that does not verify
+        rc, err, _ = team.render("--os-sandbox", "on", flag, "off")
+        assert rc == 1 and action in err, err[-800:]
+        assert (team.state()["os"], team.state()["wasm"]) == ("on", "on")
     assert er.list_exceptions(team.dir) == []
 
     team.sign(_row(f"sandbox-os-off:{framework}"), _row(f"sandbox-wasm-off:{framework}"))
@@ -220,10 +230,13 @@ def test_confined_os_off_with_orchestrator_only_is_refused(base: Path, framework
     path = base / f"{framework}-{source}-wp.brief.json"
     path.write_text(json.dumps(brief), encoding="utf-8")
     rc, err, records = team.render(*(["--os-sandbox", "off"] if source == "cli" else []), brief=path)
-    if "write_policy" in err and "not supported" in err:   # a framework without the write policy at all
-        pytest.skip(f"{framework} refuses write_policy itself: {err.strip().splitlines()[-1][:160]}")
-    assert rc == 1 and "orchestrator-only" in err, err[-800:]
-    assert records == [] and not (team.dir / "references" / "build-log.json").exists()
+    assert rc == 1 and records == [] and not (team.dir / "references" / "build-log.json").exists(), err[-800:]
+    if framework in _WRITE_POLICY_HOSTS:   # the Rule-12 refusal itself, naming the switch that turned it off
+        switch = "--os-sandbox off" if source == "cli" else 'os_sandbox "off"'
+        assert f'write_policy "orchestrator-only" needs the session sandbox: {switch} turns it off' in err, err[-800:]
+    else:                                  # the write policy is refused on this host before the switch matters
+        assert 'write_policy "orchestrator-only" is supported on claude' in err and f"{framework} has" in err, \
+            err[-800:]
 
 
 @pytest.mark.xfail(strict=True, reason=(

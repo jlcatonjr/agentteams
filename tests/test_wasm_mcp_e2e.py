@@ -7,7 +7,8 @@ rendered front matter** over stdio:
 
 * a granted agent (``cleanup``: ``docs`` ro + scratch in the brief) and a compute-only one (``format-converter``);
 * the render installed byte-exactly the packaged bundle, and the rendered pins hash is the installed pins file's;
-* the rendered ``--grant-sha256`` is the server's digest: the flags widened without it refuse to start;
+* the rendered ``--grant-sha256`` is the server's digest: flags widened (read, scratch, limits) or the digest
+  dropped refuse to start (the digest covers the grant, not the ``--agent`` name: R1 protects the files);
 * without a runtime: ``tools/list`` is ``run_wasm`` only, a path outside the grant (or any path for the compute-only
   agent) is refused, and a call inside the grant reaches the clear ``--wasm-install`` error;
 * an ineligible agent (``adversarial``, read-only) carries no server entry and no ``run_wasm`` tool;
@@ -144,12 +145,27 @@ def test_compute_only_agent_refuses_every_path(rendered: Path) -> None:
 
 def test_widening_the_rendered_flags_without_the_digest_refuses_to_start(rendered: Path) -> None:
     """The rendered ``--grant-sha256`` (P11) is the server's own digest (P10): a widened copy of the flags fails."""
-    command, args = _launch_of(rendered, COMPUTE)
-    at = args.index("--fuel")
-    for widened in ([*args[:at], "--read", "secret", *args[at:]], [*args[:at], "--scratch", *args[at:]]):
-        proc = _start_refusal(rendered, command, widened)
-        assert proc.returncode == 2 and proc.stdout == b"" and b"grant" in proc.stderr, proc.stderr[-400:]
-    assert _start_refusal(rendered, command, args).returncode == 0   # the rendered flags themselves start
+    def edited(slug: str, edit: Any) -> tuple[str, list[str]]:
+        command, args = _launch_of(rendered, slug)
+        return command, edit(list(args))
+
+    def insert(flags: list[str]) -> Any:
+        return lambda a: [*a[:a.index("--fuel")], *flags, *a[a.index("--fuel"):]]
+
+    def bump(flag: str) -> Any:
+        return lambda a: [*a[:a.index(flag) + 1], str(int(a[a.index(flag) + 1]) * 2), *a[a.index(flag) + 2:]]
+
+    tampered = [edited(COMPUTE, insert(["--read", "secret"])), edited(COMPUTE, insert(["--scratch"])),
+                edited(GRANTED, insert(["--read", "secret"])), edited(COMPUTE, bump("--fuel")),
+                edited(COMPUTE, bump("--timeout-s"))]
+    for command, args in tampered:
+        proc = _start_refusal(rendered, command, args)
+        assert proc.returncode == 2 and proc.stdout == b"" and b"grant" in proc.stderr, (args, proc.stderr[-400:])
+    command, args = edited(COMPUTE, lambda a: a[:a.index("--grant-sha256")])   # the digest flag dropped
+    proc = _start_refusal(rendered, command, args)
+    assert proc.returncode == 2 and proc.stdout == b"", proc.stderr[-400:]
+    for slug in (GRANTED, COMPUTE):   # the rendered flags themselves start
+        assert _start_refusal(rendered, *_launch_of(rendered, slug)).returncode == 0
 
 
 # --- live: the dev runtime under a test pins file --------------------------------------------------------------------

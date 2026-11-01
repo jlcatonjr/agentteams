@@ -103,15 +103,22 @@ def _plant(root: Path, kind: str) -> None:
         os.link(root / "outside.txt", target / "hard.txt")
     elif kind == "fifo":
         os.mkfifo(target / "pipe")
+    elif kind == "dirlink":
+        (root / "outside").mkdir()
+        os.symlink(root / "outside", target / "sub")
 
 
-@pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])
+_R7_CAUSE = {"symlink": "link.txt is a symlink", "hardlink": "hard.txt is a hardlink",
+             "fifo": "pipe is a FIFO, socket or device", "dirlink": "sub is a symlink"}
+
+
+@pytest.mark.parametrize("kind", sorted(_R7_CAUSE))
 def test_r7_entry_planted_in_a_brief_granted_dir_after_render_is_refused(tmp_path: Path, kind: str,
                                                                          no_spawn: None) -> None:
     root = _project(tmp_path)
     grant = _brief_grant(root, ["data"])
     _plant(root, kind)
-    with pytest.raises(G.WasmGuestError, match="snapshot of /project/data"):
+    with pytest.raises(G.WasmGuestError, match=f"snapshot of /project/data: snapshot: {_R7_CAUSE[kind]}; refused"):
         _module_run(root, grant)
     assert not os.listdir(root / ".agentteams" / "wasm" / "exec")   # the refused run left nothing behind
 
@@ -122,17 +129,25 @@ def test_r7_size_cap_is_enforced_during_the_copy(tmp_path: Path, no_spawn: None,
     (root / "data" / "big.bin").write_bytes(b"x" * 4096)
     grant = _brief_grant(root, ["data"])
     monkeypatch.setattr(W, "SNAPSHOT_MAX_BYTES", 1024)
-    with pytest.raises(G.WasmGuestError, match="snapshot of /project/data"):
+    with pytest.raises(G.WasmGuestError, match="snapshot of /project/data: read mount too large to snapshot"):
         _module_run(root, grant)
 
 
-def test_r7_a_read_path_overlapping_the_scratch_dir_is_refused(tmp_path: Path, no_spawn: None) -> None:
+@pytest.mark.parametrize("where, cause", [
+    ("scratch-parent", r"host .* overlaps the protected .*/\.agentteams; refused"),
+    ("project-root", r"host .* must be inside the project, not its root"),
+])
+def test_r7_a_read_path_overlapping_the_scratch_dir_is_refused(tmp_path: Path, where: str, cause: str,
+                                                               no_spawn: None) -> None:
+    """Every read mount that overlaps an agent scratch also touches the control plane or is the project root, so
+    those rules refuse it before the overlap rule itself (``wasm_exec._check_mount_host``) is reached."""
     root = _project(tmp_path)
     grant = _brief_grant(root, ["data"])
     scratch = next(m for m in grant.mounts if m.guest == "/scratch")
-    overlapping = W.Grant((W.Mount(str(Path(scratch.host).parent), "/project/sc", "ro"), scratch), grant.limits)
+    host = str(Path(scratch.host).parent) if where == "scratch-parent" else str(root)
+    overlapping = W.Grant((W.Mount(host, "/project/sc", "ro"), scratch), grant.limits)
     Path(scratch.host).mkdir(parents=True)
-    with pytest.raises(G.WasmGuestError, match="scratch"):
+    with pytest.raises(G.WasmGuestError, match=f"/project/sc: {cause}"):
         _module_run(root, overlapping)
 
 
@@ -172,7 +187,7 @@ def _render_in(root: Path) -> tuple[Any, str]:
 def test_colon_in_the_project_path_refuses_the_render_and_writes_no_agents(tmp_path: Path) -> None:
     root = _project(tmp_path / "a::b")
     rc, _ = _render_in(root)
-    assert rc != 0 and rc is not None
+    assert isinstance(rc, W.WasmExecError) and "without ':'" in str(rc)   # fail closed (the xfail below: not clean)
     assert not list((root / ".claude" / "agents").glob("*.md"))
 
 
