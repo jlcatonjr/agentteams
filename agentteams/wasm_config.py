@@ -52,8 +52,11 @@ if TYPE_CHECKING:
 #: :data:`WASM_SANDBOX_VALUES`. The team manifest is never persisted whole, so it never reaches disk.
 WASM_SANDBOX_CLI_KEY = "_wasm_sandbox_cli"
 
+#: The two values of every sandbox on/off switch (``os_sandbox`` / ``--os-sandbox``, ``--wasm-sandbox``,
+#: ``--wasm-substrate`` / ``wasm_sandbox.model_substrate``); the one constant :func:`validate_on_off` checks.
+ON_OFF_VALUES: tuple[str, ...] = ("on", "off")
 #: The two values of ``--wasm-sandbox`` and of ``--wasm-substrate`` / ``wasm_sandbox.model_substrate``.
-WASM_SANDBOX_VALUES: tuple[str, ...] = ("on", "off")
+WASM_SANDBOX_VALUES: tuple[str, ...] = ON_OFF_VALUES
 
 #: Transient manifest key carrying ``--wasm-substrate`` (operator argv; P20 D3). Set only by ``cli/generate.py`` and
 #: the ``--check-wiring`` path, never read from input; validated by :func:`validate_wasm_substrate_cli`.
@@ -467,8 +470,32 @@ def config_from_record(rec: object, *, agent_slugs: Iterable[str]) -> WasmConfig
 
 # --- the effective state (WASM half of sandbox_state.effective_sandbox_state) -------------------------------------
 
+def validate_on_off(value: object, label: str) -> str | None:
+    """Return a validated sandbox on/off switch value (fail closed on anything else).
+
+    The one validator behind ``--wasm-sandbox``, ``--wasm-substrate`` and ``os_sandbox``
+    (``sandbox_state.validate_os_sandbox``): ``"OFF"``, ``true`` or ``1`` look like a choice while meaning none, so
+    they are refused rather than ignored.
+
+    Args:
+        value: The raw brief / argv value (or the transient manifest key).
+        label: The switch's name in the error message (for example ``"--wasm-sandbox"``).
+
+    Returns:
+        ``None`` when absent, else ``"on"`` or ``"off"``.
+
+    Raises:
+        ValueError: Any other value.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and value in ON_OFF_VALUES:
+        return value
+    raise ValueError(f"{label} must be \"on\" or \"off\" (got {value!r})")
+
+
 def validate_wasm_sandbox_cli(value: object) -> str | None:
-    """Return the validated ``--wasm-sandbox`` value.
+    """Return the validated ``--wasm-sandbox`` value (:func:`validate_on_off`).
 
     Args:
         value: The argv value (or the transient manifest key).
@@ -479,15 +506,11 @@ def validate_wasm_sandbox_cli(value: object) -> str | None:
     Raises:
         ValueError: Any other value.
     """
-    if value is None:
-        return None
-    if isinstance(value, str) and value in WASM_SANDBOX_VALUES:
-        return value
-    raise ValueError(f"--wasm-sandbox must be \"on\" or \"off\" (got {value!r})")
+    return validate_on_off(value, "--wasm-sandbox")
 
 
 def validate_wasm_substrate_cli(value: object) -> str | None:
-    """Return the validated ``--wasm-substrate`` value (fail closed on anything but on/off).
+    """Return the validated ``--wasm-substrate`` value (:func:`validate_on_off`).
 
     Args:
         value: The argv value (or the transient manifest key).
@@ -498,11 +521,7 @@ def validate_wasm_substrate_cli(value: object) -> str | None:
     Raises:
         ValueError: Any other value.
     """
-    if value is None:
-        return None
-    if isinstance(value, str) and value in WASM_SANDBOX_VALUES:
-        return value
-    raise ValueError(f"--wasm-substrate must be \"on\" or \"off\" (got {value!r})")
+    return validate_on_off(value, "--wasm-substrate")
 
 
 def substrate_switch(manifest: Mapping[str, Any]) -> tuple[str | None, str | None]:
@@ -532,9 +551,7 @@ def substrate_switch(manifest: Mapping[str, Any]) -> tuple[str | None, str | Non
     kept = manifest.get(WASM_SUBSTRATE_KEPT_KEY)
     if kept is None:
         return None, None
-    if kept not in WASM_SANDBOX_VALUES:
-        raise ValueError(f"the kept model-substrate value must be \"on\" or \"off\" (got {kept!r})")
-    return kept, "kept"
+    return validate_on_off(kept, "the kept model-substrate value"), "kept"
 
 
 def _slugs_of(manifest: Mapping[str, Any]) -> list[str]:
@@ -747,6 +764,7 @@ __all__ = [
     "NATIVE_EXEC_EXEMPT",
     "NATIVE_EXEC_KEEP_DEFAULT",
     "NATIVE_EXEC_VALUES",
+    "ON_OFF_VALUES",
     "WASM_SANDBOX_CLI_KEY",
     "WASM_SANDBOX_VALUES",
     "WASM_SUBSTRATE_CLI_KEY",
@@ -762,6 +780,7 @@ __all__ = [
     "manifest_wasm_config",
     "normalize_wasm_sandbox",
     "substrate_switch",
+    "validate_on_off",
     "validate_read_path",
     "validate_wasm_sandbox_cli",
     "validate_wasm_substrate_cli",

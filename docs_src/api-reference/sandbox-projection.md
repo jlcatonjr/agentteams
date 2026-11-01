@@ -32,6 +32,9 @@ process is confined. `require_enforced` is always `true`; a consumer must refuse
 ## Public surface
 
 - `PROJECTION_REL`, `SCHEMA_ID`, `PRODUCER`, `FIELDS` (file order = the schema's `required`).
+- `TEAM_DIR_KEY`: a transient manifest key, the render's agents dir (set by
+  `cli.wasm_sandbox_switch.apply_wasm_switch` on every render with a project root). Like the `_wasm_substrate_*`
+  keys it is never persisted: the build-log records only `sandbox_state`.
 - `projection_record(manifest, *, team) -> dict | None`: the record, or `None` when neither the brief nor argv sets
   the switch (a kept floor is never re-projected).
 - `validate_record(obj) -> dict`: the stdlib twin of the schema (exact keys, enums, `require_enforced is True`);
@@ -39,7 +42,8 @@ process is confined. `require_enforced` is always `true`; a consumer must refuse
 - `projection_text(record) -> str`: canonical two-space JSON plus one newline.
 - `write_projection(project_root, record, *, dry_run) -> ProjectionOutcome` (`status`: `written`, `unchanged`,
   `kept-foreign`, `dry-run`; `notices`). `.agentteams` must be a real directory and the file regular or absent; the
-  write is temp-then-`os.replace` relative to the directory fd (`signing_switch._replace_no_follow`).
+  write is temp-then-`os.replace` relative to the directory fd (`atomicio.replace_no_follow`); the read is
+  `atomicio.read_regular_nofollow`, capped at 4 KiB.
 - `read_projection(project_root) -> dict | None`: the reference reader (absent: `None`; anything malformed raises).
 - `kept_value(project_root) -> str | None`: the floor an existing file holds (only a readable object saying `"off"`
   is `"off"`).
@@ -69,7 +73,9 @@ process is confined. `require_enforced` is always `true`; a consumer must refuse
 ## Residuals (Rule 12)
 
 The kept floor can only hold a stricter value longer. With the OS sandbox off nothing stops a session from editing
-the file; `--verify-integrity` and the gate's OR with the build-log record catch a lowered floor afterwards.
+the file; `--verify-integrity` and the gate's OR with the build-log record catch a lowered floor afterwards. The
+Copilot surfaces (copilot-cli, copilot-vscode) emit no session sandbox, so they never write-protect the file
+(`known-limitations.md`). A consumer must also refuse when the file is absent after an `on`: handoff §4.3 item 8.
 
 ## See also
 

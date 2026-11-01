@@ -272,7 +272,7 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Tracking:** 1.0 known limitation. A version pin that fails closed on an untested codex-cli is planned for 1.0.x
   (found by baseAgent).
 
-## Copilot (`--framework copilot-vscode`)
+## Copilot (`--framework copilot-vscode`, `--framework copilot-cli`)
 
 ### The orchestrator and security agents exceed GitHub's custom-agent size limit
 
@@ -282,6 +282,17 @@ does (see the [stability policy](https://github.com/jlcatonjr/agentteams/blob/ma
 - **Workaround:** rely on the Claude or Codex surface for those two roles, or trim their Project-Specific Notes.
 - **Tracking:** 1.0 known limitation. Splitting long sections into references, with an emit-time size check, is
   planned for 1.0.x (found by masterTeacher).
+
+### The projected model-substrate floor is not write-protected
+
+- **What:** the Copilot surfaces emit no session sandbox, so nothing stops a Copilot session from editing or deleting
+  `.agentteams/sandbox-state.json` (the `wasm_sandbox.model_substrate` floor a consumer such as baseAgent enforces).
+  Claude and Goose write-protect the file, and the Codex and Grok runners protect all of `.agentteams`.
+- **Who:** copilot-cli and copilot-vscode teams that set `wasm_sandbox.model_substrate`.
+- **Workaround:** run `agentteams --verify-integrity` before a run that depends on the floor: it exits 1 when the file
+  is absent, unusable or `off` while the last render recorded `on`. The consumer's own check is in the baseAgent
+  handoff (`references/cross-orchestrator-requests/2026-W44-wasm-grant-spec-and-substrate.md` §4.3 item 8).
+- **Tracking:** WASM sandbox P20 residual (Rule 12).
 
 ## Rendering
 

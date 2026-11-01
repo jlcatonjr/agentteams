@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 from agentteams import _sandbox_profiles as _profiles
 from agentteams.cli.sandbox_effects import native_exec_token, read_token, scratch_token, valid_rel
+from agentteams.wasm_config import ON_OFF_VALUES, validate_on_off
 
 if TYPE_CHECKING:
     from agentteams.wasm_exec import Grant, Limits
@@ -281,7 +282,7 @@ class SandboxState:
                                                      "wasm_grants", "model_substrate"}:
             return None
         switches = rec["os"], rec["wasm"]
-        if any(v not in ("on", "off") for v in switches):
+        if any(v not in ON_OFF_VALUES for v in switches):
             return None
         if not all(isinstance(rec[k], str) and _REASON_RE.match(rec[k]) for k in ("os_reason", "wasm_reason")):
             return None
@@ -462,7 +463,7 @@ def previous_sandbox_state(team_dir: Path, project_root: Path, framework_id: str
 
 
 #: The two values of the dedicated OS-sandbox switch (brief ``os_sandbox``, argv ``--os-sandbox``; P00).
-OS_SANDBOX_VALUES: tuple[str, ...] = ("on", "off")
+OS_SANDBOX_VALUES: tuple[str, ...] = ON_OFF_VALUES
 
 #: Transient manifest key carrying ``--os-sandbox`` (operator argv). Set only by ``cli/generate.py`` and the
 #: ``--check-wiring`` path, never read from input: :func:`effective_sandbox_state` honours it only as one of
@@ -492,11 +493,7 @@ def validate_os_sandbox(value: object) -> str | None:
     Raises:
         ValueError: Any other value.
     """
-    if value is None:
-        return None
-    if isinstance(value, str) and value in OS_SANDBOX_VALUES:
-        return value
-    raise ValueError(f"os_sandbox must be \"on\" or \"off\" (got {value!r})")
+    return validate_on_off(value, "os_sandbox")
 
 
 def _sandbox_tokens(manifest: dict[str, Any]) -> list[str]:
@@ -717,6 +714,26 @@ def verifier_sandbox_state(manifest: dict[str, Any] | None, team_dir: Path,
     return SandboxState.from_record(log.get(BUILD_LOG_STATE_KEY), project_root=_root(project_root))
 
 
+def recorded_model_substrate(team_dir: Path) -> str | None:
+    """Return the ``model_substrate`` the last render recorded in the build-log, without rebuilding any grant (P20).
+
+    Reads only that one field, so a missing :mod:`agentteams.wasm_exec` or a malformed grant elsewhere in the record
+    can never hide a recorded ``"on"`` floor from ``--verify-integrity`` (``sandbox_projection.verify_projection``).
+
+    Args:
+        team_dir: The team directory (holds ``references/build-log.json``).
+
+    Returns:
+        ``"on"`` / ``"off"``, or None when the build-log is absent or unusable or records no such value.
+
+    Raises:
+        Nothing.
+    """
+    record = (_read_build_log(team_dir) or {}).get(BUILD_LOG_STATE_KEY)
+    value = record.get("model_substrate") if isinstance(record, dict) else None
+    return value if isinstance(value, str) and value in ON_OFF_VALUES else None
+
+
 def has_recorded_state(team_dir: Path) -> bool:
     """Return whether the previous render recorded a ``sandbox_state`` (or left an unusable build-log).
 
@@ -789,6 +806,7 @@ __all__ = [
     "os_switch_state",
     "previous_sandbox_exceptions",
     "previous_sandbox_state",
+    "recorded_model_substrate",
     "state_tokens",
     "validate_os_sandbox",
     "verifier_sandbox_state",

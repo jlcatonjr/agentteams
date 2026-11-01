@@ -111,17 +111,22 @@ def test_apply_wasm_switch_refuses_a_symlinked_projection_up_front(tmp_path):
 
 
 def test_the_build_log_record_carries_the_value_and_no_transient_key(tmp_path):
+    from agentteams.sandbox_projection import TEAM_DIR_KEY
+
     team = _team(tmp_path, governed=False)
     m = _manifest(None, **{WASM_SUBSTRATE_CLI_KEY: "on"})
     finalize_privilege_wiring(m, [], "claude", tmp_path, team_dir=team)
     assert m["sandbox_state"]["model_substrate"] == "on"
+    assert isinstance(m.get(TEAM_DIR_KEY), Path)      # set for this render (transient), so it must not leak below
     record = json.dumps(m["sandbox_state"])
-    assert WASM_SUBSTRATE_CLI_KEY not in record and WASM_SUBSTRATE_KEPT_KEY not in record
+    for key in (WASM_SUBSTRATE_CLI_KEY, WASM_SUBSTRATE_KEPT_KEY, TEAM_DIR_KEY):
+        assert key not in record
     from tests.test_sandbox_state_record import _run_log
 
-    log = _run_log(tmp_path, sandbox_state=m["sandbox_state"])
+    log = _run_log(tmp_path, sandbox_state=m["sandbox_state"], **{TEAM_DIR_KEY: m[TEAM_DIR_KEY]})
     assert log["sandbox_state"]["model_substrate"] == "on"
-    assert WASM_SUBSTRATE_CLI_KEY not in json.dumps(log)
+    text = json.dumps(log)
+    assert WASM_SUBSTRATE_CLI_KEY not in text and TEAM_DIR_KEY not in text and str(team) not in text
 
 
 def test_finalize_maps_a_bad_cli_value_to_a_refusal(tmp_path):

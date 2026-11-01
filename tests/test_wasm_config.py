@@ -201,3 +201,20 @@ def test_cli_value_fails_closed(bad):
     with pytest.raises(ValueError, match="--wasm-sandbox"):
         wc.validate_wasm_sandbox_cli(bad)
     assert wc.validate_wasm_sandbox_cli(None) is None and wc.validate_wasm_sandbox_cli("on") == "on"
+
+
+@pytest.mark.parametrize("validate, label", [
+    (wc.validate_wasm_sandbox_cli, "--wasm-sandbox"),
+    (wc.validate_wasm_substrate_cli, "--wasm-substrate"),
+    (ss.validate_os_sandbox, "os_sandbox"),
+])
+@pytest.mark.parametrize("bad", ["OFF", True, 1, "", "yes"])
+def test_every_on_off_switch_shares_one_validator(validate, label, bad):
+    # W6R F2: one validator and one value set for the three on/off switches; only the label differs.
+    assert ss.OS_SANDBOX_VALUES is wc.WASM_SANDBOX_VALUES is wc.ON_OFF_VALUES == ("on", "off")
+    with pytest.raises(ValueError) as exc:
+        validate(bad)
+    with pytest.raises(ValueError) as shared:
+        wc.validate_on_off(bad, label)
+    assert str(exc.value) == str(shared.value) and str(exc.value).startswith(f"{label} must be")
+    assert [validate(v) for v in (None, "on", "off")] == [None, "on", "off"]

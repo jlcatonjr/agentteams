@@ -39,6 +39,9 @@ normalised block as `manifest["wasm_sandbox"]` only when the brief has it, so ev
   never from input), `validate_wasm_substrate_cli(value)`, and `substrate_switch(manifest) -> (value, source)`:
   `--wasm-substrate` > `wasm_sandbox.model_substrate` > a kept projection file > `(None, None)` (P20; see
   [`sandbox_projection`](sandbox-projection.md)).
+- `ON_OFF_VALUES` (`("on", "off")`) and `validate_on_off(value, label) -> str | None`: the one validator behind
+  `validate_wasm_sandbox_cli`, `validate_wasm_substrate_cli`, the kept value and `sandbox_state.validate_os_sandbox`
+  (`None` when absent; any other value raises `ValueError("<label> must be \"on\" or \"off\" ...")`).
 
 ## Notes
 
