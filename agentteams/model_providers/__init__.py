@@ -54,7 +54,10 @@ from agentteams.model_providers._common import (
     CI_ALLOW_ENV, KINDS, MAX_PROVIDER_ID_CHARS, MAX_PROVIDER_SIG_CHARS, STOPS, TIER_ENV_PREFIX, TIERS,
     ModelProviderError, ModelReply, ToolSpec, Usage,
 )
-from agentteams.model_providers._config import PROVIDERS, Preset, Provider, get_provider, load_key, model_for_tier
+from agentteams.model_providers._config import (
+    PROVIDERS, Preset, Provider, check_base_url, get_provider, is_loopback_url, load_key, model_for_tier,
+    preset_needs_key,
+)
 from agentteams.model_providers._stub import StubProvider
 from agentteams.model_providers._transport import BACKOFF_CAP_S, MAX_RESPONSE_BYTES, MAX_RETRIES, _post_json
 from agentteams.model_providers._validate import _check_request
@@ -62,8 +65,8 @@ from agentteams.model_providers._validate import _check_request
 __all__ = [
     "ANTHROPIC_VERSION", "BACKOFF_CAP_S", "CI_ALLOW_ENV", "KINDS", "MAX_PROVIDER_ID_CHARS", "MAX_PROVIDER_SIG_CHARS",
     "MAX_RESPONSE_BYTES", "MAX_RETRIES", "PROVIDERS", "STOPS", "TIERS", "TIER_ENV_PREFIX", "ModelProviderError",
-    "ModelReply", "Preset", "Provider", "StubProvider", "ToolSpec", "Usage", "complete", "get_provider", "load_key",
-    "model_for_tier",
+    "ModelReply", "Preset", "Provider", "StubProvider", "ToolSpec", "Usage", "check_base_url", "complete",
+    "get_provider", "is_loopback_url", "load_key", "model_for_tier", "preset_needs_key",
 ]
 
 #: Wire family -> module providing ``endpoint(provider, model)``, ``encode(...)`` and ``decode(...)``.

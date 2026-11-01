@@ -17,12 +17,16 @@ The kinds:
 Gate action ids are ``<kind>:<qualifier>`` (a framework id, ``model-substrate``, or an agent slug). Grant tokens are
 ``wasm:<agent>:read:<rel>``, ``wasm:<agent>:scratch`` and ``native-exec:<agent>``.
 
-Stdlib-only; imports nothing from ``agentteams`` (so every importer stays cycle-free).
+Stdlib-only; imports only the leaf :mod:`agentteams.sandbox_tokens` (the token spelling, re-exported here), so
+every importer stays cycle-free.
 """
 
 from __future__ import annotations
 
 import re
+
+from agentteams.sandbox_tokens import checked_slug as _slug
+from agentteams.sandbox_tokens import native_exec_token, read_token, scratch_token, valid_rel
 
 SANDBOX_OS_OFF = "sandbox-os-off"
 SANDBOX_WASM_OFF = "sandbox-wasm-off"
@@ -51,8 +55,6 @@ SANDBOX_RELAXATION_TOKENS: tuple[str, ...] = tuple(dict.fromkeys(
 
 _RELAXATION_RE = re.compile(r"(?<![a-z])(?:" + "|".join(re.escape(t) for t in _STEMS) + ")")
 _FOLD_RE = re.compile(r"[\s_]+")
-_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 def _fold(text: str) -> str:
@@ -71,37 +73,6 @@ def names_sandbox_relaxation(text: str) -> bool:
         does not).
     """
     return _RELAXATION_RE.search(_fold(text)) is not None
-
-
-def _slug(value: str, what: str) -> str:
-    """Return ``value`` when it is a slug (``^[a-z0-9][a-z0-9-]*$``), else raise ValueError naming ``what``."""
-    if not isinstance(value, str) or not _SLUG_RE.match(value):
-        raise ValueError(f"{what} {value!r} is not a slug (^[a-z0-9][a-z0-9-]*$)")
-    return value
-
-
-def valid_rel(rel: str) -> str:
-    """Return ``rel`` when it is a project-relative guest path, else raise.
-
-    The guest-name segment grammar (P02): segments of ``[A-Za-z0-9._-]+`` joined by ``/``; no ``.`` or ``..``
-    segment, no leading or trailing ``/``.
-
-    Args:
-        rel: The project-relative path a read grant names.
-
-    Returns:
-        ``rel`` unchanged.
-
-    Raises:
-        ValueError: ``rel`` is empty, absolute, or has a segment outside the grammar.
-    """
-    if not isinstance(rel, str) or not rel:
-        raise ValueError("a read path must be a non-empty project-relative path")
-    for segment in rel.split("/"):
-        if segment in {"", ".", ".."} or not _SEGMENT_RE.match(segment):
-            raise ValueError(f"read path {rel!r} has a segment outside the guest-name grammar ([A-Za-z0-9._-]+, "
-                             "no '.' or '..', no empty segment)")
-    return rel
 
 
 def action_id(kind: str, qualifier: str) -> str:
@@ -133,52 +104,6 @@ def relaxation_kind_of(action: str) -> str | None:
     """
     head = (action or "").strip().lower().split(":", 1)[0]
     return head if head in SANDBOX_RELAXATION_KINDS else None
-
-
-def read_token(agent: str, rel: str) -> str:
-    """Return the grant token for a read-only ``/project/<rel>`` mount: ``wasm:<agent>:read:<rel>``.
-
-    Args:
-        agent: The agent slug.
-        rel: The project-relative path (see :func:`valid_rel`).
-
-    Returns:
-        The token.
-
-    Raises:
-        ValueError: A bad slug or path.
-    """
-    return f"wasm:{_slug(agent, 'agent')}:read:{valid_rel(rel)}"
-
-
-def scratch_token(agent: str) -> str:
-    """Return the grant token for an agent's private writable scratch dir: ``wasm:<agent>:scratch``.
-
-    Args:
-        agent: The agent slug.
-
-    Returns:
-        The token.
-
-    Raises:
-        ValueError: A bad slug.
-    """
-    return f"wasm:{_slug(agent, 'agent')}:scratch"
-
-
-def native_exec_token(agent: str) -> str:
-    """Return the token for an agent that keeps native execution while WASM is on: ``native-exec:<agent>``.
-
-    Args:
-        agent: The agent slug.
-
-    Returns:
-        The token.
-
-    Raises:
-        ValueError: A bad slug.
-    """
-    return f"native-exec:{_slug(agent, 'agent')}"
 
 
 def is_relaxation_token(token: str) -> bool:

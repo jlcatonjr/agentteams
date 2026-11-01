@@ -33,8 +33,9 @@ live = [needs_wasmtime, needs_dev_python]
 
 @pytest.fixture(scope="module")
 def rendered(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """An ungoverned team (``enforce_decision_signing: false``): its widened grant runs under a notice (C2)."""
     root = project(tmp_path_factory.mktemp("wasmcli"))
-    assert render(root, write_brief(root)) == 0
+    assert render(root, write_brief(root, enforce_decision_signing=False)) == 0
     return root
 
 
@@ -52,7 +53,7 @@ def dev_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize("_", [pytest.param(None, marks=live)])
 def test_run_one_agent_on_the_stub_then_verify_and_revoke(rendered: Path, dev_runtime: None, _: None,
                                                           capsys: pytest.CaptureFixture[str]) -> None:
-    rc = _main("--run-wasm-agent", "orchestrator", "--task", "Say hello.", "--project", str(rendered))
+    rc = _main("--run-wasm-agent", "orchestrator", "--wasm-task", "Say hello.", "--project", str(rendered))
     out = capsys.readouterr().out
     assert rc == 0, out
     assert "WASM agent orchestrator: provider stub, model stub" in out
@@ -60,7 +61,7 @@ def test_run_one_agent_on_the_stub_then_verify_and_revoke(rendered: Path, dev_ru
     run_id = next(line.split()[3].rstrip(":") for line in out.splitlines() if line.startswith("wasm agent run "))
     assert _main("--verify-wasm-run", run_id, "--project", str(rendered)) == 0
     assert "verified" in capsys.readouterr().out
-    assert _main("--revoke-wasm-run", run_id, "--project", str(rendered), "--reason", "test") == 0
+    assert _main("--revoke-wasm-run", run_id, "--project", str(rendered), "--revoke-reason", "test") == 0
     sentinel = rendered / ".agentteams" / "wasm-runs" / run_id / "REVOKED"
     assert sentinel.read_text().startswith("test")
     assert _main("--revoke-wasm-run", run_id, "--project", str(rendered)) == 1      # already revoked
@@ -86,7 +87,8 @@ def test_rendered_grant_reaches_the_guest(rendered: Path, dev_runtime: None, mon
         return text_reply("done")
     monkeypatch.setattr(L, "build_provider", lambda *a, **k: MP.Provider(MP.PROVIDERS["stub"], None, "",
                                                                          MP.StubProvider(script)))
-    rc = _main("--run-wasm-agent", "primary-producer", "--task", "Read the doc.", "--project", str(rendered), "--json")
+    rc = _main("--run-wasm-agent", "primary-producer", "--wasm-task", "Read the doc.", "--project", str(rendered),
+               "--json")
     data = json.loads(capsys.readouterr().out.split("\n", 1)[1])
     assert rc == 0 and data["run"]["status"] == "ok", data
     results = {b["tool_use_id"]: b for b in seen[1][-1]["content"]}
@@ -104,7 +106,7 @@ def test_missing_runtime_refuses_before_any_provider_call(rendered: Path, monkey
     def boom(*a: Any, **k: Any) -> Any:
         raise AssertionError("provider built before the runtime check")
     monkeypatch.setattr(L, "build_provider", boom)
-    rc = _main("--run-wasm-agent", "orchestrator", "--task", "x", "--project", str(rendered))
+    rc = _main("--run-wasm-agent", "orchestrator", "--wasm-task", "x", "--project", str(rendered))
     out = capsys.readouterr().out
     assert rc == 1 and "refused (runtime:" in out
     assert not (rendered / ".agentteams" / "wasm" / "installed.json").exists()
@@ -124,9 +126,9 @@ def test_provider_key_comes_only_from_the_environment(rendered: Path, dev_runtim
 
 
 @pytest.mark.parametrize("argv, rc", [
-    (("--run-wasm-agent", "ghost", "--task", "x"), 2),
-    (("--run-wasm-agent", "orchestrator", "--task", "   "), 2),
-    (("--run-wasm-agent", "orchestrator", "--task", "x", "--wasm-provider", "nope"), 2),
+    (("--run-wasm-agent", "ghost", "--wasm-task", "x"), 2),
+    (("--run-wasm-agent", "orchestrator", "--wasm-task", "   "), 2),
+    (("--run-wasm-agent", "orchestrator", "--wasm-task", "x", "--wasm-provider", "nope"), 2),
     (("--verify-wasm-run", "not-hex"), 2),
     (("--verify-wasm-run", "0" * 32), 1),
     (("--revoke-wasm-run", "0" * 32), 2),
@@ -136,7 +138,7 @@ def test_usage_refusals(rendered: Path, argv: tuple[str, ...], rc: int) -> None:
 
 
 def test_no_team_refuses(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert _main("--run-wasm-agent", "orchestrator", "--task", "x", "--project", str(tmp_path)) == 2
+    assert _main("--run-wasm-agent", "orchestrator", "--wasm-task", "x", "--project", str(tmp_path)) == 2
     assert "render the team with --framework wasm first" in capsys.readouterr().err
 
 
@@ -146,14 +148,14 @@ def test_task_file_is_nofollow_and_capped(rendered: Path, tmp_path: Path, capsys
     link = tmp_path / "link.txt"
     link.symlink_to(big)
     for path in (big, link):
-        assert _main("--run-wasm-agent", "orchestrator", "--task-file", str(path), "--project", str(rendered)) == 2
-        assert "--task-file" in capsys.readouterr().err
+        assert _main("--run-wasm-agent", "orchestrator", "--wasm-task-file", str(path), "--project", str(rendered)) == 2
+        assert "--wasm-task-file" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("argv", [
-    ["--task", "x"], ["--task-file", "x"], ["--wasm-provider", "stub"], ["--reason", "r"],
-    ["--run-wasm-agent", "a"], ["--run-wasm-agent", "a", "--task", "x", "--task-file", "y"],
-    ["--run-wasm-agent", "a", "--task", "x", "--verify-wasm-run", "0" * 32],
+    ["--wasm-task", "x"], ["--wasm-task-file", "x"], ["--wasm-provider", "stub"], ["--revoke-reason", "r"],
+    ["--run-wasm-agent", "a"], ["--run-wasm-agent", "a", "--wasm-task", "x", "--wasm-task-file", "y"],
+    ["--run-wasm-agent", "a", "--wasm-task", "x", "--verify-wasm-run", "0" * 32],
     ["--framework", "wasm", "--convert-from", "x"], ["--framework", "wasm", "--bridge-from", "x"],
     ["--framework", "wasm", "--interop-from", "x"], ["--framework", "wasm", "--absorb-from", "x"],
     ["--framework", "claude", "--interop-from", "x", "--interop-source-framework", "wasm"],
@@ -169,7 +171,7 @@ def test_no_run_dir_or_os_confine_flag() -> None:
     from agentteams.cli.parser import _build_parser
 
     flags = {s for a in _build_parser()._actions for s in a.option_strings}
-    assert {"--run-wasm-agent", "--task", "--task-file", "--wasm-provider", "--revoke-wasm-run",
+    assert {"--run-wasm-agent", "--wasm-task", "--wasm-task-file", "--wasm-provider", "--revoke-wasm-run",
             "--verify-wasm-run"} <= flags
     assert not {f for f in flags if "run-dir" in f or "os-confine" in f or "api-key" in f}
 
@@ -188,7 +190,7 @@ def test_guest_os_confine_follows_host_os_confine(rendered: Path, monkeypatch: p
     monkeypatch.setattr(L, "stage0", fake_stage0)
     real = T.check_runtime
     monkeypatch.setattr(T, "check_runtime", lambda data: {**real(data), "host_os_confine": host})
-    assert _main("--run-wasm-agent", "orchestrator", "--task", "x", "--project", str(rendered)) == 0
+    assert _main("--run-wasm-agent", "orchestrator", "--wasm-task", "x", "--project", str(rendered)) == 0
     assert (seen["guest_os_confine"], seen["host_confine"]) == (guest, host_confine)
     assert "environ" in seen and "resolver" in seen and "stub_script" not in seen
 

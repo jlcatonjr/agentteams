@@ -550,8 +550,9 @@ Adapter for agentteams' own WASM agent runtime (plan P08). Not a vendor CLI: the
   - Instructions: `.agentteams-wasm/TEAM.md` (neutralised like `AGENTS.md`).
   - `extra_output_files`: the neutral baseline plus `../grants.json` (from `sandbox_state.wasm_grant_for` only),
     `../runtime.json` (`wasm_agent.team.runtime_record`) and `../README.md`.
-  - Post-emit: `write_team_lock(agents_dir)` (called from `cli/generate_helpers._emit_privilege_artifacts` on every
-    write path) hashes the team into `.agentteams/wasm-team.lock.json`.
+  - Post-emit: `lock_wasm_team(manifest, output_dir)` (called from `cli/generate_helpers._emit_privilege_artifacts`
+    on every write path; a no-op for other frameworks) runs `write_team_lock(agents_dir)`, which hashes the team into
+    `.agentteams/wasm-team.lock.json`. A lock that cannot be written fails the render (`Error:` line, exit 1).
 - **Handoffs:** `manifest`. **Agents dir:** `<project>/.agentteams-wasm/agents/` (`normalize_output_path` appends it).
 - **`required_front_matter_keys()`:** `(name, description, tools, model, delegates)`; `FORMAT_SPECS["wasm"]` has
   `upstream=False` (the docs-watch exemption: `framework_research` watches only `UPSTREAM_SPECS`).

@@ -1588,7 +1588,8 @@ The per-dialect policy and parsers behind the gateway: `ROUTES`, the allowlists 
 `check_request(dialect, raw, *, models, max_output_tokens, chat_reserve_tokens, dlp, responses_reserve_tokens, chat_reasoning)` (raises `PolicyError`
 for a refusal; `dlp` is the DLP hook, and `Checked.redactions` its counts),
 `upstream_headers(dialect, client, up, anthropic_betas)`, `usage_for(dialect, payload)`
-(returns `(Usage, found)`), `load_prices(path)`, `priced(prices, model, usage)` and
+(returns `(Usage, found)`), `load_prices(path)`, `parse_prices(text)` (the same checks on text the caller
+already read; the WASM launcher passes its lock-verified bytes), `priced(prices, model, usage)` and
 `reservation(prices, checked)`.
 
 **Live probe.** `scripts/vulnscan-gateway-probe.sh [--model M] [--anthropic-model M]

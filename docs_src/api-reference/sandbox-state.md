@@ -78,6 +78,10 @@ state_tokens(state) -> frozenset[str]
 keep_tokens(state, exceptions) -> frozenset[str]
 ```
 
+The token spelling (`read_token`, `scratch_token`, `native_exec_token`, `valid_rel`, `checked_slug`) lives in the
+stdlib-only leaf `agentteams.sandbox_tokens`, which this module and `wasm_agent.team` import without touching the CLI
+package; `cli/sandbox_effects` re-exports it with the relaxation vocabulary.
+
 `grant_from_tokens` is the one grant builder (brief grants and the runner's jails): it refuses a read path through a
 symlink and, unless `check_credentials=False` (parsing a recorded state, where nothing is mounted), a read directory
 holding credential-named entries anywhere below it or too large to scan (`_sandbox_profiles.refuse_credentials`).

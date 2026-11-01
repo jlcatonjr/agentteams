@@ -29,7 +29,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 from agentteams import _sandbox_profiles as _profiles
-from agentteams.cli.sandbox_effects import native_exec_token, read_token, scratch_token, valid_rel
+from agentteams.sandbox_tokens import native_exec_token, read_token, scratch_token, valid_rel
 from agentteams.wasm_config import ON_OFF_VALUES, validate_on_off
 
 if TYPE_CHECKING:

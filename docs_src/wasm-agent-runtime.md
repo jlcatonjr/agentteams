@@ -60,16 +60,18 @@ file. A tier with no model refuses the run, except on the `stub` provider.
 }
 ```
 
-Every key is optional; an unknown key or a bad value refuses the render. `base_url` must be `https` (or `http` to a
-loopback host) with no user info, query or fragment. A brief never holds a key.
+Every key is optional; an unknown key or a bad value refuses the render. A brief never holds a key, and it never
+chooses where a key goes: `base_url` is accepted only for a keyless local preset (`ollama`, `lmstudio`) on a loopback
+host (`127.0.0.1`, `::1`, `localhost`). For any preset that sends a key the render refuses it; set the URL at run time
+instead (see below). The prices file is hashed into the team lock, so editing it means re-rendering.
 
 ## Run an agent
 
 ```
 agentteams --wasm-install all --project .          # once: the pinned runtime and interpreters
-agentteams --run-wasm-agent orchestrator --task "Summarise the open issues." --project .
+agentteams --run-wasm-agent orchestrator --wasm-task "Summarise the open issues." --project .
 agentteams --verify-wasm-run <run-id> --project .
-agentteams --revoke-wasm-run <run-id> --project . --reason "stop"
+agentteams --revoke-wasm-run <run-id> --project . --revoke-reason "stop"
 ```
 
 Provider keys are read from the environment only, by the launcher, and handed to the host over a pipe:
@@ -81,10 +83,16 @@ Provider keys are read from the environment only, by the launcher, and handed to
 | `openrouter` | `OPENROUTER_API_KEY` |
 | `xai` | `XAI_API_KEY` |
 | `gemini` | `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) |
-| `openai-compatible` | `AGENTTEAMS_MODEL_API_KEY` (needs `base_url`) |
+| `openai-compatible` | `AGENTTEAMS_MODEL_API_KEY` (needs an operator base URL) |
 | `ollama`, `lmstudio`, `stub` | none |
 
 `--wasm-provider NAME` picks another preset for one run. The run's output is model text and is printed as data.
+
+The key is sent to the preset's own base URL. To send it elsewhere (a proxy, a self-hosted gateway), the operator sets
+`AGENTTEAMS_WASM_BASE_URL` or passes `--wasm-base-url URL` (which wins) at run time: `https`, or `http` to a loopback
+host, with no user info, query or fragment. A URL rendered from the brief is kept only while the keyless-loopback rule
+holds for the run's preset, so `--wasm-provider anthropic` on an `ollama` team drops it (with a notice) and the key goes
+to Anthropic's own host.
 
 ## What is enforced
 
@@ -99,6 +107,20 @@ Provider keys are read from the environment only, by the launcher, and handed to
 - **Read-only mounts** are never mounted writable: `snapshot` is a size-capped copy per run (a read path over the cap
   refuses the run); `os` is a nested OS profile.
 - **Delegation** (`delegate`) is refused by the host until the delegation runtime lands.
+- **Grant authorization at launch:** the lock is a plain hash list, not a signature. Before every run the launcher
+  re-checks the agent's grant read-only. In a governed workspace each read path or scratch dir must be covered by an
+  active `wasm-grant-widen:wasm` exception whose bound Ed25519 decision still verifies, and limits above the defaults
+  must equal the ones the render's sandbox gate recorded; otherwise the run is refused. In an ungoverned workspace a
+  `SANDBOX RELAXATION` notice names the widening. Every load also re-runs the credential scan over each read path.
+
+### What the lock does and does not prove
+
+`.agentteams/wasm-team.lock.json` proves the team files match what the last render wrote. It holds no key, so anyone who
+can write `.agentteams/` can re-hash an edited team. Its integrity therefore rests on two things: R1, which
+write-protects `.agentteams/` for an agent session whenever WASM is on (only in an OS-confined session: Claude's
+deny list, the launcher's read-only binds or the Seatbelt control-plane denies), and the launch-time authorization
+check above, which a re-hashed `grants.json` cannot pass in a governed workspace. Outside an OS-confined session, treat
+`.agentteams/` as trusted only as far as you trust every process that can write it.
 
 ## Limits of v1
 

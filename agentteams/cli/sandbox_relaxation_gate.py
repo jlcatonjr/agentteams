@@ -299,6 +299,42 @@ def _standing(team_dir: Path, r: Relaxation, now: datetime) -> tuple[str, object
                       "predate governance); re-sign a decision or turn the sandbox back on", lapsed)
 
 
+def standing_authorization(team_dir: Path, kind: str, qualifier: str, grants: tuple[str, ...] = (), *,
+                           now: datetime | None = None) -> dict[str, str]:
+    """Re-check, read-only, that a standing relaxation is still covered by an active exception (launch time).
+
+    The same carry-over test a later render applies (:func:`authorize` on a continuing relaxation): every token in
+    *grants* is covered by an active, unexpired registry entry whose bound decision row still re-verifies (approved
+    author, the operator's Ed25519 signature, lineage, hash chain). Nothing is consumed, registered or retired. The
+    ``--run-wasm-agent`` launcher calls it in a governed workspace for every token an agent's grant holds (C2), so a
+    rewritten ``grants.json`` plus a re-hashed lock still cannot run a widening the operator never signed.
+
+    Args:
+        team_dir: The team directory (decisions log, exception registry).
+        kind: A standing kind (``wasm-grant-widen``, ``native-exec-keep``, ``sandbox-os-off``, ...).
+        qualifier: The action qualifier (a framework id or agent slug).
+        grants: The tokens that must be covered (grant kinds).
+        now: Reference time (defaults to now, UTC).
+
+    Returns:
+        The ``active-exception`` record (``kind``, ``action``, ``authorization``, ``exception_id``).
+
+    Raises:
+        SandboxRelaxationError: Not covered (never recorded, lapsed, unbound), or the registry or decisions log is
+            unreadable or broken (fail-closed).
+    """
+    r = Relaxation(kind, qualifier, grants=tuple(sorted(grants)), continuing=True)
+    try:
+        status, detail = _standing(team_dir, r, now or datetime.now(UTC))
+    except (ExceptionRegistryError, RuntimeError, OSError, ValueError) as exc:
+        raise SandboxRelaxationError(str(exc)) from exc
+    if status != "active":
+        message = detail[0] if status == "refuse" else f"{r.action} has no active exception"  # type: ignore[index]
+        raise SandboxRelaxationError(f"{message}. {_shape(r)}")
+    entries = list(detail)  # type: ignore[call-overload]
+    return _record(r, "active-exception", exception_id=";".join(str(e.get("id")) for e in entries))
+
+
 def _record(r: Relaxation, authorization: str, **extra: str) -> dict[str, str]:
     return {"kind": r.kind, "action": r.action, "authorization": authorization,
             **{k: v for k, v in extra.items() if v}}
@@ -457,4 +493,5 @@ __all__ = [
     "authorize",
     "plan_relaxations",
     "retire_on_tighten",
+    "standing_authorization",
 ]

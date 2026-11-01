@@ -553,8 +553,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "agentteams/data/wasm_runtime_pins.json sits in a git work tree.",
     )
     # --run-wasm-agent / --revoke-wasm-run / --verify-wasm-run (P08): the WASM agent runtime launcher. No flag takes a
-    # key, a URL, a run dir or an os_confine mode: keys come from the environment, Stage 0 owns the run dir (R4) and
-    # only the launcher module chooses the guest confinement (R5).
+    # key, a run dir or an os_confine mode: keys come from the environment, Stage 0 owns the run dir (R4) and only the
+    # launcher module chooses the guest confinement (R5). --wasm-base-url is the operator's run-time base URL (S5).
     parser.add_argument(
         "--run-wasm-agent",
         metavar="SLUG",
@@ -562,19 +562,19 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="run_wasm_agent",
         help="Run one agent of the --framework wasm team in --project (the WASM agent runtime: every step is a "
         "fresh WASM guest; the host calls the model provider). The team must match its control-plane lock. Needs "
-        "--task or --task-file and the pinned runtime (--wasm-install). Provider keys come only from the "
+        "--wasm-task or --wasm-task-file and the pinned runtime (--wasm-install). Provider keys come only from the "
         "environment (ANTHROPIC_API_KEY, OPENAI_API_KEY, ...; the stub needs none). Exit 0 ok, 1 the run failed or "
         "was refused, 2 usage.",
     )
     parser.add_argument(
-        "--task",
+        "--wasm-task",
         metavar="TEXT",
         default=None,
         dest="wasm_task",
         help="With --run-wasm-agent: the task (operator input; DLP-scanned before any model call).",
     )
     parser.add_argument(
-        "--task-file",
+        "--wasm-task-file",
         metavar="PATH",
         default=None,
         dest="wasm_task_file",
@@ -588,12 +588,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="With --run-wasm-agent: override the team's provider preset (a preset name only: no key, no URL).",
     )
     parser.add_argument(
+        "--wasm-base-url",
+        metavar="URL",
+        default=None,
+        dest="wasm_base_url",
+        help="With --run-wasm-agent: the provider base URL for this run (operator input; overrides "
+        "AGENTTEAMS_WASM_BASE_URL). https, or http to a loopback host; no userinfo, query or fragment. The provider "
+        "key is sent to it, so it is never read from the brief for a keyed preset.",
+    )
+    parser.add_argument(
         "--revoke-wasm-run",
         metavar="RUN_ID",
         default=None,
         dest="revoke_wasm_run",
         help="Revoke a WASM agent run in --project: writes its REVOKED sentinel; the run stops at its next "
-        "checkpoint. --reason is recorded.",
+        "checkpoint. --revoke-reason is recorded.",
     )
     parser.add_argument(
         "--verify-wasm-run",
@@ -603,10 +612,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Verify a WASM agent run's hash-chained transcript in --project (read-only). Exit 0 when it verifies.",
     )
     parser.add_argument(
-        "--reason",
+        "--revoke-reason",
         metavar="TEXT",
         default=None,
-        dest="wasm_reason",
+        dest="revoke_reason",
         help="With --revoke-wasm-run: the reason recorded in the sentinel (at most 200 characters).",
     )
     parser.add_argument(
