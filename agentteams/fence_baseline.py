@@ -37,7 +37,6 @@ Stdlib only.
 from __future__ import annotations
 
 import hashlib
-import os
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
@@ -74,7 +73,7 @@ def block_digests(content: str) -> dict[str, str]:
     Raises:
         Nothing.
     """
-    from agentteams.fences import _extract_fenced_regions  # local: fences imports this module lazily
+    from agentteams.fences import _extract_fenced_regions  # local: fences imports this module at load time
 
     regions = _extract_fenced_regions(content)
     if not isinstance(regions, dict):
@@ -170,15 +169,13 @@ def is_unedited(file_baseline: Mapping[str, str] | None, sid: str, block: str) -
 
 
 def _relative_key(path: Path, output_dir: Path) -> str | None:
-    """The build-log key for *path*: POSIX, relative to *output_dir*, never absolute (as front_matter_baseline, OI-21).
+    """The build-log key for *path*: the same key the front-matter baseline uses (one definition, OI-21).
 
     None when no relative form exists (another drive on Windows): nothing is recorded, which fails safe.
     """
-    try:
-        rel = os.path.relpath(path, output_dir)
-    except ValueError:
-        return None
-    return None if os.path.isabs(rel) else Path(rel).as_posix()
+    from agentteams.cli.artifacts import _baseline_key  # local: cli.artifacts imports the pipeline
+
+    return _baseline_key(path, output_dir)
 
 
 def _file_digests(path: Path) -> dict[str, str]:

@@ -57,8 +57,15 @@ def _merge(root: Path, *, backup: Path | None, dry_run: bool = False, twin_drop:
                          yes=True, backup_path=backup, twin_drop=twin_drop)
 
 
+#: Tests of the recorded baseline itself: they do not need the live template to read as a shrink.
+_BASELINE_ONLY = {"test_emit_records_the_template_render_digests", "test_a_preserved_hand_edit_is_never_recorded_as_authored",
+                  "test_a_real_render_records_the_fence_baseline"}
+
+
 @pytest.fixture(autouse=True)
-def _precondition():
+def _precondition(request):
+    if request.function.__name__ in _BASELINE_ONLY:
+        return
     if _detect_fence_shrink(_SID, _OLD, _NEW) is None:
         pytest.skip("the current template no longer reads as a shrink of the 9c6b7697 block")
 
@@ -196,3 +203,12 @@ def test_halt_and_warn_are_unchanged(tmp_path, policy):
                            yes=True, backup_path=backup, shrink_policy=policy)
     assert not any("unedited since generation" in n for n in result.notices)
     assert (_OLD in target.read_text(encoding="utf-8")) is (policy == "halt")
+
+
+def test_additive_policy_also_releases_an_unedited_fence(tmp_path):
+    root, backup = tmp_path / "agents", tmp_path / "backup"
+    target = _deploy(root, _OLD, baseline=_authored_old())
+    result = emit.emit_all([(_REL, _doc(_NEW))], output_dir=root, dry_run=False, overwrite=False, merge=True,
+                           yes=True, backup_path=backup, shrink_policy="additive")
+    assert _NEW in target.read_text(encoding="utf-8")
+    assert any("unedited since generation" in n for n in result.notices)

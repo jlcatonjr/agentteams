@@ -1175,9 +1175,12 @@ def _merge_fenced_content(
                         result.shrink_overridden.append(sid)
                     # Unedited since generation: the on-disk block is exactly a render agentteams recorded
                     # authoring, so the shrink guard has no enrichment to protect (ops-team, 2026-11-01).
-                    # Only where a shrink would otherwise be kept (preserve/additive); halt and warn are unchanged.
+                    # Only where a shrink would otherwise be kept (preserve/additive); halt and warn are unchanged,
+                    # and a template-authoritative fence keeps its own path (and notice): it is never preserved.
                     unedited = bool(notice and not overridden and fence_baseline
-                                    and (preserve_on_shrink or additive_on_shrink)) and _fence_baseline.is_unedited(
+                                    and (preserve_on_shrink or additive_on_shrink)
+                                    and not _is_template_authoritative(sid, rel_path, brief_derived_files)
+                                    ) and _fence_baseline.is_unedited(
                         fence_baseline, sid, existing_regions.get(sid, ""))
                     if unedited:
                         result.shrink_unedited.append(sid)
