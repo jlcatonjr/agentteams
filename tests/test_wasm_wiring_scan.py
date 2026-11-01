@@ -277,3 +277,15 @@ def test_install_refusal_exits_cleanly_without_a_traceback(tmp_path, monkeypatch
     assert exc.value.code == 1
     assert "Error: agentteams_wasm bundle install refused: bundle file wasm_exec.py does not match its pin" in \
         capsys.readouterr().err
+
+
+def test_an_agent_body_naming_the_server_is_not_a_launching_config():
+    """P14's @security rows name the server's path in an agent body; only front matter can launch it."""
+    marker = ww.LAUNCH_MARKER
+    body_only = f"---\nname: security\ntools: Read, Grep\n---\n\nAny edit to `.agentteams/bin/{marker}` is reviewed.\n"
+    assert not ww._launches(".claude/agents/security.md", body_only)
+    in_front = f"---\nname: x\nmcpServers:\n  agentteams_wasm:\n    command: python3\n    args: [\"{marker}\"]\n---\nbody\n"
+    assert ww._launches(".claude/agents/x.md", in_front)
+    unclosed = f"---\nname: x\nargs: [{marker}]\nbody without a closing fence\n"
+    assert ww._launches(".claude/agents/x.md", unclosed)   # fail closed
+    assert not ww._launches(".claude/agents/x.md", f"no front matter, mentions {marker}\n")

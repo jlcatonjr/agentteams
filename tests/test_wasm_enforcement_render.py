@@ -144,7 +144,12 @@ def test_agents_md_is_unchanged_by_deny():
     on = _render("agents-md", _manifest("agents-md", wasm=None, wasm_sandbox={"enabled": True, "native_exec": "deny"}))
     keep = _render("agents-md", _manifest("agents-md", wasm=None, wasm_sandbox={"enabled": True,
                                                                                "native_exec": "keep"}))
-    assert on == keep
+    # agents-md has no tool channel, so deny narrows nothing: the same files with the same tool declarations.
+    # (P14's instruction text names the policy, so the prose legitimately differs between deny and keep.)
+    assert set(on) == set(keep)
+    for path in on:
+        tools = [ln for ln in on[path].splitlines() if ln.lstrip().lower().startswith("tools:")]
+        assert tools == [ln for ln in keep[path].splitlines() if ln.lstrip().lower().startswith("tools:")], path
 
 
 # --- WASM off: byte identity ---------------------------------------------------------------------------------------

@@ -15,6 +15,8 @@ These are filled automatically by the rendering engine from the project descript
 - `{PRIMARY_OUTPUT_DIR}` — Path to the primary output directory. It is a directory (or literal glob text) inside the project; the repository itself is `{PROJECT_NAME}`.
 - `{AGENT_SLUG_LIST}` — Multi-line YAML list of all agent slugs
 - `{ADOPTED_AGENT_ROUTING_ROWS}` — Orchestrator routing-table rows for `--adopt-orphans` agents, one `\n`-prefixed row each, sorted by slug; `""` when nothing is adopted. Sits at the end of the last fixed row (not on its own line) so a team without adopted agents renders byte-identically
+- `{WASM_ROUTING_ROWS}` — Orchestrator routing-table rows for the WASM sandbox (run code through the requesting agent's `run_wasm`; grant changes to `@security`), `\n`-prefixed; `""` unless WASM is on. Sits right after `{ADOPTED_AGENT_ROUTING_ROWS}` at the end of the last fixed row. Set by `agentteams/wasm_policy.populate_placeholders` once the switch is resolved (default `""` in `analyze`)
+- `{WASM_SECURITY_TRIGGER_ROWS}` — `@security` *Mandatory Review Triggers* rows for the WASM sandbox (grant widening, `native_exec`/`native_exec_keep`, WASM off, `sandbox: wasm` to `os`, the server bundle, laundering), `\n`-prefixed; `""` unless WASM is on. Sits at the end of the table's last fixed row, so a WASM-off team renders byte-identically. Set as `{WASM_ROUTING_ROWS}` is
 - `{DOMAIN_AGENT_SLUGS}` — Comma-separated list of domain agent slugs
 - `{WORKSTREAM_EXPERT_SLUGS}` — Comma-separated list of workstream expert slugs
 - `{AUTHORITY_HIERARCHY}` — Formatted authority hierarchy

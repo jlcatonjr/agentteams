@@ -538,6 +538,8 @@ def build_manifest(description: dict[str, Any], *, framework: str = "copilot-vsc
     # Adopted-agent routing rows: empty until adopt_orphan_agents fills them, so a team
     # with no adopted agents renders its orchestrator routing table byte-identically.
     auto_resolved["ADOPTED_AGENT_ROUTING_ROWS"] = ""
+    # WASM plan P14: wasm_policy.populate_placeholders fills these once the switch is resolved ("" while off).
+    auto_resolved["WASM_SECURITY_TRIGGER_ROWS"] = auto_resolved["WASM_ROUTING_ROWS"] = ""
 
     # Manual-required placeholders (unfilled MANUAL tokens)
     manual_required = _collect_manual_required(auto_resolved)

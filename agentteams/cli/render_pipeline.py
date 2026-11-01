@@ -174,9 +174,12 @@ def _build_final_rendered(
     from agentteams import graph as _graph
     from agentteams import mcp_need as _mcp_need
     from agentteams import wasm_enforcement as _wasm_enforcement
+    from agentteams import wasm_policy as _wasm_policy
     from agentteams import write_policy as _write_policy
 
     _wasm_enforcement.begin(manifest)  # WASM plan P13: this render's native-exec action record starts empty
+    _wasm_policy.begin(manifest)  # WASM plan P14: this render's run_wasm text record starts empty
+    _wasm_policy.populate_placeholders(manifest)  # the two WASM rows; "" while WASM is off (byte-identical)
     rendered = render.render_all(manifest, templates_dir=TEMPLATES_DIR)
     final: list[tuple[str, str]] = []
     runtime_handoff_agents: list[dict[str, object]] = []
@@ -187,8 +190,11 @@ def _build_final_rendered(
             # write_policy "orchestrator-only": narrow tools and add the proposal sections before any adapter
             # reads `tools:` (identity without the switch, so default teams stay byte-identical).
             content = _write_policy.apply(content, slug, manifest)
+            pre_wasm = content  # the tools before P13's narrowing (P14 reads both sides)
             # WASM plan P13: remove native exec where run_wasm replaces it (identity while WASM is off).
             content = _wasm_enforcement.apply_canonical(content, slug, manifest, adapter.framework_id)
+            # WASM plan P14: the run_wasm / native-exec section, read from the tools before and after the narrowing.
+            content = _wasm_policy.apply(content, slug, manifest, adapter.framework_id, before=pre_wasm)
             if adapter.handoff_delivery_mode() == "manifest":
                 handoffs = adapter.extract_handoffs(content)
                 if handoffs:
@@ -196,7 +202,9 @@ def _build_final_rendered(
             content = adapter.render_agent_file(content, slug, manifest)
         elif file_type == "instructions":
             # Under the switch the top-level session is the orchestrator: give it the dispatch contract (F1).
-            content = adapter.render_instructions_file(_write_policy.apply_instructions(content, manifest), manifest)
+            content = _wasm_policy.apply_instructions(_write_policy.apply_instructions(content, manifest), manifest,
+                                                      adapter.framework_id)
+            content = adapter.render_instructions_file(content, manifest)
         elif file_type == "skill":
             # Directory-per-skill (`<slug>/SKILL.md`): the slug is the DIRECTORY
             # name — that is also the invocable command name. Taking the file stem
@@ -208,8 +216,10 @@ def _build_final_rendered(
         elif file_type == "builder":
             # Default hook is identity (copilot/claude keep the markdown builder);
             # adapters with non-markdown agents (Goose) wrap it as a runnable recipe.
-            content = adapter.render_builder_file(
-                _write_policy.apply(content, Path(rel_path).stem.replace(".agent", ""), manifest), manifest)
+            builder_slug = Path(rel_path).stem.replace(".agent", "")
+            content = _wasm_policy.apply(_write_policy.apply(content, builder_slug, manifest), builder_slug, manifest,
+                                         adapter.framework_id, builder=True)
+            content = adapter.render_builder_file(content, manifest)
         if rel_path.endswith(_mcp_need.SKILL_REFERENCE_PATH) and _write_policy.enabled(manifest):
             content = _mcp_need.apply_skill_override(content)  # only the orchestrator opens gap plans
         final_path = adapter.finalize_output_path(rel_path, file_type)
@@ -218,6 +228,9 @@ def _build_final_rendered(
     if _write_policy.enabled(manifest):
         final.append(("references/write-policy.reference.md", _write_policy.reference_doc()))
         final.append((_mcp_need.REFERENCE_PATH, _mcp_need.reference_doc()))
+    if _wasm_policy.enabled(manifest, adapter.framework_id):
+        _wasm_policy.verify_claims(manifest, adapter.framework_id)  # text never states an unwired run_wasm
+        final.append((_wasm_policy.REFERENCE_PATH, _wasm_policy.reference_doc(manifest, adapter.framework_id)))
 
     # Framework-specific sidecar files not derived from a template
     # (e.g. Goose's .goosehints integrator). Default is none.

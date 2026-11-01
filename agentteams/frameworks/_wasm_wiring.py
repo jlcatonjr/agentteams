@@ -547,6 +547,14 @@ def _launches(rel: str, text: str) -> bool:
         return any(LAUNCH_MARKER in v for v in _launch_strings(data))
     if rel.endswith(".toml"):
         return any(LAUNCH_MARKER in v for v in _launch_strings(tomllib.loads(text)))  # TOMLDecodeError: ValueError
+    if rel.endswith(".md"):
+        # An agent file declares MCP servers only in its front matter (`mcpServers:`); the body is prose an agent
+        # reads (P14's @security rows name the server's path there). No front matter: nothing can be launched. An
+        # opened but unclosed block is scanned whole (fail closed).
+        if not text.startswith("---"):
+            return False
+        end = text.find("\n---", 3)
+        text = text if end < 0 else text[:end]
     # YAML (Goose recipes, agent front matter), read without a YAML dependency like goose_recipe_read: the whole
     # file, escapes decoded, is a superset of every cmd/args scalar that reader returns (it only strips quotes).
     return LAUNCH_MARKER in text or LAUNCH_MARKER in _yaml_decoded(text)

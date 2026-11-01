@@ -3,9 +3,9 @@
 
 > **Auto-generated.** Regenerated on every commit that touches the `agentteams` package. Do not edit manually — changes will be overwritten.
 
-- Modules mapped: **397**
+- Modules mapped: **398**
 - Packages: **14**
-- Internal import edges: **1400**
+- Internal import edges: **1405**
 - Distinct external dependencies: **11**
 
 ---
@@ -22,7 +22,7 @@ Inter-package import dependencies (module-level detail in the tables below).
 
 | Package | Modules | Depends on |
 | --- | --- | --- |
-| `agentteams` | 168 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
+| `agentteams` | 169 | `agentteams.cli`, `agentteams.enrich`, `agentteams.frameworks`, `agentteams.mcp_servers`, `agentteams.model_providers`, `agentteams.research`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.cli` | 55 | `agentteams`, `agentteams.frameworks`, `agentteams.redteam`, `agentteams.vulnscan`, `agentteams.wasm_agent` |
 | `agentteams.data` | 8 | — |
 | `agentteams.data.vulnscan_tools` | 2 | — |
@@ -132,8 +132,8 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.cli.post_emit_checks` | `agentteams.emit`, `agentteams.scan` | `agentteams.cli.generate` |
 | `agentteams.cli.proposal_commands` | `agentteams.confinement`, `agentteams.ingest`, `agentteams.proposal_policy`, `agentteams.proposal_runner`, `agentteams.proposals`, `agentteams.runner_wasm` | `agentteams.cli.app` |
 | `agentteams.cli.recipe_check` | `agentteams.frameworks.goose` | `agentteams.cli.app` |
-| `agentteams.cli.render_pipeline` | `agentteams.backup`, `agentteams.emit`, `agentteams.fence_twin_acks`, `agentteams.fence_twins`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.vscode_tasks`, `agentteams.wasm_enforcement`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.wasm_enforcement` |
-| `agentteams.cli.sandbox_effects` | `agentteams.sandbox_tokens` | `agentteams.cli.action_ids`, `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._control_plane_protect`, `agentteams.runner_wasm`, `agentteams.wasm_config` |
+| `agentteams.cli.render_pipeline` | `agentteams.backup`, `agentteams.emit`, `agentteams.fence_twin_acks`, `agentteams.fence_twins`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.graph`, `agentteams.mcp_need`, `agentteams.render`, `agentteams.vscode_tasks`, `agentteams.wasm_enforcement`, `agentteams.wasm_policy`, `agentteams.write_policy` | `agentteams.cli.app`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.generate_helpers`, `agentteams.wasm_enforcement` |
+| `agentteams.cli.sandbox_effects` | `agentteams.sandbox_tokens` | `agentteams.cli.action_ids`, `agentteams.cli.effect_classifier`, `agentteams.cli.management_directives`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._control_plane_protect`, `agentteams.runner_wasm`, `agentteams.wasm_config`, `agentteams.wasm_policy` |
 | `agentteams.cli.sandbox_relaxation_gate` | `agentteams.cli.decision_log`, `agentteams.cli.effect_classifier`, `agentteams.cli.exception_registry`, `agentteams.cli.sandbox_effects`, `agentteams.cli.security_gate`, `agentteams.sandbox_state` | `agentteams.cli.artifacts`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.write_root_policy`, `agentteams.multi_sync`, `agentteams.runner_wasm` |
 | `agentteams.cli.schema_cache` | `agentteams.atomicio` | `agentteams.cli.artifacts`, `agentteams.cli.code_index_artifacts`, `agentteams.mcp_servers.recall`, `agentteams.security_refs` |
 | `agentteams.cli.security_gate` | `agentteams.atomicio`, `agentteams.cli.decision_log`, `agentteams.cli.signed_ledger` | `agentteams._wasm_pin_update`, `agentteams.branch_cleanup`, `agentteams.cli.adopt_merge_gate`, `agentteams.cli.commands`, `agentteams.cli.generate`, `agentteams.cli.package_switch`, `agentteams.cli.sandbox_relaxation_gate`, `agentteams.cli.standalone_modes`, `agentteams.security_refs` |
@@ -203,7 +203,7 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.frameworks._sandbox_emit` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._prompt_root_protect`, `agentteams.frameworks._write_roots`, `agentteams.sandbox_state` | `agentteams.cli.generate_helpers`, `agentteams.cli.operator_signing`, `agentteams.cli.standalone_modes`, `agentteams.confinement`, `agentteams.control_plane_io`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.grok_config_emit`, `agentteams.mcp_direct_grants`, `agentteams.multi_sync`, `agentteams.projection_marker`, `agentteams.sandbox_projection`, `agentteams.signing_switch` |
 | `agentteams.frameworks._wasm_team_docs` | `agentteams._sandbox_profiles`, `agentteams.frameworks._write_roots`, `agentteams.model_providers`, `agentteams.sandbox_state`, `agentteams.wasm_agent.team` | `agentteams.frameworks.wasm` |
 | `agentteams.frameworks._wasm_tool_scoping` | — | `agentteams.frameworks.wasm`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.team` |
-| `agentteams.frameworks._wasm_wiring` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp` |
+| `agentteams.frameworks._wasm_wiring` | `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.cli.artifacts`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks.base`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp`, `agentteams.wasm_policy` |
 | `agentteams.frameworks._write_roots` | — | `agentteams.cli.generate_helpers`, `agentteams.cli.standalone_modes`, `agentteams.cli.write_root_policy`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._goose_sandbox_emit`, `agentteams.frameworks._grok_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_team_docs`, `agentteams.frameworks.claude`, `agentteams.multi_sync`, `agentteams.proposal_policy`, `agentteams.proposals`, `agentteams.sandbox_state`, `agentteams.vulnscan.team_dir`, `agentteams.wasm_config`, `agentteams.wasm_enforcement` |
 | `agentteams.frameworks.agents_md` | `agentteams.frameworks._agents_md_rules`, `agentteams.frameworks.base`, `agentteams.yaml_frontmatter` | `agentteams.cli.render_pipeline`, `agentteams.frameworks.codex`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.frameworks.wasm` |
 | `agentteams.frameworks.base` | `agentteams.frameworks._linux_sandbox_emit`, `agentteams.frameworks._sandbox_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.yaml_frontmatter` | `agentteams._interop_grok`, `agentteams.cli.render_pipeline`, `agentteams.convert`, `agentteams.frameworks.agents_md`, `agentteams.frameworks.claude`, `agentteams.frameworks.copilot_cli`, `agentteams.frameworks.copilot_vscode`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_emit`, `agentteams.frameworks.grok`, `agentteams.frameworks.registry`, `agentteams.frameworks.wasm`, `agentteams.interop`, `agentteams.output_plan` |
@@ -438,12 +438,13 @@ Every module, coloured by package (full adjacency in the table below).
 | `agentteams.wasm_agent.team` | `agentteams._sandbox_profiles`, `agentteams.atomicio`, `agentteams.frameworks._wasm_tool_scoping`, `agentteams.model_providers`, `agentteams.sandbox_state`, `agentteams.sandbox_tokens`, `agentteams.vulnscan.gateway_dialects`, `agentteams.wasm_agent.budget`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.guest_source`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.tools`, `agentteams.wasm_agent.transcript`, `agentteams.wasm_exec` | `agentteams.analyze`, `agentteams.cli.wasm_agent_commands`, `agentteams.frameworks._wasm_team_docs`, `agentteams.frameworks.wasm`, `agentteams.wasm_agent.child_runs`, `agentteams.wasm_agent.delegation` |
 | `agentteams.wasm_agent.tools` | `agentteams.model_providers`, `agentteams.wasm_agent.protocol` | `agentteams.wasm_agent.broker`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.team` |
 | `agentteams.wasm_agent.transcript` | `agentteams.atomicio`, `agentteams.wasm_agent.protocol` | `agentteams.cli.wasm_agent_commands`, `agentteams.wasm_agent`, `agentteams.wasm_agent.child_runs`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.host`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.mediation`, `agentteams.wasm_agent.stage1`, `agentteams.wasm_agent.team` |
-| `agentteams.wasm_config` | `agentteams._sandbox_profiles`, `agentteams.capability_map`, `agentteams.cli.governance_targets`, `agentteams.cli.sandbox_effects`, `agentteams.frameworks._write_roots`, `agentteams.host_features`, `agentteams.sandbox_state`, `agentteams.wasm_exec`, `agentteams.wasm_guests` | `agentteams.analyze`, `agentteams.cli.generate`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.wasm`, `agentteams.multi_sync`, `agentteams.runner_wasm`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp` |
+| `agentteams.wasm_config` | `agentteams._sandbox_profiles`, `agentteams.capability_map`, `agentteams.cli.governance_targets`, `agentteams.cli.sandbox_effects`, `agentteams.frameworks._write_roots`, `agentteams.host_features`, `agentteams.sandbox_state`, `agentteams.wasm_exec`, `agentteams.wasm_guests` | `agentteams.analyze`, `agentteams.cli.generate`, `agentteams.cli.os_sandbox_switch`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.wasm`, `agentteams.multi_sync`, `agentteams.runner_wasm`, `agentteams.sandbox_projection`, `agentteams.sandbox_state`, `agentteams.wasm_enforcement`, `agentteams.wasm_mcp`, `agentteams.wasm_policy` |
 | `agentteams.wasm_enforcement` | `agentteams.cli.render_pipeline`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_sandbox_emit`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._sandbox_drift`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks._write_roots`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_read`, `agentteams.frameworks.goose_tool_scoping`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_mcp`, `agentteams.write_policy` | `agentteams.cli.os_sandbox_switch`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.cli.wasm_sandbox_switch`, `agentteams.convert`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop` |
 | `agentteams.wasm_exec` | — | `agentteams.cli.wasm_agent_commands`, `agentteams.runner_wasm`, `agentteams.sandbox_state`, `agentteams.wasm_agent.child_runs`, `agentteams.wasm_agent.delegation`, `agentteams.wasm_agent.launch`, `agentteams.wasm_agent.stage1`, `agentteams.wasm_agent.team`, `agentteams.wasm_config`, `agentteams.wasm_mcp` |
 | `agentteams.wasm_guests` | — | `agentteams.runner_wasm`, `agentteams.wasm_agent.launch`, `agentteams.wasm_config` |
-| `agentteams.wasm_mcp` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._wasm_wiring`, `agentteams.runner_mcp`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_exec`, `agentteams.wasm_runtime` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement` |
+| `agentteams.wasm_mcp` | `agentteams.frameworks._control_plane_protect`, `agentteams.frameworks._wasm_wiring`, `agentteams.runner_mcp`, `agentteams.sandbox_state`, `agentteams.wasm_config`, `agentteams.wasm_exec`, `agentteams.wasm_runtime` | `agentteams.codex_mcp_emit`, `agentteams.frameworks._wasm_wiring`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.wasm_enforcement`, `agentteams.wasm_policy` |
 | `agentteams.wasm_pins` | — | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.wasm_runtime` |
+| `agentteams.wasm_policy` | `agentteams.cli.sandbox_effects`, `agentteams.frameworks._wasm_wiring`, `agentteams.wasm_config`, `agentteams.wasm_mcp` | `agentteams.cli.render_pipeline` |
 | `agentteams.wasm_runtime` | `agentteams._wasm_archive`, `agentteams._wasm_pin_update`, `agentteams.git_exec`, `agentteams.wasm_pins` | `agentteams._wasm_pin_update`, `agentteams.cli.wasm_agent_commands`, `agentteams.cli.wasm_commands`, `agentteams.runner_wasm`, `agentteams.wasm_agent.launch`, `agentteams.wasm_mcp` |
 | `agentteams.whole_body_migration` | `agentteams.fence_twins`, `agentteams.fences`, `agentteams.scan`, `agentteams.unfenced`, `agentteams.user_regions` | `agentteams.fences`, `agentteams.fleet` |
 | `agentteams.write_policy` | — | `agentteams.analyze`, `agentteams.audit_agent_contract`, `agentteams.cli.artifacts`, `agentteams.cli.generate`, `agentteams.cli.render_pipeline`, `agentteams.cli.standalone_modes`, `agentteams.frameworks._codex_role_gate_emit`, `agentteams.frameworks._codex_wasm_gate`, `agentteams.frameworks.claude`, `agentteams.frameworks.goose`, `agentteams.frameworks.goose_recipe_grants`, `agentteams.interop`, `agentteams.interop_grant_check`, `agentteams.interop_write_policy`, `agentteams.mcp_detect`, `agentteams.wasm_enforcement` |
@@ -1700,6 +1701,7 @@ digraph "agentteams architecture" {
         "agentteams.render",
         "agentteams.vscode_tasks",
         "agentteams.wasm_enforcement",
+        "agentteams.wasm_policy",
         "agentteams.write_policy"
       ],
       "external": [],
@@ -5457,6 +5459,19 @@ digraph "agentteams architecture" {
       "external": [],
       "repo_local": []
     },
+    "agentteams.wasm_policy": {
+      "package": "agentteams",
+      "path": "agentteams/wasm_policy.py",
+      "is_package": false,
+      "imports_internal": [
+        "agentteams.cli.sandbox_effects",
+        "agentteams.frameworks._wasm_wiring",
+        "agentteams.wasm_config",
+        "agentteams.wasm_mcp"
+      ],
+      "external": [],
+      "repo_local": []
+    },
     "agentteams.wasm_runtime": {
       "package": "agentteams",
       "path": "agentteams/wasm_runtime.py",
@@ -7159,6 +7174,10 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.cli.render_pipeline",
       "target": "agentteams.wasm_enforcement"
+    },
+    {
+      "source": "agentteams.cli.render_pipeline",
+      "target": "agentteams.wasm_policy"
     },
     {
       "source": "agentteams.cli.render_pipeline",
@@ -11191,6 +11210,22 @@ digraph "agentteams architecture" {
     {
       "source": "agentteams.wasm_mcp",
       "target": "agentteams.wasm_runtime"
+    },
+    {
+      "source": "agentteams.wasm_policy",
+      "target": "agentteams.cli.sandbox_effects"
+    },
+    {
+      "source": "agentteams.wasm_policy",
+      "target": "agentteams.frameworks._wasm_wiring"
+    },
+    {
+      "source": "agentteams.wasm_policy",
+      "target": "agentteams.wasm_config"
+    },
+    {
+      "source": "agentteams.wasm_policy",
+      "target": "agentteams.wasm_mcp"
     },
     {
       "source": "agentteams.wasm_runtime",
