@@ -48,17 +48,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pin each other's exact version as peers (so `vitest` and `@vitest/mocker` could not move alone), and `express
   4.22.1` requires `qs ~6.14.0` (the fixed `qs` needs `express 4.22.3`, inside `^4.19.2`). `npm audit fix` without
   `--force` takes neither.
-- **`npm_groups.npm_moves`** (new; run by `fix_path` with `apply` after the audit fix): for each package still vulnerable
-  whose fix is inside its caret range, the new `agentteams.vulnscan.npm_groups` (`LockGraph`, read from the
+- **`npm_ops.npm_moves`** (new module `agentteams.vulnscan.npm_ops`; run by `fix_path` with `apply` after the audit
+  fix, with `fix.npm_fix` / `fix.advisory_counts` passed in): for each package still vulnerable whose fix is inside its caret range, the new `agentteams.vulnscan.npm_groups` (`LockGraph`, read from the
   lockfile's own `dependencies` and exact `peerDependencies`, no built-in package list) names the packages to move
   together: the exact-peer group, or each direct parent with its group. Each runs as `npm update --no-save <names>
-  --package-lock-only --ignore-scripts` (`npm_fix(..., update=)`, the audit fix's isolation, registry, cooldown and
-  confinement; names must be plain package names), so `package.json` and its ranges never change. A move is kept
+  --package-lock-only --ignore-scripts` (`npm_fix(..., update=)`, the audit fix's isolation, registry and cooldown;
+  names must be plain package names; `install` with `update` raises `ValueError`), so `package.json` and its ranges
+  never change. **Fail closed (security review):** no move runs outside the tools container, or when
+  `manifests.npm_off_registry` finds a non-registry source in `package.json` or the base or current lockfile
+  (`npm update <parent>` re-resolves that parent's spec). A move is kept
   only when it removes an advisory occurrence and adds none, else the lockfile is restored byte for byte;
   `manifests.check_lock_edit` still judges the result. Out-of-range fixes stay `major-held`.
 - **Retry guard:** the dry-run fix plan names each such move in the row's note (and the section note says the step
   runs), so the plan digest `retry_guard` keys its hold on changes and the held repositories are retried once.
-  `npm_groups.py` joins the enforcement integrity set.
+  `npm_groups.py` and `npm_ops.py` join the enforcement integrity set; `semver_line` / `has_workspaces` move to
+  `npm_ops`, and `manifests.npm_packages` / `npm_entry_name` are the one `packages` walk both readers use.
 
 ### added (vulnscan: scan mirrors)
 

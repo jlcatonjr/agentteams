@@ -15,7 +15,7 @@
   is a direct dependency has its ``package.json`` spec raised to ``^<fixed version>`` and the lockfile re-resolved with
   ``npm install --package-lock-only --ignore-scripts`` first (:mod:`.npm_major`; transitive-only majors and npm
   workspaces stay held). What the audit fix leaves vulnerable inside its range is retried by moving its exact-peer
-  group or direct parent (``npm update --no-save``, :func:`.npm_groups.npm_moves`). It runs on a
+  group or direct parent (``npm update --no-save``, :func:`.npm_ops.npm_moves`). It runs on a
   scratch copy with the public registry and TLS verification fixed, never reading the
   repository's ``.npmrc``. A dry run also lists each vulnerable package of the lockfile from
   the advisories (:func:`plan_npm_lock`); npm, not this module, picks the versions it writes.
@@ -55,10 +55,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agentteams.vulnscan import _http, images, lockfiles, npm_groups, npm_major, open_prs, osv, private_sources, project_policy, subproc_confine
+from agentteams.vulnscan import _http, images, lockfiles, npm_groups, npm_major, npm_ops, open_prs, osv, private_sources, project_policy, subproc_confine
 from agentteams.vulnscan.executor_env import ExecError   # leaf module: no import of the executor
 from agentteams.vulnscan.manifests import CRATE_LOCKS, REQ_NAME, REQ_PIN, discover, npm_off_registry, parse
-from agentteams.vulnscan.npm_groups import has_workspaces as _npm_workspaces, semver_line as _semver_line
+from agentteams.vulnscan.npm_ops import has_workspaces as _npm_workspaces, semver_line as _semver_line
 from agentteams.vulnscan.versions import is_final, major, version_key
 
 PYPI = "https://pypi.org/pypi"
@@ -634,16 +634,21 @@ def npm_fix(directory: Path, *, cooldown_days: int = 0, apply: bool = False, ins
         install: Run ``npm install --package-lock-only --ignore-scripts`` instead (``stage-major``: re-resolve the
             lockfile after :func:`npm_majors` raised a ``package.json`` spec), with the same cooldown and isolation.
         update: Run ``npm update --no-save <names> --package-lock-only --ignore-scripts`` instead
-            (:func:`.npm_groups.npm_moves`: an exact-peer group or a direct parent, within the declared ranges);
+            (:func:`.npm_ops.npm_moves`: an exact-peer group or a direct parent, within the declared ranges);
             each name must be a plain package name (:data:`npm_groups.NPM_NAME`), so none can read as an option.
 
     Returns:
         npm's output, or a note when npm is unavailable, a manifest is a symlink or a name is not a package name.
+
+    Raises:
+        ValueError: Both ``install`` and ``update`` were given (a caller's mistake).
     """
     confined = subproc_confine.active() is not None
     npm = "npm" if confined else shutil.which("npm")
     verb = ["install", "--no-audit"] if install else ["update", "--no-save", *update] if update else ["audit", "fix"]
-    if update and (install or not all(npm_groups.NPM_NAME.fullmatch(n) for n in update)):
+    if install and update:
+        raise ValueError("npm_fix: install and update are exclusive")
+    if update and not all(npm_groups.NPM_NAME.fullmatch(n) for n in update):
         return "npm update not run: a name is not a plain package name"
     if not npm:
         return f"npm not installed — run `npm {verb[0]} ... --package-lock-only --ignore-scripts` where it is"
@@ -931,8 +936,9 @@ def fix_path(root: Path, *, apply: bool = False, allow_major: bool = False, cool
             res.npm.append((where, npm_fix(path.parent, cooldown_days=cooldown_days, apply=apply)))
             if apply:   # what the audit fix left inside its range: exact-peer groups and direct parents
                 try:
-                    res.npm += [(where, o) for o in npm_groups.npm_moves(path, cooldown_days=cooldown_days,
-                                                                         private=private)]
+                    res.npm += [(where, o) for o in npm_ops.npm_moves(path, run=npm_fix, counts=advisory_counts,
+                                                                      base_lock=old, cooldown_days=cooldown_days,
+                                                                      private=private)]
                 except _http.FeedError as exc:
                     res.feed_errors.append(f"{rel}: {exc}")
                     continue

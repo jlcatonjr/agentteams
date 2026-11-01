@@ -380,14 +380,41 @@ def _pyproject(path: Path, m: Manifest) -> None:
         m.covered = True   # empty, or every dependency is pinned by the requirements files alongside
 
 
+def npm_packages(data: Any) -> dict[str, Any] | None:
+    """Return a parsed npm lockfile's ``packages`` map (lockfileVersion 2/3), or None (v1, or not an object).
+
+    Args:
+        data: The lockfile's parsed JSON.
+
+    Returns:
+        ``{key: entry}`` as the file holds it (``""`` is the root package), or None.
+    """
+    packages = data.get("packages") if isinstance(data, dict) else None
+    return packages if isinstance(packages, dict) else None
+
+
+def npm_entry_name(key: str, info: dict[str, Any]) -> str:
+    """Return the package name of one ``packages`` entry: its ``name`` field, else the last ``node_modules/`` part.
+
+    Args:
+        key: The entry's key (``node_modules/a/node_modules/@s/b``).
+        info: The entry.
+
+    Returns:
+        The name (``@s/b``).
+    """
+    name = info.get("name")
+    return name if isinstance(name, str) and name else key.rsplit("node_modules/", 1)[-1]
+
+
 def _npm_lock(path: Path, m: Manifest) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
-    packages = data.get("packages")
-    if isinstance(packages, dict):  # lockfileVersion 2/3
+    packages = npm_packages(data)
+    if packages is not None:  # lockfileVersion 2/3
         for key, info in packages.items():
             if not key or "version" not in info or info.get("link"):
                 continue
-            name = info.get("name") or key.rsplit("node_modules/", 1)[-1]
+            name = npm_entry_name(key, info)
             scope = "dev" if info.get("dev") or info.get("devOptional") else "runtime"
             m.deps.append(Dep("npm", name, info["version"], scope, str(path)))
         return

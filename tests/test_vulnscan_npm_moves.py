@@ -3,13 +3,12 @@
 data-quality-monitor's vitest and ``@vitest/mocker`` had a fix inside ``^4.1.x``, but ``@vitest/coverage-v8`` pins
 its peer vitest to its own exact version (and vitest pins it back), so ``npm audit fix`` found nothing to do; its
 ``qs`` (and traffic-file-enrichment-app's) needed ``express 4.22.3``, inside the declared ``^4.19.2``, because
-``express 4.22.1`` requires ``qs ~6.14.0``. ``npm_groups.npm_moves`` now updates the group or the parent lockfile-only.
+``express 4.22.1`` requires ``qs ~6.14.0``. ``npm_ops.npm_moves`` now updates the group or the parent lockfile-only.
 Network-free: OSV and npm are stubbed (one test runs ``npm_fix`` against a fake npm binary).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sys
@@ -17,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from agentteams.vulnscan import fix, manifests, npm_groups, osv
+from agentteams.vulnscan import fix, manifests, npm_groups, npm_ops, osv
 
 MOCKER_IDS = ["GHSA-mock-1", "GHSA-mock-2"]
 VITEST_IDS = ["GHSA-vite-1"]
@@ -84,6 +83,12 @@ def _npm(monkeypatch: pytest.MonkeyPatch, results: dict[tuple[str, ...], str], c
             return "changed 3 packages"
         return "up to date, audited 1 package"
     monkeypatch.setattr(fix, "npm_fix", npm_fix)
+    _confined(monkeypatch)
+
+
+def _confined(monkeypatch: pytest.MonkeyPatch, on: bool = True) -> None:
+    """Pretend the tools container is (or is not) active: npm_moves runs nothing outside it."""
+    monkeypatch.setattr(npm_ops, "_container_active", lambda: on)
 
 
 def _tree(tmp: Path, pkg: dict, lock: str) -> Path:
@@ -138,7 +143,12 @@ def test_names_that_could_read_as_options_are_never_returned(tmp_path: Path) -> 
     path = tmp_path / "package-lock.json"
     path.write_text(json.dumps(lock))
     assert npm_groups.LockGraph(npm_groups.load(path)).moves("qs", "6.14.3") == []
+
+
+def test_an_unreadable_or_v1_lockfile_has_no_graph(tmp_path: Path) -> None:
     assert npm_groups.load(tmp_path / "missing.json") == {}
+    (tmp_path / "v1.json").write_text('{"lockfileVersion": 1, "dependencies": {"qs": {"version": "6.14.3"}}}')
+    assert npm_groups.load(tmp_path / "v1.json") == {}
 
 
 # ---------------------------------------------------------------- npm_moves / fix_path (apply)
@@ -235,7 +245,61 @@ def test_no_movable_package_asks_osv_nothing(tmp_path: Path, monkeypatch: pytest
     path = tmp_path / "package-lock.json"
     path.write_text(json.dumps({"lockfileVersion": 3, "packages": {"": {"dependencies": {"qs": "^6"}},
                                                                    "node_modules/qs": _entry("qs", "6.14.3")}}))
-    assert npm_groups.npm_moves(path) == [] and seen == []   # direct qs without exact peers: the audit fix's job alone
+    # direct qs without exact peers: the audit fix's job alone
+    assert npm_ops.npm_moves(path, run=fix.npm_fix, counts=fix.advisory_counts) == [] and seen == []
+
+
+# ---------------------------------------------------------------- fail closed (security review)
+
+def test_no_move_runs_outside_the_tools_container(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """npm update <parent> re-resolves that parent's package.json spec: never on the host."""
+    _osv(monkeypatch)
+    before = _express_lock()
+    root = _tree(tmp_path, _BACK_PKG, before)
+    calls: list = []
+    _npm(monkeypatch, {("express",): _express_lock("4.22.3", "6.16.1", qs_range="~6.16.0")}, calls)
+    _confined(monkeypatch, on=False)
+    res = fix.fix_path(root, apply=True, allow_dirty=True)
+    assert not [c for c in calls if c.get("update")] and (root / "package-lock.json").read_text() == before
+    out = next(o for _, o in res.npm if o.startswith("npm update moves not run"))
+    assert "outside the tools container" in out and res.resolved == 0
+
+
+@pytest.mark.parametrize("where", ["package.json", "current lock", "base lock"])
+def test_no_move_runs_against_an_off_registry_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                     where: str) -> None:
+    _osv(monkeypatch)
+    pkg, lock = dict(_BACK_PKG), _express_lock()
+    if where == "package.json":
+        pkg = {**pkg, "dependencies": {"express": "^4.19.2", "evil": "git+https://evil.example/x.git"}}
+    root = _tree(tmp_path, pkg, lock)
+    path = root / "package-lock.json"
+    bad = json.loads(lock)
+    bad["packages"]["node_modules/evil"] = {"version": "1.0.0", "resolved": "https://evil.example/evil-1.0.0.tgz"}
+    calls: list = []
+    _npm(monkeypatch, {("express",): _express_lock("4.22.3", "6.16.1", qs_range="~6.16.0")}, calls)
+    if where == "current lock":
+        path.write_text(json.dumps(bad))
+    base = json.dumps(bad).encode() if where == "base lock" else path.read_bytes()
+    current = path.read_bytes()
+    out = npm_ops.npm_moves(path, run=fix.npm_fix, counts=fix.advisory_counts, base_lock=base)
+    assert len(out) == 1 and out[0].startswith("npm update moves not run: ") and "evil" in out[0]
+    assert not [c for c in calls if c.get("update")] and path.read_bytes() == current
+
+
+def test_confined_and_registry_only_the_move_runs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _osv(monkeypatch)
+    root = _tree(tmp_path, _BACK_PKG, _express_lock())
+    path = root / "package-lock.json"
+    calls: list = []
+    _npm(monkeypatch, {("express",): _express_lock("4.22.3", "6.16.1", qs_range="~6.16.0")}, calls)
+    out = npm_ops.npm_moves(path, run=fix.npm_fix, counts=fix.advisory_counts, base_lock=path.read_bytes())
+    assert [c["update"] for c in calls] == [("express",)] and out[0].startswith("npm update express: kept")
+
+
+def test_install_with_update_is_a_callers_mistake(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="exclusive"):
+        fix.npm_fix(tmp_path, apply=True, install=True, update=("express",))
 
 
 def test_a_registry_rule_break_in_the_moved_lockfile_is_still_refused() -> None:
@@ -304,4 +368,3 @@ def test_the_plan_names_the_move_so_a_held_repository_is_retried(tmp_path: Path,
     (root / "package-lock.json").write_text(_vitest_lock(peer_spec="^4.1.5"))   # what the old plan could see
     unbound = fix.fix_path(root, apply=False, npm=False).markdown()
     assert "(exact-peer group)" not in unbound
-    assert hashlib.sha256(plan.encode()).digest() != hashlib.sha256(unbound.encode()).digest()

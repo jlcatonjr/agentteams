@@ -1679,25 +1679,32 @@ with `major` set (spec raised to `^<fixed version>` by `npm_major.rewrite_specs`
 `package.json` that could not be rewritten). Raises `FeedError` or `OSError`. `npm_fix` takes `install=False`;
 with it, it runs `npm install --no-audit --package-lock-only --ignore-scripts` with the audit fix's isolation.
 
-#### `npm_groups.npm_moves(lockfile, *, cooldown_days=0, private=())`
+#### `npm_ops.npm_moves(lockfile, *, run, counts, base_lock=None, cooldown_days=0, private=())`
 
-The step after the audit fix, called by `fix_path` with `apply` (`stage-fix` and `stage-major`). `npm audit fix`
-without `--force` stops short when a package is bound to others by **exact peer specs** (`@vitest/coverage-v8`
-and `vitest` each pin the other's exact version, so neither moves alone) or when a **direct parent pins it** (`express
-4.22.1` requires `qs ~6.14.0`; the fixed `qs` needs a newer `express` inside `package.json`'s `^4.19.2`). For each
-package still vulnerable whose fixed version is inside its caret range (never `major-held` or `malicious`),
-`npm_groups.LockGraph(npm_groups.load(lockfile)).moves(name, version)` (module `npm_groups`; this function lives there too, running npm through `fix.npm_fix`) reads the lockfile's own `dependencies` (node
-resolution) and `peerDependencies` (an exact version binds; no package list is built in) and names the sets to update
-together: the package's exact-peer group, or each direct parent with that parent's group. Each set (at most
-`npm_groups.MAX_NPM_MOVES`, names matching `npm_groups.NPM_NAME` only, groups of at most `npm_groups.MAX_GROUP`) runs as
-`npm update --no-save <names> --package-lock-only --ignore-scripts` (`npm_fix(..., update=names)`, the audit fix's
-isolation, registry, cooldown and confinement), so the declared ranges are never changed (that is `stage-major`'s).
-A move is kept only when `advisory_counts` shows an advisory occurrence fewer and none new; otherwise, or on an npm
+The step after the audit fix, called by `fix_path` with `apply` (`stage-fix` and `stage-major`), which passes
+`run=npm_fix`, `counts=advisory_counts` and `base_lock` (the lockfile before the audit fix); `npm_ops` never imports
+`fix`. `npm audit fix` without `--force` stops short when a package is bound to others by **exact peer specs**
+(`@vitest/coverage-v8` and `vitest` each pin the other's exact version, so neither moves alone) or when a **direct
+parent pins it** (`express 4.22.1` requires `qs ~6.14.0`; the fixed `qs` needs a newer `express` inside
+`package.json`'s `^4.19.2`). For each package still vulnerable whose fixed version is inside its caret range (never
+`major-held` or `malicious`), the selection side, `npm_groups.LockGraph(npm_groups.load(lockfile)).moves(name,
+version)`, reads the lockfile's own `dependencies` (node resolution, over `manifests.npm_packages` /
+`manifests.npm_entry_name`) and `peerDependencies` (an exact version binds; no package list is built in) and names the
+sets to update together: the package's exact-peer group, or each direct parent with that parent's group. Each set (at
+most `npm_ops.MAX_NPM_MOVES`, names matching `npm_groups.NPM_NAME` only, groups of at most `npm_groups.MAX_GROUP`)
+runs as `npm update --no-save <names> --package-lock-only --ignore-scripts` (`npm_fix(..., update=names)`, the audit
+fix's isolation, registry and cooldown; `npm_fix` raises `ValueError` given both `install` and `update`), so the
+declared ranges are never changed (that is `stage-major`'s). **Fail closed** like `stage-major`'s `npm install`
+(`npm update <parent>` re-resolves that parent's `package.json` spec): no move runs unless the tools container is
+active (`subproc_confine.active`) and `manifests.npm_off_registry` finds nothing in `package.json` with the current
+and the base lockfile; a refusal is one `npm update moves not run: ...` line and the lockfile stays as the audit fix
+left it. A move is kept only when `counts` shows an advisory occurrence fewer and none new; otherwise, or on an npm
 error, the lockfile is restored byte for byte. `executor.validate_diff` still judges the result
-(`manifests.check_lock_edit`). Returns one summary per move, npm's output indented. Raises `FeedError`. In a dry run,
-`plan_npm_lock` names each such move in the row's note (`npm_groups.annotate_plan`; the section note gains
-`npm_groups.PLAN_NOTE`), so a repository
-held by `retry_guard` for "nothing fixable" gets a new fix-plan digest, and one retry, once the moves appear.
+(`manifests.check_lock_edit`). Returns one summary per move, npm's output indented. Raises `FeedError`.
+`npm_ops.semver_line` and `npm_ops.has_workspaces` are the caret-line and workspaces checks `fix` shares. In a dry
+run, `plan_npm_lock` names each such move in the row's note (`npm_groups.annotate_plan`; the section note gains
+`npm_groups.PLAN_NOTE`), so a repository held by `retry_guard` for "nothing fixable" gets a new fix-plan digest, and
+one retry, once the moves appear.
 
 #### `PinChange`
 
