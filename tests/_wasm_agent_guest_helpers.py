@@ -46,10 +46,11 @@ def remap(guest: ModuleType, mapping: Mapping[str, Path], missing: Path) -> None
 
 def frame(event: Mapping[str, Any], *, carry: Any = None, tools: list[str] | None = None,
           mounts: list[dict[str, str]] | None = None, limits: Mapping[str, int] | None = None,
-          **override: Any) -> dict[str, Any]:
-    """A v1 event frame as the host's ``protocol.encode_event`` builds it."""
+          delegates: list[str] | None = None, **override: Any) -> dict[str, Any]:
+    """A v1 event frame as the host's ``protocol.encode_event`` builds it (``agent.delegates`` since P09)."""
     out = {"v": 1, "type": "event", "accept": [1], "run_id": RUN_ID, "step": 0,
-           "agent": {"slug": "primary-producer", "tools": ALL_TOOLS if tools is None else tools},
+           "agent": {"slug": "primary-producer", "tools": ALL_TOOLS if tools is None else tools,
+                     "delegates": ["a", "reviewer"] if delegates is None else delegates},
            "mounts": [{"guest": "/project/docs", "mode": "ro"}, {"guest": "/scratch", "mode": "rw"}]
            if mounts is None else mounts,
            "limits": dict(LIMITS if limits is None else limits), "carry": carry, "event": dict(event)}

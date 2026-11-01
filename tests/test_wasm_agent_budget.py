@@ -57,7 +57,7 @@ def test_steps_tools_and_wall_clock() -> None:
 
 def test_carve_clamps_and_debits_parent() -> None:
     led = BudgetLedger(Budget(max_total_tokens=1000, max_child_runs=2, max_delegation_depth=2))
-    child = led.carve({"max_total_tokens": 5000, "max_steps": 3})
+    child = led.carve({"max_total_tokens": 5000, "max_steps": 3, "max_model_calls": 1})
     assert child.max_total_tokens == 1000 and child.max_steps == 3 and child.max_delegation_depth == 1
     with pytest.raises(BudgetExceeded, match="max_total_tokens"):
         led.reserve(0, 10)                           # the child holds the rest
