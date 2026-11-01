@@ -76,6 +76,9 @@ LENGTH_ALLOWLIST: frozenset[str] = frozenset({
     # the genuine fix.
     # WASM P11 (wave 5) added the Codex first_party_tables hand-off and gate, the [WASM-WIRING] report call
     # and the binary-bundle install call (logic in frameworks/_wasm_wiring.py, cli/wasm_sandbox_switch.py): 1284.
+    # WASM P13 (wave 6) added the three-line report_wasm_enforcement call in _emit_host_mcp_artifacts_if_enabled
+    # (the verdict lives in the integrity-pinned wasm_enforcement.py): 1287. commands.py is 1155 after P13's
+    # two-line printing of --convert-from's [WASM-ENFORCEMENT] notices (logic in wasm_enforcement.projection_notice).
     "agentteams/cli/artifacts.py",
     "agentteams/cli/commands.py",
     # fences.py (1130; 1442 after the 2026-10-10 fence-twins hook): itself a CH-07 carve of emit.py (the fence/merge extraction the

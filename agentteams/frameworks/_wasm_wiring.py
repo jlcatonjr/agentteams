@@ -123,8 +123,9 @@ def _static_row(manifest: Mapping[str, Any], framework: str) -> dict[str, Any]:
     if framework == "codex":
         return row("wired-shared", "session-compute-only", "one compute-only instance in .codex/config.toml (loaded "
                    "only for a trusted project), configured with default_tools_approval_mode = \"prompt\" (a default "
-                   "the host applies, not enforcement agentteams verifies); spawned agents under the codex:sandbox "
-                   "role gate reach only agentteams_readfs until P13", True,
+                   "the host applies, not enforcement agentteams verifies); under the codex:sandbox role gate a "
+                   "spawned agent outside the keep list is denied the shell and steered to run_wasm (WASM mode), or "
+                   "reaches only agentteams_readfs (write_policy: orchestrator-only)", True,
                    [CODEX_CONFIG])
     if framework == "copilot-vscode":
         return row("example-only", "session-compute-only", f"inert {VSCODE_EXAMPLE} (servers/stdio, VS Code docs "
