@@ -562,6 +562,8 @@ def _run_convert(
         print(f"\n  ✗  {len(result.errors)} error(s):")
         for err in result.errors:
             print(f"    {err}")
+    for notice in result.notices:
+        print(f"  {notice}", file=sys.stderr)
 
     verb = "Would convert" if dry_run else "Converted"
     print(

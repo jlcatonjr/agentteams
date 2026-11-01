@@ -1268,6 +1268,14 @@
             ],
             "description": "Goose only: a delegate inherits the orchestrator's extensions (native exec kept, no run_wasm)."
           },
+          "delegates_native": {
+            "type": "array",
+            "description": "Goose only: the narrowed agents that keep native exec when run as a delegate (not on a direct goose run --recipe).",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          },
           "mechanism": {
             "type": "string"
           },
