@@ -37,8 +37,14 @@ def test_dry_run_lists_url_size_sha(capsys, tmp_path):
 
 
 def test_install_todo_pin_component_exits_1(capsys, tmp_path, monkeypatch):
+    doc = wr.load_pins()
+    doc["components"]["wasmtime"]["platforms"]["darwin-arm64"]["files"]["wasmtime"]["sha256"] = wr.TODO_PIN
+    pins = tmp_path / "pins-todo.json"
+    pins.write_text(json.dumps(doc))
+    monkeypatch.setattr(wr, "PINS_PATH", pins)
     monkeypatch.setattr(wr, "host_platform", lambda: "darwin-arm64")
-    rc = build_team.main(["--wasm-install", "wasmtime", "--yes", "--project", str(tmp_path)])
+    (tmp_path / "proj").mkdir()
+    rc = build_team.main(["--wasm-install", "wasmtime", "--yes", "--project", str(tmp_path / "proj")])
     assert rc == 1 and "pin incomplete" in capsys.readouterr().err
 
 
