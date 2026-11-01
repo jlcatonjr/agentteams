@@ -49,7 +49,7 @@ boundary a generated team requests (`agentteams/host_features.py:134-261`). An
 
 | Profile | OS boundary | Emits | What it costs / buys |
 |---|---|---|---|
-| **`cooperative`** | none — the opt-out | no sandbox request | zero friction; sandbox off + hook fail-open (S19) |
+| **`cooperative`** | none (`os_sandbox: "off"` is the dedicated off switch) | no sandbox request | zero friction; sandbox off + hook fail-open (S19) |
 | **`confined`** | requested — **today's default** | a sandbox request token | bounds in-sandbox write reach; hook flipped fail-closed only when explicitly selected |
 | **`exclusive`** | requested + read-exclusion | sandbox token **and** `denyRead` | adds outbound credential-dir read-exclusion |
 

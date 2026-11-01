@@ -116,9 +116,10 @@ ceiling can be read there.
 - **CONDITIONAL PASS / `conditions_verified`** (S8) — a sentinel verdict allowing
   an action **only** when `conditions_verified` reads `"verified"`; while
   `pending`, the gate treats it "as if HALT."
-- **`cooperative` (privilege profile)** (S18) — the **opt-out** (no longer the
+- **`cooperative` (privilege profile)** (S18) — a profile-level opt-out (no longer the
   default as of 2026-W39): **no OS boundary** — sandbox off, hook fail-open;
-  confinement is emitted only under `confined`/`exclusive`.
+  confinement is emitted only under `confined`/`exclusive` (or `os_sandbox: "on"`).
+  The dedicated off switch for the boundary alone is `os_sandbox: "off"`.
 - **`confined` (privilege profile)** (S18) — the **default as of 2026-W39**: emits
   a sandbox request token and, when **explicitly** selected in the brief, flips the
   hook fail-closed (the defaulted `confined` leaves the hook fail-open); enforcement

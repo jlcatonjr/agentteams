@@ -23,5 +23,6 @@ confines nothing).
 - **[Part VI — Integrity & drift](part-vi-integrity-and-drift.md)** (SB18–SB19)
 - **[Part VII — Ceilings & red-team](part-vii-ceilings-and-red-team.md)** (SB20–SB21) — the honest verdicts
 - **[Part VIII — Synthesis & reference](part-viii-synthesis-and-reference.md)** (SB22–SB23)
+- **[Part IX — Switching sandboxes and WASM](part-ix-switching-sandboxes-and-wasm.md)** (SB25–SB30) — two boxes, who can open them, and where enforcement is claimed
 
 *Diagrams:* G1 (pipeline, Part I), G2 (decision, Part III), G6 (synthesis, Part VIII).

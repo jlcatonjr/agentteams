@@ -6,7 +6,8 @@
 
 `privilege_profile` has three values, each a superset of the last:
 
-- **`cooperative`** (the opt-out) — no boundary emitted; the agent is trusted, hook fail-open (SB3).
+- **`cooperative`** — no boundary emitted; the agent is trusted, hook fail-open (SB3). The dedicated
+  switch for the boundary alone is `os_sandbox` (below, and SB25).
 - **`confined`** (default as of 2026-W39) — workspace **write-confinement**: the agent writes only inside
   `workspace_write_roots` (default `["."]`, the generated tree). *Network* deny-by-default is a property
   of the mechanisms that emit an egress directive — goose Seatbelt (`deny network*`) and the Linux

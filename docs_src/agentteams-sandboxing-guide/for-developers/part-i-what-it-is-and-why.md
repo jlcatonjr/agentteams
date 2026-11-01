@@ -10,7 +10,8 @@ destructive `Bash` spellings. It's **design-time** — none of it runs inside th
 **Ceiling #1 — emitted by default, inert until wired (SB3).** As of 2026-W39 the default profile is
 `confined`, which *emits* an OS write-confinement boundary (a settings/config example you must merge) —
 but the hook still stays **fail-open** (`_FAIL_CLOSED_ON_ERROR = False`) unless you set an *explicit*
-`confined`/`exclusive`. Opt out of emitting with `cooperative`. You get *enforcement* only when you wire
+`confined`/`exclusive`. Turn emitting off with `os_sandbox: "off"` (the dedicated switch, Part IX;
+`cooperative` also emits none). You get *enforcement* only when you wire
 the emitted boundary in.
 
 ```bash

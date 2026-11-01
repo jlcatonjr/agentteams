@@ -66,7 +66,8 @@ must merge, so it enforces nothing until wired. The PreToolUse constitutional-ga
 hook still stays **fail-open by default**
 (`agentteams/templates/universal/hooks/constitutional-gate.py:22-36`); its
 fail-open→fail-closed flip requires an *explicit* `confined`/`exclusive`, not the
-defaulted `confined`. Opt out of the emitted boundary with `cooperative`. Reading
+defaulted `confined`. Turn the emitted boundary off with
+`os_sandbox: "off"` (or the `cooperative` profile). Reading
 "layered stack" as "every layer is enforced out of the box" is the overclaim this
 ceiling exists to prevent: out of the box, the OS-level locks are emitted but
 dormant until the operator wires them in.

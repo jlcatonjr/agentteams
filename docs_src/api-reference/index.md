@@ -130,6 +130,7 @@ This reference defines the **supported public API surface** (documented modules 
 | [`sandbox_projection`](sandbox-projection.md) | The model-substrate WASM switch projected to `.agentteams/sandbox-state.json` for consumers that run model code (WASM P20) |
 | [`wasm_config`](wasm-config.md) | The brief's `wasm_sandbox` block, `--wasm-sandbox`, per-agent grants as `Grant(mounts, limits)`, and `wasm_eligible` (WASM P01) |
 | [`wasm_agent`](wasm-agent.md) | The WASM agent host: step-mode protocol, Stage 0/1 split, budgets, DLP, key custody, hash-chained transcript (WASM P05) |
+| [`model_providers`](model-providers.md) | One stdlib-only client for the model APIs the WASM agent host calls: Anthropic, OpenAI-compatible, Gemini and an offline stub; key custody and egress rules (WASM P06) |
 | [`wasm_mcp`](wasm-mcp.md) | The `agentteams_wasm` MCP server: `run_wasm` for vendor-CLI agents, its hash-checked bundle and the per-agent launch flags that carry each grant (WASM P10) |
 | [`wasm_enforcement`](wasm-enforcement.md) | Per-provider native-exec denial for WASM-eligible agents (`native_exec`), the Codex WASM-mode gate, and the honest `wasm_enforcement` verdict (WASM P13) |
 | [`wasm_policy`](wasm-policy.md) | Render-time WASM sandbox text for generated agents: `run_wasm` usage, grants, native-exec status, `@security` and routing rows (WASM P14) |
