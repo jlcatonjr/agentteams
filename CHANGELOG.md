@@ -41,6 +41,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `npm install` re-resolves every `package.json` spec; tracked as `agentteams-remediation-log: stage-major-offregistry-base`
   (any relaxation needs its own `@security` review).
 
+### fixed (vulnscan: `stage-fix` moves exact-peer groups and direct parents the audit fix leaves behind)
+
+- On 2026-11-01 `stage-fix` found "nothing fixable without a major jump" for data-quality-monitor and
+  traffic-file-enrichment-app although every fix was inside the declared ranges: `@vitest/coverage-v8` and `vitest`
+  pin each other's exact version as peers (so `vitest` and `@vitest/mocker` could not move alone), and `express
+  4.22.1` requires `qs ~6.14.0` (the fixed `qs` needs `express 4.22.3`, inside `^4.19.2`). `npm audit fix` without
+  `--force` takes neither.
+- **`npm_groups.npm_moves`** (new; run by `fix_path` with `apply` after the audit fix): for each package still vulnerable
+  whose fix is inside its caret range, the new `agentteams.vulnscan.npm_groups` (`LockGraph`, read from the
+  lockfile's own `dependencies` and exact `peerDependencies`, no built-in package list) names the packages to move
+  together: the exact-peer group, or each direct parent with its group. Each runs as `npm update --no-save <names>
+  --package-lock-only --ignore-scripts` (`npm_fix(..., update=)`, the audit fix's isolation, registry, cooldown and
+  confinement; names must be plain package names), so `package.json` and its ranges never change. A move is kept
+  only when it removes an advisory occurrence and adds none, else the lockfile is restored byte for byte;
+  `manifests.check_lock_edit` still judges the result. Out-of-range fixes stay `major-held`.
+- **Retry guard:** the dry-run fix plan names each such move in the row's note (and the section note says the step
+  runs), so the plan digest `retry_guard` keys its hold on changes and the held repositories are retried once.
+  `npm_groups.py` joins the enforcement integrity set.
+
 ### added (vulnscan: scan mirrors)
 
 - **`scan_mirror`** (`vulnscan.json`, default `""`): the daily scan can read each repository's default branch from a
