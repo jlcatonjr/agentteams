@@ -297,6 +297,7 @@ nav:
               - wasm_config: api-reference/wasm-config.md
               - wasm_agent: api-reference/wasm-agent.md
               - wasm_mcp: api-reference/wasm-mcp.md
+              - wasm_enforcement: api-reference/wasm-enforcement.md
               - sandbox_projection: api-reference/sandbox-projection.md
               - proposal_policy: api-reference/proposal-policy.md
               - mcp_direct_grants: api-reference/mcp-direct-grants.md
