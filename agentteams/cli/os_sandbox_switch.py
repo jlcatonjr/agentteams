@@ -218,7 +218,9 @@ def gate_exceptions(manifest: dict, state: SandboxState, project_root: Path, pre
     from agentteams.sandbox_state import SandboxExceptions
     from agentteams.wasm_config import manifest_wasm_config
 
-    keep = frozenset(manifest_wasm_config(manifest).native_exec_keep) if state.wasm else frozenset()
+    # --framework wasm (P08): the runtime has no native execution at all, so nothing can keep it (not a carve-out).
+    keep = (frozenset(manifest_wasm_config(manifest).native_exec_keep) if state.wasm
+            and manifest.get("framework") != "wasm" else frozenset())
     if manifest.get("write_policy") == "orchestrator-only":
         from agentteams import runner_wasm
         from agentteams._sandbox_profiles import ConfinementError

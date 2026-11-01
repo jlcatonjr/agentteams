@@ -70,7 +70,7 @@ LIMIT_BOUNDS: dict[str, tuple[int, int]] = {"fuel": (_B["fuel"][0], _B["fuel"][1
 
 # --- nesting constants (a parity test pins them to confinement.PROTECTED_REL / _sandbox_emit.SIGNING_KEY_DIR) -----
 NEST_PROTECTED_REL = (".agentteams", ".agentteams-queue", ".agentteams-status", ".git", ".claude", ".goose", ".codex",
-                      ".grok", ".github")
+                      ".grok", ".github", ".agentteams-wasm")
 NEST_KEY_DIR = "~/.config/agentteams/keys"
 NEST_DEV_WRITES = ("/dev/null", "/dev/zero", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/dtracehelper")
 #: Credential stores the nested wasmtime may not read (R5).

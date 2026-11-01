@@ -28,6 +28,7 @@ FROZEN_SURFACE_PATHS: dict[str, tuple[str, ...]] = {
     "copilot-vscode": (".github/agents/",),
     "copilot-cli": (".github/agents/",),
     "grok": (".grok/",),
+    "wasm": (".agentteams-wasm/",),
 }
 
 #: Words that name an unfreeze, matched at a word start: ``unfreeze``/``--unfreeze``/``unfrozen`` and the hyphen,

@@ -65,7 +65,7 @@ GRANT_SCHEMA = "agentteams-wasm-mcp-grant/v1"
 BUNDLE_MODULES: tuple[tuple[str, str, str], ...] = (
     ("_sandbox_profiles", "_sandbox_profiles.py", "4ba73a39488e3c7e674535bea7460cb115de963a01ef1f9a9e3a5f522116251b"),
     ("wasm_pins", "wasm_pins.py", "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df"),
-    ("wasm_exec", "wasm_exec.py", "cca8c394f8d21585edbfc504e0e42f844b1bfa9d16d73fe3241c423d1e63838a"),
+    ("wasm_exec", "wasm_exec.py", "1e2a0d33d8fa13d5b1141c63bf9881ec9df896de17e41446e1dd517a87fc256d"),
     ("wasm_guests", "wasm_guests.py", "a3b23dd61bd3ea924f47c37debec44ff7442d2c5af32475d6de18e34c7c7ba5c"),
 )
 #: The bundle's data files: (installed file, sha256). The pins file is checked against ``--pins-sha256`` instead.

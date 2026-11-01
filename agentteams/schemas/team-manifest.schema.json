@@ -51,7 +51,8 @@
         "goose",
         "agents-md",
         "codex",
-        "grok"
+        "grok",
+        "wasm"
       ]
     },
     "primary_output_dir": {
@@ -946,6 +947,10 @@
           ]
         }
       }
+    },
+    "wasm_runtime": {
+      "type": "object",
+      "description": "P08: the brief's wasm_runtime block in normalised form (wasm_agent.team.normalize_wasm_runtime), carried only when the brief has the block."
     },
     "sandbox_state": {
       "type": "object",

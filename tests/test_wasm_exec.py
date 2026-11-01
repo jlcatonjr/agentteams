@@ -295,8 +295,9 @@ def test_no_intra_package_imports(mod: types.ModuleType) -> None:
             assert node.func.id not in ("__import__",), "dynamic import"
 
 
-#: Files allowed to pass os_confine="inherited" (R5): the executor itself and the P08 launcher.
-_INHERITED_OK = re.compile(r"^agentteams/(wasm_exec\.py|wasm_agent/launch[a-z_]*\.py)$")
+#: Files allowed to pass os_confine="inherited" (R5): the executor itself and the P08 launcher (merged as
+#: ``cli/wasm_agent_commands.py``; ``tests/test_wasm_framework_cli.py`` holds the stricter AST check).
+_INHERITED_OK = re.compile(r"^agentteams/(wasm_exec\.py|wasm_agent/launch[a-z_]*\.py|cli/wasm_agent_commands\.py)$")
 
 
 def test_only_p08_launcher_passes_inherited() -> None:

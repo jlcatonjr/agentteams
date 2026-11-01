@@ -52,6 +52,11 @@ if TYPE_CHECKING:
 #: :data:`WASM_SANDBOX_VALUES`. The team manifest is never persisted whole, so it never reaches disk.
 WASM_SANDBOX_CLI_KEY = "_wasm_sandbox_cli"
 
+#: Transient manifest key set only by ``cli/wasm_sandbox_switch.apply_wasm_switch`` when the target is
+#: ``--framework wasm`` and neither the brief nor ``--wasm-sandbox`` names the switch (P08 §4.6): the framework choice
+#: is the opt-in (D6), reason ``"framework"``. Honoured only as the boolean ``True``; never read from input.
+WASM_FRAMEWORK_KEY = "_wasm_sandbox_framework"
+
 #: The two values of ``--wasm-sandbox``.
 WASM_SANDBOX_VALUES: tuple[str, ...] = ("on", "off")
 
@@ -514,7 +519,8 @@ def wasm_switch(manifest: Mapping[str, Any]) -> tuple[bool, str]:
         manifest: The team manifest.
 
     Returns:
-        ``(True|False, "cli" | "brief" | "default-off")``.
+        ``(True|False, "cli" | "brief" | "framework" | "default-off")``; ``"framework"`` only when neither names
+        the switch and :data:`WASM_FRAMEWORK_KEY` is ``True`` (``--framework wasm``, P08).
 
     Raises:
         ValueError: A bad ``--wasm-sandbox`` value or a malformed ``wasm_sandbox`` record.
@@ -523,20 +529,21 @@ def wasm_switch(manifest: Mapping[str, Any]) -> tuple[bool, str]:
     if cli is not None:
         return cli == "on", "cli"
     if manifest.get("wasm_sandbox") is None:
-        return False, "default-off"
+        return (True, "framework") if manifest.get(WASM_FRAMEWORK_KEY) is True else (False, "default-off")
     return manifest_wasm_config(manifest).enabled, "brief"
 
 
 def wasm_switch_set(manifest: Mapping[str, Any]) -> bool:
-    """Return whether the brief block or ``--wasm-sandbox`` is present (the gate then engages).
+    """Return whether the brief block, ``--wasm-sandbox`` or ``--framework wasm`` sets the switch (the gate engages).
 
     Args:
         manifest: The team manifest.
 
     Returns:
-        True when either is present.
+        True when any of them is present.
     """
-    return manifest.get("wasm_sandbox") is not None or manifest.get(WASM_SANDBOX_CLI_KEY) is not None
+    return (manifest.get("wasm_sandbox") is not None or manifest.get(WASM_SANDBOX_CLI_KEY) is not None
+            or manifest.get(WASM_FRAMEWORK_KEY) is True)
 
 
 def _project_root(manifest: Mapping[str, Any]) -> Path | None:
@@ -686,6 +693,7 @@ __all__ = [
     "NATIVE_EXEC_EXEMPT",
     "NATIVE_EXEC_KEEP_DEFAULT",
     "NATIVE_EXEC_VALUES",
+    "WASM_FRAMEWORK_KEY",
     "WASM_SANDBOX_CLI_KEY",
     "WASM_SANDBOX_VALUES",
     "AgentWasmGrant",

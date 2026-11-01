@@ -50,7 +50,7 @@ GOOSE_TIMEOUT = 300
 #: Largest grant timeout a launch may carry (I5); the server enforces the same bound.
 MAX_TIMEOUT_S = 240
 #: sha256 of the shipped server; ``tests/test_wasm_mcp.py`` keeps it current.
-SHA256 = "e7560d7537a723dfab66c4cb47380e4d1301696a9e5c3458aa949ce3e995fe3f"
+SHA256 = "32ab2ef8a931b11c758074be4382fe42cf00d612ede99c9eb1c5d0350824130a"
 
 #: The bundle: ``(installed path, packaged source)``; modules first, in the server's load order.
 BUNDLE: tuple[tuple[str, str], ...] = (
@@ -72,7 +72,7 @@ PINS_INSTALLED = f"{BIN_DIR}/wasm_runtime_pins.json"
 BUNDLE_SHA256: Mapping[str, str] = {
     f"{BIN_DIR}/_sandbox_profiles.py": "4ba73a39488e3c7e674535bea7460cb115de963a01ef1f9a9e3a5f522116251b",
     f"{BIN_DIR}/wasm_pins.py": "ffda17a642ac6bf606e23f20030aee2b361a8bbccbfee36f8733af646424b9df",
-    f"{BIN_DIR}/wasm_exec.py": "cca8c394f8d21585edbfc504e0e42f844b1bfa9d16d73fe3241c423d1e63838a",
+    f"{BIN_DIR}/wasm_exec.py": "1e2a0d33d8fa13d5b1141c63bf9881ec9df896de17e41446e1dd517a87fc256d",
     f"{BIN_DIR}/wasm_guests.py": "a3b23dd61bd3ea924f47c37debec44ff7442d2c5af32475d6de18e34c7c7ba5c",
     f"{BIN_DIR}/wasm_deny_probe.wasm": "dbcb3891225e2ce1a9145bd191d7a68afaed687b6572d88c7918baf6e7e7b365",
     f"{BIN_DIR}/wasm_probe_python.py": "1ce444ee1a54d5ebb15db105e4b8376e833e3614199b32353e2488e835745ed1",

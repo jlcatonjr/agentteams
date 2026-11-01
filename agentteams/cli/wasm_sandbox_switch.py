@@ -32,20 +32,35 @@ class WasmSwitchError(ValueError):
 def apply_wasm_switch(manifest: dict, wasm_sandbox_cli: str | None) -> None:
     """Carry ``--wasm-sandbox`` onto ``manifest`` and validate the WASM half of the effective state.
 
+    ``--framework wasm`` (P08 §4.6) is itself the opt-in: when neither the brief nor ``--wasm-sandbox`` names the
+    switch, the transient :data:`~agentteams.wasm_config.WASM_FRAMEWORK_KEY` turns WASM on (reason ``framework``).
+    An explicit off (brief ``enabled: false`` or ``--wasm-sandbox off``) refuses: the runtime has no non-WASM mode.
+
     Args:
-        manifest: The team manifest (mutated: the transient CLI key when the flag is given). The CLI-set project
-            root must already be on it (``write_root_policy.begin``) for grants with mounts.
+        manifest: The team manifest (mutated: the transient CLI / framework key). The CLI-set project root must
+            already be on it (``write_root_policy.begin``) for grants with mounts.
         wasm_sandbox_cli: ``--wasm-sandbox`` (operator argv), or None.
 
     Raises:
-        WasmSwitchError: A bad value, a malformed block, a refused read path, or a mount with no project root.
+        WasmSwitchError: A bad value, a malformed block, a refused read path, a mount with no project root, or WASM
+            explicitly off for ``--framework wasm``.
         ImportError: WASM is on and ``agentteams.wasm_exec`` is not importable (fail closed).
     """
-    from agentteams.wasm_config import WASM_SANDBOX_CLI_KEY, validate_wasm_sandbox_cli, wasm_state_fields
+    from agentteams.wasm_config import (
+        WASM_FRAMEWORK_KEY, WASM_SANDBOX_CLI_KEY, validate_wasm_sandbox_cli, wasm_state_fields, wasm_switch,
+    )
 
     try:
         if wasm_sandbox_cli is not None:
             manifest[WASM_SANDBOX_CLI_KEY] = validate_wasm_sandbox_cli(wasm_sandbox_cli)
+        if manifest.get("framework") == "wasm":
+            on, reason = wasm_switch(manifest)
+            if not on and reason != "default-off":
+                raise WasmSwitchError(f"--framework wasm needs WASM confinement, but it is switched off ({reason}): "
+                                      "the WASM agent runtime has no non-WASM mode. Remove the off switch.")
+            if not on:
+                manifest[WASM_FRAMEWORK_KEY] = True
+                print("  🧩 --framework wasm turns WASM confinement on for this team (reason: framework).")
         wasm_state_fields(manifest)
     except ValueError as exc:
         raise WasmSwitchError(str(exc)) from exc
