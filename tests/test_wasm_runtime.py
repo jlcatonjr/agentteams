@@ -222,9 +222,13 @@ def test_packaged_pins_carry_the_verified_versions():
     assert set(c["wasmtime"]["platforms"]) == set(wr.PLATFORMS)
     assert c["wasmtime"]["platforms"]["darwin-arm64"]["sha256"] == \
         "7228786d479b0e5bddf293d07f53b9aecb1a8f1d55a02821640aa65a522e2631"
-    # Extracted-file hashes were not downloadable here: they must stay TODO-PIN (Rule 5).
-    assert c["wasmtime"]["platforms"]["darwin-arm64"]["files"]["wasmtime"]["sha256"] == wr.TODO_PIN
-    assert c["python"]["platforms"]["any"]["tree"]["sha256"] == wr.TODO_PIN
+    # Extracted-file hashes filled from a verified download (operator pin update, 2026-11-01; Rule 5).
+    assert c["wasmtime"]["platforms"]["darwin-arm64"]["files"]["wasmtime"]["sha256"] == \
+        "153c72c488f668e485a2b7b1c37ccf6ce7c7f71cb60ee305794bef40506be1a5"
+    assert c["python"]["platforms"]["any"]["tree"] == {
+        "count": 592, "root": "lib", "sha256": "5a0aa32e97deb5b46b83e22b4b07e022c3d57c285a51ecc90ba247da6dff0289"}
+    assert all(comp["provenance"] == "download-verified" for comp in c.values())
+    assert wr.TODO_PIN not in json.dumps(c)   # components only: the rule5 text names the marker
 
 
 def test_pins_sha256_matches_packaged_file():
@@ -251,11 +255,24 @@ def test_pins_validation_refuses_short_digest_and_foreign_host():
     assert any("allowlisted host" in p for p in problems)
 
 
+def _packaged_with_todo(tmp_path: Path, monkeypatch) -> None:
+    """The real pins, with the wasmtime entry file and the python tree put back to TODO-PIN (as before the pin update)."""
+    doc = wr.load_pins()
+    doc["components"]["wasmtime"]["platforms"]["darwin-arm64"]["files"]["wasmtime"]["sha256"] = wr.TODO_PIN
+    doc["components"]["python"]["platforms"]["any"]["tree"]["sha256"] = wr.TODO_PIN
+    pins = tmp_path / "pins-todo.json"
+    pins.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    monkeypatch.setattr(wr, "PINS_PATH", pins)
+    monkeypatch.setattr(wr, "host_platform", lambda: "darwin-arm64")
+
+
 def test_todo_pin_fails_closed_install_and_resolve_packaged(tmp_path, monkeypatch):
-    """The real pins: wasmtime/python hold TODO-PIN and are refused before any fetch."""
+    """The real pins with TODO-PIN reinserted: wasmtime/python are refused before any fetch."""
     def boom(*a):  # pragma: no cover - must not be reached
         raise AssertionError("fetch called for a TODO-PIN component")
-    monkeypatch.setattr(wr, "host_platform", lambda: "darwin-arm64")
+    _packaged_with_todo(tmp_path, monkeypatch)
+    tmp_path = tmp_path / "proj"
+    tmp_path.mkdir()
     for comp in ("wasmtime", "python"):
         with pytest.raises(wr.WasmRuntimeError, match="pin incomplete"):
             wr.install(tmp_path, [comp], fetch=boom)
