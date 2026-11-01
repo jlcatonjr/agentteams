@@ -238,12 +238,13 @@ def test_cli_render_into_a_custom_output_with_wasm_on_is_refused(tmp_path, capsy
 # --- H1 -----------------------------------------------------------------------------------------------------------
 
 
-def test_cli_binary_install_raises_value_errors_and_warns_only_on_os_errors(tmp_path, monkeypatch, capsys):
+def test_cli_binary_install_refuses_value_errors_and_warns_only_on_os_errors(tmp_path, monkeypatch, capsys):
     from agentteams.cli import wasm_sandbox_switch as sw
 
     manifest = _manifest()
-    with pytest.raises(ValueError, match="not found under"):
+    with pytest.raises(SystemExit) as exc:
         sw.install_wasm_binary(manifest, tmp_path)   # server-not-found is never a warning
+    assert exc.value.code == 1 and "not found under" in capsys.readouterr().err
 
     def pin_mismatch(*_a, **_k):
         raise ValueError("pin mismatch")
@@ -252,8 +253,27 @@ def test_cli_binary_install_raises_value_errors_and_warns_only_on_os_errors(tmp_
         raise OSError("disk full")
 
     monkeypatch.setattr(ww, "install_binary", pin_mismatch)
-    with pytest.raises(ValueError, match="pin mismatch"):
+    with pytest.raises(SystemExit):
         sw.install_wasm_binary(manifest, tmp_path)
+    assert "pin mismatch" in capsys.readouterr().err
     monkeypatch.setattr(ww, "install_binary", disk_full)
     sw.install_wasm_binary(manifest, tmp_path)
     assert "disk full" in capsys.readouterr().err
+
+
+def test_install_refusal_exits_cleanly_without_a_traceback(tmp_path, monkeypatch, capsys):
+    """A refused bundle install (here: a pin mismatch) stops the render with exit 1 and one Error: line."""
+    import pytest
+
+    from agentteams.cli import wasm_sandbox_switch as WS
+    from agentteams.frameworks import _wasm_wiring
+
+    def refuse(manifest, root):
+        raise ValueError("bundle file wasm_exec.py does not match its pin")
+    monkeypatch.setattr(_wasm_wiring, "install_binary", refuse)
+    monkeypatch.setattr(_wasm_wiring, "install_root", lambda fw, root: root)
+    with pytest.raises(SystemExit) as exc:
+        WS.install_wasm_binary({"framework": "claude"}, tmp_path)
+    assert exc.value.code == 1
+    assert "Error: agentteams_wasm bundle install refused: bundle file wasm_exec.py does not match its pin" in \
+        capsys.readouterr().err

@@ -149,8 +149,9 @@ def install_wasm_binary(manifest: dict, project_root: Path) -> None:
         project_root: The CLI's project root (the pre-normalisation ``--output`` path).
 
     Raises:
-        ValueError: The server is not installed at the derived root, a bundle pin mismatch, or a symlinked
-            ``.agentteams`` / ``bin`` (fail closed: never downgraded to a warning).
+        SystemExit: Exit code 1, after an ``Error:`` line, when the server is not installed at the derived root,
+            a bundle file does not match its pin, or ``.agentteams`` / ``bin`` is a symlink (fail closed: never
+            downgraded to a warning).
     """
     from agentteams.frameworks._wasm_wiring import install_binary, install_root
 
@@ -161,6 +162,9 @@ def install_wasm_binary(manifest: dict, project_root: Path) -> None:
     except OSError as exc:
         print(f"  !  agentteams_wasm bundle install failed ({exc}); the server refuses to start until it is "
               "re-rendered", file=sys.stderr)
+    except ValueError as exc:   # fail closed, with a message instead of a traceback
+        print(f"Error: agentteams_wasm bundle install refused: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 __all__ = ["WasmSwitchError", "advise_wasm", "apply_wasm_switch", "install_wasm_binary", "report_wasm_wiring"]
