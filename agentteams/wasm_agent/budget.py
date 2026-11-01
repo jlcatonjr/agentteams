@@ -3,7 +3,9 @@
 A :class:`Budget` is agentteams policy, not a provider fact. :class:`BudgetLedger` enforces it: a model call
 reserves its worst case (``max_tokens`` plus an input estimate, and USD when priced) *before* the call and commits the
 real usage after, refunding the rest; steps, tool calls and the wall clock are counted against a monotonic deadline.
-:meth:`BudgetLedger.carve` hands a child run (P09) a slice of what is left, debited from the parent.
+:meth:`BudgetLedger.carve` hands a child run (P09) a slice of what is left, debited from the parent (model calls,
+tokens and USD are held as *carved* until :meth:`BudgetLedger.settle` replaces the slice by what the child really
+used, so a tree never spends more than its root's budget).
 
 Stdlib only.
 """
@@ -122,7 +124,8 @@ class BudgetLedger:
         self.tokens = self.reserved_tokens = 0
         self.usd = self.reserved_usd = 0.0
         self.unmetered_calls = 0
-        self.carved_tokens = 0
+        self.carved_tokens = self.carved_calls = 0
+        self.carved_usd = 0.0
 
     # -- time
 
@@ -202,13 +205,13 @@ class BudgetLedger:
         b = self.budget
         tokens = -(-max(0, input_bytes) // BYTES_PER_TOKEN) + max_tokens
         with self._lock:
-            if self.model_calls >= b.max_model_calls:
+            if self.model_calls + self.carved_calls >= b.max_model_calls:
                 raise BudgetExceeded("max_model_calls")
             if max_tokens > b.max_output_tokens_per_call:
                 raise BudgetExceeded("max_output_tokens_per_call", f"{max_tokens} > {b.max_output_tokens_per_call}")
             if self.tokens + self.reserved_tokens + self.carved_tokens + tokens > b.max_total_tokens:
                 raise BudgetExceeded("max_total_tokens")
-            if b.max_usd is not None and self.usd + self.reserved_usd + usd_estimate > b.max_usd:
+            if b.max_usd is not None and self.usd + self.reserved_usd + self.carved_usd + usd_estimate > b.max_usd:
                 raise BudgetExceeded("max_usd")
             self.model_calls += 1
             self.reserved_tokens += tokens
@@ -255,23 +258,29 @@ class BudgetLedger:
             self.reserved_usd -= reservation.usd
             self.model_calls -= 1
 
-    def carve(self, request: Mapping[str, Any] | None = None) -> Budget:
+    def carve(self, request: Mapping[str, Any] | None = None, *, share: float = 1.0) -> Budget:
         """A child run's budget: *request* clamped to what is left, debited from this ledger (P09).
+
+        Unrequested model calls, tokens, wall clock and USD default to *share* of what is left; an explicit request
+        is clamped to the whole remainder. Model calls, tokens and USD stay debited (carved) until :meth:`settle`.
 
         Args:
             request: Optional ``{field: value}`` asks (unknown fields refused).
+            share: The default fraction of each remaining counter (``0 < share <= 1``).
 
         Returns:
             The child's :class:`Budget`.
 
         Raises:
             BudgetExceeded: ``max_child_runs`` or ``max_delegation_depth`` (depth 0 left).
-            ValueError: An unknown field in *request*.
+            ValueError: An unknown field in *request*, or *share* outside ``(0, 1]``.
         """
         req = dict(request or {})
         names = {f.name for f in dataclasses.fields(Budget)}
         if set(req) - names:
             raise ValueError(f"unknown budget fields {sorted(set(req) - names)}")
+        if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 < share <= 1:
+            raise ValueError("share must be in (0, 1]")
         with self._lock:
             b = self.budget
             if self.child_runs >= b.max_child_runs:
@@ -279,28 +288,72 @@ class BudgetLedger:
             if b.max_delegation_depth < 1:
                 raise BudgetExceeded("max_delegation_depth")
             left_tokens = max(0, b.max_total_tokens - self.tokens - self.reserved_tokens - self.carved_tokens)
+            left_usd = None if b.max_usd is None else max(
+                0.0, b.max_usd - self.usd - self.reserved_usd - self.carved_usd)
             left = {
-                "max_model_calls": max(0, b.max_model_calls - self.model_calls),
+                "max_model_calls": max(0, b.max_model_calls - self.model_calls - self.carved_calls),
                 "max_total_tokens": left_tokens,
                 "max_output_tokens_per_call": b.max_output_tokens_per_call,
                 "max_steps": max(0, b.max_steps - self.steps),
                 "max_tool_calls": max(0, b.max_tool_calls - self.tool_calls),
                 "wall_clock_s": max(0.001, self.remaining_s()),
-                "max_usd": None if b.max_usd is None else max(0.0, b.max_usd - self.usd - self.reserved_usd),
+                "max_usd": left_usd,
                 "max_delegation_depth": b.max_delegation_depth - 1,
                 "max_child_runs": max(0, b.max_child_runs - self.child_runs - 1),
             }
+            shared = {"max_model_calls": int, "max_total_tokens": int, "wall_clock_s": float, "max_usd": float}
             out: dict[str, Any] = {}
             for name, cap in left.items():
                 ask = req.get(name)
-                if ask is None or cap is None:
-                    out[name] = cap if ask is None else ask
+                if ask is None:
+                    out[name] = cap if cap is None or name not in shared else shared[name](cap * share)
+                elif cap is None:
+                    out[name] = ask
                 else:
                     out[name] = min(ask, cap)
+            out["wall_clock_s"] = max(0.001, out["wall_clock_s"])
             child = Budget(**out)
             self.child_runs += 1
             self.carved_tokens += child.max_total_tokens
+            self.carved_calls += child.max_model_calls
+            self.carved_usd += child.max_usd or 0.0
         return child
+
+    def settle(self, child: Budget, usage: Mapping[str, Any], *, started: bool = True) -> None:
+        """Replace a carved slice by what the child really used; the unused rest returns to this ledger (P09).
+
+        A child with unmetered model calls under a USD cap is charged its whole USD slice (cost unknown:
+        conservative, plan Q-2).
+
+        Args:
+            child: The budget :meth:`carve` returned.
+            usage: The child's ``totals()`` (``model_calls``, ``tokens``, ``usd``, ``unmetered_calls``).
+            started: False when the child never ran (its fan-out slot is returned too).
+
+        Returns:
+            None.
+
+        Raises:
+            Nothing (malformed usage counts as zero).
+        """
+        def num(key: str) -> float:
+            v = usage.get(key, 0) if isinstance(usage, Mapping) else 0
+            return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else 0.0
+
+        with self._lock:
+            self.carved_tokens = max(0, self.carved_tokens - child.max_total_tokens)
+            self.carved_calls = max(0, self.carved_calls - child.max_model_calls)
+            self.carved_usd = max(0.0, self.carved_usd - (child.max_usd or 0.0))
+            self.model_calls += max(0, int(num("model_calls")))
+            self.tokens += max(0, int(num("tokens")))
+            unmetered = max(0, int(num("unmetered_calls")))
+            self.unmetered_calls += unmetered
+            spent = max(0.0, num("usd"))
+            if unmetered and child.max_usd is not None:
+                spent = max(spent, child.max_usd)
+            self.usd += spent
+            if not started:
+                self.child_runs = max(0, self.child_runs - 1)
 
     def totals(self) -> dict[str, Any]:
         """The counters, for the transcript and :class:`RunResult`.

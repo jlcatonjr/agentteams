@@ -52,7 +52,7 @@ DENIED_CODES = ("budget", "not-granted", "dlp", "depth", "refused")
 #: The Stage 0 -> Stage 1 bootstrap (key pipe, one line): its version and its exact key set.
 BOOTSTRAP_VERSION = 1
 BOOT_KEYS = frozenset({"v", "provider", "key", "base_url", "stub_script", "mac_key", "run_id", "project_root", "spec",
-                       "task", "budget", "secrets", "prices", "notices", "call_timeout_s"})
+                       "task", "budget", "secrets", "prices", "notices", "call_timeout_s", "delegation"})
 #: ``done`` reasons are free codes but must match this shape.
 _REASON_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$", re.ASCII)
 

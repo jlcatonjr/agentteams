@@ -1,10 +1,11 @@
 """stage1.py — the confined WASM agent host process (P05 §4.9; started only by ``launch.stage0``).
 
 Stage 1 runs inside the host OS sandbox. It reads its bootstrap (provider, key, reserved-key MAC key, the agent spec,
-task, budget and known secrets) **once** from the key pipe and closes it, builds the P06 provider, and runs the same
+task, budget, known secrets and the delegation policy) **once** from the key pipe and closes it, builds the P06 provider, and runs the same
 host loop as Stage 0's in-process mode, with :class:`~agentteams.wasm_agent.transcript.PipeJournal` and
 :class:`~agentteams.wasm_agent.broker.PipeBroker` over the control pipe. It writes nothing under ``.agentteams/``
-(R4): every record and every prepared guest directory is Stage 0's.
+(R4): every record and every prepared guest directory is Stage 0's. Sub-agents (P09) run in this same process, each
+through Stage 0's child-run service (:class:`~agentteams.wasm_agent.delegation.PipeChildHost`).
 
 Stdlib only.
 """
@@ -24,6 +25,7 @@ from agentteams import wasm_exec as W
 import agentteams.wasm_agent.protocol as P
 from agentteams.wasm_agent.broker import PipeBroker
 from agentteams.wasm_agent.budget import Budget
+from agentteams.wasm_agent.delegation import DelegationPolicy, PipeChildHost
 from agentteams.wasm_agent.host import AgentSpec, Revocation, RunOptions, build_provider, grant_from_dict, run_agent
 from agentteams.wasm_agent.transcript import PipeJournal
 
@@ -124,6 +126,9 @@ def main(argv: Sequence[str]) -> int:
                              mac_key=bytes.fromhex(boot["mac_key"]), secrets=list(boot["secrets"]),
                              prices=boot["prices"], revocation=revocation, notices=list(boot["notices"]),
                              call_timeout_s=float(boot["call_timeout_s"]))
+        if boot["delegation"] is not None:
+            options.children = PipeChildHost(control)
+            options.delegation = DelegationPolicy(**dict(boot["delegation"]))
         task = str(boot["task"])
     except (ValueError, TypeError, KeyError, W.WasmExecError, MP.ModelProviderError):
         return 2
