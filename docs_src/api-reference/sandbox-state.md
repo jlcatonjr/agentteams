@@ -20,6 +20,7 @@ legacy_os_requested(manifest: dict) -> bool
 os_switch_set(manifest: dict) -> bool
 has_recorded_state(team_dir: Path) -> bool
 verifier_sandbox_state(manifest: dict | None, team_dir: Path, project_root: Path) -> SandboxState | None
+recorded_model_substrate(team_dir: Path) -> str | None   # the build-log's model_substrate alone (P20)
 ```
 
 `effective_sandbox_state` precedence, first match wins: `--os-sandbox` → an explicit
@@ -81,6 +82,9 @@ keep_tokens(state, exceptions) -> frozenset[str]
 symlink and, unless `check_credentials=False` (parsing a recorded state, where nothing is mounted), a read directory
 holding credential-named entries anywhere below it or too large to scan (`_sandbox_profiles.refuse_credentials`).
 `verifier_sandbox_state` lets an `ImportError` (no `wasm_exec` for a recorded grant) propagate: fail closed.
+`recorded_model_substrate` reads only that one field and builds no grant, so `--verify-integrity`'s floor check
+(`sandbox_projection.verify_projection`) never depends on `wasm_exec`. `validate_os_sandbox` is
+`wasm_config.validate_on_off(value, "os_sandbox")`; `OS_SANDBOX_VALUES` is `wasm_config.ON_OFF_VALUES`.
 
 `previous_sandbox_state` fails toward "was on": a malformed record yields `SandboxState.conservative()`, and
 on-disk boundary evidence can only turn a switch on. OS evidence: the framework's boundary files, the neutral
